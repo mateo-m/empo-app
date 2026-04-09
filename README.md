@@ -1,8 +1,6 @@
 # mkxp-ios
 
-An iOS port of [mkxp-z](https://github.com/mkxp-z/mkxp-z), which is itself a fork of [mkxp](https://github.com/Ancurio/mkxp). It lets you run RPG Maker XP, VX, and VX Ace games (RGSS1/2/3) on iPhones and iPads.
-
-This is not meant for the App Store. It is a personal project intended to be sideloaded via a developer certificate.
+An iOS port of [mkxp-z](https://github.com/mkxp-z/mkxp-z), which is itself a fork of [mkxp](https://github.com/Ancurio/mkxp). It lets you run RPG Maker XP games (RGSS1) on iPhones and iPads. Only Ruby 1.8 is bundled right now, so VX (RGSS2) and VX Ace (RGSS3) games are not currently supported.
 
 ## How it works
 
