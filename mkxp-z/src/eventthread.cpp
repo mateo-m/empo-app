@@ -686,10 +686,19 @@ void EventThread::cleanup()
 
 void EventThread::resetInputStates()
 {
-    memset(&keyStates, 0, sizeof(keyStates));
-    memset(&controllerState, 0, sizeof(controllerState));
-    memset(&mouseState.buttons, 0, sizeof(mouseState.buttons));
-    memset(&touchState, 0, sizeof(touchState));
+	memset(&keyStates, 0, sizeof(keyStates));
+	memset(&controllerState, 0, sizeof(controllerState));
+	memset(&mouseState.buttons, 0, sizeof(mouseState.buttons));
+	memset(&touchState, 0, sizeof(touchState));
+}
+
+void EventThread::resetAllInputStates()
+{
+	memset(&keyStates, 0, sizeof(keyStates));
+	memset(&controllerState, 0, sizeof(controllerState));
+	memset(&mouseState, 0, sizeof(mouseState));
+	memset(&touchState, 0, sizeof(touchState));
+	SDL_AtomicSet(&verticalScrollDistance, 0);
 }
 
 void EventThread::setFullscreen(SDL_Window *win, bool mode)

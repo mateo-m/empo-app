@@ -38,6 +38,11 @@
 
 #if TARGET_OS_IPHONE
 #include "ios_bridge.h"
+#else
+// Stubs so the LSP doesn't complain when TARGET_OS_IPHONE is undefined
+static inline const char *mkxp_waitForGamePath(void) { return ""; }
+static inline void mkxp_setEngineTerminated(void) {}
+static inline void mkxp_resetBridgeState(void) {}
 #endif
 
 #include "binding.h"
@@ -183,7 +188,12 @@ int rgssThreadFun(void *userdata) {
 
   SharedState::finiInstance();
 
+#if !TARGET_OS_IPHONE
+  /* On iOS, the AL context is managed by main() across game sessions */
   alcDestroyContext(alcCtx);
+#else
+  alcMakeContextCurrent(NULL);
+#endif
 
   return 0;
 }
@@ -231,6 +241,18 @@ static void setupWindowIcon(const Config &conf, SDL_Window *win) {
 
 int main(int argc, char *argv[]) {
   try {
+
+#if TARGET_OS_IPHONE
+    // --- FIRST LAUNCH: wait for Library UI before SDL_Init ---
+    // SDL_Init creates an OpenGL window that would cover the Library UI,
+    // so we wait for the user to pick a game first.
+    char dataDir[512]{};
+    const char *selectedPath = mkxp_waitForGamePath();
+    if (selectedPath && selectedPath[0]) {
+        strncpy(dataDir, selectedPath, sizeof(dataDir));
+    }
+#endif
+
     SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
     SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
 
@@ -252,7 +274,9 @@ int main(int argc, char *argv[]) {
     }
 
 #ifndef WORKDIR_CURRENT
+#if !TARGET_OS_IPHONE
     char dataDir[512]{};
+#endif
 #if defined(__linux__)
     char *tmp{};
     tmp = getenv("SRCDIR");
@@ -266,39 +290,6 @@ int main(int argc, char *argv[]) {
     bool cwdOk = mkxp_fs::setCurrentDirectory(dataDir);
     (void)cwdOk;
 #endif
-    
-    /* now we load the config */
-    Config conf;
-    conf.read(argc, argv);
-
-#if defined(__WIN32__)
-    // Create a debug console in debug mode
-    if (conf.winConsole) {
-      if (setupWindowsConsole()) {
-        reopenWindowsStreams();
-      } else {
-        char buf[200];
-        snprintf(buf, sizeof(buf), "Error allocating console: %lu",
-                GetLastError());
-        showInitError(std::string(buf));
-      }
-    }
-#endif
-
-#ifdef MKXPZ_STEAM
-    if (!STEAMSHIM_init()) {
-      showInitError("Failed to initialize Steamworks. The application cannot "
-                    "continue launching.");
-      SDL_Quit();
-      return 0;
-    }
-#endif
-
-    if (conf.windowTitle.empty())
-      conf.windowTitle = conf.game.title;
-
-    assert(conf.rgssVersion >= 1 && conf.rgssVersion <= 3);
-    printRgssVersion(conf.rgssVersion);
 
     int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
     if (IMG_Init(imgFlags) != imgFlags) {
@@ -339,16 +330,74 @@ int main(int argc, char *argv[]) {
 
       return 0;
     }
+
+#ifdef MKXPZ_STEAM
+    if (!STEAMSHIM_init()) {
+      showInitError("Failed to initialize Steamworks. The application cannot "
+                    "continue launching.");
+      SDL_Quit();
+      return 0;
+    }
+#endif
+
 #if defined(__WIN32__)
     WSAData wsadata = {0};
     if (WSAStartup(0x101, &wsadata) || wsadata.wVersion != 0x101) {
       char buf[200];
       snprintf(buf, sizeof(buf), "Error initializing winsock: %08X",
                WSAGetLastError());
-      showInitError(
-          std::string(buf)); // Not an error worth ending the program over
+      showInitError(std::string(buf));
     }
 #endif
+
+    // ================================================================
+    // Game session loop (iOS only -- non-iOS falls through once)
+    // ================================================================
+#if TARGET_OS_IPHONE
+    bool firstSession = true;
+    while (true) {
+    // On subsequent sessions, wait for the library to provide a new game path
+    if (!firstSession) {
+        EventThread::resetAllInputStates();
+        const char *nextPath = mkxp_waitForGamePath();
+        if (nextPath && nextPath[0]) {
+            strncpy(dataDir, nextPath, sizeof(dataDir));
+        } else {
+            break; // empty path = quit
+        }
+        // Reset bridge state AFTER copying the path, so the UI has had time
+        // to observe mkxp_isEngineTerminated() during mkxp_waitForGamePath().
+        mkxp_resetBridgeState();
+    }
+    firstSession = false;
+
+    // Set working directory to the selected game
+    mkxp_fs::setCurrentDirectory(dataDir);
+#endif // TARGET_OS_IPHONE
+
+    /* now we load the config */
+    Config conf;
+    conf.read(argc, argv);
+
+#if defined(__WIN32__)
+    // Create a debug console in debug mode
+    if (conf.winConsole) {
+      if (setupWindowsConsole()) {
+        reopenWindowsStreams();
+      } else {
+        char buf[200];
+        snprintf(buf, sizeof(buf), "Error allocating console: %lu",
+                GetLastError());
+        showInitError(std::string(buf));
+      }
+    }
+#endif
+
+    if (conf.windowTitle.empty())
+      conf.windowTitle = conf.game.title;
+
+    assert(conf.rgssVersion >= 1 && conf.rgssVersion <= 3);
+    printRgssVersion(conf.rgssVersion);
 
     SDL_Window *win;
     Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
@@ -377,7 +426,6 @@ int main(int argc, char *argv[]) {
 
     if (!win) {
       showInitError(std::string("Error creating window: ") + SDL_GetError());
-
 #ifdef MKXPZ_STEAM
       STEAMSHIM_deinit();
 #endif
@@ -429,9 +477,11 @@ int main(int argc, char *argv[]) {
     if (!alcDev) {
       showInitError("Could not detect an available audio device.");
       SDL_DestroyWindow(win);
+#if !TARGET_OS_IPHONE
       TTF_Quit();
       IMG_Quit();
       SDL_Quit();
+#endif
 
 #ifdef MKXPZ_STEAM
       STEAMSHIM_deinit();
@@ -481,6 +531,11 @@ int main(int argc, char *argv[]) {
 #endif
 
     /* Start RGSS thread */
+#if TARGET_OS_IPHONE
+    /* Drain stale events (especially SDL_QUIT) left over from the
+     * previous session so the event loop doesn't exit immediately. */
+    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+#endif
     SDL_Thread *rgssThread = SDL_CreateThread(rgssThreadFun, "rgss", &rtData);
 
     /* Start event processing */
@@ -520,13 +575,32 @@ int main(int argc, char *argv[]) {
     if (rtData.glContext)
       SDL_GL_DeleteContext(rtData.glContext);
 
-    /* Clean up any remainin events */
+    /* Clean up any remaining events */
     eventThread.cleanup();
 
-    Debug() << "Shutting down.";
+    Debug() << "Game session ended.";
 
+    alcMakeContextCurrent(NULL);
+    if (alcCtx)
+      alcDestroyContext(alcCtx);
     alcCloseDevice(alcDev);
     SDL_DestroyWindow(win);
+
+#if TARGET_OS_IPHONE
+    /* Signal that the engine has fully shut down.
+     * The UI layer observes this and decides what to do next
+     * (e.g. show library, quit app). */
+    mkxp_setEngineTerminated();
+
+    /* Wait for the UI to provide a new game path (or not).
+     * mkxp_waitForGamePath() pumps the main run loop so UIKit
+     * stays responsive. If the UI decides to quit the app,
+     * it can call exit() or simply never set a path. */
+    continue;
+    } // end while(true) game session loop
+#endif // TARGET_OS_IPHONE
+
+    Debug() << "Shutting down.";
 
 #if defined(__WIN32__)
     if (wsadata.wVersion)
