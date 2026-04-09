@@ -1,0 +1,189 @@
+name: mkxp-ios
+options:
+  bundleIdPrefix: com.mkxp
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    CLANG_CXX_LANGUAGE_STANDARD: c++14
+    CLANG_ENABLE_OBJC_ARC: YES
+    CLANG_ENABLE_MODULES: NO
+    OTHER_CFLAGS: -fdeclspec
+    WARNING_CFLAGS: "-Wno-documentation -Wno-shorten-64-to-32 -Wno-deprecated-declarations -Wno-uninitialized -Wno-conditional-uninitialized -Wno-undefined-var-template -Wno-comma -Wno-switch -Wno-unused-const-variable -Wno-deprecated-literal-operator -Wno-unused-function"
+    DEPENDENCY_SEARCH_PATH: $(PROJECT_DIR)/../Dependencies/build-$(PLATFORM_NAME)-arm64
+    HEADER_SEARCH_PATHS:
+      - $(PROJECT_DIR)/../../mkxp-z
+      - $(PROJECT_DIR)/../../mkxp-z/src
+      - $(PROJECT_DIR)/../../mkxp-z/src/audio
+      - $(PROJECT_DIR)/../../mkxp-z/src/crypto
+      - $(PROJECT_DIR)/../../mkxp-z/src/display
+      - $(PROJECT_DIR)/../../mkxp-z/src/display/gl
+      - $(PROJECT_DIR)/../../mkxp-z/src/display/libnsgif
+      - $(PROJECT_DIR)/../../mkxp-z/src/etc
+      - $(PROJECT_DIR)/../../mkxp-z/src/filesystem
+      - $(PROJECT_DIR)/../../mkxp-z/src/input
+      - $(PROJECT_DIR)/../../mkxp-z/src/net
+      - $(PROJECT_DIR)/../../mkxp-z/src/system
+      - $(PROJECT_DIR)/../../mkxp-z/src/theoraplay
+      - $(PROJECT_DIR)/../../mkxp-z/src/util
+      - $(PROJECT_DIR)/../../mkxp-z/binding
+      - $(PROJECT_DIR)/../../mkxp-z/shader
+      - $(PROJECT_DIR)/shims
+      - $(DEPENDENCY_SEARCH_PATH)/include/SDL2
+      - $(DEPENDENCY_SEARCH_PATH)/include/pixman-1
+      - $(DEPENDENCY_SEARCH_PATH)/include/uchardet
+      - $(DEPENDENCY_SEARCH_PATH)/include/freetype2
+    SYSTEM_HEADER_SEARCH_PATHS:
+      - $(DEPENDENCY_SEARCH_PATH)/include/ruby18
+      - $(DEPENDENCY_SEARCH_PATH)/include
+    LIBRARY_SEARCH_PATHS:
+      - $(DEPENDENCY_SEARCH_PATH)/lib
+    GCC_PREPROCESSOR_DEFINITIONS:
+      - MKXPZ_BUILD_XCODE
+      - MKXPZ_ALCDEVICE=ALCdevice_struct
+      - MKXPZ_MINIFFI
+      - 'MKXPZ_VERSION="\"1.0.0\""'
+      - 'MKXPZ_GIT_HASH="\"ios\""'
+      - MKXPZ_LEGACY_RUBY
+      - GLES2_HEADER
+      - HAVE_CONFIG_H
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: YES
+  configs:
+    Release:
+      OTHER_CFLAGS: "-fdeclspec -O3"
+targets:
+  mkxp-ios:
+    type: application
+    platform: iOS
+    sources:
+      - path: ../../mkxp-z/src/main.cpp
+      - path: ../../mkxp-z/src/eventthread.cpp
+      - path: ../../mkxp-z/src/sharedstate.cpp
+      - path: ../../mkxp-z/src/config.cpp
+      - path: ../../mkxp-z/src/settingsmenu.cpp
+      - path: ../../mkxp-z/src/crypto/rgssad.cpp
+      - path: ../../mkxp-z/src/util/iniconfig.cpp
+      - path: ../../mkxp-z/src/system/systemImpl.cpp
+        buildPhase: none
+      - path: ../../mkxp-z/src/filesystem/filesystem.cpp
+      - path: ../../mkxp-z/src/filesystem/filesystemImpl.cpp
+        buildPhase: none
+      - path: ../../mkxp-z/src/input/input.cpp
+      - path: ../../mkxp-z/src/input/keybindings.cpp
+      - path: ../../mkxp-z/src/audio/audio.cpp
+      - path: ../../mkxp-z/src/audio/audiostream.cpp
+      - path: ../../mkxp-z/src/audio/alstream.cpp
+      - path: ../../mkxp-z/src/audio/soundemitter.cpp
+      - path: ../../mkxp-z/src/audio/sdlsoundsource.cpp
+      - path: ../../mkxp-z/src/audio/vorbissource.cpp
+      - path: ../../mkxp-z/src/audio/midisource.cpp
+      - path: ../../mkxp-z/src/audio/fluid-fun.cpp
+      - path: ../../mkxp-z/src/display/graphics.cpp
+      - path: ../../mkxp-z/src/display/bitmap.cpp
+      - path: ../../mkxp-z/src/display/font.cpp
+      - path: ../../mkxp-z/src/display/sprite.cpp
+      - path: ../../mkxp-z/src/display/plane.cpp
+      - path: ../../mkxp-z/src/display/viewport.cpp
+      - path: ../../mkxp-z/src/display/window.cpp
+      - path: ../../mkxp-z/src/display/windowvx.cpp
+      - path: ../../mkxp-z/src/display/tilemap.cpp
+      - path: ../../mkxp-z/src/display/tilemapvx.cpp
+      - path: ../../mkxp-z/src/display/autotiles.cpp
+      - path: ../../mkxp-z/src/display/autotilesvx.cpp
+      - path: ../../mkxp-z/src/display/gl/shader.cpp
+      - path: ../../mkxp-z/src/display/gl/glstate.cpp
+      - path: ../../mkxp-z/src/display/gl/gl-fun.cpp
+      - path: ../../mkxp-z/src/display/gl/gl-meta.cpp
+      - path: ../../mkxp-z/src/display/gl/gl-debug.cpp
+      - path: ../../mkxp-z/src/display/gl/vertex.cpp
+      - path: ../../mkxp-z/src/display/gl/scene.cpp
+      - path: ../../mkxp-z/src/display/gl/texpool.cpp
+      - path: ../../mkxp-z/src/display/gl/tileatlas.cpp
+      - path: ../../mkxp-z/src/display/gl/tileatlasvx.cpp
+      - path: ../../mkxp-z/src/display/gl/tilequad.cpp
+      - path: ../../mkxp-z/src/etc/etc.cpp
+      - path: ../../mkxp-z/src/etc/table.cpp
+      - path: ../../mkxp-z/src/net/net.cpp
+      - path: ../../mkxp-z/src/net/LUrlParser.cpp
+      - path: ../../mkxp-z/src/display/libnsgif/libnsgif.c
+      - path: ../../mkxp-z/src/display/libnsgif/lzw.c
+      - path: ../../mkxp-z/src/theoraplay/theoraplay.c
+      - path: ../../mkxp-z/binding/binding-mri.cpp
+      - path: ../../mkxp-z/binding/binding-util.cpp
+      - path: ../../mkxp-z/binding/bitmap-binding.cpp
+      - path: ../../mkxp-z/binding/table-binding.cpp
+      - path: ../../mkxp-z/binding/etc-binding.cpp
+      - path: ../../mkxp-z/binding/font-binding.cpp
+      - path: ../../mkxp-z/binding/sprite-binding.cpp
+      - path: ../../mkxp-z/binding/viewport-binding.cpp
+      - path: ../../mkxp-z/binding/plane-binding.cpp
+      - path: ../../mkxp-z/binding/window-binding.cpp
+      - path: ../../mkxp-z/binding/windowvx-binding.cpp
+      - path: ../../mkxp-z/binding/tilemap-binding.cpp
+      - path: ../../mkxp-z/binding/tilemapvx-binding.cpp
+      - path: ../../mkxp-z/binding/input-binding.cpp
+      - path: ../../mkxp-z/binding/audio-binding.cpp
+      - path: ../../mkxp-z/binding/graphics-binding.cpp
+      - path: ../../mkxp-z/binding/filesystem-binding.cpp
+      - path: ../../mkxp-z/binding/miniffi.cpp
+      - path: ../../mkxp-z/binding/miniffi-binding.cpp
+      - path: ../../mkxp-z/binding/http-binding.cpp
+      - path: ../../mkxp-z/binding/cusl-binding.cpp
+      - path: ../../mkxp-z/binding/module_rpg.cpp
+      - path: ../../mkxp-z/src/ios_bridge.cpp
+      - path: src
+        type: group
+      - path: Assets.bundle
+        type: folder
+        buildPhase: resources
+      - path: ../../demo/games/Z213
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mkxp.mkxp-ios
+        INFOPLIST_FILE: $(PROJECT_DIR)/Info.plist
+        PRODUCT_NAME: mkxp-z
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        OTHER_LDFLAGS:
+          - -lSDL2
+          - -lSDL2main
+          - -lSDL2_image
+          - -lSDL2_sound
+          - -lSDL2_ttf
+          - -lruby18-static
+          - -lruby18-ext
+          - -lfreetype
+          - -lpixman-1
+          - -lpng16
+          - -logg
+          - -lvorbis
+          - -lvorbisfile
+          - -ltheora
+          - -ltheoradec
+          - -lphysfs
+          - -luchardet
+          - -lz
+          - -lbz2
+          - -liconv
+          - -ldl
+          - -lpthread
+          - -framework Foundation
+          - -framework UIKit
+          - -framework CoreFoundation
+          - -framework CoreGraphics
+          - -framework CoreVideo
+          - -framework CoreAudio
+          - -framework AudioToolbox
+          - -framework AVFoundation
+          - -framework Metal
+          - -framework OpenGLES
+          - -framework OpenAL
+          - -framework QuartzCore
+          - -framework GameController
+          - -framework CoreMotion
+          - -framework CoreBluetooth
+          - -weak_framework CoreHaptics
