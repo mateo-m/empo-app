@@ -1,0 +1,28 @@
+# Games (large, user-provided content)
+demo/games/
+
+# Build artifacts
+ios/mkxp-ios/build/
+ios/mkxp-ios/mkxp-ios.xcodeproj/
+
+# Dependencies (downloaded sources and build outputs)
+ios/Dependencies/downloads/
+ios/Dependencies/build-*/
+
+# Xcode / DerivedData
+DerivedData/
+*.xcworkspace
+xcuserdata/
+
+# Clangd / LSP cache
+.cache/
+compile_commands.json
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Temporary files
+*.swp
+*.swo
+*~
