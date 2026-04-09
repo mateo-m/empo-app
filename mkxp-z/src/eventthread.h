@@ -85,6 +85,9 @@ public:
 
 	static bool allocUserEvents();
 
+	/* Reset all input state arrays (for session transitions on iOS) */
+	static void resetAllInputStates();
+
 	EventThread();
     ~EventThread();
 

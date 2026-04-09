@@ -4,6 +4,7 @@ demo/games/
 # Build artifacts
 ios/mkxp-ios/build/
 ios/mkxp-ios/mkxp-ios.xcodeproj/
+*.ipa
 
 # Dependencies (downloaded sources and build outputs)
 ios/Dependencies/downloads/

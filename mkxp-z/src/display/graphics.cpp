@@ -65,6 +65,10 @@
 #include <cmath>
 #include <climits>
 
+#if TARGET_OS_IPHONE
+#include "ios_bridge.h"
+#endif
+
 
 #define DEF_SCREEN_W (rgssVer == 1 ? 640 : 544)
 #define DEF_SCREEN_H (rgssVer == 1 ? 480 : 416)
@@ -884,6 +888,17 @@ struct GraphicsPrivate {
         ratio.y = (float)scRes.y / scSize.y * backingScaleFactor;
         
         rtData->screenOffset = scOffset / backingScaleFactor;
+
+#if TARGET_OS_IPHONE
+        // Publish the game viewport rect in logical points for the touch overlay.
+        // scOffset.y is in GL coordinates (origin bottom-left), convert to
+        // screen coordinates (origin top-left) for UIKit.
+        // Use UIKit screen scale (not SDL backingScaleFactor) for GL-to-point conversion.
+        float uiSc = mkxp_getScreenScale();
+        float screenY = (winSize.y - scOffset.y - scSize.y) / uiSc;
+        mkxp_setGameRect(scOffset.x / uiSc, screenY,
+                         scSize.x / uiSc, scSize.y / uiSc);
+#endif
     }
     
     /* Enforces fixed aspect ratio, if desired */
@@ -915,6 +930,49 @@ struct GraphicsPrivate {
         
         scOffset.x = (winSize.x - scSize.x) / 2.f;
         scOffset.y = (winSize.y - scSize.y) / 2.f;
+
+#if TARGET_OS_IPHONE
+        {
+            float saTop = 0, saBottom = 0, saLeft = 0, saRight = 0;
+            mkxp_getSafeAreaInsets(&saTop, &saBottom, &saLeft, &saRight);
+
+            // Safe area insets are in UIKit points. Convert to GL drawable
+            // pixels using the UIKit screen scale. We cannot use SDL's
+            // backingScaleFactor because SDL's window size may differ from
+            // the UIKit screen size in points.
+            float uiScale = mkxp_getScreenScale();
+            int saTopPx   = (int)(saTop    * uiScale);
+            int saBotPx   = (int)(saBottom * uiScale);
+            int saLeftPx  = (int)(saLeft   * uiScale);
+            int saRightPx = (int)(saRight  * uiScale);
+
+            // Available area inside safe insets
+            int availW = winSize.x - saLeftPx - saRightPx;
+            int availH = winSize.y - saTopPx  - saBotPx;
+
+            // Fit game within the safe area
+            float resRatio2 = (float)scRes.x / scRes.y;
+            scSize.x = availW;
+            scSize.y = (int)(scSize.x / resRatio2);
+            if (scSize.y > availH) {
+                scSize.y = availH;
+                scSize.x = (int)(scSize.y * resRatio2);
+            }
+
+            // Note: scOffset.y is in OpenGL coordinates (origin = bottom-left),
+            // so bottom safe area maps to lower y values.
+            if (winSize.x < winSize.y) {
+                // Portrait: top-align within safe area, controls go below.
+                // "top" in screen coords = high y in GL coords.
+                scOffset.x = saLeftPx + (availW - scSize.x) / 2;
+                scOffset.y = winSize.y - saTopPx - scSize.y;
+            } else {
+                // Landscape: center within safe area
+                scOffset.x = saLeftPx + (availW - scSize.x) / 2;
+                scOffset.y = saBotPx  + (availH - scSize.y) / 2;
+            }
+        }
+#endif
     }
     
     static int findHighestFittingScale(int base, int target) {
