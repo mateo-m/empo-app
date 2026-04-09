@@ -1,6 +1,7 @@
 #import "TouchControlsOverlay.h"
 #import <SDL.h>
 #include "ios_bridge.h"
+#import "mkxp_z-Swift.h"
 
 // ============================================================================
 // MARK: - Constants
@@ -941,6 +942,9 @@ static UIView *createKeyboardAccessoryView(void) {
 // hide controls
 @property (nonatomic, strong) UIButton *hideToggle;
 @property (nonatomic) BOOL controlsHidden;
+// quit to library
+@property (nonatomic, strong) UIButton *quitToggle;
+@property (nonatomic, strong) NSTimer *terminationPollTimer;
 // toolbar idle dimming
 @property (nonatomic, strong) NSTimer *toolbarIdleTimer;
 @property (nonatomic) BOOL toolbarDimmed;
@@ -965,6 +969,7 @@ static UIView *createKeyboardAccessoryView(void) {
         [self buildDebugOverlay];
         [self buildKeyboardSupport];
         [self buildHideToggle];
+        [self buildQuitButton];
 
         // Load saved layout or create defaults
         if (![self loadLayout]) {
@@ -1011,6 +1016,7 @@ static UIView *createKeyboardAccessoryView(void) {
         self.debugToggle.alpha = alpha;
         self.keyboardToggle.alpha = alpha;
         self.hideToggle.alpha = alpha;
+        self.quitToggle.alpha = alpha;
     };
     if (animated) {
         [UIView animateWithDuration:0.18 delay:0 usingSpringWithDamping:0.85 initialSpringVelocity:0 options:0 animations:block completion:nil];
@@ -1047,6 +1053,7 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     _debugToggle.alpha = alpha;
     _keyboardToggle.alpha = alpha;
     _hideToggle.alpha = alpha;
+    _quitToggle.alpha = alpha;
 }
 
 // Pass through touches that don't hit any control
@@ -1061,7 +1068,7 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     }
     UIView *hit = [super hitTest:point withEvent:event];
     // Reset idle timer when any toolbar button is tapped
-    if (hit == _editToggle || hit == _debugToggle || hit == _keyboardToggle || hit == _hideToggle) {
+    if (hit == _editToggle || hit == _debugToggle || hit == _keyboardToggle || hit == _hideToggle || hit == _quitToggle) {
         [self resetToolbarIdleTimer];
     }
     return (hit == self) ? nil : hit;
@@ -1213,6 +1220,88 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     [self addSubview:_hideToggle];
 }
 
+- (void)buildQuitButton {
+    _quitToggle = [UIButton buttonWithType:UIButtonTypeSystem];
+    UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:16 weight:UIImageSymbolWeightMedium];
+    [_quitToggle setImage:[UIImage systemImageNamed:@"xmark.circle.fill" withConfiguration:cfg]
+                 forState:UIControlStateNormal];
+    _quitToggle.tintColor = [UIColor colorWithRed:1.0 green:0.4 blue:0.4 alpha:0.9];
+    _quitToggle.backgroundColor = [UIColor colorWithWhite:0.3 alpha:0.5];
+    _quitToggle.layer.cornerRadius = kSmallButtonSize / 2;
+    [_quitToggle addTarget:self action:@selector(onQuitToLibrary) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:_quitToggle];
+}
+
+- (void)onQuitToLibrary {
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:@"Return to Library"
+                         message:@"Are you sure you want to quit the current game?"
+                  preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Quit" style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+        [self beginEngineTermination];
+    }]];
+
+    // Find the nearest view controller to present the alert
+    UIViewController *vc = self.window.rootViewController;
+    while (vc.presentedViewController) vc = vc.presentedViewController;
+    [vc presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)beginEngineTermination {
+    // Disable controls immediately
+    [self setControlsHidden:YES animated:YES];
+
+    // Ask the engine to shut down
+    mkxp_requestTerminate();
+
+    // Poll until the engine confirms termination
+    _terminationPollTimer = [NSTimer scheduledTimerWithTimeInterval:0.1
+                                                            target:self
+                                                          selector:@selector(pollEngineTermination)
+                                                          userInfo:nil
+                                                           repeats:YES];
+}
+
+- (void)pollEngineTermination {
+    if (mkxp_isEngineTerminated()) {
+        [_terminationPollTimer invalidate];
+        _terminationPollTimer = nil;
+
+        // Re-show the library on the main thread
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // Reset overlay state for next session
+            [self prepareForNewSession];
+
+            // Show the library window
+            [GameLibraryWindow performSelector:@selector(show)];
+        });
+    }
+}
+
+- (void)prepareForNewSession {
+    _gameReady = NO;
+    _controlsHidden = YES;
+
+    // Invalidate any existing timers
+    [_toolbarIdleTimer invalidate];
+    _toolbarIdleTimer = nil;
+
+    // Recreate loading view
+    if (!_loadingView) {
+        _loadingView = [[TCLoadingView alloc] initWithFrame:self.bounds];
+        [self addSubview:_loadingView];
+    }
+
+    // Restart game readiness polling
+    [_loadingTimer invalidate];
+    _loadingTimer = [NSTimer scheduledTimerWithTimeInterval:0.1
+                                                    target:self
+                                                  selector:@selector(checkGameReady)
+                                                  userInfo:nil
+                                                   repeats:YES];
+}
+
 - (void)toggleHideControls {
     _controlsHidden = !_controlsHidden;
     UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:16 weight:UIImageSymbolWeightMedium];
@@ -1227,6 +1316,7 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
         self.editToggle.alpha = alpha;
         self.debugToggle.alpha = alpha;
         self.keyboardToggle.alpha = alpha;
+        self.quitToggle.alpha = alpha;
     } completion:nil];
 }
 
@@ -1343,34 +1433,106 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     CGSize sz = self.bounds.size;
     UIEdgeInsets safe = self.safeAreaInsets;
 
-    // Top-right button row: [hide] [keyboard] [debug] [gear]
-    // Position inside safe area so buttons aren't clipped by notch or rounded corners
-    CGFloat btnY = safe.top + 4;
-    CGFloat btnX = sz.width - safe.right - 4;
+    BOOL isPortrait = sz.height > sz.width;
 
-    // Hide toggle — rightmost (always visible)
-    btnX -= kSmallButtonSize;
-    _hideToggle.frame = CGRectMake(btnX, btnY, kSmallButtonSize, kSmallButtonSize);
+    // Query the game viewport rect (set by the engine via mkxp_setGameRect)
+    float gx = 0, gy = 0, gw = 0, gh = 0;
+    mkxp_getGameRect(&gx, &gy, &gw, &gh);
 
-    // Gear (edit toggle)
-    btnX -= (kSmallButtonSize + 8);
-    _editToggle.frame = CGRectMake(btnX, btnY, kSmallButtonSize, kSmallButtonSize);
+    if (isPortrait && gh > 0) {
+        // Portrait: place toolbox buttons right-aligned, smaller,
+        // at the top of the controls area (just below the game).
+        CGFloat tbBtnSize = kSmallButtonSize - 8; // smaller in portrait
+        CGFloat tbGap = 6;
+        CGFloat totalBtnW = 5 * tbBtnSize + 4 * tbGap;
+        CGFloat btnX = sz.width - safe.right - 8 - totalBtnW;
+        CGFloat btnY = gy + gh + 8;
 
-    // Debug toggle
-    btnX -= (kSmallButtonSize + 8);
-    _debugToggle.frame = CGRectMake(btnX, btnY, kSmallButtonSize, kSmallButtonSize);
+        _keyboardToggle.frame = CGRectMake(btnX, btnY, tbBtnSize, tbBtnSize);
+        btnX += tbBtnSize + tbGap;
+        _debugToggle.frame = CGRectMake(btnX, btnY, tbBtnSize, tbBtnSize);
+        btnX += tbBtnSize + tbGap;
+        _editToggle.frame = CGRectMake(btnX, btnY, tbBtnSize, tbBtnSize);
+        btnX += tbBtnSize + tbGap;
+        _hideToggle.frame = CGRectMake(btnX, btnY, tbBtnSize, tbBtnSize);
+        btnX += tbBtnSize + tbGap;
+        _quitToggle.frame = CGRectMake(btnX, btnY, tbBtnSize, tbBtnSize);
 
-    // Keyboard toggle
-    btnX -= (kSmallButtonSize + 8);
-    _keyboardToggle.frame = CGRectMake(btnX, btnY, kSmallButtonSize, kSmallButtonSize);
+        // Update corner radius and icon size for smaller buttons
+        CGFloat tbIconPt = 13;
+        UIImageSymbolConfiguration *tbCfg = [UIImageSymbolConfiguration configurationWithPointSize:tbIconPt weight:UIImageSymbolWeightMedium];
+        NSDictionary<NSValue *, NSString *> *btnIcons = @{
+            [NSValue valueWithNonretainedObject:_keyboardToggle]: @"keyboard",
+            [NSValue valueWithNonretainedObject:_debugToggle]:    @"chart.line.uptrend.xyaxis",
+            [NSValue valueWithNonretainedObject:_editToggle]:     @"gearshape.fill",
+            [NSValue valueWithNonretainedObject:_hideToggle]:     _controlsHidden ? @"eye.slash.fill" : @"eye.fill",
+            [NSValue valueWithNonretainedObject:_quitToggle]:     @"xmark.circle.fill",
+        };
+        for (NSValue *key in btnIcons) {
+            UIButton *btn = (UIButton *)[key nonretainedObjectValue];
+            btn.layer.cornerRadius = tbBtnSize / 2;
+            [btn setImage:[UIImage systemImageNamed:btnIcons[key] withConfiguration:tbCfg]
+                 forState:UIControlStateNormal];
+        }
 
-    // Edit toolbar: top center of screen, inside safe area
-    CGFloat tbW = 260, tbH = 40;
-    _editToolbar.frame = CGRectMake((sz.width - tbW) / 2, safe.top + 4, tbW, tbH);
+        // Edit toolbar: center horizontally just below the game area
+        CGFloat tbW = 260, tbH = 40;
+        _editToolbar.frame = CGRectMake((sz.width - tbW) / 2, gy + gh + 8, tbW, tbH);
 
-    // Debug overlay: top-left corner inside safe area (unless user dragged it)
-    if (!_debugOverlay.dragged) {
-        _debugOverlay.frame = CGRectMake(safe.left + 4, safe.top + 4, 220, 100);
+        // Debug overlay: below game area, left-aligned
+        if (!_debugOverlay.dragged) {
+            _debugOverlay.frame = CGRectMake(safe.left + 4, gy + gh + 8, 220, 100);
+        }
+    } else {
+        // Landscape (or game rect not yet available): top-right button row
+        CGFloat btnY = safe.top + 4;
+        CGFloat btnX = sz.width - safe.right - 4;
+
+        // Hide toggle — rightmost (always visible)
+        btnX -= kSmallButtonSize;
+        _hideToggle.frame = CGRectMake(btnX, btnY, kSmallButtonSize, kSmallButtonSize);
+
+        // Gear (edit toggle)
+        btnX -= (kSmallButtonSize + 8);
+        _editToggle.frame = CGRectMake(btnX, btnY, kSmallButtonSize, kSmallButtonSize);
+
+        // Debug toggle
+        btnX -= (kSmallButtonSize + 8);
+        _debugToggle.frame = CGRectMake(btnX, btnY, kSmallButtonSize, kSmallButtonSize);
+
+        // Keyboard toggle
+        btnX -= (kSmallButtonSize + 8);
+        _keyboardToggle.frame = CGRectMake(btnX, btnY, kSmallButtonSize, kSmallButtonSize);
+
+        // Quit toggle
+        btnX -= (kSmallButtonSize + 8);
+        _quitToggle.frame = CGRectMake(btnX, btnY, kSmallButtonSize, kSmallButtonSize);
+
+        // Restore original corner radius and icon size for landscape
+        CGFloat lsIconPt = 18;
+        UIImageSymbolConfiguration *lsCfg = [UIImageSymbolConfiguration configurationWithPointSize:lsIconPt weight:UIImageSymbolWeightMedium];
+        NSDictionary<NSValue *, NSString *> *btnIcons = @{
+            [NSValue valueWithNonretainedObject:_keyboardToggle]: @"keyboard",
+            [NSValue valueWithNonretainedObject:_debugToggle]:    @"chart.line.uptrend.xyaxis",
+            [NSValue valueWithNonretainedObject:_editToggle]:     @"gearshape.fill",
+            [NSValue valueWithNonretainedObject:_hideToggle]:     _controlsHidden ? @"eye.slash.fill" : @"eye.fill",
+            [NSValue valueWithNonretainedObject:_quitToggle]:     @"xmark.circle.fill",
+        };
+        for (NSValue *key in btnIcons) {
+            UIButton *btn = (UIButton *)[key nonretainedObjectValue];
+            btn.layer.cornerRadius = kSmallButtonSize / 2;
+            [btn setImage:[UIImage systemImageNamed:btnIcons[key] withConfiguration:lsCfg]
+                 forState:UIControlStateNormal];
+        }
+
+        // Edit toolbar: top center of screen, inside safe area
+        CGFloat tbW = 260, tbH = 40;
+        _editToolbar.frame = CGRectMake((sz.width - tbW) / 2, safe.top + 4, tbW, tbH);
+
+        // Debug overlay: top-left corner inside safe area (unless user dragged it)
+        if (!_debugOverlay.dragged) {
+            _debugOverlay.frame = CGRectMake(safe.left + 4, safe.top + 4, 220, 100);
+        }
     }
 
     // Ensure toolbar buttons are always on top of everything
@@ -1380,6 +1542,7 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     [self bringSubviewToFront:_debugToggle];
     [self bringSubviewToFront:_editToggle];
     [self bringSubviewToFront:_hideToggle];
+    [self bringSubviewToFront:_quitToggle];
 
     // Loading view
     _loadingView.frame = self.bounds;
@@ -1555,6 +1718,7 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     _debugToggle.hidden = _editMode;
     _keyboardToggle.hidden = _editMode;
     _hideToggle.hidden = _editMode;
+    _quitToggle.hidden = _editMode;
     _dpad.editing = _editMode;
     for (TCButton *b in _buttons) {
         b.editing = _editMode;
@@ -1952,9 +2116,16 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
 
 @implementation TouchControlsViewController
 
-- (BOOL)prefersStatusBarHidden { return YES; }
+- (BOOL)prefersStatusBarHidden {
+    CGSize sz = self.view.bounds.size;
+    return sz.width > sz.height; // hide only in landscape
+}
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations {
-    return UIInterfaceOrientationMaskLandscape;
+    return UIInterfaceOrientationMaskAllButUpsideDown;
+}
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator {
+    [super viewWillTransitionToSize:size withTransitionCoordinator:coordinator];
+    [self setNeedsStatusBarAppearanceUpdate];
 }
 
 @end

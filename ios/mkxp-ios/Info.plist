@@ -27,14 +27,18 @@
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>UIStatusBarHidden</key>
-	<true/>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<false/>
+	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>

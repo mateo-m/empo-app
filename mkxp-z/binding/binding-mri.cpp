@@ -1477,17 +1477,43 @@ static void mriBindingExecute() {
     rb_enc_set_default_internal(rb_enc_from_encoding(rb_utf8_encoding()));
     rb_enc_set_default_external(rb_enc_from_encoding(rb_utf8_encoding()));
 #else
-    ruby_init();
-    rb_eval_string("$KCODE='U'");
+    /* Ruby 1.8: ruby_init() and Init_* must only be called once.
+     * On iOS, the engine runs multiple game sessions in a single process.
+     * ruby_cleanup() partially destructs the VM and ruby_init() doesn't
+     * fully reinitialize it, causing SIGSEGV on the second run.
+     * Keep the VM alive across sessions. */
+    static bool rubyVMInitialized = false;
+    if (!rubyVMInitialized) {
+        ruby_init();
+        rb_eval_string("$KCODE='U'");
 
-    /* Initialize statically-linked extensions for Ruby 1.8 */
-    {
+        /* Initialize statically-linked extensions for Ruby 1.8 */
         Init_zlib();
         Init_stringio();
         Init_strscan();
         Init_thread();
         Init_digest();
         Init_fcntl();
+
+        rubyVMInitialized = true;
+    } else {
+        /* Subsequent session: clear leftover Ruby state.
+         * Clear exception before eval -- a stale $! can cause issues.
+         * Do NOT set $@ when $! is nil; Ruby 1.8's errat_setter raises
+         * ArgumentError ("$@ must be set after raise"), and with no
+         * rb_protect tag on the stack that rb_raise crashes the process. */
+        rb_gv_set("$!", Qnil);
+
+        int clearState = 0;
+        rb_eval_string_protect(
+            "$LOADED_FEATURES.clear; $\".clear",
+            &clearState
+        );
+
+        if (clearState) {
+            /* If clearing failed, reset exception and continue anyway */
+            rb_gv_set("$!", Qnil);
+        }
     }
 #ifdef __WIN32__
     if (!conf.winConsole) {
@@ -1543,10 +1569,11 @@ static void mriBindingExecute() {
     mriBindingInit();
     
     std::string &customScript = conf.customScript;
-    if (!customScript.empty())
+    if (!customScript.empty()) {
         runCustomScript(customScript);
-    else
+    } else {
         runRMXPScripts(btData);
+    }
     
 #if RAPI_FULL > 187
     VALUE exc = rb_errinfo();
@@ -1556,7 +1583,13 @@ static void mriBindingExecute() {
     if (!NIL_P(exc) && !rb_obj_is_kind_of(exc, rb_eSystemExit))
         showExc(exc, btData);
     
+#if TARGET_OS_IPHONE
+    /* On iOS, keep the Ruby VM alive across game sessions.
+     * ruby_cleanup() corrupts Ruby 1.8's internal state and
+     * makes ruby_init() crash on subsequent calls. */
+#else
     ruby_cleanup(0);
+#endif
     
     shState->rtData().rqTermAck.set();
 }

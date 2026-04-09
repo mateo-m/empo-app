@@ -138,9 +138,6 @@ targets:
       - path: Assets.bundle
         type: folder
         buildPhase: resources
-      - path: ../../demo/games/Z213
-        type: folder
-        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mkxp.mkxp-ios
@@ -148,6 +145,9 @@ targets:
         PRODUCT_NAME: mkxp-z
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
+        
+        SWIFT_VERSION: "5.0"
+        SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/mkxp-ios-Bridging-Header.h
         OTHER_LDFLAGS:
           - -lSDL2
           - -lSDL2main
