@@ -32,6 +32,14 @@ static std::atomic<float> s_gameRectY{0};
 static std::atomic<float> s_gameRectW{0};
 static std::atomic<float> s_gameRectH{0};
 
+// Input bridge: cached SDL window ID for event injection.
+static uint32_t s_sdlWindowID = 0;
+
+// Key event callback: engine -> UI notification for hardware key events.
+static mkxp_KeyEventCallback s_keyEventCb = nullptr;
+static void *s_keyEventUserdata = nullptr;
+static bool s_keyWatcherInstalled = false;
+
 extern "C" {
 
 void mkxp_setGameReady(void) {
@@ -92,6 +100,7 @@ void mkxp_resetBridgeState(void) {
     s_gameRectY.store(0, std::memory_order_relaxed);
     s_gameRectW.store(0, std::memory_order_relaxed);
     s_gameRectH.store(0, std::memory_order_relaxed);
+    s_sdlWindowID = 0;
     {
         std::lock_guard<std::mutex> lock(s_pathMutex);
         s_gamePath.clear();
@@ -125,6 +134,55 @@ void mkxp_getGameRect(float *x, float *y, float *w, float *h) {
     if (y) *y = s_gameRectY.load(std::memory_order_relaxed);
     if (w) *w = s_gameRectW.load(std::memory_order_relaxed);
     if (h) *h = s_gameRectH.load(std::memory_order_relaxed);
+}
+
+// ============================================================================
+// Input bridge
+// ============================================================================
+
+void mkxp_injectKeyEvent(int scancode, int pressed) {
+    // Lazily resolve the SDL window ID on first use
+    if (s_sdlWindowID == 0) {
+        SDL_Window *w = SDL_GetGrabbedWindow();
+        if (w) {
+            s_sdlWindowID = SDL_GetWindowID(w);
+        } else {
+            // Single-window app: SDL window IDs start at 1
+            s_sdlWindowID = 1;
+        }
+    }
+
+    SDL_Event event;
+    memset(&event, 0, sizeof(event));
+    event.type              = pressed ? SDL_KEYDOWN : SDL_KEYUP;
+    event.key.timestamp     = SDL_GetTicks();
+    event.key.windowID      = s_sdlWindowID;
+    event.key.state         = pressed ? SDL_PRESSED : SDL_RELEASED;
+    event.key.repeat        = 0;
+    event.key.keysym.scancode = (SDL_Scancode)scancode;
+    event.key.keysym.sym    = SDL_GetKeyFromScancode((SDL_Scancode)scancode);
+    event.key.keysym.mod    = KMOD_NONE;
+    SDL_PushEvent(&event);
+}
+
+static int keyEventWatcherFn(void * /*userdata*/, SDL_Event *event) {
+    if (event->type == SDL_KEYDOWN || event->type == SDL_KEYUP) {
+        int pressed = (event->type == SDL_KEYDOWN) ? 1 : 0;
+        int sc = (int)event->key.keysym.scancode;
+        if (s_keyEventCb) {
+            s_keyEventCb(sc, pressed, s_keyEventUserdata);
+        }
+    }
+    return 1; // keep processing the event
+}
+
+void mkxp_setKeyEventCallback(mkxp_KeyEventCallback cb, void *userdata) {
+    s_keyEventCb = cb;
+    s_keyEventUserdata = userdata;
+    if (!s_keyWatcherInstalled) {
+        SDL_AddEventWatch(keyEventWatcherFn, NULL);
+        s_keyWatcherInstalled = true;
+    }
 }
 
 } // extern "C"

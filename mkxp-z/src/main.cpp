@@ -130,6 +130,16 @@ static void printGLInfo() {
 static SDL_GLContext initGL(SDL_Window *win, Config &conf,
                             RGSSThreadData *threadData);
 
+/* On iOS, the screen FBO is non-zero (SDL creates an FBO backed by
+ * CAEAGLLayer). This ID is captured once during initGL() and reused
+ * for all sessions, since the window and GL context persist.
+ * Re-querying GL_FRAMEBUFFER_BINDING on subsequent sessions would
+ * return 0 (because SharedState::finiInstance deleted all game FBOs
+ * and GL reverts the binding to 0), which is wrong on iOS. */
+#if TARGET_OS_IPHONE
+static GLuint s_iosScreenFBO = 0;
+#endif
+
 int rgssThreadFun(void *userdata) {
   RGSSThreadData *threadData = static_cast<RGSSThreadData *>(userdata);
 
@@ -142,13 +152,22 @@ int rgssThreadFun(void *userdata) {
   SDL_GL_MakeCurrent(threadData->window, threadData->glContext);
 #endif
 
-  /* Query the real default framebuffer ID.
-   * On iOS, SDL creates a non-zero FBO backed by CAEAGLLayer.
-   * Binding FBO 0 renders to nothing, causing a black screen. */
+  /* Set the screen framebuffer ID and reset the binding tracker. */
   {
+#if TARGET_OS_IPHONE
+    /* On iOS, use the screen FBO captured once during initGL().
+     * The persistent GL context means this ID never changes. */
+    FBO::screenFramebufferID = FBO::ID(s_iosScreenFBO);
+#else
+    /* On other platforms, query the real default framebuffer ID. */
     GLint defaultFBO = 0;
     gl.GetIntegerv(GL_FRAMEBUFFER_BINDING, &defaultFBO);
     FBO::screenFramebufferID = FBO::ID(static_cast<GLuint>(defaultFBO));
+#endif
+    /* Bind the screen FBO explicitly and reset the tracker so it
+     * matches the actual GL state at the start of this session. */
+    gl.BindFramebuffer(GL_FRAMEBUFFER, FBO::screenFramebufferID.gl);
+    FBO::boundFramebufferID = FBO::screenFramebufferID;
   }
 
   /* Setup AL context — already created on the main thread to avoid
@@ -189,10 +208,16 @@ int rgssThreadFun(void *userdata) {
   SharedState::finiInstance();
 
 #if !TARGET_OS_IPHONE
-  /* On iOS, the AL context is managed by main() across game sessions */
+  /* On non-iOS, the AL context is destroyed with each session */
   alcDestroyContext(alcCtx);
 #else
+  /* On iOS, the AL context persists across sessions.
+   * Detach it from this thread so the next RGSS thread can claim it. */
   alcMakeContextCurrent(NULL);
+
+  /* Detach GL context from this thread so the next RGSS thread
+   * can call MakeCurrent on it. */
+  SDL_GL_MakeCurrent(threadData->window, NULL);
 #endif
 
   return 0;
@@ -351,13 +376,68 @@ int main(int argc, char *argv[]) {
 #endif
 
     // ================================================================
-    // Game session loop (iOS only -- non-iOS falls through once)
+    // iOS: Create persistent window, GL context, and AL device ONCE.
+    // These survive across game sessions to avoid GL context issues.
     // ================================================================
 #if TARGET_OS_IPHONE
+    // Set working directory for the first game (needed to read Config)
+    mkxp_fs::setCurrentDirectory(dataDir);
+
+    /* Read initial config to get window title/size (Config is re-read
+     * per session, but we need one now for window creation). */
+    Config initConf;
+    initConf.read(argc, argv);
+
+    Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
+
+#ifdef GLES2_HEADER
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
+
+    /* Allow all orientations. Without this, SDL infers supported
+     * orientations from the window w/h: a landscape-shaped game
+     * (e.g. 640x480) would lock the window to landscape only,
+     * preventing portrait gameplay. */
+    SDL_SetHint(SDL_HINT_ORIENTATIONS,
+                "Portrait LandscapeLeft LandscapeRight");
+
+    SDL_Window *persistWin = SDL_CreateWindow(
+        initConf.windowTitle.c_str(), SDL_WINDOWPOS_UNDEFINED,
+        SDL_WINDOWPOS_UNDEFINED, initConf.defScreenW,
+        initConf.defScreenH, winFlags);
+
+    if (!persistWin) {
+      showInitError(std::string("Error creating window: ") + SDL_GetError());
+      return 0;
+    }
+
+    SDL_GLContext persistGLCtx = initGL(persistWin, initConf, 0);
+
+    ALCdevice *persistAlcDev = alcOpenDevice(0);
+    if (!persistAlcDev) {
+      showInitError("Could not detect an available audio device.");
+      SDL_GL_DeleteContext(persistGLCtx);
+      SDL_DestroyWindow(persistWin);
+      return 0;
+    }
+
+    ALCcontext *persistAlcCtx = alcCreateContext(persistAlcDev, 0);
+    if (persistAlcCtx)
+      alcMakeContextCurrent(persistAlcCtx);
+
+    SDL_DisplayMode mode;
+    SDL_GetDisplayMode(0, 0, &mode);
+
+    // ================================================================
+    // Game session loop
+    // ================================================================
     bool firstSession = true;
     while (true) {
     // On subsequent sessions, wait for the library to provide a new game path
     if (!firstSession) {
+        mkxp_setEngineTerminated();
         EventThread::resetAllInputStates();
         const char *nextPath = mkxp_waitForGamePath();
         if (nextPath && nextPath[0]) {
@@ -368,12 +448,117 @@ int main(int argc, char *argv[]) {
         // Reset bridge state AFTER copying the path, so the UI has had time
         // to observe mkxp_isEngineTerminated() during mkxp_waitForGamePath().
         mkxp_resetBridgeState();
+
+        // Set working directory to the selected game
+        mkxp_fs::setCurrentDirectory(dataDir);
     }
     firstSession = false;
 
-    // Set working directory to the selected game
-    mkxp_fs::setCurrentDirectory(dataDir);
-#endif // TARGET_OS_IPHONE
+    /* Read the game's config */
+    Config conf;
+    conf.read(argc, argv);
+
+    if (conf.windowTitle.empty())
+      conf.windowTitle = conf.game.title;
+
+    assert(conf.rgssVersion >= 1 && conf.rgssVersion <= 3);
+    printRgssVersion(conf.rgssVersion);
+
+    /* Update the persistent window for this game session */
+    SDL_SetWindowTitle(persistWin, conf.windowTitle.c_str());
+    SDL_SetWindowSize(persistWin, conf.defScreenW, conf.defScreenH);
+
+    if (!mode.refresh_rate)
+      conf.syncToRefreshrate = false;
+
+    EventThread eventThread;
+
+    RGSSThreadData rtData(&eventThread, argv[0], persistWin, persistAlcDev,
+                          persistAlcCtx, mode.refresh_rate,
+                          mkxp_sys::getScalingFactor(), conf, persistGLCtx);
+
+    int winW, winH, drwW, drwH;
+    SDL_GetWindowSize(persistWin, &winW, &winH);
+    rtData.windowSizeMsg.post(Vec2i(winW, winH));
+
+    SDL_GL_GetDrawableSize(persistWin, &drwW, &drwH);
+    rtData.drawableSizeMsg.post(Vec2i(drwW, drwH));
+
+    /* Load and post key bindings */
+    rtData.bindingUpdateMsg.post(loadBindings(conf));
+
+    /* Drain stale events (especially SDL_QUIT) left over from the
+     * previous session so the event loop doesn't exit immediately. */
+    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+
+    /* Ruby 1.8's GC scans the entire thread stack for object references
+     * (mark_locations_array). The default 512KB pthread stack on iOS is
+     * insufficient and causes SIGBUS when GC hits the stack guard page.
+     * Use 4 MB to match the default main-thread stack size on Apple platforms. */
+    SDL_Thread *rgssThread = SDL_CreateThreadWithStackSize(rgssThreadFun, "rgss",
+                                                          4 * 1024 * 1024, &rtData);
+
+    /* Start event processing */
+    eventThread.process(rtData);
+
+    /* Request RGSS thread to stop */
+    rtData.rqTerm.set();
+
+    /* Wait for RGSS thread response */
+    for (int i = 0; i < 1000; ++i) {
+      if (rtData.rqTermAck) {
+        Debug() << "RGSS thread ack'd request after" << i * 10 << "ms";
+        break;
+      }
+      SDL_Delay(10);
+    }
+
+    if (rtData.rqTermAck)
+      SDL_WaitThread(rgssThread, 0);
+    else
+      SDL_ShowSimpleMessageBox(
+          SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
+          std::string("The RGSS script seems to be stuck. "+conf.game.title+" will now force quit.").c_str(),
+          persistWin);
+
+    if (!rtData.rgssErrorMsg.empty()) {
+      Debug() << rtData.rgssErrorMsg;
+      SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
+                               rtData.rgssErrorMsg.c_str(), persistWin);
+    }
+
+    /* Clean up any remaining events */
+    eventThread.cleanup();
+
+    /* Clear the framebuffer to black so the next session doesn't
+     * briefly flash the last frame of the previous session. */
+    SDL_GL_MakeCurrent(persistWin, persistGLCtx);
+    gl.BindFramebuffer(GL_FRAMEBUFFER, s_iosScreenFBO);
+    gl.ClearColor(0, 0, 0, 1);
+    gl.Clear(GL_COLOR_BUFFER_BIT);
+    SDL_GL_SwapWindow(persistWin);
+    SDL_GL_MakeCurrent(persistWin, NULL);
+
+    Debug() << "Game session ended.";
+
+    continue;
+    } // end while(true) game session loop
+
+    /* Cleanup persistent resources (unreachable in normal flow,
+     * but good form in case we ever break out of the loop) */
+    if (persistGLCtx)
+      SDL_GL_DeleteContext(persistGLCtx);
+    alcMakeContextCurrent(NULL);
+    if (persistAlcCtx)
+      alcDestroyContext(persistAlcCtx);
+    alcCloseDevice(persistAlcDev);
+    SDL_DestroyWindow(persistWin);
+
+#else // !TARGET_OS_IPHONE — original single-session flow
+
+    // ================================================================
+    // Non-iOS: single-pass flow (no session loop)
+    // ================================================================
 
     /* now we load the config */
     Config conf;
@@ -477,11 +662,9 @@ int main(int argc, char *argv[]) {
     if (!alcDev) {
       showInitError("Could not detect an available audio device.");
       SDL_DestroyWindow(win);
-#if !TARGET_OS_IPHONE
       TTF_Quit();
       IMG_Quit();
       SDL_Quit();
-#endif
 
 #ifdef MKXPZ_STEAM
       STEAMSHIM_deinit();
@@ -489,10 +672,6 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    /* Create and activate ALC context on the main thread.
-     * On iOS, Apple's OpenAL starts an AudioUnit (AURemoteIO) which
-     * requires main-thread RPC to the audio daemon.  Doing this from
-     * a secondary thread (rgss) causes an RPC timeout → abort(). */
     ALCcontext *alcCtx = alcCreateContext(alcDev, 0);
     if (alcCtx)
       alcMakeContextCurrent(alcCtx);
@@ -531,11 +710,6 @@ int main(int argc, char *argv[]) {
 #endif
 
     /* Start RGSS thread */
-#if TARGET_OS_IPHONE
-    /* Drain stale events (especially SDL_QUIT) left over from the
-     * previous session so the event loop doesn't exit immediately. */
-    SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
-#endif
     SDL_Thread *rgssThread = SDL_CreateThread(rgssThreadFun, "rgss", &rtData);
 
     /* Start event processing */
@@ -586,18 +760,6 @@ int main(int argc, char *argv[]) {
     alcCloseDevice(alcDev);
     SDL_DestroyWindow(win);
 
-#if TARGET_OS_IPHONE
-    /* Signal that the engine has fully shut down.
-     * The UI layer observes this and decides what to do next
-     * (e.g. show library, quit app). */
-    mkxp_setEngineTerminated();
-
-    /* Wait for the UI to provide a new game path (or not).
-     * mkxp_waitForGamePath() pumps the main run loop so UIKit
-     * stays responsive. If the UI decides to quit the app,
-     * it can call exit() or simply never set a path. */
-    continue;
-    } // end while(true) game session loop
 #endif // TARGET_OS_IPHONE
 
     Debug() << "Shutting down.";
@@ -644,6 +806,17 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
     GLINIT_SHOWERROR(std::string("Could not create OpenGL context: ") + SDL_GetError());
     return 0;
   }
+
+#if TARGET_OS_IPHONE
+  /* Capture the screen FBO right after context creation, while SDL's
+   * CAEAGLLayer-backed FBO is still bound. This value persists for the
+   * lifetime of the window and is reused by all game sessions. */
+  {
+    GLint fbo = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+    s_iosScreenFBO = static_cast<GLuint>(fbo);
+  }
+#endif
 
   try {
     initGLFunctions();
