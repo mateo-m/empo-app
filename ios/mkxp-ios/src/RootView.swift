@@ -1,54 +1,26 @@
 import SwiftUI
 
 /// The top-level view that switches between Library and Player based on AppState.
+///
+/// Library is always mounted so the NavigationStack persists across phases.
+/// This lets the reverse hero zoom play when quitting a game. Hidden via
+/// opacity during gameplay so the transparent PlayerView shows SDL beneath.
 struct RootView: View {
     @ObservedObject var appState = AppState.shared
     @ObservedObject var layout = ControlsLayout.shared
+    @Namespace private var hero
 
     var body: some View {
         ZStack {
-            switch appState.phase {
-            case .library, .quitting:
-                GameLibraryView(appState: appState)
-                    .transition(.opacity)
-                    .zIndex(2)
+            // Library — always mounted, hidden during gameplay
+            GameLibraryView(appState: appState, heroNamespace: hero)
+                .opacity(appState.phase == .playing ? 0 : 1)
+                .allowsHitTesting(appState.phase != .playing)
 
-            case .loading:
-                // Black background with loading spinner
-                LoadingView()
-                    .transition(.opacity)
-                    .zIndex(1)
-
-            case .playing:
-                // Transparent overlay with touch controls
+            // Playing — transparent controls overlay
+            if appState.phase == .playing {
                 PlayerView(appState: appState, layout: layout)
-                    .transition(.opacity)
                     .zIndex(1)
-            }
-        }
-        .animation(.easeInOut(duration: 0.25), value: appState.phase)
-    }
-}
-
-// ============================================================================
-// MARK: - Loading View
-// ============================================================================
-
-struct LoadingView: View {
-    var body: some View {
-        ZStack {
-            Color.black
-                .ignoresSafeArea()
-
-            VStack(spacing: 20) {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .scaleEffect(1.5)
-
-                Text("Loading\u{2026}")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
             }
         }
     }
