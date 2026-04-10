@@ -108,16 +108,19 @@ void mkxp_resetBridgeState(void) {
 }
 
 double mkxp_getAverageFPS(void) {
+    if (s_engineTerminated.load(std::memory_order_acquire)) return 0.0;
     if (!SharedState::instance) return 0.0;
     return SharedState::instance->graphics().averageFrameRate();
 }
 
 int mkxp_getRGSSVersion(void) {
+    if (s_engineTerminated.load(std::memory_order_acquire)) return 0;
     if (!SharedState::instance) return 0;
     return SharedState::instance->rtData().config.rgssVersion;
 }
 
 const char *mkxp_getGameTitle(void) {
+    if (s_engineTerminated.load(std::memory_order_acquire)) return "";
     if (!SharedState::instance) return "";
     return SharedState::instance->rtData().config.game.title.c_str();
 }

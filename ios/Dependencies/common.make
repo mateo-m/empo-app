@@ -237,7 +237,7 @@ sdl2ttf: init_dirs sdl2 freetype $(LIBDIR)/libSDL2_ttf.a
 
 $(LIBDIR)/libSDL2_ttf.a: $(SOURCES)/sdl2_ttf/Makefile
 	cd $(SOURCES)/sdl2_ttf; \
-	make -j$(NPROC); make install
+	make -j$(NPROC) lib; make install-libLTLIBRARIES install-libSDL2_ttfincludeHEADERS install-pkgconfigDATA
 
 $(SOURCES)/sdl2_ttf/Makefile: $(SOURCES)/sdl2_ttf/configure
 	cd $(SOURCES)/sdl2_ttf; \
@@ -249,15 +249,15 @@ $(SOURCES)/sdl2_ttf/configure: $(SOURCES)/sdl2_ttf/autogen.sh
 # Freetype (submodule: sources/freetype)
 freetype: init_dirs $(LIBDIR)/libfreetype.a
 
-$(LIBDIR)/libfreetype.a: $(SOURCES)/freetype/Makefile
+$(LIBDIR)/libfreetype.a: $(SOURCES)/freetype/builds/unix/unix-def.mk
 	cd $(SOURCES)/freetype; \
 	make -j$(NPROC); make install
 
-$(SOURCES)/freetype/Makefile: $(SOURCES)/freetype/configure
+$(SOURCES)/freetype/builds/unix/unix-def.mk: $(SOURCES)/freetype/builds/unix/configure
 	cd $(SOURCES)/freetype; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
 
-$(SOURCES)/freetype/configure: $(SOURCES)/freetype/autogen.sh
+$(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 	cd $(SOURCES)/freetype; ./autogen.sh
 
 # Ruby 3.1 (submodule: sources/ruby)
@@ -300,7 +300,7 @@ $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 # Ruby 1.8 (submodule: sources/ruby18)
 ruby18: init_dirs $(LIBDIR)/libruby18-static.a
 
-RUBY18_CFLAGS = $(CFLAGS) -std=gnu89 -O2 \
+RUBY18_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
 	-Wno-implicit-function-declaration \
 	-Wno-implicit-int \
 	-Wno-incompatible-pointer-types \
@@ -312,17 +312,17 @@ RUBY18_EXTS = zlib stringio strscan thread digest fcntl
 
 $(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/Makefile
 	cd $(SOURCES)/ruby18; \
-	$(CONFIGURE_ENV) CFLAGS="$(RUBY18_CFLAGS)" make -j$(NPROC) libruby18-static.a; \
-	cp libruby18-static.a $(LIBDIR)/; \
+	$(CONFIGURE_ENV) CFLAGS="$(RUBY18_CFLAGS)" make -j$(NPROC) COMPILE_PRELUDE=true libruby-static.a; \
+	cp libruby-static.a $(LIBDIR)/libruby18-static.a; \
 	mkdir -p $(INCLUDEDIR)/ruby18; \
-	cp include/ruby/*.h $(INCLUDEDIR)/ruby18/; \
-	cp config.h $(INCLUDEDIR)/ruby18/
-	@# Build extensions
-	@OBJ_FILES=""; \
+	cp *.h $(INCLUDEDIR)/ruby18/
+	@# Build extensions (use Ruby 1.8 headers only, not $(INCLUDEDIR) which has Ruby 3.1)
+	@EXTCFLAGS="$(RUBY18_CFLAGS) -I$(SOURCES)/ruby18 -I$(SOURCES)/ruby18/include -I$(INCLUDEDIR)"; \
+	OBJ_FILES=""; \
 	for ext in $(RUBY18_EXTS); do \
 		for src in $(SOURCES)/ruby18/ext/$$ext/*.c; do \
 			obj=$${src%.c}.o; \
-			$(CC) $(RUBY18_CFLAGS) -I$(SOURCES)/ruby18 -I$(SOURCES)/ruby18/include -c $$src -o $$obj; \
+			$(CC) $$EXTCFLAGS -c $$src -o $$obj; \
 			OBJ_FILES="$$OBJ_FILES $$obj"; \
 		done; \
 	done; \
@@ -338,11 +338,13 @@ $(SOURCES)/ruby18/Makefile: $(SOURCES)/ruby18/configure
 		--prefix="$(BUILD_PREFIX)" \
 		--disable-shared \
 		--enable-static \
-		--with-static-linked-ext
+		--with-static-linked-ext; \
+	touch prelude.c
 
 $(SOURCES)/ruby18/configure: $(SOURCES)/ruby18/configure.in
 	cd $(SOURCES)/ruby18; \
 	git checkout -- . 2>/dev/null; \
+	git clean -fdx 2>/dev/null; \
 	git apply $(PATCHES)/ruby18/ios.patch; \
 	autoconf
 
