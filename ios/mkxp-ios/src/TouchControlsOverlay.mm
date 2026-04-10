@@ -1,5 +1,4 @@
 #import "TouchControlsOverlay.h"
-#import <SDL.h>
 #include "ios_bridge.h"
 #import "mkxp_z-Swift.h"
 
@@ -21,104 +20,76 @@ static NSString *const kSavedLayoutKey = @"touchControlsLayout";
 
 typedef struct {
     const char *label;
-    SDL_Scancode scancode;
+    int scancode;
 } KeyEntry;
 
 static const KeyEntry kKeyCatalog[] = {
     // Common RPG Maker keys
-    {"Z (Confirm)",  SDL_SCANCODE_Z},
-    {"X (Cancel)",   SDL_SCANCODE_X},
-    {"Shift (Dash)", SDL_SCANCODE_LSHIFT},
-    {"Ctrl (Skip)",  SDL_SCANCODE_LCTRL},
-    {"Space",        SDL_SCANCODE_SPACE},
-    {"Enter",        SDL_SCANCODE_RETURN},
-    {"Escape",       SDL_SCANCODE_ESCAPE},
-    {"Tab",          SDL_SCANCODE_TAB},
+    {"Z (Confirm)",  MKXP_SCANCODE_Z},
+    {"X (Cancel)",   MKXP_SCANCODE_X},
+    {"Shift (Dash)", MKXP_SCANCODE_LSHIFT},
+    {"Ctrl (Skip)",  MKXP_SCANCODE_LCTRL},
+    {"Space",        MKXP_SCANCODE_SPACE},
+    {"Enter",        MKXP_SCANCODE_RETURN},
+    {"Escape",       MKXP_SCANCODE_ESCAPE},
+    {"Tab",          MKXP_SCANCODE_TAB},
     // Letters
-    {"A", SDL_SCANCODE_A}, {"B", SDL_SCANCODE_B}, {"C", SDL_SCANCODE_C},
-    {"D", SDL_SCANCODE_D}, {"E", SDL_SCANCODE_E}, {"F", SDL_SCANCODE_F},
-    {"G", SDL_SCANCODE_G}, {"H", SDL_SCANCODE_H}, {"I", SDL_SCANCODE_I},
-    {"J", SDL_SCANCODE_J}, {"K", SDL_SCANCODE_K}, {"L", SDL_SCANCODE_L},
-    {"M", SDL_SCANCODE_M}, {"N", SDL_SCANCODE_N}, {"O", SDL_SCANCODE_O},
-    {"P", SDL_SCANCODE_P}, {"Q", SDL_SCANCODE_Q}, {"R", SDL_SCANCODE_R},
-    {"S", SDL_SCANCODE_S}, {"T", SDL_SCANCODE_T}, {"U", SDL_SCANCODE_U},
-    {"V", SDL_SCANCODE_V}, {"W", SDL_SCANCODE_W}, {"Y", SDL_SCANCODE_Y},
+    {"A", MKXP_SCANCODE_A}, {"B", MKXP_SCANCODE_B}, {"C", MKXP_SCANCODE_C},
+    {"D", MKXP_SCANCODE_D}, {"E", MKXP_SCANCODE_E}, {"F", MKXP_SCANCODE_F},
+    {"G", MKXP_SCANCODE_G}, {"H", MKXP_SCANCODE_H}, {"I", MKXP_SCANCODE_I},
+    {"J", MKXP_SCANCODE_J}, {"K", MKXP_SCANCODE_K}, {"L", MKXP_SCANCODE_L},
+    {"M", MKXP_SCANCODE_M}, {"N", MKXP_SCANCODE_N}, {"O", MKXP_SCANCODE_O},
+    {"P", MKXP_SCANCODE_P}, {"Q", MKXP_SCANCODE_Q}, {"R", MKXP_SCANCODE_R},
+    {"S", MKXP_SCANCODE_S}, {"T", MKXP_SCANCODE_T}, {"U", MKXP_SCANCODE_U},
+    {"V", MKXP_SCANCODE_V}, {"W", MKXP_SCANCODE_W}, {"Y", MKXP_SCANCODE_Y},
     // Numbers
-    {"0", SDL_SCANCODE_0}, {"1", SDL_SCANCODE_1}, {"2", SDL_SCANCODE_2},
-    {"3", SDL_SCANCODE_3}, {"4", SDL_SCANCODE_4}, {"5", SDL_SCANCODE_5},
-    {"6", SDL_SCANCODE_6}, {"7", SDL_SCANCODE_7}, {"8", SDL_SCANCODE_8},
-    {"9", SDL_SCANCODE_9},
+    {"0", MKXP_SCANCODE_0}, {"1", MKXP_SCANCODE_1}, {"2", MKXP_SCANCODE_2},
+    {"3", MKXP_SCANCODE_3}, {"4", MKXP_SCANCODE_4}, {"5", MKXP_SCANCODE_5},
+    {"6", MKXP_SCANCODE_6}, {"7", MKXP_SCANCODE_7}, {"8", MKXP_SCANCODE_8},
+    {"9", MKXP_SCANCODE_9},
     // Function keys
-    {"F1", SDL_SCANCODE_F1}, {"F2", SDL_SCANCODE_F2}, {"F3", SDL_SCANCODE_F3},
-    {"F4", SDL_SCANCODE_F4}, {"F5", SDL_SCANCODE_F5}, {"F6", SDL_SCANCODE_F6},
-    {"F7", SDL_SCANCODE_F7}, {"F8", SDL_SCANCODE_F8}, {"F9", SDL_SCANCODE_F9},
-    {"F10", SDL_SCANCODE_F10}, {"F11", SDL_SCANCODE_F11}, {"F12", SDL_SCANCODE_F12},
+    {"F1", MKXP_SCANCODE_F1}, {"F2", MKXP_SCANCODE_F2}, {"F3", MKXP_SCANCODE_F3},
+    {"F4", MKXP_SCANCODE_F4}, {"F5", MKXP_SCANCODE_F5}, {"F6", MKXP_SCANCODE_F6},
+    {"F7", MKXP_SCANCODE_F7}, {"F8", MKXP_SCANCODE_F8}, {"F9", MKXP_SCANCODE_F9},
+    {"F10", MKXP_SCANCODE_F10}, {"F11", MKXP_SCANCODE_F11}, {"F12", MKXP_SCANCODE_F12},
     // Special
-    {"Alt",       SDL_SCANCODE_LALT},
-    {"Backspace", SDL_SCANCODE_BACKSPACE},
+    {"Alt",       MKXP_SCANCODE_LALT},
+    {"Backspace", MKXP_SCANCODE_BACKSPACE},
 };
 static const int kKeyCatalogCount = sizeof(kKeyCatalog) / sizeof(kKeyCatalog[0]);
 
 // ============================================================================
-// MARK: - SDL event injection
+// MARK: - Key event injection (via bridge)
 // ============================================================================
 
-static Uint32 g_sdlWindowID = 0;
-
-static void injectKey(SDL_Scancode scancode, BOOL pressed) {
-    // Lazily resolve the SDL window ID on first use
-    if (g_sdlWindowID == 0) {
-        SDL_Window *w = SDL_GetGrabbedWindow();
-        if (w) {
-            g_sdlWindowID = SDL_GetWindowID(w);
-        } else {
-            // Single-window app: SDL window IDs start at 1
-            g_sdlWindowID = 1;
-        }
-    }
-
-    SDL_Event event;
-    memset(&event, 0, sizeof(event));
-    event.type              = pressed ? SDL_KEYDOWN : SDL_KEYUP;
-    event.key.timestamp     = SDL_GetTicks();
-    event.key.windowID      = g_sdlWindowID;
-    event.key.state         = pressed ? SDL_PRESSED : SDL_RELEASED;
-    event.key.repeat        = 0;
-    event.key.keysym.scancode = scancode;
-    event.key.keysym.sym    = SDL_GetKeyFromScancode(scancode);
-    event.key.keysym.mod    = KMOD_NONE;
-    SDL_PushEvent(&event);
+static void injectKey(int scancode, BOOL pressed) {
+    mkxp_injectKeyEvent(scancode, pressed ? 1 : 0);
 }
 
 // ============================================================================
-// MARK: - SDL event watcher (highlights buttons on hardware key events)
+// MARK: - Key event watcher (highlights buttons on hardware key events)
 // ============================================================================
 
-static NSString *const kSDLKeyEventNotification = @"TCSDLKeyEvent";
+static NSString *const kKeyEventNotification = @"TCKeyEvent";
 
-static int sdlKeyEventWatcher(void *userdata, SDL_Event *event) {
-    if (event->type == SDL_KEYDOWN || event->type == SDL_KEYUP) {
-        BOOL pressed = (event->type == SDL_KEYDOWN);
-        SDL_Scancode sc = event->key.keysym.scancode;
-        // Dispatch to main thread for UI updates
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [[NSNotificationCenter defaultCenter]
-                postNotificationName:kSDLKeyEventNotification
-                              object:nil
-                            userInfo:@{
-                                @"scancode": @((int)sc),
-                                @"pressed":  @(pressed),
-                            }];
-        });
-    }
-    return 1; // keep processing the event
+static void keyEventBridgeCallback(int scancode, int pressed, void * /*userdata*/) {
+    // Dispatch to main thread for UI updates
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter]
+            postNotificationName:kKeyEventNotification
+                          object:nil
+                        userInfo:@{
+                            @"scancode": @(scancode),
+                            @"pressed":  @(pressed),
+                        }];
+    });
 }
 
-static BOOL g_sdlKeyWatcherInstalled = NO;
-static void installSDLKeyEventWatcher(void) {
-    if (!g_sdlKeyWatcherInstalled) {
-        SDL_AddEventWatch(sdlKeyEventWatcher, NULL);
-        g_sdlKeyWatcherInstalled = YES;
+static BOOL g_keyWatcherInstalled = NO;
+static void installKeyEventWatcher(void) {
+    if (!g_keyWatcherInstalled) {
+        mkxp_setKeyEventCallback(keyEventBridgeCallback, NULL);
+        g_keyWatcherInstalled = YES;
     }
 }
 
@@ -126,27 +97,27 @@ static void installSDLKeyEventWatcher(void) {
 // MARK: - Character-to-scancode mapping (for system keyboard)
 // ============================================================================
 
-static SDL_Scancode scancodeForCharacter(unichar c) {
-    if (c >= 'a' && c <= 'z') return (SDL_Scancode)(SDL_SCANCODE_A + (c - 'a'));
-    if (c >= 'A' && c <= 'Z') return (SDL_Scancode)(SDL_SCANCODE_A + (c - 'A'));
-    if (c >= '1' && c <= '9') return (SDL_Scancode)(SDL_SCANCODE_1 + (c - '1'));
-    if (c == '0') return SDL_SCANCODE_0;
+static int scancodeForCharacter(unichar c) {
+    if (c >= 'a' && c <= 'z') return (MKXP_SCANCODE_A + (c - 'a'));
+    if (c >= 'A' && c <= 'Z') return (MKXP_SCANCODE_A + (c - 'A'));
+    if (c >= '1' && c <= '9') return (MKXP_SCANCODE_1 + (c - '1'));
+    if (c == '0') return MKXP_SCANCODE_0;
     switch (c) {
-        case ' ':  return SDL_SCANCODE_SPACE;
-        case '\n': return SDL_SCANCODE_RETURN;
-        case '\t': return SDL_SCANCODE_TAB;
-        case '-':  return SDL_SCANCODE_MINUS;
-        case '=':  return SDL_SCANCODE_EQUALS;
-        case '[':  return SDL_SCANCODE_LEFTBRACKET;
-        case ']':  return SDL_SCANCODE_RIGHTBRACKET;
-        case '\\': return SDL_SCANCODE_BACKSLASH;
-        case ';':  return SDL_SCANCODE_SEMICOLON;
-        case '\'': return SDL_SCANCODE_APOSTROPHE;
-        case ',':  return SDL_SCANCODE_COMMA;
-        case '.':  return SDL_SCANCODE_PERIOD;
-        case '/':  return SDL_SCANCODE_SLASH;
-        case '`':  return SDL_SCANCODE_GRAVE;
-        default:   return SDL_SCANCODE_UNKNOWN;
+        case ' ':  return MKXP_SCANCODE_SPACE;
+        case '\n': return MKXP_SCANCODE_RETURN;
+        case '\t': return MKXP_SCANCODE_TAB;
+        case '-':  return MKXP_SCANCODE_MINUS;
+        case '=':  return MKXP_SCANCODE_EQUALS;
+        case '[':  return MKXP_SCANCODE_LEFTBRACKET;
+        case ']':  return MKXP_SCANCODE_RIGHTBRACKET;
+        case '\\': return MKXP_SCANCODE_BACKSLASH;
+        case ';':  return MKXP_SCANCODE_SEMICOLON;
+        case '\'': return MKXP_SCANCODE_APOSTROPHE;
+        case ',':  return MKXP_SCANCODE_COMMA;
+        case '.':  return MKXP_SCANCODE_PERIOD;
+        case '/':  return MKXP_SCANCODE_SLASH;
+        case '`':  return MKXP_SCANCODE_GRAVE;
+        default:   return MKXP_SCANCODE_UNKNOWN;
     }
 }
 
@@ -155,7 +126,7 @@ static SDL_Scancode scancodeForCharacter(unichar c) {
 // ============================================================================
 
 @interface TCButton : UIView
-@property (nonatomic) SDL_Scancode scancode;
+@property (nonatomic) int scancode;
 @property (nonatomic, copy) NSString *label;
 @property (nonatomic) BOOL editing;
 @property (nonatomic) BOOL active;
@@ -174,7 +145,7 @@ static SDL_Scancode scancodeForCharacter(unichar c) {
 
 @implementation TCButton
 
-- (instancetype)initWithLabel:(NSString *)label scancode:(SDL_Scancode)sc size:(CGFloat)size {
+- (instancetype)initWithLabel:(NSString *)label scancode:(int)sc size:(CGFloat)size {
     self = [super initWithFrame:CGRectMake(0, 0, size, size)];
     if (self) {
         _scancode = sc;
@@ -327,7 +298,7 @@ static CGFloat springCurve(CGFloat t) {
 + (TCButton *)fromDict:(NSDictionary *)d {
     CGFloat size = [d[@"size"] floatValue] ?: kButtonSize;
     TCButton *b = [[TCButton alloc] initWithLabel:d[@"label"]
-                                         scancode:(SDL_Scancode)[d[@"scancode"] intValue]
+                                         scancode:(int)[d[@"scancode"] intValue]
                                              size:size];
     b.relativeCenter = CGPointMake([d[@"rx"] floatValue], [d[@"ry"] floatValue]);
     return b;
@@ -456,16 +427,16 @@ typedef NS_OPTIONS(NSUInteger, DPadDirection) {
     if (old == newDir) return;
 
     // Release keys no longer held
-    if ((old & DPadUp)    && !(newDir & DPadUp))    injectKey(SDL_SCANCODE_UP, NO);
-    if ((old & DPadDown)  && !(newDir & DPadDown))  injectKey(SDL_SCANCODE_DOWN, NO);
-    if ((old & DPadLeft)  && !(newDir & DPadLeft))  injectKey(SDL_SCANCODE_LEFT, NO);
-    if ((old & DPadRight) && !(newDir & DPadRight)) injectKey(SDL_SCANCODE_RIGHT, NO);
+    if ((old & DPadUp)    && !(newDir & DPadUp))    injectKey(MKXP_SCANCODE_UP, NO);
+    if ((old & DPadDown)  && !(newDir & DPadDown))  injectKey(MKXP_SCANCODE_DOWN, NO);
+    if ((old & DPadLeft)  && !(newDir & DPadLeft))  injectKey(MKXP_SCANCODE_LEFT, NO);
+    if ((old & DPadRight) && !(newDir & DPadRight)) injectKey(MKXP_SCANCODE_RIGHT, NO);
 
     // Press newly held keys
-    if (!(old & DPadUp)    && (newDir & DPadUp))    injectKey(SDL_SCANCODE_UP, YES);
-    if (!(old & DPadDown)  && (newDir & DPadDown))  injectKey(SDL_SCANCODE_DOWN, YES);
-    if (!(old & DPadLeft)  && (newDir & DPadLeft))  injectKey(SDL_SCANCODE_LEFT, YES);
-    if (!(old & DPadRight) && (newDir & DPadRight)) injectKey(SDL_SCANCODE_RIGHT, YES);
+    if (!(old & DPadUp)    && (newDir & DPadUp))    injectKey(MKXP_SCANCODE_UP, YES);
+    if (!(old & DPadDown)  && (newDir & DPadDown))  injectKey(MKXP_SCANCODE_DOWN, YES);
+    if (!(old & DPadLeft)  && (newDir & DPadLeft))  injectKey(MKXP_SCANCODE_LEFT, YES);
+    if (!(old & DPadRight) && (newDir & DPadRight)) injectKey(MKXP_SCANCODE_RIGHT, YES);
 
     _activeDirections = newDir;
     [self setNeedsDisplay];
@@ -737,10 +708,10 @@ static const NSInteger kFPSSampleCount = 120;
 @implementation TCKeyboardField
 
 - (void)deleteBackward {
-    injectKey(SDL_SCANCODE_BACKSPACE, YES);
+    injectKey(MKXP_SCANCODE_BACKSPACE, YES);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-        injectKey(SDL_SCANCODE_BACKSPACE, NO);
+        injectKey(MKXP_SCANCODE_BACKSPACE, NO);
     });
     // Don't call super — text field stays empty
 }
@@ -825,11 +796,11 @@ static UIView *createKeyboardAccessoryView(void) {
     fScroll.showsHorizontalScrollIndicator = NO;
     [bar addSubview:fScroll];
 
-    struct { const char *label; SDL_Scancode sc; } fKeys[] = {
-        {"F1",SDL_SCANCODE_F1},{"F2",SDL_SCANCODE_F2},{"F3",SDL_SCANCODE_F3},
-        {"F4",SDL_SCANCODE_F4},{"F5",SDL_SCANCODE_F5},{"F6",SDL_SCANCODE_F6},
-        {"F7",SDL_SCANCODE_F7},{"F8",SDL_SCANCODE_F8},{"F9",SDL_SCANCODE_F9},
-        {"F10",SDL_SCANCODE_F10},{"F11",SDL_SCANCODE_F11},{"F12",SDL_SCANCODE_F12},
+    struct { const char *label; int sc; } fKeys[] = {
+        {"F1",MKXP_SCANCODE_F1},{"F2",MKXP_SCANCODE_F2},{"F3",MKXP_SCANCODE_F3},
+        {"F4",MKXP_SCANCODE_F4},{"F5",MKXP_SCANCODE_F5},{"F6",MKXP_SCANCODE_F6},
+        {"F7",MKXP_SCANCODE_F7},{"F8",MKXP_SCANCODE_F8},{"F9",MKXP_SCANCODE_F9},
+        {"F10",MKXP_SCANCODE_F10},{"F11",MKXP_SCANCODE_F11},{"F12",MKXP_SCANCODE_F12},
     };
     CGFloat fX = 6;
     for (int i = 0; i < 12; i++) {
@@ -856,18 +827,18 @@ static UIView *createKeyboardAccessoryView(void) {
     rScroll.showsHorizontalScrollIndicator = NO;
     [bar addSubview:rScroll];
 
-    struct { const char *label; SDL_Scancode sc; BOOL holdable; } row2[] = {
-        {"Esc",  SDL_SCANCODE_ESCAPE, NO},
-        {"Tab",  SDL_SCANCODE_TAB,    NO},
-        {"Ctrl", SDL_SCANCODE_LCTRL,  YES},
-        {"Shift",SDL_SCANCODE_LSHIFT, YES},
-        {"Alt",  SDL_SCANCODE_LALT,   YES},
-        {"\u2190",SDL_SCANCODE_LEFT,  YES},  // ←
-        {"\u2191",SDL_SCANCODE_UP,    YES},  // ↑
-        {"\u2193",SDL_SCANCODE_DOWN,  YES},  // ↓
-        {"\u2192",SDL_SCANCODE_RIGHT, YES},  // →
-        {"Enter",SDL_SCANCODE_RETURN, NO},
-        {"Bksp", SDL_SCANCODE_BACKSPACE, NO},
+    struct { const char *label; int sc; BOOL holdable; } row2[] = {
+        {"Esc",  MKXP_SCANCODE_ESCAPE, NO},
+        {"Tab",  MKXP_SCANCODE_TAB,    NO},
+        {"Ctrl", MKXP_SCANCODE_LCTRL,  YES},
+        {"Shift",MKXP_SCANCODE_LSHIFT, YES},
+        {"Alt",  MKXP_SCANCODE_LALT,   YES},
+        {"\u2190",MKXP_SCANCODE_LEFT,  YES},  // ←
+        {"\u2191",MKXP_SCANCODE_UP,    YES},  // ↑
+        {"\u2193",MKXP_SCANCODE_DOWN,  YES},  // ↓
+        {"\u2192",MKXP_SCANCODE_RIGHT, YES},  // →
+        {"Enter",MKXP_SCANCODE_RETURN, NO},
+        {"Bksp", MKXP_SCANCODE_BACKSPACE, NO},
     };
     CGFloat rX = 6;
     int row2Count = sizeof(row2) / sizeof(row2[0]);
@@ -901,7 +872,7 @@ static UIView *createKeyboardAccessoryView(void) {
 
 @implementation UIView (TCAccKeyActions)
 - (void)accKeyTap:(UIButton *)sender {
-    SDL_Scancode sc = (SDL_Scancode)sender.tag;
+    int sc = (int)sender.tag;
     injectKey(sc, YES);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
@@ -909,10 +880,10 @@ static UIView *createKeyboardAccessoryView(void) {
     });
 }
 - (void)accKeyDown:(UIButton *)sender {
-    injectKey((SDL_Scancode)sender.tag, YES);
+    injectKey((int)sender.tag, YES);
 }
 - (void)accKeyUp:(UIButton *)sender {
-    injectKey((SDL_Scancode)sender.tag, NO);
+    injectKey((int)sender.tag, NO);
 }
 @end
 
@@ -1202,10 +1173,10 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
 
     // Watch for hardware key events to highlight matching game buttons
     [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(handleSDLKeyEvent:)
-                                                 name:kSDLKeyEventNotification
+                                             selector:@selector(handleKeyEvent:)
+                                                 name:kKeyEventNotification
                                                object:nil];
-    installSDLKeyEventWatcher();
+    installKeyEventWatcher();
 }
 
 - (void)buildHideToggle {
@@ -1365,8 +1336,8 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     }
 }
 
-- (void)handleSDLKeyEvent:(NSNotification *)note {
-    SDL_Scancode sc = (SDL_Scancode)[note.userInfo[@"scancode"] intValue];
+- (void)handleKeyEvent:(NSNotification *)note {
+    int sc = (int)[note.userInfo[@"scancode"] intValue];
     BOOL pressed = [note.userInfo[@"pressed"] boolValue];
 
     for (TCButton *b in _buttons) {
@@ -1378,10 +1349,10 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     // Also highlight D-pad directions (set visually only, don't re-inject keys)
     if (_dpad) {
         DPadDirection dir = DPadNone;
-        if (sc == SDL_SCANCODE_UP)    dir = DPadUp;
-        if (sc == SDL_SCANCODE_DOWN)  dir = DPadDown;
-        if (sc == SDL_SCANCODE_LEFT)  dir = DPadLeft;
-        if (sc == SDL_SCANCODE_RIGHT) dir = DPadRight;
+        if (sc == MKXP_SCANCODE_UP)    dir = DPadUp;
+        if (sc == MKXP_SCANCODE_DOWN)  dir = DPadDown;
+        if (sc == MKXP_SCANCODE_LEFT)  dir = DPadLeft;
+        if (sc == MKXP_SCANCODE_RIGHT) dir = DPadRight;
         if (dir != DPadNone) {
             DPadDirection cur = _dpad.activeDirections;
             if (pressed)
@@ -1399,15 +1370,15 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     for (NSUInteger i = 0; i < string.length; i++) {
         unichar c = [string characterAtIndex:i];
         BOOL isUpper = (c >= 'A' && c <= 'Z');
-        SDL_Scancode sc = scancodeForCharacter(c);
-        if (sc == SDL_SCANCODE_UNKNOWN) continue;
+        int sc = scancodeForCharacter(c);
+        if (sc == MKXP_SCANCODE_UNKNOWN) continue;
 
-        if (isUpper) injectKey(SDL_SCANCODE_LSHIFT, YES);
+        if (isUpper) injectKey(MKXP_SCANCODE_LSHIFT, YES);
         injectKey(sc, YES);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             injectKey(sc, NO);
-            if (isUpper) injectKey(SDL_SCANCODE_LSHIFT, NO);
+            if (isUpper) injectKey(MKXP_SCANCODE_LSHIFT, NO);
         });
     }
     // Keep a space in the field so backspace always works
@@ -1416,10 +1387,10 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
 }
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {
-    injectKey(SDL_SCANCODE_RETURN, YES);
+    injectKey(MKXP_SCANCODE_RETURN, YES);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-        injectKey(SDL_SCANCODE_RETURN, NO);
+        injectKey(MKXP_SCANCODE_RETURN, NO);
     });
     return NO;
 }
@@ -1600,12 +1571,12 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
 
 - (void)createDefaultLayoutAnimated:(BOOL)animated {
     // Default definitions
-    struct DefEntry { const char *label; SDL_Scancode sc; CGFloat rx, ry, size; };
+    struct DefEntry { const char *label; int sc; CGFloat rx, ry, size; };
     DefEntry defs[] = {
-        {"A",     SDL_SCANCODE_RETURN,  0.90, 0.75, kButtonSize},
-        {"B",     SDL_SCANCODE_ESCAPE,  0.80, 0.68, kButtonSize},
-        {"Shift", SDL_SCANCODE_LSHIFT,  0.72, 0.80, kButtonSize - 6},
-        {"Esc",   SDL_SCANCODE_ESCAPE,  0.92, 0.58, kSmallButtonSize},
+        {"A",     MKXP_SCANCODE_RETURN,  0.90, 0.75, kButtonSize},
+        {"B",     MKXP_SCANCODE_ESCAPE,  0.80, 0.68, kButtonSize},
+        {"Shift", MKXP_SCANCODE_LSHIFT,  0.72, 0.80, kButtonSize - 6},
+        {"Esc",   MKXP_SCANCODE_ESCAPE,  0.92, 0.58, kSmallButtonSize},
     };
     int defCount = 4;
     CGPoint defaultDpadCenter = CGPointMake(0.13, 0.72);
@@ -1881,7 +1852,7 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
 
     for (int i = 0; i < kKeyCatalogCount; i++) {
         NSString *entryLabel = [NSString stringWithUTF8String:kKeyCatalog[i].label];
-        SDL_Scancode sc = kKeyCatalog[i].scancode;
+        int sc = kKeyCatalog[i].scancode;
         NSString *title = entryLabel;
         if (sc == btn.scancode) {
             title = [NSString stringWithFormat:@"\u2713 %@", entryLabel]; // checkmark for current
@@ -1940,7 +1911,7 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     [self.window.rootViewController presentViewController:ac animated:YES completion:nil];
 }
 
-- (NSString *)scancodeDisplayName:(SDL_Scancode)sc {
+- (NSString *)scancodeDisplayName:(int)sc {
     for (int i = 0; i < kKeyCatalogCount; i++) {
         if (kKeyCatalog[i].scancode == sc) {
             return [NSString stringWithUTF8String:kKeyCatalog[i].label];
@@ -1960,7 +1931,7 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
 
     for (int i = 0; i < kKeyCatalogCount; i++) {
         NSString *label = [NSString stringWithUTF8String:kKeyCatalog[i].label];
-        SDL_Scancode sc = kKeyCatalog[i].scancode;
+        int sc = kKeyCatalog[i].scancode;
         [ac addAction:[UIAlertAction actionWithTitle:label
                                                style:UIAlertActionStyleDefault
                                              handler:^(UIAlertAction *a) {
@@ -1980,7 +1951,7 @@ static const NSTimeInterval kToolbarIdleDelay = 3.0;
     [vc presentViewController:ac animated:YES completion:nil];
 }
 
-- (void)addButtonWithLabel:(NSString *)label scancode:(SDL_Scancode)sc {
+- (void)addButtonWithLabel:(NSString *)label scancode:(int)sc {
     // Short display label (strip parenthetical descriptions)
     NSString *displayLabel = label;
     NSRange paren = [label rangeOfString:@" ("];

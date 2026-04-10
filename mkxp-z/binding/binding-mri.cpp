@@ -64,6 +64,12 @@ void Init_strscan(void);
 void Init_thread(void);
 void Init_digest(void);
 void Init_fcntl(void);
+
+/* Ruby 1.8 GC stack base — defined in gc.c.
+ * Must be updated when the RGSS thread changes between sessions,
+ * otherwise GC's mark_locations_array scans the old thread's
+ * (now-unmapped) stack and crashes with SIGSEGV. */
+extern VALUE *rb_gc_stack_start;
 #endif
 }
 
@@ -1497,7 +1503,14 @@ static void mriBindingExecute() {
 
         rubyVMInitialized = true;
     } else {
-        /* Subsequent session: clear leftover Ruby state.
+        /* Subsequent session: the RGSS thread has a new stack, but
+         * Ruby 1.8's GC still holds rb_gc_stack_start from the first
+         * thread. Force-update it so mark_locations_array scans the
+         * correct (current) stack, not the old (now-unmapped) one. */
+        volatile VALUE stack_anchor = Qnil;
+        rb_gc_stack_start = (VALUE *)&stack_anchor;
+
+        /* Clear leftover Ruby state.
          * Clear exception before eval -- a stale $! can cause issues.
          * Do NOT set $@ when $! is nil; Ruby 1.8's errat_setter raises
          * ArgumentError ("$@ must be set after raise"), and with no
