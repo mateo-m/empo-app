@@ -4,6 +4,8 @@ BUILD_PREFIX := ${PWD}/build-$(SDK)-$(ARCH)
 LIBDIR := $(BUILD_PREFIX)/lib
 INCLUDEDIR := $(BUILD_PREFIX)/include
 DOWNLOADS := ${PWD}/downloads/$(HOST)
+SOURCES := ${PWD}/sources
+PATCHES := ${PWD}
 NPROC := $(shell sysctl -n hw.ncpu)
 CFLAGS := -I$(INCLUDEDIR) -I$(INCLUDEDIR)/freetype2 $(TARGETFLAGS) -O3
 CXXFLAGS := $(CFLAGS)
@@ -179,15 +181,15 @@ $(DOWNLOADS)/libpng/Makefile: $(DOWNLOADS)/libpng/configure
 $(DOWNLOADS)/libpng/configure:
 	$(CLONE) $(GITHUB)/pnggroup/libpng -b v1.6.50 $(DOWNLOADS)/libpng
 
-# SDL2
+# SDL2 (submodule: sources/sdl2)
 sdl2: init_dirs $(LIBDIR)/libSDL2.a
 
-$(LIBDIR)/libSDL2.a: $(DOWNLOADS)/sdl2/cmakebuild/Makefile
-	cd $(DOWNLOADS)/sdl2/cmakebuild; \
+$(LIBDIR)/libSDL2.a: $(SOURCES)/sdl2/cmakebuild/Makefile
+	cd $(SOURCES)/sdl2/cmakebuild; \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/sdl2/cmakebuild/Makefile: $(DOWNLOADS)/sdl2/CMakeLists.txt
-	cd $(DOWNLOADS)/sdl2; \
+$(SOURCES)/sdl2/cmakebuild/Makefile: $(SOURCES)/sdl2/CMakeLists.txt
+	cd $(SOURCES)/sdl2; \
 	mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) -DBUILD_SHARED_LIBS=no \
 	-DSDL_OPENGL=OFF \
@@ -195,18 +197,15 @@ $(DOWNLOADS)/sdl2/cmakebuild/Makefile: $(DOWNLOADS)/sdl2/CMakeLists.txt
 	-DSDL_METAL=ON \
 	-DSDL_RENDER_METAL=ON
 
-$(DOWNLOADS)/sdl2/CMakeLists.txt:
-	$(CLONE) $(GITHUB)/mkxp-z/SDL $(DOWNLOADS)/sdl2 -b mkxp-z-2.28.1
-
-# SDL_image
+# SDL_image (submodule: sources/sdl2_image)
 sdl2image: init_dirs sdl2 $(LIBDIR)/libSDL2_image.a
 
-$(LIBDIR)/libSDL2_image.a: $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile
-	cd $(DOWNLOADS)/sdl2_image/cmakebuild; \
+$(LIBDIR)/libSDL2_image.a: $(SOURCES)/sdl2_image/cmakebuild/Makefile
+	cd $(SOURCES)/sdl2_image/cmakebuild; \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/sdl2_image/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_image/CMakeLists.txt
-	cd $(DOWNLOADS)/sdl2_image; mkdir -p cmakebuild; cd cmakebuild; \
+$(SOURCES)/sdl2_image/cmakebuild/Makefile: $(SOURCES)/sdl2_image/CMakeLists.txt
+	cd $(SOURCES)/sdl2_image; mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) \
 	-DBUILD_SHARED_LIBS=no \
 	-DSDL2IMAGE_JPG_SAVE=yes \
@@ -218,77 +217,62 @@ $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_image/CMakeLists.
 	-DSDL2IMAGE_VENDORED=yes
 
 
-$(DOWNLOADS)/sdl2_image/CMakeLists.txt:
-	$(CLONE) $(GITHUB)/mkxp-z/SDL_image $(DOWNLOADS)/sdl2_image -b mkxp-z; \
-	cd $(DOWNLOADS)/sdl2_image; \
-	./external/download.sh
-
-
-# SDL_sound
+# SDL_sound (submodule: sources/sdl_sound)
 sdlsound: init_dirs sdl2 libogg libvorbis $(LIBDIR)/libSDL2_sound.a
 
-$(LIBDIR)/libSDL2_sound.a: $(DOWNLOADS)/sdl_sound/cmakebuild/Makefile
-	cd $(DOWNLOADS)/sdl_sound/cmakebuild; \
+$(LIBDIR)/libSDL2_sound.a: $(SOURCES)/sdl_sound/cmakebuild/Makefile
+	cd $(SOURCES)/sdl_sound/cmakebuild; \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/sdl_sound/cmakebuild/Makefile: $(DOWNLOADS)/sdl_sound/CMakeLists.txt
-	cd $(DOWNLOADS)/sdl_sound; mkdir -p cmakebuild; cd cmakebuild; \
+$(SOURCES)/sdl_sound/cmakebuild/Makefile: $(SOURCES)/sdl_sound/CMakeLists.txt
+	cd $(SOURCES)/sdl_sound; mkdir -p cmakebuild; cd cmakebuild; \
 	$(CMAKE) \
 	-DSDLSOUND_BUILD_SHARED=false \
 	-DSDLSOUND_BUILD_TEST=false \
 	-DSDLSOUND_DECODER_COREAUDIO=false
 
-$(DOWNLOADS)/sdl_sound/CMakeLists.txt:
-	$(CLONE) $(GITHUB)/mkxp-z/SDL_sound $(DOWNLOADS)/sdl_sound -b git
 
-
-# SDL2 (ttf)
+# SDL2_ttf (submodule: sources/sdl2_ttf)
 sdl2ttf: init_dirs sdl2 freetype $(LIBDIR)/libSDL2_ttf.a
 
-$(LIBDIR)/libSDL2_ttf.a: $(DOWNLOADS)/sdl2_ttf/Makefile
-	cd $(DOWNLOADS)/sdl2_ttf; \
+$(LIBDIR)/libSDL2_ttf.a: $(SOURCES)/sdl2_ttf/Makefile
+	cd $(SOURCES)/sdl2_ttf; \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/sdl2_ttf/Makefile: $(DOWNLOADS)/sdl2_ttf/configure
-	cd $(DOWNLOADS)/sdl2_ttf; \
+$(SOURCES)/sdl2_ttf/Makefile: $(SOURCES)/sdl2_ttf/configure
+	cd $(SOURCES)/sdl2_ttf; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
 
-$(DOWNLOADS)/sdl2_ttf/configure: $(DOWNLOADS)/sdl2_ttf/autogen.sh
-	cd $(DOWNLOADS)/sdl2_ttf; ./autogen.sh
+$(SOURCES)/sdl2_ttf/configure: $(SOURCES)/sdl2_ttf/autogen.sh
+	cd $(SOURCES)/sdl2_ttf; ./autogen.sh
 
-$(DOWNLOADS)/sdl2_ttf/autogen.sh:
-	$(CLONE) $(GITHUB)/mkxp-z/SDL_ttf $(DOWNLOADS)/sdl2_ttf -b mkxp-z
-
-# Freetype
+# Freetype (submodule: sources/freetype)
 freetype: init_dirs $(LIBDIR)/libfreetype.a
 
-$(LIBDIR)/libfreetype.a: $(DOWNLOADS)/freetype/Makefile
-	cd $(DOWNLOADS)/freetype; \
+$(LIBDIR)/libfreetype.a: $(SOURCES)/freetype/Makefile
+	cd $(SOURCES)/freetype; \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/freetype/Makefile: $(DOWNLOADS)/freetype/configure
-	cd $(DOWNLOADS)/freetype; \
+$(SOURCES)/freetype/Makefile: $(SOURCES)/freetype/configure
+	cd $(SOURCES)/freetype; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
 
-$(DOWNLOADS)/freetype/configure: $(DOWNLOADS)/freetype/autogen.sh
-	cd $(DOWNLOADS)/freetype; ./autogen.sh
+$(SOURCES)/freetype/configure: $(SOURCES)/freetype/autogen.sh
+	cd $(SOURCES)/freetype; ./autogen.sh
 
-$(DOWNLOADS)/freetype/autogen.sh:
-	$(CLONE) $(GITHUB)/mkxp-z/freetype2 $(DOWNLOADS)/freetype
-
-# Ruby (static only for iOS)
+# Ruby 3.1 (submodule: sources/ruby)
 ruby: init_dirs $(LIBDIR)/libruby.3.1-static.a
 
-$(LIBDIR)/libruby.3.1-static.a: $(DOWNLOADS)/ruby/Makefile
-	cd $(DOWNLOADS)/ruby; \
+$(LIBDIR)/libruby.3.1-static.a: $(SOURCES)/ruby/Makefile
+	cd $(SOURCES)/ruby; \
 	$(CONFIGURE_ENV) make -j$(NPROC) libruby.3.1-static.a; \
 	cp libruby.3.1-static.a $(LIBDIR)/; \
 	cp -R include/* $(INCLUDEDIR)/; \
 	mkdir -p $(INCLUDEDIR)/ruby/internal; \
 	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby/internal/ 2>/dev/null || true
 
-$(DOWNLOADS)/ruby/Makefile: $(DOWNLOADS)/ruby/configure
-	cd $(DOWNLOADS)/ruby; \
+$(SOURCES)/ruby/Makefile: $(SOURCES)/ruby/configure
+	cd $(SOURCES)/ruby; \
 	export $(CONFIGURE_ENV); \
 	export CFLAGS="-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__ $$CFLAGS"; \
 	export LDFLAGS="$$LDFLAGS"; \
@@ -307,16 +291,68 @@ $(DOWNLOADS)/ruby/Makefile: $(DOWNLOADS)/ruby/configure
 	ac_cv_func_close_range=no \
 	cross_compiling=yes
 
-$(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
-	cd $(DOWNLOADS)/ruby; autoreconf -i
+$(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
+	cd $(SOURCES)/ruby; \
+	git checkout -- . 2>/dev/null; \
+	git apply $(PATCHES)/ruby31/ios.patch; \
+	autoreconf -i
 
-$(DOWNLOADS)/ruby/configure.ac:
-	$(CLONE) $(GITHUB)/mkxp-z/ruby $(DOWNLOADS)/ruby --single-branch -b mkxp-z-3.1.3 --depth 1
-	sed -i '' '/: $${PRELOADENV=DYLD_INSERT_LIBRARIES}/g' $(DOWNLOADS)/ruby/configure.ac
+# Ruby 1.8 (submodule: sources/ruby18)
+ruby18: init_dirs $(LIBDIR)/libruby18-static.a
+
+RUBY18_CFLAGS = $(CFLAGS) -std=gnu89 -O2 \
+	-Wno-implicit-function-declaration \
+	-Wno-implicit-int \
+	-Wno-incompatible-pointer-types \
+	-Wno-int-conversion \
+	-Wno-deprecated-non-prototype \
+	-Wno-incompatible-function-pointer-types
+
+RUBY18_EXTS = zlib stringio strscan thread digest fcntl
+
+$(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/Makefile
+	cd $(SOURCES)/ruby18; \
+	$(CONFIGURE_ENV) CFLAGS="$(RUBY18_CFLAGS)" make -j$(NPROC) libruby18-static.a; \
+	cp libruby18-static.a $(LIBDIR)/; \
+	mkdir -p $(INCLUDEDIR)/ruby18; \
+	cp include/ruby/*.h $(INCLUDEDIR)/ruby18/; \
+	cp config.h $(INCLUDEDIR)/ruby18/
+	@# Build extensions
+	@OBJ_FILES=""; \
+	for ext in $(RUBY18_EXTS); do \
+		for src in $(SOURCES)/ruby18/ext/$$ext/*.c; do \
+			obj=$${src%.c}.o; \
+			$(CC) $(RUBY18_CFLAGS) -I$(SOURCES)/ruby18 -I$(SOURCES)/ruby18/include -c $$src -o $$obj; \
+			OBJ_FILES="$$OBJ_FILES $$obj"; \
+		done; \
+	done; \
+	$(AR) rcs $(LIBDIR)/libruby18-ext.a $$OBJ_FILES; \
+	$(RANLIB) $(LIBDIR)/libruby18-ext.a
+
+$(SOURCES)/ruby18/Makefile: $(SOURCES)/ruby18/configure
+	cd $(SOURCES)/ruby18; \
+	$(CONFIGURE_ENV) CFLAGS="$(RUBY18_CFLAGS)" \
+	./configure \
+		--host=$(HOST) \
+		--build=x86_64-apple-darwin \
+		--prefix="$(BUILD_PREFIX)" \
+		--disable-shared \
+		--enable-static \
+		--with-static-linked-ext
+
+$(SOURCES)/ruby18/configure: $(SOURCES)/ruby18/configure.in
+	cd $(SOURCES)/ruby18; \
+	git checkout -- . 2>/dev/null; \
+	git apply $(PATCHES)/ruby18/ios.patch; \
+	autoconf
 
 # ====
 init_dirs:
 	@mkdir -p $(LIBDIR) $(INCLUDEDIR)
+
+# Fetch vendored sources for SDL_image (must run once after submodule init)
+sdl2image-vendored: $(SOURCES)/sdl2_image/external/download.sh
+	cd $(SOURCES)/sdl2_image; ./external/download.sh
 
 clean: clean-compiled
 
@@ -328,5 +364,15 @@ clean-downloads:
 clean-compiled:
 	-rm -rf build-$(SDK)-$(ARCH)
 
+# Clean build artifacts from submodule source trees (configure outputs, object files, etc.)
+clean-sources:
+	@for dir in sdl2 sdl2_image sdl2_ttf sdl_sound freetype ruby; do \
+		rm -rf $(SOURCES)/$$dir/cmakebuild 2>/dev/null; \
+	done
+	cd $(SOURCES)/sdl2_ttf && git checkout -- . 2>/dev/null || true
+	cd $(SOURCES)/freetype && git checkout -- . 2>/dev/null || true
+	cd $(SOURCES)/ruby && git checkout -- . 2>/dev/null || true
+	cd $(SOURCES)/ruby18 && git checkout -- . 2>/dev/null || true
+
 deps-core: libtheora libvorbis pixman libpng physfs uchardet sdl2 sdl2image sdlsound sdl2ttf freetype
-everything: deps-core ruby
+everything: deps-core ruby ruby18

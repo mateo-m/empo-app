@@ -3,25 +3,19 @@
 ## Source
 
 - **Upstream**: Ruby 3.1.3
-- **Fork**: <https://github.com/mkxp-z/ruby> branch `mkxp-z-3.1.3` (shallow clone)
+- **Fork**: <https://github.com/mkxp-z/ruby> branch `mkxp-z-3.1.3` (submodule at `sources/ruby`)
 - **Base commit**: `4d85560` (Nobuyoshi Nakada — "Fix redefinition of `clock_gettime` and `clock_getres`")
 
 ## Patches
 
-Three files patched in the working tree (uncommitted) for iOS compatibility:
+All iOS patches are in `ios.patch` (applied automatically by the makefile
+via `git apply` before `autoreconf`):
 
 ### 1. `configure.ac` — Remove DYLD_INSERT_LIBRARIES
 
 The line `: ${PRELOADENV=DYLD_INSERT_LIBRARIES}` is deleted. On iOS,
 `DYLD_INSERT_LIBRARIES` is not supported, and referencing it causes
 configure warnings/failures.
-
-This patch is applied automatically by the makefile via `sed` at clone
-time:
-
-```
-sed -i '' '/$${PRELOADENV=DYLD_INSERT_LIBRARIES}/d' configure.ac
-```
 
 ### 2. `dir.c` — sys/vnode.h iOS shim
 
