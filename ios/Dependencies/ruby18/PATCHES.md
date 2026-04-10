@@ -3,7 +3,7 @@
 ## Source
 
 - **Upstream**: JoiPlay's `ruby_1_8` branch — <https://github.com/joiplay/ruby>
-- **Branch**: `ruby_1_8`
+- **Branch**: `ruby_1_8` (submodule at `sources/ruby18`)
 - **Commit**: `50783b8` ("\* 2014-01-28") — a git-svn mirror of the official Ruby SVN repository (revision 44718)
 - **Note**: This is the last maintenance snapshot of Ruby 1.8, frozen since 2014.
 
@@ -17,12 +17,10 @@ original Ruby 1.8 maximizes game compatibility.
 
 ## Patches
 
-The Ruby 1.8 source is NOT included in this repository — it is built
-externally. Only the pre-built static libraries and headers are consumed.
+All iOS patches are in `ios.patch` (applied automatically by the makefile
+via `git apply` before `autoconf`):
 
-### Source modifications (2 files)
-
-#### 1. `config.guess` and `config.sub` — Updated for aarch64
+### `config.guess` and `config.sub` — Updated for aarch64
 
 The original 2014-era autoconf helper scripts do not recognize modern
 platform triplets like `aarch64-apple-darwin`. Both files were replaced
@@ -58,126 +56,35 @@ required to make Ruby 1.8 work on iOS:
 
 ## iOS Build Instructions
 
-Ruby 1.8 is built entirely outside the project's makefile system. The
-following instructions reproduce the build.
-
-### Prerequisites
-
-- Xcode with iOS SDK (arm64)
-- The iOS dependency build prefix (for zlib headers/lib):
-  `ios/Dependencies/build-iphoneos-arm64/` (or `iphonesimulator`)
-
-### 1. Clone source
+Ruby 1.8 is now built as part of the standard makefile system:
 
 ```bash
-git clone -b ruby_1_8 https://github.com/joiplay/ruby /tmp/ruby18-src
-cd /tmp/ruby18-src
+cd ios/Dependencies
+make -f iphoneos.make ruby18       # device build
+make -f iphonesimulator.make ruby18  # simulator build
 ```
 
-### 2. Update config.guess / config.sub
-
-Replace the 2014-era files with current versions:
+Or as part of the full build:
 
 ```bash
-curl -o config.guess 'https://git.savannah.gnu.org/cgit/config.git/plain/config.guess'
-curl -o config.sub   'https://git.savannah.gnu.org/cgit/config.git/plain/config.sub'
+make -f iphoneos.make everything
 ```
 
-### 3. Set up cross-compilation environment
+The makefile automatically:
+1. Applies `ios.patch` via `git apply` (updates config.guess/config.sub)
+2. Runs `autoconf` to generate `configure`
+3. Cross-compiles with `-std=gnu89` and appropriate `-Wno-*` flags
+4. Builds core library (`libruby18-static.a`)
+5. Builds extensions (zlib, stringio, strscan, thread, digest, fcntl) into `libruby18-ext.a`
+6. Installs libs to `$(LIBDIR)` and headers to `$(INCLUDEDIR)/ruby18/`
 
-```bash
-SDK="iphoneos"  # or "iphonesimulator"
-SYSROOT=$(xcrun --sdk $SDK --show-sdk-path)
-CC=$(xcrun --sdk $SDK --find clang)
-AR=$(xcrun --sdk $SDK --find ar)
-RANLIB=$(xcrun --sdk $SDK --find ranlib)
+### Key build flags
 
-ARCH_FLAGS="-arch arm64 -isysroot $SYSROOT -miphoneos-version-min=26.0"
-# For simulator, use: -mios-simulator-version-min=26.0 -target arm64-apple-ios26.0-simulator
-
-BUILD_PREFIX="/path/to/ios/Dependencies/build-iphoneos-arm64"
-
-CFLAGS="$ARCH_FLAGS -std=gnu89 -O2 \
-  -Wno-implicit-function-declaration \
-  -Wno-implicit-int \
-  -Wno-incompatible-pointer-types \
-  -Wno-int-conversion \
-  -Wno-deprecated-non-prototype \
-  -Wno-incompatible-function-pointer-types \
-  -I$BUILD_PREFIX/include"
-
-LDFLAGS="$ARCH_FLAGS -L$BUILD_PREFIX/lib"
-```
-
-Key notes on CFLAGS:
-
-- `-std=gnu89` — Required because Ruby 1.8 is K&R-style C code that
-  relies on implicit function declarations and other C89 behaviors
-- The `-Wno-*` flags suppress warnings-turned-errors for the legacy code
-- `-I$BUILD_PREFIX/include` — Needed for zlib headers
-
-### 4. Configure
-
-```bash
-./configure \
-  --host=aarch64-apple-darwin \
-  --build=x86_64-apple-darwin \
-  --prefix=$BUILD_PREFIX \
-  --disable-shared \
-  --enable-static \
-  --with-static-linked-ext \
-  CC="$CC" \
-  CFLAGS="$CFLAGS" \
-  LDFLAGS="$LDFLAGS"
-```
-
-### 5. Build core library
-
-```bash
-make miniruby  # builds the bootstrap interpreter (not used, but required)
-make libruby18-static.a
-```
-
-### 6. Build extensions
-
-Extensions are compiled separately and archived into `libruby18-ext.a`.
-The following extensions are needed by mkxp-z / RGSS games:
-
-```bash
-EXTS="zlib stringio strscan thread digest fcntl"
-```
-
-Each extension is built by compiling its `.c` files from `ext/<name>/`
-with the same CFLAGS plus `-I. -I./include`, then archiving the `.o`
-files:
-
-```bash
-OBJ_FILES=""
-for ext in $EXTS; do
-  cd ext/$ext
-  # Run extconf.rb equivalent: compile all .c files
-  for src in *.c; do
-    $CC $CFLAGS -I../.. -I../../include -c $src -o ${src%.c}.o
-    OBJ_FILES="$OBJ_FILES ext/$ext/${src%.c}.o"
-  done
-  cd ../..
-done
-
-$AR rcs libruby18-ext.a $OBJ_FILES
-$RANLIB libruby18-ext.a
-```
-
-### 7. Install
-
-Copy the build artifacts into the dependency build prefix:
-
-```bash
-cp libruby18-static.a $BUILD_PREFIX/lib/
-cp libruby18-ext.a    $BUILD_PREFIX/lib/
-mkdir -p $BUILD_PREFIX/include/ruby18
-cp include/ruby/*.h   $BUILD_PREFIX/include/ruby18/
-cp config.h           $BUILD_PREFIX/include/ruby18/  # generated by configure
-```
+- `-std=gnu89` — Required because Ruby 1.8 is K&R-style C code
+- `-Wno-implicit-function-declaration`, `-Wno-implicit-int`, etc. —
+  Suppress warnings-turned-errors for legacy C code
+- `--host=aarch64-apple-darwin --build=x86_64-apple-darwin` —
+  Cross-compilation triple
 
 ### Output
 
