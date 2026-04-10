@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Combine
 
 /// The phases of the app lifecycle.
@@ -17,6 +18,7 @@ class AppState: ObservableObject {
     @Published var phase: AppPhase = .library
     @Published var gameRect: CGRect = .zero
     @Published var showQuitConfirm = false
+    @Published var selectedGame: GameEntry?
 
     private var pollTimer: Timer?
     private var terminationTimer: Timer?
@@ -25,10 +27,12 @@ class AppState: ObservableObject {
 
     // MARK: - Actions
 
-    /// Called by GameLibraryView when a game is tapped.
-    func selectGame(_ path: String) {
+    /// Called from NavigationLink's simultaneousGesture when user taps a card.
+    func selectGame(_ game: GameEntry) {
+        guard phase == .library else { return }
+        selectedGame = game
         phase = .loading
-        mkxp_setGamePath(path)
+        mkxp_setGamePath(game.path)
         startGamePolling()
     }
 
@@ -42,7 +46,9 @@ class AppState: ObservableObject {
         showQuitConfirm = false
         stopGamePolling()
 
-        // Show library immediately (covers everything)
+        // Show library immediately — the NavigationStack pop provides
+        // the reverse hero zoom animation, no additional fade needed.
+        selectedGame = nil
         phase = .library
 
         // Ask engine to shut down
@@ -84,7 +90,9 @@ class AppState: ObservableObject {
 
         // Check if game is ready (transition from loading to playing)
         if phase == .loading && mkxp_isGameReady() != 0 {
-            phase = .playing
+            withAnimation(.easeOut(duration: 0.3)) {
+                phase = .playing
+            }
         }
     }
 }

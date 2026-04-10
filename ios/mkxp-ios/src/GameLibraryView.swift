@@ -2,7 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct GameLibraryView: View {
-    var appState: AppState
+    @ObservedObject var appState: AppState
+    var heroNamespace: Namespace.ID
     @ObservedObject var library = GameLibrary.shared
     @ObservedObject var settings = AppSettings.shared
     @State private var showImporter = false
@@ -11,6 +12,7 @@ struct GameLibraryView: View {
     @State private var showError = false
     @State private var gameToDelete: GameEntry?
     @State private var showDeleteConfirm = false
+    @State private var path = NavigationPath()
 
     private var isImporting: Bool { library.importStatus != nil }
 
@@ -20,34 +22,48 @@ struct GameLibraryView: View {
     ]
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Group {
-                    if library.games.isEmpty && !isImporting {
-                        emptyState
-                    } else {
-                        gameGrid
-                    }
-                }
-
-                if isImporting {
-                    importOverlay
-                }
-            }
-            .navigationTitle("Library")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+        NavigationStack(path: $path) {
+            VStack(spacing: 0) {
+                // Custom header — stays put during hero zoom (no nav bar animation)
+                HStack {
                     Button(action: { showSettings = true }) {
                         Image(systemName: "gearshape")
+                            .font(.body)
+                            .padding(10)
                     }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
+                    .glassEffect(.regular, in: .circle)
+                    Spacer()
+                    Text("Library")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    Spacer()
                     Button(action: { showImporter = true }) {
                         Image(systemName: "plus")
+                            .font(.body)
+                            .padding(10)
                     }
+                    .glassEffect(.regular, in: .circle)
                     .disabled(isImporting)
                 }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
+                ZStack {
+                    Group {
+                        if library.games.isEmpty && !isImporting {
+                            emptyState
+                        } else {
+                            gameGrid
+                        }
+                    }
+
+                    if isImporting {
+                        importOverlay
+                    }
+                }
             }
+            .navigationBarHidden(true)
             .sheet(isPresented: $showSettings) {
                 SettingsView()
             }
@@ -71,6 +87,15 @@ struct GameLibraryView: View {
             } message: {
                 if let game = gameToDelete {
                     Text("Are you sure you want to delete \"\(game.title)\"? This will remove all game files.")
+                }
+            }
+            .navigationDestination(for: GameEntry.self) { game in
+                GameLoadingView(game: game)
+                    .navigationTransition(.zoom(sourceID: game.id, in: heroNamespace))
+            }
+            .onChange(of: appState.phase) { _, newPhase in
+                if newPhase == .library && !path.isEmpty {
+                    path = NavigationPath()
                 }
             }
         }
@@ -123,16 +148,22 @@ struct GameLibraryView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(library.games) { game in
-                    GameCard(game: game)
-                        .onTapGesture { appState.selectGame(game.path) }
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                gameToDelete = game
-                                showDeleteConfirm = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
+                    NavigationLink(value: game) {
+                        GameCard(game: game)
+                            .matchedTransitionSource(id: game.id, in: heroNamespace)
+                    }
+                    .buttonStyle(.plain)
+                    .simultaneousGesture(TapGesture().onEnded {
+                        appState.selectGame(game)
+                    })
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            gameToDelete = game
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
+                    }
                 }
             }
             .padding()
@@ -219,6 +250,50 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Loading View (pushed inside NavigationStack with zoom hero transition)
+
+struct GameLoadingView: View {
+    let game: GameEntry
+
+    var body: some View {
+        ZStack {
+            // Blurred, dimmed artwork background
+            artworkBackground
+
+            // Title + spinner centered
+            VStack(spacing: 16) {
+                Text(game.title)
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .shadow(radius: 4)
+
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .scaleEffect(1.2)
+            }
+        }
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    @ViewBuilder
+    private var artworkBackground: some View {
+        if let path = game.artworkPath, let uiImage = UIImage(contentsOfFile: path) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .ignoresSafeArea()
+                .blur(radius: 20)
+                .overlay(Color.black.opacity(0.5))
+                .ignoresSafeArea()
+        } else {
+            Color.black.ignoresSafeArea()
         }
     }
 }
