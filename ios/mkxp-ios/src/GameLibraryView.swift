@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct GameLibraryView: View {
+    var appState: AppState
     @ObservedObject var library = GameLibrary.shared
     @ObservedObject var settings = AppSettings.shared
     @State private var showImporter = false
@@ -123,7 +124,7 @@ struct GameLibraryView: View {
             LazyVGrid(columns: columns, spacing: 16) {
                 ForEach(library.games) { game in
                     GameCard(game: game)
-                        .onTapGesture { GameLibraryWindow.selectGame(game.path) }
+                        .onTapGesture { appState.selectGame(game.path) }
                         .contextMenu {
                             Button(role: .destructive) {
                                 gameToDelete = game
