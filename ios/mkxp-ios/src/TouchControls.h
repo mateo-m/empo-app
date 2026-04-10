@@ -50,6 +50,10 @@ typedef NS_OPTIONS(NSUInteger, DPadDirection) {
 @end
 
 // ============================================================================
+// TCAccessoryBar — keyboard accessory that respects safe area insets
+@interface TCAccessoryBar : UIView
+@end
+
 // TCKeyboardField — hidden text field for system keyboard input
 // ============================================================================
 
