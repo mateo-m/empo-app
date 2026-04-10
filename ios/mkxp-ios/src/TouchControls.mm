@@ -410,9 +410,16 @@ static int scancodeForCharacter(unichar c) {
 - (void)accKeyUp:(UIButton *)sender;
 @end
 
+@implementation TCAccessoryBar
+// TODO: Handle safe area insets for standalone accessory bar (no native keyboard).
+// UIKit controls the input accessory view frame and ignores dynamic resizing.
+// Needs a different approach — possibly recreating with correct height or
+// not using inputAccessoryView at all.
+@end
+
 UIView *TCCreateKeyboardAccessoryView(void) {
     CGFloat barH = 80;
-    UIView *bar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 0, barH)];
+    TCAccessoryBar *bar = [[TCAccessoryBar alloc] initWithFrame:CGRectMake(0, 0, 0, barH)];
     bar.backgroundColor = [UIColor colorWithWhite:0.12 alpha:0.95];
     bar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 
