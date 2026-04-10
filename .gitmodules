@@ -2,27 +2,34 @@
 	path = ios/Dependencies/sources/sdl2
 	url = https://github.com/mkxp-z/SDL
 	branch = mkxp-z-2.28.1
+	ignore = dirty
 [submodule "ios/Dependencies/sources/sdl2_image"]
 	path = ios/Dependencies/sources/sdl2_image
 	url = https://github.com/mkxp-z/SDL_image
 	branch = mkxp-z
+	ignore = dirty
 [submodule "ios/Dependencies/sources/sdl_sound"]
 	path = ios/Dependencies/sources/sdl_sound
 	url = https://github.com/mkxp-z/SDL_sound
 	branch = git
+	ignore = dirty
 [submodule "ios/Dependencies/sources/sdl2_ttf"]
 	path = ios/Dependencies/sources/sdl2_ttf
 	url = https://github.com/mkxp-z/SDL_ttf
 	branch = mkxp-z
+	ignore = dirty
 [submodule "ios/Dependencies/sources/freetype"]
 	path = ios/Dependencies/sources/freetype
 	url = https://github.com/mkxp-z/freetype2
 	branch = master
+	ignore = dirty
 [submodule "ios/Dependencies/sources/ruby"]
 	path = ios/Dependencies/sources/ruby
 	url = https://github.com/mkxp-z/ruby
 	branch = mkxp-z-3.1.3
+	ignore = dirty
 [submodule "ios/Dependencies/sources/ruby18"]
 	path = ios/Dependencies/sources/ruby18
 	url = https://github.com/joiplay/ruby
 	branch = ruby_1_8
+	ignore = dirty

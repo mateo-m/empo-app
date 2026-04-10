@@ -1,0 +1,11 @@
+{
+  "git.ignoredRepositories": [
+    "ios/Dependencies/sources/sdl2",
+    "ios/Dependencies/sources/sdl2_image",
+    "ios/Dependencies/sources/sdl_sound",
+    "ios/Dependencies/sources/sdl2_ttf",
+    "ios/Dependencies/sources/freetype",
+    "ios/Dependencies/sources/ruby",
+    "ios/Dependencies/sources/ruby18"
+  ]
+}
