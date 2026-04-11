@@ -4,9 +4,13 @@ An iOS port of [mkxp-z](https://github.com/mkxp-z/mkxp-z), which is itself a for
 
 ## How it works
 
-The engine (`mkxp-z/`) does all the heavy lifting: it reimplements the RGSS runtime that RPG Maker games expect, using SDL2 for windowing and input, OpenGL ES 2.0 for rendering, OpenAL for audio, and an embedded Ruby interpreter to run game scripts. The iOS-specific code (`ios/`) builds it as a native iOS app, adds a touch controls overlay, and bundles all the dependencies as static libraries.
+The engine (`mkxp-z/`) does all the heavy lifting: it reimplements the RGSS runtime that RPG Maker games expect, using SDL2 for windowing and input, OpenGL ES 2.0 for rendering, OpenAL for audio, and an embedded Ruby interpreter to run game scripts. The iOS-specific code (`ios/`) builds it as a native iOS app, adds a SwiftUI game library and touch controls overlay, and bundles all the dependencies as static libraries.
 
-When the app launches, it looks for a game folder containing an `.ini` file, `mkxp.json`, or an `.rgssad` archive. A set of Ruby preload scripts run before the game's own scripts to patch over Windows-specific assumptions (Win32API calls, environment variables, etc.) so that games work without modification.
+When the app launches, it presents a **game library** where you can browse imported games and import new ones (folders or `.zip` files) via the system document picker. Selecting a game hands its path to the engine, which loads the `.ini` file, `mkxp.json`, or `.rgssad` archive. A set of Ruby preload scripts run before the game's own scripts to patch over Windows-specific assumptions (Win32API calls, environment variables, etc.) so that games work without modification.
+
+### Library UI
+
+The library is built entirely in SwiftUI with a playful design: SF Rounded font, liquid glass buttons, a morphing import button that arcs between expanded (empty state) and collapsed (header) positions, and card-based game display with artwork thumbnails. Games can be imported from folders or `.zip` files, with real-time progress indicators (indeterminate for folders, determinate for zips). The app supports dark, light, and auto themes applied at the UIWindow level.
 
 ### Ruby 1.8
 
@@ -22,7 +26,7 @@ A transparent UIKit overlay window sits on top of SDL's OpenGL rendering surface
 - Edit mode where you can drag, resize, relabel, re-bind, or delete any button
 - The ability to add new buttons mapped to arbitrary key presses
 
-The overlay injects SDL keyboard events directly, so the engine sees them exactly as if they came from a hardware keyboard. The touch controls code is fully self-contained in `TouchControlsOverlay.h` and `TouchControlsOverlay.mm` and does not require any engine modifications.
+The overlay injects SDL keyboard events directly, so the engine sees them exactly as if they came from a hardware keyboard. The touch controls are self-contained in `ios/mkxp-ios/src/Player/` and do not require any engine modifications.
 
 ## Project structure
 
@@ -52,12 +56,35 @@ mkxp-ios/
       downloads/                   # Dependency source checkouts (not in git)
     mkxp-ios/
       project.yml                  # XcodeGen project spec
-      Info.plist                   # App metadata, landscape-only, native resolution
+      Info.plist                   # App metadata
       src/
-        TouchControlsOverlay.h     # Touch controls interface
-        TouchControlsOverlay.mm    # Touch controls implementation
+        mkxp-ios-Bridging-Header.h # Bridges C engine API to Swift
         systemImplIOS.mm           # iOS system functions (scaling factor)
-        filesystemImplIOS.mm       # iOS filesystem (generic game root detection)
+        filesystemImplIOS.mm       # iOS filesystem (game root detection)
+        App/                       # App lifecycle and root UI
+          AppLoader.m              # +load bootstrap (creates UIWindow before main)
+          AppWindow.swift          # UIWindow above SDL, theme observation
+          AppState.swift           # @Observable state machine (library/loading/playing/quitting)
+          AppSettings.swift        # Persisted settings (theme, debug mode, log retention)
+          RootView.swift           # Root SwiftUI view (SF Rounded, phase-based routing)
+          GitInfo.generated.swift  # Auto-generated commit hash for version display
+        Library/                   # Game library (import, browse, delete)
+          GameLibraryView.swift    # Grid layout, morphing import button, liquid glass header
+          GameCard.swift           # Game card component (artwork, title, import progress)
+          GameEntry.swift          # Game data model (title, path, artwork, import state)
+          GameLibrary.swift        # Game scanning, importing, deletion
+          GameLoadingView.swift    # Loading screen (spinner while engine boots)
+          GameImportValidator.swift # Validates imported game structure
+          ZipExtractor.swift       # Zip extraction with progress callback
+          DocumentPickerView.swift # System document picker (UIDocumentPickerViewController)
+        Settings/                  # App settings
+          SettingsView.swift       # Theme picker, title position, debug toggles
+        Player/                    # In-game overlay
+          PlayerView.swift         # Game viewport + controls layout
+          ControlsLayout.swift     # Portrait/landscape control positioning
+          TouchControls.h          # Touch controls interface
+          TouchControls.mm         # Touch controls implementation (D-pad, buttons, toolbar)
+          TouchControlRepresentables.swift # UIKit-to-SwiftUI bridge
       shims/                       # Headers that stub out unavailable platform APIs
         al.h, alc.h, alext.h       # Redirect OpenAL includes to Apple's framework
         TouchBar.h                 # Stub for macOS Touch Bar API
@@ -152,7 +179,14 @@ xcrun simctl launch <UDID> com.mkxp.mkxp-ios
 
 ### 5. Add a game
 
-Place your game folder (containing the `.ini` file and game data) into `demo/games/`. Update `project.yml` to reference it as a bundled resource, regenerate the Xcode project, and rebuild.
+Games are imported at runtime through the app's library UI. Tap the import button, select a game folder or `.zip` file from the system document picker, and the app copies it into its sandboxed `Documents/Games/` directory. No rebuild required.
+
+For development, you can also copy game folders directly into the simulator's app container:
+
+```sh
+CONTAINER=$(xcrun simctl get_app_container <UDID> com.mkxp.mkxp-ios data)
+cp -R /path/to/your/game "$CONTAINER/Documents/Games/"
+```
 
 ### LSP / compile_commands.json
 

@@ -120,7 +120,7 @@ This keeps UIKit alive (rendering the SwiftUI Library) while the C++ engine bloc
 
 **Problem:** The SwiftUI Library UI and the C++ engine communicate through a C bridge (`ios_bridge.h`). There's no callback mechanism from C++ to Swift — the bridge only exposes query functions like `mkxp_isEngineTerminated()` and `mkxp_isGameReady()`.
 
-**Solution (`AppState.swift`):** Timers poll bridge state every 100ms:
+**Solution (`AppState.swift`):** Timers poll bridge state every 100ms. `AppState` uses the `@Observable` macro (Observation framework) so SwiftUI views react to state changes automatically without `@Published` wrappers.
 
 - **Termination timer**: Polls `mkxp_isEngineTerminated()` to detect when a game session ends and transition back to the Library.
 - **Game polling timer**: Polls `mkxp_isGameReady()` and viewport rect updates to sync the UI with engine state.
@@ -152,7 +152,7 @@ void mkxp_requestTerminate(void) {
 
 **Problem:** SDL creates its own `UIWindow` with an OpenGL view. The SwiftUI Library UI must appear above it, and the Player controls must overlay it while passing non-control touches through.
 
-**Solution (`AppWindow.swift`):** A single `UIWindow` is created at `windowLevel = .normal + 1` (above SDL's window) and installed via `+load` (before `main()` runs). It switches between opaque (Library mode) and transparent (Player mode).
+**Solution (`AppWindow.swift`):** A single `UIWindow` is created at `windowLevel = .normal + 1` (above SDL's window) and installed via `+load` (before `main()` runs). It switches between opaque (Library mode) and transparent (Player mode). Theme changes (dark/light/auto) are observed via `withObservationTracking` and applied at the window level via `overrideUserInterfaceStyle`.
 
 ---
 
