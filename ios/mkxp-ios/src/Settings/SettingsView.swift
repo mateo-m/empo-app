@@ -43,10 +43,18 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 2)
+
+                    if settings.debugLogs {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Stepper("Keep last \(settings.maxLogFiles) logs", value: $settings.maxLogFiles, in: 5...100, step: 5)
+                            Text("Older log files are automatically deleted when the app launches.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
                 } header: {
                     Text("Advanced")
-                } footer: {
-                    Text("These options are useful for troubleshooting game compatibility issues.")
                 }
 
                 Section {

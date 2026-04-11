@@ -24,8 +24,6 @@ class AppState: ObservableObject {
     private var terminationTimer: Timer?
     private let sessionHistoryPath: String
 
-    private static let maxLogFiles = 20
-
     private init() {
         let logsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs", isDirectory: true)
@@ -51,7 +49,7 @@ class AppState: ObservableObject {
 
         // Only consider per-session log files (UUID-slug-timestamp.log), not session-history.log
         let logFiles = files.filter { $0.lastPathComponent != "session-history.log" && $0.pathExtension == "log" }
-        guard logFiles.count > Self.maxLogFiles else { return }
+        guard logFiles.count > AppSettings.shared.maxLogFiles else { return }
 
         let sorted = logFiles.sorted {
             let d0 = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
@@ -59,7 +57,7 @@ class AppState: ObservableObject {
             return d0 < d1
         }
 
-        for file in sorted.prefix(sorted.count - Self.maxLogFiles) {
+        for file in sorted.prefix(sorted.count - AppSettings.shared.maxLogFiles) {
             try? fm.removeItem(at: file)
         }
     }
