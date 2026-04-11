@@ -6,8 +6,8 @@ import SwiftUI
 /// This lets the reverse hero zoom play when quitting a game. Hidden via
 /// opacity during gameplay so the transparent PlayerView shows SDL beneath.
 struct RootView: View {
-    @ObservedObject var appState = AppState.shared
-    @ObservedObject var layout = ControlsLayout.shared
+    var appState = AppState.shared
+    var layout = ControlsLayout.shared
     @Namespace private var hero
 
     var body: some View {

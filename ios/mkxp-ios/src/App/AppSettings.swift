@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 enum TitlePosition: String, CaseIterable {
     case inside = "inside"
@@ -12,26 +13,27 @@ enum TitlePosition: String, CaseIterable {
     }
 }
 
-class AppSettings: ObservableObject {
+@Observable
+class AppSettings {
     static let shared = AppSettings()
 
-    @Published var debugMode: Bool {
+    var debugMode: Bool {
         didSet { UserDefaults.standard.set(debugMode, forKey: "debugMode") }
     }
 
-    @Published var debugLogs: Bool {
+    var debugLogs: Bool {
         didSet { UserDefaults.standard.set(debugLogs, forKey: "debugLogs") }
     }
 
-    @Published var maxLogFiles: Int {
+    var maxLogFiles: Int {
         didSet { UserDefaults.standard.set(maxLogFiles, forKey: "maxLogFiles") }
     }
 
-    @Published var cleanupInvalidGames: Bool {
+    var cleanupInvalidGames: Bool {
         didSet { UserDefaults.standard.set(cleanupInvalidGames, forKey: "cleanupInvalidGames") }
     }
 
-    @Published var titlePosition: TitlePosition {
+    var titlePosition: TitlePosition {
         didSet { UserDefaults.standard.set(titlePosition.rawValue, forKey: "titlePosition") }
     }
 
