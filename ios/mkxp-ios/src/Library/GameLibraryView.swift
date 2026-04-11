@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct GameLibraryView: View {
-    @ObservedObject var appState: AppState
+    var appState: AppState
     var heroNamespace: Namespace.ID
-    @ObservedObject var library = GameLibrary.shared
-    @ObservedObject var settings = AppSettings.shared
+    var library = GameLibrary.shared
+    var settings = AppSettings.shared
     @State private var showImporter = false
     @State private var showSettings = false
     @State private var errorMessage: String?

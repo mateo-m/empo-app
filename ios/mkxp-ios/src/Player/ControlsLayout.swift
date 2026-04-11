@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Model for a single action button's persistent state.
 struct ButtonModel: Identifiable, Equatable {
@@ -38,14 +39,15 @@ struct ButtonModel: Identifiable, Equatable {
 }
 
 /// Manages the layout of touch controls (d-pad + action buttons) with persistence.
-class ControlsLayout: ObservableObject {
+@Observable
+class ControlsLayout {
     static let shared = ControlsLayout()
 
     private static let savedLayoutKey = "touchControlsLayout"
 
-    @Published var dpadRelativeCenter: CGPoint = CGPoint(x: 0.13, y: 0.72)
-    @Published var dpadSize: CGFloat = 140
-    @Published var buttons: [ButtonModel] = []
+    var dpadRelativeCenter: CGPoint = CGPoint(x: 0.13, y: 0.72)
+    var dpadSize: CGFloat = 140
+    var buttons: [ButtonModel] = []
 
     private init() {
         if !loadLayout() {

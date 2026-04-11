@@ -104,8 +104,8 @@ private let kToolbarIdleDelay: TimeInterval = 3.0
 // ============================================================================
 
 struct PlayerView: View {
-    @ObservedObject var appState: AppState
-    @ObservedObject var layout: ControlsLayout
+    @Bindable var appState: AppState
+    var layout: ControlsLayout
     @State private var editMode = false
     @State private var controlsHidden = false
     @State private var keyboardMode = false

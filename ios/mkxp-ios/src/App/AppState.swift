@@ -1,6 +1,6 @@
 import Foundation
 import SwiftUI
-import Combine
+import Observation
 
 /// The phases of the app lifecycle.
 enum AppPhase: Equatable {
@@ -12,13 +12,14 @@ enum AppPhase: Equatable {
 
 /// Central state machine driving all UI transitions.
 /// Polls bridge functions and publishes state changes that SwiftUI reacts to.
-class AppState: ObservableObject {
+@Observable
+class AppState {
     static let shared = AppState()
 
-    @Published var phase: AppPhase = .library
-    @Published var gameRect: CGRect = .zero
-    @Published var showQuitConfirm = false
-    @Published var selectedGame: GameEntry?
+    var phase: AppPhase = .library
+    var gameRect: CGRect = .zero
+    var showQuitConfirm = false
+    var selectedGame: GameEntry?
 
     private var pollTimer: Timer?
     private var terminationTimer: Timer?

@@ -2,8 +2,9 @@ import SwiftUI
 
 struct GameCard: View {
     let game: GameEntry
-    @ObservedObject private var settings = AppSettings.shared
     @State private var titleHeight: CGFloat = 40
+
+    private var settings: AppSettings { AppSettings.shared }
 
     var body: some View {
         switch settings.titlePosition {
