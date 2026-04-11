@@ -11,6 +11,7 @@ struct GameLibraryView: View {
     @State private var showErrorAlert = false
     @State private var gameToDelete: GameEntry?
     @State private var showDeleteConfirm = false
+    @State private var showInvalidAlert = false
     @State private var path = NavigationPath()
 
     private var showEmpty: Bool {
@@ -77,6 +78,11 @@ struct GameLibraryView: View {
                 if let game = gameToDelete {
                     Text("This will remove all files for \"\(game.title)\". You can always re-import it later.")
                 }
+            }
+            .alert("invalid game", isPresented: $showInvalidAlert) {
+                Button("OK") {}
+            } message: {
+                Text("this game couldn't be loaded properly. you can delete it and try importing again.")
             }
             .navigationDestination(for: GameEntry.self) { game in
                 GameLoadingView(game: game)
@@ -196,25 +202,36 @@ struct GameLibraryView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(library.games) { game in
-                    if game.isImporting {
+                    switch game.status {
+                    case .importing:
                         GameCard(game: game, onStopImport: {
                             gameToDelete = game
                             showDeleteConfirm = true
                         })
                             .id("\(game.id)-importing")
                             .transition(.cardAppear)
-                    } else {
+
+                    case .invalid:
+                        Button { showInvalidAlert = true } label: {
+                            GameCard(game: game)
+                        }
+                            .id("\(game.id)-invalid")
+                            .buttonStyle(CardPressStyle())
+                            .transition(.cardAppear)
+                            .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
+
+                    case .ready:
                         NavigationLink(value: game) {
                             GameCard(game: game)
                                 .matchedTransitionSource(id: game.id, in: heroNamespace)
                         }
-                        .id("\(game.id)-ready")
-                        .buttonStyle(CardPressStyle())
-                        .simultaneousGesture(TapGesture().onEnded {
-                            appState.selectGame(game)
-                        })
-                        .transition(.cardAppear)
-                        .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
+                            .id("\(game.id)-ready")
+                            .buttonStyle(CardPressStyle())
+                            .simultaneousGesture(TapGesture().onEnded {
+                                appState.selectGame(game)
+                            })
+                            .transition(.cardAppear)
+                            .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
                     }
                 }
             }
