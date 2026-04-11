@@ -22,6 +22,7 @@ class AppState {
     var selectedGame: GameEntry?
 
     private let sessionHistoryPath: String
+    private static let isoFormatter = ISO8601DateFormatter()
 
     private init() {
         let logsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -31,7 +32,7 @@ class AppState {
 
         // Reset session history on each app launch
         let dirty = GitInfo.dirty ? " (dirty)" : ""
-        let launchTime = ISO8601DateFormatter().string(from: Date())
+        let launchTime = Self.isoFormatter.string(from: Date())
         var header = "mkxp-ios session history\n"
         header += "commit: \(GitInfo.commit)\(dirty)\n"
         header += "launched: \(launchTime)\n"
@@ -89,7 +90,7 @@ class AppState {
             .lowercased()
             .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let timestamp = Self.isoFormatter.string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
         let filename = "\(game.id)-\(slug)-\(timestamp).log"
         let logPath = logsDir.appendingPathComponent(filename).path
@@ -107,7 +108,7 @@ class AppState {
     }
 
     private func appendSessionHistory(game: GameEntry) {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let timestamp = Self.isoFormatter.string(from: Date())
         let entry = "\n[\(timestamp)] \(game.title) [\(game.id)]\n"
         if let data = entry.data(using: .utf8),
            let fh = FileHandle(forWritingAtPath: sessionHistoryPath) {
