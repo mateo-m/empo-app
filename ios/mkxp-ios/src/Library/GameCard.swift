@@ -5,10 +5,10 @@ struct GameCard: View {
     var onStopImport: (() -> Void)? = nil
     @State private var titleHeight: CGFloat = 40
 
-    private var settings: AppSettings { AppSettings.shared }
+    private var titlePosition: TitlePosition { AppSettings.shared.titlePosition }
 
     var body: some View {
-        switch settings.titlePosition {
+        switch titlePosition {
         case .inside: insideCard
         case .under:  underCard
         }
