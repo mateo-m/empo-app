@@ -28,7 +28,11 @@ The overlay injects SDL keyboard events directly, so the engine sees them exactl
 
 ```
 mkxp-ios/
-  mkxp-z/                          # mkxp-z engine source (upstream + iOS patches)
+  setup.sh                           # Run once after cloning (configures git hooks)
+  .githooks/                         # Tracked git hooks
+    post-commit                      # Regenerates GitInfo.generated.swift
+  docs/                              # Architecture and design docs
+  mkxp-z/                            # mkxp-z engine source (upstream + iOS patches)
     src/
       main.cpp                     # Entry point, FBO setup, OpenAL init
       eventthread.cpp              # SDL event loop (KEYUP fix)
@@ -60,10 +64,13 @@ mkxp-ios/
         SettingsMenuController.h   # Stub for macOS settings menu
       Assets.bundle/
         Preload/                   # Ruby scripts loaded before game scripts
-          ios_compat.rb            # ENV vars, MKXP module, Dir.chdir patch
+          ios_compat.rb            # Engine-level iOS patches (fork, env vars, Dir.chdir)
+          pokemon_compat.rb        # Pokemon Essentials/fangame patches (disposed objects, $mouse)
           ruby_classic_wrap.rb     # Ruby 1.8 compatibility helpers
           win32_wrap.rb            # Win32API emulation layer (CC0, by Ancurio)
           mkxp_wrap.rb             # mkxp module compatibility
+        Postload/                  # Ruby scripts loaded after game scripts, before Main
+          pokemon_input.rb         # Pokemon Essentials Input redirect (native j-prefixed methods)
         Fonts/                     # Fallback fonts (Liberation Sans, WenQuanYi)
         Shaders/                   # GLSL vertex/fragment shaders
   demo/
@@ -78,6 +85,16 @@ mkxp-ios/
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 - Standard Unix build tools (`autoconf`, `automake`, `libtool`, `cmake`, `pkg-config`)
 - An Apple developer account (free or paid) for code signing
+
+### 0. Initial setup
+
+After cloning the repo, run the setup script once:
+
+```sh
+./setup.sh
+```
+
+This configures git to use the tracked hooks in `.githooks/` (which keep the version display in sync with the latest commit) and generates the initial `GitInfo.generated.swift`.
 
 ### 1. Build dependencies
 
@@ -196,7 +213,7 @@ OpenGLES, OpenAL, Foundation, UIKit, CoreGraphics, CoreVideo, CoreAudio, AudioTo
 
 - `win32_wrap.rb` by Ancurio and Splendide Imaginarius, released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 - `mkxp_wrap.rb` by Splendide Imaginarius, released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
-- `ios_compat.rb` and `ruby_classic_wrap.rb` are part of this project
+- `ios_compat.rb`, `pokemon_compat.rb`, `pokemon_input.rb`, and `ruby_classic_wrap.rb` are part of this project
 
 ## License
 
