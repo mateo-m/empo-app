@@ -23,6 +23,10 @@ class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(debugLogs, forKey: "debugLogs") }
     }
 
+    @Published var maxLogFiles: Int {
+        didSet { UserDefaults.standard.set(maxLogFiles, forKey: "maxLogFiles") }
+    }
+
     @Published var cleanupInvalidGames: Bool {
         didSet { UserDefaults.standard.set(cleanupInvalidGames, forKey: "cleanupInvalidGames") }
     }
@@ -34,6 +38,8 @@ class AppSettings: ObservableObject {
     private init() {
         self.debugMode = UserDefaults.standard.bool(forKey: "debugMode")
         self.debugLogs = UserDefaults.standard.bool(forKey: "debugLogs")
+        let storedMax = UserDefaults.standard.integer(forKey: "maxLogFiles")
+        self.maxLogFiles = storedMax > 0 ? storedMax : 20
         self.cleanupInvalidGames = UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
         let raw = UserDefaults.standard.string(forKey: "titlePosition") ?? TitlePosition.inside.rawValue
         self.titlePosition = TitlePosition(rawValue: raw) ?? .inside
