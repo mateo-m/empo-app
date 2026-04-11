@@ -1025,6 +1025,12 @@ struct GraphicsPrivate {
     
     void checkResize(bool skipIntScaleBuffer = false) {
         if (threadData->windowSizeMsg.poll(winSize)) {
+            /* Drain all pending async GL work (e.g. pixel processing
+             * dispatched by the previous SwapWindow) before touching
+             * any GL state.  Without this, rotating the device can
+             * cause a SIGSEGV in libGLImage on iOS. */
+            glFinish();
+
             /* Query the actual size in pixels, not units */
             Vec2i drawableSize(winSize);
             threadData->drawableSizeMsg.poll(drawableSize);
