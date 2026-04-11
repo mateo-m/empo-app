@@ -85,10 +85,17 @@ struct GameCard: View {
 
     @ViewBuilder
     private var centerOverlay: some View {
-        if game.isImporting {
+        switch game.status {
+        case .importing:
             Color.black.opacity(0.3)
             ImportProgressView(progress: game.importProgress, onStop: onStopImport)
-        } else {
+        case .invalid:
+            Color.black.opacity(0.3)
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title2)
+                .foregroundStyle(.yellow)
+                .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
+        case .ready:
             Image(systemName: "play.fill")
                 .font(.title3)
                 .foregroundStyle(.white)

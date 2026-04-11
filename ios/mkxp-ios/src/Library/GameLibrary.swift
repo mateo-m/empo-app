@@ -19,35 +19,13 @@ class GameLibrary {
 
     private init() {
         ensureGamesDirectory()
-        if AppSettings.shared.cleanupInvalidGames {
-            removeInvalidGameFolders()
-        }
-        games = scanGames()
+        games = scanGames(cleanupInvalid: AppSettings.shared.cleanupInvalidGames)
     }
 
     // MARK: - Scan
 
-    /// Removes game folders that fail validation (e.g. half-imported due to crash).
-    private func removeInvalidGameFolders() {
-        guard let contents = try? fm.contentsOfDirectory(
-            at: gamesDirectory,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return }
-
-        for url in contents {
-            guard (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
-                continue
-            }
-            if (try? GameImportValidator.validate(url)) == nil {
-                NSLog("[GameLibrary] Removing invalid game folder: %@", url.lastPathComponent)
-                try? fm.removeItem(at: url)
-            }
-        }
-    }
-
     func reload() {
-        let scanned = scanGames()
+        let scanned = scanGames(cleanupInvalid: false)
         let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
 
         DispatchQueue.main.async {
@@ -73,7 +51,9 @@ class GameLibrary {
         }
     }
 
-    private func scanGames() -> [GameEntry] {
+    /// Scans the games directory in a single pass. If `cleanupInvalid` is true,
+    /// invalid folders are removed instead of silently skipped.
+    private func scanGames(cleanupInvalid: Bool) -> [GameEntry] {
         var entries: [GameEntry] = []
         guard let contents = try? fm.contentsOfDirectory(
             at: gamesDirectory,
@@ -85,7 +65,25 @@ class GameLibrary {
             guard (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
                 continue
             }
-            if let entry = scanGameFolder(url) {
+
+            // Validate once — either scan, cleanup, or mark invalid
+            let isValid = (try? GameImportValidator.validate(url)) != nil
+
+            if !isValid {
+                if cleanupInvalid {
+                    NSLog("[GameLibrary] Removing invalid game folder: %@", url.lastPathComponent)
+                    try? fm.removeItem(at: url)
+                    continue
+                }
+                // Include as invalid entry so the user can see it
+                if var entry = buildGameEntry(from: url) {
+                    entry.status = .invalid
+                    entries.append(entry)
+                }
+                continue
+            }
+
+            if let entry = buildGameEntry(from: url) {
                 entries.append(entry)
             }
         }
@@ -94,8 +92,8 @@ class GameLibrary {
         return entries
     }
 
-    private func scanGameFolder(_ url: URL) -> GameEntry? {
-        guard (try? GameImportValidator.validate(url)) != nil else { return nil }
+    /// Builds a GameEntry from a validated game folder (no validation performed here).
+    private func buildGameEntry(from url: URL) -> GameEntry? {
 
         let folderName = url.lastPathComponent
         let title = parseGameTitle(at: url) ?? "Unknown Game"
@@ -166,7 +164,7 @@ class GameLibrary {
                 path: "",
                 title: title,
                 artworkPath: artwork,
-                isImporting: true
+                status: .importing(progress: 0)
             ))
         }
 
@@ -198,7 +196,7 @@ class GameLibrary {
     private func updateProgress(_ importID: String, _ progress: Double) {
         DispatchQueue.main.async {
             guard let idx = self.games.firstIndex(where: { $0.id == importID }) else { return }
-            self.games[idx].importProgress = progress
+            self.games[idx].status = .importing(progress: progress)
         }
     }
 
@@ -218,7 +216,7 @@ class GameLibrary {
                     path: "",
                     title: title ?? self.games[idx].title,
                     artworkPath: artwork ?? self.games[idx].artworkPath,
-                    isImporting: true
+                    status: .importing(progress: self.games[idx].importProgress)
                 )
             }
         }
