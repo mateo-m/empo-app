@@ -203,10 +203,12 @@ class GameLibrary {
     }
 
     /// Updates the skeleton card's title and artwork mid-import (e.g. after zip extraction).
-    private func updateSkeleton(_ importID: String, gameDir: URL) {
+    /// Returns the parsed title so callers can reuse it without re-reading the INI file.
+    @discardableResult
+    private func updateSkeleton(_ importID: String, gameDir: URL) -> String? {
         let title = parseGameTitle(at: gameDir)
         let artwork = findArtwork(at: gameDir)
-        guard title != nil || artwork != nil else { return }
+        guard title != nil || artwork != nil else { return title }
 
         DispatchQueue.main.async {
             guard let idx = self.games.firstIndex(where: { $0.id == importID }) else { return }
@@ -220,10 +222,10 @@ class GameLibrary {
                 )
             }
         }
+        return title
     }
 
-    private func destinationURL(for importID: String, gameDir: URL) -> URL {
-        let title = parseGameTitle(at: gameDir)
+    private func destinationURL(for importID: String, title: String?) -> URL {
         let slug = title.map { slugify($0) } ?? ""
         let folderName = slug.isEmpty ? importID : "\(importID)-\(slug)"
         return gamesDirectory.appendingPathComponent(folderName)
@@ -243,7 +245,8 @@ class GameLibrary {
         try GameImportValidator.validate(tmpDest)
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
-        let destURL = destinationURL(for: importID, gameDir: tmpDest)
+        let title = parseGameTitle(at: tmpDest)
+        let destURL = destinationURL(for: importID, title: title)
         try fm.moveItem(at: tmpDest, to: destURL)
 
         // If cancelled right after move, clean up the destination
@@ -264,11 +267,11 @@ class GameLibrary {
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
         let gameRoot = try findGameRoot(in: tmpDir)
-        updateSkeleton(importID, gameDir: gameRoot)
+        let title = updateSkeleton(importID, gameDir: gameRoot)
         try GameImportValidator.validate(gameRoot)
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
-        let destURL = destinationURL(for: importID, gameDir: gameRoot)
+        let destURL = destinationURL(for: importID, title: title)
         try fm.moveItem(at: gameRoot, to: destURL)
 
         // If cancelled right after move, clean up the destination
