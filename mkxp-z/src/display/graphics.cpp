@@ -1029,7 +1029,7 @@ struct GraphicsPrivate {
             Vec2i drawableSize(winSize);
             threadData->drawableSizeMsg.poll(drawableSize);
             
-            backingScaleFactor = drawableSize.x / winSize.x;
+            backingScaleFactor = (float)drawableSize.x / winSize.x;
             winSize = drawableSize;
             
             /* Make sure integer buffers are rebuilt before screen offsets are
