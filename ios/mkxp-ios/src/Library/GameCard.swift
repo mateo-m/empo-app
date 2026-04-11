@@ -111,7 +111,7 @@ struct GameCard: View {
 
     @ViewBuilder
     private var artworkView: some View {
-        if let path = game.artworkPath, let uiImage = UIImage(contentsOfFile: path) {
+        if let path = game.artworkPath, let uiImage = ImageCache.shared.image(for: path) {
             Image(uiImage: uiImage)
                 .resizable()
                 .aspectRatio(contentMode: .fill)

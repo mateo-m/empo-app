@@ -284,6 +284,11 @@ class GameLibrary {
     func deleteGame(_ entry: GameEntry, onError: ((String) -> Void)? = nil) {
         let wasImporting = entry.isImporting
 
+        // Evict cached artwork
+        if let artworkPath = entry.artworkPath {
+            ImageCache.shared.evict(path: artworkPath)
+        }
+
         withAnimation {
             games.removeAll { $0.id == entry.id }
         }
