@@ -11,7 +11,7 @@ enum AppPhase: Equatable {
 }
 
 /// Central state machine driving all UI transitions.
-/// Polls bridge functions and publishes state changes that SwiftUI reacts to.
+/// Registers callbacks with the C bridge to react to engine state changes.
 @Observable
 class AppState {
     static let shared = AppState()
@@ -21,8 +21,6 @@ class AppState {
     var showQuitConfirm = false
     var selectedGame: GameEntry?
 
-    private var pollTimer: Timer?
-    private var terminationTimer: Timer?
     private let sessionHistoryPath: String
 
     private init() {
@@ -41,6 +39,7 @@ class AppState {
         try? header.write(toFile: sessionHistoryPath, atomically: true, encoding: .utf8)
 
         pruneOldLogs(in: logsDir)
+        registerBridgeCallbacks()
     }
 
     /// Keep only the most recent log files, deleting the oldest ones.
@@ -73,7 +72,6 @@ class AppState {
         configureDebugLog(for: game)
         appendSessionHistory(game: game)
         mkxp_setGamePath(game.path)
-        startGamePolling()
     }
 
     /// Creates a per-session debug log file if debug logs are enabled.
@@ -127,55 +125,47 @@ class AppState {
     /// User confirmed quit — immediately show library, then tear down engine.
     func confirmQuit() {
         showQuitConfirm = false
-        stopGamePolling()
 
         // Show library immediately — the NavigationStack pop provides
         // the reverse hero zoom animation, no additional fade needed.
         selectedGame = nil
         phase = .library
 
-        // Ask engine to shut down
+        // Ask engine to shut down. The engineTerminated callback
+        // will fire when teardown is complete.
         mkxp_requestTerminate()
+    }
 
-        // Poll until engine confirms termination, then reset for next session
-        terminationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
-            if mkxp_isEngineTerminated() != 0 {
-                timer.invalidate()
-                self?.terminationTimer = nil
-                // Reload library in case anything changed
+    // MARK: - Bridge Callbacks
+
+    /// Registers C function pointer callbacks with the engine bridge.
+    /// These fire on the engine thread; each dispatches to main for UI updates.
+    private func registerBridgeCallbacks() {
+        // Game ready: loading -> playing
+        mkxp_setGameReadyCallback({ _ in
+            DispatchQueue.main.async {
+                guard AppState.shared.phase == .loading else { return }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    AppState.shared.phase = .playing
+                }
+            }
+        }, nil)
+
+        // Engine terminated: reload library after quit completes
+        mkxp_setEngineTerminatedCallback({ _ in
+            DispatchQueue.main.async {
                 GameLibrary.shared.reload()
             }
-        }
-    }
+        }, nil)
 
-    // MARK: - Bridge Polling
-
-    private func startGamePolling() {
-        pollTimer?.invalidate()
-        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.pollBridge()
-        }
-    }
-
-    func stopGamePolling() {
-        pollTimer?.invalidate()
-        pollTimer = nil
-    }
-
-    private func pollBridge() {
-        // Update game rect
-        var x: Float = 0, y: Float = 0, w: Float = 0, h: Float = 0
-        mkxp_getGameRect(&x, &y, &w, &h)
-        let newRect = CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h))
-        if newRect != gameRect {
-            gameRect = newRect
-        }
-
-        // Check if game is ready (transition from loading to playing)
-        if phase == .loading && mkxp_isGameReady() != 0 {
-            withAnimation(.easeOut(duration: 0.3)) {
-                phase = .playing
+        // Game rect changed: update viewport for player layout
+        mkxp_setGameRectChangedCallback({ x, y, w, h, _ in
+            let newRect = CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h))
+            DispatchQueue.main.async {
+                if AppState.shared.gameRect != newRect {
+                    AppState.shared.gameRect = newRect
+                }
             }
-        }
+        }, nil)
     }
 }

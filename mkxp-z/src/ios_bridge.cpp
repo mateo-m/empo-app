@@ -44,10 +44,23 @@ static mkxp_KeyEventCallback s_keyEventCb = nullptr;
 static void *s_keyEventUserdata = nullptr;
 static bool s_keyWatcherInstalled = false;
 
+// Lifecycle callbacks: engine -> UI notifications for state changes.
+static mkxp_GameReadyCallback s_gameReadyCb = nullptr;
+static void *s_gameReadyUserdata = nullptr;
+
+static mkxp_EngineTerminatedCallback s_engineTerminatedCb = nullptr;
+static void *s_engineTerminatedUserdata = nullptr;
+
+static mkxp_GameRectChangedCallback s_gameRectChangedCb = nullptr;
+static void *s_gameRectChangedUserdata = nullptr;
+
 extern "C" {
 
 void mkxp_setGameReady(void) {
     s_gameReady.store(true, std::memory_order_release);
+    if (s_gameReadyCb) {
+        s_gameReadyCb(s_gameReadyUserdata);
+    }
 }
 
 int mkxp_isGameReady(void) {
@@ -94,6 +107,9 @@ void mkxp_setEngineTerminated(void) {
     // Clear pathSet so the next mkxp_waitForGamePath() actually blocks
     // until the Library UI provides a new game selection.
     s_pathSet.store(false, std::memory_order_release);
+    if (s_engineTerminatedCb) {
+        s_engineTerminatedCb(s_engineTerminatedUserdata);
+    }
 }
 
 void mkxp_resetBridgeState(void) {
@@ -130,10 +146,17 @@ const char *mkxp_getGameTitle(void) {
 }
 
 void mkxp_setGameRect(float x, float y, float w, float h) {
+    float oldX = s_gameRectX.load(std::memory_order_relaxed);
+    float oldY = s_gameRectY.load(std::memory_order_relaxed);
+    float oldW = s_gameRectW.load(std::memory_order_relaxed);
+    float oldH = s_gameRectH.load(std::memory_order_relaxed);
     s_gameRectX.store(x, std::memory_order_relaxed);
     s_gameRectY.store(y, std::memory_order_relaxed);
     s_gameRectW.store(w, std::memory_order_relaxed);
     s_gameRectH.store(h, std::memory_order_relaxed);
+    if (s_gameRectChangedCb && (x != oldX || y != oldY || w != oldW || h != oldH)) {
+        s_gameRectChangedCb(x, y, w, h, s_gameRectChangedUserdata);
+    }
 }
 
 void mkxp_getGameRect(float *x, float *y, float *w, float *h) {
@@ -190,6 +213,25 @@ void mkxp_setKeyEventCallback(mkxp_KeyEventCallback cb, void *userdata) {
         SDL_AddEventWatch(keyEventWatcherFn, NULL);
         s_keyWatcherInstalled = true;
     }
+}
+
+// ============================================================================
+// Lifecycle callbacks
+// ============================================================================
+
+void mkxp_setGameReadyCallback(mkxp_GameReadyCallback cb, void *userdata) {
+    s_gameReadyCb = cb;
+    s_gameReadyUserdata = userdata;
+}
+
+void mkxp_setEngineTerminatedCallback(mkxp_EngineTerminatedCallback cb, void *userdata) {
+    s_engineTerminatedCb = cb;
+    s_engineTerminatedUserdata = userdata;
+}
+
+void mkxp_setGameRectChangedCallback(mkxp_GameRectChangedCallback cb, void *userdata) {
+    s_gameRectChangedCb = cb;
+    s_gameRectChangedUserdata = userdata;
 }
 
 void mkxp_setDebugLogPath(const char *path) {
