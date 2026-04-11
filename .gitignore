@@ -26,4 +26,5 @@ compile_commands.json
 # Temporary files
 *.swp
 *.swo
-*~ios/mkxp-ios/src/App/GitInfo.generated.swift
+*~
+ios/mkxp-ios/src/App/GitInfo.generated.swift
