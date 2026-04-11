@@ -40,7 +40,9 @@ end
 
 # Patch Dir.chdir to handle nil gracefully (games may pass nil paths)
 class << Dir
-  alias_method :_mkxp_orig_chdir, :chdir
+  unless method_defined?(:_mkxp_orig_chdir)
+    alias_method :_mkxp_orig_chdir, :chdir
+  end
   def chdir(dir = nil, &block)
     return _mkxp_orig_chdir(&block) if dir.nil?
     _mkxp_orig_chdir(dir, &block)
