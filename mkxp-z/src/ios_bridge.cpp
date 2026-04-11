@@ -21,6 +21,7 @@ static std::atomic<bool> s_gameReady{false};
 // Debug log path for Ruby errors (empty = disabled).
 static std::mutex s_debugLogMutex;
 static std::string s_debugLogPath;
+static FILE *s_debugLogFile = nullptr;
 
 // Game path selection: Library sets the path, engine waits for it.
 static std::mutex s_pathMutex;
@@ -236,17 +237,23 @@ void mkxp_setGameRectChangedCallback(mkxp_GameRectChangedCallback cb, void *user
 
 void mkxp_setDebugLogPath(const char *path) {
     std::lock_guard<std::mutex> lock(s_debugLogMutex);
+    // Close previous file handle if open
+    if (s_debugLogFile) {
+        fclose(s_debugLogFile);
+        s_debugLogFile = nullptr;
+    }
     s_debugLogPath = (path && path[0]) ? path : "";
+    // Open new file handle for the session
+    if (!s_debugLogPath.empty()) {
+        s_debugLogFile = fopen(s_debugLogPath.c_str(), "a");
+    }
 }
 
 void mkxp_debugLog(const char *tag, const char *source, const char *message) {
     std::lock_guard<std::mutex> lock(s_debugLogMutex);
-    if (s_debugLogPath.empty()) return;
-    FILE *f = fopen(s_debugLogPath.c_str(), "a");
-    if (f) {
-        fprintf(f, "[%s] (%s) %s\n", tag, source, message);
-        fclose(f);
-    }
+    if (!s_debugLogFile) return;
+    fprintf(s_debugLogFile, "[%s] (%s) %s\n", tag, source, message);
+    fflush(s_debugLogFile);
 }
 
 } // extern "C"
