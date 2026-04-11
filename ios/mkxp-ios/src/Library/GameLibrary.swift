@@ -195,6 +195,14 @@ class GameLibrary {
         }
     }
 
+    /// Updates the skeleton card's import progress (0.0–1.0).
+    private func updateProgress(_ importID: String, _ progress: Double) {
+        DispatchQueue.main.async {
+            guard let idx = self.games.firstIndex(where: { $0.id == importID }) else { return }
+            self.games[idx].importProgress = progress
+        }
+    }
+
     /// Updates the skeleton card's title and artwork mid-import (e.g. after zip extraction).
     private func updateSkeleton(_ importID: String, gameDir: URL) {
         let title = parseGameTitle(at: gameDir)
@@ -251,7 +259,9 @@ class GameLibrary {
         try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmpDir) }
 
-        try ZipExtractor.extract(zipURL: sourceURL, to: tmpDir) { _, _ in }
+        try ZipExtractor.extract(zipURL: sourceURL, to: tmpDir) { _, pct in
+            self.updateProgress(importID, pct)
+        }
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
         let gameRoot = try findGameRoot(in: tmpDir)

@@ -17,10 +17,12 @@ struct GameLibraryView: View {
         library.games.isEmpty
     }
 
-    private let columns = Array(
-        repeating: GridItem(.flexible(), spacing: 12),
-        count: 3
-    )
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    private var columns: [GridItem] {
+        let count = verticalSizeClass == .compact ? 5 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -33,16 +35,19 @@ struct GameLibraryView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
-                // Custom header — transparent with progressive blur
                 libraryHeader
             }
             .animation(.easeInOut(duration: 0.25), value: showEmpty)
             .overlay {
                 if showEmpty {
-                    emptyState
+                    emptyStateContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .offset(y: -30)
                         .transition(.emptyState)
                 }
+            }
+            .overlay(alignment: .topTrailing) {
+                importButton
             }
             .toolbarVisibility(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
@@ -53,12 +58,12 @@ struct GameLibraryView: View {
                     importGames(from: urls)
                 }
             }
-            .alert("Error", isPresented: $showErrorAlert) {
+            .alert("oops!", isPresented: $showErrorAlert) {
                 Button("OK") {}
             } message: {
-                Text(errorMessage ?? "Unknown error")
+                Text(errorMessage ?? "Something went wrong.")
             }
-            .alert("Delete Game", isPresented: $showDeleteConfirm) {
+            .alert("delete game?", isPresented: $showDeleteConfirm) {
                 Button("Delete", role: .destructive) {
                     if let game = gameToDelete {
                         library.deleteGame(game) { error in
@@ -70,7 +75,7 @@ struct GameLibraryView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 if let game = gameToDelete {
-                    Text("Are you sure you want to delete \"\(game.title)\"? This will remove all game files.")
+                    Text("This will remove all files for \"\(game.title)\". You can always re-import it later.")
                 }
             }
             .navigationDestination(for: GameEntry.self) { game in
@@ -87,21 +92,19 @@ struct GameLibraryView: View {
 
     // MARK: - Empty State
 
-    private var emptyState: some View {
+    private var emptyStateContent: some View {
         VStack(spacing: 12) {
             Image(systemName: "gamecontroller")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-            Text("No Games")
+            Text("no games yet")
                 .font(.title2)
                 .fontWeight(.medium)
-            Text("Tap + to import an RPG Maker game folder or .zip file.")
+            Text("add your favorite RPG Maker\ngames to get started!")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
-        .padding()
-        .frame(maxWidth: 240)
     }
 
     // MARK: - Header
@@ -115,36 +118,75 @@ struct GameLibraryView: View {
                     .font(.body)
                     .padding(10)
             }
-            .glassEffect(.regular, in: .circle)
+            .tint(.primary)
+            .glassEffect(.regular.interactive(), in: .circle)
             Spacer()
-            Text("Library")
+            Text("library")
                 .font(.largeTitle)
                 .fontWeight(.bold)
             Spacer()
-            Button(action: { showImporter = true }) {
-                Image(systemName: "plus")
-                    .font(.body)
-                    .padding(10)
-            }
-            .glassEffect(.regular, in: .circle)
+            // Invisible placeholder to keep "Library" centered
+            Color.clear.frame(width: 38, height: 38)
         }
         .padding(.horizontal)
         .frame(height: headerHeight)
-        .background {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .mask {
-                    VStack(spacing: 0) {
-                        Rectangle()
-                        LinearGradient(
-                            colors: [.black, .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .frame(height: 40)
+    }
+
+    // MARK: - Morphing Import Button
+
+    private var importButton: some View {
+        GeometryReader { geo in
+            let collapsed = !showEmpty
+            let buttonSize: CGFloat = 38
+
+            // End positions (center coordinates)
+            let collapsedX = geo.size.width - 16 - buttonSize / 2
+            let collapsedY = headerHeight / 2
+            let expandedX = geo.size.width / 2
+            let expandedY = geo.size.height / 2 + 80
+
+            // Arc: find center of rotation on perpendicular bisector
+            let chordDX = collapsedX - expandedX
+            let chordDY = collapsedY - expandedY
+            let curvature: CGFloat = -1.5 // larger = gentler/subtler arc
+            let arcCenterX = (expandedX + collapsedX) / 2 + curvature * (-chordDY)
+            let arcCenterY = (expandedY + collapsedY) / 2 + curvature * chordDX
+
+            // Offset from arc center to expanded position
+            let offX = expandedX - arcCenterX
+            let offY = expandedY - arcCenterY
+
+            // Arc sweep angle (expanded → collapsed)
+            let startAngle = atan2(offY, offX)
+            let endAngle = atan2(collapsedY - arcCenterY, collapsedX - arcCenterX)
+            let arcDeg = (endAngle - startAngle) * 180 / .pi
+
+            Button(action: { showImporter = true }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus")
+                        .font(.body.weight(.semibold))
+                    if !collapsed {
+                        Text("Import game")
+                            .font(.body.weight(.semibold))
+                            .transition(.blurReplace)
                     }
                 }
-                .ignoresSafeArea()
+                .foregroundStyle(.white)
+                .padding(.horizontal, collapsed ? 10 : 20)
+                .padding(.vertical, collapsed ? 10 : 12)
+            }
+            .glassEffect(.regular.tint(.orange).interactive(), in: .capsule)
+            .environment(\.colorScheme, .dark)
+            // Counter-rotate to keep content upright
+            .rotationEffect(.degrees(collapsed ? -arcDeg : 0))
+            // Offset from arc center to expanded position
+            .offset(x: offX, y: offY)
+            // Arc sweep rotation
+            .rotationEffect(.degrees(collapsed ? arcDeg : 0))
+            // Place at arc center
+            .position(x: arcCenterX, y: arcCenterY)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.spring(duration: 0.55, bounce: 0.175), value: showEmpty)
         }
     }
 
@@ -155,26 +197,24 @@ struct GameLibraryView: View {
             LazyVGrid(columns: columns, spacing: 12) {
                 ForEach(library.games) { game in
                     if game.isImporting {
-                        GameCard(game: game)
+                        GameCard(game: game, onStopImport: {
+                            gameToDelete = game
+                            showDeleteConfirm = true
+                        })
+                            .id("\(game.id)-importing")
                             .transition(.cardAppear)
                     } else {
                         NavigationLink(value: game) {
                             GameCard(game: game)
                                 .matchedTransitionSource(id: game.id, in: heroNamespace)
                         }
-                        .buttonStyle(.plain)
+                        .id("\(game.id)-ready")
+                        .buttonStyle(CardPressStyle())
                         .simultaneousGesture(TapGesture().onEnded {
                             appState.selectGame(game)
                         })
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                gameToDelete = game
-                                showDeleteConfirm = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
                         .transition(.cardAppear)
+                        .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
                     }
                 }
             }
@@ -237,5 +277,30 @@ extension AnyTransition {
             active: CardTransitionModifier(active: true),
             identity: CardTransitionModifier(active: false)
         )
+    }
+}
+
+// MARK: - Game Context Menu
+
+private struct GameContextMenuModifier: ViewModifier {
+    let game: GameEntry
+    @Binding var gameToDelete: GameEntry?
+    @Binding var showDeleteConfirm: Bool
+
+    func body(content: Content) -> some View {
+        content.contextMenu {
+            Button(role: .destructive) {
+                gameToDelete = game
+                showDeleteConfirm = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+}
+
+extension View {
+    func gameContextMenu(game: GameEntry, gameToDelete: Binding<GameEntry?>, showDeleteConfirm: Binding<Bool>) -> some View {
+        modifier(GameContextMenuModifier(game: game, gameToDelete: gameToDelete, showDeleteConfirm: showDeleteConfirm))
     }
 }

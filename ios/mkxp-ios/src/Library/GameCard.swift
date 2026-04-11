@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GameCard: View {
     let game: GameEntry
+    var onStopImport: (() -> Void)? = nil
     @State private var titleHeight: CGFloat = 40
 
     private var settings: AppSettings { AppSettings.shared }
@@ -54,7 +55,7 @@ struct GameCard: View {
                     }
             }
             .overlay { centerOverlay }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(.rect(cornerRadius: 12))
             .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
     }
 
@@ -66,7 +67,7 @@ struct GameCard: View {
                 .aspectRatio(1, contentMode: .fit)
                 .overlay { artworkView }
                 .overlay { centerOverlay }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(.rect(cornerRadius: 12))
                 .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
 
             Text(game.title)
@@ -86,10 +87,7 @@ struct GameCard: View {
     private var centerOverlay: some View {
         if game.isImporting {
             Color.black.opacity(0.3)
-            ProgressView()
-                .progressViewStyle(.circular)
-                .tint(.white)
-                .scaleEffect(1.3)
+            ImportProgressView(progress: game.importProgress, onStop: onStopImport)
         } else {
             Image(systemName: "play.fill")
                 .font(.title3)
@@ -125,5 +123,61 @@ struct GameCard: View {
                     .foregroundStyle(.quaternary)
             }
         }
+    }
+}
+
+// MARK: - Import Progress Indicator
+
+private struct ImportProgressView: View {
+    let progress: Double
+    var onStop: (() -> Void)? = nil
+    @State private var spinning = false
+
+    private var isDeterminate: Bool { progress > 0 }
+
+    var body: some View {
+        ZStack {
+            // Track
+            Circle()
+                .stroke(.white.opacity(0.3), lineWidth: 3.5)
+                .frame(width: 36, height: 36)
+
+            if isDeterminate {
+                // Determinate: radial fill
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(.white, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+                    .frame(width: 36, height: 36)
+                    .rotationEffect(.degrees(-90))
+            } else {
+                // Indeterminate: spinning arc
+                Circle()
+                    .trim(from: 0, to: 0.3)
+                    .stroke(.white, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+                    .frame(width: 36, height: 36)
+                    .rotationEffect(.degrees(spinning ? 360 : 0))
+                    .onAppear { spinning = true }
+                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
+            }
+
+            // Stop button
+            Button(action: { onStop?() }) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(.white)
+                    .frame(width: 12, height: 12)
+            }
+            .buttonStyle(.plain)
+        }
+        .animation(.easeOut(duration: 0.3), value: progress)
+    }
+}
+
+// MARK: - Card Press Style
+
+struct CardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
