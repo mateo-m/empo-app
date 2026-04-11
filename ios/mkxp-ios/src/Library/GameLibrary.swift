@@ -1,11 +1,13 @@
 import Foundation
 import UIKit
 import SwiftUI
+import Observation
 
-class GameLibrary: ObservableObject {
+@Observable
+class GameLibrary {
     static let shared = GameLibrary()
 
-    @Published var games: [GameEntry] = []
+    var games: [GameEntry] = []
 
     private let fm = FileManager.default
     private var cancelledImports = Set<String>()

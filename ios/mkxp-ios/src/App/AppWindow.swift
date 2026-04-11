@@ -147,12 +147,17 @@ class AppWindow: UIWindow {
         instance = window
 
         // Observe phase changes to toggle pass-through and orientation
-        var cancellable: Any?
-        cancellable = AppState.shared.$phase
-            .receive(on: DispatchQueue.main)
-            .sink { [weak window] phase in
-                _ = cancellable // prevent deallocation
+        observePhase(window: window)
+    }
+
+    private static func observePhase(window: AppWindow) {
+        withObservationTracking {
+            _ = AppState.shared.phase
+        } onChange: {
+            DispatchQueue.main.async { [weak window] in
                 window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                if let window { observePhase(window: window) }
             }
+        }
     }
 }
