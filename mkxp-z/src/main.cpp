@@ -48,6 +48,7 @@ static inline void mkxp_resetBridgeState(void) {}
 #include "binding.h"
 #include "sharedstate.h"
 #include "eventthread.h"
+#include "display/graphics.h"
 #include "util/debugwriter.h"
 #include "util/exception.h"
 #include "display/gl/gl-debug.h"
@@ -140,6 +141,81 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
 static GLuint s_iosScreenFBO = 0;
 #endif
 
+#if TARGET_OS_IPHONE
+/* Persistent RGSS thread for iOS.
+ * Ruby 1.8's VM has internal state (parser, symbol table, thread-local
+ * storage) bound to the thread that called ruby_init(). Creating a new
+ * thread for each game session causes crashes because the VM's stack
+ * boundaries and TLS references become stale.
+ * Solution: keep the RGSS thread alive across sessions. The main thread
+ * posts new RGSSThreadData via these shared variables. */
+static SDL_sem *s_rgssSessionReady = nullptr;   // main → RGSS: "new session available"
+static SDL_sem *s_rgssSessionDone  = nullptr;    // RGSS → main: "session finished"
+static RGSSThreadData *s_nextRTData = nullptr;   // the data for the next session
+
+int rgssThreadFun(void *userdata) {
+  RGSSThreadData *threadData = static_cast<RGSSThreadData *>(userdata);
+
+  SDL_GL_MakeCurrent(threadData->window, threadData->glContext);
+
+  /* Set the screen framebuffer ID and reset the binding tracker. */
+  FBO::screenFramebufferID = FBO::ID(s_iosScreenFBO);
+  gl.BindFramebuffer(GL_FRAMEBUFFER, FBO::screenFramebufferID.gl);
+  FBO::boundFramebufferID = FBO::screenFramebufferID;
+
+  /* AL context — persistent, just activate on this thread. */
+  ALCcontext *alcCtx = threadData->alcCtx;
+  alcMakeContextCurrent(alcCtx);
+
+  /* --- Session loop: runs on the SAME thread forever --- */
+  while (true) {
+    /* Re-set FBO state for this session (SharedState::finiInstance
+     * may have unbound it). */
+    FBO::screenFramebufferID = FBO::ID(s_iosScreenFBO);
+    gl.BindFramebuffer(GL_FRAMEBUFFER, FBO::screenFramebufferID.gl);
+    FBO::boundFramebufferID = FBO::screenFramebufferID;
+
+    try {
+      SharedState::initInstance(threadData);
+    } catch (const Exception &exc) {
+      rgssThreadError(threadData, exc.msg);
+      break;
+    }
+
+    mkxp_setGameReady();
+
+    /* Run game scripts */
+    scriptBinding->execute();
+
+    /* Detach disposables before destroying SharedState */
+    shState->graphics().detachAllDisposables();
+
+    threadData->rqTermAck.set();
+    threadData->ethread->requestTerminate();
+
+    SharedState::finiInstance();
+
+    /* Signal main thread that session is done */
+    SDL_SemPost(s_rgssSessionDone);
+
+    /* Wait for the main thread to provide the next session's data.
+     * This blocks until main calls SDL_SemPost(s_rgssSessionReady). */
+    SDL_SemWait(s_rgssSessionReady);
+
+    /* Pick up the new RGSSThreadData */
+    threadData = s_nextRTData;
+    if (!threadData)
+      break; // null = quit
+  }
+
+  alcMakeContextCurrent(NULL);
+  SDL_GL_MakeCurrent(threadData ? threadData->window : nullptr, NULL);
+
+  return 0;
+}
+
+#else // !TARGET_OS_IPHONE — original single-session thread
+
 int rgssThreadFun(void *userdata) {
   RGSSThreadData *threadData = static_cast<RGSSThreadData *>(userdata);
 
@@ -154,29 +230,17 @@ int rgssThreadFun(void *userdata) {
 
   /* Set the screen framebuffer ID and reset the binding tracker. */
   {
-#if TARGET_OS_IPHONE
-    /* On iOS, use the screen FBO captured once during initGL().
-     * The persistent GL context means this ID never changes. */
-    FBO::screenFramebufferID = FBO::ID(s_iosScreenFBO);
-#else
     /* On other platforms, query the real default framebuffer ID. */
     GLint defaultFBO = 0;
     gl.GetIntegerv(GL_FRAMEBUFFER_BINDING, &defaultFBO);
     FBO::screenFramebufferID = FBO::ID(static_cast<GLuint>(defaultFBO));
-#endif
-    /* Bind the screen FBO explicitly and reset the tracker so it
-     * matches the actual GL state at the start of this session. */
     gl.BindFramebuffer(GL_FRAMEBUFFER, FBO::screenFramebufferID.gl);
     FBO::boundFramebufferID = FBO::screenFramebufferID;
   }
 
-  /* Setup AL context — already created on the main thread to avoid
-   * iOS AudioToolbox RPC timeout when starting from a secondary thread.
-   * Just re-activate it on this thread. */
   ALCcontext *alcCtx = threadData->alcCtx;
 
   if (!alcCtx) {
-    /* Fallback: try creating here (non-iOS platforms) */
     alcCtx = alcCreateContext(threadData->alcDev, 0);
     if (!alcCtx) {
       rgssThreadError(threadData, "Error creating OpenAL context");
@@ -191,15 +255,9 @@ int rgssThreadFun(void *userdata) {
   } catch (const Exception &exc) {
     rgssThreadError(threadData, exc.msg);
     alcDestroyContext(alcCtx);
-
     return 0;
   }
 
-#if TARGET_OS_IPHONE
-  mkxp_setGameReady();
-#endif
-
-  /* Start script execution */
   scriptBinding->execute();
 
   threadData->rqTermAck.set();
@@ -207,21 +265,11 @@ int rgssThreadFun(void *userdata) {
 
   SharedState::finiInstance();
 
-#if !TARGET_OS_IPHONE
-  /* On non-iOS, the AL context is destroyed with each session */
   alcDestroyContext(alcCtx);
-#else
-  /* On iOS, the AL context persists across sessions.
-   * Detach it from this thread so the next RGSS thread can claim it. */
-  alcMakeContextCurrent(NULL);
-
-  /* Detach GL context from this thread so the next RGSS thread
-   * can call MakeCurrent on it. */
-  SDL_GL_MakeCurrent(threadData->window, NULL);
-#endif
 
   return 0;
 }
+#endif
 
 static void printRgssVersion(int ver) {
   const char *const makers[] = {"", "XP", "VX", "VX Ace"};
@@ -431,8 +479,11 @@ int main(int argc, char *argv[]) {
     SDL_GetDisplayMode(0, 0, &mode);
 
     // ================================================================
-    // Game session loop
+    // Game session loop — persistent RGSS thread
     // ================================================================
+    s_rgssSessionReady = SDL_CreateSemaphore(0);
+    s_rgssSessionDone  = SDL_CreateSemaphore(0);
+    SDL_Thread *rgssThread = nullptr;
     bool firstSession = true;
     while (true) {
     // On subsequent sessions, wait for the library to provide a new game path
@@ -466,12 +517,6 @@ int main(int argc, char *argv[]) {
 
     /* Update the persistent window for this game session */
     SDL_SetWindowTitle(persistWin, conf.windowTitle.c_str());
-#if !TARGET_OS_IPHONE
-    /* On iOS the window is always fullscreen; SDL_SetWindowSize would
-     * set a logical size smaller than the screen, causing the viewport
-     * to not fill the display on subsequent sessions. */
-    SDL_SetWindowSize(persistWin, conf.defScreenW, conf.defScreenH);
-#endif
 
     if (!mode.refresh_rate)
       conf.syncToRefreshrate = false;
@@ -496,20 +541,26 @@ int main(int argc, char *argv[]) {
      * previous session so the event loop doesn't exit immediately. */
     SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
 
-    /* Ruby 1.8's GC scans the entire thread stack for object references
-     * (mark_locations_array). The default 512KB pthread stack on iOS is
-     * insufficient and causes SIGBUS when GC hits the stack guard page.
-     * Use 4 MB to match the default main-thread stack size on Apple platforms. */
-    SDL_Thread *rgssThread = SDL_CreateThreadWithStackSize(rgssThreadFun, "rgss",
-                                                          4 * 1024 * 1024, &rtData);
+    if (!rgssThread) {
+        /* First session: create the persistent RGSS thread.
+         * Use 16 MB stack for Ruby 1.8's GC stack scanning. */
+        rgssThread = SDL_CreateThreadWithStackSize(rgssThreadFun, "rgss",
+                                                   16 * 1024 * 1024, &rtData);
+    } else {
+        /* Subsequent sessions: signal the persistent RGSS thread
+         * with the new session data. */
+        s_nextRTData = &rtData;
+        SDL_SemPost(s_rgssSessionReady);
+    }
 
-    /* Start event processing */
+    /* Start event processing (blocks until game ends) */
     eventThread.process(rtData);
 
     /* Request RGSS thread to stop */
     rtData.rqTerm.set();
 
-    /* Wait for RGSS thread response */
+    /* Wait for RGSS thread to finish THIS session (not the thread itself).
+     * The thread stays alive, waiting for the next session. */
     for (int i = 0; i < 1000; ++i) {
       if (rtData.rqTermAck) {
         Debug() << "RGSS thread ack'd request after" << i * 10 << "ms";
@@ -518,13 +569,17 @@ int main(int argc, char *argv[]) {
       SDL_Delay(10);
     }
 
-    if (rtData.rqTermAck)
-      SDL_WaitThread(rgssThread, 0);
-    else
+    if (rtData.rqTermAck) {
+        /* Wait for the RGSS thread to finish cleanup (SharedState::finiInstance)
+         * before we proceed. It will post s_rgssSessionDone then block on
+         * s_rgssSessionReady. */
+        SDL_SemWait(s_rgssSessionDone);
+    } else {
       SDL_ShowSimpleMessageBox(
           SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
           std::string("The RGSS script seems to be stuck. "+conf.game.title+" will now force quit.").c_str(),
           persistWin);
+    }
 
     if (!rtData.rgssErrorMsg.empty()) {
       Debug() << rtData.rgssErrorMsg;
@@ -536,7 +591,9 @@ int main(int argc, char *argv[]) {
     eventThread.cleanup();
 
     /* Clear the framebuffer to black so the next session doesn't
-     * briefly flash the last frame of the previous session. */
+     * briefly flash the last frame of the previous session.
+     * NOTE: GL context is held by the RGSS thread (which is blocked
+     * on s_rgssSessionReady). Temporarily claim it here. */
     SDL_GL_MakeCurrent(persistWin, persistGLCtx);
     gl.BindFramebuffer(GL_FRAMEBUFFER, s_iosScreenFBO);
     gl.ClearColor(0, 0, 0, 1);
@@ -548,6 +605,13 @@ int main(int argc, char *argv[]) {
 
     continue;
     } // end while(true) game session loop
+
+    /* Signal the RGSS thread to exit */
+    s_nextRTData = nullptr;
+    SDL_SemPost(s_rgssSessionReady);
+    SDL_WaitThread(rgssThread, 0);
+    SDL_DestroySemaphore(s_rgssSessionReady);
+    SDL_DestroySemaphore(s_rgssSessionDone);
 
     /* Cleanup persistent resources (unreachable in normal flow,
      * but good form in case we ever break out of the loop) */

@@ -22,8 +22,23 @@ class AppState: ObservableObject {
 
     private var pollTimer: Timer?
     private var terminationTimer: Timer?
+    private let sessionHistoryPath: String
 
-    private init() {}
+    private init() {
+        let logsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Logs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
+        sessionHistoryPath = logsDir.appendingPathComponent("session-history.log").path
+
+        // Reset session history on each app launch
+        let dirty = GitInfo.dirty ? " (dirty)" : ""
+        let launchTime = ISO8601DateFormatter().string(from: Date())
+        var header = "mkxp-ios session history\n"
+        header += "commit: \(GitInfo.commit)\(dirty)\n"
+        header += "launched: \(launchTime)\n"
+        header += "---\n"
+        try? header.write(toFile: sessionHistoryPath, atomically: true, encoding: .utf8)
+    }
 
     // MARK: - Actions
 
@@ -32,8 +47,53 @@ class AppState: ObservableObject {
         guard phase == .library else { return }
         selectedGame = game
         phase = .loading
+        configureDebugLog(for: game)
+        appendSessionHistory(game: game)
         mkxp_setGamePath(game.path)
         startGamePolling()
+    }
+
+    /// Creates a per-session debug log file if debug logs are enabled.
+    private func configureDebugLog(for game: GameEntry) {
+        guard AppSettings.shared.debugLogs else {
+            mkxp_setDebugLogPath(nil)
+            return
+        }
+
+        let logsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Logs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
+
+        let slug = game.title
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let filename = "\(game.id)-\(slug)-\(timestamp).log"
+        let logPath = logsDir.appendingPathComponent(filename).path
+
+        // Write header with git info
+        let dirty = GitInfo.dirty ? " (dirty)" : ""
+        var header = "mkxp-ios debug log\n"
+        header += "commit: \(GitInfo.commit)\(dirty)\n"
+        header += "game: \(game.title) [\(game.id)]\n"
+        header += "session: \(timestamp)\n"
+        header += "---\n\n"
+        try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
+
+        mkxp_setDebugLogPath(logPath)
+    }
+
+    private func appendSessionHistory(game: GameEntry) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let entry = "\n[\(timestamp)] \(game.title) [\(game.id)]\n"
+        if let data = entry.data(using: .utf8),
+           let fh = FileHandle(forWritingAtPath: sessionHistoryPath) {
+            fh.seekToEndOfFile()
+            fh.write(data)
+            fh.closeFile()
+        }
     }
 
     /// User tapped the quit button — show confirmation.

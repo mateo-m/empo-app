@@ -30,9 +30,17 @@ Scene::~Scene()
 	/* Ensure elements don't unlink from a destructed Scene */
 	IntruListLink<SceneElement> *iter;
 
-	for (iter = elements.begin(); iter != elements.end(); iter = iter->next)
+	for (iter = elements.begin(); iter != elements.end(); )
 	{
+		IntruListLink<SceneElement> *next = iter->next;
 		iter->data->scene = 0;
+		/* Null out link pointers so that ~IntruListLink is a no-op
+		 * when Ruby GC later frees orphaned scene elements from a
+		 * previous session. Without this, the link destructor follows
+		 * stale prev/next pointers and corrupts memory. */
+		iter->prev = 0;
+		iter->next = 0;
+		iter = next;
 	}
 }
 

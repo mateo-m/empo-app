@@ -394,8 +394,10 @@ module Win32API_Impl
 end
 
 def kappatalize(s)
-	# Use two-arg slice to get a String (not affected by Ruby 1.8 [] shim)
-	s[0] = s[0, 1].upcase
+	# Sanitize to a valid Ruby constant name: strip non-alphanumeric/underscore
+	# chars (e.g. "RGSS Linker" -> "RGSSLinker") and ensure first char is uppercase.
+	s = s.gsub(/[^A-Za-z0-9_]/, '')
+	s[0] = s[0, 1].upcase if s.length > 0
 	return s
 end
 

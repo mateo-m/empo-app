@@ -18,6 +18,10 @@
 
 static std::atomic<bool> s_gameReady{false};
 
+// Debug log path for Ruby errors (empty = disabled).
+static std::mutex s_debugLogMutex;
+static std::string s_debugLogPath;
+
 // Game path selection: Library sets the path, engine waits for it.
 static std::mutex s_pathMutex;
 static std::string s_gamePath;
@@ -188,4 +192,26 @@ void mkxp_setKeyEventCallback(mkxp_KeyEventCallback cb, void *userdata) {
     }
 }
 
+void mkxp_setDebugLogPath(const char *path) {
+    std::lock_guard<std::mutex> lock(s_debugLogMutex);
+    s_debugLogPath = (path && path[0]) ? path : "";
+}
+
+void mkxp_debugLog(const char *tag, const char *source, const char *message) {
+    std::lock_guard<std::mutex> lock(s_debugLogMutex);
+    if (s_debugLogPath.empty()) return;
+    FILE *f = fopen(s_debugLogPath.c_str(), "a");
+    if (f) {
+        fprintf(f, "[%s] (%s) %s\n", tag, source, message);
+        fclose(f);
+    }
+}
+
 } // extern "C"
+
+// Internal helper — called by binding-mri.cpp, not part of the C bridge.
+// Returns empty string if logging is disabled.
+std::string mkxp_getDebugLogPath(void) {
+    std::lock_guard<std::mutex> lock(s_debugLogMutex);
+    return s_debugLogPath;
+}

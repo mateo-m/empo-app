@@ -35,6 +35,7 @@ class Disposable
 public:
 	Disposable()
 	    : disposed(false),
+	      detached(false),
 	      link(this)
 	{
 		shState->graphics().addDisposable(this);
@@ -42,7 +43,8 @@ public:
 
 	virtual ~Disposable()
 	{
-		shState->graphics().remDisposable(this);
+		if (!detached)
+			shState->graphics().remDisposable(this);
 	}
 
 	void dispose()
@@ -84,6 +86,7 @@ private:
 	friend class Graphics;
 
 	bool disposed;
+	bool detached;
 	IntruListLink<Disposable> link;
 };
 
