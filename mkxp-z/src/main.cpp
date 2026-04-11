@@ -466,7 +466,12 @@ int main(int argc, char *argv[]) {
 
     /* Update the persistent window for this game session */
     SDL_SetWindowTitle(persistWin, conf.windowTitle.c_str());
+#if !TARGET_OS_IPHONE
+    /* On iOS the window is always fullscreen; SDL_SetWindowSize would
+     * set a logical size smaller than the screen, causing the viewport
+     * to not fill the display on subsequent sessions. */
     SDL_SetWindowSize(persistWin, conf.defScreenW, conf.defScreenH);
+#endif
 
     if (!mode.refresh_rate)
       conf.syncToRefreshrate = false;
