@@ -44,8 +44,13 @@
 #include <vector>
 #include <regex>
 #include <algorithm>
+#include <cstdio>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
+#endif
+#if TARGET_OS_IPHONE
+#include <execinfo.h>
+#include <signal.h>
 #endif
 #include "util/rapidcsv.h"
 
@@ -1036,9 +1041,20 @@ bool evalScript(VALUE string, const char *filename)
 
 #define SCRIPT_SECTION_FMT (rgssVer >= 3 ? "{%04ld}" : "Section%03ld")
 
+// Declared in ios_bridge.cpp — returns the debug log path set by the UI,
+// or empty string if debug logging is disabled.
+std::string mkxp_getDebugLogPath(void);
+extern "C" void mkxp_debugLog(const char *tag, const char *source, const char *message);
+
+static void logRubyError(const char *type, const char *detail) {
+    mkxp_debugLog(type, "binding-mri.cpp [C++]", detail);
+}
+
 static void runRMXPScripts(BacktraceData &btData) {
     const Config &conf = shState->rtData().config;
     const std::string &scriptPack = conf.game.scripts;
+    
+    logRubyError("SESSION", ("runRMXPScripts: scriptPack=" + scriptPack).c_str());
     
     if (scriptPack.empty()) {
         showMsg("No script file has been specified. Check the game's INI and try again.");
@@ -1049,6 +1065,8 @@ static void runRMXPScripts(BacktraceData &btData) {
         showMsg("Unable to load scripts from '" + scriptPack + "'");
         return;
     }
+    
+    logRubyError("SESSION", "Script file exists, loading...");
     
     VALUE scriptArray;
     
@@ -1061,6 +1079,8 @@ static void runRMXPScripts(BacktraceData &btData) {
         return;
     }
     
+    logRubyError("SESSION", "Scripts loaded into array");
+    
     if (!RB_TYPE_P(scriptArray, RUBY_T_ARRAY)) {
         showMsg("Failed to read script data");
         return;
@@ -1069,6 +1089,11 @@ static void runRMXPScripts(BacktraceData &btData) {
     rb_gv_set("$RGSS_SCRIPTS", scriptArray);
     
     long scriptCount = RARRAY_LEN(scriptArray);
+    {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "Script count: %ld", scriptCount);
+        logRubyError("SESSION", buf);
+    }
     
     std::string decodeBuffer;
     decodeBuffer.resize(0x1000);
@@ -1228,6 +1253,7 @@ static void runRMXPScripts(BacktraceData &btData) {
     }
 #endif /* RAPI_FULL > 187 - preprocessing */
     
+    logRubyError("SESSION", "About to run engine preloads");
     /* Execute engine-bundled preload scripts (iOS compatibility layer) */
 #if TARGET_OS_IPHONE
     {
@@ -1281,6 +1307,8 @@ static void runRMXPScripts(BacktraceData &btData) {
     VALUE exc = rb_gv_get("$!");
     if (exc != Qnil)
         return;
+    
+    logRubyError("SESSION", "About to enter main script eval loop");
     
     while (true) {
         for (long i = 0; i < scriptCount; ++i) {
@@ -1373,7 +1401,128 @@ static void runRMXPScripts(BacktraceData &btData) {
             
             int state;
             
+            {
+                char sbuf[256];
+                snprintf(sbuf, sizeof(sbuf), "Eval script %ld/%ld: %s", i, scriptCount, scriptName);
+                logRubyError("SCRIPT", sbuf);
+            }
             evalString(string, fname, &state);
+            {
+                char sbuf[256];
+                snprintf(sbuf, sizeof(sbuf), "Eval script %ld/%ld done (state=%d)", i, scriptCount, state);
+                logRubyError("SCRIPT", sbuf);
+            }
+            
+            /* RGSS allows reopening a class with a different superclass
+             * and mixing up class/module definitions. Standard Ruby raises
+             * TypeError for these cases:
+             *   - "superclass mismatch for class X"
+             *   - "X is not a module"
+             *   - "X is not a class"
+             * Handle by removing the conflicting constant and retrying. */
+            for (int retries = 0; state && retries < 64; ++retries) {
+                VALUE exc = rb_gv_get("$!");
+                if (exc == Qnil || !rb_obj_is_kind_of(exc, rb_eTypeError))
+                    break;
+                
+                VALUE msg = rb_funcall(exc, rb_intern("message"), 0);
+                const char *msgStr = StringValueCStr(msg);
+                
+                std::string clsName;
+                
+                /* "superclass mismatch for class X" */
+                const char *prefix = "superclass mismatch for class ";
+                const char *match = strstr(msgStr, prefix);
+                if (match) {
+                    const char *className = match + strlen(prefix);
+                    for (const char *p = className; *p && (isalnum(*p) || *p == '_'); ++p)
+                        clsName += *p;
+                }
+                
+                /* "X is not a module" / "X is not a class" */
+                if (clsName.empty()) {
+                    const char *suffix1 = " is not a module";
+                    const char *suffix2 = " is not a class";
+                    const char *found = strstr(msgStr, suffix1);
+                    if (!found) found = strstr(msgStr, suffix2);
+                    if (found) {
+                        /* Walk backwards from the suffix to extract the name.
+                         * Message format: "(eval):98350: PBTerrain is not a module" */
+                        const char *end = found;
+                        const char *start = end;
+                        while (start > msgStr && (isalnum(start[-1]) || start[-1] == '_'))
+                            --start;
+                        if (start < end)
+                            clsName.assign(start, end);
+                    }
+                }
+                
+                if (clsName.empty())
+                    break;
+                
+                Debug() << "TypeError for" << clsName.c_str()
+                        << "- removing and retrying (RGSS compat)";
+                
+                {
+                    char buf[512];
+                    snprintf(buf, sizeof(buf), "Script '%s': TypeError for %s (%s) - removing and retrying",
+                             scriptName, clsName.c_str(), msgStr);
+                    logRubyError("RETRY", buf);
+                }
+                
+                std::string removeCode =
+                    "Object.send(:remove_const, :" + clsName + ") rescue nil";
+                int rmState = 0;
+                rb_eval_string_protect(removeCode.c_str(), &rmState);
+                
+                rb_gv_set("$!", Qnil);
+                state = 0;
+                evalString(string, fname, &state);
+            }
+            
+#if TARGET_OS_IPHONE
+            /* On iOS, native DLL/library loading (LoadError) and missing
+             * native methods (NoMethodError from DLL-provided extensions)
+             * are expected to fail. Many game scripts have optional native
+             * extensions (e.g. RGSS Linker, F-mod, screenshot DLLs).
+             * Skip these errors and continue to the next script section —
+             * the game typically has fallback code paths. */
+            if (state) {
+                VALUE exc = rb_gv_get("$!");
+                if (exc != Qnil) {
+                bool shouldSkip = false;
+                if (rb_obj_is_kind_of(exc, rb_eLoadError) ||
+                    rb_obj_is_kind_of(exc, rb_eSyntaxError)) {
+                    shouldSkip = true;
+                } else if (rb_obj_is_kind_of(exc, rb_eNoMethodError)) {
+                    /* Only skip NoMethodError from missing DLL/native methods.
+                     * These are on Module/Class receivers (e.g. Kernel:Module).
+                     * Game logic errors (nil:NilClass, false:FalseClass, or
+                     * any object instance) must NOT be skipped. */
+                    VALUE msg = rb_funcall(exc, rb_intern("message"), 0);
+                    const char *msgStr = StringValueCStr(msg);
+                    shouldSkip = strstr(msgStr, ":Module") ||
+                                 strstr(msgStr, ":Class");
+                }
+                if (shouldSkip) {
+                    VALUE msg = rb_funcall(exc, rb_intern("message"), 0);
+                    Debug() << "Skipping" << rb_class2name(rb_obj_class(exc))
+                            << "in script" << scriptName
+                            << ":" << StringValueCStr(msg);
+                    {
+                        char buf[512];
+                        snprintf(buf, sizeof(buf), "Script '%s': %s - %s",
+                                 scriptName, rb_class2name(rb_obj_class(exc)),
+                                 StringValueCStr(msg));
+                        logRubyError("SKIPPED", buf);
+                    }
+                    rb_gv_set("$!", Qnil);
+                    state = 0;
+                }
+                }
+            }
+#endif
+            
             if (state)
                 break;
         }
@@ -1452,11 +1601,58 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
     snprintf(&ms[0], ms.size(), "Script '%s' line %s: %s occurred.\n\n%s",
              file.c_str(), line, RSTRING_PTR(name), RSTRING_PTR(msg));
     
+    logRubyError("FATAL", ms.c_str());
     showMsg(ms);
 }
 
+#if TARGET_OS_IPHONE
+static void mkxpCrashHandler(int sig) {
+    /* Write backtrace to the debug log file */
+    std::string logPathStr = mkxp_getDebugLogPath();
+    const char *logPath = logPathStr.empty() ? nullptr : logPathStr.c_str();
+    FILE *f = logPath ? fopen(logPath, "a") : nullptr;
+    if (!f) f = fopen("/tmp/mkxp_crash.log", "a");
+    if (f) {
+        fprintf(f, "\n=== CRASH: signal %d ===\n", sig);
+        void *frames[128];
+        int count = backtrace(frames, 128);
+        char **symbols = backtrace_symbols(frames, count);
+        if (symbols) {
+            for (int i = 0; i < count; i++)
+                fprintf(f, "  %s\n", symbols[i]);
+            free(symbols);
+        }
+        fclose(f);
+    }
+    /* Also write to a known fixed location */
+    f = fopen("/tmp/mkxp_crash.log", "a");
+    if (f) {
+        fprintf(f, "\n=== CRASH: signal %d ===\n", sig);
+        void *frames[128];
+        int count = backtrace(frames, 128);
+        char **symbols = backtrace_symbols(frames, count);
+        if (symbols) {
+            for (int i = 0; i < count; i++)
+                fprintf(f, "  %s\n", symbols[i]);
+            free(symbols);
+        }
+        fclose(f);
+    }
+    /* Re-raise to get the default behavior */
+    signal(sig, SIG_DFL);
+    raise(sig);
+}
+#endif
+
 static void mriBindingExecute() {
     Config &conf = shState->rtData().config;
+
+#if TARGET_OS_IPHONE
+    /* Install crash handler to capture native backtraces */
+    signal(SIGSEGV, mkxpCrashHandler);
+    signal(SIGABRT, mkxpCrashHandler);
+    signal(SIGBUS, mkxpCrashHandler);
+#endif
     
 #if RAPI_MAJOR >= 2
     /* Normally only a ruby executable would do a sysinit,
@@ -1544,83 +1740,129 @@ static void mriBindingExecute() {
 
         rubyVMInitialized = true;
     } else {
-        /* Subsequent session: the RGSS thread has a new stack, but
-         * Ruby 1.8's GC still holds rb_gc_stack_start from the first
-         * thread. Force-update it so mark_locations_array scans the
-         * correct (current) stack, not the old (now-unmapped) one. */
+        static int sessionNum = 1;
+        sessionNum++;
+        char sessionBuf[128];
+        snprintf(sessionBuf, sizeof(sessionBuf), "=== Starting session %d ===", sessionNum);
+        logRubyError("SESSION", sessionBuf);
+
+        /* The RGSS thread is now persistent on iOS — same thread for all
+         * sessions. rb_gc_stack_start should still be valid, but update
+         * it as a safety measure in case the stack frame shifted. */
         volatile VALUE stack_anchor = Qnil;
         rb_gc_stack_start = (VALUE *)&stack_anchor;
+        logRubyError("SESSION", "GC stack updated (same thread)");
 
-        /* Clear leftover Ruby state.
-         * Clear exception before eval -- a stale $! can cause issues.
-         * Do NOT set $@ when $! is nil; Ruby 1.8's errat_setter raises
-         * ArgumentError ("$@ must be set after raise"), and with no
-         * rb_protect tag on the stack that rb_raise crashes the process. */
+        /* ---- Full session cleanup using C API only ---- */
+
+        /* Pre-create a MkxpNullMouse instance before cleanup removes
+         * game constants. MkxpNullMouse is defined in preload, not in
+         * the baseline, so it would be removed during constant cleanup. */
+        VALUE nullMouseInstance = Qnil;
+        {
+            VALUE mkxpNullMouseClass = rb_const_get(rb_cObject, rb_intern("MkxpNullMouse"));
+            nullMouseInstance = rb_class_new_instance(0, NULL, mkxpNullMouseClass);
+        }
+
+        /* 1. Remove game-defined constants from Object.
+         *    Anything not in the baseline (captured after mriBindingInit)
+         *    was defined by game scripts and must go to prevent
+         *    superclass-mismatch errors between different games. */
+        {
+            VALUE baseConsts = rb_gv_get("$__mkxp_base_consts");
+            if (baseConsts != Qnil) {
+                VALUE currentConsts = rb_funcall(rb_cObject, rb_intern("constants"), 0);
+                long len = RARRAY_LEN(currentConsts);
+                int removed = 0;
+                for (long ci = 0; ci < len; ++ci) {
+                    VALUE cname = rb_ary_entry(currentConsts, ci);
+                    if (rb_funcall(baseConsts, rb_intern("include?"), 1, cname) == Qfalse) {
+                        /* In Ruby 1.8, constants are strings, not symbols. */
+                        const char *cnameStr = RSTRING_PTR(cname);
+                        /* Don't remove MkxpNullMouse — it's defined in preload,
+                         * not in the baseline, but needed across sessions. */
+                        if (cnameStr && strcmp(cnameStr, "MkxpNullMouse") == 0)
+                            continue;
+                        int err = 0;
+                        rb_protect([](VALUE arg) -> VALUE {
+                            rb_funcall(rb_cObject, rb_intern("remove_const"), 1, arg);
+                            return Qnil;
+                        }, cname, &err);
+                        if (!err) removed++;
+                    }
+                }
+                char cbuf[128];
+                snprintf(cbuf, sizeof(cbuf), "Removed %d game constants", removed);
+                logRubyError("CLEANUP", cbuf);
+            }
+        }
+
+        /* 2. Clean up Input singleton methods added by game scripts.
+         *    Games like Pokemon Essentials replace Input.update etc.
+         *    Don't touch Graphics — removing its singletons corrupts viewport. */
+        {
+            VALUE inputMod = rb_const_get(rb_cObject, rb_intern("Input"));
+            VALUE sclass = rb_singleton_class(inputMod);
+            VALUE methods = rb_funcall(sclass, rb_intern("instance_methods"), 1, Qfalse);
+            long mlen = RARRAY_LEN(methods);
+            int mremoved = 0;
+            for (long mi = 0; mi < mlen; ++mi) {
+                VALUE mname = rb_ary_entry(methods, mi);
+                int err = 0;
+                rb_protect([](VALUE args) -> VALUE {
+                    VALUE sc = rb_ary_entry(args, 0);
+                    VALUE mn = rb_ary_entry(args, 1);
+                    rb_funcall(sc, rb_intern("remove_method"), 1, mn);
+                    return Qnil;
+                }, rb_ary_new3(2, sclass, mname), &err);
+                if (!err) mremoved++;
+            }
+            char mbuf[128];
+            snprintf(mbuf, sizeof(mbuf), "Removed %d Input singleton methods", mremoved);
+            logRubyError("CLEANUP", mbuf);
+        }
+
+        /* 3. Clear game globals that persist across sessions.
+         *    Use pre-created MkxpNullMouse for $mouse — setting to nil
+         *    would break games that guard with defined?($mouse) since
+         *    nil-assigned globals still return "global-variable". */
         rb_gv_set("$!", Qnil);
+        rb_gv_set("$mouse", nullMouseInstance);
+        rb_gv_set("$game_exists", Qnil);
+        rb_gv_set("$PokemonSystem", Qnil);
+        rb_gv_set("$PokemonGlobal", Qnil);
+        rb_gv_set("$Trainer", Qnil);
+        rb_gv_set("$game_switches", Qnil);
+        rb_gv_set("$game_variables", Qnil);
+        rb_gv_set("$game_self_switches", Qnil);
+        rb_gv_set("$game_screen", Qnil);
+        rb_gv_set("$game_map", Qnil);
+        rb_gv_set("$game_player", Qnil);
+        rb_gv_set("$game_party", Qnil);
+        rb_gv_set("$game_troop", Qnil);
+        rb_gv_set("$game_temp", Qnil);
+        rb_gv_set("$game_system", Qnil);
+        rb_gv_set("$scene", Qnil);
+        rb_gv_set("$data_system", Qnil);
+        rb_gv_set("$data_actors", Qnil);
+        rb_gv_set("$data_classes", Qnil);
+        rb_gv_set("$data_skills", Qnil);
+        rb_gv_set("$data_items", Qnil);
+        rb_gv_set("$data_weapons", Qnil);
+        rb_gv_set("$data_armors", Qnil);
+        rb_gv_set("$data_enemies", Qnil);
+        rb_gv_set("$data_troops", Qnil);
+        rb_gv_set("$data_states", Qnil);
+        rb_gv_set("$data_animations", Qnil);
+        rb_gv_set("$data_tilesets", Qnil);
+        rb_gv_set("$data_common_events", Qnil);
+        logRubyError("CLEANUP", "Game globals cleared");
 
-        int clearState = 0;
-        rb_eval_string_protect(
-            "$LOADED_FEATURES.clear; $\".clear",
-            &clearState
-        );
+        /* 4. Force GC to collect stale Ruby objects from previous session. */
+        rb_gc();
+        logRubyError("CLEANUP", "GC completed");
 
-        if (clearState) {
-            /* If clearing failed, reset exception and continue anyway */
-            rb_gv_set("$!", Qnil);
-        }
-
-        /* Remove constants defined by the previous game's scripts.
-         * Without this, a class defined by Game A (e.g. StringInput < Base1)
-         * persists and conflicts when Game B tries to define it with a
-         * different superclass (StringInput < Base2), causing TypeError. */
-        if (true) {
-            int rmState = 0;
-            rb_eval_string_protect(
-                "if defined?($__mkxp_base_consts) then "
-                "  (Object.constants - $__mkxp_base_consts).each do |c| "
-                "    Object.send(:remove_const, c) rescue nil "
-                "  end "
-                "end",
-                &rmState
-            );
-            if (rmState) rb_gv_set("$!", Qnil);
-        }
-        
-        /* Clean singleton methods from Input so game-defined overrides
-         * don't persist. mriBindingInit() re-registers C-level methods.
-         * NOTE: Graphics is intentionally excluded — removing its
-         * singleton methods corrupts the viewport on the next session. */
-        {
-            int cleanState = 0;
-            rb_eval_string_protect(
-                "sc = (class << Input; self; end); "
-                "sc.instance_methods(false).each do |m| "
-                "  sc.send(:remove_method, m) rescue nil "
-                "end",
-                &cleanState
-            );
-            if (cleanState) rb_gv_set("$!", Qnil);
-        }
-        
-        /* Clear game-defined global variables that leak between sessions. */
-        {
-            int gvState = 0;
-            rb_eval_string_protect(
-                "$PokemonSystem = nil; "
-                "$PokemonGlobal = nil; "
-                "$Trainer = nil; "
-                "$game_system = nil; "
-                "$game_map = nil; "
-                "$game_player = nil; "
-                "$game_switches = nil; "
-                "$game_variables = nil; "
-                "$game_temp = nil; "
-                "$game_screen = nil; "
-                "$scene = nil",
-                &gvState
-            );
-            if (gvState) rb_gv_set("$!", Qnil);
-        }
+        logRubyError("SESSION", "Full cleanup done");
     }
 #ifdef __WIN32__
     if (!conf.winConsole) {
@@ -1674,26 +1916,27 @@ static void mriBindingExecute() {
     BacktraceData btData;
     
     mriBindingInit();
+    logRubyError("SESSION", "mriBindingInit completed");
     
 #if TARGET_OS_IPHONE && RAPI_FULL <= 187
     /* Snapshot Object.constants AFTER mriBindingInit registers RGSS classes
      * but BEFORE game scripts run. On subsequent sessions, any constants not
      * in this baseline were defined by game scripts and must be removed to
-     * prevent superclass-mismatch errors between different games. */
+     * prevent superclass-mismatch errors between different games.
+     * Use C API to avoid parser accumulation. */
     {
         static bool baselineCaptured = false;
         if (!baselineCaptured) {
-            int state = 0;
-            rb_eval_string_protect(
-                "$__mkxp_base_consts = Object.constants.dup",
-                &state
-            );
+            VALUE consts = rb_funcall(rb_cObject, rb_intern("constants"), 0);
+            VALUE dup = rb_funcall(consts, rb_intern("dup"), 0);
+            rb_gv_set("$__mkxp_base_consts", dup);
             baselineCaptured = true;
         }
     }
 #endif
     
     std::string &customScript = conf.customScript;
+    logRubyError("SESSION", "About to run scripts");
     if (!customScript.empty()) {
         runCustomScript(customScript);
     } else {

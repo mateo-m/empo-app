@@ -1654,12 +1654,18 @@ void Graphics::setBrightness(int value) {
 }
 
 void Graphics::reset() {
-    /* Dispose all live Disposables */
+    /* Dispose all live Disposables and mark them detached.
+     * On iOS, Ruby GC may free these objects in a later session —
+     * ~Disposable must skip remDisposable for detached objects. */
     IntruListLink<Disposable> *iter;
     
-    for (iter = p->dispList.begin(); iter != p->dispList.end();
-         iter = iter->next) {
+    for (iter = p->dispList.begin(); iter != p->dispList.end(); ) {
+        IntruListLink<Disposable> *next = iter->next;
         iter->data->dispose();
+        iter->data->detached = true;
+        iter->prev = 0;
+        iter->next = 0;
+        iter = next;
     }
     
     p->dispList.clear();
@@ -1833,5 +1839,18 @@ void Graphics::unlock(bool force) {
 void Graphics::addDisposable(Disposable *d) { p->dispList.append(d->link); }
 
 void Graphics::remDisposable(Disposable *d) { p->dispList.remove(d->link); }
+
+void Graphics::detachAllDisposables() {
+    IntruListLink<Disposable> *iter = p->dispList.begin();
+    IntruListLink<Disposable> *end = p->dispList.end();
+    while (iter != end) {
+        IntruListLink<Disposable> *next = iter->next;
+        iter->data->detached = true;
+        iter->prev = 0;
+        iter->next = 0;
+        iter = next;
+    }
+    p->dispList.clear();
+}
 
 #undef GRAPHICS_THREAD_LOCK
