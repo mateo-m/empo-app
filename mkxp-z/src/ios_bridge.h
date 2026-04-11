@@ -100,13 +100,32 @@ const char *mkxp_waitForGamePath(void);
 // ============================================================================
 
 // mkxp_requestTerminate: UI asks the engine to shut down.
-// mkxp_isEngineTerminated: UI polls to know when the engine has fully shut down.
+// mkxp_isEngineTerminated: check if the engine has fully shut down.
 // mkxp_setEngineTerminated: engine sets this after teardown is complete.
 // mkxp_resetBridgeState: resets all bridge flags for a new game session.
 void        mkxp_requestTerminate(void);
 int         mkxp_isEngineTerminated(void);
 void        mkxp_setEngineTerminated(void);
 void        mkxp_resetBridgeState(void);
+
+// ============================================================================
+// Lifecycle callbacks (Engine -> UI)
+// ============================================================================
+//
+// These callbacks fire on the engine thread when state changes.
+// The UI side must dispatch to the main thread for any UI updates.
+
+// Called when the engine finishes loading and the game starts rendering.
+typedef void (*mkxp_GameReadyCallback)(void *userdata);
+void        mkxp_setGameReadyCallback(mkxp_GameReadyCallback cb, void *userdata);
+
+// Called when the engine has fully shut down after a quit request.
+typedef void (*mkxp_EngineTerminatedCallback)(void *userdata);
+void        mkxp_setEngineTerminatedCallback(mkxp_EngineTerminatedCallback cb, void *userdata);
+
+// Called when the game viewport rect changes (x, y, w, h in logical points).
+typedef void (*mkxp_GameRectChangedCallback)(float x, float y, float w, float h, void *userdata);
+void        mkxp_setGameRectChangedCallback(mkxp_GameRectChangedCallback cb, void *userdata);
 
 // ============================================================================
 // Input injection (UI -> Engine)

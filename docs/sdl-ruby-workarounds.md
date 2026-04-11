@@ -116,19 +116,28 @@ This keeps UIKit alive (rendering the SwiftUI Library) while the C++ engine bloc
 
 ---
 
-## 6. Timer-Based Polling in Swift UI
+## 6. Callback-Based State Notification
 
-**Problem:** The SwiftUI Library UI and the C++ engine communicate through a C bridge (`ios_bridge.h`). There's no callback mechanism from C++ to Swift — the bridge only exposes query functions like `mkxp_isEngineTerminated()` and `mkxp_isGameReady()`.
+**Problem:** The SwiftUI Library UI and the C++ engine communicate through a C bridge (`ios_bridge.h`). The UI needs to know when the engine changes state (game ready, viewport rect changed, engine terminated).
 
-**Solution (`AppState.swift`):** Timers poll bridge state every 100ms. `AppState` uses the `@Observable` macro (Observation framework) so SwiftUI views react to state changes automatically without `@Published` wrappers.
-
-- **Termination timer**: Polls `mkxp_isEngineTerminated()` to detect when a game session ends and transition back to the Library.
-- **Game polling timer**: Polls `mkxp_isGameReady()` and viewport rect updates to sync the UI with engine state.
+**Solution (`AppState.swift`, `ios_bridge.cpp`):** The bridge provides callback registration functions that the UI registers once at init. Callbacks fire on the engine thread; Swift dispatches to the main thread for UI updates.
 
 ```swift
-terminationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { ... }
-pollTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { ... }
+// Registered once in AppState.init()
+mkxp_setGameReadyCallback({ _ in
+    DispatchQueue.main.async { AppState.shared.phase = .playing }
+}, nil)
+
+mkxp_setEngineTerminatedCallback({ _ in
+    DispatchQueue.main.async { GameLibrary.shared.reload() }
+}, nil)
+
+mkxp_setGameRectChangedCallback({ x, y, w, h, _ in
+    DispatchQueue.main.async { AppState.shared.gameRect = CGRect(...) }
+}, nil)
 ```
+
+The engine calls these callbacks from `mkxp_setGameReady()`, `mkxp_setEngineTerminated()`, and `mkxp_setGameRect()` respectively. The rect callback only fires when the value actually changes.
 
 ---
 
@@ -166,6 +175,6 @@ The architecture can be summarized as:
 | Ruby 1.8 can't restart     | Keep VM alive, patch GC stack, clear state |
 | Ruby 1.8 small stack       | 4MB RGSS thread stack                      |
 | Main thread blocked by SDL | Pump CFRunLoop manually                    |
-| No C++→Swift callbacks     | Timer-based polling (100ms)                |
+| No C++→Swift callbacks     | C function pointer callbacks (dispatch to main) |
 | No direct engine kill      | Inject SDL_QUIT event                      |
 | SDL owns a UIWindow        | Float SwiftUI window above it              |
