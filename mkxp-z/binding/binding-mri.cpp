@@ -1054,8 +1054,6 @@ static void runRMXPScripts(BacktraceData &btData) {
     const Config &conf = shState->rtData().config;
     const std::string &scriptPack = conf.game.scripts;
     
-    logRubyError("SESSION", ("runRMXPScripts: scriptPack=" + scriptPack).c_str());
-    
     if (scriptPack.empty()) {
         showMsg("No script file has been specified. Check the game's INI and try again.");
         return;
@@ -1065,8 +1063,6 @@ static void runRMXPScripts(BacktraceData &btData) {
         showMsg("Unable to load scripts from '" + scriptPack + "'");
         return;
     }
-    
-    logRubyError("SESSION", "Script file exists, loading...");
     
     VALUE scriptArray;
     
@@ -1079,8 +1075,6 @@ static void runRMXPScripts(BacktraceData &btData) {
         return;
     }
     
-    logRubyError("SESSION", "Scripts loaded into array");
-    
     if (!RB_TYPE_P(scriptArray, RUBY_T_ARRAY)) {
         showMsg("Failed to read script data");
         return;
@@ -1089,11 +1083,6 @@ static void runRMXPScripts(BacktraceData &btData) {
     rb_gv_set("$RGSS_SCRIPTS", scriptArray);
     
     long scriptCount = RARRAY_LEN(scriptArray);
-    {
-        char buf[128];
-        snprintf(buf, sizeof(buf), "Script count: %ld", scriptCount);
-        logRubyError("SESSION", buf);
-    }
     
     std::string decodeBuffer;
     decodeBuffer.resize(0x1000);
@@ -1253,7 +1242,6 @@ static void runRMXPScripts(BacktraceData &btData) {
     }
 #endif /* RAPI_FULL > 187 - preprocessing */
     
-    logRubyError("SESSION", "About to run engine preloads");
     /* Execute engine-bundled preload scripts (iOS compatibility layer) */
 #if TARGET_OS_IPHONE
     {
@@ -1308,8 +1296,6 @@ static void runRMXPScripts(BacktraceData &btData) {
     VALUE exc = rb_gv_get("$!");
     if (exc != Qnil)
         return;
-    
-    logRubyError("SESSION", "About to enter main script eval loop");
     
     while (true) {
         for (long i = 0; i < scriptCount; ++i) {
@@ -1402,17 +1388,7 @@ static void runRMXPScripts(BacktraceData &btData) {
             
             int state;
             
-            {
-                char sbuf[256];
-                snprintf(sbuf, sizeof(sbuf), "Eval script %ld/%ld: %s", i, scriptCount, scriptName);
-                logRubyError("SCRIPT", sbuf);
-            }
             evalString(string, fname, &state);
-            {
-                char sbuf[256];
-                snprintf(sbuf, sizeof(sbuf), "Eval script %ld/%ld done (state=%d)", i, scriptCount, state);
-                logRubyError("SCRIPT", sbuf);
-            }
             
             /* RGSS allows reopening a class with a different superclass
              * and mixing up class/module definitions. Standard Ruby raises
@@ -1743,16 +1719,12 @@ static void mriBindingExecute() {
     } else {
         static int sessionNum = 1;
         sessionNum++;
-        char sessionBuf[128];
-        snprintf(sessionBuf, sizeof(sessionBuf), "=== Starting session %d ===", sessionNum);
-        logRubyError("SESSION", sessionBuf);
 
         /* The RGSS thread is now persistent on iOS — same thread for all
          * sessions. rb_gc_stack_start should still be valid, but update
          * it as a safety measure in case the stack frame shifted. */
         volatile VALUE stack_anchor = Qnil;
         rb_gc_stack_start = (VALUE *)&stack_anchor;
-        logRubyError("SESSION", "GC stack updated (same thread)");
 
         /* ---- Full session cleanup using C API only ---- */
 
@@ -1774,7 +1746,6 @@ static void mriBindingExecute() {
             if (baseConsts != Qnil) {
                 VALUE currentConsts = rb_funcall(rb_cObject, rb_intern("constants"), 0);
                 long len = RARRAY_LEN(currentConsts);
-                int removed = 0;
                 for (long ci = 0; ci < len; ++ci) {
                     VALUE cname = rb_ary_entry(currentConsts, ci);
                     if (rb_funcall(baseConsts, rb_intern("include?"), 1, cname) == Qfalse) {
@@ -1789,12 +1760,8 @@ static void mriBindingExecute() {
                             rb_funcall(rb_cObject, rb_intern("remove_const"), 1, arg);
                             return Qnil;
                         }, cname, &err);
-                        if (!err) removed++;
                     }
                 }
-                char cbuf[128];
-                snprintf(cbuf, sizeof(cbuf), "Removed %d game constants", removed);
-                logRubyError("CLEANUP", cbuf);
             }
         }
 
@@ -1806,7 +1773,6 @@ static void mriBindingExecute() {
             VALUE sclass = rb_singleton_class(inputMod);
             VALUE methods = rb_funcall(sclass, rb_intern("instance_methods"), 1, Qfalse);
             long mlen = RARRAY_LEN(methods);
-            int mremoved = 0;
             for (long mi = 0; mi < mlen; ++mi) {
                 VALUE mname = rb_ary_entry(methods, mi);
                 int err = 0;
@@ -1816,11 +1782,7 @@ static void mriBindingExecute() {
                     rb_funcall(sc, rb_intern("remove_method"), 1, mn);
                     return Qnil;
                 }, rb_ary_new3(2, sclass, mname), &err);
-                if (!err) mremoved++;
             }
-            char mbuf[128];
-            snprintf(mbuf, sizeof(mbuf), "Removed %d Input singleton methods", mremoved);
-            logRubyError("CLEANUP", mbuf);
         }
 
         /* 3. Clear game globals that persist across sessions. */
@@ -1860,13 +1822,9 @@ static void mriBindingExecute() {
         rb_gv_set("$data_animations", Qnil);
         rb_gv_set("$data_tilesets", Qnil);
         rb_gv_set("$data_common_events", Qnil);
-        logRubyError("CLEANUP", "Game globals cleared");
 
         /* 4. Force GC to collect stale Ruby objects from previous session. */
         rb_gc();
-        logRubyError("CLEANUP", "GC completed");
-
-        logRubyError("SESSION", "Full cleanup done");
     }
 #ifdef __WIN32__
     if (!conf.winConsole) {
@@ -1920,7 +1878,6 @@ static void mriBindingExecute() {
     BacktraceData btData;
     
     mriBindingInit();
-    logRubyError("SESSION", "mriBindingInit completed");
     
 #if TARGET_OS_IPHONE && RAPI_FULL <= 187
     /* Snapshot Object.constants AFTER mriBindingInit registers RGSS classes
@@ -1940,7 +1897,6 @@ static void mriBindingExecute() {
 #endif
     
     std::string &customScript = conf.customScript;
-    logRubyError("SESSION", "About to run scripts");
     if (!customScript.empty()) {
         runCustomScript(customScript);
     } else {
