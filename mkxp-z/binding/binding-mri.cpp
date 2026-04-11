@@ -1259,6 +1259,7 @@ static void runRMXPScripts(BacktraceData &btData) {
     {
         const char *enginePreloads[] = {
             "ios_compat",
+            "pokemon_compat",
             "ruby_classic_wrap",
             "win32_wrap",
             "mkxp_wrap",
@@ -1322,7 +1323,7 @@ static void runRMXPScripts(BacktraceData &btData) {
                methods that were replaced by the game. */
             if (i == scriptCount - 1) {
                 const char *enginePostloads[] = {
-                    "pokeinput",
+                    "pokemon_input",
                     nullptr
                 };
                 
@@ -1822,16 +1823,19 @@ static void mriBindingExecute() {
             logRubyError("CLEANUP", mbuf);
         }
 
-        /* 3. Clear game globals that persist across sessions.
-         *    Use pre-created MkxpNullMouse for $mouse — setting to nil
-         *    would break games that guard with defined?($mouse) since
-         *    nil-assigned globals still return "global-variable". */
+        /* 3. Clear game globals that persist across sessions. */
+
+        /* Engine state */
         rb_gv_set("$!", Qnil);
+
+        /* Pokemon Essentials / Pokemon fangames */
         rb_gv_set("$mouse", nullMouseInstance);
-        rb_gv_set("$game_exists", Qnil);
+        rb_gv_set("$game_exists", Qnil);       /* Uranium hard-reset flag */
         rb_gv_set("$PokemonSystem", Qnil);
         rb_gv_set("$PokemonGlobal", Qnil);
         rb_gv_set("$Trainer", Qnil);
+
+        /* Standard RGSS globals (used by all RPG Maker games) */
         rb_gv_set("$game_switches", Qnil);
         rb_gv_set("$game_variables", Qnil);
         rb_gv_set("$game_self_switches", Qnil);
