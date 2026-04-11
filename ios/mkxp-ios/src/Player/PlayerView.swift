@@ -510,8 +510,8 @@ struct DebugOverlayView: View {
     @State private var fps: Double = 0
     @State private var gameTitle: String = "--"
     @State private var rgssVersion: Int32 = 0
-    @State private var fpsSamples: [Double] = []
-    private let maxSamples = 120
+    @State private var ringBuffer = FPSRingBuffer(capacity: 120)
+    @State private var metadataLoaded = false
     private let maxFPS: Double = 70
 
     var body: some View {
@@ -535,10 +535,11 @@ struct DebugOverlayView: View {
 
                 // FPS Graph
                 Canvas { context, size in
-                    guard fpsSamples.count >= 2 else { return }
+                    let samples = ringBuffer.samples
+                    guard samples.count >= 2 else { return }
                     var path = Path()
-                    for (i, sample) in fpsSamples.enumerated() {
-                        let x = CGFloat(i) / CGFloat(maxSamples - 1) * size.width
+                    for (i, sample) in samples.enumerated() {
+                        let x = CGFloat(i) / CGFloat(ringBuffer.capacity - 1) * size.width
                         let y = size.height - (sample / maxFPS) * size.height
                         let clamped = max(0, min(size.height, y))
                         if i == 0 { path.move(to: CGPoint(x: x, y: clamped)) }
@@ -554,13 +555,15 @@ struct DebugOverlayView: View {
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
             guard mkxp_isEngineTerminated() == 0 else { return }
             fps = mkxp_getAverageFPS()
-            rgssVersion = mkxp_getRGSSVersion()
-            if let title = mkxp_getGameTitle(), title[0] != 0 {
-                gameTitle = String(cString: title)
-            }
-            fpsSamples.append(fps)
-            if fpsSamples.count > maxSamples {
-                fpsSamples.removeFirst(fpsSamples.count - maxSamples)
+            ringBuffer.append(fps)
+
+            // Load metadata once (title/version don't change mid-session)
+            if !metadataLoaded {
+                rgssVersion = mkxp_getRGSSVersion()
+                if let title = mkxp_getGameTitle(), title[0] != 0 {
+                    gameTitle = String(cString: title)
+                    metadataLoaded = true
+                }
             }
         }
     }
@@ -569,5 +572,33 @@ struct DebugOverlayView: View {
         if fps >= 55 { return .green }
         if fps >= 30 { return .yellow }
         return .red
+    }
+}
+
+/// Fixed-size ring buffer for FPS samples. O(1) append, no array shifting.
+private struct FPSRingBuffer {
+    let capacity: Int
+    private var buffer: [Double]
+    private var writeIndex = 0
+    private var count = 0
+
+    init(capacity: Int) {
+        self.capacity = capacity
+        self.buffer = [Double](repeating: 0, count: capacity)
+    }
+
+    mutating func append(_ value: Double) {
+        buffer[writeIndex] = value
+        writeIndex = (writeIndex + 1) % capacity
+        if count < capacity { count += 1 }
+    }
+
+    /// Returns samples in chronological order (oldest first).
+    var samples: [Double] {
+        if count < capacity {
+            return Array(buffer[0..<count])
+        }
+        // Ring wrapped: oldest is at writeIndex, read to end then wrap
+        return Array(buffer[writeIndex..<capacity]) + Array(buffer[0..<writeIndex])
     }
 }
