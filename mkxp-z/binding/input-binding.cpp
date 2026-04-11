@@ -608,6 +608,19 @@ void inputBindingInit() {
     _rb_define_module_function(module, "raw_key_states", inputRawKeyStates);
     _rb_define_module_function(module, "asyncKeyState", inputAsyncKeyState);
     
+    /* j-prefixed aliases: native C-level methods that can't be overridden by
+       Ruby game scripts. Used by pokeinput.rb to restore native Input behavior
+       in Pokemon Essentials games that replace the Input module. */
+    _rb_define_module_function(module, "jupdate", inputUpdate);
+    _rb_define_module_function(module, "jpress?", inputPress);
+    _rb_define_module_function(module, "jtrigger?", inputTrigger);
+    _rb_define_module_function(module, "jrepeat?", inputRepeat);
+    _rb_define_module_function(module, "jpressex?", inputPressEx);
+    _rb_define_module_function(module, "jtriggerex?", inputTriggerEx);
+    _rb_define_module_function(module, "jrepeatex?", inputRepeatEx);
+    _rb_define_module_function(module, "jdir4", inputDir4);
+    _rb_define_module_function(module, "jdir8", inputDir8);
+    
     VALUE submod = rb_define_module_under(module, "Controller");
     _rb_define_module_function(submod, "connected?", inputControllerConnected);
     _rb_define_module_function(submod, "name", inputControllerName);

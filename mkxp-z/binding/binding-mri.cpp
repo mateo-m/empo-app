@@ -1287,6 +1287,47 @@ static void runRMXPScripts(BacktraceData &btData) {
             if (shState->rtData().rqTerm)
                 break;
             
+#if TARGET_OS_IPHONE
+            /* Run postload scripts right before the last game script (Main).
+               At this point all game classes/modules are defined, so scripts
+               like pokeinput.rb can check $PokemonSystem and override Input
+               methods that were replaced by the game. */
+            if (i == scriptCount - 1) {
+                const char *enginePostloads[] = {
+                    "pokeinput",
+                    nullptr
+                };
+                
+                for (int p = 0; enginePostloads[p]; ++p) {
+                    try {
+                        std::string pscript = mkxp_fs::contentsOfAssetAsString(
+                            (std::string("Postload/") + enginePostloads[p]).c_str(), "rb");
+                        VALUE pscriptStr = rb_utf8_str_new_cstr(pscript.c_str());
+                        VALUE pfname = rb_utf8_str_new_cstr(enginePostloads[p]);
+                        int pstate;
+                        evalString(pscriptStr, pfname, &pstate);
+                        if (pstate) {
+#if RAPI_FULL > 187
+                            VALUE pexc = rb_errinfo();
+#else
+                            VALUE pexc = rb_gv_get("$!");
+#endif
+                            if (pexc != Qnil) {
+                                Debug() << "Error in engine postload" << enginePostloads[p];
+#if RAPI_FULL > 187
+                                rb_set_errinfo(Qnil);
+#else
+                                rb_gv_set("$!", Qnil);
+#endif
+                            }
+                        }
+                    } catch (...) {
+                        Debug() << "Failed to load engine postload:" << enginePostloads[p];
+                    }
+                }
+            }
+#endif
+            
             VALUE script = rb_ary_entry(scriptArray, i);
             VALUE scriptDecoded = rb_ary_entry(script, 3);
             VALUE string =
@@ -1527,6 +1568,59 @@ static void mriBindingExecute() {
             /* If clearing failed, reset exception and continue anyway */
             rb_gv_set("$!", Qnil);
         }
+
+        /* Remove constants defined by the previous game's scripts.
+         * Without this, a class defined by Game A (e.g. StringInput < Base1)
+         * persists and conflicts when Game B tries to define it with a
+         * different superclass (StringInput < Base2), causing TypeError. */
+        if (true) {
+            int rmState = 0;
+            rb_eval_string_protect(
+                "if defined?($__mkxp_base_consts) then "
+                "  (Object.constants - $__mkxp_base_consts).each do |c| "
+                "    Object.send(:remove_const, c) rescue nil "
+                "  end "
+                "end",
+                &rmState
+            );
+            if (rmState) rb_gv_set("$!", Qnil);
+        }
+        
+        /* Clean singleton methods from Input so game-defined overrides
+         * don't persist. mriBindingInit() re-registers C-level methods.
+         * NOTE: Graphics is intentionally excluded — removing its
+         * singleton methods corrupts the viewport on the next session. */
+        {
+            int cleanState = 0;
+            rb_eval_string_protect(
+                "sc = (class << Input; self; end); "
+                "sc.instance_methods(false).each do |m| "
+                "  sc.send(:remove_method, m) rescue nil "
+                "end",
+                &cleanState
+            );
+            if (cleanState) rb_gv_set("$!", Qnil);
+        }
+        
+        /* Clear game-defined global variables that leak between sessions. */
+        {
+            int gvState = 0;
+            rb_eval_string_protect(
+                "$PokemonSystem = nil; "
+                "$PokemonGlobal = nil; "
+                "$Trainer = nil; "
+                "$game_system = nil; "
+                "$game_map = nil; "
+                "$game_player = nil; "
+                "$game_switches = nil; "
+                "$game_variables = nil; "
+                "$game_temp = nil; "
+                "$game_screen = nil; "
+                "$scene = nil",
+                &gvState
+            );
+            if (gvState) rb_gv_set("$!", Qnil);
+        }
     }
 #ifdef __WIN32__
     if (!conf.winConsole) {
@@ -1580,6 +1674,24 @@ static void mriBindingExecute() {
     BacktraceData btData;
     
     mriBindingInit();
+    
+#if TARGET_OS_IPHONE && RAPI_FULL <= 187
+    /* Snapshot Object.constants AFTER mriBindingInit registers RGSS classes
+     * but BEFORE game scripts run. On subsequent sessions, any constants not
+     * in this baseline were defined by game scripts and must be removed to
+     * prevent superclass-mismatch errors between different games. */
+    {
+        static bool baselineCaptured = false;
+        if (!baselineCaptured) {
+            int state = 0;
+            rb_eval_string_protect(
+                "$__mkxp_base_consts = Object.constants.dup",
+                &state
+            );
+            baselineCaptured = true;
+        }
+    }
+#endif
     
     std::string &customScript = conf.customScript;
     if (!customScript.empty()) {

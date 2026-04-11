@@ -166,7 +166,9 @@ $win32KeyStates = nil
 
 module Graphics
 	class << self
-		alias_method(:win32wrap_update, :update)
+		unless method_defined?(:win32wrap_update)
+			alias_method(:win32wrap_update, :update)
+		end
 		def update
 			win32wrap_update
 			$win32KeyStates = nil
@@ -402,7 +404,7 @@ class Win32API
 	TOLERATE_ERRORS = true unless const_defined?("TOLERATE_ERRORS")
 	LOG_NATIVE = false unless const_defined?("LOG_NATIVE")
 
-	alias_method :mkxp_native_initialize, :initialize
+	alias_method :mkxp_native_initialize, :initialize unless method_defined?(:mkxp_native_initialize)
 	def initialize(dll, func, *args)
 		@dll = dll
 		@func = func
@@ -431,7 +433,7 @@ class Win32API
 
 	end
 
-	alias_method :mkxp_native_call, :call
+	alias_method :mkxp_native_call, :call unless method_defined?(:mkxp_native_call)
 	def call(*args)
 		if @mkxp_wrap_impl
 			return @mkxp_wrap_impl.call(args)
