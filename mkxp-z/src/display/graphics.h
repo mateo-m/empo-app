@@ -98,6 +98,11 @@ public:
     void lock(bool force = false);
     void unlock(bool force = false);
 
+	/* Null out all Disposable link pointers so GC-triggered destructors
+	 * don't corrupt a future session's intrusive list. Must be called
+	 * before SharedState::finiInstance() on iOS. */
+	void detachAllDisposables();
+
 private:
 	Graphics(RGSSThreadData *data);
 	~Graphics();

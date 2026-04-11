@@ -47,16 +47,27 @@ class GameLibrary: ObservableObject {
 
     func reload() {
         let scanned = scanGames()
-
-        // Preserve skeleton entries for in-progress imports — reload only
-        // replaces entries that exist on disk (same ID = in-place update).
-        let importing = self.games.filter { $0.isImporting }
-        let diskIDs = Set(scanned.map(\.id))
-        let merged = scanned + importing.filter { !diskIDs.contains($0.id) }
+        let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
 
         DispatchQueue.main.async {
             withAnimation {
-                self.games = merged
+                // Update existing entries in-place (skeleton -> real, or metadata refresh)
+                var updatedIDs = Set<String>()
+                for i in self.games.indices {
+                    let id = self.games[i].id
+                    if let fresh = scannedByID[id] {
+                        self.games[i] = fresh
+                        updatedIDs.insert(id)
+                    }
+                }
+
+                // Remove entries that are no longer on disk and not importing
+                self.games.removeAll { !$0.isImporting && !scannedByID.keys.contains($0.id) }
+
+                // Append any new games not already in the list
+                for entry in scanned where !updatedIDs.contains(entry.id) {
+                    self.games.append(entry)
+                }
             }
         }
     }

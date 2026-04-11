@@ -154,6 +154,21 @@ void        mkxp_getSafeAreaInsets(float *top, float *bottom, float *left, float
 // Use this instead of SDL's backingScaleFactor when converting UIKit points to GL pixels.
 float       mkxp_getScreenScale(void);
 
+// ============================================================================
+// Debug logging
+// ============================================================================
+
+// mkxp_setDebugLogPath: set the file path for debug logging this session.
+// Pass NULL or "" to disable logging. Called by UI before each game session.
+void        mkxp_setDebugLogPath(const char *path);
+
+// mkxp_debugLog: append a log line to the debug log file (if enabled).
+// tag: short category (e.g. "SESSION", "SCRIPT", "FATAL")
+// source: file and language identifier (e.g. "binding-mri.cpp [C++]")
+// message: the log message
+// No-op if debug logging is disabled.
+void        mkxp_debugLog(const char *tag, const char *source, const char *message);
+
 #ifdef __cplusplus
 }
 #endif

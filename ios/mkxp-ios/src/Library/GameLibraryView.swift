@@ -24,37 +24,17 @@ struct GameLibraryView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            VStack(spacing: 0) {
-                // Custom header — stays put during hero zoom (no nav bar animation)
-                HStack {
-                    Button(action: { showSettings = true }) {
-                        Image(systemName: "gearshape")
-                            .font(.body)
-                            .padding(10)
-                    }
-                    .glassEffect(.regular, in: .circle)
-                    Spacer()
-                    Text("Library")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    Spacer()
-                    Button(action: { showImporter = true }) {
-                        Image(systemName: "plus")
-                            .font(.body)
-                            .padding(10)
-                    }
-                    .glassEffect(.regular, in: .circle)
-                }
-                .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-
+            ZStack(alignment: .top) {
                 if !showEmpty {
                     gameGrid
                         .transition(.opacity)
                 } else {
                     Spacer()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+
+                // Custom header — transparent with progressive blur
+                libraryHeader
             }
             .animation(.easeInOut(duration: 0.25), value: showEmpty)
             .overlay {
@@ -69,8 +49,8 @@ struct GameLibraryView: View {
                 SettingsView()
             }
             .sheet(isPresented: $showImporter) {
-                DocumentPickerView { url in
-                    importGame(from: url)
+                DocumentPickerView { urls in
+                    importGames(from: urls)
                 }
             }
             .alert("Error", isPresented: $showErrorAlert) {
@@ -124,6 +104,50 @@ struct GameLibraryView: View {
         .frame(maxWidth: 240)
     }
 
+    // MARK: - Header
+
+    private let headerHeight: CGFloat = 56
+
+    private var libraryHeader: some View {
+        HStack {
+            Button(action: { showSettings = true }) {
+                Image(systemName: "gearshape")
+                    .font(.body)
+                    .padding(10)
+            }
+            .glassEffect(.regular, in: .circle)
+            Spacer()
+            Text("Library")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+            Spacer()
+            Button(action: { showImporter = true }) {
+                Image(systemName: "plus")
+                    .font(.body)
+                    .padding(10)
+            }
+            .glassEffect(.regular, in: .circle)
+        }
+        .padding(.horizontal)
+        .frame(height: headerHeight)
+        .background {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .mask {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(
+                            colors: [.black, .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: 40)
+                    }
+                }
+                .ignoresSafeArea()
+        }
+    }
+
     // MARK: - Game Grid
 
     private var gameGrid: some View {
@@ -155,21 +179,24 @@ struct GameLibraryView: View {
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.vertical)
+            .padding(.top, headerHeight + 8)
+            .padding(.bottom)
             .animation(.default, value: library.games.map(\.id))
         }
     }
 
     // MARK: - Import
 
-    private func importGame(from url: URL) {
-        let accessing = url.startAccessingSecurityScopedResource()
+    private func importGames(from urls: [URL]) {
+        for url in urls {
+            let accessing = url.startAccessingSecurityScopedResource()
 
-        library.importGame(from: url) { error in
-            if accessing { url.stopAccessingSecurityScopedResource() }
-            if let error = error {
-                errorMessage = error.localizedDescription
-                showErrorAlert = true
+            library.importGame(from: url) { error in
+                if accessing { url.stopAccessingSecurityScopedResource() }
+                if let error = error {
+                    errorMessage = error.localizedDescription
+                    showErrorAlert = true
+                }
             }
         }
     }
