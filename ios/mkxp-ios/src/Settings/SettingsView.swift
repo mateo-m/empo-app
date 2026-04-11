@@ -8,37 +8,42 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
+                    Picker("Theme", selection: $settings.theme) {
+                        ForEach(AppTheme.allCases, id: \.self) { theme in
+                            Text(theme.label).tag(theme)
+                        }
+                    }
                     Picker("Title position", selection: $settings.titlePosition) {
                         ForEach(TitlePosition.allCases, id: \.self) { position in
                             Text(position.label).tag(position)
                         }
                     }
                 } header: {
-                    Text("Interface")
+                    Text("look & feel")
                 } footer: {
-                    Text("Controls how game titles are displayed on library cards.")
+                    Text("Choose where game titles show up on your library cards.")
                 }
 
                 Section {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle("Debug mode", isOn: $settings.debugMode)
-                        Text("Shows FPS counter and engine info during gameplay.")
+                        Text("Shows FPS and engine info while you play.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 2)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Toggle("Clean up invalid games", isOn: $settings.cleanupInvalidGames)
-                        Text("Automatically removes games that failed to import on next launch.")
+                        Toggle("Clean up broken imports", isOn: $settings.cleanupInvalidGames)
+                        Text("Automatically removes games that didn't import properly.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 2)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Toggle("Enable debug logs", isOn: $settings.debugLogs)
-                        Text("Records engine and script diagnostics for each game session. Log files are saved to Documents/Logs and accessible via the Files app.")
+                        Toggle("Debug logs", isOn: $settings.debugLogs)
+                        Text("Saves engine logs for each session. Find them in Files → mkxp-z → Logs.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -47,14 +52,14 @@ struct SettingsView: View {
                     if settings.debugLogs {
                         VStack(alignment: .leading, spacing: 4) {
                             Stepper("Keep last \(settings.maxLogFiles) logs", value: $settings.maxLogFiles, in: 5...100, step: 5)
-                            Text("Older log files are automatically deleted when the app launches.")
+                            Text("Older logs get cleaned up automatically on launch.")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 2)
                     }
                 } header: {
-                    Text("Advanced")
+                    Text("advanced")
                 }
 
                 Section {
@@ -66,7 +71,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle("settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
