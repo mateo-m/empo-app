@@ -1,5 +1,7 @@
 import Foundation
 import Observation
+import SwiftUI
+import UIKit
 
 enum TitlePosition: String, CaseIterable {
     case inside = "inside"
@@ -13,9 +15,35 @@ enum TitlePosition: String, CaseIterable {
     }
 }
 
+enum AppTheme: String, CaseIterable {
+    case dark = "dark"
+    case light = "light"
+    case auto = "auto"
+
+    var label: String {
+        switch self {
+        case .dark:  "Dark"
+        case .light: "Light"
+        case .auto:  "Auto"
+        }
+    }
+
+    var userInterfaceStyle: UIUserInterfaceStyle {
+        switch self {
+        case .dark:  .dark
+        case .light: .light
+        case .auto:  .unspecified
+        }
+    }
+}
+
 @Observable
 class AppSettings {
     static let shared = AppSettings()
+
+    var theme: AppTheme {
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: "theme") }
+    }
 
     var debugMode: Bool {
         didSet { UserDefaults.standard.set(debugMode, forKey: "debugMode") }
@@ -38,6 +66,8 @@ class AppSettings {
     }
 
     private init() {
+        let themeRaw = UserDefaults.standard.string(forKey: "theme") ?? AppTheme.dark.rawValue
+        self.theme = AppTheme(rawValue: themeRaw) ?? .dark
         self.debugMode = UserDefaults.standard.bool(forKey: "debugMode")
         self.debugLogs = UserDefaults.standard.bool(forKey: "debugLogs")
         let storedMax = UserDefaults.standard.integer(forKey: "maxLogFiles")

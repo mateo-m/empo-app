@@ -146,8 +146,13 @@ class AppWindow: UIWindow {
         window.makeKeyAndVisible()
         instance = window
 
+        // Apply initial theme
+        window.overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle
+
         // Observe phase changes to toggle pass-through and orientation
         observePhase(window: window)
+        // Observe theme changes to update window interface style
+        observeTheme(window: window)
     }
 
     private static func observePhase(window: AppWindow) {
@@ -157,6 +162,17 @@ class AppWindow: UIWindow {
             DispatchQueue.main.async { [weak window] in
                 window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
                 if let window { observePhase(window: window) }
+            }
+        }
+    }
+
+    private static func observeTheme(window: AppWindow) {
+        withObservationTracking {
+            _ = AppSettings.shared.theme
+        } onChange: {
+            DispatchQueue.main.async { [weak window] in
+                window?.overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle
+                if let window { observeTheme(window: window) }
             }
         }
     }

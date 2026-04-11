@@ -23,5 +23,6 @@ struct RootView: View {
                     .zIndex(1)
             }
         }
+        .fontDesign(.rounded)
     }
 }
