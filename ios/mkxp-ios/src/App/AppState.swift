@@ -24,6 +24,8 @@ class AppState: ObservableObject {
     private var terminationTimer: Timer?
     private let sessionHistoryPath: String
 
+    private static let maxLogFiles = 20
+
     private init() {
         let logsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs", isDirectory: true)
@@ -38,6 +40,28 @@ class AppState: ObservableObject {
         header += "launched: \(launchTime)\n"
         header += "---\n"
         try? header.write(toFile: sessionHistoryPath, atomically: true, encoding: .utf8)
+
+        pruneOldLogs(in: logsDir)
+    }
+
+    /// Keep only the most recent log files, deleting the oldest ones.
+    private func pruneOldLogs(in logsDir: URL) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: logsDir, includingPropertiesForKeys: [.creationDateKey]) else { return }
+
+        // Only consider per-session log files (UUID-slug-timestamp.log), not session-history.log
+        let logFiles = files.filter { $0.lastPathComponent != "session-history.log" && $0.pathExtension == "log" }
+        guard logFiles.count > Self.maxLogFiles else { return }
+
+        let sorted = logFiles.sorted {
+            let d0 = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            let d1 = (try? $1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
+            return d0 < d1
+        }
+
+        for file in sorted.prefix(sorted.count - Self.maxLogFiles) {
+            try? fm.removeItem(at: file)
+        }
     }
 
     // MARK: - Actions
