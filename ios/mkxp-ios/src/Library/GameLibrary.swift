@@ -13,10 +13,9 @@ class GameLibrary {
     private var cancelledImports = Set<String>()
     private let cancelLock = NSLock()
 
-    var gamesDirectory: URL {
-        let docs = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return docs.appendingPathComponent("Games", isDirectory: true)
-    }
+    let gamesDirectory: URL = FileManager.default
+        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Games", isDirectory: true)
 
     private init() {
         ensureGamesDirectory()
