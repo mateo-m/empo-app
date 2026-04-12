@@ -23,6 +23,7 @@ class AppState {
 
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
+    private var sessionStartTime: Date?  // for play time tracking
 
     private init() {
         let logsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -83,6 +84,7 @@ class AppState {
 
         configureDebugLog(for: game)
         appendSessionHistory(game: game)
+        sessionStartTime = Date()
         mkxp_setGamePath(game.path)
     }
 
@@ -129,6 +131,24 @@ class AppState {
         }
     }
 
+    /// Records the elapsed wall-clock play time for the current session
+    /// and updates the game's metadata. Called when the engine terminates.
+    func recordSessionPlayTime() {
+        guard let game = selectedGame,
+              let startTime = sessionStartTime else { return }
+
+        let elapsed = Date().timeIntervalSince(startTime)
+        sessionStartTime = nil
+
+        // Only record meaningful sessions (> 1 second)
+        guard elapsed > 1 else { return }
+
+        var metadata = GameMetadata.load(for: game.id)
+        metadata.totalPlayTime = (metadata.totalPlayTime ?? 0) + elapsed
+        metadata.lastPlayed = Date()
+        metadata.save(for: game.id)
+    }
+
     /// User tapped the quit button — show confirmation.
     func requestQuit() {
         guard AppSettings.shared.isEnabled(.gameQuit) else { return }
@@ -164,9 +184,10 @@ class AppState {
             }
         }, nil)
 
-        // Engine terminated: reload library after quit completes
+        // Engine terminated: record play time, reload library after quit completes
         mkxp_setEngineTerminatedCallback({ _ in
             DispatchQueue.main.async {
+                AppState.shared.recordSessionPlayTime()
                 GameLibrary.shared.reload()
             }
         }, nil)
