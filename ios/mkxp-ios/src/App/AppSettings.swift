@@ -6,6 +6,13 @@ import UIKit
 enum LibraryDisplayMode: String, CaseIterable {
     case grid = "grid"
     case list = "list"
+
+    var label: String {
+        switch self {
+        case .grid: "Grid"
+        case .list: "List"
+        }
+    }
 }
 
 enum TitlePosition: String, CaseIterable {

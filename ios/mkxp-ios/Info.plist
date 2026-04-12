@@ -42,5 +42,7 @@
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>NSCameraUsageDescription</key>
+	<string>Take a photo to use as custom game artwork or banner.</string>
 </dict>
 </plist>

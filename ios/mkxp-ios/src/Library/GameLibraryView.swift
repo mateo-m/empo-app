@@ -15,6 +15,7 @@ struct GameLibraryView: View {
     @State private var path = NavigationPath()
     @State private var searchText = ""
     @State private var gameForSettings: GameEntry?
+    @State private var gameForInfo: GameEntry?
 
     private var showEmpty: Bool {
         library.games.isEmpty
@@ -73,6 +74,9 @@ struct GameLibraryView: View {
             }
             .sheet(item: $gameForSettings) { game in
                 GameSettingsView(game: game)
+            }
+            .sheet(item: $gameForInfo) { game in
+                GameInfoView(game: game)
             }
             .alert("Oops!", isPresented: $showErrorAlert) {
                 Button("OK") {}
@@ -298,7 +302,7 @@ struct GameLibraryView: View {
                         case .importing: break
                         }
                     }
-                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings)
+                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             gameToDelete = game
@@ -332,7 +336,7 @@ struct GameLibraryView: View {
                     .id("\(game.id)-invalid")
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
-                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings)
+                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
 
             case .ready:
                 NavigationLink(value: game) {
@@ -345,7 +349,7 @@ struct GameLibraryView: View {
                         appState.selectGame(game)
                     })
                     .transition(.cardAppear)
-                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings)
+                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
             }
         }
     }
@@ -412,10 +416,17 @@ private struct GameContextMenuModifier: ViewModifier {
     @Binding var gameToDelete: GameEntry?
     @Binding var showDeleteConfirm: Bool
     @Binding var gameForSettings: GameEntry?
+    @Binding var gameForInfo: GameEntry?
 
     func body(content: Content) -> some View {
         content.contextMenu {
             if case .ready = game.status {
+                Button {
+                    gameForInfo = game
+                } label: {
+                    Label("Info", systemImage: "info.circle")
+                }
+
                 Button {
                     gameForSettings = game
                 } label: {
@@ -436,7 +447,7 @@ private struct GameContextMenuModifier: ViewModifier {
 }
 
 extension View {
-    func gameContextMenu(game: GameEntry, gameToDelete: Binding<GameEntry?>, showDeleteConfirm: Binding<Bool>, gameForSettings: Binding<GameEntry?>) -> some View {
-        modifier(GameContextMenuModifier(game: game, gameToDelete: gameToDelete, showDeleteConfirm: showDeleteConfirm, gameForSettings: gameForSettings))
+    func gameContextMenu(game: GameEntry, gameToDelete: Binding<GameEntry?>, showDeleteConfirm: Binding<Bool>, gameForSettings: Binding<GameEntry?>, gameForInfo: Binding<GameEntry?>) -> some View {
+        modifier(GameContextMenuModifier(game: game, gameToDelete: gameToDelete, showDeleteConfirm: showDeleteConfirm, gameForSettings: gameForSettings, gameForInfo: gameForInfo))
     }
 }

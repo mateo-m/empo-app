@@ -20,6 +20,7 @@ class GameLibrary {
     private init() {
         ensureGamesDirectory()
         games = scanGames(cleanupInvalid: AppSettings.shared.cleanupInvalidGames)
+        syncMetadata()
     }
 
     // MARK: - Scan
@@ -93,11 +94,12 @@ class GameLibrary {
     }
 
     /// Builds a GameEntry from a validated game folder (no validation performed here).
+    /// Loads metadata to apply custom title/artwork overrides.
     private func buildGameEntry(from url: URL) -> GameEntry? {
 
         let folderName = url.lastPathComponent
-        let title = parseGameTitle(at: url) ?? "Unknown Game"
-        let artwork = findArtwork(at: url)
+        let iniTitle = parseGameTitle(at: url) ?? "Unknown Game"
+        let defaultArtwork = findArtwork(at: url)
 
         // ID is the UUID prefix (first 36 chars) of the folder name.
         // Legacy folders without a UUID use the full folder name.
@@ -109,12 +111,43 @@ class GameLibrary {
             id = folderName
         }
 
+        // Load metadata for custom title/artwork overrides
+        var metadata = GameMetadata.load(for: id)
+        var needsSave = false
+
+        // Set dateAdded retroactively if not present (pre-existing game)
+        if metadata.dateAdded == nil {
+            let attrs = try? fm.attributesOfItem(atPath: url.path)
+            metadata.dateAdded = (attrs?[.creationDate] as? Date) ?? Date()
+            needsSave = true
+        }
+
+        if needsSave {
+            metadata.save(for: id)
+        }
+
+        // Apply overrides
+        let title = metadata.customTitle ?? iniTitle
+        let artworkPath = metadata.customArtworkPath(for: id) ?? defaultArtwork
+
         return GameEntry(
             id: id,
             path: url.path,
             title: title,
-            artworkPath: artwork
+            artworkPath: artworkPath
         )
+    }
+
+    // MARK: - Entry Refresh
+
+    /// Re-reads a single game entry from disk + metadata and updates the games array.
+    /// Use after modifying metadata (custom title, artwork, etc.) for immediate UI feedback.
+    func refreshGameEntry(id: String) {
+        guard let idx = games.firstIndex(where: { $0.id == id }) else { return }
+        let url = URL(fileURLWithPath: games[idx].path)
+        guard var entry = buildGameEntry(from: url) else { return }
+        entry.status = games[idx].status  // preserve current status
+        withAnimation { games[idx] = entry }
     }
 
     // MARK: - Import
@@ -252,6 +285,9 @@ class GameLibrary {
             try? fm.removeItem(at: destURL)
             throw ImportCancelled()
         }
+
+        // Create initial metadata
+        createMetadata(for: importID)
     }
 
     private func importZip(from sourceURL: URL, importID: String) throws {
@@ -277,6 +313,16 @@ class GameLibrary {
             try? fm.removeItem(at: destURL)
             throw ImportCancelled()
         }
+
+        // Create initial metadata
+        createMetadata(for: importID)
+    }
+
+    /// Creates metadata with dateAdded = now for a newly imported game.
+    private func createMetadata(for gameId: String) {
+        var metadata = GameMetadata()
+        metadata.dateAdded = Date()
+        metadata.save(for: gameId)
     }
 
     // MARK: - Delete
@@ -288,6 +334,9 @@ class GameLibrary {
         if let artworkPath = entry.artworkPath {
             ImageCache.shared.evict(path: artworkPath)
         }
+
+        // Remove metadata (JSON + custom media)
+        GameMetadata.delete(for: entry.id)
 
         withAnimation {
             games.removeAll { $0.id == entry.id }
@@ -393,6 +442,32 @@ class GameLibrary {
     private func ensureGamesDirectory() {
         if !fm.fileExists(atPath: gamesDirectory.path) {
             try? fm.createDirectory(at: gamesDirectory, withIntermediateDirectories: true)
+        }
+    }
+
+    /// Removes orphaned metadata entries that no longer correspond to a game.
+    /// This handles cases where the app crashed mid-delete, leaving metadata behind.
+    private func syncMetadata() {
+        let metadataDir = FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Metadata", isDirectory: true)
+
+        guard fm.fileExists(atPath: metadataDir.path),
+              let contents = try? fm.contentsOfDirectory(
+                  at: metadataDir,
+                  includingPropertiesForKeys: nil,
+                  options: [.skipsHiddenFiles]
+              ) else { return }
+
+        let gameIDs = Set(games.map(\.id))
+
+        for url in contents {
+            // Extract game ID from filename: "{gameId}.json" or directory "{gameId}/"
+            let name = url.deletingPathExtension().lastPathComponent
+            if !gameIDs.contains(name) {
+                NSLog("[GameLibrary] Removing orphaned metadata: %@", url.lastPathComponent)
+                try? fm.removeItem(at: url)
+            }
         }
     }
 }
