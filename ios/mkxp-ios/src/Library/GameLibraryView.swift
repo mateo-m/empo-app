@@ -14,6 +14,7 @@ struct GameLibraryView: View {
     @State private var showInvalidAlert = false
     @State private var path = NavigationPath()
     @State private var searchText = ""
+    @State private var gameForSettings: GameEntry?
 
     private var showEmpty: Bool {
         library.games.isEmpty
@@ -69,6 +70,9 @@ struct GameLibraryView: View {
                 DocumentPickerView { urls in
                     importGames(from: urls)
                 }
+            }
+            .sheet(item: $gameForSettings) { game in
+                GameSettingsView(game: game)
             }
             .alert("Oops!", isPresented: $showErrorAlert) {
                 Button("OK") {}
@@ -294,14 +298,15 @@ struct GameLibraryView: View {
                         case .importing: break
                         }
                     }
-                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
-            }
-            .onDelete { offsets in
-                if let index = offsets.first {
-                    let game = filteredGames[index]
-                    gameToDelete = game
-                    showDeleteConfirm = true
-                }
+                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            gameToDelete = game
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
             }
         }
         .listStyle(.plain)
@@ -327,7 +332,7 @@ struct GameLibraryView: View {
                     .id("\(game.id)-invalid")
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
-                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
+                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings)
 
             case .ready:
                 NavigationLink(value: game) {
@@ -340,7 +345,7 @@ struct GameLibraryView: View {
                         appState.selectGame(game)
                     })
                     .transition(.cardAppear)
-                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
+                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings)
             }
         }
     }
@@ -406,9 +411,20 @@ private struct GameContextMenuModifier: ViewModifier {
     let game: GameEntry
     @Binding var gameToDelete: GameEntry?
     @Binding var showDeleteConfirm: Bool
+    @Binding var gameForSettings: GameEntry?
 
     func body(content: Content) -> some View {
         content.contextMenu {
+            if case .ready = game.status {
+                Button {
+                    gameForSettings = game
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
+                }
+            }
+
+            Divider()
+
             Button(role: .destructive) {
                 gameToDelete = game
                 showDeleteConfirm = true
@@ -420,7 +436,7 @@ private struct GameContextMenuModifier: ViewModifier {
 }
 
 extension View {
-    func gameContextMenu(game: GameEntry, gameToDelete: Binding<GameEntry?>, showDeleteConfirm: Binding<Bool>) -> some View {
-        modifier(GameContextMenuModifier(game: game, gameToDelete: gameToDelete, showDeleteConfirm: showDeleteConfirm))
+    func gameContextMenu(game: GameEntry, gameToDelete: Binding<GameEntry?>, showDeleteConfirm: Binding<Bool>, gameForSettings: Binding<GameEntry?>) -> some View {
+        modifier(GameContextMenuModifier(game: game, gameToDelete: gameToDelete, showDeleteConfirm: showDeleteConfirm, gameForSettings: gameForSettings))
     }
 }

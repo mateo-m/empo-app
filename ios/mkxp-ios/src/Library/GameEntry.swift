@@ -34,5 +34,7 @@ struct GameEntry: Identifiable, Hashable {
     }
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
-    static func == (lhs: GameEntry, rhs: GameEntry) -> Bool { lhs.id == rhs.id }
+    static func == (lhs: GameEntry, rhs: GameEntry) -> Bool {
+        lhs.id == rhs.id && lhs.status == rhs.status && lhs.title == rhs.title && lhs.path == rhs.path && lhs.artworkPath == rhs.artworkPath
+    }
 }
