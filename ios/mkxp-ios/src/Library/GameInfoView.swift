@@ -91,17 +91,58 @@ struct GameInfoView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    // ── Banner Header ────────────────────────
-                    bannerHeader
+                // ── Banner Header ────────────────────────
+                bannerHeader
 
-                    // ── Details ──────────────────────────────
-                    detailsSection
+                // ── Sections ─────────────────────────────
+                List {
+                    Section("Details") {
+                        LabeledContent("Date added") {
+                            if let date = metadata.dateAdded {
+                                Text(Self.dateFormatter.string(from: date))
+                            } else {
+                                Text("Unknown")
+                            }
+                        }
 
-                    // ── Actions ──────────────────────────────
-                    actionsSection
+                        LabeledContent("Last played") {
+                            if let date = metadata.lastPlayed {
+                                Text(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
+                            } else {
+                                Text("Never")
+                            }
+                        }
+
+                        if let time = metadata.totalPlayTime, time > 0 {
+                            LabeledContent("Play time") {
+                                Text(GameMetadata.formatPlayTime(metadata.totalPlayTime))
+                            }
+                        }
+
+                        LabeledContent("Size on disk") {
+                            if let size = diskSize {
+                                Text(GameMetadata.formatDiskSize(size))
+                            } else {
+                                ProgressView()
+                            }
+                        }
+                    }
+
+                    Section {
+                        Button { openInFiles() } label: {
+                            Label("Browse game files", systemImage: "folder")
+                        }
+
+                        if let logURL = sessionLogURL() {
+                            ShareLink(item: logURL) {
+                                Label("Export logs", systemImage: "square.and.arrow.up")
+                            }
+                        }
+                    }
                 }
-                .padding(.bottom, 24)
+                .listStyle(.insetGrouped)
+                .scrollDisabled(true)
+                .frame(minHeight: 350)
             }
             .ignoresSafeArea(edges: .top)
             .background(Color(.systemGroupedBackground))
@@ -122,12 +163,12 @@ struct GameInfoView: View {
                         // Subtitle: cross-fade between headline and caption sizes
                         // (font changes aren't animatable, so we overlay both)
                         ZStack {
-                            Text("Game information")
+                            Text("Information")
                                 .font(.headline)
                                 .opacity(1 - titleScrollProgress)
                                 .blur(radius: titleScrollProgress * 4)
 
-                            Text("Game information")
+                            Text("Information")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .opacity(titleScrollProgress)
@@ -211,9 +252,9 @@ struct GameInfoView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
                         .glassEffect(.regular, in: .capsule)
-                        .opacity(0.7)
+                        .opacity(0.5)
                         .padding(.top, 72)
-                        .padding(.trailing, 12)
+                        .padding(.trailing, 16)
                         .opacity(1 - titleScrollProgress)
                 }
 
@@ -224,13 +265,13 @@ struct GameInfoView: View {
                         Image(systemName: "photo")
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
+                            .padding(6)
                             .glassEffect(.regular, in: .circle)
-                            .opacity(0.7)
+                            .opacity(0.5)
                             .padding(4)
                     }
                     .shadow(radius: 8, y: 4)
+                    .contentShape(Rectangle())
                     .onTapGesture { showArtworkPicker = true }
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -257,7 +298,7 @@ struct GameInfoView: View {
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 7)
                                 .glassEffect(.regular, in: .circle)
-                                .opacity(0.7)
+                                .opacity(0.4)
                         }
                     }
 
@@ -269,6 +310,7 @@ struct GameInfoView: View {
                     }
                 }
                 .shadow(color: .black.opacity(0.6), radius: 6)
+                .contentShape(Rectangle())
                 .onTapGesture {
                     editingTitle = metadata.customTitle ?? ""
                     isEditingTitle = true
@@ -278,6 +320,7 @@ struct GameInfoView: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
+            .contentShape(Rectangle())
             .background(
                 GeometryReader { geo in
                     Color.clear.onChange(of: geo.frame(in: .global).minY) { _, globalY in
@@ -336,7 +379,7 @@ struct GameInfoView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    // MARK: - Details Section
+    // MARK: - Formatters
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -350,64 +393,6 @@ struct GameInfoView: View {
         f.unitsStyle = .full
         return f
     }()
-
-    private var detailsSection: some View {
-        GroupedSection(header: "Details") {
-            DetailRow(label: "Date added") {
-                if let date = metadata.dateAdded {
-                    Text(Self.dateFormatter.string(from: date))
-                } else {
-                    Text("Unknown").foregroundStyle(.secondary)
-                }
-            }
-
-            DetailRow(label: "Last played") {
-                if let date = metadata.lastPlayed {
-                    Text(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
-                } else {
-                    Text("Never").foregroundStyle(.secondary)
-                }
-            }
-
-            if let time = metadata.totalPlayTime, time > 0 {
-                DetailRow(label: "Play time") {
-                    Text(GameMetadata.formatPlayTime(metadata.totalPlayTime))
-                }
-            }
-
-            DetailRow(label: "Size on disk", showDivider: false) {
-                if let size = diskSize {
-                    Text(GameMetadata.formatDiskSize(size))
-                } else {
-                    ProgressView()
-                }
-            }
-        }
-    }
-
-    // MARK: - Actions Section
-
-    private var actionsSection: some View {
-        GroupedSection {
-            Button { openInFiles() } label: {
-                Label("Browse game files", systemImage: "folder")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
-            }
-
-            Divider().padding(.leading, 16)
-
-            if let logURL = sessionLogURL() {
-                ShareLink(item: logURL) {
-                    Label("Export logs", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                }
-            }
-        }
-    }
 
     // MARK: - Actions
 
@@ -475,56 +460,5 @@ struct GameInfoView: View {
             .appendingPathComponent("Logs", isDirectory: true)
         let historyLog = logsDir.appendingPathComponent("session-history.log")
         return FileManager.default.fileExists(atPath: historyLog.path) ? historyLog : nil
-    }
-}
-
-// MARK: - Grouped Section Components
-
-/// A manually styled grouped section matching the insetGrouped appearance.
-private struct GroupedSection<Content: View>: View {
-    var header: String? = nil
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let header {
-                Text(header.uppercased())
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 32)
-            }
-
-            VStack(spacing: 0) {
-                content
-            }
-            .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .padding(.horizontal, 16)
-        }
-    }
-}
-
-/// A row inside a grouped section with label and value.
-private struct DetailRow<Value: View>: View {
-    let label: String
-    var showDivider: Bool = true
-    @ViewBuilder var value: Value
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(label)
-                Spacer()
-                value
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 16)
-
-            if showDivider {
-                Divider()
-                    .padding(.leading, 16)
-            }
-        }
     }
 }
