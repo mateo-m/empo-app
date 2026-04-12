@@ -13,9 +13,15 @@ struct GameLibraryView: View {
     @State private var showDeleteConfirm = false
     @State private var showInvalidAlert = false
     @State private var path = NavigationPath()
+    @State private var searchText = ""
 
     private var showEmpty: Bool {
         library.games.isEmpty
+    }
+
+    private var filteredGames: [GameEntry] {
+        if searchText.isEmpty { return library.games }
+        return library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
     }
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -29,14 +35,19 @@ struct GameLibraryView: View {
         NavigationStack(path: $path) {
             ZStack(alignment: .top) {
                 if !showEmpty {
-                    gameGrid
+                    gameContent
                         .transition(.opacity)
                 } else {
                     Spacer()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
-                libraryHeader
+                VStack(spacing: 8) {
+                    libraryHeader
+                    if !showEmpty {
+                        searchBar
+                    }
+                }
             }
             .animation(.easeInOut(duration: 0.25), value: showEmpty)
             .overlay {
@@ -59,12 +70,12 @@ struct GameLibraryView: View {
                     importGames(from: urls)
                 }
             }
-            .alert("oops!", isPresented: $showErrorAlert) {
+            .alert("Oops!", isPresented: $showErrorAlert) {
                 Button("OK") {}
             } message: {
                 Text(errorMessage ?? "Something went wrong.")
             }
-            .alert("delete game?", isPresented: $showDeleteConfirm) {
+            .alert("Delete Game?", isPresented: $showDeleteConfirm) {
                 Button("Delete", role: .destructive) {
                     if let game = gameToDelete {
                         library.deleteGame(game) { error in
@@ -79,10 +90,10 @@ struct GameLibraryView: View {
                     Text("This will remove all files for \"\(game.title)\". You can always re-import it later.")
                 }
             }
-            .alert("invalid game", isPresented: $showInvalidAlert) {
+            .alert("Invalid Game", isPresented: $showInvalidAlert) {
                 Button("OK") {}
             } message: {
-                Text("this game couldn't be loaded properly. you can delete it and try importing again.")
+                Text("This game couldn't be loaded properly. You can delete it and try importing again.")
             }
             .navigationDestination(for: GameEntry.self) { game in
                 GameLoadingView(game: game)
@@ -103,10 +114,10 @@ struct GameLibraryView: View {
             Image(systemName: "gamecontroller")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-            Text("no games yet")
+            Text("No Games Yet")
                 .font(.title2)
                 .fontWeight(.medium)
-            Text("add your favorite RPG Maker\ngames to get started!")
+            Text("Add your favorite RPG Maker\ngames to get started!")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -116,6 +127,7 @@ struct GameLibraryView: View {
     // MARK: - Header
 
     private let headerHeight: CGFloat = 56
+    private let searchBarHeight: CGFloat = 44
 
     private var libraryHeader: some View {
         HStack {
@@ -127,8 +139,8 @@ struct GameLibraryView: View {
             .tint(.primary)
             .glassEffect(.regular.interactive(), in: .circle)
             Spacer()
-            Text("library")
-                .font(.largeTitle)
+            Text("Library")
+                .font(.title)
                 .fontWeight(.bold)
             Spacer()
             // Invisible placeholder to keep "Library" centered
@@ -136,6 +148,48 @@ struct GameLibraryView: View {
         }
         .padding(.horizontal)
         .frame(height: headerHeight)
+    }
+
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search games", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.primary)
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: searchBarHeight)
+            .glassEffect(.regular.interactive(), in: .capsule)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
+                }
+            } label: {
+                Image(systemName: settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2")
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .frame(width: 38, height: 38)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .glassEffect(.regular.interactive(), in: .circle)
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 4)
+        .tint(.primary)
     }
 
     // MARK: - Morphing Import Button
@@ -196,49 +250,98 @@ struct GameLibraryView: View {
         }
     }
 
-    // MARK: - Game Grid
+    // MARK: - Game Content
 
-    private var gameGrid: some View {
+    private var gameContent: some View {
+        Group {
+            if settings.libraryDisplayMode == .grid {
+                gridContent
+            } else {
+                listContent
+            }
+        }
+    }
+
+    private var gridContent: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(library.games) { game in
-                    switch game.status {
-                    case .importing:
-                        GameCard(game: game, onStopImport: {
-                            gameToDelete = game
-                            showDeleteConfirm = true
-                        })
-                            .id("\(game.id)-importing")
-                            .transition(.cardAppear)
+                gridItems
+            }
+            .padding(.horizontal)
+            .padding(.top, headerHeight + searchBarHeight + 20)
+            .padding(.bottom)
+            .animation(.default, value: filteredGames.map(\.id))
+        }
+    }
 
-                    case .invalid:
-                        Button { showInvalidAlert = true } label: {
-                            GameCard(game: game)
+    private var listContent: some View {
+        List {
+            ForEach(filteredGames) { game in
+                GameListRow(game: game, onStopImport: game.isImporting ? {
+                    gameToDelete = game
+                    showDeleteConfirm = true
+                } : nil)
+                    .matchedTransitionSource(id: game.id, in: heroNamespace)
+                    .background {
+                        if case .ready = game.status {
+                            NavigationLink(value: game) { EmptyView() }.opacity(0)
                         }
-                            .id("\(game.id)-invalid")
-                            .buttonStyle(CardPressStyle())
-                            .transition(.cardAppear)
-                            .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
-
-                    case .ready:
-                        NavigationLink(value: game) {
-                            GameCard(game: game)
-                                .matchedTransitionSource(id: game.id, in: heroNamespace)
-                        }
-                            .id("\(game.id)-ready")
-                            .buttonStyle(CardPressStyle())
-                            .simultaneousGesture(TapGesture().onEnded {
-                                appState.selectGame(game)
-                            })
-                            .transition(.cardAppear)
-                            .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
                     }
+                    .onTapGesture {
+                        switch game.status {
+                        case .ready: appState.selectGame(game)
+                        case .invalid: showInvalidAlert = true
+                        case .importing: break
+                        }
+                    }
+                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
+            }
+            .onDelete { offsets in
+                if let index = offsets.first {
+                    let game = filteredGames[index]
+                    gameToDelete = game
+                    showDeleteConfirm = true
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.top, headerHeight + 8)
-            .padding(.bottom)
-            .animation(.default, value: library.games.map(\.id))
+        }
+        .listStyle(.plain)
+        .contentMargins(.top, headerHeight + searchBarHeight + 20, for: .scrollContent)
+    }
+
+    @ViewBuilder
+    private var gridItems: some View {
+        ForEach(filteredGames) { game in
+            switch game.status {
+            case .importing:
+                GameCard(game: game, onStopImport: {
+                    gameToDelete = game
+                    showDeleteConfirm = true
+                })
+                    .id("\(game.id)-importing")
+                    .transition(.cardAppear)
+
+            case .invalid:
+                Button { showInvalidAlert = true } label: {
+                    GameCard(game: game)
+                }
+                    .id("\(game.id)-invalid")
+                    .buttonStyle(CardPressStyle())
+                    .transition(.cardAppear)
+                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
+
+            case .ready:
+                NavigationLink(value: game) {
+                    GameCard(game: game)
+                        .matchedTransitionSource(id: game.id, in: heroNamespace)
+                }
+                    .id("\(game.id)-ready")
+                    .buttonStyle(CardPressStyle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        appState.selectGame(game)
+                    })
+                    .transition(.cardAppear)
+                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm)
+            }
         }
     }
 
