@@ -4,6 +4,16 @@ enum GameStatus: Hashable {
     case ready
     case importing(progress: Double) // 0.0 to 1.0
     case invalid
+
+    /// The broad phase, ignoring associated values — useful as an animation trigger.
+    enum Phase: Hashable { case ready, importing, invalid }
+    var phase: Phase {
+        switch self {
+        case .ready: .ready
+        case .importing: .importing
+        case .invalid: .invalid
+        }
+    }
 }
 
 struct GameEntry: Identifiable, Hashable {
