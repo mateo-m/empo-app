@@ -8,6 +8,7 @@
 #ifndef IOS_BRIDGE_H
 #define IOS_BRIDGE_H
 
+#include <stdbool.h>
 // ============================================================================
 // Scancode constants
 // ============================================================================
@@ -166,8 +167,16 @@ void        mkxp_getGameRect(float *x, float *y, float *w, float *h);
 // UI system queries (implemented in systemImplIOS.mm)
 // ============================================================================
 
-// Safe area insets in logical points.
+// Safe area insets in logical points (read from cached atomics).
 void        mkxp_getSafeAreaInsets(float *top, float *bottom, float *left, float *right);
+
+// Push safe area insets from UIKit. Call from main thread whenever insets change.
+// Also sets a "needs relayout" flag so the engine recalculates its viewport.
+void        mkxp_setSafeAreaInsets(float top, float bottom, float left, float right);
+
+// Returns true (once) if safe area insets changed since last check.
+// The engine polls this each frame to trigger viewport recalculation.
+bool        mkxp_consumeSafeAreaInsetsChanged(void);
 
 // UIKit screen scale factor (e.g. 3.0 on iPhone Pro).
 // Use this instead of SDL's backingScaleFactor when converting UIKit points to GL pixels.
