@@ -37,6 +37,13 @@ static std::atomic<float> s_gameRectY{0};
 static std::atomic<float> s_gameRectW{0};
 static std::atomic<float> s_gameRectH{0};
 
+// Cached safe area insets in logical points, pushed from UIKit.
+static std::atomic<float> s_safeAreaTop{0};
+static std::atomic<float> s_safeAreaBottom{0};
+static std::atomic<float> s_safeAreaLeft{0};
+static std::atomic<float> s_safeAreaRight{0};
+static std::atomic<bool>  s_safeAreaInsetsChanged{false};
+
 // Input bridge: cached SDL window ID for event injection.
 static uint32_t s_sdlWindowID = 0;
 
@@ -165,6 +172,31 @@ void mkxp_getGameRect(float *x, float *y, float *w, float *h) {
     if (y) *y = s_gameRectY.load(std::memory_order_relaxed);
     if (w) *w = s_gameRectW.load(std::memory_order_relaxed);
     if (h) *h = s_gameRectH.load(std::memory_order_relaxed);
+}
+
+void mkxp_getSafeAreaInsets(float *top, float *bottom, float *left, float *right) {
+    if (top)    *top    = s_safeAreaTop.load(std::memory_order_relaxed);
+    if (bottom) *bottom = s_safeAreaBottom.load(std::memory_order_relaxed);
+    if (left)   *left   = s_safeAreaLeft.load(std::memory_order_relaxed);
+    if (right)  *right  = s_safeAreaRight.load(std::memory_order_relaxed);
+}
+
+void mkxp_setSafeAreaInsets(float top, float bottom, float left, float right) {
+    float oldTop    = s_safeAreaTop.load(std::memory_order_relaxed);
+    float oldBottom = s_safeAreaBottom.load(std::memory_order_relaxed);
+    float oldLeft   = s_safeAreaLeft.load(std::memory_order_relaxed);
+    float oldRight  = s_safeAreaRight.load(std::memory_order_relaxed);
+    s_safeAreaTop.store(top, std::memory_order_relaxed);
+    s_safeAreaBottom.store(bottom, std::memory_order_relaxed);
+    s_safeAreaLeft.store(left, std::memory_order_relaxed);
+    s_safeAreaRight.store(right, std::memory_order_relaxed);
+    if (top != oldTop || bottom != oldBottom || left != oldLeft || right != oldRight) {
+        s_safeAreaInsetsChanged.store(true, std::memory_order_release);
+    }
+}
+
+bool mkxp_consumeSafeAreaInsetsChanged(void) {
+    return s_safeAreaInsetsChanged.exchange(false, std::memory_order_acquire);
 }
 
 // ============================================================================

@@ -905,6 +905,47 @@ struct GraphicsPrivate {
     void recalculateScreenSize(bool fixedAspectRatio) {
         scSize = winSize;
         
+#if TARGET_OS_IPHONE
+        {
+            float saTop = 0, saBottom = 0, saLeft = 0, saRight = 0;
+            mkxp_getSafeAreaInsets(&saTop, &saBottom, &saLeft, &saRight);
+
+            float uiScale = mkxp_getScreenScale();
+            int saTopPx   = (int)(saTop    * uiScale);
+            int saBotPx   = (int)(saBottom * uiScale);
+            int saLeftPx  = (int)(saLeft   * uiScale);
+            int saRightPx = (int)(saRight  * uiScale);
+
+            // Available area inside safe insets
+            int availW = winSize.x - saLeftPx - saRightPx;
+            int availH = winSize.y - saTopPx  - saBotPx;
+
+            if (fixedAspectRatio) {
+                // Fit game within the safe area while preserving aspect ratio
+                float resRatio = (float)scRes.x / scRes.y;
+                scSize.x = availW;
+                scSize.y = (int)(scSize.x / resRatio);
+                if (scSize.y > availH) {
+                    scSize.y = availH;
+                    scSize.x = (int)(scSize.y * resRatio);
+                }
+            } else {
+                // Stretch to fill the entire safe area
+                scSize.x = availW;
+                scSize.y = availH;
+            }
+
+            if (winSize.x < winSize.y) {
+                // Portrait: top-align within safe area, controls go below.
+                scOffset.x = saLeftPx + (availW - scSize.x) / 2;
+                scOffset.y = winSize.y - saTopPx - scSize.y;
+            } else {
+                // Landscape: center within safe area
+                scOffset.x = saLeftPx + (availW - scSize.x) / 2;
+                scOffset.y = saBotPx  + (availH - scSize.y) / 2;
+            }
+        }
+#else
         if (!fixedAspectRatio) {
             if (!integerScaleActive || (integerScaleActive && integerLastMileScaling)) {
                 scOffset = Vec2i(0, 0);
@@ -930,48 +971,6 @@ struct GraphicsPrivate {
         
         scOffset.x = (winSize.x - scSize.x) / 2.f;
         scOffset.y = (winSize.y - scSize.y) / 2.f;
-
-#if TARGET_OS_IPHONE
-        {
-            float saTop = 0, saBottom = 0, saLeft = 0, saRight = 0;
-            mkxp_getSafeAreaInsets(&saTop, &saBottom, &saLeft, &saRight);
-
-            // Safe area insets are in UIKit points. Convert to GL drawable
-            // pixels using the UIKit screen scale. We cannot use SDL's
-            // backingScaleFactor because SDL's window size may differ from
-            // the UIKit screen size in points.
-            float uiScale = mkxp_getScreenScale();
-            int saTopPx   = (int)(saTop    * uiScale);
-            int saBotPx   = (int)(saBottom * uiScale);
-            int saLeftPx  = (int)(saLeft   * uiScale);
-            int saRightPx = (int)(saRight  * uiScale);
-
-            // Available area inside safe insets
-            int availW = winSize.x - saLeftPx - saRightPx;
-            int availH = winSize.y - saTopPx  - saBotPx;
-
-            // Fit game within the safe area
-            float resRatio2 = (float)scRes.x / scRes.y;
-            scSize.x = availW;
-            scSize.y = (int)(scSize.x / resRatio2);
-            if (scSize.y > availH) {
-                scSize.y = availH;
-                scSize.x = (int)(scSize.y * resRatio2);
-            }
-
-            // Note: scOffset.y is in OpenGL coordinates (origin = bottom-left),
-            // so bottom safe area maps to lower y values.
-            if (winSize.x < winSize.y) {
-                // Portrait: top-align within safe area, controls go below.
-                // "top" in screen coords = high y in GL coords.
-                scOffset.x = saLeftPx + (availW - scSize.x) / 2;
-                scOffset.y = winSize.y - saTopPx - scSize.y;
-            } else {
-                // Landscape: center within safe area
-                scOffset.x = saLeftPx + (availW - scSize.x) / 2;
-                scOffset.y = saBotPx  + (availH - scSize.y) / 2;
-            }
-        }
 #endif
     }
     
@@ -1024,7 +1023,24 @@ struct GraphicsPrivate {
     }
     
     void checkResize(bool skipIntScaleBuffer = false) {
-        if (threadData->windowSizeMsg.poll(winSize)) {
+        bool sizeChanged = threadData->windowSizeMsg.poll(winSize);
+
+#if TARGET_OS_IPHONE
+        // Safe area insets are pushed from UIKit asynchronously.
+        // If they changed (e.g. during rotation), recalculate even
+        // if the window size didn't change.
+        bool insetsChanged = mkxp_consumeSafeAreaInsetsChanged();
+        if (insetsChanged && !sizeChanged) {
+            // Recalculate viewport with current window size
+            recalculateScreenSize(threadData->config.fixedAspectRatio);
+            updateScreenResoRatio(threadData);
+
+            SDL_Rect screen = {scOffset.x, scOffset.y, scSize.x, scSize.y};
+            threadData->ethread->notifyGameScreenChange(screen);
+        }
+#endif
+
+        if (sizeChanged) {
             /* Drain all pending async GL work (e.g. pixel processing
              * dispatched by the previous SwapWindow) before touching
              * any GL state.  Without this, rotating the device can

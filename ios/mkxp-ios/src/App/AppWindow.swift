@@ -87,6 +87,15 @@ class AppWindow: UIWindow {
         fatalError("init(coder:) not implemented")
     }
 
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        let insets = safeAreaInsets
+        mkxp_setSafeAreaInsets(
+            Float(insets.top), Float(insets.bottom),
+            Float(insets.left), Float(insets.right)
+        )
+    }
+
     // No hitTest override needed. Controls handle their own key injection
     // via the bridge. Background touches are harmlessly absorbed — RGSS games
     // use keyboard input, not mouse/touch.
@@ -145,6 +154,13 @@ class AppWindow: UIWindow {
 
         window.makeKeyAndVisible()
         instance = window
+
+        // Seed safe area insets for the engine bridge
+        let insets = window.safeAreaInsets
+        mkxp_setSafeAreaInsets(
+            Float(insets.top), Float(insets.bottom),
+            Float(insets.left), Float(insets.right)
+        )
 
         // Apply initial theme
         window.overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle

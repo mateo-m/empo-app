@@ -70,6 +70,12 @@ class AppState {
         guard phase == .library else { return }
         selectedGame = game
         phase = .loading
+
+        // Apply per-game settings to mkxp.json before the engine reads it
+        let gameDir = URL(fileURLWithPath: game.path)
+        let settings = GameSettings.load(from: gameDir)
+        settings.applyToConfig(in: gameDir)
+
         configureDebugLog(for: game)
         appendSessionHistory(game: game)
         mkxp_setGamePath(game.path)
