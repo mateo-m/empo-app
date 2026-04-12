@@ -76,6 +76,20 @@ class AppSettings {
         didSet { UserDefaults.standard.set(debugMode, forKey: "debugMode") }
     }
 
+    var showViewportBounds: Bool {
+        didSet {
+            UserDefaults.standard.set(showViewportBounds, forKey: "showViewportBounds")
+            mkxp_setShowViewportBounds(showViewportBounds)
+        }
+    }
+
+    var viewportBoundsColor: Color {
+        didSet {
+            saveViewportBoundsColor()
+            pushViewportBoundsColor()
+        }
+    }
+
     var debugLogs: Bool {
         didSet { UserDefaults.standard.set(debugLogs, forKey: "debugLogs") }
     }
@@ -109,6 +123,8 @@ class AppSettings {
         let themeRaw = UserDefaults.standard.string(forKey: "theme") ?? AppTheme.dark.rawValue
         self.theme = AppTheme(rawValue: themeRaw) ?? .dark
         self.debugMode = UserDefaults.standard.bool(forKey: "debugMode")
+        self.showViewportBounds = UserDefaults.standard.bool(forKey: "showViewportBounds")
+        self.viewportBoundsColor = Self.loadViewportBoundsColor()
         self.debugLogs = UserDefaults.standard.bool(forKey: "debugLogs")
         let storedMax = UserDefaults.standard.integer(forKey: "maxLogFiles")
         self.maxLogFiles = storedMax > 0 ? storedMax : 20
@@ -123,6 +139,10 @@ class AppSettings {
             flags[feature.rawValue] = UserDefaults.standard.bool(forKey: feature.rawValue)
         }
         self.experimentalFlags = flags
+
+        // Push initial values to bridge
+        mkxp_setShowViewportBounds(showViewportBounds)
+        pushViewportBoundsColor()
     }
 
     // MARK: - Experimental API
@@ -133,5 +153,40 @@ class AppSettings {
 
     func setEnabled(_ feature: ExperimentalFeature, _ value: Bool) {
         experimentalFlags[feature.rawValue] = value
+    }
+
+    // MARK: - Viewport Bounds Color
+
+    /// Default: orange at 50% opacity
+    private static let defaultViewportBoundsColor = Color(.sRGB, red: 1.0, green: 0.584, blue: 0.0, opacity: 0.5)
+
+    private static func loadViewportBoundsColor() -> Color {
+        let ud = UserDefaults.standard
+        guard ud.object(forKey: "vpBoundsR") != nil else { return defaultViewportBoundsColor }
+        return Color(
+            .sRGB,
+            red: ud.double(forKey: "vpBoundsR"),
+            green: ud.double(forKey: "vpBoundsG"),
+            blue: ud.double(forKey: "vpBoundsB"),
+            opacity: ud.double(forKey: "vpBoundsA")
+        )
+    }
+
+    private func saveViewportBoundsColor() {
+        let resolved = UIColor(viewportBoundsColor)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let ud = UserDefaults.standard
+        ud.set(Double(r), forKey: "vpBoundsR")
+        ud.set(Double(g), forKey: "vpBoundsG")
+        ud.set(Double(b), forKey: "vpBoundsB")
+        ud.set(Double(a), forKey: "vpBoundsA")
+    }
+
+    func pushViewportBoundsColor() {
+        let resolved = UIColor(viewportBoundsColor)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
+        mkxp_setViewportBoundsColor(Float(r), Float(g), Float(b), Float(a))
     }
 }

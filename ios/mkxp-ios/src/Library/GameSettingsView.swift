@@ -10,7 +10,6 @@ struct GameSettingsView: View {
     @State private var needsRestart = false
 
     private let gameDirectory: URL
-    private let isGameRunning: Bool
     private let initialSettings: GameSettings
 
     init(game: GameEntry) {
@@ -25,9 +24,11 @@ struct GameSettingsView: View {
         _settings = State(initialValue: s)
         _cheats = State(initialValue: cheatsVal)
         _defaults = State(initialValue: defs)
+        self.initialSettings = s
     }
 
-    // Effective values: override ?? game default ?? engine default
+    // MARK: - Effective Values
+
     private var effectiveSmoothScaling: Bool {
         settings.smoothScaling ?? defaults.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
     }
@@ -43,84 +44,51 @@ struct GameSettingsView: View {
     private var effectiveFontScale: Double {
         settings.fontScale ?? defaults.fontScale ?? GameConfigDefaults.engineFontScale
     }
+    private var effectiveVsync: Bool {
+        settings.vsync ?? defaults.vsync ?? GameConfigDefaults.engineVsync
+    }
+    private var effectivePathCache: Bool {
+        settings.pathCache ?? defaults.pathCache ?? GameConfigDefaults.enginePathCache
+    }
+    private var effectiveSolidFonts: Bool {
+        settings.solidFonts ?? defaults.solidFonts ?? GameConfigDefaults.engineSolidFonts
+    }
+    private var effectivePostloadScripts: Bool {
+        settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
+    }
+    private var effectiveVerticalAlignment: VerticalAlignment {
+        settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
+    }
+    private var effectiveResolution: ResolutionPreset? {
+        settings.resolution ?? defaults.resolution
+    }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    Toggle("Smooth Scaling", isOn: smoothScalingBinding)
-                } header: {
-                    Text("Display")
-                } footer: {
-                    Text("Use bilinear filtering when upscaling. Disable for a pixel-perfect look.")
-                }
+                // ── Display ──────────────────────────────────
+                displaySection
 
-                Section {
-                    Toggle("Fixed Aspect Ratio", isOn: fixedAspectRatioBinding)
-                } footer: {
-                    Text("Preserve the game's aspect ratio instead of stretching to fill the screen.")
-                }
+                // ── Portrait Layout ──────────────────────────
+                verticalAlignmentSection
 
-                Section {
-                    Toggle("Frame Skip", isOn: frameSkipBinding)
-                } header: {
-                    Text("Performance")
-                } footer: {
-                    Text("Skip rendering frames when the game falls behind. Can improve performance at the cost of visual smoothness.")
-                }
+                // ── Resolution ───────────────────────────────
+                resolutionSection
 
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Speed")
-                            Spacer()
-                            Text("\(effectiveSpeedMultiplier)×")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                        Slider(
-                            value: speedBinding,
-                            in: 1...9,
-                            step: 1
-                        )
-                    }
-                    .padding(.vertical, 2)
-                } footer: {
-                    Text("Run the game faster. Requires restarting the game to take effect.")
-                }
+                // ── Performance ──────────────────────────────
+                performanceSection
 
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Font Scale")
-                            Spacer()
-                            Text(String(format: "%.1f×", effectiveFontScale))
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
-                        Slider(
-                            value: fontScaleBinding,
-                            in: 0.5...2.0,
-                            step: 0.1
-                        )
-                    }
-                    .padding(.vertical, 2)
-                } header: {
-                    Text("Text")
-                } footer: {
-                    Text("Scale all in-game text. 1.0× is the default size.")
-                }
+                // ── Text ─────────────────────────────────────
+                textSection
 
-                Section {
-                    Toggle("Cheats", isOn: $cheats)
-                } header: {
-                    Text("Gameplay")
-                } footer: {
-                    Text("Enable cheat mode. Only works if the game supports it.")
-                }
+                // ── Engine ───────────────────────────────────
+                engineSection
 
-                if settings.smoothScaling != nil || settings.fixedAspectRatio != nil ||
-                   settings.frameSkip != nil || settings.speedMultiplier != nil || settings.fontScale != nil {
+                // ── Gameplay ─────────────────────────────────
+                gameplaySection
+
+                // ── Reset ────────────────────────────────────
+                if settings.hasCustomizations {
                     Section {
                         Button("Reset to Defaults", role: .destructive) {
                             withAnimation {
@@ -155,7 +123,180 @@ struct GameSettingsView: View {
             .onChange(of: settings.frameSkip) { save() }
             .onChange(of: settings.speedMultiplier) { save() }
             .onChange(of: settings.fontScale) { save() }
+            .onChange(of: settings.vsync) { save() }
+            .onChange(of: settings.pathCache) { save() }
+            .onChange(of: settings.solidFonts) { save() }
+            .onChange(of: settings.postloadScripts) { save() }
+            .onChange(of: settings.verticalAlignment) { save() }
+            .onChange(of: settings.resolution) { save() }
             .onChange(of: cheats) { saveCheats() }
+        }
+    }
+
+    // MARK: - Sections
+
+    private var displaySection: some View {
+        Group {
+            Section {
+                Toggle("Smooth scaling", isOn: smoothScalingBinding)
+            } header: {
+                Text("Display")
+            } footer: {
+                Text("Use bilinear filtering when upscaling. Disable for a pixel-perfect look.")
+            }
+
+            Section {
+                Toggle("Fixed aspect ratio", isOn: fixedAspectRatioBinding)
+            } footer: {
+                Text("Preserve the game's proportions instead of stretching to fill the screen.")
+            }
+
+            Section {
+                Toggle("VSync", isOn: vsyncBinding)
+            } footer: {
+                Text("Synchronize rendering with the display refresh rate to reduce tearing.")
+            }
+        }
+    }
+
+    private var verticalAlignmentSection: some View {
+        Section {
+            Picker("Position", selection: verticalAlignmentBinding) {
+                ForEach(VerticalAlignment.allCases, id: \.self) { alignment in
+                    HStack(spacing: 10) {
+                        VerticalAlignmentIllustration(alignment: alignment)
+                            .frame(width: 24, height: 40)
+                        Text(alignment.label)
+                    }
+                    .tag(alignment)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } header: {
+            Text("Portrait layout")
+        } footer: {
+            Text("Where the game sits on screen when playing in portrait. Controls appear below.")
+        }
+    }
+
+    private var resolutionSection: some View {
+        Section {
+            Picker("Resolution", selection: resolutionBinding) {
+                Text("Default")
+                    .tag(nil as ResolutionPreset?)
+
+                ForEach(ResolutionPreset.presets) { preset in
+                    HStack {
+                        Text(preset.label)
+                        Spacer()
+                        Text(preset.aspectRatio)
+                            .foregroundStyle(.secondary)
+                    }
+                    .tag(preset as ResolutionPreset?)
+                }
+            }
+            .pickerStyle(.navigationLink)
+        } header: {
+            Text("Resolution")
+        } footer: {
+            if let res = effectiveResolution {
+                Text("Currently \(res.label) (\(res.aspectRatio)). Some games override this in their scripts. Changes take effect on next launch.")
+            } else {
+                Text("Override the game's internal resolution. Some games override this in their scripts. Changes take effect on next launch.")
+            }
+        }
+    }
+
+    private var performanceSection: some View {
+        Section {
+            Toggle("Frame skip", isOn: frameSkipBinding)
+        } header: {
+            Text("Performance")
+        } footer: {
+            Text("Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness.")
+        }
+    }
+
+    private var textSection: some View {
+        Group {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Font scale")
+                        Spacer()
+                        Text(String(format: "%.1fx", effectiveFontScale))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(
+                        value: fontScaleBinding,
+                        in: 0.5...2.0,
+                        step: 0.1
+                    )
+                }
+                .padding(.vertical, 2)
+            } header: {
+                Text("Text")
+            } footer: {
+                Text("Scale all in-game text. 1.0x is the default size.")
+            }
+
+            Section {
+                Toggle("Solid fonts", isOn: solidFontsBinding)
+            } footer: {
+                Text("Disable alpha blending for text, which can look sharper in some games.")
+            }
+        }
+    }
+
+    private var engineSection: some View {
+        Group {
+            Section {
+                Toggle("Postload scripts", isOn: postloadScriptsBinding)
+            } header: {
+                Text("Engine")
+            } footer: {
+                Text("Run scripts that apply common fixes for Pokemon Essentials games.")
+            }
+
+            Section {
+                Toggle("Path cache", isOn: pathCacheBinding)
+            } footer: {
+                Text("Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues.")
+            }
+        }
+    }
+
+    private var gameplaySection: some View {
+        Group {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Fast forward")
+                        Spacer()
+                        Text("\(effectiveSpeedMultiplier)x")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(
+                        value: speedBinding,
+                        in: 1...9,
+                        step: 1
+                    )
+                }
+                .padding(.vertical, 2)
+            } header: {
+                Text("Gameplay")
+            } footer: {
+                Text("Run the game at a faster speed. 1x is normal.")
+            }
+
+            Section {
+                Toggle("Cheats", isOn: $cheats)
+            } footer: {
+                Text("Enable cheat mode. Only works if the game supports it.")
+            }
         }
     }
 
@@ -196,6 +337,48 @@ struct GameSettingsView: View {
         )
     }
 
+    private var vsyncBinding: Binding<Bool> {
+        Binding(
+            get: { effectiveVsync },
+            set: { settings.vsync = $0 }
+        )
+    }
+
+    private var pathCacheBinding: Binding<Bool> {
+        Binding(
+            get: { effectivePathCache },
+            set: { settings.pathCache = $0 }
+        )
+    }
+
+    private var solidFontsBinding: Binding<Bool> {
+        Binding(
+            get: { effectiveSolidFonts },
+            set: { settings.solidFonts = $0 }
+        )
+    }
+
+    private var postloadScriptsBinding: Binding<Bool> {
+        Binding(
+            get: { effectivePostloadScripts },
+            set: { settings.postloadScripts = $0 }
+        )
+    }
+
+    private var verticalAlignmentBinding: Binding<VerticalAlignment> {
+        Binding(
+            get: { effectiveVerticalAlignment },
+            set: { settings.verticalAlignment = $0 }
+        )
+    }
+
+    private var resolutionBinding: Binding<ResolutionPreset?> {
+        Binding(
+            get: { settings.resolution },
+            set: { settings.resolution = $0 }
+        )
+    }
+
     // MARK: - Persistence
 
     private func save() {
@@ -204,5 +387,45 @@ struct GameSettingsView: View {
 
     private func saveCheats() {
         GameSettings.saveCheats(cheats, to: gameDirectory)
+    }
+}
+
+// MARK: - Vertical Alignment Illustration
+
+/// A tiny illustration showing where the game viewport sits on a phone silhouette.
+private struct VerticalAlignmentIllustration: View {
+    let alignment: VerticalAlignment
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let phoneInset: CGFloat = 2
+            let innerW = w - phoneInset * 2
+            let innerH = h - phoneInset * 2
+            let gameH: CGFloat = innerH * 0.35
+
+            let gameY: CGFloat = switch alignment {
+            case .top:
+                phoneInset + 2
+            case .topCenter:
+                phoneInset + (innerH - gameH) * 0.25
+            case .center:
+                phoneInset + (innerH - gameH) / 2
+            }
+
+            ZStack {
+                // Phone outline
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(.secondary.opacity(0.5), lineWidth: 1)
+                    .frame(width: w, height: h)
+
+                // Game viewport
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(.tint.opacity(0.6))
+                    .frame(width: innerW - 4, height: gameH)
+                    .position(x: w / 2, y: gameY + gameH / 2)
+            }
+        }
     }
 }

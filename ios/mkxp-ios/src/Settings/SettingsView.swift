@@ -26,6 +26,34 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    ForEach(ExperimentalFeature.allCases) { feature in
+                        let enabled = settings.isEnabled(feature)
+                        Toggle(isOn: Binding(
+                            get: { enabled },
+                            set: { newValue in
+                                if newValue {
+                                    featureToEnable = feature
+                                } else {
+                                    settings.setEnabled(feature, false)
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(feature.label)
+                                Text(feature.description)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    Text("Experimental")
+                } footer: {
+                    Text("These features are still in development and may not work as expected.")
+                }
+
+                Section {
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle("Debug mode", isOn: $settings.debugMode)
                         Text("Shows FPS and engine info while you play.")
@@ -33,6 +61,28 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 2)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Toggle("Show viewport bounds", isOn: $settings.showViewportBounds)
+                        Text("Tints the area outside the game viewport so you can see where controls can go.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
+
+                    if settings.showViewportBounds {
+                        NavigationLink {
+                            ViewportBoundsColorPicker(color: $settings.viewportBoundsColor)
+                        } label: {
+                            HStack {
+                                Text("Bounds color")
+                                Spacer()
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(settings.viewportBoundsColor)
+                                    .frame(width: 24, height: 24)
+                            }
+                        }
+                    }
 
                     VStack(alignment: .leading, spacing: 4) {
                         Toggle("Clean up broken imports", isOn: $settings.cleanupInvalidGames)
@@ -61,34 +111,6 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Advanced")
-                }
-
-                Section {
-                    ForEach(ExperimentalFeature.allCases) { feature in
-                        let enabled = settings.isEnabled(feature)
-                        Toggle(isOn: Binding(
-                            get: { enabled },
-                            set: { newValue in
-                                if newValue {
-                                    featureToEnable = feature
-                                } else {
-                                    settings.setEnabled(feature, false)
-                                }
-                            }
-                        )) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(feature.label)
-                                Text(feature.description)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 2)
-                    }
-                } header: {
-                    Text("Experimental")
-                } footer: {
-                    Text("These features are still in development and may not work as expected.")
                 }
 
                 Section {
@@ -127,6 +149,156 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Viewport Bounds Color Picker
+
+private struct ViewportBoundsColorPicker: View {
+    @Binding var color: Color
+
+    var body: some View {
+        Form {
+            Section {
+                ColorPicker("Color", selection: $color, supportsOpacity: true)
+            }
+
+            Section {
+                HStack(spacing: 20) {
+                    Spacer()
+                    DevicePreview(color: color, isLandscape: false)
+                    DevicePreview(color: color, isLandscape: true)
+                    Spacer()
+                }
+                .padding(.vertical, 16)
+                .listRowBackground(Color.clear)
+            } header: {
+                Text("Preview")
+            }
+        }
+        .navigationTitle("Bounds color")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Device Preview
+
+/// Miniature device mockup showing the game viewport and bounds color.
+private struct DevicePreview: View {
+    let color: Color
+    let isLandscape: Bool
+
+    // Device proportions (roughly iPhone-like)
+    private let portraitW: CGFloat = 70
+    private let portraitH: CGFloat = 150
+    private let cornerRadius: CGFloat = 12
+    private let bezelWidth: CGFloat = 2
+    private let notchHeight: CGFloat = 8
+
+    private var deviceW: CGFloat { isLandscape ? portraitH : portraitW }
+    private var deviceH: CGFloat { isLandscape ? portraitW : portraitH }
+
+    var body: some View {
+        ZStack {
+            // Device bezel
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(.secondary.opacity(0.15))
+                .overlay(
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(.secondary.opacity(0.4), lineWidth: 1)
+                )
+
+            // Screen area
+            let screenInset = bezelWidth + 2
+            let screenW = deviceW - screenInset * 2
+            let screenH = deviceH - screenInset * 2
+
+            RoundedRectangle(cornerRadius: cornerRadius - 3)
+                .fill(color)
+                .padding(screenInset)
+
+            // Game viewport
+            let gameRect = gameViewportRect(screenW: screenW, screenH: screenH)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.black)
+                .frame(width: gameRect.width, height: gameRect.height)
+                .offset(x: gameRect.offsetX, y: gameRect.offsetY)
+
+            // Notch indicator
+            notchView
+        }
+        .frame(width: deviceW, height: deviceH)
+    }
+
+    private var notchView: some View {
+        Group {
+            if isLandscape {
+                // Notch on the left
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 4,
+                    topTrailingRadius: 4
+                )
+                .fill(.secondary.opacity(0.3))
+                .frame(width: notchHeight, height: 20)
+                .offset(x: -(deviceW / 2 - notchHeight / 2))
+            } else {
+                // Notch on top
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 0,
+                    bottomLeadingRadius: 4,
+                    bottomTrailingRadius: 4,
+                    topTrailingRadius: 0
+                )
+                .fill(.secondary.opacity(0.3))
+                .frame(width: 28, height: notchHeight)
+                .offset(y: -(deviceH / 2 - notchHeight / 2))
+            }
+        }
+    }
+
+    private struct GameRect {
+        let width: CGFloat
+        let height: CGFloat
+        let offsetX: CGFloat
+        let offsetY: CGFloat
+    }
+
+    private func gameViewportRect(screenW: CGFloat, screenH: CGFloat) -> GameRect {
+        // Simulate a 4:3 game aspect ratio
+        let gameAspect: CGFloat = 4.0 / 3.0
+        let safeTopInset: CGFloat = notchHeight + 2
+
+        if isLandscape {
+            // Landscape: game centered, safe insets on left
+            let safeLeftInset: CGFloat = notchHeight + 2
+            let availW = screenW - safeLeftInset
+            let availH = screenH
+            var gameW = availW
+            var gameH = gameW / gameAspect
+            if gameH > availH {
+                gameH = availH
+                gameW = gameH * gameAspect
+            }
+            let offsetX = (safeLeftInset - 0) / 2
+            return GameRect(width: gameW, height: gameH, offsetX: offsetX, offsetY: 0)
+        } else {
+            // Portrait: game top-center aligned within safe area
+            let availW = screenW
+            let availH = screenH - safeTopInset
+            var gameW = availW
+            var gameH = gameW / gameAspect
+            if gameH > availH * 0.6 {
+                gameH = availH * 0.6
+                gameW = gameH * gameAspect
+            }
+            // Top-center: between top and center
+            let topY = -(screenH / 2 - safeTopInset - gameH / 2 - 2)
+            let centerY: CGFloat = 0
+            let offsetY = (topY + centerY) / 2
+            return GameRect(width: gameW, height: gameH, offsetX: 0, offsetY: offsetY)
         }
     }
 }
