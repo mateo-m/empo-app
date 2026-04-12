@@ -1310,6 +1310,7 @@ static void runRMXPScripts(BacktraceData &btData) {
             if (i == scriptCount - 1) {
                 const char *enginePostloads[] = {
                     "pokemon_input",
+                    "pokemon_tilemap_fix",
                     nullptr
                 };
                 
