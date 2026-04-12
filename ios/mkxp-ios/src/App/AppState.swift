@@ -76,6 +76,11 @@ class AppState {
         let settings = GameSettings.load(from: gameDir)
         settings.applyToConfig(in: gameDir)
 
+        // Push bridge-only settings (not in mkxp.json)
+        let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
+        let postload = settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
+        mkxp_applyPerGameSettings(alignment.bridgeValue, postload)
+
         configureDebugLog(for: game)
         appendSessionHistory(game: game)
         mkxp_setGamePath(game.path)
