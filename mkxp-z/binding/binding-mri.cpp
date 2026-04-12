@@ -48,6 +48,10 @@
 #ifdef __APPLE__
 #include <TargetConditionals.h>
 #endif
+
+#if TARGET_OS_IPHONE
+#include "ios_bridge.h"
+#endif
 #if TARGET_OS_IPHONE
 #include <execinfo.h>
 #include <signal.h>
@@ -1307,7 +1311,7 @@ static void runRMXPScripts(BacktraceData &btData) {
                At this point all game classes/modules are defined, so scripts
                like pokeinput.rb can check $PokemonSystem and override Input
                methods that were replaced by the game. */
-            if (i == scriptCount - 1) {
+            if (i == scriptCount - 1 && mkxp_getPostloadEnabled()) {
                 const char *enginePostloads[] = {
                     "pokemon_input",
                     "pokemon_tilemap_fix",

@@ -44,6 +44,17 @@ static std::atomic<float> s_safeAreaLeft{0};
 static std::atomic<float> s_safeAreaRight{0};
 static std::atomic<bool>  s_safeAreaInsetsChanged{false};
 
+// Per-game settings: vertical alignment and postload toggle.
+static std::atomic<int>   s_verticalAlignment{1};  // 0=top, 1=top-center, 2=center
+static std::atomic<bool>  s_postloadEnabled{true};
+
+// Debug: tint the area outside the game viewport.
+static std::atomic<bool>  s_showViewportBounds{false};
+static std::atomic<float> s_vpBoundsR{0};
+static std::atomic<float> s_vpBoundsG{0};
+static std::atomic<float> s_vpBoundsB{0};
+static std::atomic<float> s_vpBoundsA{1};
+
 // Input bridge: cached SDL window ID for event injection.
 static uint32_t s_sdlWindowID = 0;
 
@@ -128,6 +139,8 @@ void mkxp_resetBridgeState(void) {
     s_gameRectY.store(0, std::memory_order_relaxed);
     s_gameRectW.store(0, std::memory_order_relaxed);
     s_gameRectH.store(0, std::memory_order_relaxed);
+    // Note: s_verticalAlignment and s_postloadEnabled are NOT reset here.
+    // They are explicitly set by selectGame() before each session.
     s_sdlWindowID = 0;
     {
         std::lock_guard<std::mutex> lock(s_pathMutex);
@@ -265,6 +278,49 @@ void mkxp_setEngineTerminatedCallback(mkxp_EngineTerminatedCallback cb, void *us
 void mkxp_setGameRectChangedCallback(mkxp_GameRectChangedCallback cb, void *userdata) {
     s_gameRectChangedCb = cb;
     s_gameRectChangedUserdata = userdata;
+}
+
+// ============================================================================
+// Per-game settings
+// ============================================================================
+
+void mkxp_applyPerGameSettings(MKXPVerticalAlignment verticalAlignment,
+                               bool postloadEnabled) {
+    int oldAlign = s_verticalAlignment.exchange((int)verticalAlignment, std::memory_order_relaxed);
+    if (oldAlign != (int)verticalAlignment) {
+        s_safeAreaInsetsChanged.store(true, std::memory_order_release);
+    }
+    s_postloadEnabled.store(postloadEnabled, std::memory_order_relaxed);
+}
+
+MKXPVerticalAlignment mkxp_getVerticalAlignment(void) {
+    return (MKXPVerticalAlignment)s_verticalAlignment.load(std::memory_order_relaxed);
+}
+
+bool mkxp_getPostloadEnabled(void) {
+    return s_postloadEnabled.load(std::memory_order_relaxed);
+}
+
+void mkxp_setShowViewportBounds(bool enabled) {
+    s_showViewportBounds.store(enabled, std::memory_order_relaxed);
+}
+
+bool mkxp_getShowViewportBounds(void) {
+    return s_showViewportBounds.load(std::memory_order_relaxed);
+}
+
+void mkxp_setViewportBoundsColor(float r, float g, float b, float a) {
+    s_vpBoundsR.store(r, std::memory_order_relaxed);
+    s_vpBoundsG.store(g, std::memory_order_relaxed);
+    s_vpBoundsB.store(b, std::memory_order_relaxed);
+    s_vpBoundsA.store(a, std::memory_order_relaxed);
+}
+
+void mkxp_getViewportBoundsColor(float *r, float *g, float *b, float *a) {
+    if (r) *r = s_vpBoundsR.load(std::memory_order_relaxed);
+    if (g) *g = s_vpBoundsG.load(std::memory_order_relaxed);
+    if (b) *b = s_vpBoundsB.load(std::memory_order_relaxed);
+    if (a) *a = s_vpBoundsA.load(std::memory_order_relaxed);
 }
 
 void mkxp_setDebugLogPath(const char *path) {

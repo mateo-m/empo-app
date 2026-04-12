@@ -936,9 +936,23 @@ struct GraphicsPrivate {
             }
 
             if (winSize.x < winSize.y) {
-                // Portrait: top-align within safe area, controls go below.
+                // Portrait: position game within safe area based on vertical alignment.
+                // Controls go below the game viewport.
                 scOffset.x = saLeftPx + (availW - scSize.x) / 2;
-                scOffset.y = winSize.y - saTopPx - scSize.y;
+
+                MKXPVerticalAlignment vAlign = mkxp_getVerticalAlignment();
+                if (vAlign == MKXP_VALIGN_TOP) {
+                    // Top: game pressed against top safe edge
+                    scOffset.y = winSize.y - saTopPx - scSize.y;
+                } else if (vAlign == MKXP_VALIGN_CENTER) {
+                    // Center: game centered within safe area
+                    scOffset.y = saBotPx + (availH - scSize.y) / 2;
+                } else {
+                    // Top-center (default): midpoint between top and center
+                    int topY = winSize.y - saTopPx - scSize.y;
+                    int centerY = saBotPx + (availH - scSize.y) / 2;
+                    scOffset.y = (topY + centerY) / 2;
+                }
             } else {
                 // Landscape: center within safe area
                 scOffset.x = saLeftPx + (availW - scSize.x) / 2;
@@ -1182,8 +1196,20 @@ struct GraphicsPrivate {
         {
             GLMeta::blitSource(screen.getPP().frontBuffer(), scaleIsSpecial);
         }
-        
+
+#if TARGET_OS_IPHONE
+        if (mkxp_getShowViewportBounds()) {
+            float r, g, b, a;
+            mkxp_getViewportBoundsColor(&r, &g, &b, &a);
+            glState.clearColor.pushSet(Vec4(r, g, b, a));
+            FBO::clear();
+            glState.clearColor.pop();
+        } else {
+            FBO::clear();
+        }
+#else
         FBO::clear();
+#endif
         metaBlitBufferFlippedScaled(sourceSize, scaleIsSpecial);
         
         GLMeta::blitEnd();

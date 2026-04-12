@@ -183,6 +183,41 @@ bool        mkxp_consumeSafeAreaInsetsChanged(void);
 float       mkxp_getScreenScale(void);
 
 // ============================================================================
+// Per-game settings (UI -> Engine, set before each session)
+// ============================================================================
+//
+// These are set by selectGame() before mkxp_setGamePath() and read by the
+// engine during the session. They must NOT be reset in mkxp_resetBridgeState()
+// because selectGame() always sets them explicitly before each session.
+//
+// To add a new per-game bridge setting:
+//   1. Add a parameter to mkxp_applyPerGameSettings() below
+//   2. Add an atomic in ios_bridge.cpp with a getter
+//   3. Add the field to GameSettings.swift and pass it from AppState.selectGame()
+
+typedef enum {
+    MKXP_VALIGN_TOP        = 0,
+    MKXP_VALIGN_TOP_CENTER = 1,
+    MKXP_VALIGN_CENTER     = 2,
+} MKXPVerticalAlignment;
+
+void        mkxp_applyPerGameSettings(MKXPVerticalAlignment verticalAlignment,
+                                      bool postloadEnabled);
+
+MKXPVerticalAlignment mkxp_getVerticalAlignment(void);
+
+// Postload scripts toggle: whether to run engine postload scripts.
+bool        mkxp_getPostloadEnabled(void);
+
+// Whether to show the viewport bounds by tinting the area outside the game.
+void        mkxp_setShowViewportBounds(bool enabled);
+bool        mkxp_getShowViewportBounds(void);
+
+// Set/get the viewport bounds color (RGBA, 0.0–1.0).
+void        mkxp_setViewportBoundsColor(float r, float g, float b, float a);
+void        mkxp_getViewportBoundsColor(float *r, float *g, float *b, float *a);
+
+// ============================================================================
 // Debug logging
 // ============================================================================
 
