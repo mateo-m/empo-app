@@ -24,5 +24,6 @@ struct RootView: View {
             }
         }
         .fontDesign(.rounded)
+        .tint(.orange)
     }
 }

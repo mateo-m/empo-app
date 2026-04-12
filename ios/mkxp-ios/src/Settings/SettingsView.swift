@@ -9,20 +9,45 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Theme", selection: $settings.theme) {
-                        ForEach(AppTheme.allCases, id: \.self) { theme in
-                            Text(theme.label).tag(theme)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker("Theme", selection: $settings.theme) {
+                            ForEach(AppTheme.allCases, id: \.self) { theme in
+                                Text(theme.label).tag(theme)
+                            }
                         }
+                        Text("Switch between dark, light, or system appearance.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
-                    Picker("Title position", selection: $settings.titlePosition) {
-                        ForEach(TitlePosition.allCases, id: \.self) { position in
-                            Text(position.label).tag(position)
+                    .padding(.vertical, 2)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker("View mode", selection: $settings.libraryDisplayMode) {
+                            ForEach(LibraryDisplayMode.allCases, id: \.self) { mode in
+                                Text(mode.label).tag(mode)
+                            }
                         }
+                        Text("Show games as a grid of cards or a compact list.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
+                    .padding(.vertical, 2)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Picker("Title position", selection: $settings.titlePosition) {
+                            ForEach(TitlePosition.allCases, id: \.self) { position in
+                                Text(position.label).tag(position)
+                            }
+                        }
+                        Text("Where game titles show up on your library cards.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 2)
                 } header: {
                     Text("Look & Feel")
                 } footer: {
-                    Text("Choose where game titles show up on your library cards.")
+                    Text("Customize the appearance and layout of your library.")
                 }
 
                 Section {
@@ -55,8 +80,8 @@ struct SettingsView: View {
 
                 Section {
                     VStack(alignment: .leading, spacing: 4) {
-                        Toggle("Debug mode", isOn: $settings.debugMode)
-                        Text("Shows FPS and engine info while you play.")
+                        Toggle("Game overlay", isOn: $settings.debugMode)
+                        Text("Shows the game name, Ruby version, and FPS while you play.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -111,6 +136,8 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Advanced")
+                } footer: {
+                    Text("These options are intended for debugging and troubleshooting.")
                 }
 
                 Section {
