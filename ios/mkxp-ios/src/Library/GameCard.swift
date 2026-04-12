@@ -105,13 +105,13 @@ struct GameCard: View {
                         .fill(.thinMaterial)
                         .mask(
                             RadialGradient(
-                                colors: [.white, .white.opacity(0.7), .white.opacity(0.3), .clear],
+                                colors: [.white, .white.opacity(0.5), .white.opacity(0.15), .clear],
                                 center: .center,
                                 startRadius: 0,
-                                endRadius: 36
+                                endRadius: 30
                             )
                         )
-                        .frame(width: 72, height: 72)
+                        .frame(width: 60, height: 60)
                 )
         }
     }
@@ -137,31 +137,35 @@ struct GameCard: View {
 
 private struct ImportProgressView: View {
     let progress: Double
+    var size: CGFloat = 36
+    var tint: Color = .white
     var onStop: (() -> Void)? = nil
     @State private var spinning = false
 
     private var isDeterminate: Bool { progress > 0 }
+    private var lineWidth: CGFloat { size * 0.097 }
+    private var stopSize: CGFloat { size * 0.333 }
 
     var body: some View {
         ZStack {
             // Track
             Circle()
-                .stroke(.white.opacity(0.3), lineWidth: 3.5)
-                .frame(width: 36, height: 36)
+                .stroke(tint.opacity(0.3), lineWidth: lineWidth)
+                .frame(width: size, height: size)
 
             if isDeterminate {
                 // Determinate: radial fill
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(.white, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
-                    .frame(width: 36, height: 36)
+                    .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .frame(width: size, height: size)
                     .rotationEffect(.degrees(-90))
             } else {
                 // Indeterminate: spinning arc
                 Circle()
                     .trim(from: 0, to: 0.3)
-                    .stroke(.white, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
-                    .frame(width: 36, height: 36)
+                    .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .frame(width: size, height: size)
                     .rotationEffect(.degrees(spinning ? 360 : 0))
                     .onAppear { spinning = true }
                     .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
@@ -170,12 +174,140 @@ private struct ImportProgressView: View {
             // Stop button
             Button(action: { onStop?() }) {
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(.white)
-                    .frame(width: 12, height: 12)
+                    .fill(tint)
+                    .frame(width: stopSize, height: stopSize)
             }
             .buttonStyle(.plain)
         }
         .animation(.easeOut(duration: 0.3), value: progress)
+    }
+}
+
+// MARK: - Game List Row
+
+struct GameListRow: View {
+    let game: GameEntry
+    var onStopImport: (() -> Void)? = nil
+    private let artworkSize: CGFloat = 48
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Artwork thumbnail
+            Group {
+                if let path = game.artworkPath, let uiImage = ImageCache.shared.image(for: path) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    ZStack {
+                        Color(.tertiarySystemBackground)
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.quaternary)
+                    }
+                }
+            }
+            .frame(width: artworkSize, height: artworkSize)
+            .clipShape(.rect(cornerRadius: 8))
+
+            // Title
+            Text(game.title)
+                .font(.body)
+                .fontWeight(.medium)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            Spacer()
+
+            // Status indicator (morphs between states)
+            ListRowStatusIndicator(
+                status: game.status,
+                onStopImport: onStopImport
+            )
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - List Row Status Indicator (Morphing)
+
+/// Animates between importing → ready/invalid with a shared circle that morphs.
+private struct ListRowStatusIndicator: View {
+    let status: GameStatus
+    var onStopImport: (() -> Void)? = nil
+
+    @State private var spinning = false
+    private let size: CGFloat = 38
+    private let ringSize: CGFloat = 28
+    private let lineWidth: CGFloat = 2.7
+    private let stopSize: CGFloat = 9.5
+
+    private var isImporting: Bool { status.phase == .importing }
+    private var progress: Double {
+        if case .importing(let p) = status { return p }
+        return 0
+    }
+    private var isDeterminate: Bool { progress > 0 }
+
+    var body: some View {
+        ZStack {
+            // Background circle — fills in on ready, hidden on invalid
+            Circle()
+                .fill(.ultraThinMaterial)
+                .frame(width: size, height: size)
+                .opacity(status.phase == .ready ? 1 : 0)
+                .scaleEffect(status.phase == .ready ? 1 : 0.7)
+
+            // Progress ring — visible only while importing
+            ZStack {
+                Circle()
+                    .stroke(Color.primary.opacity(0.2), lineWidth: lineWidth)
+                    .frame(width: ringSize, height: ringSize)
+
+                if isDeterminate {
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(Color.primary, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                        .frame(width: ringSize, height: ringSize)
+                        .rotationEffect(.degrees(-90))
+                } else {
+                    Circle()
+                        .trim(from: 0, to: 0.3)
+                        .stroke(Color.primary, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                        .frame(width: ringSize, height: ringSize)
+                        .rotationEffect(.degrees(spinning ? 360 : 0))
+                        .onAppear { spinning = true }
+                        .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
+                }
+            }
+            .opacity(isImporting ? 1 : 0)
+            .scaleEffect(isImporting ? 1 : 0.5)
+
+            // Inner icon — stop square morphs to play or warning
+            Group {
+                switch status.phase {
+                case .importing:
+                    Button(action: { onStopImport?() }) {
+                        RoundedRectangle(cornerRadius: 2.5)
+                            .fill(Color.primary)
+                            .frame(width: stopSize, height: stopSize)
+                    }
+                    .buttonStyle(.plain)
+                case .ready:
+                    Image(systemName: "play.fill")
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                case .invalid:
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                }
+            }
+            .transition(.blurReplace)
+        }
+        .frame(width: size, height: size)
+        .animation(.easeOut(duration: 0.3), value: progress)
+        .animation(.smooth(duration: 0.4), value: status.phase)
     }
 }
 
