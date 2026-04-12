@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var settings = AppSettings.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var featureToEnable: ExperimentalFeature?
 
     var body: some View {
         NavigationStack {
@@ -19,7 +20,7 @@ struct SettingsView: View {
                         }
                     }
                 } header: {
-                    Text("look & feel")
+                    Text("Look & Feel")
                 } footer: {
                     Text("Choose where game titles show up on your library cards.")
                 }
@@ -59,7 +60,35 @@ struct SettingsView: View {
                         .padding(.vertical, 2)
                     }
                 } header: {
-                    Text("advanced")
+                    Text("Advanced")
+                }
+
+                Section {
+                    ForEach(ExperimentalFeature.allCases) { feature in
+                        let enabled = settings.isEnabled(feature)
+                        Toggle(isOn: Binding(
+                            get: { enabled },
+                            set: { newValue in
+                                if newValue {
+                                    featureToEnable = feature
+                                } else {
+                                    settings.setEnabled(feature, false)
+                                }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(feature.label)
+                                Text(feature.description)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    Text("Experimental")
+                } footer: {
+                    Text("These features are still in development and may not work as expected.")
                 }
 
                 Section {
@@ -71,7 +100,27 @@ struct SettingsView: View {
                     }
                 }
             }
-            .navigationTitle("settings")
+            .confirmationDialog(
+                "Enable \(featureToEnable?.label.lowercased() ?? "")?",
+                isPresented: Binding(
+                    get: { featureToEnable != nil },
+                    set: { if !$0 { featureToEnable = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Enable") {
+                    if let feature = featureToEnable {
+                        settings.setEnabled(feature, true)
+                    }
+                    featureToEnable = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    featureToEnable = nil
+                }
+            } message: {
+                Text("This feature is experimental and may not work as expected.")
+            }
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

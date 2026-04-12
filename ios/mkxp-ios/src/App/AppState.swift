@@ -120,6 +120,7 @@ class AppState {
 
     /// User tapped the quit button — show confirmation.
     func requestQuit() {
+        guard AppSettings.shared.isEnabled(.gameQuit) else { return }
         showQuitConfirm = true
     }
 

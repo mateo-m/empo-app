@@ -3,6 +3,11 @@ import Observation
 import SwiftUI
 import UIKit
 
+enum LibraryDisplayMode: String, CaseIterable {
+    case grid = "grid"
+    case list = "list"
+}
+
 enum TitlePosition: String, CaseIterable {
     case inside = "inside"
     case under  = "under"
@@ -37,6 +42,28 @@ enum AppTheme: String, CaseIterable {
     }
 }
 
+// MARK: - Experimental Features
+
+enum ExperimentalFeature: String, CaseIterable, Identifiable {
+    case gameQuit = "experimental.gameQuit"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .gameQuit: "Quit game"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .gameQuit: "Quit the running game and return to the library."
+        }
+    }
+}
+
+// MARK: - App Settings
+
 @Observable
 class AppSettings {
     static let shared = AppSettings()
@@ -65,6 +92,19 @@ class AppSettings {
         didSet { UserDefaults.standard.set(titlePosition.rawValue, forKey: "titlePosition") }
     }
 
+    var libraryDisplayMode: LibraryDisplayMode {
+        didSet { UserDefaults.standard.set(libraryDisplayMode.rawValue, forKey: "libraryDisplayMode") }
+    }
+
+    /// Backing store for experimental feature toggles.
+    private var experimentalFlags: [String: Bool] {
+        didSet {
+            for (key, value) in experimentalFlags {
+                UserDefaults.standard.set(value, forKey: key)
+            }
+        }
+    }
+
     private init() {
         let themeRaw = UserDefaults.standard.string(forKey: "theme") ?? AppTheme.dark.rawValue
         self.theme = AppTheme(rawValue: themeRaw) ?? .dark
@@ -75,5 +115,23 @@ class AppSettings {
         self.cleanupInvalidGames = UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
         let raw = UserDefaults.standard.string(forKey: "titlePosition") ?? TitlePosition.inside.rawValue
         self.titlePosition = TitlePosition(rawValue: raw) ?? .inside
+        let modeRaw = UserDefaults.standard.string(forKey: "libraryDisplayMode") ?? LibraryDisplayMode.grid.rawValue
+        self.libraryDisplayMode = LibraryDisplayMode(rawValue: modeRaw) ?? .grid
+
+        var flags: [String: Bool] = [:]
+        for feature in ExperimentalFeature.allCases {
+            flags[feature.rawValue] = UserDefaults.standard.bool(forKey: feature.rawValue)
+        }
+        self.experimentalFlags = flags
+    }
+
+    // MARK: - Experimental API
+
+    func isEnabled(_ feature: ExperimentalFeature) -> Bool {
+        experimentalFlags[feature.rawValue] ?? false
+    }
+
+    func setEnabled(_ feature: ExperimentalFeature, _ value: Bool) {
+        experimentalFlags[feature.rawValue] = value
     }
 }

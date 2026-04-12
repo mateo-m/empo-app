@@ -348,8 +348,10 @@ struct PlayerView: View {
             list.append(contentsOf: [
                 ("gearshape.fill", { toggleEditMode() }, .white.opacity(0.8)),
                 (controlsHidden ? "eye.slash.fill" : "eye.fill", { toggleHideControls() }, .white.opacity(0.8)),
-                ("xmark.circle.fill", { appState.requestQuit() }, Color(red: 1.0, green: 0.4, blue: 0.4)),
             ])
+            if AppSettings.shared.isEnabled(.gameQuit) {
+                list.append(("xmark.circle.fill", { appState.requestQuit() }, Color(red: 1.0, green: 0.4, blue: 0.4)))
+            }
             return list
         }()
 
