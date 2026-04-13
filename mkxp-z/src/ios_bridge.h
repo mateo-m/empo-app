@@ -118,10 +118,6 @@ void        mkxp_resetBridgeState(void);
 // These callbacks fire on the engine thread when state changes.
 // The UI side must dispatch to the main thread for any UI updates.
 
-// Called when the engine finishes loading and the game starts rendering.
-typedef void (*mkxp_GameReadyCallback)(void *userdata);
-void        mkxp_setGameReadyCallback(mkxp_GameReadyCallback cb, void *userdata);
-
 // Called when the engine has fully shut down after a quit request.
 typedef void (*mkxp_EngineTerminatedCallback)(void *userdata);
 void        mkxp_setEngineTerminatedCallback(mkxp_EngineTerminatedCallback cb, void *userdata);
@@ -270,6 +266,18 @@ void        mkxp_setPausedCallback(mkxp_PausedCallback cb, void *userdata);
 // Called on the engine thread when the engine has resumed.
 typedef void (*mkxp_ResumedCallback)(void *userdata);
 void        mkxp_setResumedCallback(mkxp_ResumedCallback cb, void *userdata);
+
+// Called once on the engine thread after the first frame is swapped
+// to the screen.  Fires for both fresh starts (first frame of the
+// session) and resumes (first frame after unpause).  The UI uses
+// this to know the live SDL surface is visible and it's safe to
+// transition away from the loading view or fade the snapshot overlay.
+typedef void (*mkxp_FrameRenderedCallback)(void *userdata);
+void        mkxp_setFrameRenderedCallback(mkxp_FrameRenderedCallback cb, void *userdata);
+
+// Engine-internal: called from swapGLBuffer() to fire the one-shot
+// frame-rendered signal.  NOT for UI use.
+void        mkxp_signalFrameRendered(void);
 
 // ============================================================================
 // Debug logging

@@ -68,9 +68,6 @@ static void *s_keyEventUserdata = nullptr;
 static bool s_keyWatcherInstalled = false;
 
 // Lifecycle callbacks: engine -> UI notifications for state changes.
-static mkxp_GameReadyCallback s_gameReadyCb = nullptr;
-static void *s_gameReadyUserdata = nullptr;
-
 static mkxp_EngineTerminatedCallback s_engineTerminatedCb = nullptr;
 static void *s_engineTerminatedUserdata = nullptr;
 
@@ -101,13 +98,19 @@ static void *s_pausedUserdata = nullptr;
 static mkxp_ResumedCallback s_resumedCb = nullptr;
 static void *s_resumedUserdata = nullptr;
 
+// Frame-rendered-after-resume: one-shot signal so the UI knows
+// the live SDL surface is visible and the snapshot can fade out.
+static std::atomic<bool> s_needsFrameRenderedSignal{false};
+static mkxp_FrameRenderedCallback s_frameRenderedCb = nullptr;
+static void *s_frameRenderedUserdata = nullptr;
+
 extern "C" {
 
 void mkxp_setGameReady(void) {
     s_gameReady.store(true, std::memory_order_release);
-    if (s_gameReadyCb) {
-        s_gameReadyCb(s_gameReadyUserdata);
-    }
+    // Arm the frame-rendered signal so the UI knows when the first
+    // frame has actually been swapped to the screen.
+    s_needsFrameRenderedSignal.store(true, std::memory_order_release);
 }
 
 int mkxp_isGameReady(void) {
@@ -189,6 +192,7 @@ void mkxp_resetBridgeState(void) {
     // Reset pause state so a stale pause doesn't block the next session.
     s_pauseRequested.store(false, std::memory_order_relaxed);
     s_paused.store(false, std::memory_order_relaxed);
+    s_needsFrameRenderedSignal.store(false, std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> lock(s_snapshotMutex);
         s_snapshotData.clear();
@@ -318,11 +322,6 @@ void mkxp_setKeyEventCallback(mkxp_KeyEventCallback cb, void *userdata) {
 // Lifecycle callbacks
 // ============================================================================
 
-void mkxp_setGameReadyCallback(mkxp_GameReadyCallback cb, void *userdata) {
-    s_gameReadyCb = cb;
-    s_gameReadyUserdata = userdata;
-}
-
 void mkxp_setEngineTerminatedCallback(mkxp_EngineTerminatedCallback cb, void *userdata) {
     s_engineTerminatedCb = cb;
     s_engineTerminatedUserdata = userdata;
@@ -371,6 +370,9 @@ void mkxp_requestResume(void) {
         s_pauseRequested.store(false, std::memory_order_release);
         s_paused.store(false, std::memory_order_release);
     }
+    // Arm the one-shot frame-rendered signal so the UI knows when the
+    // first post-resume frame has been swapped to the screen.
+    s_needsFrameRenderedSignal.store(true, std::memory_order_release);
     s_pauseCV.notify_one();
 }
 
@@ -441,6 +443,18 @@ void mkxp_setPausedCallback(mkxp_PausedCallback cb, void *userdata) {
 void mkxp_setResumedCallback(mkxp_ResumedCallback cb, void *userdata) {
     s_resumedCb = cb;
     s_resumedUserdata = userdata;
+}
+
+void mkxp_setFrameRenderedCallback(mkxp_FrameRenderedCallback cb, void *userdata) {
+    s_frameRenderedCb = cb;
+    s_frameRenderedUserdata = userdata;
+}
+
+void mkxp_signalFrameRendered(void) {
+    if (s_needsFrameRenderedSignal.exchange(false, std::memory_order_acq_rel)) {
+        if (s_frameRenderedCb)
+            s_frameRenderedCb(s_frameRenderedUserdata);
+    }
 }
 
 // ============================================================================

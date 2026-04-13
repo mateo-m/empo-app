@@ -29,9 +29,14 @@ struct RootView: View {
                 .opacity(appState.phase == .playing ? 0 : 1)
                 .allowsHitTesting(appState.phase != .playing)
 
-            // Playing — transparent controls overlay
+            // Playing — transparent controls overlay.
+            // .transition(.identity) prevents the default fade-in so
+            // PlayerView appears at full opacity instantly, even when
+            // the phase change is wrapped in withAnimation.  This lets
+            // the library fade out smoothly without a cross-fade dim.
             if appState.phase == .playing {
                 PlayerView(appState: appState, layout: layout)
+                    .transition(.identity)
                     .zIndex(1)
             }
         }

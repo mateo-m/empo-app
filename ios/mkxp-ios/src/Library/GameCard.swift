@@ -128,7 +128,10 @@ struct GameCard: View {
 
     @ViewBuilder
     private var artworkView: some View {
-        GameArtworkView(artworkPath: game.artworkPath)
+        GameArtworkView(
+            artworkPath: game.artworkPath,
+            importing: game.status.phase == .importing
+        )
     }
 }
 
@@ -194,16 +197,19 @@ struct GameListRow: View {
     var body: some View {
         HStack(spacing: 14) {
             // Artwork thumbnail
-            Group {
-                GameArtworkView(
-                    artworkPath: game.artworkPath,
-                    placeholderIconSize: 16
-                )
-            }
-            .frame(width: artworkSize, height: artworkSize)
-            .clipShape(.rect(cornerRadius: 8))
+            GameArtworkView(
+                artworkPath: game.artworkPath,
+                placeholderIconSize: 16,
+                size: artworkSize,
+                cornerRadius: 8,
+                importing: game.status.phase == .importing
+            )
             .if(heroNamespace != nil) { view in
-                view.matchedTransitionSource(id: game.id, in: heroNamespace!)
+                view.matchedTransitionSource(id: game.id, in: heroNamespace!) { config in
+                    config
+                        .background(.black)
+                        .clipShape(.rect(cornerRadius: 8))
+                }
             }
 
             // Title and pause badge
