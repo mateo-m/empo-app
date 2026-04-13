@@ -132,7 +132,7 @@ struct GameInfoView: View {
             .ignoresSafeArea(edges: .top)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(titleScrollProgress > 0.5 ? .visible : .hidden, for: .navigationBar)
-            .animation(.smooth(duration: 0.15), value: titleScrollProgress > 0.5)
+            .animation(.smooth(duration: Motion.durationFast), value: titleScrollProgress > 0.5)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
@@ -159,7 +159,7 @@ struct GameInfoView: View {
                         }
                     }
                     .frame(maxWidth: 250)
-                    .animation(.smooth(duration: 0.2), value: titleScrollProgress)
+                    .animation(.smooth(duration: Motion.durationNormal), value: titleScrollProgress)
                     .background(
                         GeometryReader { geo in
                             Color.clear.onAppear {
@@ -218,6 +218,7 @@ struct GameInfoView: View {
             bannerBackground
                 .contentShape(Rectangle())
                 .onTapGesture { showBannerPicker = true }
+                .accessibilityLabel("Change banner image")
                 .mask(
                     LinearGradient(
                         stops: [
@@ -232,13 +233,13 @@ struct GameInfoView: View {
                 .overlay(alignment: .topTrailing) {
                     Label("Change banner", systemImage: "photo")
                         .font(.caption2)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, Spacing.md)
                         .padding(.vertical, 5)
                         .glassEffect(.regular, in: .capsule)
                         .opacity(0.5)
                         .padding(.top, 72)
-                        .padding(.trailing, 16)
+                        .padding(.trailing, Spacing.xl)
                         .opacity(1 - titleScrollProgress)
                 }
 
@@ -248,22 +249,22 @@ struct GameInfoView: View {
                     .overlay(alignment: .topTrailing) {
                         Image(systemName: "photo")
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white)
-                            .padding(6)
+                            .foregroundStyle(.primary)
+                            .padding(Spacing.sm)
                             .glassEffect(.regular, in: .circle)
                             .opacity(0.5)
-                            .padding(4)
+                            .padding(Spacing.xs)
                     }
-                    .shadow(radius: 8, y: 4)
+                    .elevatedShadow()
                     .contentShape(Rectangle())
                     .onTapGesture { showArtworkPicker = true }
+                    .accessibilityLabel("Change game artwork")
 
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Spacing.sm) {
                         if isEditingTitle {
                             TextField(originalTitle, text: $editingTitle)
                                 .font(.title2.weight(.bold))
-                                .foregroundStyle(.white)
                                 .focused($isTitleFocused)
                                 .onSubmit { finishEditingTitle() }
                                 .onChange(of: isTitleFocused) { _, focused in
@@ -273,27 +274,24 @@ struct GameInfoView: View {
                         } else {
                             Text(displayTitle)
                                 .font(.title2.weight(.bold))
-                                .foregroundStyle(.white)
                                 .lineLimit(1)
 
                             Image(systemName: "pencil")
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 7)
                                 .glassEffect(.regular, in: .circle)
-                                .opacity(0.4)
+                                .opacity(Overlay.light + 0.1)
                         }
                     }
 
                     if metadata.customTitle != nil, !isEditingTitle {
                         Text(originalTitle)
                             .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
-                .shadow(color: .black.opacity(0.6), radius: 6)
                 .contentShape(Rectangle())
                 .onTapGesture {
                     editingTitle = metadata.customTitle ?? ""
@@ -302,8 +300,8 @@ struct GameInfoView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, Spacing.xxl)
+            .padding(.bottom, Spacing.xxl)
             .contentShape(Rectangle())
             .background(
                 GeometryReader { geo in
@@ -336,8 +334,9 @@ struct GameInfoView: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(height: bannerHeight)
         } else {
+            // Fallback gradient — adapts to color scheme via .surface
             LinearGradient(
-                colors: [.brand.opacity(0.4), .clear],
+                colors: [.brand.opacity(0.3), .surface],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -359,8 +358,8 @@ struct GameInfoView: View {
                 }
             }
         }
-        .frame(width: 80, height: 80)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .frame(width: AppSize.infoArtwork, height: AppSize.infoArtwork)
+        .clipShape(RoundedRectangle(cornerRadius: Radius.md))
     }
 
     // MARK: - Formatters

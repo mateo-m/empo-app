@@ -32,7 +32,7 @@ struct GameLibraryView: View {
 
     private var columns: [GridItem] {
         let count = verticalSizeClass == .compact ? 5 : 3
-        return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
+        return Array(repeating: GridItem(.flexible(), spacing: Spacing.lg), count: count)
     }
 
     var body: some View {
@@ -46,14 +46,14 @@ struct GameLibraryView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
-                VStack(spacing: 8) {
+                VStack(spacing: Spacing.md) {
                     libraryHeader
                     if !showEmpty {
                         searchBar
                     }
                 }
             }
-            .animation(.spring(duration: 0.3), value: showEmpty)
+            .animation(Motion.standard, value: showEmpty)
             .overlay {
                 if showEmpty {
                     emptyStateContent
@@ -140,18 +140,11 @@ struct GameLibraryView: View {
     // MARK: - Empty State
 
     private var emptyStateContent: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "gamecontroller")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("No Games Yet")
-                .font(.title2)
-                .fontWeight(.medium)
-            Text("Add your favorite RPG Maker\ngames to get started!")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
+        EmptyStateView(
+            icon: "gamecontroller",
+            title: "No Games Yet",
+            subtitle: "Add your favorite RPG Maker\ngames to get started!"
+        )
     }
 
     // MARK: - Header
@@ -168,13 +161,15 @@ struct GameLibraryView: View {
             }
             .tint(.primary)
             .glassEffect(.regular.interactive(), in: .circle)
+            .accessibilityLabel("Settings")
             Spacer()
             Text("Library")
                 .font(.title)
                 .fontWeight(.bold)
             Spacer()
             // Invisible placeholder to keep "Library" centered
-            Color.clear.frame(width: 38, height: 38)
+            Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal)
         .frame(height: headerHeight)
@@ -183,8 +178,8 @@ struct GameLibraryView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 8) {
+        HStack(spacing: Spacing.md) {
+            HStack(spacing: Spacing.md) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 TextField("Search games", text: $searchText)
@@ -198,27 +193,29 @@ struct GameLibraryView: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.primary)
                     }
+                    .accessibilityLabel("Clear search")
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, Spacing.lg)
             .frame(height: searchBarHeight)
             .glassEffect(.regular.interactive(), in: .capsule)
 
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
+                withAnimation(Motion.standard) {
                     settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
                 }
             } label: {
                 Image(systemName: settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2")
                     .font(.body)
                     .foregroundStyle(.primary)
-                    .frame(width: 38, height: 38)
+                    .frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
                     .contentTransition(.symbolEffect(.replace))
             }
             .glassEffect(.regular.interactive(), in: .circle)
+            .accessibilityLabel(settings.libraryDisplayMode == .grid ? "Switch to list" : "Switch to grid")
         }
         .padding(.horizontal)
-        .padding(.bottom, 4)
+        .padding(.bottom, Spacing.xs)
         .tint(.primary)
     }
 
@@ -227,7 +224,7 @@ struct GameLibraryView: View {
     private var importButton: some View {
         GeometryReader { geo in
             let collapsed = !showEmpty
-            let buttonSize: CGFloat = 38
+            let buttonSize: CGFloat = AppSize.toolbarButton
 
             // End positions (center coordinates)
             let collapsedX = geo.size.width - 16 - buttonSize / 2
@@ -276,7 +273,7 @@ struct GameLibraryView: View {
             // Place at arc center
             .position(x: arcCenterX, y: arcCenterY)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(.spring(duration: 0.55, bounce: 0.175), value: showEmpty)
+            .animation(Motion.bouncy, value: showEmpty)
         }
     }
 
@@ -294,11 +291,11 @@ struct GameLibraryView: View {
 
     private var gridContent: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: Spacing.lg) {
                 gridItems
             }
             .padding(.horizontal)
-            .padding(.top, headerHeight + searchBarHeight + 20)
+            .padding(.top, headerHeight + searchBarHeight + Spacing.xxl)
             .padding(.bottom)
             .animation(.default, value: filteredGames.map(\.id))
         }
@@ -359,7 +356,7 @@ struct GameLibraryView: View {
             }
         }
     .listStyle(.plain)
-    .contentMargins(.top, headerHeight + searchBarHeight + 20, for: .scrollContent)
+    .contentMargins(.top, headerHeight + searchBarHeight + Spacing.xxl, for: .scrollContent)
     }
 
     @ViewBuilder
@@ -390,7 +387,7 @@ struct GameLibraryView: View {
                         .matchedTransitionSource(id: game.id, in: heroNamespace) { config in
                             config
                                 .background(.black)
-                                .clipShape(.rect(cornerRadius: 12))
+                                .clipShape(.rect(cornerRadius: Radius.md))
                         }
                 }
                     .id("\(game.id)-\(isPaused ? "paused" : "ready")")
@@ -437,43 +434,7 @@ struct GameLibraryView: View {
     }
 }
 
-// MARK: - Transitions
-
-private struct EmptyStateModifier: ViewModifier {
-    let active: Bool
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(active ? 0.8 : 1)
-            .opacity(active ? 0 : 1)
-            .blur(radius: active ? 10 : 0)
-    }
-}
-
-private struct CardTransitionModifier: ViewModifier {
-    let active: Bool
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(active ? 0.97 : 1)
-            .opacity(active ? 0 : 1)
-            .blur(radius: active ? 6 : 0)
-    }
-}
-
-extension AnyTransition {
-    static var emptyState: AnyTransition {
-        .modifier(
-            active: EmptyStateModifier(active: true),
-            identity: EmptyStateModifier(active: false)
-        )
-    }
-
-    static var cardAppear: AnyTransition {
-        .modifier(
-            active: CardTransitionModifier(active: true),
-            identity: CardTransitionModifier(active: false)
-        )
-    }
-}
+// Transitions (EmptyState, CardAppear) are defined in Design/Primitives.swift
 
 // MARK: - Game Context Menu
 
@@ -522,6 +483,7 @@ private struct GameContextMenuModifier: ViewModifier {
                 Label("Delete", systemImage: "trash")
             }
         }
+        .tint(nil)
     }
 }
 
