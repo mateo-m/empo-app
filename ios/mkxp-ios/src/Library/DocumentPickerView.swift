@@ -8,6 +8,7 @@ struct DocumentPickerView: UIViewControllerRepresentable {
         let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder, .zip])
         picker.allowsMultipleSelection = true
         picker.delegate = context.coordinator
+        picker.view.tintColor = UIColor(.brand)
         return picker
     }
 

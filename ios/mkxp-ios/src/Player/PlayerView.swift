@@ -389,7 +389,7 @@ struct PlayerView: View {
                 .foregroundColor(.white)
                 .font(.system(size: 14, weight: .semibold))
             Button("Reset") { showResetConfirm = true }
-                .foregroundColor(.orange)
+                .foregroundColor(.brand)
                 .font(.system(size: 14, weight: .semibold))
             Button("Done") { toggleEditMode() }
                 .foregroundColor(.green)

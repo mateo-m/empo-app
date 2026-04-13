@@ -199,7 +199,7 @@ struct GameInfoView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") { dismiss() }
-                        .tint(.orange)
+                        .tint(.brand)
                 }
             }
             .imageSourcePicker(
@@ -234,7 +234,7 @@ struct GameInfoView: View {
             }
             return .ignored
         }
-        .tint(.orange)
+        .tint(.brand)
     }
 
     // MARK: - Banner Header
@@ -366,7 +366,7 @@ struct GameInfoView: View {
                 .frame(height: bannerHeight)
         } else {
             LinearGradient(
-                colors: [.orange.opacity(0.4), .purple.opacity(0.3)],
+                colors: [.brand.opacity(0.4), .clear],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

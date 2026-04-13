@@ -187,6 +187,7 @@ private struct ImportProgressView: View {
 
 struct GameListRow: View {
     let game: GameEntry
+    var heroNamespace: Namespace.ID? = nil
     var onStopImport: (() -> Void)? = nil
     private let artworkSize: CGFloat = 48
 
@@ -209,6 +210,9 @@ struct GameListRow: View {
             }
             .frame(width: artworkSize, height: artworkSize)
             .clipShape(.rect(cornerRadius: 8))
+            .if(heroNamespace != nil) { view in
+                view.matchedTransitionSource(id: game.id, in: heroNamespace!)
+            }
 
             // Title
             Text(game.title)
@@ -227,6 +231,7 @@ struct GameListRow: View {
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())
+        .listRowBackground(Color(.systemBackground))
     }
 }
 
