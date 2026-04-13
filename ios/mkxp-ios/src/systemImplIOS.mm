@@ -70,6 +70,14 @@ std::string getPlistValue(const char *key) {
 
 
 float mkxp_getScreenScale(void) {
+    // Screen scale is a device constant (e.g. 3.0 on iPhone Pro) that
+    // never changes at runtime.  Cache it to avoid dispatch_sync to the
+    // main queue on every resize — that call can stall the RGSS thread
+    // during rapid rotation while UIKit is processing layout animations.
+    static float cachedScale = 0.0f;
+    if (cachedScale > 0.0f)
+        return cachedScale;
+
     __block float scale = 2.0f;
 
     void (^queryBlock)(void) = ^{
@@ -88,5 +96,6 @@ float mkxp_getScreenScale(void) {
         dispatch_sync(dispatch_get_main_queue(), queryBlock);
     }
 
+    cachedScale = scale;
     return scale;
 }
