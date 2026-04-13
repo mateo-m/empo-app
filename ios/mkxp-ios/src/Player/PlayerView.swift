@@ -113,6 +113,10 @@ struct PlayerView: View {
     @State private var toolbarOpacity: Double = 1.0
     @State private var toolbarIdleTask: Task<Void, Never>?
 
+    // Resume snapshot fade-out (static double for the SDL view)
+    @State private var resumeSnapshot: UIImage?
+    @State private var snapshotOpacity: Double = 1
+
     // Edit mode state
     @State private var showAddSheet = false
     @State private var showResetConfirm = false
@@ -172,6 +176,19 @@ struct PlayerView: View {
                     )
                     .frame(width: 0, height: 0)
                 }
+
+                // Resume snapshot overlay — a frozen frame of the game
+                // positioned at gameRect.  Fades out to reveal the live
+                // SDL rendering underneath.  See docs/pause-resume.md.
+                if let snapshot = resumeSnapshot {
+                    Image(uiImage: snapshot)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: gameRect.width, height: gameRect.height)
+                        .position(x: gameRect.midX, y: gameRect.midY)
+                        .opacity(snapshotOpacity)
+                        .allowsHitTesting(false)
+                }
             }
             .allowsHitTesting(true)
         }
@@ -179,6 +196,23 @@ struct PlayerView: View {
         .onAppear {
             TCInstallKeyEventWatcher()
             resetToolbarIdleTimer()
+
+            // If resuming from pause, pick up the snapshot and hold it
+            // until the engine signals its first frame has been swapped.
+            if let snapshot = appState.pauseSnapshot {
+                resumeSnapshot = snapshot
+                snapshotOpacity = 1
+
+                // If the engine already rendered before we appeared, fade now
+                if appState.snapshotCanFade {
+                    startSnapshotFade()
+                }
+            }
+        }
+        .onChange(of: appState.snapshotCanFade) { _, canFade in
+            if canFade && resumeSnapshot != nil {
+                startSnapshotFade()
+            }
         }
         .alert("Return to Library", isPresented: $appState.showQuitConfirm) {
             Button("Cancel", role: .cancel) {}
@@ -503,6 +537,19 @@ struct PlayerView: View {
             if entry.scancode == sc { return entry.label }
         }
         return "Key \(sc)"
+    }
+
+    /// Fade the snapshot overlay to reveal the live SDL surface.
+    /// Called when the engine signals its first post-resume frame is on-screen.
+    private func startSnapshotFade() {
+        withAnimation(.easeOut(duration: 0.3)) {
+            snapshotOpacity = 0
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            resumeSnapshot = nil
+            appState.pauseSnapshot = nil
+            appState.snapshotCanFade = false
+        }
     }
 }
 

@@ -307,57 +307,59 @@ struct GameLibraryView: View {
     private var listContent: some View {
         List {
             ForEach(filteredGames) { game in
-                switch game.status {
-                case .importing:
-                    GameListRow(game: game, onStopImport: {
+                let isPaused = appState.pausedGame?.id == game.id
+                GameListRow(
+                    game: game,
+                    isPaused: isPaused,
+                    heroNamespace: game.status == .ready ? heroNamespace : nil,
+                    onStopImport: game.status.phase == .importing ? {
                         gameToDelete = game
                         showDeleteConfirm = true
-                    })
-                    .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
-
-                case .invalid:
-                    GameListRow(game: game)
-                        .onTapGesture { showInvalidAlert = true }
-                        .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
-
-                case .ready:
-                    GameListRow(game: game, isPaused: appState.pausedGame?.id == game.id, heroNamespace: heroNamespace)
-                        .onTapGesture { handleGameTap(game) }
-                        .swipeActions(edge: .leading) {
-                            Button { gameForSettings = game } label: {
-                                Label("Settings", systemImage: "gearshape")
-                            }
-                            .tint(.brand)
-
-                            Button { gameForInfo = game } label: {
-                                Label("Info", systemImage: "info.circle")
-                            }
-                            .tint(.gray)
-                        }
-                        .swipeActions(edge: .trailing) {
-                            if appState.pausedGame?.id == game.id {
-                                Button(role: .destructive) {
-                                    appState.returnToLibrary()
-                                } label: {
-                                    Label("Quit", systemImage: "stop.fill")
-                                }
-                                .tint(.red)
-                            }
-
-                            Button(role: .destructive) {
-                                gameToDelete = game
-                                showDeleteConfirm = true
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                            .tint(.red)
-                        }
-                        .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                    } : nil
+                )
+                .onTapGesture {
+                    switch game.status {
+                    case .ready: handleGameTap(game)
+                    case .invalid: showInvalidAlert = true
+                    case .importing: break
+                    }
                 }
+                .swipeActions(edge: .leading) {
+                    if game.status == .ready {
+                        Button { gameForSettings = game } label: {
+                            Label("Settings", systemImage: "gearshape")
+                        }
+                        .tint(.brand)
+
+                        Button { gameForInfo = game } label: {
+                            Label("Info", systemImage: "info.circle")
+                        }
+                        .tint(.gray)
+                    }
+                }
+                .swipeActions(edge: .trailing) {
+                    if isPaused {
+                        Button(role: .destructive) {
+                            appState.returnToLibrary()
+                        } label: {
+                            Label("Quit", systemImage: "stop.fill")
+                        }
+                        .tint(.red)
+                    }
+
+                    Button(role: .destructive) {
+                        gameToDelete = game
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .tint(.red)
+                }
+                .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
             }
         }
-        .listStyle(.plain)
-        .contentMargins(.top, headerHeight + searchBarHeight + 20, for: .scrollContent)
+    .listStyle(.plain)
+    .contentMargins(.top, headerHeight + searchBarHeight + 20, for: .scrollContent)
     }
 
     @ViewBuilder
@@ -385,7 +387,11 @@ struct GameLibraryView: View {
                 let isPaused = appState.pausedGame?.id == game.id
                 Button { handleGameTap(game) } label: {
                     GameCard(game: game, isPaused: isPaused)
-                        .matchedTransitionSource(id: game.id, in: heroNamespace)
+                        .matchedTransitionSource(id: game.id, in: heroNamespace) { config in
+                            config
+                                .background(.black)
+                                .clipShape(.rect(cornerRadius: 12))
+                        }
                 }
                     .id("\(game.id)-\(isPaused ? "paused" : "ready")")
                     .buttonStyle(CardPressStyle())
