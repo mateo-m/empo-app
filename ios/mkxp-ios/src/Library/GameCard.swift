@@ -40,20 +40,30 @@ struct GameCard: View {
                     .allowsHitTesting(false)
             }
             .overlay(alignment: .bottomLeading) {
-                Text(game.title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .multilineTextAlignment(.leading)
-                    .padding(8)
-                    .onGeometryChange(for: CGFloat.self) { proxy in
-                        proxy.size.height
-                    } action: { newHeight in
-                        titleHeight = newHeight
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(game.title)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.75)
+                        .multilineTextAlignment(.leading)
+
+                    if let originalTitle = game.originalTitle {
+                        Text(originalTitle)
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.7))
+                            .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+                            .lineLimit(1)
                     }
+                }
+                .padding(8)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height
+                } action: { newHeight in
+                    titleHeight = newHeight
+                }
             }
             .overlay { centerOverlay }
             .clipShape(.rect(cornerRadius: 12))
@@ -71,14 +81,23 @@ struct GameCard: View {
                 .clipShape(.rect(cornerRadius: 12))
                 .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
 
-            Text(game.title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.75)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+            VStack(spacing: 2) {
+                Text(game.title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+
+                if let originalTitle = game.originalTitle {
+                    Text(originalTitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
     }
 
@@ -194,6 +213,13 @@ struct GameListRow: View {
     var onStopImport: (() -> Void)? = nil
     private let artworkSize: CGFloat = 48
 
+    // Fallback namespace keeps the view tree stable when heroNamespace
+    // is nil (importing state).  Without this, the conditional .if()
+    // modifier was creating two structural branches — SwiftUI destroyed
+    // and recreated GameArtworkView on status change, losing @State and
+    // preventing the saturation animation.
+    @Namespace private var fallbackNamespace
+
     var body: some View {
         HStack(spacing: 14) {
             // Artwork thumbnail
@@ -204,15 +230,13 @@ struct GameListRow: View {
                 cornerRadius: 8,
                 importing: game.status.phase == .importing
             )
-            .if(heroNamespace != nil) { view in
-                view.matchedTransitionSource(id: game.id, in: heroNamespace!) { config in
-                    config
-                        .background(.black)
-                        .clipShape(.rect(cornerRadius: 8))
-                }
+            .matchedTransitionSource(id: game.id, in: heroNamespace ?? fallbackNamespace) { config in
+                config
+                    .background(.black)
+                    .clipShape(.rect(cornerRadius: 8))
             }
 
-            // Title and pause badge
+            // Title and original name
             VStack(alignment: .leading, spacing: 2) {
                 Text(game.title)
                     .font(.body)
@@ -220,10 +244,11 @@ struct GameListRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                if isPaused {
-                    Text("Paused")
+                if let originalTitle = game.originalTitle {
+                    Text(originalTitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
 
