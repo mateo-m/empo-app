@@ -40,13 +40,7 @@ private class AppRootViewController: UIViewController {
     // MARK: - Orientation & Status Bar
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        let phase = AppState.shared.phase
-        switch phase {
-        case .library, .quitting:
-            return .portrait
-        case .loading, .playing:
-            return .allButUpsideDown
-        }
+        .allButUpsideDown
     }
 
     override var prefersStatusBarHidden: Bool {
