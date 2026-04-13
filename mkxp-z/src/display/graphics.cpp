@@ -21,8 +21,6 @@
 
 #include "graphics.h"
 
-#include "alstream.h"
-#include "audio.h"
 #include "binding.h"
 #include "bitmap.h"
 #include "config.h"
@@ -36,12 +34,12 @@
 #include "gl-util.h"
 #include "glstate.h"
 #include "intrulist.h"
+#include "movie.h"
 #include "quad.h"
 #include "scene.h"
 #include "shader.h"
 #include "sharedstate.h"
 #include "texpool.h"
-#include "theoraplay/theoraplay.h"
 #include "util.h"
 #include "input.h"
 #include "sprite.h"
@@ -63,385 +61,21 @@
 #include <unistd.h>
 #include <time.h>
 #include <cmath>
-#include <climits>
 
 #if TARGET_OS_IPHONE
 #include "ios_bridge.h"
-#include "audio.h"
 #endif
-
 
 #define DEF_SCREEN_W (rgssVer == 1 ? 640 : 544)
 #define DEF_SCREEN_H (rgssVer == 1 ? 480 : 416)
 
 #define DEF_FRAMERATE (rgssVer == 1 ? 40 : 60)
 
-#define DEF_MAX_VIDEO_FRAMES 30
-#define VIDEO_DELAY 10
-#define MOVIE_AUDIO_BUFFER_SIZE 2048
-#define AUDIO_BUFFER_LEN_MS 2000
-
-typedef struct AudioQueue
-{
-    const THEORAPLAY_AudioPacket *audio;
-    int offset;
-    struct AudioQueue *next;
-} AudioQueue;
-
-
-static long readMovie(THEORAPLAY_Io *io, void *buf, long buflen)
-{
-    SDL_RWops *f = (SDL_RWops *) io->userdata;
-    return (long) SDL_RWread(f, buf, 1, buflen);
-} // IoFopenRead
-
-
-static void closeMovie(THEORAPLAY_Io *io)
-{
-    SDL_RWops *f = (SDL_RWops *) io->userdata;
-    SDL_RWclose(f);
-    free(io);
-} // IoFopenClose
-
-
-struct Movie
-{
-    THEORAPLAY_Decoder *decoder;
-    const THEORAPLAY_AudioPacket *audio;
-    const THEORAPLAY_VideoFrame *video;
-    bool hasVideo;
-    bool hasAudio;
-    bool skippable;
-    Bitmap *videoBitmap;
-    SDL_RWops srcOps;
-    SDL_Thread *audioThread;
-    AtomicFlag audioThreadTermReq;
-    volatile AudioQueue *audioQueueHead;
-    volatile AudioQueue *audioQueueTail;
-    ALuint audioSource;
-    ALuint alBuffers[STREAM_BUFS];
-    ALshort audioBuffer[MOVIE_AUDIO_BUFFER_SIZE];
-    SDL_mutex *audioMutex;
-    
-    Movie(bool skippable_)
-    : decoder(0), audio(0), video(0), skippable(skippable_), videoBitmap(0), audioThread(0)
-    {
-    }
-    bool preparePlayback()
-    {
-        
-        // https://theora.org/doc/libtheora-1.0/codec_8h.html
-        // https://ffmpeg.org/doxygen/0.11/group__lavc__misc__pixfmt.html
-        THEORAPLAY_Io *io = (THEORAPLAY_Io *) malloc(sizeof (THEORAPLAY_Io));
-        if(!io) {
-            SDL_RWclose(&srcOps);
-            return false;
-        }
-        
-        io->read = readMovie;
-        io->close = closeMovie;
-        io->userdata = &srcOps;
-        decoder = THEORAPLAY_startDecode(io, DEF_MAX_VIDEO_FRAMES, THEORAPLAY_VIDFMT_RGBA);
-        if (!decoder) {
-            SDL_RWclose(&srcOps);
-            return false;
-        }
-        
-        // Wait until the decoder has parsed out some basic truths from the file.
-        while (!THEORAPLAY_isInitialized(decoder)) {
-            SDL_Delay(VIDEO_DELAY);
-        }
-        
-        // Once we're initialized, we can tell if this file has audio and/or video.
-        hasAudio = THEORAPLAY_hasAudioStream(decoder);
-        hasVideo = THEORAPLAY_hasVideoStream(decoder);
-        
-        // Queue up the audio
-        if (hasAudio) {
-            while ((audio = THEORAPLAY_getAudio(decoder)) == NULL) {
-                if ((THEORAPLAY_availableVideo(decoder) >= DEF_MAX_VIDEO_FRAMES)) {
-                    break;  // we'll never progress, there's no audio yet but we've prebuffered as much as we plan to.
-                }
-                SDL_Delay(VIDEO_DELAY);
-            }
-        }
-        
-        // No video, so no point in doing anything else
-        if (!hasVideo) {
-            THEORAPLAY_stopDecode(decoder);
-            return false;
-        }
-        
-        // Wait until we have video
-        while ((video = THEORAPLAY_getVideo(decoder)) == NULL) {
-            SDL_Delay(VIDEO_DELAY);
-        }
-        
-        // Wait until we have audio, if applicable
-        audio = NULL;
-        if (hasAudio) {
-            while ((audio = THEORAPLAY_getAudio(decoder)) == NULL && THEORAPLAY_availableVideo(decoder) < DEF_MAX_VIDEO_FRAMES) {
-                SDL_Delay(VIDEO_DELAY);
-            }
-        }
-        // Create this Bitmap without a hires replacement, because we don't
-        // support hires replacement for Movies yet.
-        videoBitmap = new Bitmap(video->width, video->height, true);
-        audioQueueHead = NULL;
-        audioQueueTail = NULL;
-        
-        return true;
-    }
-    
-    void queueAudioPacket(const THEORAPLAY_AudioPacket *audio) {
-        AudioQueue *item = NULL;
-        
-        if (!audio) {
-            return;
-        }
-        
-        item = (AudioQueue *) malloc(sizeof (AudioQueue));
-        if (!item) {
-            THEORAPLAY_freeAudio(audio);
-            return;  // oh well.
-        }
-        
-        item->audio = audio;
-        item->offset = 0;
-        item->next = NULL;
-        
-        SDL_LockMutex(audioMutex);
-        if (audioQueueTail) {
-            audioQueueTail->next = item;
-        } else {
-            audioQueueHead = item;
-        }
-        audioQueueTail = item;
-        SDL_UnlockMutex(audioMutex);
-    }
-    
-    void bufferMovieAudio(THEORAPLAY_Decoder *decoder, const Uint32 now) {
-        const THEORAPLAY_AudioPacket *audio;
-        while ((audio = THEORAPLAY_getAudio(decoder)) != NULL) {
-            queueAudioPacket(audio);
-            if (audio->playms >= now + AUDIO_BUFFER_LEN_MS) {  // don't let this get too far ahead.
-                break;
-            }
-        }
-    }
-
-    void streamMovieAudio(){
-        ALint state = 0;
-        ALint procBufs = STREAM_BUFS;	    
-        volatile AudioQueue *audioPacketAndOffset;
-        int channels;
-        int sampleRate;
-        float *sourceSamples;
-        ALuint samplesToProcess;
-        ALshort *sampleBuffer;
-        ALuint remainingSamples;
-
-        while(true) {
-            while(procBufs--) {
-                // Quit if audio thread terminate request has been made
-                if (audioThreadTermReq) return;
-
-                remainingSamples = MOVIE_AUDIO_BUFFER_SIZE;
-                sampleBuffer = audioBuffer;
-                SDL_LockMutex(audioMutex);
-
-                while(audioQueueHead && (remainingSamples > 0)) {
-                    audioPacketAndOffset = audioQueueHead;
-                    channels = audioPacketAndOffset->audio->channels;
-                    sampleRate = audioPacketAndOffset->audio->freq;
-                    sourceSamples = audioPacketAndOffset->audio->samples + (audioPacketAndOffset->offset * channels);
-                    samplesToProcess = (audioPacketAndOffset->audio->frames - audioPacketAndOffset->offset) * channels;
-
-                    if (samplesToProcess > remainingSamples) samplesToProcess = remainingSamples;
-
-                    for (ALuint i = 0; i < samplesToProcess; i++) {
-                        const float val = (*(sourceSamples++));
-                        if (val < -1.0f) {
-                            *(sampleBuffer++) = SHRT_MIN;
-                        } else if (val > 1.0f) {
-                            *(sampleBuffer++) = SHRT_MAX;
-                        } else {
-                            *(sampleBuffer++) = (ALshort) (val * SHRT_MAX);
-                        }
-                    }
-
-                    // Necessary to remember position between repeated iterations
-                    audioPacketAndOffset->offset += (samplesToProcess / channels);
-                    remainingSamples -= samplesToProcess;
-
-                    // The current audio packet has been completed
-                    if ((audioPacketAndOffset->offset) >= audioPacketAndOffset->audio->frames) {
-                        audioQueueHead = audioPacketAndOffset->next;
-                        THEORAPLAY_freeAudio(audioPacketAndOffset->audio);
-                        free((void *) audioPacketAndOffset);
-                    }
-                }
-
-                if(!audioQueueHead) audioQueueTail = NULL;
-
-                SDL_UnlockMutex(audioMutex);
-
-                alBufferData(alBuffers[procBufs], channels == 1 ? AL_FORMAT_MONO16 : AL_FORMAT_STEREO16, audioBuffer,
-                    (MOVIE_AUDIO_BUFFER_SIZE - remainingSamples) * sizeof(ALshort), sampleRate);
-                alSourceQueueBuffers(audioSource, 1, &alBuffers[procBufs]);     
-                alGetSourcei(audioSource, AL_SOURCE_STATE, &state);
-                if(state != AL_PLAYING) alSourcePlay(audioSource);
-            }
-
-            // Periodically check the buffers until one is available
-            while(true) {
-                // Quit if audio thread terminate request has been made
-                if (audioThreadTermReq) return;
-
-                alGetSourcei(audioSource, AL_BUFFERS_PROCESSED, &procBufs);
-                if(procBufs > 0) break;
-                SDL_Delay(AUDIO_SLEEP);
-            }
-            alSourceUnqueueBuffers(audioSource, procBufs, alBuffers);
-        }
-    }
-    
-    bool startAudio(float volume)
-    {
-        alGenSources(1, &audioSource);
-        alGenBuffers(STREAM_BUFS, alBuffers);
-        alSourcef(audioSource, AL_GAIN, volume);
-
-        audioThreadTermReq.clear();
-        audioMutex = SDL_CreateMutex();
-        queueAudioPacket(audio);
-        audio = NULL;
-        bufferMovieAudio(decoder, 0);
-        audioThread = createSDLThread <Movie, &Movie::streamMovieAudio>(this, "movieaudio");
-
-        return true;
-    }
-    
-    void play(float volume)
-    {
-        Uint32 frameMs = 0;
-        Uint32 baseTicks = SDL_GetTicks();
-        bool openedAudio = false;
-        while (THEORAPLAY_isDecoding(decoder)) {
-            // Check for reset/shutdown input
-            if(shState->graphics().updateMovieInput(this)) break;
-            
-            // Check for attempted skip
-            if (skippable) {
-                shState->input().update();
-                if  (shState->input().isTriggered(Input::C) || shState->input().isTriggered(Input::B)) break;
-            }
-            
-            const Uint32 now = SDL_GetTicks() - baseTicks;
-            
-            if (!video) {
-                video = THEORAPLAY_getVideo(decoder);
-            }
-            
-            if (hasAudio) {
-                if (!audio) {
-                    audio = THEORAPLAY_getAudio(decoder);
-                }
-                
-                if (audio && !openedAudio) {
-                    if(!startAudio(volume)){
-                        Debug() << "Error opening movie audio!";
-                        break;
-                    }
-                    openedAudio = true;
-                }
-                
-            }
-            
-            if (video && (video->playms <= now)) {
-                frameMs = (video->fps == 0.0) ? 0 : ((Uint32) (1000.0 / video->fps));
-                if ( frameMs && ((now - video->playms) >= frameMs) )
-                {
-                    // Skip frames to catch up
-                    const THEORAPLAY_VideoFrame *last = video;
-                    while ((video = THEORAPLAY_getVideo(decoder)) != NULL)
-                    {
-                        THEORAPLAY_freeVideo(last);
-                        last = video;
-                        if ((now - video->playms) < frameMs)
-                            break;
-                    } 
-
-                    if (!video)
-                        video = last;
-                }
-
-                // Application is too far behind
-                if (!video) {
-                    Debug() << "WARNING: Video playback cannot keep up!";
-                    break;
-                }
-
-                // Got a video frame, now draw it
-                videoBitmap->replaceRaw(video->pixels, video->width * video->height * 4);
-                shState->graphics().update(false);
-                THEORAPLAY_freeVideo(video);
-                video = NULL;
-
-            } else {
-                // Next video frame not yet ready, let the CPU breathe
-                SDL_Delay(VIDEO_DELAY);
-            }
-            
-            if (openedAudio) {
-                bufferMovieAudio(decoder, now);
-            }
-        }
-    }
-    
-    ~Movie()
-    {
-        if (hasAudio) {
-            if (audioQueueTail) {
-                THEORAPLAY_freeAudio(audioQueueTail->audio);
-            }
-            audioQueueTail = NULL;
-            
-            if (audioQueueHead) {
-                THEORAPLAY_freeAudio(audioQueueHead->audio);
-            }
-            audioQueueHead = NULL;
-            SDL_DestroyMutex(audioMutex);
-            audioThreadTermReq.set();
-            if(audioThread) {
-                SDL_WaitThread(audioThread, 0);
-                audioThread = 0;
-            }
-            alSourceStop(audioSource);
-            alDeleteSources(1, &audioSource);
-            alDeleteBuffers(STREAM_BUFS, alBuffers);
-        }
-        if (video) THEORAPLAY_freeVideo(video);
-        if (audio) THEORAPLAY_freeAudio(audio);
-        if (decoder) THEORAPLAY_stopDecode(decoder);
-        delete videoBitmap;
-    }
-};
-
-struct MovieOpenHandler : FileSystem::OpenHandler
-{
-    SDL_RWops *srcOps;
-    
-    MovieOpenHandler(SDL_RWops &srcOps)
-    :   srcOps(&srcOps)
-    {}
-    
-    bool tryRead(SDL_RWops &ops, const char *ext)
-    {
-        *srcOps = ops;
-        return true;
-    }
-};
+#if TARGET_OS_IPHONE
+  #define IOS_CHECK_PAUSE() p->checkPause()
+#else
+  #define IOS_CHECK_PAUSE() ((void)0)
+#endif
 
 struct PingPong {
     TEXFBO rt[2];
@@ -1285,6 +919,28 @@ struct GraphicsPrivate {
         SDL_UnlockMutex(avgFPSLock);
     }
 
+    /* Blit the frozen scene buffer to the screen and swap.
+     * Used by fadeout/fadein when the scene is frozen. */
+    void blitFrozenSceneToScreen() {
+        int scaleIsSpecial = GLMeta::blitScaleIsSpecial(
+            integerScaleBuffer, false,
+            IntRect(0, 0, scSize.x, scSize.y),
+            frozenScene, IntRect(0, 0, scRes.x, scRes.y));
+
+        GLMeta::blitBeginScreen(scSize, scaleIsSpecial);
+        GLMeta::blitSource(frozenScene, scaleIsSpecial);
+
+        FBO::clear();
+        metaBlitBufferFlippedScaled(scaleIsSpecial);
+
+        GLMeta::blitEnd();
+
+        swapGLBuffer();
+#if TARGET_OS_IPHONE
+        checkPause();
+#endif
+    }
+
 #if TARGET_OS_IPHONE
     /* Check for a pending pause request.  mkxp_checkPause() handles
      * audio source pausing and blocks until resumed; we just need
@@ -1368,9 +1024,7 @@ void Graphics::update(bool checkForShutdown) {
     p->checkResize();
     p->redrawScreen();
 
-#if TARGET_OS_IPHONE
-    p->checkPause();
-#endif
+    IOS_CHECK_PAUSE();
 }
 
 void Graphics::freeze() {
@@ -1487,9 +1141,7 @@ void Graphics::transition(int duration, const char *filename, int vague) {
         p->swapGLBuffer();
         /* Call this manually, as redrawScreen() is not called during this loop. */
         p->updateAvgFPS();
-#if TARGET_OS_IPHONE
-        p->checkPause();
-#endif
+        IOS_CHECK_PAUSE();
     }
     
     glState.blend.pop();
@@ -1528,9 +1180,7 @@ void Graphics::wait(int duration) {
     for (int i = 0; i < duration; ++i) {
         p->checkShutDownReset();
         p->redrawScreen();
-#if TARGET_OS_IPHONE
-        p->checkPause();
-#endif
+        IOS_CHECK_PAUSE();
     }
 }
 
@@ -1544,20 +1194,7 @@ void Graphics::fadeout(int duration) {
         setBrightness(diff + (curr / duration) * i);
         
         if (p->frozen) {
-            int scaleIsSpecial = GLMeta::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), p->frozenScene, IntRect(0, 0, p->scRes.x, p->scRes.y));
-
-            GLMeta::blitBeginScreen(p->scSize, scaleIsSpecial);
-            GLMeta::blitSource(p->frozenScene, scaleIsSpecial);
-            
-            FBO::clear();
-            p->metaBlitBufferFlippedScaled(scaleIsSpecial);
-            
-            GLMeta::blitEnd();
-            
-            p->swapGLBuffer();
-#if TARGET_OS_IPHONE
-            p->checkPause();
-#endif
+            p->blitFrozenSceneToScreen();
         } else {
             update();
         }
@@ -1574,20 +1211,7 @@ void Graphics::fadein(int duration) {
         setBrightness(curr + (diff / duration) * i);
         
         if (p->frozen) {
-            int scaleIsSpecial = GLMeta::blitScaleIsSpecial(p->integerScaleBuffer, false, IntRect(0, 0, p->scSize.x, p->scSize.y), p->frozenScene, IntRect(0, 0, p->scRes.x, p->scRes.y));
-
-            GLMeta::blitBeginScreen(p->scSize, scaleIsSpecial);
-            GLMeta::blitSource(p->frozenScene, scaleIsSpecial);
-            
-            FBO::clear();
-            p->metaBlitBufferFlippedScaled(scaleIsSpecial);
-            
-            GLMeta::blitEnd();
-            
-            p->swapGLBuffer();
-#if TARGET_OS_IPHONE
-            p->checkPause();
-#endif
+            p->blitFrozenSceneToScreen();
         } else {
             update();
         }
@@ -1937,9 +1561,7 @@ void Graphics::repaintWait(const AtomicFlag &exitCond, bool checkReset) {
         
         p->threadData->ethread->notifyFrame();
 
-#if TARGET_OS_IPHONE
-        p->checkPause();
-#endif
+        IOS_CHECK_PAUSE();
     }
     
     GLMeta::blitEnd();

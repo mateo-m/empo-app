@@ -94,6 +94,7 @@ targets:
       - path: ../../mkxp-z/src/audio/midisource.cpp
       - path: ../../mkxp-z/src/audio/fluid-fun.cpp
       - path: ../../mkxp-z/src/display/graphics.cpp
+      - path: ../../mkxp-z/src/display/movie.cpp
       - path: ../../mkxp-z/src/display/bitmap.cpp
       - path: ../../mkxp-z/src/display/font.cpp
       - path: ../../mkxp-z/src/display/sprite.cpp

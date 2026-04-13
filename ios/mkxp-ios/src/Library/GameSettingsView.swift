@@ -131,29 +131,23 @@ struct GameSettingsView: View {
 
     private var displaySection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Smooth scaling", isOn: smoothScalingBinding)
-                Text("Use bilinear filtering when upscaling. Disable for a pixel-perfect look.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 2)
+            SettingsToggle(
+                title: "Smooth scaling",
+                isOn: smoothScalingBinding,
+                description: "Use bilinear filtering when upscaling. Disable for a pixel-perfect look."
+            )
 
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Fixed aspect ratio", isOn: fixedAspectRatioBinding)
-                Text("Preserve the game's proportions instead of stretching to fill the screen.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 2)
+            SettingsToggle(
+                title: "Fixed aspect ratio",
+                isOn: fixedAspectRatioBinding,
+                description: "Preserve the game's proportions instead of stretching to fill the screen."
+            )
 
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("VSync", isOn: vsyncBinding)
-                Text("Synchronize rendering with the display refresh rate to reduce tearing.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 2)
+            SettingsToggle(
+                title: "VSync",
+                isOn: vsyncBinding,
+                description: "Synchronize rendering with the display refresh rate to reduce tearing."
+            )
 
             VStack(alignment: .leading, spacing: 4) {
                 Picker("Resolution", selection: resolutionBinding) {
@@ -203,13 +197,11 @@ struct GameSettingsView: View {
             }
             .padding(.vertical, 2)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Solid fonts", isOn: solidFontsBinding)
-                Text("Disable alpha blending for text, which can look sharper in some games.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 2)
+            SettingsToggle(
+                title: "Solid fonts",
+                isOn: solidFontsBinding,
+                description: "Disable alpha blending for text, which can look sharper in some games."
+            )
         } header: {
             Text("Display")
         } footer: {
@@ -240,13 +232,11 @@ struct GameSettingsView: View {
 
     private var performanceSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Frame skip", isOn: frameSkipBinding)
-                Text("Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 2)
+            SettingsToggle(
+                title: "Frame skip",
+                isOn: frameSkipBinding,
+                description: "Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness."
+            )
         } header: {
             Text("Performance")
         } footer: {
@@ -257,21 +247,17 @@ struct GameSettingsView: View {
 
     private var engineSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Postload scripts", isOn: postloadScriptsBinding)
-                Text("Run scripts that apply common fixes for Pokemon Essentials games.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 2)
+            SettingsToggle(
+                title: "Postload scripts",
+                isOn: postloadScriptsBinding,
+                description: "Run scripts that apply common fixes for Pokemon Essentials games."
+            )
 
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Path cache", isOn: pathCacheBinding)
-                Text("Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 2)
+            SettingsToggle(
+                title: "Path cache",
+                isOn: pathCacheBinding,
+                description: "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
+            )
         } header: {
             Text("Engine")
         } footer: {
@@ -300,13 +286,11 @@ struct GameSettingsView: View {
             }
             .padding(.vertical, 2)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Toggle("Cheats", isOn: $cheats)
-                Text("Enable cheat mode. Only works if the game supports it.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 2)
+            SettingsToggle(
+                title: "Cheats",
+                isOn: $cheats,
+                description: "Enable cheat mode. Only works if the game supports it."
+            )
         } header: {
             Text("Gameplay")
         } footer: {
