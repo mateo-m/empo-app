@@ -857,6 +857,22 @@ struct GraphicsPrivate {
         avgFPSLock = SDL_CreateMutex();
         glResourceLock = SDL_CreateMutex();
         
+        /* Query the actual window and drawable sizes directly from SDL.
+         * main.cpp also posts these to windowSizeMsg/drawableSizeMsg, but
+         * the constructor shouldn't poll message queues for initialization.
+         * The window is fully created before the RGSS thread starts, so
+         * these reads are safe. */
+        {
+            int winW, winH;
+            SDL_GetWindowSize(rtData->window, &winW, &winH);
+            winSize = Vec2i(winW, winH);
+
+            int drwW, drwH;
+            SDL_GL_GetDrawableSize(rtData->window, &drwW, &drwH);
+            backingScaleFactor = (float)drwW / winW;
+            winSize = Vec2i(drwW, drwH);
+        }
+
         if (integerScaleActive) {
             integerScaleFactor = Vec2i(0, 0);
             rebuildIntegerScaleBuffer();
@@ -1625,10 +1641,25 @@ void Graphics::resizeScreen(int width, int height) {
     
     glState.scissorBox.set(IntRect(0, 0, p->scRes.x, p->scRes.y));
     
+#if !TARGET_OS_IPHONE
+    /* On iOS the window is always fullscreen — requestWindowResize is a
+     * no-op that can corrupt the internal size state. Skip it. */
     shState->eThread().requestWindowResize(width, height);
+#else
+    /* Trigger a size recalculation so the viewport is updated. */
+    p->recalculateScreenSize(shState->config().fixedAspectRatio);
+    p->updateScreenResoRatio(p->threadData);
+    SDL_Rect screen = {p->scOffset.x, p->scOffset.y, p->scSize.x, p->scSize.y};
+    p->threadData->ethread->notifyGameScreenChange(screen);
+#endif
 }
 
 void Graphics::resizeWindow(int width, int height, bool center) {
+#if TARGET_OS_IPHONE
+    /* On iOS the window is always fullscreen — resizing is meaningless. */
+    (void)width; (void)height; (void)center;
+    return;
+#else
     p->threadData->rqWindowAdjust.wait();
     p->checkResize();
     
@@ -1640,6 +1671,7 @@ void Graphics::resizeWindow(int width, int height, bool center) {
     
     if (center)
         this->center();
+#endif
 }
 
 bool Graphics::updateMovieInput(Movie *movie) {

@@ -36,5 +36,20 @@ struct RootView: View {
             }
         }
         .fontDesign(.rounded)
+        .alert("Something went wrong", isPresented: showErrorAlert) {
+            Button("OK") {
+                appState.errorMessage = nil
+                appState.returnToLibrary()
+            }
+        } message: {
+            Text(appState.errorMessage ?? "")
+        }
+    }
+
+    private var showErrorAlert: Binding<Bool> {
+        Binding(
+            get: { appState.errorMessage != nil },
+            set: { if !$0 { appState.errorMessage = nil } }
+        )
     }
 }
