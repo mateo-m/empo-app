@@ -4,6 +4,7 @@
 #include "ios_bridge.h"
 #include "sharedstate.h"
 #include "graphics.h"
+#include "audio.h"
 #include "eventthread.h"
 #include "config.h"
 #include <atomic>
@@ -374,14 +375,16 @@ void mkxp_requestResume(void) {
 }
 
 void mkxp_checkPause(void) {
-    if (!s_pauseRequested.load(std::memory_order_acquire))
+    if (!s_pauseRequested.load(std::memory_order_acquire) &&
+        !s_paused.load(std::memory_order_acquire))
         return;
 
-    /* The engine calls this from its GL thread. At this point the
-     * caller (e.g. Graphics.update) has just finished rendering a
-     * frame, so the framebuffer is ready for snapshot capture.
-     * Snapshot capture and audio suspension are handled by the
-     * caller in graphics.cpp before invoking this function. */
+    /* Pause every AL_PLAYING source.  We intentionally do NOT
+     * detach the OpenAL context — keeping it current avoids
+     * any audio blip that Apple's implementation produces when
+     * a context is restored via alcMakeContextCurrent(). */
+    if (SharedState::instance)
+        SharedState::instance->audio().pauseSources();
 
     s_paused.store(true, std::memory_order_release);
 
@@ -393,6 +396,14 @@ void mkxp_checkPause(void) {
     s_pauseCV.wait(lock, [] {
         return !s_paused.load(std::memory_order_acquire);
     });
+
+    if (!s_terminateRequested.load(std::memory_order_acquire)) {
+        /* Normal resume — un-pause the sources we paused. */
+        if (SharedState::instance)
+            SharedState::instance->audio().resumeSources();
+    }
+    /* On terminate the sources stay paused (silent) until
+     * SharedState::finiInstance() deletes them. */
 
     if (s_resumedCb)
         s_resumedCb(s_resumedUserdata);
