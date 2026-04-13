@@ -56,6 +56,7 @@
 #endif
 
 #include <algorithm>
+#include <vector>
 #include <errno.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -753,6 +754,13 @@ struct GraphicsPrivate {
         ++frameCount;
         
         threadData->ethread->notifyFrame();
+
+#if TARGET_OS_IPHONE
+        // Fire the one-shot "frame rendered after resume" signal so the
+        // UI knows the live SDL surface is on-screen and can fade out
+        // the snapshot overlay.
+        mkxp_signalFrameRendered();
+#endif
     }
     
     void compositeToBuffer(TEXFBO &buffer) {
@@ -945,10 +953,42 @@ struct GraphicsPrivate {
     /* Check for a pending pause request.  mkxp_checkPause() handles
      * audio source pausing and blocks until resumed; we just need
      * to reset frame timing afterward so the limiter doesn't try
-     * to catch up for the time spent paused. */
+     * to catch up for the time spent paused.
+     *
+     * Before blocking, we capture the engine's front buffer as an
+     * RGBA snapshot.  The SDL window is always fullscreen behind
+     * the SwiftUI layer and can't participate in SwiftUI view
+     * transitions.  The snapshot acts as a static double — a frozen
+     * frame that SwiftUI places at the game viewport's position
+     * (gameRect) during the hero zoom animation, so the transition
+     * appears to zoom into the live game.  Once the animation
+     * finishes, the snapshot is discarded and the real SDL rendering
+     * takes over.  See docs/pause-resume.md for the full picture. */
     void checkPause() {
         if (!mkxp_isPaused() && !mkxp_isPauseRequested())
             return;
+
+        /* Capture the front buffer (the engine's internal render
+         * target, not FBO 0 / the screen — iOS gives undefined
+         * content for the on-screen framebuffer after swapBuffers).
+         * The engine's 2D projection maps Y top-to-bottom, so
+         * glReadPixels on this FBO produces top-down pixel data —
+         * no vertical flip needed. */
+        {
+            TEXFBO &fb = screen.getPP().frontBuffer();
+            int w = fb.width;
+            int h = fb.height;
+            if (w > 0 && h > 0) {
+                FBO::ID prevFBO = FBO::boundFramebufferID;
+                FBO::bind(fb.fbo);
+
+                std::vector<uint8_t> pixels(w * h * 4);
+                gl.ReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+                FBO::bind(prevFBO);
+                mkxp_setSnapshot(pixels.data(), w, h);
+            }
+        }
 
         mkxp_checkPause();
 

@@ -26,6 +26,19 @@ class AppState {
     /// Non-nil when the engine is alive but suspended on a condvar.
     var pausedGame: GameEntry?
 
+    /// Snapshot of the game viewport captured when pausing.
+    /// The SDL window can't participate in SwiftUI transitions, so this
+    /// frozen frame acts as a static double during the hero zoom animation.
+    /// Positioned at `gameRect` in GameLoadingView to match the portrait layout.
+    /// Cleared once the animation finishes and the live SDL view takes over.
+    /// See docs/pause-resume.md.
+    var pauseSnapshot: UIImage?
+
+    /// Set to true when the engine swaps its first frame after resume.
+    /// PlayerView watches this to know when the live SDL surface is
+    /// visible and it's safe to fade out the snapshot overlay.
+    var snapshotCanFade = false
+
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
     private var sessionStartTime: Date?  // for play time tracking
@@ -81,6 +94,8 @@ class AppState {
 
         guard phase == .library, pausedGame == nil else { return }
         selectedGame = game
+        pauseSnapshot = nil
+        snapshotCanFade = false
         phase = .loading
 
         // Apply per-game settings to mkxp.json before the engine reads it
@@ -181,6 +196,7 @@ class AppState {
         mkxp_requestTerminate()
         selectedGame = nil
         pausedGame = nil
+        pauseSnapshot = nil
         phase = .library
     }
 
@@ -201,13 +217,34 @@ class AppState {
     }
 
     /// Resume the engine from a paused state and return to gameplay.
+    /// The phase change is delayed so the hero zoom animation can play
+    /// while the library is still visible.  The snapshot stays alive —
+    /// PlayerView picks it up as a fade-out overlay so there's no flash
+    /// at the handoff, and controls are visible immediately.
     func resume() {
         guard pausedGame != nil else { return }
         pausedGame = nil
-        withAnimation(.easeOut(duration: 0.2)) {
-            phase = .playing
-        }
+        snapshotCanFade = false
         mkxp_requestResume()
+
+        // Delay phase change so the hero zoom plays with the library visible.
+        // When phase flips to .playing, PlayerView appears instantly (via
+        // .transition(.identity)) with the snapshot overlay at gameRect.
+        // The library fades out underneath — the snapshot stays fully
+        // visible because PlayerView's copy is at full opacity throughout.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            // Instant phase change — no animation.  PlayerView appears
+            // with the snapshot overlay at the exact same gameRect
+            // position, so the handoff is pixel-perfect.  An animated
+            // fade would make the library grid visible behind
+            // GameLoadingView as it becomes semi-transparent.
+            self.phase = .playing
+            // Small delay so the resume snapshot settles after the
+            // hero zoom before fading.  Mirrors the fresh-start delay.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.snapshotCanFade = true
+            }
+        }
     }
 
     /// Resume the engine if it was paused by a background transition.
@@ -226,12 +263,25 @@ class AppState {
     /// Registers C function pointer callbacks with the engine bridge.
     /// These fire on the engine thread; each dispatches to main for UI updates.
     private func registerBridgeCallbacks() {
-        // Game ready: loading -> playing
-        mkxp_setGameReadyCallback({ _ in
+        // First frame rendered: fires for both fresh starts and resumes.
+        // For fresh starts (phase == .loading), transition to .playing.
+        // For resumes (phase == .playing), signal the snapshot can fade.
+        mkxp_setFrameRenderedCallback({ _ in
             DispatchQueue.main.async {
-                guard AppState.shared.phase == .loading else { return }
-                withAnimation(.easeOut(duration: 0.3)) {
-                    AppState.shared.phase = .playing
+                let state = AppState.shared
+                if state.phase == .loading {
+                    // Small delay so the loading screen settles after the
+                    // hero zoom before dissolving.  Without this, the
+                    // artwork "flashes" for a split second because the
+                    // engine renders its first frame almost immediately.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        guard state.phase == .loading else { return }
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            state.phase = .playing
+                        }
+                    }
+                } else if state.phase == .playing {
+                    state.snapshotCanFade = true
                 }
             }
         }, nil)
@@ -263,8 +313,30 @@ class AppState {
             }
         }, nil)
 
-        // Engine paused: return to library (manual) or stay on player (background)
+        // Engine paused: capture snapshot and return to library (manual) or stay on player (background)
         mkxp_setPausedCallback({ _ in
+            // Capture snapshot on the engine thread (pointer is valid until next pause/reset)
+            var snapshotImage: UIImage?
+            var w: Int32 = 0
+            var h: Int32 = 0
+            if let ptr = mkxp_getSnapshotRGBA(&w, &h), w > 0, h > 0 {
+                let bytesPerRow = Int(w) * 4
+                let totalBytes = bytesPerRow * Int(h)
+                let data = Data(bytes: ptr, count: totalBytes)
+                if let provider = CGDataProvider(data: data as CFData),
+                   let cgImage = CGImage(
+                       width: Int(w), height: Int(h),
+                       bitsPerComponent: 8, bitsPerPixel: 32,
+                       bytesPerRow: bytesPerRow,
+                       space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                       provider: provider,
+                       decode: nil, shouldInterpolate: true,
+                       intent: .defaultIntent) {
+                    snapshotImage = UIImage(cgImage: cgImage)
+                }
+            }
+
             DispatchQueue.main.async {
                 guard AppState.shared.phase == .playing else { return }
                 if AppState.shared.isBackgroundPause {
@@ -272,6 +344,7 @@ class AppState {
                     // Will auto-resume when app returns to foreground.
                     return
                 }
+                AppState.shared.pauseSnapshot = snapshotImage
                 AppState.shared.pausedGame = AppState.shared.selectedGame
                 withAnimation(.easeOut(duration: 0.25)) {
                     AppState.shared.phase = .library
