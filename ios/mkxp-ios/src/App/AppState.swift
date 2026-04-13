@@ -22,6 +22,10 @@ class AppState {
     var selectedGame: GameEntry?
     var errorMessage: String?
 
+    /// The game that is currently paused in the background.
+    /// Non-nil when the engine is alive but suspended on a condvar.
+    var pausedGame: GameEntry?
+
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
     private var sessionStartTime: Date?  // for play time tracking
@@ -69,7 +73,13 @@ class AppState {
 
     /// Called from NavigationLink's simultaneousGesture when user taps a card.
     func selectGame(_ game: GameEntry) {
-        guard phase == .library else { return }
+        // If this game is already paused, resume it instead
+        if let paused = pausedGame, paused.id == game.id {
+            resume()
+            return
+        }
+
+        guard phase == .library, pausedGame == nil else { return }
         selectedGame = game
         phase = .loading
 
@@ -165,10 +175,44 @@ class AppState {
     /// Returns to the library and tears down the engine.
     /// Used by quit confirmation, error dismissal, and any other exit path.
     func returnToLibrary() {
-        selectedGame = nil
-        phase = .library
+        // requestTerminate unblocks the condvar (if paused) and pushes
+        // SDL_QUIT. The engine will skip audio restoration because the
+        // terminate flag is set before the condvar is signaled.
         mkxp_requestTerminate()
+        selectedGame = nil
+        pausedGame = nil
+        phase = .library
     }
+
+    /// Request the engine to pause and return to library.
+    /// Called from the toolbar pause button.
+    func requestPause() {
+        guard phase == .playing else { return }
+        isBackgroundPause = false
+        mkxp_requestPause()
+    }
+
+    /// Pause the engine silently without leaving the player.
+    /// Called when the app moves to the background; auto-resumes on foreground.
+    func requestBackgroundPause() {
+        guard phase == .playing else { return }
+        isBackgroundPause = true
+        mkxp_requestPause()
+    }
+
+    /// Resume the engine from a paused state and return to gameplay.
+    func resume() {
+        guard pausedGame != nil else { return }
+        pausedGame = nil
+        withAnimation(.easeOut(duration: 0.2)) {
+            phase = .playing
+        }
+        mkxp_requestResume()
+    }
+
+    /// Whether the current pause was triggered by app backgrounding
+    /// (silent — no UI transition to library).
+    private var isBackgroundPause = false
 
     // MARK: - Bridge Callbacks
 
@@ -211,5 +255,25 @@ class AppState {
                 AppState.shared.errorMessage = message
             }
         }, nil)
+
+        // Engine paused: return to library (manual) or stay on player (background)
+        mkxp_setPausedCallback({ _ in
+            DispatchQueue.main.async {
+                guard AppState.shared.phase == .playing else { return }
+                if AppState.shared.isBackgroundPause {
+                    // Silent pause — engine is suspended but UI stays on PlayerView.
+                    // Will auto-resume when app returns to foreground.
+                    return
+                }
+                AppState.shared.pausedGame = AppState.shared.selectedGame
+                withAnimation(.easeOut(duration: 0.25)) {
+                    AppState.shared.phase = .library
+                }
+            }
+        }, nil)
+
+        // Engine resumed: handled in resume() method
+        mkxp_setResumedCallback({ _ in }, nil)
     }
+
 }

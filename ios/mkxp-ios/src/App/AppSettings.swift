@@ -53,18 +53,21 @@ enum AppTheme: String, CaseIterable {
 
 enum ExperimentalFeature: String, CaseIterable, Identifiable {
     case gameQuit = "experimental.gameQuit"
+    case gamePause = "experimental.gamePause"
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .gameQuit: "Quit game"
+        case .gamePause: "Pause game"
         }
     }
 
     var description: String {
         switch self {
         case .gameQuit: "Quit the running game and return to the library."
+        case .gamePause: "Pause the engine and freeze the game in place."
         }
     }
 }

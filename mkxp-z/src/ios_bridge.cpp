@@ -8,7 +8,9 @@
 #include "config.h"
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include <string>
+#include <vector>
 
 #include <SDL.h>
 
@@ -30,6 +32,7 @@ static std::atomic<bool> s_pathSet{false};
 
 // Engine terminated flag: set by engine after full teardown.
 static std::atomic<bool> s_engineTerminated{false};
+static std::atomic<bool> s_terminateRequested{false};
 
 // Game viewport rect in logical points, updated by the engine each frame.
 static std::atomic<float> s_gameRectX{0};
@@ -79,6 +82,24 @@ static std::string s_errorMessage;
 static mkxp_ErrorMessageCallback s_errorMsgCb = nullptr;
 static void *s_errorMsgUserdata = nullptr;
 
+// Pause / Resume state.
+static std::atomic<bool> s_pauseRequested{false};
+static std::atomic<bool> s_paused{false};
+static std::mutex s_pauseMutex;
+static std::condition_variable s_pauseCV;
+
+// Snapshot buffer: owned by the bridge, written by engine, read by UI.
+static std::mutex s_snapshotMutex;
+static std::vector<unsigned char> s_snapshotData;
+static int s_snapshotWidth = 0;
+static int s_snapshotHeight = 0;
+
+// Pause/resume callbacks.
+static mkxp_PausedCallback s_pausedCb = nullptr;
+static void *s_pausedUserdata = nullptr;
+static mkxp_ResumedCallback s_resumedCb = nullptr;
+static void *s_resumedUserdata = nullptr;
+
 extern "C" {
 
 void mkxp_setGameReady(void) {
@@ -116,11 +137,26 @@ const char *mkxp_waitForGamePath(void) {
 }
 
 void mkxp_requestTerminate(void) {
+    s_terminateRequested.store(true, std::memory_order_release);
+
+    // If the engine is paused on the condvar, unblock it so it can
+    // process SDL_QUIT. This avoids needing a separate resume call.
+    {
+        std::lock_guard<std::mutex> lock(s_pauseMutex);
+        s_paused.store(false, std::memory_order_release);
+        s_pauseRequested.store(false, std::memory_order_release);
+    }
+    s_pauseCV.notify_one();
+
     // Push SDL_QUIT into the event queue. The engine's event loop
     // will pick it up and initiate normal shutdown.
     SDL_Event event;
     event.type = SDL_QUIT;
     SDL_PushEvent(&event);
+}
+
+int mkxp_isTerminateRequested(void) {
+    return s_terminateRequested.load(std::memory_order_acquire) ? 1 : 0;
 }
 
 int mkxp_isEngineTerminated(void) {
@@ -141,6 +177,7 @@ void mkxp_resetBridgeState(void) {
     s_gameReady.store(false, std::memory_order_release);
     s_pathSet.store(false, std::memory_order_release);
     s_engineTerminated.store(false, std::memory_order_release);
+    s_terminateRequested.store(false, std::memory_order_release);
     s_gameRectX.store(0, std::memory_order_relaxed);
     s_gameRectY.store(0, std::memory_order_relaxed);
     s_gameRectW.store(0, std::memory_order_relaxed);
@@ -148,6 +185,15 @@ void mkxp_resetBridgeState(void) {
     // Note: s_verticalAlignment and s_postloadEnabled are NOT reset here.
     // They are explicitly set by selectGame() before each session.
     s_sdlWindowID = 0;
+    // Reset pause state so a stale pause doesn't block the next session.
+    s_pauseRequested.store(false, std::memory_order_relaxed);
+    s_paused.store(false, std::memory_order_relaxed);
+    {
+        std::lock_guard<std::mutex> lock(s_snapshotMutex);
+        s_snapshotData.clear();
+        s_snapshotWidth = 0;
+        s_snapshotHeight = 0;
+    }
     {
         std::lock_guard<std::mutex> lock(s_pathMutex);
         s_gamePath.clear();
@@ -308,6 +354,82 @@ const char *mkxp_getErrorMessage(void) {
 void mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *userdata) {
     s_errorMsgCb = cb;
     s_errorMsgUserdata = userdata;
+}
+
+// ============================================================================
+// Pause / Resume
+// ============================================================================
+
+void mkxp_requestPause(void) {
+    s_pauseRequested.store(true, std::memory_order_release);
+}
+
+void mkxp_requestResume(void) {
+    {
+        std::lock_guard<std::mutex> lock(s_pauseMutex);
+        s_pauseRequested.store(false, std::memory_order_release);
+        s_paused.store(false, std::memory_order_release);
+    }
+    s_pauseCV.notify_one();
+}
+
+void mkxp_checkPause(void) {
+    if (!s_pauseRequested.load(std::memory_order_acquire))
+        return;
+
+    /* The engine calls this from its GL thread. At this point the
+     * caller (e.g. Graphics.update) has just finished rendering a
+     * frame, so the framebuffer is ready for snapshot capture.
+     * Snapshot capture and audio suspension are handled by the
+     * caller in graphics.cpp before invoking this function. */
+
+    s_paused.store(true, std::memory_order_release);
+
+    if (s_pausedCb)
+        s_pausedCb(s_pausedUserdata);
+
+    /* Block until resume is requested. */
+    std::unique_lock<std::mutex> lock(s_pauseMutex);
+    s_pauseCV.wait(lock, [] {
+        return !s_paused.load(std::memory_order_acquire);
+    });
+
+    if (s_resumedCb)
+        s_resumedCb(s_resumedUserdata);
+}
+
+bool mkxp_isPauseRequested(void) {
+    return s_pauseRequested.load(std::memory_order_acquire);
+}
+
+bool mkxp_isPaused(void) {
+    return s_paused.load(std::memory_order_acquire);
+}
+
+void mkxp_setSnapshot(const unsigned char *data, int width, int height) {
+    std::lock_guard<std::mutex> lock(s_snapshotMutex);
+    size_t size = (size_t)width * height * 4;
+    s_snapshotData.assign(data, data + size);
+    s_snapshotWidth = width;
+    s_snapshotHeight = height;
+}
+
+const unsigned char *mkxp_getSnapshotRGBA(int *width, int *height) {
+    std::lock_guard<std::mutex> lock(s_snapshotMutex);
+    if (s_snapshotData.empty()) return nullptr;
+    if (width) *width = s_snapshotWidth;
+    if (height) *height = s_snapshotHeight;
+    return s_snapshotData.data();
+}
+
+void mkxp_setPausedCallback(mkxp_PausedCallback cb, void *userdata) {
+    s_pausedCb = cb;
+    s_pausedUserdata = userdata;
+}
+
+void mkxp_setResumedCallback(mkxp_ResumedCallback cb, void *userdata) {
+    s_resumedCb = cb;
+    s_resumedUserdata = userdata;
 }
 
 // ============================================================================
