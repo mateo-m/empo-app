@@ -16,6 +16,8 @@ struct GameLibraryView: View {
     @State private var searchText = ""
     @State private var gameForSettings: GameEntry?
     @State private var gameForInfo: GameEntry?
+    @State private var pendingGame: GameEntry?
+    @State private var showPausedGameAlert = false
 
     private var showEmpty: Bool {
         library.games.isEmpty
@@ -102,6 +104,26 @@ struct GameLibraryView: View {
                 Button("OK") {}
             } message: {
                 Text("This game couldn't be loaded properly. You can delete it and try importing again.")
+            }
+            .alert("A game is paused", isPresented: $showPausedGameAlert) {
+                Button("Cancel", role: .cancel) {
+                    pendingGame = nil
+                }
+                Button("Quit and play") {
+                    if let game = pendingGame {
+                        pendingGame = nil
+                        appState.returnToLibrary()
+                        // Small delay to let the engine tear down before starting new game
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            appState.selectGame(game)
+                            path.append(game)
+                        }
+                    }
+                }
+            } message: {
+                if let paused = appState.pausedGame {
+                    Text("\"\(paused.title)\" is still running. Quit it to play a different game?")
+                }
             }
             .navigationDestination(for: GameEntry.self) { game in
                 GameLoadingView(game: game)
@@ -291,19 +313,16 @@ struct GameLibraryView: View {
                         gameToDelete = game
                         showDeleteConfirm = true
                     })
-                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                    .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
 
                 case .invalid:
                     GameListRow(game: game)
                         .onTapGesture { showInvalidAlert = true }
-                        .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                        .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
 
                 case .ready:
-                    GameListRow(game: game, heroNamespace: heroNamespace)
-                        .onTapGesture {
-                            appState.selectGame(game)
-                            path.append(game)
-                        }
+                    GameListRow(game: game, isPaused: appState.pausedGame?.id == game.id, heroNamespace: heroNamespace)
+                        .onTapGesture { handleGameTap(game) }
                         .swipeActions(edge: .leading) {
                             Button { gameForSettings = game } label: {
                                 Label("Settings", systemImage: "gearshape")
@@ -316,6 +335,15 @@ struct GameLibraryView: View {
                             .tint(.gray)
                         }
                         .swipeActions(edge: .trailing) {
+                            if appState.pausedGame?.id == game.id {
+                                Button(role: .destructive) {
+                                    appState.returnToLibrary()
+                                } label: {
+                                    Label("Quit", systemImage: "stop.fill")
+                                }
+                                .tint(.red)
+                            }
+
                             Button(role: .destructive) {
                                 gameToDelete = game
                                 showDeleteConfirm = true
@@ -324,7 +352,7 @@ struct GameLibraryView: View {
                             }
                             .tint(.red)
                         }
-                        .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                        .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                 }
             }
         }
@@ -351,21 +379,38 @@ struct GameLibraryView: View {
                     .id("\(game.id)-invalid")
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
-                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                    .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
 
             case .ready:
-                NavigationLink(value: game) {
-                    GameCard(game: game)
+                let isPaused = appState.pausedGame?.id == game.id
+                Button { handleGameTap(game) } label: {
+                    GameCard(game: game, isPaused: isPaused)
                         .matchedTransitionSource(id: game.id, in: heroNamespace)
                 }
-                    .id("\(game.id)-ready")
+                    .id("\(game.id)-\(isPaused ? "paused" : "ready")")
                     .buttonStyle(CardPressStyle())
-                    .simultaneousGesture(TapGesture().onEnded {
-                        appState.selectGame(game)
-                    })
                     .transition(.cardAppear)
-                    .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                    .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
             }
+        }
+    }
+
+    // MARK: - Game Tap Handling
+
+    /// Centralized tap handler for game cards in both grid and list modes.
+    private func handleGameTap(_ game: GameEntry) {
+        if appState.pausedGame?.id == game.id {
+            // Resume the paused game
+            appState.resume()
+            path.append(game)
+        } else if appState.pausedGame != nil {
+            // Another game is paused — confirm before switching
+            pendingGame = game
+            showPausedGameAlert = true
+        } else {
+            // Normal: start the game
+            appState.selectGame(game)
+            path.append(game)
         }
     }
 
@@ -428,10 +473,13 @@ extension AnyTransition {
 
 private struct GameContextMenuModifier: ViewModifier {
     let game: GameEntry
+    var appState: AppState
     @Binding var gameToDelete: GameEntry?
     @Binding var showDeleteConfirm: Bool
     @Binding var gameForSettings: GameEntry?
     @Binding var gameForInfo: GameEntry?
+
+    private var isPaused: Bool { appState.pausedGame?.id == game.id }
 
     func body(content: Content) -> some View {
         content.contextMenu {
@@ -449,6 +497,16 @@ private struct GameContextMenuModifier: ViewModifier {
                 }
             }
 
+            if isPaused {
+                Divider()
+
+                Button(role: .destructive) {
+                    appState.returnToLibrary()
+                } label: {
+                    Label("Quit", systemImage: "stop.fill")
+                }
+            }
+
             Divider()
 
             Button(role: .destructive) {
@@ -462,7 +520,7 @@ private struct GameContextMenuModifier: ViewModifier {
 }
 
 extension View {
-    func gameContextMenu(game: GameEntry, gameToDelete: Binding<GameEntry?>, showDeleteConfirm: Binding<Bool>, gameForSettings: Binding<GameEntry?>, gameForInfo: Binding<GameEntry?>) -> some View {
-        modifier(GameContextMenuModifier(game: game, gameToDelete: gameToDelete, showDeleteConfirm: showDeleteConfirm, gameForSettings: gameForSettings, gameForInfo: gameForInfo))
+    func gameContextMenu(game: GameEntry, appState: AppState, gameToDelete: Binding<GameEntry?>, showDeleteConfirm: Binding<Bool>, gameForSettings: Binding<GameEntry?>, gameForInfo: Binding<GameEntry?>) -> some View {
+        modifier(GameContextMenuModifier(game: game, appState: appState, gameToDelete: gameToDelete, showDeleteConfirm: showDeleteConfirm, gameForSettings: gameForSettings, gameForInfo: gameForInfo))
     }
 }

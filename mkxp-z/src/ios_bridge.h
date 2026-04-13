@@ -101,10 +101,12 @@ const char *mkxp_waitForGamePath(void);
 // ============================================================================
 
 // mkxp_requestTerminate: UI asks the engine to shut down.
+// mkxp_isTerminateRequested: check if termination was requested (before engine has shut down).
 // mkxp_isEngineTerminated: check if the engine has fully shut down.
 // mkxp_setEngineTerminated: engine sets this after teardown is complete.
 // mkxp_resetBridgeState: resets all bridge flags for a new game session.
 void        mkxp_requestTerminate(void);
+int         mkxp_isTerminateRequested(void);
 int         mkxp_isEngineTerminated(void);
 void        mkxp_setEngineTerminated(void);
 void        mkxp_resetBridgeState(void);
@@ -229,6 +231,48 @@ const char *mkxp_getErrorMessage(void);
 // Called when the engine sets an error message.
 typedef void (*mkxp_ErrorMessageCallback)(const char *message, void *userdata);
 void        mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *userdata);
+
+// ============================================================================
+// Pause / Resume (UI <-> Engine)
+// ============================================================================
+//
+// Pause flow:
+//   1. UI calls mkxp_requestPause().
+//   2. Engine's checkPause() (called from Graphics.update etc.) sees the flag,
+//      captures a framebuffer snapshot, suspends audio, fires the paused
+//      callback, then blocks on a condvar.
+//   3. UI calls mkxp_requestResume() to unblock the engine thread.
+//
+// The snapshot is written to a shared buffer by the engine (on the GL thread)
+// and read by the UI to display over the SDL view while the engine is frozen.
+
+// UI -> Engine: request the engine to pause/resume.
+void        mkxp_requestPause(void);
+void        mkxp_requestResume(void);
+
+// Engine -> internal: check if a pause was requested and block if so.
+// Called from Graphics blocking points. NOT for UI use.
+void        mkxp_checkPause(void);
+
+// Query pause state.
+bool        mkxp_isPauseRequested(void);
+bool        mkxp_isPaused(void);
+
+// Snapshot: RGBA pixel data captured by the engine before blocking.
+// mkxp_getSnapshotRGBA returns a pointer to the pixel buffer (valid until
+// the next pause). Width/height are set by the engine.
+// The UI must NOT free this pointer.
+void        mkxp_setSnapshot(const unsigned char *data, int width, int height);
+const unsigned char *mkxp_getSnapshotRGBA(int *width, int *height);
+
+// Called on the engine thread when the engine has actually paused
+// (snapshot captured, audio suspended, thread about to block).
+typedef void (*mkxp_PausedCallback)(void *userdata);
+void        mkxp_setPausedCallback(mkxp_PausedCallback cb, void *userdata);
+
+// Called on the engine thread when the engine has resumed.
+typedef void (*mkxp_ResumedCallback)(void *userdata);
+void        mkxp_setResumedCallback(mkxp_ResumedCallback cb, void *userdata);
 
 // ============================================================================
 // Debug logging

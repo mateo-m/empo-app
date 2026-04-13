@@ -339,9 +339,11 @@ struct PlayerView: View {
         let gap: CGFloat = isPortrait ? 6 : 8
 
         let buttons: [(icon: String, action: () -> Void, tint: Color)] = {
-            var list: [(icon: String, action: () -> Void, tint: Color)] = [
-                ("keyboard", { toggleKeyboard() }, .white.opacity(0.8)),
-            ]
+            var list: [(icon: String, action: () -> Void, tint: Color)] = []
+            if AppSettings.shared.isEnabled(.gamePause) {
+                list.append(("pause.fill", { appState.requestPause() }, .white.opacity(0.8)))
+            }
+            list.append(("keyboard", { toggleKeyboard() }, .white.opacity(0.8)))
             if AppSettings.shared.debugMode {
                 list.append(("chart.line.uptrend.xyaxis", { showDebugOverlay.toggle() }, .white.opacity(0.8)))
             }

@@ -163,9 +163,12 @@ int rgssThreadFun(void *userdata) {
   gl.BindFramebuffer(GL_FRAMEBUFFER, FBO::screenFramebufferID.gl);
   FBO::boundFramebufferID = FBO::screenFramebufferID;
 
-  /* AL context — persistent, just activate on this thread. */
+  /* AL context — persistent, just activate on this thread.
+   * alcProcessContext is a safety net in case processing was
+   * suspended during a previous session's pause-terminate. */
   ALCcontext *alcCtx = threadData->alcCtx;
   alcMakeContextCurrent(alcCtx);
+  alcProcessContext(alcCtx);
 
   /* --- Session loop: runs on the SAME thread forever --- */
   while (true) {
@@ -192,6 +195,12 @@ int rgssThreadFun(void *userdata) {
 
     threadData->rqTermAck.set();
     threadData->ethread->requestTerminate();
+
+    /* Ensure the OpenAL context is current before tearing down Audio.
+     * handlePause() nulls it during pause. If the game was terminated
+     * while paused, handlePause() suspended processing via
+     * alcSuspendContext before restoring it, so no audio blips here. */
+    alcMakeContextCurrent(alcCtx);
 
     SharedState::finiInstance();
 

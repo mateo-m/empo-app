@@ -67,6 +67,9 @@
 
 #if TARGET_OS_IPHONE
 #include "ios_bridge.h"
+#include "audio.h"
+#include <OpenAL/al.h>
+#include <OpenAL/alc.h>
 #endif
 
 
@@ -1283,6 +1286,39 @@ struct GraphicsPrivate {
         last_avg_update = time;
         SDL_UnlockMutex(avgFPSLock);
     }
+
+#if TARGET_OS_IPHONE
+    /* Check for a pending pause request, suspend audio, and block
+     * until resumed.  Called from every Graphics blocking point
+     * (update, wait, fadeout, fadein, repaintWait, transition). */
+    void handlePause() {
+        if (!mkxp_isPaused() && !mkxp_isPauseRequested())
+            return;
+
+        /* ---- Suspend audio by detaching the OpenAL context ---- */
+        alcMakeContextCurrent(NULL);
+
+        /* ---- Block until resumed or terminated ---- */
+        mkxp_checkPause();
+
+        /* ---- Restore audio ---- */
+        if (mkxp_isTerminateRequested()) {
+            /* Suspend context processing, restore it (so API calls work),
+             * then stop all sources before resuming processing.  This
+             * prevents any queued audio buffers from reaching the output
+             * when the context becomes current again. */
+            alcSuspendContext(threadData->alcCtx);
+            alcMakeContextCurrent(threadData->alcCtx);
+            shState->audio().reset();
+            alcProcessContext(threadData->alcCtx);
+        } else {
+            alcMakeContextCurrent(threadData->alcCtx);
+        }
+
+        /* Reset frame timing so the limiter doesn't try to catch up. */
+        fpsLimiter.resetFrameAdjust();
+    }
+#endif
 };
 
 Graphics::Graphics(RGSSThreadData *data) {
@@ -1350,6 +1386,10 @@ void Graphics::update(bool checkForShutdown) {
     
     p->checkResize();
     p->redrawScreen();
+
+#if TARGET_OS_IPHONE
+    p->handlePause();
+#endif
 }
 
 void Graphics::freeze() {
@@ -1466,6 +1506,9 @@ void Graphics::transition(int duration, const char *filename, int vague) {
         p->swapGLBuffer();
         /* Call this manually, as redrawScreen() is not called during this loop. */
         p->updateAvgFPS();
+#if TARGET_OS_IPHONE
+        p->handlePause();
+#endif
     }
     
     glState.blend.pop();
@@ -1504,6 +1547,9 @@ void Graphics::wait(int duration) {
     for (int i = 0; i < duration; ++i) {
         p->checkShutDownReset();
         p->redrawScreen();
+#if TARGET_OS_IPHONE
+        p->handlePause();
+#endif
     }
 }
 
@@ -1528,6 +1574,9 @@ void Graphics::fadeout(int duration) {
             GLMeta::blitEnd();
             
             p->swapGLBuffer();
+#if TARGET_OS_IPHONE
+            p->handlePause();
+#endif
         } else {
             update();
         }
@@ -1555,6 +1604,9 @@ void Graphics::fadein(int duration) {
             GLMeta::blitEnd();
             
             p->swapGLBuffer();
+#if TARGET_OS_IPHONE
+            p->handlePause();
+#endif
         } else {
             update();
         }
@@ -1903,6 +1955,10 @@ void Graphics::repaintWait(const AtomicFlag &exitCond, bool checkReset) {
         p->fpsLimiter.delay();
         
         p->threadData->ethread->notifyFrame();
+
+#if TARGET_OS_IPHONE
+        p->handlePause();
+#endif
     }
     
     GLMeta::blitEnd();
