@@ -116,6 +116,7 @@ struct PlayerView: View {
     // Resume snapshot fade-out (static double for the SDL view)
     @State private var resumeSnapshot: UIImage?
     @State private var snapshotOpacity: Double = 1
+    @State private var controlsVisible: Bool = true
 
     // Edit mode state
     @State private var showAddSheet = false
@@ -142,7 +143,7 @@ struct PlayerView: View {
                 Color.clear
                     .allowsHitTesting(false)
 
-                if !controlsHidden {
+                if !controlsHidden && controlsVisible {
                     // D-Pad
                     dpadView(in: geo)
 
@@ -153,10 +154,12 @@ struct PlayerView: View {
                 }
 
                 // Toolbar (always visible unless editing)
-                if !editMode {
-                    toolbarButtons(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoSize: geo.size)
-                } else {
-                    editToolbar(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoSize: geo.size)
+                if controlsVisible {
+                    if !editMode {
+                        toolbarButtons(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoSize: geo.size)
+                    } else {
+                        editToolbar(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoSize: geo.size)
+                    }
                 }
 
                 // Debug overlay
@@ -195,18 +198,22 @@ struct PlayerView: View {
         .ignoresSafeArea()
         .onAppear {
             TCInstallKeyEventWatcher()
-            resetToolbarIdleTimer()
 
             // If resuming from pause, pick up the snapshot and hold it
             // until the engine signals its first frame has been swapped.
+            // Hide controls until the snapshot fades to avoid visual clutter
+            // during the transition.
             if let snapshot = appState.pauseSnapshot {
                 resumeSnapshot = snapshot
                 snapshotOpacity = 1
+                controlsVisible = false
 
                 // If the engine already rendered before we appeared, fade now
                 if appState.snapshotCanFade {
                     startSnapshotFade()
                 }
+            } else {
+                resetToolbarIdleTimer()
             }
         }
         .onChange(of: appState.snapshotCanFade) { _, canFade in
@@ -544,7 +551,9 @@ struct PlayerView: View {
     private func startSnapshotFade() {
         withAnimation(.easeOut(duration: 0.3)) {
             snapshotOpacity = 0
+            controlsVisible = true
         }
+        resetToolbarIdleTimer()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             resumeSnapshot = nil
             appState.pauseSnapshot = nil
