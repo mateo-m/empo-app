@@ -535,6 +535,18 @@ struct GraphicsPrivate {
     }
     
     void updateScreenResoRatio(RGSSThreadData *rtData) {
+        /* Guard against zero scSize — can happen transiently during
+         * rapid rotation when window size and safe area insets are
+         * from different orientations. */
+        if (scSize.x <= 0 || scSize.y <= 0) {
+            char buf[128];
+            snprintf(buf, sizeof(buf),
+                     "REJECTED zero scSize=%dx%d in updateScreenResoRatio",
+                     scSize.x, scSize.y);
+            mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+            return;
+        }
+
         Vec2 &ratio = rtData->sizeResoRatio;
         ratio.x = (float)scRes.x / scSize.x * backingScaleFactor;
         ratio.y = (float)scRes.y / scSize.y * backingScaleFactor;
@@ -568,9 +580,27 @@ struct GraphicsPrivate {
             int saLeftPx  = (int)(saLeft   * uiScale);
             int saRightPx = (int)(saRight  * uiScale);
 
-            // Available area inside safe insets
-            int availW = winSize.x - saLeftPx - saRightPx;
-            int availH = winSize.y - saTopPx  - saBotPx;
+            // Available area inside safe insets.
+            // During rapid rotation the window size and safe area insets
+            // may come from different orientations, producing negative
+            // or zero available dimensions.  Clamp to 1 to prevent
+            // invalid viewport calculations and GL state corruption.
+            int rawAvailW = winSize.x - saLeftPx - saRightPx;
+            int rawAvailH = winSize.y - saTopPx  - saBotPx;
+            int availW = std::max(1, rawAvailW);
+            int availH = std::max(1, rawAvailH);
+
+            if (rawAvailW <= 0 || rawAvailH <= 0) {
+                char buf[256];
+                snprintf(buf, sizeof(buf),
+                         "CLAMPED avail: raw=%dx%d clamped=%dx%d "
+                         "winSize=%dx%d sa=T%.0f B%.0f L%.0f R%.0f (px: T%d B%d L%d R%d) uiScale=%.1f",
+                         rawAvailW, rawAvailH, availW, availH,
+                         winSize.x, winSize.y,
+                         saTop, saBottom, saLeft, saRight,
+                         saTopPx, saBotPx, saLeftPx, saRightPx, uiScale);
+                mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+            }
 
             if (fixedAspectRatio) {
                 // Fit game within the safe area while preserving aspect ratio
@@ -689,6 +719,7 @@ struct GraphicsPrivate {
     }
     
     void checkResize(bool skipIntScaleBuffer = false) {
+        Vec2i oldWinSize = winSize;
         bool sizeChanged = threadData->windowSizeMsg.poll(winSize);
 
 #if TARGET_OS_IPHONE
@@ -697,9 +728,20 @@ struct GraphicsPrivate {
         // if the window size didn't change.
         bool insetsChanged = mkxp_consumeSafeAreaInsetsChanged();
         if (insetsChanged && !sizeChanged) {
+            char buf[256];
+            snprintf(buf, sizeof(buf),
+                     "insetsChanged (no size change) winSize=%dx%d",
+                     winSize.x, winSize.y);
+            mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+
             // Recalculate viewport with current window size
             recalculateScreenSize(threadData->config.fixedAspectRatio);
             updateScreenResoRatio(threadData);
+
+            snprintf(buf, sizeof(buf),
+                     "after insets recalc: scSize=%dx%d scOffset=%d,%d bsf=%.3f",
+                     scSize.x, scSize.y, scOffset.x, scOffset.y, backingScaleFactor);
+            mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
 
             SDL_Rect screen = {scOffset.x, scOffset.y, scSize.x, scSize.y};
             threadData->ethread->notifyGameScreenChange(screen);
@@ -716,6 +758,33 @@ struct GraphicsPrivate {
             /* Query the actual size in pixels, not units */
             Vec2i drawableSize(winSize);
             threadData->drawableSizeMsg.poll(drawableSize);
+
+            {
+                char buf[256];
+                snprintf(buf, sizeof(buf),
+                         "sizeChanged: winSize=%dx%d drawable=%dx%d (was %dx%d)",
+                         winSize.x, winSize.y, drawableSize.x, drawableSize.y,
+                         oldWinSize.x, oldWinSize.y);
+                mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+            }
+
+            /* Guard against zero dimensions during rotation transitions.
+             * iOS can momentarily report 0-width or 0-height while the
+             * window is being resized.  A zero winSize.x would cause
+             * division-by-zero in backingScaleFactor, producing inf/NaN
+             * that permanently corrupts all viewport calculations.
+             * Restore winSize so future frames keep using the last good value. */
+            if (winSize.x <= 0 || winSize.y <= 0 ||
+                drawableSize.x <= 0 || drawableSize.y <= 0) {
+                char buf[256];
+                snprintf(buf, sizeof(buf),
+                         "REJECTED zero dims: winSize=%dx%d drawable=%dx%d, restoring %dx%d",
+                         winSize.x, winSize.y, drawableSize.x, drawableSize.y,
+                         oldWinSize.x, oldWinSize.y);
+                mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+                winSize = oldWinSize;
+                return;
+            }
             
             backingScaleFactor = (float)drawableSize.x / winSize.x;
             winSize = drawableSize;
@@ -729,6 +798,21 @@ struct GraphicsPrivate {
             glState.viewport.refresh();
             recalculateScreenSize(threadData->config.fixedAspectRatio);
             updateScreenResoRatio(threadData);
+
+            {
+                char buf[256];
+                snprintf(buf, sizeof(buf),
+                         "after resize: scSize=%dx%d scOffset=%d,%d bsf=%.3f",
+                         scSize.x, scSize.y, scOffset.x, scOffset.y, backingScaleFactor);
+                mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+
+                GLenum fbStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+                GLenum glErr = glGetError();
+                snprintf(buf, sizeof(buf),
+                         "GL state: FBO status=0x%X glError=0x%X",
+                         fbStatus, glErr);
+                mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+            }
             
             SDL_Rect screen = {scOffset.x, scOffset.y, scSize.x, scSize.y};
             threadData->ethread->notifyGameScreenChange(screen);
