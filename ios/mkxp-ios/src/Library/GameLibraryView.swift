@@ -243,7 +243,7 @@ struct GameLibraryView: View {
                 .padding(.horizontal, collapsed ? 10 : 20)
                 .padding(.vertical, collapsed ? 10 : 12)
             }
-            .glassEffect(.regular.tint(.orange).interactive(), in: .capsule)
+            .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
             .environment(\.colorScheme, .dark)
             // Counter-rotate to keep content upright
             .rotationEffect(.degrees(collapsed ? -arcDeg : 0))
@@ -299,19 +299,32 @@ struct GameLibraryView: View {
                         .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
 
                 case .ready:
-                    GameListRow(game: game)
-                        .matchedTransitionSource(id: game.id, in: heroNamespace)
+                    GameListRow(game: game, heroNamespace: heroNamespace)
                         .onTapGesture {
                             appState.selectGame(game)
                             path.append(game)
                         }
+                        .swipeActions(edge: .leading) {
+                            Button { gameForSettings = game } label: {
+                                Label("Settings", systemImage: "gearshape")
+                            }
+                            .tint(.brand)
+
+                            Button { gameForInfo = game } label: {
+                                Label("Info", systemImage: "info.circle")
+                            }
+                            .tint(.gray)
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                gameToDelete = game
+                                showDeleteConfirm = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            .tint(.red)
+                        }
                         .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
-                }
-            }
-            .onDelete { indexSet in
-                if let index = indexSet.first {
-                    gameToDelete = filteredGames[index]
-                    showDeleteConfirm = true
                 }
             }
         }

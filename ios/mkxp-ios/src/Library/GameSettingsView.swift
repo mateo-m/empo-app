@@ -66,26 +66,20 @@ struct GameSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // ── Gameplay ─────────────────────────────────
+                gameplaySection
+
                 // ── Display ──────────────────────────────────
                 displaySection
 
                 // ── Portrait Layout ──────────────────────────
                 verticalAlignmentSection
 
-                // ── Resolution ───────────────────────────────
-                resolutionSection
-
                 // ── Performance ──────────────────────────────
                 performanceSection
 
-                // ── Text ─────────────────────────────────────
-                textSection
-
                 // ── Engine ───────────────────────────────────
                 engineSection
-
-                // ── Gameplay ─────────────────────────────────
-                gameplaySection
 
                 // ── Reset ────────────────────────────────────
                 if settings.hasCustomizations {
@@ -136,26 +130,90 @@ struct GameSettingsView: View {
     // MARK: - Sections
 
     private var displaySection: some View {
-        Group {
-            Section {
+        Section {
+            VStack(alignment: .leading, spacing: 4) {
                 Toggle("Smooth scaling", isOn: smoothScalingBinding)
-            } header: {
-                Text("Display")
-            } footer: {
                 Text("Use bilinear filtering when upscaling. Disable for a pixel-perfect look.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 2)
 
-            Section {
+            VStack(alignment: .leading, spacing: 4) {
                 Toggle("Fixed aspect ratio", isOn: fixedAspectRatioBinding)
-            } footer: {
                 Text("Preserve the game's proportions instead of stretching to fill the screen.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 2)
 
-            Section {
+            VStack(alignment: .leading, spacing: 4) {
                 Toggle("VSync", isOn: vsyncBinding)
-            } footer: {
                 Text("Synchronize rendering with the display refresh rate to reduce tearing.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Picker("Resolution", selection: resolutionBinding) {
+                    Text("Default")
+                        .tag(nil as ResolutionPreset?)
+
+                    ForEach(ResolutionPreset.presets) { preset in
+                        HStack {
+                            Text(preset.label)
+                            Spacer()
+                            Text(preset.aspectRatio)
+                                .foregroundStyle(.secondary)
+                        }
+                        .tag(preset as ResolutionPreset?)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+
+                if let res = effectiveResolution {
+                    Text("Currently \(res.label) (\(res.aspectRatio)). Some games may override this in their scripts.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Override the game's internal resolution. Some games may override this in their scripts.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 2)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Font scale")
+                    Spacer()
+                    Text(String(format: "%.1fx", effectiveFontScale))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+                Slider(
+                    value: fontScaleBinding,
+                    in: 0.5...2.0,
+                    step: 0.1
+                )
+                Text("Scale all in-game text. 1.0x is the default size.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Solid fonts", isOn: solidFontsBinding)
+                Text("Disable alpha blending for text, which can look sharper in some games.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+        } header: {
+            Text("Display")
+        } footer: {
+            Text("Control how the game looks on screen. Changes take effect on next launch.")
         }
     }
 
@@ -180,123 +238,79 @@ struct GameSettingsView: View {
         }
     }
 
-    private var resolutionSection: some View {
-        Section {
-            Picker("Resolution", selection: resolutionBinding) {
-                Text("Default")
-                    .tag(nil as ResolutionPreset?)
-
-                ForEach(ResolutionPreset.presets) { preset in
-                    HStack {
-                        Text(preset.label)
-                        Spacer()
-                        Text(preset.aspectRatio)
-                            .foregroundStyle(.secondary)
-                    }
-                    .tag(preset as ResolutionPreset?)
-                }
-            }
-            .pickerStyle(.navigationLink)
-        } header: {
-            Text("Resolution")
-        } footer: {
-            if let res = effectiveResolution {
-                Text("Currently \(res.label) (\(res.aspectRatio)). Some games override this in their scripts. Changes take effect on next launch.")
-            } else {
-                Text("Override the game's internal resolution. Some games override this in their scripts. Changes take effect on next launch.")
-            }
-        }
-    }
-
     private var performanceSection: some View {
         Section {
-            Toggle("Frame skip", isOn: frameSkipBinding)
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Frame skip", isOn: frameSkipBinding)
+                Text("Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
         } header: {
             Text("Performance")
         } footer: {
-            Text("Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness.")
+            Text("Tune how the engine handles demanding scenes.")
         }
     }
 
-    private var textSection: some View {
-        Group {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Font scale")
-                        Spacer()
-                        Text(String(format: "%.1fx", effectiveFontScale))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    Slider(
-                        value: fontScaleBinding,
-                        in: 0.5...2.0,
-                        step: 0.1
-                    )
-                }
-                .padding(.vertical, 2)
-            } header: {
-                Text("Text")
-            } footer: {
-                Text("Scale all in-game text. 1.0x is the default size.")
-            }
-
-            Section {
-                Toggle("Solid fonts", isOn: solidFontsBinding)
-            } footer: {
-                Text("Disable alpha blending for text, which can look sharper in some games.")
-            }
-        }
-    }
 
     private var engineSection: some View {
-        Group {
-            Section {
+        Section {
+            VStack(alignment: .leading, spacing: 4) {
                 Toggle("Postload scripts", isOn: postloadScriptsBinding)
-            } header: {
-                Text("Engine")
-            } footer: {
                 Text("Run scripts that apply common fixes for Pokemon Essentials games.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 2)
 
-            Section {
+            VStack(alignment: .leading, spacing: 4) {
                 Toggle("Path cache", isOn: pathCacheBinding)
-            } footer: {
                 Text("Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 2)
+        } header: {
+            Text("Engine")
+        } footer: {
+            Text("Low-level engine options that affect compatibility and loading.")
         }
     }
 
     private var gameplaySection: some View {
-        Group {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Fast forward")
-                        Spacer()
-                        Text("\(effectiveSpeedMultiplier)x")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    Slider(
-                        value: speedBinding,
-                        in: 1...9,
-                        step: 1
-                    )
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Fast forward")
+                    Spacer()
+                    Text("\(effectiveSpeedMultiplier)x")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
-                .padding(.vertical, 2)
-            } header: {
-                Text("Gameplay")
-            } footer: {
+                Slider(
+                    value: speedBinding,
+                    in: 1...9,
+                    step: 1
+                )
                 Text("Run the game at a faster speed. 1x is normal.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 2)
 
-            Section {
+            VStack(alignment: .leading, spacing: 4) {
                 Toggle("Cheats", isOn: $cheats)
-            } footer: {
                 Text("Enable cheat mode. Only works if the game supports it.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.vertical, 2)
+        } header: {
+            Text("Gameplay")
+        } footer: {
+            Text("Options that change how you play the game.")
         }
     }
 
