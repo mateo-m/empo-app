@@ -349,6 +349,7 @@ class GameLibrary {
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
+                guard self.fm.fileExists(atPath: entry.path) else { return }
                 try self.fm.removeItem(atPath: entry.path)
             } catch {
                 NSLog("[GameLibrary] Delete error: %@", "\(error)")

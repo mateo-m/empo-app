@@ -575,16 +575,25 @@ int main(int argc, char *argv[]) {
          * s_rgssSessionReady. */
         SDL_SemWait(s_rgssSessionDone);
     } else {
+#if TARGET_OS_IPHONE
+      mkxp_setErrorMessage(
+          std::string("The RGSS script seems to be stuck. "+conf.game.title+" will now force quit.").c_str());
+#else
       SDL_ShowSimpleMessageBox(
           SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
           std::string("The RGSS script seems to be stuck. "+conf.game.title+" will now force quit.").c_str(),
           persistWin);
+#endif
     }
 
     if (!rtData.rgssErrorMsg.empty()) {
       Debug() << rtData.rgssErrorMsg;
+#if TARGET_OS_IPHONE
+      mkxp_setErrorMessage(rtData.rgssErrorMsg.c_str());
+#else
       SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
                                rtData.rgssErrorMsg.c_str(), persistWin);
+#endif
     }
 
     /* Clean up any remaining events */

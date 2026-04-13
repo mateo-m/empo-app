@@ -20,6 +20,7 @@ class AppState {
     var gameRect: CGRect = .zero
     var showQuitConfirm = false
     var selectedGame: GameEntry?
+    var errorMessage: String?
 
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
@@ -158,14 +159,14 @@ class AppState {
     /// User confirmed quit — immediately show library, then tear down engine.
     func confirmQuit() {
         showQuitConfirm = false
+        returnToLibrary()
+    }
 
-        // Show library immediately — the NavigationStack pop provides
-        // the reverse hero zoom animation, no additional fade needed.
+    /// Returns to the library and tears down the engine.
+    /// Used by quit confirmation, error dismissal, and any other exit path.
+    func returnToLibrary() {
         selectedGame = nil
         phase = .library
-
-        // Ask engine to shut down. The engineTerminated callback
-        // will fire when teardown is complete.
         mkxp_requestTerminate()
     }
 
@@ -199,6 +200,15 @@ class AppState {
                 if AppState.shared.gameRect != newRect {
                     AppState.shared.gameRect = newRect
                 }
+            }
+        }, nil)
+
+        // Error message: engine encountered a fatal error
+        mkxp_setErrorMessageCallback({ msg, _ in
+            guard let msg else { return }
+            let message = String(cString: msg)
+            DispatchQueue.main.async {
+                AppState.shared.errorMessage = message
             }
         }, nil)
     }
