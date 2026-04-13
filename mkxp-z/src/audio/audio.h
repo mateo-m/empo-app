@@ -72,6 +72,17 @@ public:
 
 	void reset();
 
+#if TARGET_OS_IPHONE
+	/* Pause all currently-playing OpenAL sources and remember which
+	 * ones were active.  Called by mkxp_checkPause() in ios_bridge
+	 * before blocking so that audio is silenced while the engine
+	 * is suspended. */
+	void pauseSources();
+
+	/* Resume the sources that were paused by pauseSources(). */
+	void resumeSources();
+#endif
+
 private:
 	Audio(RGSSThreadData &rtData);
 	~Audio();
