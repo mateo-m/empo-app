@@ -51,7 +51,7 @@ struct GameLibraryView: View {
                     }
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: showEmpty)
+            .animation(.spring(duration: 0.3), value: showEmpty)
             .overlay {
                 if showEmpty {
                     emptyStateContent
@@ -377,9 +377,9 @@ private struct EmptyStateModifier: ViewModifier {
     let active: Bool
     func body(content: Content) -> some View {
         content
-            .scaleEffect(active ? 0.9 : 1)
-            .opacity(active ? 0.8 : 1)
-            .blur(radius: active ? 4 : 0)
+            .scaleEffect(active ? 0.8 : 1)
+            .opacity(active ? 0 : 1)
+            .blur(radius: active ? 10 : 0)
     }
 }
 
