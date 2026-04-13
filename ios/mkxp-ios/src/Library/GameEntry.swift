@@ -37,4 +37,40 @@ struct GameEntry: Identifiable, Hashable {
     static func == (lhs: GameEntry, rhs: GameEntry) -> Bool {
         lhs.id == rhs.id && lhs.status == rhs.status && lhs.title == rhs.title && lhs.path == rhs.path && lhs.artworkPath == rhs.artworkPath
     }
+
+    // MARK: - INI Parsing
+
+    /// Reads the `Title=` value from the `[Game]` section of the game's .ini file.
+    /// Returns nil if no .ini file is found or the title is empty.
+    static func parseINITitle(at gameDir: URL) -> String? {
+        let fm = FileManager.default
+        let iniURL: URL? = {
+            let gameIni = gameDir.appendingPathComponent("Game.ini")
+            if fm.fileExists(atPath: gameIni.path) { return gameIni }
+            if let items = try? fm.contentsOfDirectory(atPath: gameDir.path) {
+                for item in items where item.lowercased().hasSuffix(".ini") {
+                    return gameDir.appendingPathComponent(item)
+                }
+            }
+            return nil
+        }()
+        guard let iniURL, let data = try? String(contentsOf: iniURL, encoding: .utf8) else {
+            return nil
+        }
+
+        var inGameSection = false
+        for line in data.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[") {
+                inGameSection = trimmed.lowercased().hasPrefix("[game]")
+                continue
+            }
+            if inGameSection && trimmed.lowercased().hasPrefix("title=") {
+                let value = String(trimmed.dropFirst("title=".count))
+                    .trimmingCharacters(in: .whitespaces)
+                if !value.isEmpty { return value }
+            }
+        }
+        return nil
+    }
 }

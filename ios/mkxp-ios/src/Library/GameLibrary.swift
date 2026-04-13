@@ -364,34 +364,7 @@ class GameLibrary {
     // MARK: - Metadata Helpers
 
     private func parseGameTitle(at url: URL) -> String? {
-        let iniURL: URL? = {
-            let gameIni = url.appendingPathComponent("Game.ini")
-            if fm.fileExists(atPath: gameIni.path) { return gameIni }
-            if let items = try? fm.contentsOfDirectory(atPath: url.path) {
-                for item in items where item.lowercased().hasSuffix(".ini") {
-                    return url.appendingPathComponent(item)
-                }
-            }
-            return nil
-        }()
-        guard let iniURL, let data = try? String(contentsOf: iniURL, encoding: .utf8) else {
-            return nil
-        }
-
-        var inGameSection = false
-        for line in data.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("[") {
-                inGameSection = trimmed.lowercased().hasPrefix("[game]")
-                continue
-            }
-            if inGameSection && trimmed.lowercased().hasPrefix("title=") {
-                let value = String(trimmed.dropFirst("title=".count))
-                    .trimmingCharacters(in: .whitespaces)
-                if !value.isEmpty { return value }
-            }
-        }
-        return nil
+        GameEntry.parseINITitle(at: url)
     }
 
     private func findArtwork(at url: URL) -> String? {

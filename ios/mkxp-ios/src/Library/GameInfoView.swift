@@ -27,36 +27,7 @@ struct GameInfoView: View {
 
         // Read the original Game.ini title (ignoring custom overrides)
         let gameDir = URL(fileURLWithPath: game.path)
-        let fm = FileManager.default
-        let iniURL: URL? = {
-            let gameIni = gameDir.appendingPathComponent("Game.ini")
-            if fm.fileExists(atPath: gameIni.path) { return gameIni }
-            if let items = try? fm.contentsOfDirectory(atPath: gameDir.path) {
-                for item in items where item.lowercased().hasSuffix(".ini") {
-                    return gameDir.appendingPathComponent(item)
-                }
-            }
-            return nil
-        }()
-
-        var iniTitle = "Unknown Game"
-        if let iniURL, let data = try? String(contentsOf: iniURL, encoding: .utf8) {
-            var inGameSection = false
-            for line in data.components(separatedBy: .newlines) {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if trimmed.hasPrefix("[") {
-                    inGameSection = trimmed.lowercased().hasPrefix("[game]")
-                    continue
-                }
-                if inGameSection && trimmed.lowercased().hasPrefix("title=") {
-                    let value = String(trimmed.dropFirst("title=".count))
-                        .trimmingCharacters(in: .whitespaces)
-                    if !value.isEmpty { iniTitle = value }
-                    break
-                }
-            }
-        }
-        self.originalTitle = iniTitle
+        self.originalTitle = GameEntry.parseINITitle(at: gameDir) ?? "Unknown Game"
     }
 
     // MARK: - Computed
@@ -418,46 +389,57 @@ struct GameInfoView: View {
         needsLibraryRefresh = true
     }
 
-    private func saveArtwork(_ image: UIImage) {
-        if let path = metadata.customArtworkPath(for: game.id) {
+    private func saveCustomImage(_ image: UIImage, kind: String,
+                                 pathGetter: (GameMetadata) -> String?,
+                                 filenameSetter: (inout GameMetadata, String?) -> Void) {
+        if let path = pathGetter(metadata) {
             ImageCache.shared.evict(path: path)
         }
-        guard let filename = GameMetadata.saveImage(image, as: "artwork", for: game.id) else { return }
-        metadata.customArtworkFilename = filename
+        guard let filename = GameMetadata.saveImage(image, as: kind, for: game.id) else { return }
+        filenameSetter(&metadata, filename)
         metadata.save(for: game.id)
         needsLibraryRefresh = true
+    }
+
+    private func removeCustomImage(kind: String,
+                                   pathGetter: (GameMetadata) -> String?,
+                                   filenameGetter: (GameMetadata) -> String?,
+                                   filenameSetter: (inout GameMetadata, String?) -> Void) {
+        if let path = pathGetter(metadata) {
+            ImageCache.shared.evict(path: path)
+        }
+        if let filename = filenameGetter(metadata) {
+            GameMetadata.removeImage(named: filename, for: game.id)
+        }
+        filenameSetter(&metadata, nil)
+        metadata.save(for: game.id)
+        needsLibraryRefresh = true
+    }
+
+    private func saveArtwork(_ image: UIImage) {
+        saveCustomImage(image, kind: "artwork",
+                       pathGetter: { $0.customArtworkPath(for: game.id) },
+                       filenameSetter: { $0.customArtworkFilename = $1 })
     }
 
     private func removeArtwork() {
-        if let path = metadata.customArtworkPath(for: game.id) {
-            ImageCache.shared.evict(path: path)
-        }
-        if let filename = metadata.customArtworkFilename {
-            GameMetadata.removeImage(named: filename, for: game.id)
-        }
-        metadata.customArtworkFilename = nil
-        metadata.save(for: game.id)
-        needsLibraryRefresh = true
+        removeCustomImage(kind: "artwork",
+                         pathGetter: { $0.customArtworkPath(for: game.id) },
+                         filenameGetter: { $0.customArtworkFilename },
+                         filenameSetter: { $0.customArtworkFilename = $1 })
     }
 
     private func saveBanner(_ image: UIImage) {
-        if let path = metadata.customBannerPath(for: game.id) {
-            ImageCache.shared.evict(path: path)
-        }
-        guard let filename = GameMetadata.saveImage(image, as: "banner", for: game.id) else { return }
-        metadata.customBannerFilename = filename
-        metadata.save(for: game.id)
+        saveCustomImage(image, kind: "banner",
+                       pathGetter: { $0.customBannerPath(for: game.id) },
+                       filenameSetter: { $0.customBannerFilename = $1 })
     }
 
     private func removeBanner() {
-        if let path = metadata.customBannerPath(for: game.id) {
-            ImageCache.shared.evict(path: path)
-        }
-        if let filename = metadata.customBannerFilename {
-            GameMetadata.removeImage(named: filename, for: game.id)
-        }
-        metadata.customBannerFilename = nil
-        metadata.save(for: game.id)
+        removeCustomImage(kind: "banner",
+                         pathGetter: { $0.customBannerPath(for: game.id) },
+                         filenameGetter: { $0.customBannerFilename },
+                         filenameSetter: { $0.customBannerFilename = $1 })
     }
 
     private func openInFiles() {

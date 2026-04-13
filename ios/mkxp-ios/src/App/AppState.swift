@@ -210,6 +210,13 @@ class AppState {
         mkxp_requestResume()
     }
 
+    /// Resume the engine if it was paused by a background transition.
+    /// Called when the app returns to the foreground.
+    func resumeFromBackground() {
+        guard phase == .playing, mkxp_isPaused() else { return }
+        mkxp_requestResume()
+    }
+
     /// Whether the current pause was triggered by app backgrounding
     /// (silent — no UI transition to library).
     private var isBackgroundPause = false
