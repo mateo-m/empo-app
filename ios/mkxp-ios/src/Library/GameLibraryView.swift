@@ -285,32 +285,34 @@ struct GameLibraryView: View {
     private var listContent: some View {
         List {
             ForEach(filteredGames) { game in
-                GameListRow(game: game, onStopImport: game.isImporting ? {
-                    gameToDelete = game
-                    showDeleteConfirm = true
-                } : nil)
-                    .matchedTransitionSource(id: game.id, in: heroNamespace)
-                    .background {
-                        if case .ready = game.status {
-                            NavigationLink(value: game) { EmptyView() }.opacity(0)
-                        }
-                    }
-                    .onTapGesture {
-                        switch game.status {
-                        case .ready: appState.selectGame(game)
-                        case .invalid: showInvalidAlert = true
-                        case .importing: break
-                        }
-                    }
+                switch game.status {
+                case .importing:
+                    GameListRow(game: game, onStopImport: {
+                        gameToDelete = game
+                        showDeleteConfirm = true
+                    })
                     .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            gameToDelete = game
-                            showDeleteConfirm = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+
+                case .invalid:
+                    GameListRow(game: game)
+                        .onTapGesture { showInvalidAlert = true }
+                        .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+
+                case .ready:
+                    GameListRow(game: game)
+                        .matchedTransitionSource(id: game.id, in: heroNamespace)
+                        .onTapGesture {
+                            appState.selectGame(game)
+                            path.append(game)
                         }
-                    }
+                        .gameContextMenu(game: game, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                }
+            }
+            .onDelete { indexSet in
+                if let index = indexSet.first {
+                    gameToDelete = filteredGames[index]
+                    showDeleteConfirm = true
+                }
             }
         }
         .listStyle(.plain)
