@@ -129,12 +129,14 @@ class GameLibrary {
         // Apply overrides
         let title = metadata.customTitle ?? iniTitle
         let artworkPath = metadata.customArtworkPath(for: id) ?? defaultArtwork
+        let originalTitle = metadata.customTitle != nil ? iniTitle : nil
 
         return GameEntry(
             id: id,
             path: url.path,
             title: title,
-            artworkPath: artworkPath
+            artworkPath: artworkPath,
+            originalTitle: originalTitle
         )
     }
 
