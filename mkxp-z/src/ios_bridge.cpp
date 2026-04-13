@@ -73,6 +73,12 @@ static void *s_engineTerminatedUserdata = nullptr;
 static mkxp_GameRectChangedCallback s_gameRectChangedCb = nullptr;
 static void *s_gameRectChangedUserdata = nullptr;
 
+// Error message routing: engine -> UI.
+static std::mutex s_errorMsgMutex;
+static std::string s_errorMessage;
+static mkxp_ErrorMessageCallback s_errorMsgCb = nullptr;
+static void *s_errorMsgUserdata = nullptr;
+
 extern "C" {
 
 void mkxp_setGameReady(void) {
@@ -278,6 +284,30 @@ void mkxp_setEngineTerminatedCallback(mkxp_EngineTerminatedCallback cb, void *us
 void mkxp_setGameRectChangedCallback(mkxp_GameRectChangedCallback cb, void *userdata) {
     s_gameRectChangedCb = cb;
     s_gameRectChangedUserdata = userdata;
+}
+
+// ============================================================================
+// Error message routing
+// ============================================================================
+
+void mkxp_setErrorMessage(const char *message) {
+    {
+        std::lock_guard<std::mutex> lock(s_errorMsgMutex);
+        s_errorMessage = message ? message : "";
+    }
+    if (s_errorMsgCb && message && message[0]) {
+        s_errorMsgCb(message, s_errorMsgUserdata);
+    }
+}
+
+const char *mkxp_getErrorMessage(void) {
+    std::lock_guard<std::mutex> lock(s_errorMsgMutex);
+    return s_errorMessage.c_str();
+}
+
+void mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *userdata) {
+    s_errorMsgCb = cb;
+    s_errorMsgUserdata = userdata;
 }
 
 // ============================================================================

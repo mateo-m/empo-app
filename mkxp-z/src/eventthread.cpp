@@ -48,6 +48,13 @@
 #include "al-util.h"
 #include "debugwriter.h"
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+#if TARGET_OS_IPHONE
+#include "ios_bridge.h"
+#endif
+
 #ifndef __APPLE__
 #include "util/string-util.h"
 #endif
@@ -537,7 +544,9 @@ void EventThread::process(RGSSThreadData &rtData)
                         
                     case REQUEST_MESSAGEBOX :
                     {
-#ifndef __APPLE__
+#if TARGET_OS_IPHONE
+                        mkxp_setErrorMessage((const char*)event.user.data1);
+#elif !defined(__APPLE__)
                         // Try to format the message with additional newlines
                         std::string message = copyWithNewlines((const char*) event.user.data1,
                                                                70);

@@ -218,6 +218,19 @@ void        mkxp_setViewportBoundsColor(float r, float g, float b, float a);
 void        mkxp_getViewportBoundsColor(float *r, float *g, float *b, float *a);
 
 // ============================================================================
+// Error routing (Engine -> UI)
+// ============================================================================
+
+// On iOS, SDL_ShowSimpleMessageBox is a no-op.  Route error messages
+// through the bridge so the UI can present them.
+void        mkxp_setErrorMessage(const char *message);
+const char *mkxp_getErrorMessage(void);
+
+// Called when the engine sets an error message.
+typedef void (*mkxp_ErrorMessageCallback)(const char *message, void *userdata);
+void        mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *userdata);
+
+// ============================================================================
 // Debug logging
 // ============================================================================
 
