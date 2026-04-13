@@ -90,62 +90,75 @@ struct GameInfoView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                // ── Banner Header ────────────────────────
-                bannerHeader
+            List {
+                // ── Banner (full-bleed via zero section margins) ──
+                Section {
+                    bannerHeader
+                }
+                .listSectionMargins(.all, 0)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listSectionSeparator(.hidden)
 
-                // ── Sections ─────────────────────────────
-                List {
-                    Section("Details") {
-                        LabeledContent("Date added") {
-                            if let date = metadata.dateAdded {
-                                Text(Self.dateFormatter.string(from: date))
-                            } else {
-                                Text("Unknown")
-                            }
-                        }
-
-                        LabeledContent("Last played") {
-                            if let date = metadata.lastPlayed {
-                                Text(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
-                            } else {
-                                Text("Never")
-                            }
-                        }
-
-                        if let time = metadata.totalPlayTime, time > 0 {
-                            LabeledContent("Play time") {
-                                Text(GameMetadata.formatPlayTime(metadata.totalPlayTime))
-                            }
-                        }
-
-                        LabeledContent("Size on disk") {
-                            if let size = diskSize {
-                                Text(GameMetadata.formatDiskSize(size))
-                            } else {
-                                ProgressView()
-                            }
+                // ── Details ──────────────────────────────
+                Section("Details") {
+                    LabeledContent("Date added") {
+                        if let date = metadata.dateAdded {
+                            Text(Self.dateFormatter.string(from: date))
+                        } else {
+                            Text("Unknown")
                         }
                     }
 
-                    Section {
-                        Button { openInFiles() } label: {
-                            Label("Browse game files", systemImage: "folder")
+                    LabeledContent("Last played") {
+                        if let date = metadata.lastPlayed {
+                            Text(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
+                        } else {
+                            Text("Never")
                         }
+                    }
 
-                        if let logURL = sessionLogURL() {
-                            ShareLink(item: logURL) {
-                                Label("Export logs", systemImage: "square.and.arrow.up")
-                            }
+                    if let time = metadata.totalPlayTime, time > 0 {
+                        LabeledContent("Play time") {
+                            Text(GameMetadata.formatPlayTime(metadata.totalPlayTime))
                         }
+                    }
+
+                    LabeledContent("Size on disk") {
+                        if let size = diskSize {
+                            Text(GameMetadata.formatDiskSize(size))
+                        } else {
+                            ProgressView()
+                        }
+                    }
+
+                    LabeledContent("ID") {
+                        Text(game.id)
+                            .monospaced()
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
                     }
                 }
-                .listStyle(.insetGrouped)
-                .scrollDisabled(true)
-                .frame(minHeight: 350)
+
+                // ── Actions ──────────────────────────────
+                Section {
+                    Button { openInFiles() } label: {
+                        Label("Browse game files", systemImage: "folder")
+                    }
+
+                    if let logURL = sessionLogURL() {
+                        ShareLink(item: logURL) {
+                            Label("Export logs", systemImage: "square.and.arrow.up")
+                        }
+                    }
+
+                }
             }
+            .listStyle(.insetGrouped)
+            .environment(\.defaultMinListHeaderHeight, 0)
             .ignoresSafeArea(edges: .top)
-            .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(titleScrollProgress > 0.5 ? .visible : .hidden, for: .navigationBar)
             .animation(.smooth(duration: 0.15), value: titleScrollProgress > 0.5)
