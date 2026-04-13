@@ -128,18 +128,7 @@ struct GameCard: View {
 
     @ViewBuilder
     private var artworkView: some View {
-        if let path = game.artworkPath, let uiImage = ImageCache.shared.image(for: path) {
-            Image(uiImage: uiImage)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-        } else {
-            ZStack {
-                Color(.tertiarySystemBackground)
-                Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: 36))
-                    .foregroundStyle(.quaternary)
-            }
-        }
+        GameArtworkView(artworkPath: game.artworkPath)
     }
 }
 
@@ -206,18 +195,10 @@ struct GameListRow: View {
         HStack(spacing: 14) {
             // Artwork thumbnail
             Group {
-                if let path = game.artworkPath, let uiImage = ImageCache.shared.image(for: path) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    ZStack {
-                        Color(.tertiarySystemBackground)
-                        Image(systemName: "gamecontroller.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.quaternary)
-                    }
-                }
+                GameArtworkView(
+                    artworkPath: game.artworkPath,
+                    placeholderIconSize: 16
+                )
             }
             .frame(width: artworkSize, height: artworkSize)
             .clipShape(.rect(cornerRadius: 8))

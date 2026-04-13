@@ -9,41 +9,35 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Picker("Theme", selection: $settings.theme) {
-                            ForEach(AppTheme.allCases, id: \.self) { theme in
-                                Text(theme.label).tag(theme)
-                            }
+                    SettingsPicker(
+                        title: "Theme",
+                        selection: $settings.theme,
+                        description: "Switch between dark, light, or system appearance."
+                    ) {
+                        ForEach(AppTheme.allCases, id: \.self) { theme in
+                            Text(theme.label).tag(theme)
                         }
-                        Text("Switch between dark, light, or system appearance.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 2)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Picker("View mode", selection: $settings.libraryDisplayMode) {
-                            ForEach(LibraryDisplayMode.allCases, id: \.self) { mode in
-                                Text(mode.label).tag(mode)
-                            }
+                    SettingsPicker(
+                        title: "View mode",
+                        selection: $settings.libraryDisplayMode,
+                        description: "Show games as a grid of cards or a compact list."
+                    ) {
+                        ForEach(LibraryDisplayMode.allCases, id: \.self) { mode in
+                            Text(mode.label).tag(mode)
                         }
-                        Text("Show games as a grid of cards or a compact list.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 2)
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Picker("Title position", selection: $settings.titlePosition) {
-                            ForEach(TitlePosition.allCases, id: \.self) { position in
-                                Text(position.label).tag(position)
-                            }
+                    SettingsPicker(
+                        title: "Title position",
+                        selection: $settings.titlePosition,
+                        description: "Where game titles show up on your library cards."
+                    ) {
+                        ForEach(TitlePosition.allCases, id: \.self) { position in
+                            Text(position.label).tag(position)
                         }
-                        Text("Where game titles show up on your library cards.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 2)
                 } header: {
                     Text("Look & Feel")
                 } footer: {
@@ -79,21 +73,17 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle("Game overlay", isOn: $settings.debugMode)
-                        Text("Shows the game name, Ruby version, and FPS while you play.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
+                    SettingsToggle(
+                        title: "Game overlay",
+                        isOn: $settings.debugMode,
+                        description: "Shows the game name, Ruby version, and FPS while you play."
+                    )
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle("Show viewport bounds", isOn: $settings.showViewportBounds)
-                        Text("Tints the area outside the game viewport so you can see where controls can go.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
+                    SettingsToggle(
+                        title: "Show viewport bounds",
+                        isOn: $settings.showViewportBounds,
+                        description: "Tints the area outside the game viewport so you can see where controls can go."
+                    )
 
                     if settings.showViewportBounds {
                         NavigationLink {
@@ -109,21 +99,17 @@ struct SettingsView: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle("Clean up broken imports", isOn: $settings.cleanupInvalidGames)
-                        Text("Automatically removes games that didn't import properly.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
+                    SettingsToggle(
+                        title: "Clean up broken imports",
+                        isOn: $settings.cleanupInvalidGames,
+                        description: "Automatically removes games that didn't import properly."
+                    )
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Toggle("Debug logs", isOn: $settings.debugLogs)
-                        Text("Saves engine logs for each session. Find them in Files → mkxp-z → Logs.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
+                    SettingsToggle(
+                        title: "Debug logs",
+                        isOn: $settings.debugLogs,
+                        description: "Saves engine logs for each session. Find them in Files → mkxp-z → Logs."
+                    )
 
                     if settings.debugLogs {
                         VStack(alignment: .leading, spacing: 4) {

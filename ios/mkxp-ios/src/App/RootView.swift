@@ -50,9 +50,7 @@ struct RootView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            if appState.phase == .playing && mkxp_isPaused() {
-                mkxp_requestResume()
-            }
+            appState.resumeFromBackground()
         }
     }
 
