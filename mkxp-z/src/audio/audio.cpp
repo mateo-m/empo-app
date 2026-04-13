@@ -35,6 +35,10 @@
 #include <SDL_thread.h>
 #include <SDL_timer.h>
 
+#if TARGET_OS_IPHONE
+#include <OpenAL/al.h>
+#endif
+
 struct AudioPrivate
 {
     
@@ -47,6 +51,11 @@ struct AudioPrivate
 	SyncPoint &syncPoint;
     
     float volumeRatio;
+
+#if TARGET_OS_IPHONE
+	/* Source IDs that were AL_PLAYING when pauseSources() was called. */
+	std::vector<ALuint> pausedSourceIDs;
+#endif
 
 	/* The 'MeWatch' is responsible for detecting
 	 * a playing ME, quickly fading out the BGM and
@@ -427,5 +436,40 @@ void Audio::reset()
 	p->me.stop();
 	p->se.stop();
 }
+
+#if TARGET_OS_IPHONE
+/* Collect every OpenAL source owned by Audio, check which are
+ * AL_PLAYING, pause those, and stash their IDs for resumeSources(). */
+void Audio::pauseSources()
+{
+	p->pausedSourceIDs.clear();
+
+	/* Gather all source IDs */
+	std::vector<ALuint> all;
+
+	for (auto track : p->bgmTracks)
+		all.push_back(track->stream.alSrc.al);
+	all.push_back(p->bgs.stream.alSrc.al);
+	all.push_back(p->me.stream.alSrc.al);
+	for (auto &src : p->se.alSrcs)
+		all.push_back(src.al);
+
+	for (ALuint src : all) {
+		ALint state = 0;
+		alGetSourcei(src, AL_SOURCE_STATE, &state);
+		if (state == AL_PLAYING) {
+			alSourcePause(src);
+			p->pausedSourceIDs.push_back(src);
+		}
+	}
+}
+
+void Audio::resumeSources()
+{
+	for (ALuint src : p->pausedSourceIDs)
+		alSourcePlay(src);
+	p->pausedSourceIDs.clear();
+}
+#endif
 
 Audio::~Audio() { delete p; }

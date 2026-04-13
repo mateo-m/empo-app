@@ -238,19 +238,16 @@ void        mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *use
 //
 // Pause flow:
 //   1. UI calls mkxp_requestPause().
-//   2. Engine's checkPause() (called from Graphics.update etc.) sees the flag,
-//      captures a framebuffer snapshot, suspends audio, fires the paused
-//      callback, then blocks on a condvar.
+//   2. Engine calls mkxp_checkPause() from Graphics blocking points.
+//      It pauses all audio sources, fires the paused callback, then
+//      blocks on a condvar.
 //   3. UI calls mkxp_requestResume() to unblock the engine thread.
-//
-// The snapshot is written to a shared buffer by the engine (on the GL thread)
-// and read by the UI to display over the SDL view while the engine is frozen.
 
 // UI -> Engine: request the engine to pause/resume.
 void        mkxp_requestPause(void);
 void        mkxp_requestResume(void);
 
-// Engine -> internal: check if a pause was requested and block if so.
+// Engine -> internal: check if a pause was requested, pause audio, and block.
 // Called from Graphics blocking points. NOT for UI use.
 void        mkxp_checkPause(void);
 
