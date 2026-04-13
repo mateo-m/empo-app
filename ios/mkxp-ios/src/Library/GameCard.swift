@@ -45,7 +45,7 @@ struct GameCard: View {
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+                        .textShadow()
                         .lineLimit(2)
                         .minimumScaleFactor(0.75)
                         .multilineTextAlignment(.leading)
@@ -54,11 +54,11 @@ struct GameCard: View {
                         Text(originalTitle)
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(0.7))
-                            .shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+                            .textShadow()
                             .lineLimit(1)
                     }
                 }
-                .padding(8)
+                .padding(Spacing.md)
                 .onGeometryChange(for: CGFloat.self) { proxy in
                     proxy.size.height
                 } action: { newHeight in
@@ -66,22 +66,25 @@ struct GameCard: View {
                 }
             }
             .overlay { centerOverlay }
-            .clipShape(.rect(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+            .clipShape(.rect(cornerRadius: Radius.md))
+            .cardShadow()
+            // Force dark scheme so the material overlay stays dark-tinted —
+            // ensures white text is readable even on the light-mode placeholder.
+            .environment(\.colorScheme, .dark)
     }
 
     // MARK: - Title Under Card
 
     private var underCard: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: Spacing.sm) {
             Color.clear
                 .aspectRatio(1, contentMode: .fit)
                 .overlay { artworkView }
                 .overlay { centerOverlay }
-                .clipShape(.rect(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                .clipShape(.rect(cornerRadius: Radius.md))
+                .cardShadow()
 
-            VStack(spacing: 2) {
+            VStack(spacing: Spacing.xxs) {
                 Text(game.title)
                     .font(.caption)
                     .fontWeight(.medium)
@@ -107,27 +110,27 @@ struct GameCard: View {
     private var centerOverlay: some View {
         switch game.status {
         case .importing:
-            Color.black.opacity(0.3)
+            Color.black.opacity(Overlay.light)
             ImportProgressView(progress: game.importProgress, onStop: onStopImport)
         case .invalid:
-            Color.black.opacity(0.3)
+            Color.black.opacity(Overlay.light)
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.title2)
-                .foregroundStyle(.yellow)
-                .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
+                .foregroundStyle(.warning)
+                .iconShadow()
         case .ready:
             if isPaused {
                 // Paused indicator
-                Color.black.opacity(0.35)
+                Color.black.opacity(Overlay.light + 0.05)
                 Image(systemName: "pause.fill")
                     .font(.title3)
                     .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
+                    .iconShadow()
             } else {
                 Image(systemName: "play.fill")
                     .font(.title3)
                     .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
+                    .iconShadow()
                     .background(
                         Circle()
                             .fill(.thinMaterial)
@@ -199,6 +202,7 @@ private struct ImportProgressView: View {
                     .frame(width: stopSize, height: stopSize)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Stop import")
         }
         .animation(.easeOut(duration: 0.3), value: progress)
     }
@@ -211,7 +215,6 @@ struct GameListRow: View {
     var isPaused: Bool = false
     var heroNamespace: Namespace.ID? = nil
     var onStopImport: (() -> Void)? = nil
-    private let artworkSize: CGFloat = 48
 
     // Fallback namespace keeps the view tree stable when heroNamespace
     // is nil (importing state).  Without this, the conditional .if()
@@ -221,23 +224,23 @@ struct GameListRow: View {
     @Namespace private var fallbackNamespace
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Spacing.lg) {
             // Artwork thumbnail
             GameArtworkView(
                 artworkPath: game.artworkPath,
                 placeholderIconSize: 16,
-                size: artworkSize,
-                cornerRadius: 8,
+                size: AppSize.listArtwork,
+                cornerRadius: Radius.sm,
                 importing: game.status.phase == .importing
             )
             .matchedTransitionSource(id: game.id, in: heroNamespace ?? fallbackNamespace) { config in
                 config
                     .background(.black)
-                    .clipShape(.rect(cornerRadius: 8))
+                    .clipShape(.rect(cornerRadius: Radius.sm))
             }
 
             // Title and original name
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(game.title)
                     .font(.body)
                     .fontWeight(.medium)
@@ -259,7 +262,7 @@ struct GameListRow: View {
                 Image(systemName: "pause.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(width: 38, height: 38)
+                    .frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
                     .background(.ultraThinMaterial)
                     .clipShape(Circle())
             } else {
@@ -283,7 +286,7 @@ private struct ListRowStatusIndicator: View {
     var onStopImport: (() -> Void)? = nil
 
     @State private var spinning = false
-    private let size: CGFloat = 38
+    private let size: CGFloat = AppSize.toolbarButton
     private let ringSize: CGFloat = 28
     private let lineWidth: CGFloat = 2.7
     private let stopSize: CGFloat = 9.5
@@ -330,38 +333,34 @@ private struct ListRowStatusIndicator: View {
             .scaleEffect(isImporting ? 1 : 0.5)
 
             // Inner icon — stop square morphs to play or warning
-            Group {
-                switch status.phase {
-                case .importing:
-                    Button(action: { onStopImport?() }) {
-                        RoundedRectangle(cornerRadius: 2.5)
-                            .fill(Color.primary)
-                            .frame(width: stopSize, height: stopSize)
-                    }
-                    .buttonStyle(.plain)
-                case .ready:
-                    Image(systemName: "play.fill")
-                        .font(.caption)
-                        .foregroundStyle(.primary)
-                case .invalid:
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.yellow)
-                }
-            }
+            innerIcon
             .transition(.blurReplace)
         }
         .frame(width: size, height: size)
-        .animation(.easeOut(duration: 0.3), value: progress)
-        .animation(.smooth(duration: 0.4), value: status.phase)
+        .animation(.easeOut(duration: Motion.durationNormal), value: progress)
+        .animation(Motion.gentle, value: status.phase)
+    }
+
+    @ViewBuilder
+    private var innerIcon: some View {
+        switch status.phase {
+        case .importing:
+            Button(action: { onStopImport?() }) {
+                RoundedRectangle(cornerRadius: 2.5)
+                    .fill(Color.primary)
+                    .frame(width: stopSize, height: stopSize)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Stop import")
+        case .ready:
+            Image(systemName: "play.fill")
+                .font(.caption)
+                .foregroundStyle(.primary)
+        case .invalid:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.warning)
+        }
     }
 }
 
-// MARK: - Card Press Style
-
-struct CardPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
+// CardPressStyle is defined in Design/Primitives.swift

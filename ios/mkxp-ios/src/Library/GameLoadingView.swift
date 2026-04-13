@@ -31,11 +31,11 @@ struct GameLoadingView: View {
         ZStack {
             artworkBackground
 
-            VStack(spacing: 16) {
+            VStack(spacing: Spacing.xl) {
                 Text(game.title)
                     .font(.title)
                     .fontWeight(.bold)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .shadow(radius: 4)
 
                 ProgressView()
@@ -80,8 +80,7 @@ struct GameLoadingView: View {
                 .aspectRatio(contentMode: .fill)
                 .ignoresSafeArea()
                 .blur(radius: 20)
-                .overlay(Color.black.opacity(0.5))
-                .ignoresSafeArea()
+                .overlay(Color.black.opacity(Overlay.medium))
         } else {
             Color.black.ignoresSafeArea()
         }

@@ -96,7 +96,6 @@ let keyCatalog: [KeyEntry] = [
 // MARK: - Constants
 // ============================================================================
 
-private let kSmallButtonSize: CGFloat = 38
 private let kToolbarIdleDelay: TimeInterval = 3.0
 
 // ============================================================================
@@ -238,7 +237,7 @@ struct PlayerView: View {
         }
         .alert("Reset Controls", isPresented: $showResetConfirm) {
             Button("Reset", role: .destructive) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                withAnimation(Motion.standard) {
                     layout.resetToDefaults()
                 }
             }
@@ -259,7 +258,7 @@ struct PlayerView: View {
                     showSizePicker = true
                 }
                 Button("Delete", role: .destructive) {
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                    withAnimation(Motion.snappy) {
                         layout.removeButton(id: btn.id)
                     }
                 }
@@ -375,25 +374,25 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func toolbarButtons(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
-        let btnSize = isPortrait && gameRect.height > 0 ? kSmallButtonSize - 8 : kSmallButtonSize
+        let btnSize = isPortrait && gameRect.height > 0 ? AppSize.toolbarButton - 8 : AppSize.toolbarButton
         let iconPt: CGFloat = isPortrait && gameRect.height > 0 ? 13 : 16
-        let gap: CGFloat = isPortrait ? 6 : 8
+        let gap: CGFloat = isPortrait ? Spacing.sm : Spacing.md
 
-        let buttons: [(icon: String, action: () -> Void, tint: Color)] = {
-            var list: [(icon: String, action: () -> Void, tint: Color)] = []
+        let buttons: [(icon: String, label: String, action: () -> Void, tint: Color)] = {
+            var list: [(icon: String, label: String, action: () -> Void, tint: Color)] = []
             if AppSettings.shared.isEnabled(.gamePause) {
-                list.append(("pause.fill", { appState.requestPause() }, .white.opacity(0.8)))
+                list.append(("pause.fill", "Pause game", { appState.requestPause() }, .white.opacity(0.8)))
             }
-            list.append(("keyboard", { toggleKeyboard() }, .white.opacity(0.8)))
+            list.append(("keyboard", "Toggle keyboard", { toggleKeyboard() }, .white.opacity(0.8)))
             if AppSettings.shared.debugMode {
-                list.append(("chart.line.uptrend.xyaxis", { showDebugOverlay.toggle() }, .white.opacity(0.8)))
+                list.append(("chart.line.uptrend.xyaxis", "Debug overlay", { showDebugOverlay.toggle() }, .white.opacity(0.8)))
             }
             list.append(contentsOf: [
-                ("gearshape.fill", { toggleEditMode() }, .white.opacity(0.8)),
-                (controlsHidden ? "eye.slash.fill" : "eye.fill", { toggleHideControls() }, .white.opacity(0.8)),
+                ("gearshape.fill", "Edit controls", { toggleEditMode() }, .white.opacity(0.8)),
+                (controlsHidden ? "eye.slash.fill" : "eye.fill", controlsHidden ? "Show controls" : "Hide controls", { toggleHideControls() }, .white.opacity(0.8)),
             ])
             if AppSettings.shared.isEnabled(.gameQuit) {
-                list.append(("xmark.circle.fill", { appState.requestQuit() }, Color(red: 1.0, green: 0.4, blue: 0.4)))
+                list.append(("xmark.circle.fill", "Quit game", { appState.requestQuit() }, .destructive))
             }
             return list
         }()
@@ -408,11 +407,12 @@ struct PlayerView: View {
                 }) {
                     Image(systemName: entry.icon)
                         .font(.system(size: iconPt, weight: .medium))
-                        .foregroundColor(entry.tint)
+                        .foregroundStyle(entry.tint)
                         .frame(width: btnSize, height: btnSize)
                         .background(Color.white.opacity(0.15))
                         .clipShape(Circle())
                 }
+                .accessibilityLabel(entry.label)
             }
         }
         .opacity(toolbarOpacity)
@@ -427,21 +427,21 @@ struct PlayerView: View {
             ? gameRect.origin.y + gameRect.height + 8 + 20
             : safeArea.top + 4 + 20
 
-        HStack(spacing: 16) {
+        HStack(spacing: Spacing.xl) {
             Button("+ Add") { showAddSheet = true }
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .font(.system(size: 14, weight: .semibold))
             Button("Reset") { showResetConfirm = true }
-                .foregroundColor(.brand)
+                .foregroundStyle(.brand)
                 .font(.system(size: 14, weight: .semibold))
             Button("Done") { toggleEditMode() }
-                .foregroundColor(.green)
+                .foregroundStyle(.success)
                 .font(.system(size: 14, weight: .bold))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
-        .background(Color.black.opacity(0.6))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, Spacing.xl)
+        .padding(.vertical, Spacing.sm)
+        .background(Color.black.opacity(Overlay.heavy))
+        .clipShape(RoundedRectangle(cornerRadius: Radius.md))
         .position(x: geoSize.width / 2, y: yPos)
     }
 
@@ -508,7 +508,7 @@ struct PlayerView: View {
     }
 
     private func toggleHideControls() {
-        withAnimation(.spring(response: 0.18, dampingFraction: 0.85)) {
+        withAnimation(Motion.snappy) {
             controlsHidden.toggle()
         }
         resetToolbarIdleTimer()
@@ -524,7 +524,7 @@ struct PlayerView: View {
     private func resetToolbarIdleTimer() {
         toolbarIdleTask?.cancel()
         if toolbarOpacity < 1 {
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.easeInOut(duration: Motion.durationFast)) {
                 toolbarOpacity = 1.0
             }
         }
@@ -532,7 +532,7 @@ struct PlayerView: View {
             try? await Task.sleep(for: .seconds(kToolbarIdleDelay))
             guard !Task.isCancelled else { return }
             if !editMode && !controlsHidden {
-                withAnimation(.easeInOut(duration: 0.6)) {
+                withAnimation(.easeInOut(duration: Motion.durationSlow)) {
                     toolbarOpacity = 0.5
                 }
             }
@@ -549,7 +549,7 @@ struct PlayerView: View {
     /// Fade the snapshot overlay to reveal the live SDL surface.
     /// Called when the engine signals its first post-resume frame is on-screen.
     private func startSnapshotFade() {
-        withAnimation(.easeOut(duration: 0.3)) {
+        withAnimation(.easeOut(duration: Motion.durationNormal)) {
             snapshotOpacity = 0
             controlsVisible = true
         }
@@ -575,23 +575,23 @@ struct DebugOverlayView: View {
     private let maxFPS: Double = 70
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
             Text(gameTitle)
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
 
             Text(rgssVersion > 0 ? "Ruby 1.8 \u{00B7} RGSS\(rgssVersion)" : "Ruby 1.8")
                 .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundStyle(.white.opacity(0.7))
 
             Text(mkxp_isGameReady() != 0 ? "Running" : "Loading\u{2026}")
                 .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundColor(mkxp_isGameReady() != 0 ? .green : .yellow)
+                .foregroundStyle(mkxp_isGameReady() != 0 ? .success : .warning)
 
-            HStack(spacing: 4) {
+            HStack(spacing: Spacing.xs) {
                 Text("\(Int(fps.rounded())) FPS")
                     .font(.system(size: 17, weight: .bold, design: .monospaced))
-                    .foregroundColor(fpsColor)
+                    .foregroundStyle(fpsColor)
 
                 // FPS Graph
                 Canvas { context, size in
@@ -609,9 +609,9 @@ struct DebugOverlayView: View {
                 }
             }
         }
-        .padding(10)
-        .background(Color.black.opacity(0.55))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(Spacing.md + Spacing.xxs)
+        .background(Color.black.opacity(Overlay.medium + 0.05))
+        .clipShape(RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
             guard mkxp_isEngineTerminated() == 0 else { return }
             fps = mkxp_getAverageFPS()
@@ -629,9 +629,9 @@ struct DebugOverlayView: View {
     }
 
     private var fpsColor: Color {
-        if fps >= 55 { return .green }
-        if fps >= 30 { return .yellow }
-        return .red
+        if fps >= 55 { return .success }
+        if fps >= 30 { return .warning }
+        return .destructive
     }
 }
 
