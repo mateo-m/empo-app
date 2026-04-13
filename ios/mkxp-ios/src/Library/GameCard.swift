@@ -2,6 +2,7 @@ import SwiftUI
 
 struct GameCard: View {
     let game: GameEntry
+    var isPaused: Bool = false
     var onStopImport: (() -> Void)? = nil
     @State private var titleHeight: CGFloat = 40
 
@@ -96,23 +97,32 @@ struct GameCard: View {
                 .foregroundStyle(.yellow)
                 .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
         case .ready:
-            Image(systemName: "play.fill")
-                .font(.title3)
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
-                .background(
-                    Circle()
-                        .fill(.thinMaterial)
-                        .mask(
-                            RadialGradient(
-                                colors: [.white, .white.opacity(0.5), .white.opacity(0.15), .clear],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 30
+            if isPaused {
+                // Paused indicator
+                Color.black.opacity(0.35)
+                Image(systemName: "pause.fill")
+                    .font(.title3)
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
+            } else {
+                Image(systemName: "play.fill")
+                    .font(.title3)
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
+                    .background(
+                        Circle()
+                            .fill(.thinMaterial)
+                            .mask(
+                                RadialGradient(
+                                    colors: [.white, .white.opacity(0.5), .white.opacity(0.15), .clear],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 30
+                                )
                             )
-                        )
-                        .frame(width: 60, height: 60)
-                )
+                            .frame(width: 60, height: 60)
+                    )
+            }
         }
     }
 
@@ -187,6 +197,7 @@ private struct ImportProgressView: View {
 
 struct GameListRow: View {
     let game: GameEntry
+    var isPaused: Bool = false
     var heroNamespace: Namespace.ID? = nil
     var onStopImport: (() -> Void)? = nil
     private let artworkSize: CGFloat = 48
@@ -214,20 +225,37 @@ struct GameListRow: View {
                 view.matchedTransitionSource(id: game.id, in: heroNamespace!)
             }
 
-            // Title
-            Text(game.title)
-                .font(.body)
-                .fontWeight(.medium)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
+            // Title and pause badge
+            VStack(alignment: .leading, spacing: 2) {
+                Text(game.title)
+                    .font(.body)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                if isPaused {
+                    Text("Paused")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             Spacer()
 
             // Status indicator (morphs between states)
-            ListRowStatusIndicator(
-                status: game.status,
-                onStopImport: onStopImport
-            )
+            if isPaused {
+                Image(systemName: "pause.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 38, height: 38)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+            } else {
+                ListRowStatusIndicator(
+                    status: game.status,
+                    onStopImport: onStopImport
+                )
+            }
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())

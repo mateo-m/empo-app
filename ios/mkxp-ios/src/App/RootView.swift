@@ -44,6 +44,16 @@ struct RootView: View {
         } message: {
             Text(appState.errorMessage ?? "")
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+            if appState.phase == .playing {
+                appState.requestBackgroundPause()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            if appState.phase == .playing && mkxp_isPaused() {
+                mkxp_requestResume()
+            }
+        }
     }
 
     private var showErrorAlert: Binding<Bool> {
