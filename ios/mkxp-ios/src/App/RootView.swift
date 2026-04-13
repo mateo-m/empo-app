@@ -1,17 +1,5 @@
 import SwiftUI
 
-// MARK: - Theme
-
-extension Color {
-    /// The app's primary brand color.
-    static let brand = Color.orange
-}
-
-extension ShapeStyle where Self == Color {
-    /// The app's primary brand color (available in ShapeStyle contexts).
-    static var brand: Color { .orange }
-}
-
 /// The top-level view that switches between Library and Player based on AppState.
 ///
 /// Library is always mounted so the NavigationStack persists across phases.
@@ -41,6 +29,7 @@ struct RootView: View {
             }
         }
         .fontDesign(.rounded)
+        .tint(.brand)
         .alert("Something went wrong", isPresented: showErrorAlert) {
             Button("OK") {
                 appState.errorMessage = nil

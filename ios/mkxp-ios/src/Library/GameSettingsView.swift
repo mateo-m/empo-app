@@ -125,6 +125,7 @@ struct GameSettingsView: View {
             .onChange(of: settings.resolution) { save() }
             .onChange(of: cheats) { saveCheats() }
         }
+        .tint(.brand)
     }
 
     // MARK: - Sections
@@ -149,7 +150,7 @@ struct GameSettingsView: View {
                 description: "Synchronize rendering with the display refresh rate to reduce tearing."
             )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Picker("Resolution", selection: resolutionBinding) {
                     Text("Default")
                         .tag(nil as ResolutionPreset?)
@@ -176,9 +177,9 @@ struct GameSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, Spacing.xxs)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 HStack {
                     Text("Font scale")
                     Spacer()
@@ -195,7 +196,7 @@ struct GameSettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, Spacing.xxs)
 
             SettingsToggle(
                 title: "Solid fonts",
@@ -267,7 +268,7 @@ struct GameSettingsView: View {
 
     private var gameplaySection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 HStack {
                     Text("Fast forward")
                     Spacer()
@@ -284,7 +285,7 @@ struct GameSettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, Spacing.xxs)
 
             SettingsToggle(
                 title: "Cheats",
@@ -414,12 +415,12 @@ private struct VerticalAlignmentIllustration: View {
 
             ZStack {
                 // Phone outline
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: Radius.xs)
                     .stroke(.secondary.opacity(0.5), lineWidth: 1)
                     .frame(width: w, height: h)
 
                 // Game viewport
-                RoundedRectangle(cornerRadius: 2)
+                RoundedRectangle(cornerRadius: Spacing.xxs)
                     .fill(.tint.opacity(0.6))
                     .frame(width: innerW - 4, height: gameH)
                     .position(x: w / 2, y: gameY + gameH / 2)

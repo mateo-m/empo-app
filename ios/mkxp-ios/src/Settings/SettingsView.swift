@@ -92,7 +92,7 @@ struct SettingsView: View {
                             HStack {
                                 Text("Bounds color")
                                 Spacer()
-                                RoundedRectangle(cornerRadius: 4)
+                                RoundedRectangle(cornerRadius: Radius.xs)
                                     .fill(settings.viewportBoundsColor)
                                     .frame(width: 24, height: 24)
                             }
@@ -163,6 +163,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .tint(.brand)
     }
 }
 
@@ -205,7 +206,7 @@ private struct DevicePreview: View {
     // Device proportions (roughly iPhone-like)
     private let portraitW: CGFloat = 70
     private let portraitH: CGFloat = 150
-    private let cornerRadius: CGFloat = 12
+    private let cornerRadius: CGFloat = Radius.md
     private let bezelWidth: CGFloat = 2
     private let notchHeight: CGFloat = 8
 

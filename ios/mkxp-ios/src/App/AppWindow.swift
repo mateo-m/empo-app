@@ -159,6 +159,9 @@ class AppWindow: UIWindow {
         // Apply initial theme
         window.overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle
 
+        // Brand tint for UIKit-backed elements (alerts, action sheets)
+        window.tintColor = UIColor(.brand)
+
         // Observe phase changes to toggle pass-through and orientation
         observePhase(window: window)
         // Observe theme changes to update window interface style
