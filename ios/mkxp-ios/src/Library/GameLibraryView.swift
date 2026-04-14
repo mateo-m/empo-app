@@ -186,7 +186,7 @@ struct GameLibraryView: View {
                     .navigationTransition(.zoom(sourceID: game.id, in: heroNamespace))
             }
             .onChange(of: appState.phase) { _, newPhase in
-                if newPhase == .library && !path.isEmpty {
+                if newPhase == nil && !path.isEmpty {
                     path = NavigationPath()
                 }
             }
