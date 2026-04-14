@@ -88,6 +88,11 @@ private struct SplashView: View {
                 .ignoresSafeArea()
                 .opacity(exiting ? 0 : 1)
 
+            // Retro checkerboard dither
+            PixelDitherPattern(color: contentColor)
+                .ignoresSafeArea()
+                .opacity(exiting ? 0 : 1)
+
             VStack(spacing: Spacing.lg) {
                 Image(systemName: "gamecontroller.fill")
                     .font(.system(size: 52))
@@ -112,6 +117,93 @@ private struct SplashView: View {
             withAnimation(.spring(duration: 0.35, bounce: 0)) {
                 entered = true
             }
+        }
+    }
+}
+
+// MARK: - Pixel Dither Pattern
+
+private struct PixelDitherPattern: View {
+    let color: Color
+    private let cellSize: CGFloat = 14
+    private let scale: CGFloat = 5
+
+    @State private var panning = false
+
+    private var tileWidth: CGFloat { cellSize * 3 }
+    private var tileHeight: CGFloat { cellSize * 2 }
+
+    private var tileImage: UIImage {
+        let uiColor = UIColor(color).withAlphaComponent(0.08)
+        let size = CGSize(width: tileWidth, height: tileHeight)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { ctx in
+            uiColor.setFill()
+
+            // Row 0: circle, cross, diamond
+            drawCircle(ctx, ox: 2, oy: 2)
+            drawCross(ctx, ox: 16, oy: 2)
+            drawDiamond(ctx, ox: 30, oy: 2)
+
+            // Row 1 (rotated order): diamond, circle, cross
+            drawDiamond(ctx, ox: 2, oy: 16)
+            drawCircle(ctx, ox: 16, oy: 16)
+            drawCross(ctx, ox: 30, oy: 16)
+        }
+    }
+
+    var body: some View {
+        Image(uiImage: tileImage)
+            .interpolation(.none)
+            .resizable(resizingMode: .tile)
+            .scaleEffect(scale)
+            .rotationEffect(.degrees(-15))
+            .offset(x: panning ? tileWidth * scale : 0, y: panning ? -tileHeight * scale * 0.5 : 0)
+            .onAppear {
+                withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
+                    panning = true
+                }
+            }
+    }
+
+    // 10px circle — smooth pixel art rounding
+    private func drawCircle(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
+        let rows: [(x: CGFloat, w: CGFloat)] = [
+            (3, 4), (2, 6), (1, 8), (1, 8), (0, 10),
+            (0, 10), (1, 8), (1, 8), (2, 6), (3, 4),
+        ]
+        for (i, row) in rows.enumerated() {
+            ctx.fill(CGRect(x: ox + row.x, y: oy + CGFloat(i), width: row.w, height: 1))
+        }
+    }
+
+    // 10px bold X — 3px-wide strokes, rounded single-pixel tips
+    private func drawCross(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
+        let rects: [(x: CGFloat, y: CGFloat, w: CGFloat)] = [
+            (1, 0, 1), (8, 0, 1),
+            (0, 1, 3), (7, 1, 3),
+            (1, 2, 3), (6, 2, 3),
+            (2, 3, 3), (5, 3, 3),
+            (3, 4, 4),
+            (3, 5, 4),
+            (2, 6, 3), (5, 6, 3),
+            (1, 7, 3), (6, 7, 3),
+            (0, 8, 3), (7, 8, 3),
+            (1, 9, 1), (8, 9, 1),
+        ]
+        for r in rects {
+            ctx.fill(CGRect(x: ox + r.x, y: oy + r.y, width: r.w, height: 1))
+        }
+    }
+
+    // 10px diamond — pointed rhombus
+    private func drawDiamond(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
+        let rows: [(x: CGFloat, w: CGFloat)] = [
+            (4, 2), (3, 4), (2, 6), (1, 8), (0, 10),
+            (0, 10), (1, 8), (2, 6), (3, 4), (4, 2),
+        ]
+        for (i, row) in rows.enumerated() {
+            ctx.fill(CGRect(x: ox + row.x, y: oy + CGFloat(i), width: row.w, height: 1))
         }
     }
 }
