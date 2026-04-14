@@ -77,6 +77,23 @@ struct GameLibraryView: View {
                         searchBar
                     }
                 }
+                .background {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .padding(.bottom, -30)
+                        .mask {
+                            VStack(spacing: 0) {
+                                Rectangle()
+                                LinearGradient(
+                                    colors: [.black, .clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .frame(height: 30)
+                            }
+                        }
+                        .ignoresSafeArea(edges: .top)
+                }
             }
             .background {
                 // Warm gradient background — subtle brand warmth
