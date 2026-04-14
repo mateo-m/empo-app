@@ -173,7 +173,7 @@ struct GameLibraryView: View {
                     }
                 }
             } message: {
-                if let paused = appState.pausedGame {
+                if let paused = PauseManager.shared.pausedGame {
                     Text("\"\(paused.title)\" is still running. Quit it to play a different game?")
                 }
             }
@@ -311,7 +311,7 @@ struct GameLibraryView: View {
     // MARK: - Hero Card
 
     private func heroCard(for game: GameEntry) -> some View {
-        let isPaused = appState.pausedGame?.id == game.id
+        let isPaused = PauseManager.shared.pausedGame?.id == game.id
         return Button { handleGameTap(game) } label: {
             Color.clear
                 .aspectRatio(2.2, contentMode: .fit)
@@ -368,7 +368,7 @@ struct GameLibraryView: View {
     private var listInner: some View {
         LazyVStack(spacing: 0) {
             ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
-                let isPaused = appState.pausedGame?.id == game.id
+                let isPaused = PauseManager.shared.pausedGame?.id == game.id
                 Button {
                     switch game.status {
                     case .ready: handleGameTap(game)
@@ -427,7 +427,7 @@ struct GameLibraryView: View {
                     .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .ready:
-                let isPaused = appState.pausedGame?.id == game.id
+                let isPaused = PauseManager.shared.pausedGame?.id == game.id
                 Button { handleGameTap(game) } label: {
                     GameCard(game: game, isPaused: isPaused)
                         .matchedTransitionSource(id: game.id, in: heroNamespace) { config in
@@ -448,10 +448,11 @@ struct GameLibraryView: View {
     // MARK: - Game Tap Handling
 
     private func handleGameTap(_ game: GameEntry) {
-        if appState.pausedGame?.id == game.id {
-            appState.resume()
+        let pauseManager = PauseManager.shared
+        if pauseManager.pausedGame?.id == game.id {
+            pauseManager.resume()
             path.append(game)
-        } else if appState.pausedGame != nil {
+        } else if pauseManager.pausedGame != nil {
             pendingGame = game
             showPausedGameAlert = true
         } else {

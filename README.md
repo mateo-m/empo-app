@@ -65,23 +65,41 @@ mkxp-ios/
           AppLoader.m              # +load bootstrap (creates UIWindow before main)
           AppWindow.swift          # UIWindow above SDL, theme observation
           AppState.swift           # @Observable state machine (library/loading/playing/quitting)
+          EngineState.swift        # Engine runtime state (game rect, background pause)
+          PauseManager.swift       # User-initiated pause/resume (snapshot, paused game)
           AppSettings.swift        # Persisted settings (theme, debug mode, log retention)
           RootView.swift           # Root SwiftUI view (SF Rounded, phase-based routing)
           GitInfo.generated.swift  # Auto-generated commit hash for version display
+        Design/                    # Design system
+          Theme.swift              # Color tokens (brand, surface, semantic), spacing, radii
+          Primitives.swift         # Haptics, button styles, empty state, transitions
         Library/                   # Game library (import, browse, delete)
           GameLibraryView.swift    # Grid layout, morphing import button, liquid glass header
           GameCard.swift           # Game card component (artwork, title, import progress)
           GameEntry.swift          # Game data model (title, path, artwork, import state)
           GameLibrary.swift        # Game scanning, importing, deletion
           GameLoadingView.swift    # Loading screen (spinner while engine boots)
+          GameInfoView.swift       # Game detail/info view
+          GameSettingsView.swift   # Per-game settings (overrides)
+          GameSettings.swift       # Per-game settings model
+          GameMetadata.swift       # Game metadata extraction
+          GameArtworkView.swift    # Artwork display component
+          GameContextMenu.swift    # Context menu for game cards
+          ImportButton.swift       # Morphing import button
+          ImageSourcePicker.swift  # Image source selection for artwork
+          ImageCache.swift         # In-memory image cache
           GameImportValidator.swift # Validates imported game structure
           ZipExtractor.swift       # Zip extraction with progress callback
           DocumentPickerView.swift # System document picker (UIDocumentPickerViewController)
         Settings/                  # App settings
           SettingsView.swift       # Theme picker, title position, debug toggles
+          SettingsComponents.swift # Reusable toggle/picker components
         Player/                    # In-game overlay
           PlayerView.swift         # Game viewport + controls layout
           ControlsLayout.swift     # Portrait/landscape control positioning
+          ControlsEditModifier.swift # Edit mode for repositioning controls
+          DebugOverlayView.swift   # Debug info overlay
+          KeyCatalog.swift         # Available key bindings catalog
           TouchControls.h          # Touch controls interface
           TouchControls.mm         # Touch controls implementation (D-pad, buttons, toolbar)
           TouchControlRepresentables.swift # UIKit-to-SwiftUI bridge
