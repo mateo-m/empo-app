@@ -36,7 +36,6 @@ class GameLibrary {
             await MainActor.run {
                 let lib = GameLibrary.shared
                 withAnimation {
-                    // Update existing entries in-place (skeleton -> real, or metadata refresh)
                     var updatedIDs = Set<String>()
                     for i in lib.games.indices {
                         let id = lib.games[i].id
@@ -46,10 +45,8 @@ class GameLibrary {
                         }
                     }
 
-                    // Remove entries that are no longer on disk and not importing
                     lib.games.removeAll { !$0.isImporting && !scannedByID.keys.contains($0.id) }
 
-                    // Append any new games not already in the list
                     for entry in scanned where !updatedIDs.contains(entry.id) {
                         lib.games.append(entry)
                     }
@@ -58,8 +55,8 @@ class GameLibrary {
         }
     }
 
-    /// Scans the games directory in a single pass. If `cleanupInvalid` is true,
-    /// invalid folders are removed instead of silently skipped.
+    /// Scans the games directory. If `cleanupInvalid` is true,
+    /// invalid folders are removed instead of kept as entries.
     nonisolated private static func scanGames(
         in gamesDir: URL,
         fm: FileManager = .default,
@@ -103,8 +100,7 @@ class GameLibrary {
         return entries
     }
 
-    /// Builds a GameEntry from a validated game folder (no validation performed here).
-    /// Loads metadata to apply custom title/artwork overrides.
+    /// Builds a GameEntry from a game folder. Loads metadata for custom title/artwork.
     nonisolated private static func buildGameEntry(from url: URL, fm: FileManager = .default) -> GameEntry? {
 
         let folderName = url.lastPathComponent
@@ -153,8 +149,7 @@ class GameLibrary {
 
     // MARK: - Entry Refresh
 
-    /// Re-reads a single game entry from disk + metadata and updates the games array.
-    /// Use after modifying metadata (custom title, artwork, etc.) for immediate UI feedback.
+    /// Re-reads a single game entry from disk + metadata for immediate UI feedback.
     func refreshGameEntry(id: String) {
         guard let idx = games.firstIndex(where: { $0.id == id }) else { return }
         let url = URL(fileURLWithPath: games[idx].path)
@@ -202,8 +197,8 @@ class GameLibrary {
             artwork = nil
         }
 
-        // Add skeleton card immediately — same ID as final entry, so SwiftUI
-        // updates in-place when reload() provides the real data.
+        // Skeleton card uses the same ID as the final entry, so SwiftUI
+        // animates in-place when reload() provides the real data.
         withAnimation {
             games.append(GameEntry(
                 id: importID,
@@ -240,7 +235,6 @@ class GameLibrary {
         }
     }
 
-    /// Updates the skeleton card's import progress (0.0–1.0).
     nonisolated private func updateProgress(_ importID: String, _ progress: Double) {
         DispatchQueue.main.async {
             let lib = GameLibrary.shared
@@ -250,7 +244,6 @@ class GameLibrary {
     }
 
     /// Updates the skeleton card's title and artwork mid-import (e.g. after zip extraction).
-    /// Returns the parsed title so callers can reuse it without re-reading the INI file.
     @discardableResult
     nonisolated private func updateSkeleton(_ importID: String, gameDir: URL) -> String? {
         let title = GameEntry.parseINITitle(at: gameDir)
@@ -337,7 +330,6 @@ class GameLibrary {
         GameLibrary.createMetadata(for: importID)
     }
 
-    /// Creates metadata with dateAdded = now for a newly imported game.
     nonisolated private static func createMetadata(for gameId: String) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
@@ -442,8 +434,7 @@ class GameLibrary {
         }
     }
 
-    /// Removes orphaned metadata entries that no longer correspond to a game.
-    /// This handles cases where the app crashed mid-delete, leaving metadata behind.
+    /// Removes orphaned metadata that no longer corresponds to a game on disk.
     private func syncMetadata() {
         let metadataDir = FileManager.default
             .urls(for: .documentDirectory, in: .userDomainMask)[0]

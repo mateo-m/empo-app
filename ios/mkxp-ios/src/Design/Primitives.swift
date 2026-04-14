@@ -1,10 +1,7 @@
 import SwiftUI
 
-// ============================================================================
 // MARK: - Haptics
-// ============================================================================
 
-/// Lightweight haptic feedback helpers.
 enum Haptics {
     private static let light = UIImpactFeedbackGenerator(style: .light)
     private static let medium = UIImpactFeedbackGenerator(style: .medium)
@@ -18,36 +15,30 @@ enum Haptics {
         UserDefaults.standard.object(forKey: "controllerHaptics") as? Bool ?? true
     }
 
-    /// Light tap — card press, small interactions.
     static func tap() {
         guard interfaceEnabled else { return }
         light.impactOccurred()
     }
 
-    /// Medium impact — import complete, significant action.
     static func impact() {
         guard interfaceEnabled else { return }
         medium.impactOccurred()
     }
 
-    /// Success — game launched successfully.
     static func success() {
         guard interfaceEnabled else { return }
         notification.notificationOccurred(.success)
     }
 
-    /// Light tap for game controller buttons.
     static func controllerTap() {
         guard controllerEnabled else { return }
         light.impactOccurred()
     }
 }
 
-// ============================================================================
 // MARK: - Button Styles
-// ============================================================================
 
-/// Scale-down press effect for tappable cards and large touch targets.
+/// Scale-down press effect for tappable cards.
 struct CardPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -59,12 +50,8 @@ struct CardPressStyle: ButtonStyle {
     }
 }
 
-// ============================================================================
 // MARK: - Empty State
-// ============================================================================
 
-/// A centered empty-state placeholder with icon, title, and subtitle.
-/// Used when a collection has no content (library, search results, etc.).
 struct EmptyStateView: View {
     let icon: String
     let title: String
@@ -109,12 +96,8 @@ struct EmptyStateView: View {
     }
 }
 
-// ============================================================================
 // MARK: - Staggered Appearance
-// ============================================================================
 
-/// Fades and slides in a view with a staggered delay based on its index.
-/// Resets and replays whenever `trigger` changes (e.g. on view mode switch).
 struct StaggeredAppearance: ViewModifier {
     let index: Int
     let trigger: UUID
@@ -140,17 +123,13 @@ struct StaggeredAppearance: ViewModifier {
 }
 
 extension View {
-    /// Staggered entrance animation — replays whenever `trigger` changes.
     func staggered(index: Int, trigger: UUID, initialDelay: TimeInterval = 0) -> some View {
         modifier(StaggeredAppearance(index: index, trigger: trigger, initialDelay: initialDelay))
     }
 }
 
-// ============================================================================
 // MARK: - Transitions
-// ============================================================================
 
-/// Scale + blur + fade for empty state appearance/disappearance.
 struct EmptyStateTransition: ViewModifier {
     let active: Bool
     func body(content: Content) -> some View {
@@ -161,7 +140,6 @@ struct EmptyStateTransition: ViewModifier {
     }
 }
 
-/// Subtle scale + blur + fade for card/row insertion/removal.
 struct CardTransition: ViewModifier {
     let active: Bool
     func body(content: Content) -> some View {
@@ -172,7 +150,6 @@ struct CardTransition: ViewModifier {
     }
 }
 
-/// Scale + blur + fade for view mode switching (grid ↔ list).
 struct ViewModeSwitchTransition: ViewModifier {
     let active: Bool
     func body(content: Content) -> some View {

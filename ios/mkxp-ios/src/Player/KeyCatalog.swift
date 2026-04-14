@@ -70,7 +70,6 @@ let keyCatalog: [KeyEntry] = [
     KeyEntry(label: "Backspace", scancode: Int32(MKXP_SCANCODE_BACKSPACE)),
 ]
 
-/// Returns a display name for a scancode by looking it up in the key catalog.
 func scancodeDisplayName(_ sc: Int32) -> String {
     for entry in keyCatalog {
         if entry.scancode == sc { return entry.label }

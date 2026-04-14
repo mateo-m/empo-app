@@ -20,7 +20,6 @@ struct GameLibraryView: View {
     @State private var pendingGame: GameEntry?
     @State private var showPausedGameAlert = false
     @State private var staggerTrigger = UUID()
-    /// Extra delay for content entrance on first mount (after splash).
     @State private var entranceDelay: TimeInterval = 0.15
 
     private var showEmpty: Bool {
@@ -32,7 +31,6 @@ struct GameLibraryView: View {
         return library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
     }
 
-    /// The most recently played game, if any (only shown when not searching).
     private var recentlyPlayed: GameEntry? {
         guard searchText.isEmpty else { return nil }
         let readyGames = library.games.filter { $0.status == .ready }
@@ -92,7 +90,6 @@ struct GameLibraryView: View {
                 }
             }
             .background {
-                // Warm gradient background — subtle brand warmth
                 LinearGradient(
                     colors: [.brand.opacity(0.06), .clear],
                     startPoint: .top,
@@ -168,8 +165,8 @@ struct GameLibraryView: View {
                     if let game = pendingGame {
                         pendingGame = nil
                         appState.returnToLibrary()
-                        // Small delay to let the engine tear down before starting new game
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    // Small delay to let the engine tear down
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                             appState.selectGame(game)
                             path.append(game)
                         }
@@ -224,7 +221,6 @@ struct GameLibraryView: View {
                 .font(.title)
                 .fontWeight(.bold)
             Spacer()
-            // Invisible placeholder to keep "Library" centered
             Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
                 .accessibilityHidden(true)
         }
@@ -451,18 +447,14 @@ struct GameLibraryView: View {
 
     // MARK: - Game Tap Handling
 
-    /// Centralized tap handler for game cards in both grid and list modes.
     private func handleGameTap(_ game: GameEntry) {
         if appState.pausedGame?.id == game.id {
-            // Resume the paused game
             appState.resume()
             path.append(game)
         } else if appState.pausedGame != nil {
-            // Another game is paused — confirm before switching
             pendingGame = game
             showPausedGameAlert = true
         } else {
-            // Normal: start the game
             appState.selectGame(game)
             path.append(game)
         }

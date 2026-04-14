@@ -16,7 +16,6 @@ struct GameInfoView: View {
     @State private var needsLibraryRefresh = false
     @FocusState private var isTitleFocused: Bool
 
-    /// The Game.ini title (before custom override) — shown as subtitle.
     private let originalTitle: String
 
     init(game: GameEntry) {
@@ -62,7 +61,6 @@ struct GameInfoView: View {
     var body: some View {
         NavigationStack {
             List {
-                // ── Banner (full-bleed via zero section margins) ──
                 Section {
                     bannerHeader
                 }
@@ -71,7 +69,6 @@ struct GameInfoView: View {
                 .listRowBackground(Color.clear)
                 .listSectionSeparator(.hidden)
 
-                // ── Details ──────────────────────────────
                 Section("Details") {
                     LabeledContent("Date added") {
                         if let date = metadata.dateAdded {
@@ -113,7 +110,6 @@ struct GameInfoView: View {
                     }
                 }
 
-                // ── Actions ──────────────────────────────
                 Section {
                     Button { openInFiles() } label: {
                         Label("Browse game files", systemImage: "folder")
