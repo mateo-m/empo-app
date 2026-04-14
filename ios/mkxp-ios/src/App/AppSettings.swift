@@ -112,6 +112,14 @@ class AppSettings {
         didSet { UserDefaults.standard.set(cleanupInvalidGames, forKey: "cleanupInvalidGames") }
     }
 
+    var interfaceHaptics: Bool {
+        didSet { UserDefaults.standard.set(interfaceHaptics, forKey: "interfaceHaptics") }
+    }
+
+    var controllerHaptics: Bool {
+        didSet { UserDefaults.standard.set(controllerHaptics, forKey: "controllerHaptics") }
+    }
+
     var titlePosition: TitlePosition {
         didSet { UserDefaults.standard.set(titlePosition.rawValue, forKey: "titlePosition") }
     }
@@ -139,6 +147,9 @@ class AppSettings {
         let storedMax = UserDefaults.standard.integer(forKey: "maxLogFiles")
         self.maxLogFiles = storedMax > 0 ? storedMax : 20
         self.cleanupInvalidGames = UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
+        // Haptics default to on
+        self.interfaceHaptics = UserDefaults.standard.object(forKey: "interfaceHaptics") as? Bool ?? true
+        self.controllerHaptics = UserDefaults.standard.object(forKey: "controllerHaptics") as? Bool ?? true
         let raw = UserDefaults.standard.string(forKey: "titlePosition") ?? TitlePosition.inside.rawValue
         self.titlePosition = TitlePosition(rawValue: raw) ?? .inside
         let modeRaw = UserDefaults.standard.string(forKey: "libraryDisplayMode") ?? LibraryDisplayMode.grid.rawValue
