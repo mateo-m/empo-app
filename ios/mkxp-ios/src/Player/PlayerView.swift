@@ -120,9 +120,11 @@ struct PlayerView: View {
             Button("Quit", role: .destructive) {
                 appState.returnToLibrary()
             }
+            .keyboardShortcut(.defaultAction)
         } message: {
             Text("Are you sure you want to quit the current game?")
         }
+        .tint(nil)
         .controlsEditDialogs(
             layout: layout,
             showAddSheet: $showAddSheet,
