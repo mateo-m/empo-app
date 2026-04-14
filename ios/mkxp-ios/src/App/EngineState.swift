@@ -6,7 +6,7 @@ import Observation
 /// Owns properties that only matter while a game is running:
 /// viewport rect, pause snapshots, quit confirmation, and
 /// pause/resume lifecycle methods.
-@Observable
+@MainActor @Observable
 class EngineState {
     static let shared = EngineState()
 
