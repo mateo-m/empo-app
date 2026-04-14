@@ -13,8 +13,20 @@
 // MARK: - Constants
 // ============================================================================
 
-static const CGFloat kButtonSize      = 56.0;
-static const CGFloat kDPadDeadZone    = 0.20; // fraction of radius
+static const CGFloat kButtonSize         = 56.0;
+static const CGFloat kDPadDeadZone       = 0.20; // fraction of radius
+static const CGFloat kButtonHitSlop      = 10.0; // extra radius for pointInside
+static const CGFloat kDPadHitSlop        = 15.0; // extra radius for pointInside
+static const CGFloat kDPadCancelRadius   = 30.0; // extra radius before cancel on move
+static const CGFloat kBorderWidth        = 2.0;
+static const CGFloat kDeleteBadgeSize    = 22.0;
+static const CGFloat kSmallFontThreshold = 50.0; // below this size, use small font
+static const CGFloat kSmallFontSize      = 12.0;
+static const CGFloat kLargeFontSize      = 16.0;
+static const CGFloat kArrowFontSize      = 16.0;
+static const CGFloat kAccessoryBarHeight = 80.0;
+static const CGFloat kAccessoryFontSize  = 13.0;
+static const CGFloat kKeyTapDuration     = 0.05; // seconds
 
 // ============================================================================
 // MARK: - Key event injection (via bridge)
@@ -108,21 +120,21 @@ static int scancodeForCharacter(unichar c) {
         self.multipleTouchEnabled = NO;
         self.exclusiveTouch = NO;
         self.layer.cornerRadius = size / 2.0;
-        self.layer.borderWidth  = 2.0;
+        self.layer.borderWidth  = kBorderWidth;
         self.layer.borderColor  = [UIColor colorWithWhite:1.0 alpha:0.7].CGColor;
         self.backgroundColor    = [UIColor colorWithWhite:1.0 alpha:0.25];
 
         _textLabel = [[UILabel alloc] initWithFrame:self.bounds];
         _textLabel.text = label;
         _textLabel.textColor = [UIColor colorWithWhite:1.0 alpha:1.0];
-        _textLabel.font = [UIFont systemFontOfSize:(size < 50 ? 12 : 16) weight:UIFontWeightBold];
+        _textLabel.font = [UIFont systemFontOfSize:(size < kSmallFontThreshold ? kSmallFontSize : kLargeFontSize) weight:UIFontWeightBold];
         _textLabel.textAlignment = NSTextAlignmentCenter;
         [self addSubview:_textLabel];
 
         // Delete badge (hidden until edit mode)
-        _deleteBadge = [[UIView alloc] initWithFrame:CGRectMake(size - 18, -4, 22, 22)];
+        _deleteBadge = [[UIView alloc] initWithFrame:CGRectMake(size - kDeleteBadgeSize + 4, -4, kDeleteBadgeSize, kDeleteBadgeSize)];
         _deleteBadge.backgroundColor = [UIColor systemRedColor];
-        _deleteBadge.layer.cornerRadius = 11;
+        _deleteBadge.layer.cornerRadius = kDeleteBadgeSize / 2.0;
         _deleteBadge.hidden = YES;
         UILabel *x = [[UILabel alloc] initWithFrame:_deleteBadge.bounds];
         x.text = @"\u00D7";
@@ -153,7 +165,7 @@ static int scancodeForCharacter(unichar c) {
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
     CGFloat cx = self.bounds.size.width * 0.5;
     CGFloat cy = self.bounds.size.height * 0.5;
-    CGFloat r = cx + 10;
+    CGFloat r = cx + kButtonHitSlop;
     CGFloat dx = point.x - cx, dy = point.y - cy;
     return (dx * dx + dy * dy) <= (r * r);
 }
@@ -192,8 +204,8 @@ static int scancodeForCharacter(unichar c) {
     self.center = c;
     self.layer.cornerRadius = newSize / 2.0;
     _textLabel.frame = self.bounds;
-    _textLabel.font = [UIFont systemFontOfSize:(newSize < 50 ? 12 : 16) weight:UIFontWeightBold];
-    _deleteBadge.frame = CGRectMake(newSize - 18, -4, 22, 22);
+    _textLabel.font = [UIFont systemFontOfSize:(newSize < kSmallFontThreshold ? kSmallFontSize : kLargeFontSize) weight:UIFontWeightBold];
+    _deleteBadge.frame = CGRectMake(newSize - kDeleteBadgeSize + 4, -4, kDeleteBadgeSize, kDeleteBadgeSize);
     [CATransaction commit];
 }
 
@@ -266,7 +278,7 @@ static int scancodeForCharacter(unichar c) {
     CGContextSetStrokeColorWithColor(ctx,
         _editing ? [UIColor systemYellowColor].CGColor
                  : [UIColor colorWithWhite:1.0 alpha:0.65].CGColor);
-    CGContextSetLineWidth(ctx, 2.0);
+    CGContextSetLineWidth(ctx, kBorderWidth);
     [cross stroke];
 
     CGFloat qS = armW * 0.7;
@@ -287,7 +299,7 @@ static int scancodeForCharacter(unichar c) {
         NSMutableParagraphStyle *ps = [NSMutableParagraphStyle new];
         ps.alignment = NSTextAlignmentCenter;
         NSDictionary *attrs = @{
-            NSFontAttributeName: [UIFont systemFontOfSize:16 weight:UIFontWeightBold],
+            NSFontAttributeName: [UIFont systemFontOfSize:kArrowFontSize weight:UIFontWeightBold],
             NSForegroundColorAttributeName: [UIColor colorWithWhite:1.0 alpha:(active ? 1.0 : 0.75)],
             NSParagraphStyleAttributeName: ps,
         };
@@ -347,7 +359,7 @@ static int scancodeForCharacter(unichar c) {
 }
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
-    CGFloat r = self.bounds.size.width / 2 + 15;
+    CGFloat r = self.bounds.size.width / 2 + kDPadHitSlop;
     CGFloat cx = self.bounds.size.width / 2;
     CGFloat cy = self.bounds.size.height / 2;
     CGFloat dx = point.x - cx, dy = point.y - cy;
@@ -367,7 +379,7 @@ static int scancodeForCharacter(unichar c) {
     UITouch *t = _trackedTouch;
     if (t && [touches containsObject:t]) {
         CGPoint p = [t locationInView:self];
-        CGFloat r = self.bounds.size.width / 2 + 30;
+        CGFloat r = self.bounds.size.width / 2 + kDPadCancelRadius;
         CGFloat cx = self.bounds.size.width / 2;
         CGFloat cy = self.bounds.size.height / 2;
         CGFloat dx = p.x - cx, dy = p.y - cy;
@@ -409,7 +421,7 @@ static int scancodeForCharacter(unichar c) {
 
 - (void)deleteBackward {
     injectKey(MKXP_SCANCODE_BACKSPACE, YES);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kKeyTapDuration * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         injectKey(MKXP_SCANCODE_BACKSPACE, NO);
     });
@@ -439,7 +451,7 @@ static int scancodeForCharacter(unichar c) {
 @end
 
 UIView *TCCreateKeyboardAccessoryView(void) {
-    CGFloat barH = 80;
+    CGFloat barH = kAccessoryBarHeight;
     TCAccessoryBar *bar = [[TCAccessoryBar alloc] initWithFrame:CGRectMake(0, 0, 0, barH)];
     bar.backgroundColor = [UIColor colorWithWhite:0.12 alpha:0.95];
     bar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
@@ -462,7 +474,7 @@ UIView *TCCreateKeyboardAccessoryView(void) {
         NSString *title = [NSString stringWithUTF8String:fKeys[i].label];
         [btn setTitle:title forState:UIControlStateNormal];
         [btn setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-        btn.titleLabel.font = [UIFont monospacedSystemFontOfSize:13 weight:UIFontWeightMedium];
+        btn.titleLabel.font = [UIFont monospacedSystemFontOfSize:kAccessoryFontSize weight:UIFontWeightMedium];
         btn.backgroundColor = [UIColor colorWithWhite:0.25 alpha:1.0];
         btn.layer.cornerRadius = 5;
         CGFloat w = (i >= 9) ? 40 : 34;
@@ -500,7 +512,7 @@ UIView *TCCreateKeyboardAccessoryView(void) {
         NSString *title = [NSString stringWithUTF8String:row2[i].label];
         [btn setTitle:title forState:UIControlStateNormal];
         [btn setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-        btn.titleLabel.font = [UIFont monospacedSystemFontOfSize:13 weight:UIFontWeightMedium];
+        btn.titleLabel.font = [UIFont monospacedSystemFontOfSize:kAccessoryFontSize weight:UIFontWeightMedium];
         btn.backgroundColor = [UIColor colorWithWhite:0.25 alpha:1.0];
         btn.layer.cornerRadius = 5;
         CGFloat w = 44;
@@ -526,7 +538,7 @@ UIView *TCCreateKeyboardAccessoryView(void) {
 - (void)accKeyTap:(UIButton *)sender {
     int sc = (int)sender.tag;
     injectKey(sc, YES);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kKeyTapDuration * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         injectKey(sc, NO);
     });
