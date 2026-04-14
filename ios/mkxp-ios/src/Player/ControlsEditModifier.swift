@@ -1,22 +1,15 @@
 import SwiftUI
 
-// ============================================================================
 // MARK: - Controls Edit Dialogs
-// ============================================================================
 
-/// A ViewModifier that attaches all controls-editing dialogs (add, reset,
-/// edit button, label editor, key picker, size picker). PlayerView owns the
-/// trigger bindings; this modifier owns the secondary dialog state.
 struct ControlsEditDialogs: ViewModifier {
     var layout: ControlsLayout
 
-    // Trigger bindings — owned by PlayerView, toggled by toolbar/gestures
     @Binding var showAddSheet: Bool
     @Binding var showResetConfirm: Bool
     @Binding var editingButton: ButtonModel?
     @Binding var showEditMenu: Bool
 
-    // Secondary dialog state — owned here, triggered from edit menu
     @State private var showLabelEditor = false
     @State private var showKeyPicker = false
     @State private var showSizePicker = false

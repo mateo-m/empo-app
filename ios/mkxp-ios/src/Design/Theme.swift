@@ -1,8 +1,6 @@
 import SwiftUI
 
-// ============================================================================
 // MARK: - Colors
-// ============================================================================
 //
 // 60-30-10 rule:
 //   60% neutral  — system backgrounds, primary/secondary text (iOS defaults)
@@ -13,14 +11,10 @@ import SwiftUI
 // derived from the accent — it creates cohesion without competing.
 
 extension Color {
-    /// The app's primary brand / accent color (10%).
     static let brand = Color.orange
 
-    /// Warm-tinted surface color (30%). Used for badges, tinted backgrounds,
-    /// and secondary surfaces that should feel "part of" the brand.
-    ///
-    /// Dark mode: warm dark surface with a hint of amber.
-    /// Light mode: warm off-white with a hint of peach.
+    /// Dark: warm dark surface with a hint of amber.
+    /// Light: warm off-white with a hint of peach.
     static let surface = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.16, green: 0.13, blue: 0.10, alpha: 1.0)
@@ -29,40 +23,28 @@ extension Color {
 }
 
 extension ShapeStyle where Self == Color {
-    /// The app's primary brand color (available in ShapeStyle contexts).
     static var brand: Color { .brand }
-
-    /// Warm-tinted surface (available in ShapeStyle contexts).
     static var surface: Color { .surface }
-
-    /// Destructive actions (available in ShapeStyle contexts).
     static var destructive: Color { .destructive }
-
-    /// Success states (available in ShapeStyle contexts).
     static var success: Color { .success }
-
-    /// Warning states (available in ShapeStyle contexts).
     static var warning: Color { .warning }
 }
 
 // MARK: - Semantic Colors
 
 extension Color {
-    /// Destructive actions — delete, quit, remove.
     static let destructive = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 1.00, green: 0.38, blue: 0.35, alpha: 1.0)
             : UIColor(red: 0.90, green: 0.24, blue: 0.20, alpha: 1.0)
     })
 
-    /// Success states — completed, connected, healthy.
     static let success = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.35, green: 0.90, blue: 0.50, alpha: 1.0)
             : UIColor(red: 0.20, green: 0.72, blue: 0.35, alpha: 1.0)
     })
 
-    /// Warning states — caution, invalid, attention needed.
     static let warning = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 1.00, green: 0.82, blue: 0.35, alpha: 1.0)
@@ -70,12 +52,9 @@ extension Color {
     })
 }
 
-// ============================================================================
 // MARK: - Spacing
-// ============================================================================
 //
-// 4-point grid. Use these instead of ad-hoc magic numbers.
-// Not every value needs to come from here — but repeated patterns should.
+// 4-point grid.
 
 enum Spacing {
     /// 2pt — hairline gaps, tight label spacing
@@ -96,9 +75,7 @@ enum Spacing {
     static let xxxl: CGFloat = 32
 }
 
-// ============================================================================
 // MARK: - Corner Radius
-// ============================================================================
 
 enum Radius {
     /// 4pt — small chips, inline badges
@@ -113,38 +90,29 @@ enum Radius {
     static let xl: CGFloat = 24
 }
 
-// ============================================================================
 // MARK: - Shadows
-// ============================================================================
 
 extension View {
-    /// Subtle card shadow — used on game cards and containers.
     func cardShadow() -> some View {
         shadow(color: .black.opacity(0.15), radius: 4, y: 2)
     }
 
-    /// Text-on-image shadow — makes white text readable over artwork.
     func textShadow() -> some View {
         shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
 
-    /// Overlay icon shadow — for play/pause icons over artwork.
     func iconShadow() -> some View {
         shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
     }
 
-    /// Elevated element shadow — for floating elements, popovers.
     func elevatedShadow() -> some View {
         shadow(color: .black.opacity(0.25), radius: 8, y: 4)
     }
 }
 
-// ============================================================================
 // MARK: - Animation
-// ============================================================================
 //
-// Named spring presets so animations feel consistent across the app.
-// All tuned for a playful, fluid feel.
+// Named spring presets — all tuned for a playful, fluid feel.
 
 enum Motion {
     // -- Small elements: buttons, toggles, icons (150-200ms) --
@@ -174,30 +142,18 @@ enum Motion {
     static let durationSlow: TimeInterval = 0.5
 }
 
-// ============================================================================
 // MARK: - Sizes
-// ============================================================================
 
 enum AppSize {
-    /// Toolbar icon buttons (player overlay).
     static let toolbarButton: CGFloat = 38
-    /// List row artwork thumbnail.
     static let listArtwork: CGFloat = 48
-    /// Info view artwork square.
     static let infoArtwork: CGFloat = 80
 }
 
-// ============================================================================
 // MARK: - Overlay Opacity
-// ============================================================================
-//
-// Standardized overlay dimming values used over artwork/backgrounds.
 
 enum Overlay {
-    /// Light dim — paused indicator, subtle darkening.
     static let light: Double = 0.3
-    /// Medium dim — importing overlay, loading state.
     static let medium: Double = 0.5
-    /// Heavy dim — debug overlay background, strong dimming.
     static let heavy: Double = 0.6
 }

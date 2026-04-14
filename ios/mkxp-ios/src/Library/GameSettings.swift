@@ -49,7 +49,6 @@ enum VerticalAlignment: String, Codable, CaseIterable {
         }
     }
 
-    /// Bridge value matching MKXPVerticalAlignment in ios_bridge.h
     var bridgeValue: MKXPVerticalAlignment {
         switch self {
         case .top: MKXP_VALIGN_TOP
@@ -61,10 +60,9 @@ enum VerticalAlignment: String, Codable, CaseIterable {
 
 // MARK: - Game Settings
 
-/// Per-game settings that override values in mkxp.json.
-/// Stored as `ios_settings.json` in each game's directory.
+/// Per-game settings stored as `ios_settings.json` in each game directory.
 /// All fields are optional — nil means "use game/engine default".
-struct GameSettings: Codable {
+struct GameSettings: Codable, Equatable {
     // Display
     var smoothScaling: Bool?           // true = bilinear (1), false = pixel-perfect (0)
     var fixedAspectRatio: Bool?        // true = letterbox, false = stretch-to-fill
@@ -93,7 +91,6 @@ struct GameSettings: Codable {
 
     // MARK: - Load / Save
 
-    /// Loads settings from the game directory. Returns empty settings if file doesn't exist.
     static func load(from gameDirectory: URL) -> GameSettings {
         let url = gameDirectory.appendingPathComponent(settingsFilename)
         guard let data = try? Data(contentsOf: url),
@@ -103,7 +100,6 @@ struct GameSettings: Codable {
         return settings
     }
 
-    /// Saves settings to the game directory.
     func save(to gameDirectory: URL) {
         let url = gameDirectory.appendingPathComponent(Self.settingsFilename)
         let encoder = JSONEncoder()
@@ -115,7 +111,6 @@ struct GameSettings: Codable {
 
     // MARK: - Cheats (separate file)
 
-    /// Reads the cheats flag from configuration.json in the game directory.
     static func loadCheats(from gameDirectory: URL) -> Bool {
         let url = gameDirectory.appendingPathComponent(cheatsFilename)
         guard let data = try? Data(contentsOf: url),
@@ -125,7 +120,6 @@ struct GameSettings: Codable {
         return json["cheats"] as? Bool ?? false
     }
 
-    /// Writes the cheats flag to configuration.json in the game directory.
     static func saveCheats(_ value: Bool, to gameDirectory: URL) {
         let url = gameDirectory.appendingPathComponent(cheatsFilename)
         var json: [String: Any] = [:]
@@ -141,14 +135,13 @@ struct GameSettings: Codable {
 
     // MARK: - Config Merging
 
-    /// Reads the game's mkxp.json default values for display in the settings UI.
-    /// Falls back to the original backup if it exists (so we always show the
-    /// game developer's intended defaults, not previously-merged values).
+    /// Reads the game's mkxp.json defaults. Prefers the original backup
+    /// over merged config so we always show the developer's intended values.
     static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
         let originalURL = gameDirectory.appendingPathComponent(originalConfigFilename)
         let configURL = gameDirectory.appendingPathComponent(configFilename)
 
-        // Prefer original backup (game developer's values) over merged config
+        // Prefer original backup over merged config
         let sourceURL = FileManager.default.fileExists(atPath: originalURL.path)
             ? originalURL : configURL
 
@@ -182,8 +175,8 @@ struct GameSettings: Codable {
         )
     }
 
-    /// Merges these settings into the game's mkxp.json for the engine to read.
-    /// Backs up the original config on first call so we can always revert.
+    /// Merges these settings into the game's mkxp.json.
+    /// Backs up the original config on first call so we can revert.
     func applyToConfig(in gameDirectory: URL) {
         let configURL = gameDirectory.appendingPathComponent(Self.configFilename)
         let originalURL = gameDirectory.appendingPathComponent(Self.originalConfigFilename)
@@ -239,19 +232,15 @@ struct GameSettings: Codable {
         }
     }
 
-    /// Whether any config-level setting has been customized (for "Reset to Defaults" visibility).
     var hasCustomizations: Bool {
-        smoothScaling != nil || fixedAspectRatio != nil || resolution != nil ||
-        frameSkip != nil || speedMultiplier != nil || vsync != nil || pathCache != nil ||
-        fontScale != nil || solidFonts != nil || postloadScripts != nil ||
-        verticalAlignment != nil
+        self != GameSettings()
     }
 
     // MARK: - JSON Helpers
 
-    /// Parses a JSON string that may contain `//` line comments (as used by mkxp.json).
+    /// Parses JSON with `//` line comments (as used by mkxp.json).
     static func parseJSONWithComments(_ raw: String) -> [String: Any]? {
-        // Strip // comments (but not inside strings)
+        // Strip // comments (not inside strings)
         var cleaned = ""
         var inString = false
         var escaped = false
@@ -306,8 +295,7 @@ struct GameSettings: Codable {
 
 // MARK: - Game Config Defaults
 
-/// Values read from the game's mkxp.json (the developer's intended defaults).
-/// Used by the settings UI to show the effective value when no override is set.
+/// Values from the game's mkxp.json — the developer's intended defaults.
 struct GameConfigDefaults {
     var smoothScaling: Bool?
     var fixedAspectRatio: Bool?

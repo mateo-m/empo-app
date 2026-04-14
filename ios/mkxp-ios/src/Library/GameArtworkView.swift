@@ -1,11 +1,7 @@
 import SwiftUI
 
-/// Shared artwork view used by GameCard, GameListRow, and GameInfoView.
-/// Displays the game's artwork or a placeholder with a configurable icon.
-///
-/// When `size` is provided, the image is framed and clipped internally
-/// (required for `.fill` to clip correctly — `.frame` must be directly
-/// on the Image, not on a parent wrapper).
+/// `.frame` must be directly on the Image (not a parent wrapper)
+/// for `.fill` aspect ratio to clip correctly.
 struct GameArtworkView: View {
     let artworkPath: String?
     var placeholderIcon: String = "gamecontroller.fill"

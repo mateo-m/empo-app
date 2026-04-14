@@ -5,7 +5,7 @@ enum GameStatus: Hashable {
     case importing(progress: Double) // 0.0 to 1.0
     case invalid
 
-    /// The broad phase, ignoring associated values — useful as an animation trigger.
+    /// Strips associated values — useful as an animation trigger.
     enum Phase: Hashable { case ready, importing, invalid }
     var phase: Phase {
         switch self {
@@ -42,8 +42,6 @@ struct GameEntry: Identifiable, Hashable {
 
     // MARK: - INI Parsing
 
-    /// Reads the `Title=` value from the `[Game]` section of the game's .ini file.
-    /// Returns nil if no .ini file is found or the title is empty.
     static func parseINITitle(at gameDir: URL) -> String? {
         let fm = FileManager.default
         let iniURL: URL? = {

@@ -129,7 +129,6 @@ class AppSettings {
         didSet { UserDefaults.standard.set(libraryDisplayMode.rawValue, forKey: "libraryDisplayMode") }
     }
 
-    /// Backing store for experimental feature toggles.
     private var experimentalFlags: [String: Bool] {
         didSet {
             for (key, value) in experimentalFlags {
@@ -148,7 +147,7 @@ class AppSettings {
         let storedMax = UserDefaults.standard.integer(forKey: "maxLogFiles")
         self.maxLogFiles = storedMax > 0 ? storedMax : 20
         self.cleanupInvalidGames = UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
-        // Haptics default to on
+        // Haptics default to on — UserDefaults.bool returns false for unset keys
         self.interfaceHaptics = UserDefaults.standard.object(forKey: "interfaceHaptics") as? Bool ?? true
         self.controllerHaptics = UserDefaults.standard.object(forKey: "controllerHaptics") as? Bool ?? true
         let raw = UserDefaults.standard.string(forKey: "titlePosition") ?? TitlePosition.inside.rawValue
@@ -162,7 +161,6 @@ class AppSettings {
         }
         self.experimentalFlags = flags
 
-        // Push initial values to bridge
         mkxp_setShowViewportBounds(showViewportBounds)
         pushViewportBoundsColor()
     }
@@ -179,7 +177,6 @@ class AppSettings {
 
     // MARK: - Viewport Bounds Color
 
-    /// Default: orange at 50% opacity
     private static let defaultViewportBoundsColor = Color(.sRGB, red: 1.0, green: 0.584, blue: 0.0, opacity: 0.5)
 
     private static func loadViewportBoundsColor() -> Color {

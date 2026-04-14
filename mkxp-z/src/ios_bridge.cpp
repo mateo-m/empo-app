@@ -277,12 +277,9 @@ bool mkxp_consumeSafeAreaInsetsChanged(void) {
     return s_safeAreaInsetsChanged.exchange(false, std::memory_order_acquire);
 }
 
-// ============================================================================
 // Input bridge
-// ============================================================================
 
 void mkxp_injectKeyEvent(int scancode, int pressed) {
-    // Lazily resolve the SDL window ID on first use
     if (s_sdlWindowID.load(std::memory_order_relaxed) == 0) {
         SDL_Window *w = SDL_GetGrabbedWindow();
         if (w) {
@@ -325,9 +322,7 @@ void mkxp_setKeyEventCallback(mkxp_KeyEventCallback cb, void *userdata) {
     }
 }
 
-// ============================================================================
 // Lifecycle callbacks
-// ============================================================================
 
 void mkxp_setEngineTerminatedCallback(mkxp_EngineTerminatedCallback cb, void *userdata) {
     s_engineTerminatedUserdata = userdata;
@@ -339,9 +334,7 @@ void mkxp_setGameRectChangedCallback(mkxp_GameRectChangedCallback cb, void *user
     s_gameRectChangedCb.store(cb, std::memory_order_release);
 }
 
-// ============================================================================
 // Error message routing
-// ============================================================================
 
 void mkxp_setErrorMessage(const char *message) {
     {
@@ -368,9 +361,7 @@ void mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *userdata) 
     s_errorMsgCb.store(cb, std::memory_order_release);
 }
 
-// ============================================================================
 // Pause / Resume
-// ============================================================================
 
 void mkxp_requestPause(void) {
     s_pauseRequested.store(true, std::memory_order_release);
@@ -470,9 +461,7 @@ void mkxp_signalFrameRendered(void) {
     }
 }
 
-// ============================================================================
 // Per-game settings
-// ============================================================================
 
 void mkxp_applyPerGameSettings(MKXPVerticalAlignment verticalAlignment,
                                bool postloadEnabled) {

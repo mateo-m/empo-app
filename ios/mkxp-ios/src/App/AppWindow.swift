@@ -5,7 +5,6 @@ import SwiftUI
 // MARK: - AppRootViewController
 // ============================================================================
 
-/// Root VC that hosts the SwiftUI content as a child view controller.
 private class AppRootViewController: UIViewController {
 
     private let hostingController: UIHostingController<RootView>
@@ -28,7 +27,6 @@ private class AppRootViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Add hosting controller as child
         addChild(hostingController)
         hostingController.view.backgroundColor = .clear
         hostingController.view.frame = view.bounds
@@ -96,15 +94,14 @@ class AppWindow: UIWindow {
 
     // MARK: - Key Window Control
 
-    /// In library/loading mode, this window must be key for SwiftUI interaction.
-    /// In player mode, SDL needs to be key — except when keyboard mode is active.
+    /// In library/loading: this window must be key for SwiftUI.
+    /// In player: SDL needs key — unless keyboard mode is active.
     override var canBecomeKey: Bool {
         let phase = AppState.shared.phase
         if phase != .playing { return true }
         return allowKeyWindow
     }
 
-    /// Called from PlayerView when keyboard mode needs the window to become key.
     @objc static func setAllowKeyWindow(_ allow: Bool) {
         guard let window = instance else { return }
         window.allowKeyWindow = allow
@@ -116,8 +113,8 @@ class AppWindow: UIWindow {
     // MARK: - Installation
 
     /// Called once at app startup (from AppLoader.m via +load).
+    /// Checks for an active scene first, otherwise waits for one.
     @objc static func install() {
-        // Check if a scene is already active
         for scene in UIApplication.shared.connectedScenes {
             if let windowScene = scene as? UIWindowScene,
                scene.activationState == .foregroundActive {
@@ -126,7 +123,6 @@ class AppWindow: UIWindow {
             }
         }
 
-        // Otherwise listen for the first window scene to activate
         NotificationCenter.default.addObserver(
             forName: UIScene.didActivateNotification,
             object: nil,
@@ -149,22 +145,19 @@ class AppWindow: UIWindow {
         window.makeKeyAndVisible()
         instance = window
 
-        // Seed safe area insets for the engine bridge
+        // Seed safe area insets
         let insets = window.safeAreaInsets
         mkxp_setSafeAreaInsets(
             Float(insets.top), Float(insets.bottom),
             Float(insets.left), Float(insets.right)
         )
 
-        // Apply initial theme
         window.overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle
 
         // Brand tint for UIKit-backed elements (alerts, action sheets)
         window.tintColor = UIColor(.brand)
 
-        // Observe phase changes to toggle pass-through and orientation
         observePhase(window: window)
-        // Observe theme changes to update window interface style
         observeTheme(window: window)
     }
 

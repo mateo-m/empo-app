@@ -9,14 +9,11 @@
 #define IOS_BRIDGE_H
 
 #include <stdbool.h>
-// ============================================================================
 // Scancode constants
-// ============================================================================
 //
-// Platform-independent key identifiers used by the input bridge.
-// Numeric values match SDL_Scancode (USB HID usage page 0x07) so the
-// engine can pass them straight through without translation.
-// UI code should use these constants instead of importing SDL headers.
+// Values match SDL_Scancode (USB HID usage page 0x07) so the engine
+// can pass them through without translation. UI code should use these
+// instead of importing SDL headers.
 
 enum {
     MKXP_SCANCODE_UNKNOWN   = 0,
@@ -80,118 +77,78 @@ enum {
 extern "C" {
 #endif
 
-// ============================================================================
 // Game lifecycle
-// ============================================================================
 
 void        mkxp_setGameReady(void);
 int         mkxp_isGameReady(void);
 
-// ============================================================================
 // Game selection (Library -> Engine)
-// ============================================================================
 
-// mkxp_setGamePath: called by the Library when the user picks a game.
-// mkxp_waitForGamePath: blocks until mkxp_setGamePath is called, returns the path.
 void        mkxp_setGamePath(const char *path);
 const char *mkxp_waitForGamePath(void);
 
-// ============================================================================
 // Engine termination
-// ============================================================================
 
-// mkxp_requestTerminate: UI asks the engine to shut down.
-// mkxp_isTerminateRequested: check if termination was requested (before engine has shut down).
-// mkxp_isEngineTerminated: check if the engine has fully shut down.
-// mkxp_setEngineTerminated: engine sets this after teardown is complete.
-// mkxp_resetBridgeState: resets all bridge flags for a new game session.
 void        mkxp_requestTerminate(void);
 int         mkxp_isTerminateRequested(void);
 int         mkxp_isEngineTerminated(void);
 void        mkxp_setEngineTerminated(void);
 void        mkxp_resetBridgeState(void);
 
-// ============================================================================
 // Lifecycle callbacks (Engine -> UI)
-// ============================================================================
 //
-// These callbacks fire on the engine thread when state changes.
-// The UI side must dispatch to the main thread for any UI updates.
+// Fire on the engine thread. UI must dispatch to main for any updates.
 
-// Called when the engine has fully shut down after a quit request.
 typedef void (*mkxp_EngineTerminatedCallback)(void *userdata);
 void        mkxp_setEngineTerminatedCallback(mkxp_EngineTerminatedCallback cb, void *userdata);
 
-// Called when the game viewport rect changes (x, y, w, h in logical points).
 typedef void (*mkxp_GameRectChangedCallback)(float x, float y, float w, float h, void *userdata);
 void        mkxp_setGameRectChangedCallback(mkxp_GameRectChangedCallback cb, void *userdata);
 
-// ============================================================================
 // Input injection (UI -> Engine)
-// ============================================================================
 
-// Injects a key press/release event into the engine's input queue.
-// scancode: an MKXP_SCANCODE_* value.
-// pressed: 1 for key down, 0 for key up.
+// scancode: MKXP_SCANCODE_* value. pressed: 1=down, 0=up.
 void        mkxp_injectKeyEvent(int scancode, int pressed);
 
-// ============================================================================
-// Key event callback (Engine -> UI)
-// ============================================================================
+// Key event callback (Engine -> UI, fires on background thread)
 
-// Called on a background thread when the engine processes a hardware key event.
-// The UI should dispatch to the main thread for any UI updates.
 typedef void (*mkxp_KeyEventCallback)(int scancode, int pressed, void *userdata);
 void        mkxp_setKeyEventCallback(mkxp_KeyEventCallback cb, void *userdata);
 
-// ============================================================================
 // Engine state queries
-// ============================================================================
 
 double      mkxp_getAverageFPS(void);
 int         mkxp_getRGSSVersion(void);
 const char *mkxp_getGameTitle(void);
 
-// ============================================================================
 // Game viewport rect (logical points)
-// ============================================================================
 
-// mkxp_setGameRect: called by the engine when viewport changes.
-// mkxp_getGameRect: called by the UI to read the current game area.
 void        mkxp_setGameRect(float x, float y, float w, float h);
 void        mkxp_getGameRect(float *x, float *y, float *w, float *h);
 
-// ============================================================================
-// UI system queries (implemented in systemImplIOS.mm)
-// ============================================================================
+// Safe area insets (logical points, cached atomics)
 
-// Safe area insets in logical points (read from cached atomics).
 void        mkxp_getSafeAreaInsets(float *top, float *bottom, float *left, float *right);
 
-// Push safe area insets from UIKit. Call from main thread whenever insets change.
-// Also sets a "needs relayout" flag so the engine recalculates its viewport.
+// Push from UIKit main thread. Sets a "needs relayout" flag.
 void        mkxp_setSafeAreaInsets(float top, float bottom, float left, float right);
 
-// Returns true (once) if safe area insets changed since last check.
-// The engine polls this each frame to trigger viewport recalculation.
+// Returns true (once) if insets changed since last check.
 bool        mkxp_consumeSafeAreaInsetsChanged(void);
 
-// UIKit screen scale factor (e.g. 3.0 on iPhone Pro).
-// Use this instead of SDL's backingScaleFactor when converting UIKit points to GL pixels.
+// Screen scale factor (e.g. 3.0 on iPhone Pro).
 float       mkxp_getScreenScale(void);
 
-// ============================================================================
 // Per-game settings (UI -> Engine, set before each session)
-// ============================================================================
 //
-// These are set by selectGame() before mkxp_setGamePath() and read by the
-// engine during the session. They must NOT be reset in mkxp_resetBridgeState()
-// because selectGame() always sets them explicitly before each session.
+// Set by selectGame() before mkxp_setGamePath(), read by the engine
+// during the session. NOT reset in mkxp_resetBridgeState() — selectGame()
+// always sets them explicitly.
 //
-// To add a new per-game bridge setting:
-//   1. Add a parameter to mkxp_applyPerGameSettings() below
-//   2. Add an atomic in ios_bridge.cpp with a getter
-//   3. Add the field to GameSettings.swift and pass it from AppState.selectGame()
+// To add a new setting:
+//   1. Add a parameter to mkxp_applyPerGameSettings()
+//   2. Add an atomic + getter in ios_bridge.cpp
+//   3. Add the field to GameSettings.swift, pass from AppState.selectGame()
 
 typedef enum {
     MKXP_VALIGN_TOP        = 0,
@@ -203,95 +160,68 @@ void        mkxp_applyPerGameSettings(MKXPVerticalAlignment verticalAlignment,
                                       bool postloadEnabled);
 
 MKXPVerticalAlignment mkxp_getVerticalAlignment(void);
-
-// Postload scripts toggle: whether to run engine postload scripts.
 bool        mkxp_getPostloadEnabled(void);
 
-// Whether to show the viewport bounds by tinting the area outside the game.
 void        mkxp_setShowViewportBounds(bool enabled);
 bool        mkxp_getShowViewportBounds(void);
 
-// Set/get the viewport bounds color (RGBA, 0.0–1.0).
 void        mkxp_setViewportBoundsColor(float r, float g, float b, float a);
 void        mkxp_getViewportBoundsColor(float *r, float *g, float *b, float *a);
 
-// ============================================================================
 // Error routing (Engine -> UI)
-// ============================================================================
+//
+// SDL_ShowSimpleMessageBox is a no-op on iOS, so errors are routed
+// through the bridge for the UI to present.
 
-// On iOS, SDL_ShowSimpleMessageBox is a no-op.  Route error messages
-// through the bridge so the UI can present them.
 void        mkxp_setErrorMessage(const char *message);
 const char *mkxp_getErrorMessage(void);
 
-// Called when the engine sets an error message.
 typedef void (*mkxp_ErrorMessageCallback)(const char *message, void *userdata);
 void        mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *userdata);
 
-// ============================================================================
 // Pause / Resume (UI <-> Engine)
-// ============================================================================
 //
-// Pause flow:
-//   1. UI calls mkxp_requestPause().
-//   2. Engine calls mkxp_checkPause() from Graphics blocking points.
-//      It pauses all audio sources, fires the paused callback, then
-//      blocks on a condvar.
-//   3. UI calls mkxp_requestResume() to unblock the engine thread.
+// Flow:
+//   1. UI calls mkxp_requestPause()
+//   2. Engine calls mkxp_checkPause() from Graphics blocking points —
+//      pauses audio, fires paused callback, blocks on condvar
+//   3. UI calls mkxp_requestResume() to unblock
 
-// UI -> Engine: request the engine to pause/resume.
 void        mkxp_requestPause(void);
 void        mkxp_requestResume(void);
 
-// Engine -> internal: check if a pause was requested, pause audio, and block.
-// Called from Graphics blocking points. NOT for UI use.
+// Engine-internal: checks for pause request, blocks if needed. NOT for UI.
 void        mkxp_checkPause(void);
 
-// Query pause state.
 bool        mkxp_isPauseRequested(void);
 bool        mkxp_isPaused(void);
 
-// Snapshot: RGBA pixel data captured by the engine before blocking.
-// mkxp_getSnapshotRGBA returns a pointer to the pixel buffer (valid until
-// the next pause). Width/height are set by the engine.
-// The UI must NOT free this pointer.
+// Snapshot: RGBA pixel buffer captured before blocking. Valid until
+// next pause. The UI must NOT free this pointer.
 void        mkxp_setSnapshot(const unsigned char *data, int width, int height);
 const unsigned char *mkxp_getSnapshotRGBA(int *width, int *height);
 
-// Called on the engine thread when the engine has actually paused
-// (snapshot captured, audio suspended, thread about to block).
+// Fires on engine thread when paused (snapshot captured, audio suspended).
 typedef void (*mkxp_PausedCallback)(void *userdata);
 void        mkxp_setPausedCallback(mkxp_PausedCallback cb, void *userdata);
 
-// Called on the engine thread when the engine has resumed.
 typedef void (*mkxp_ResumedCallback)(void *userdata);
 void        mkxp_setResumedCallback(mkxp_ResumedCallback cb, void *userdata);
 
-// Called once on the engine thread after the first frame is swapped
-// to the screen.  Fires for both fresh starts (first frame of the
-// session) and resumes (first frame after unpause).  The UI uses
-// this to know the live SDL surface is visible and it's safe to
-// transition away from the loading view or fade the snapshot overlay.
+// One-shot: fires on engine thread after first frame is swapped post-resume
+// (or fresh start). UI uses this to fade the snapshot / dismiss loading.
 typedef void (*mkxp_FrameRenderedCallback)(void *userdata);
 void        mkxp_setFrameRenderedCallback(mkxp_FrameRenderedCallback cb, void *userdata);
 
-// Engine-internal: called from swapGLBuffer() to fire the one-shot
-// frame-rendered signal.  NOT for UI use.
+// Engine-internal: fires the one-shot frame-rendered signal. NOT for UI.
 void        mkxp_signalFrameRendered(void);
 
-// ============================================================================
 // Debug logging
-// ============================================================================
 
-// mkxp_setDebugLogPath: set the file path for debug logging this session.
-// Pass NULL or "" to disable logging. Called by UI before each game session.
+// Set log file path for this session (NULL/"" to disable).
 void        mkxp_setDebugLogPath(const char *path);
 
-// mkxp_debugLog: append a log line to the debug log file (if enabled).
-// tag: short category (e.g. "SESSION", "SCRIPT", "FATAL")
-// source: file and language identifier (e.g. "binding-mri.cpp [C++]")
-// message: the log message
-// No-op if debug logging is disabled.
+// Append a tagged log line (no-op if disabled).
 void        mkxp_debugLog(const char *tag, const char *source, const char *message);
 
 #ifdef __cplusplus

@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// A toggle with an inline description, used across Settings and Game Settings.
 struct SettingsToggle: View {
     let title: String
     @Binding var isOn: Bool
@@ -17,7 +16,6 @@ struct SettingsToggle: View {
     }
 }
 
-/// A picker with an inline description, used across Settings and Game Settings.
 struct SettingsPicker<SelectionValue: Hashable, Content: View>: View {
     let title: String
     @Binding var selection: SelectionValue
