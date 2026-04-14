@@ -3,51 +3,56 @@ import UIKit
 import SwiftUI
 import Observation
 
-@Observable
+@MainActor @Observable
 class GameLibrary {
     static let shared = GameLibrary()
 
     var games: [GameEntry] = []
 
     private let fm = FileManager.default
-    private var cancelledImports = Set<String>()
-    private let cancelLock = NSLock()
+    /// Lock-protected set — accessed from both main and background threads.
+    nonisolated(unsafe) private var cancelledImports = Set<String>()
+    nonisolated(unsafe) private let cancelLock = NSLock()
 
-    let gamesDirectory: URL = FileManager.default
+    static let gamesDirectory: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Games", isDirectory: true)
 
     private init() {
         ensureGamesDirectory()
         let cleanupInvalid = UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
-        games = scanGames(cleanupInvalid: cleanupInvalid)
+        games = Self.scanGames(in: Self.gamesDirectory, cleanupInvalid: cleanupInvalid)
         syncMetadata()
     }
 
     // MARK: - Scan
 
     func reload() {
-        let scanned = scanGames(cleanupInvalid: false)
-        let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
+        // Scan on background to avoid blocking UI during filesystem I/O
+        Task.detached {
+            let scanned = GameLibrary.scanGames(in: GameLibrary.gamesDirectory, cleanupInvalid: false)
+            let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
 
-        DispatchQueue.main.async {
-            withAnimation {
-                // Update existing entries in-place (skeleton -> real, or metadata refresh)
-                var updatedIDs = Set<String>()
-                for i in self.games.indices {
-                    let id = self.games[i].id
-                    if let fresh = scannedByID[id] {
-                        self.games[i] = fresh
-                        updatedIDs.insert(id)
+            await MainActor.run {
+                let lib = GameLibrary.shared
+                withAnimation {
+                    // Update existing entries in-place (skeleton -> real, or metadata refresh)
+                    var updatedIDs = Set<String>()
+                    for i in lib.games.indices {
+                        let id = lib.games[i].id
+                        if let fresh = scannedByID[id] {
+                            lib.games[i] = fresh
+                            updatedIDs.insert(id)
+                        }
                     }
-                }
 
-                // Remove entries that are no longer on disk and not importing
-                self.games.removeAll { !$0.isImporting && !scannedByID.keys.contains($0.id) }
+                    // Remove entries that are no longer on disk and not importing
+                    lib.games.removeAll { !$0.isImporting && !scannedByID.keys.contains($0.id) }
 
-                // Append any new games not already in the list
-                for entry in scanned where !updatedIDs.contains(entry.id) {
-                    self.games.append(entry)
+                    // Append any new games not already in the list
+                    for entry in scanned where !updatedIDs.contains(entry.id) {
+                        lib.games.append(entry)
+                    }
                 }
             }
         }
@@ -55,10 +60,14 @@ class GameLibrary {
 
     /// Scans the games directory in a single pass. If `cleanupInvalid` is true,
     /// invalid folders are removed instead of silently skipped.
-    private func scanGames(cleanupInvalid: Bool) -> [GameEntry] {
+    nonisolated private static func scanGames(
+        in gamesDir: URL,
+        fm: FileManager = .default,
+        cleanupInvalid: Bool
+    ) -> [GameEntry] {
         var entries: [GameEntry] = []
         guard let contents = try? fm.contentsOfDirectory(
-            at: gamesDirectory,
+            at: gamesDir,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         ) else { return [] }
@@ -78,14 +87,14 @@ class GameLibrary {
                     continue
                 }
                 // Include as invalid entry so the user can see it
-                if var entry = buildGameEntry(from: url) {
+                if var entry = buildGameEntry(from: url, fm: fm) {
                     entry.status = .invalid
                     entries.append(entry)
                 }
                 continue
             }
 
-            if let entry = buildGameEntry(from: url) {
+            if let entry = buildGameEntry(from: url, fm: fm) {
                 entries.append(entry)
             }
         }
@@ -96,7 +105,7 @@ class GameLibrary {
 
     /// Builds a GameEntry from a validated game folder (no validation performed here).
     /// Loads metadata to apply custom title/artwork overrides.
-    private func buildGameEntry(from url: URL) -> GameEntry? {
+    nonisolated private static func buildGameEntry(from url: URL, fm: FileManager = .default) -> GameEntry? {
 
         let folderName = url.lastPathComponent
         let iniTitle = parseGameTitle(at: url) ?? "Unknown Game"
@@ -149,7 +158,7 @@ class GameLibrary {
     func refreshGameEntry(id: String) {
         guard let idx = games.firstIndex(where: { $0.id == id }) else { return }
         let url = URL(fileURLWithPath: games[idx].path)
-        guard var entry = buildGameEntry(from: url) else { return }
+        guard var entry = Self.buildGameEntry(from: url) else { return }
         entry.status = games[idx].status  // preserve current status
         withAnimation { games[idx] = entry }
     }
@@ -158,19 +167,19 @@ class GameLibrary {
 
     private struct ImportCancelled: Error {}
 
-    private func isImportCancelled(_ id: String) -> Bool {
+    nonisolated private func isImportCancelled(_ id: String) -> Bool {
         cancelLock.lock()
         defer { cancelLock.unlock() }
         return cancelledImports.contains(id)
     }
 
-    private func cancelImport(_ id: String) {
+    nonisolated private func cancelImport(_ id: String) {
         cancelLock.lock()
         cancelledImports.insert(id)
         cancelLock.unlock()
     }
 
-    private func clearCancellation(_ id: String) {
+    nonisolated private func clearCancellation(_ id: String) {
         cancelLock.lock()
         cancelledImports.remove(id)
         cancelLock.unlock()
@@ -186,8 +195,8 @@ class GameLibrary {
         let title: String
         let artwork: String?
         if !isZip {
-            title = parseGameTitle(at: sourceURL) ?? sourceURL.lastPathComponent
-            artwork = findArtwork(at: sourceURL)
+            title = Self.parseGameTitle(at: sourceURL) ?? sourceURL.lastPathComponent
+            artwork = Self.findArtwork(at: sourceURL)
         } else {
             title = sourceURL.deletingPathExtension().lastPathComponent
             artwork = nil
@@ -213,15 +222,17 @@ class GameLibrary {
                 } else {
                     try self.importFolder(from: sourceURL, importID: importID)
                 }
-                self.reload()
-                DispatchQueue.main.async { completion(nil) }
+                DispatchQueue.main.async {
+                    GameLibrary.shared.reload()
+                    completion(nil)
+                }
             } catch is ImportCancelled {
                 NSLog("[GameLibrary] Import cancelled: %@", importID)
             } catch {
                 NSLog("[GameLibrary] Import error: %@", "\(error)")
                 DispatchQueue.main.async {
                     withAnimation {
-                        self.games.removeAll { $0.id == importID }
+                        GameLibrary.shared.games.removeAll { $0.id == importID }
                     }
                     completion(error)
                 }
@@ -230,43 +241,46 @@ class GameLibrary {
     }
 
     /// Updates the skeleton card's import progress (0.0–1.0).
-    private func updateProgress(_ importID: String, _ progress: Double) {
+    nonisolated private func updateProgress(_ importID: String, _ progress: Double) {
         DispatchQueue.main.async {
-            guard let idx = self.games.firstIndex(where: { $0.id == importID }) else { return }
-            self.games[idx].status = .importing(progress: progress)
+            let lib = GameLibrary.shared
+            guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
+            lib.games[idx].status = .importing(progress: progress)
         }
     }
 
     /// Updates the skeleton card's title and artwork mid-import (e.g. after zip extraction).
     /// Returns the parsed title so callers can reuse it without re-reading the INI file.
     @discardableResult
-    private func updateSkeleton(_ importID: String, gameDir: URL) -> String? {
-        let title = parseGameTitle(at: gameDir)
-        let artwork = findArtwork(at: gameDir)
+    nonisolated private func updateSkeleton(_ importID: String, gameDir: URL) -> String? {
+        let title = GameEntry.parseINITitle(at: gameDir)
+        let artwork = GameLibrary.findArtwork(at: gameDir)
         guard title != nil || artwork != nil else { return title }
 
         DispatchQueue.main.async {
-            guard let idx = self.games.firstIndex(where: { $0.id == importID }) else { return }
+            let lib = GameLibrary.shared
+            guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
             withAnimation {
-                self.games[idx] = GameEntry(
+                lib.games[idx] = GameEntry(
                     id: importID,
                     path: "",
-                    title: title ?? self.games[idx].title,
-                    artworkPath: artwork ?? self.games[idx].artworkPath,
-                    status: .importing(progress: self.games[idx].importProgress)
+                    title: title ?? lib.games[idx].title,
+                    artworkPath: artwork ?? lib.games[idx].artworkPath,
+                    status: .importing(progress: lib.games[idx].importProgress)
                 )
             }
         }
         return title
     }
 
-    private func destinationURL(for importID: String, title: String?) -> URL {
-        let slug = title.map { slugify($0) } ?? ""
+    nonisolated private func destinationURL(for importID: String, title: String?) -> URL {
+        let slug = title.map { GameLibrary.slugify($0) } ?? ""
         let folderName = slug.isEmpty ? importID : "\(importID)-\(slug)"
-        return gamesDirectory.appendingPathComponent(folderName)
+        return Self.gamesDirectory.appendingPathComponent(folderName)
     }
 
-    private func importFolder(from sourceURL: URL, importID: String) throws {
+    nonisolated private func importFolder(from sourceURL: URL, importID: String) throws {
+        let fm = FileManager.default
         let folderName = sourceURL.lastPathComponent
 
         let tmpDir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -280,7 +294,7 @@ class GameLibrary {
         try GameImportValidator.validate(tmpDest)
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
-        let title = parseGameTitle(at: tmpDest)
+        let title = GameEntry.parseINITitle(at: tmpDest)
         let destURL = destinationURL(for: importID, title: title)
         try fm.moveItem(at: tmpDest, to: destURL)
 
@@ -291,10 +305,11 @@ class GameLibrary {
         }
 
         // Create initial metadata
-        createMetadata(for: importID)
+        GameLibrary.createMetadata(for: importID)
     }
 
-    private func importZip(from sourceURL: URL, importID: String) throws {
+    nonisolated private func importZip(from sourceURL: URL, importID: String) throws {
+        let fm = FileManager.default
         let tmpDir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmpDir) }
@@ -304,7 +319,7 @@ class GameLibrary {
         }
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
-        let gameRoot = try findGameRoot(in: tmpDir)
+        let gameRoot = try GameLibrary.findGameRoot(in: tmpDir)
         let title = updateSkeleton(importID, gameDir: gameRoot)
         try GameImportValidator.validate(gameRoot)
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
@@ -319,11 +334,11 @@ class GameLibrary {
         }
 
         // Create initial metadata
-        createMetadata(for: importID)
+        GameLibrary.createMetadata(for: importID)
     }
 
     /// Creates metadata with dateAdded = now for a newly imported game.
-    private func createMetadata(for gameId: String) {
+    nonisolated private static func createMetadata(for gameId: String) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
         metadata.save(for: gameId)
@@ -351,14 +366,16 @@ class GameLibrary {
             return
         }
 
+        let pathToDelete = entry.path
         DispatchQueue.global(qos: .userInitiated).async {
+            let fm = FileManager.default
             do {
-                guard self.fm.fileExists(atPath: entry.path) else { return }
-                try self.fm.removeItem(atPath: entry.path)
+                guard fm.fileExists(atPath: pathToDelete) else { return }
+                try fm.removeItem(atPath: pathToDelete)
             } catch {
                 NSLog("[GameLibrary] Delete error: %@", "\(error)")
                 DispatchQueue.main.async {
-                    self.reload()
+                    GameLibrary.shared.reload()
                     onError?(error.localizedDescription)
                 }
             }
@@ -367,12 +384,13 @@ class GameLibrary {
 
     // MARK: - Metadata Helpers
 
-    private func parseGameTitle(at url: URL) -> String? {
+    nonisolated private static func parseGameTitle(at url: URL) -> String? {
         GameEntry.parseINITitle(at: url)
     }
 
-    private func findArtwork(at url: URL) -> String? {
+    nonisolated private static func findArtwork(at url: URL) -> String? {
         let titlesDir = url.appendingPathComponent("Graphics/Titles")
+        let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(atPath: titlesDir.path) else { return nil }
 
         let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "bmp"]
@@ -388,7 +406,7 @@ class GameLibrary {
     // MARK: - Private Helpers
 
     /// Turns a game title into a filesystem-friendly slug (e.g. "Pokemon Z" → "pokemon-z").
-    private func slugify(_ string: String) -> String {
+    nonisolated private static func slugify(_ string: String) -> String {
         let allowed = CharacterSet.alphanumerics
         let slug = string
             .lowercased()
@@ -402,7 +420,8 @@ class GameLibrary {
             .joined(separator: "-")
     }
 
-    private func findGameRoot(in dir: URL) throws -> URL {
+    nonisolated private static func findGameRoot(in dir: URL) throws -> URL {
+        let fm = FileManager.default
         let items = try fm.contentsOfDirectory(at: dir,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles])
@@ -418,8 +437,8 @@ class GameLibrary {
     }
 
     private func ensureGamesDirectory() {
-        if !fm.fileExists(atPath: gamesDirectory.path) {
-            try? fm.createDirectory(at: gamesDirectory, withIntermediateDirectories: true)
+        if !fm.fileExists(atPath: Self.gamesDirectory.path) {
+            try? fm.createDirectory(at: Self.gamesDirectory, withIntermediateDirectories: true)
         }
     }
 

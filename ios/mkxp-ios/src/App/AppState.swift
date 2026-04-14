@@ -13,7 +13,7 @@ enum GamePhase: Equatable {
 ///
 /// Engine-specific state (viewport, snapshots, quit confirmation) lives
 /// in `EngineState` — this class handles app-level orchestration only.
-@Observable
+@MainActor @Observable
 class AppState {
     static let shared = AppState()
 
