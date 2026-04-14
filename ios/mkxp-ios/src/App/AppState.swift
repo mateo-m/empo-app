@@ -69,7 +69,8 @@ class AppState {
 
         // Only consider per-session log files (UUID-slug-timestamp.log), not session-history.log
         let logFiles = files.filter { $0.lastPathComponent != "session-history.log" && $0.pathExtension == "log" }
-        guard logFiles.count > AppSettings.shared.maxLogFiles else { return }
+        let maxLogFiles = UserDefaults.standard.object(forKey: "maxLogFiles") as? Int ?? 20
+        guard logFiles.count > maxLogFiles else { return }
 
         let sorted = logFiles.sorted {
             let d0 = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
@@ -77,7 +78,7 @@ class AppState {
             return d0 < d1
         }
 
-        for file in sorted.prefix(sorted.count - AppSettings.shared.maxLogFiles) {
+        for file in sorted.prefix(sorted.count - maxLogFiles) {
             try? fm.removeItem(at: file)
         }
     }
@@ -116,7 +117,7 @@ class AppState {
 
     /// Creates a per-session debug log file if debug logs are enabled.
     private func configureDebugLog(for game: GameEntry) {
-        guard AppSettings.shared.debugLogs else {
+        guard UserDefaults.standard.bool(forKey: "debugLogs") else {
             mkxp_setDebugLogPath(nil)
             return
         }
@@ -177,7 +178,7 @@ class AppState {
 
     /// User tapped the quit button — show confirmation.
     func requestQuit() {
-        guard AppSettings.shared.isEnabled(.gameQuit) else { return }
+        guard UserDefaults.standard.bool(forKey: ExperimentalFeature.gameQuit.rawValue) else { return }
         showQuitConfirm = true
     }
 
