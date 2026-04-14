@@ -3,9 +3,10 @@ import SwiftUI
 struct GameLoadingView: View {
     let game: GameEntry
     var appState = AppState.shared
+    var engineState = EngineState.shared
 
     /// True when this view is shown for a resume (not a fresh load).
-    private var isResume: Bool { appState.pauseSnapshot != nil }
+    private var isResume: Bool { engineState.pauseSnapshot != nil }
 
     @State private var titleVisible = false
     @State private var spinnerVisible = false
@@ -87,8 +88,8 @@ struct GameLoadingView: View {
 
     @ViewBuilder
     private var resumeContent: some View {
-        if let snapshot = appState.pauseSnapshot {
-            let rect = appState.gameRect
+        if let snapshot = engineState.pauseSnapshot {
+            let rect = engineState.gameRect
             Image(uiImage: snapshot)
                 .resizable()
                 .interpolation(.high)
