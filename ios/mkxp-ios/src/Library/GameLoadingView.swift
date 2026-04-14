@@ -7,6 +7,10 @@ struct GameLoadingView: View {
     /// True when this view is shown for a resume (not a fresh load).
     private var isResume: Bool { appState.pauseSnapshot != nil }
 
+    @State private var titleVisible = false
+    @State private var spinnerVisible = false
+    @State private var kenBurns = false
+
     var body: some View {
         ZStack {
             // Opaque base — ensures nothing behind this view in the
@@ -37,11 +41,35 @@ struct GameLoadingView: View {
                     .fontWeight(.bold)
                     .foregroundStyle(.white)
                     .shadow(radius: 4)
+                    .opacity(titleVisible ? 1 : 0)
+                    .offset(y: titleVisible ? 0 : 12)
 
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)
                     .scaleEffect(1.2)
+                    .opacity(spinnerVisible ? 1 : 0)
+                    .offset(y: spinnerVisible ? 0 : 12)
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(duration: 0.3, bounce: 0).delay(0.2)) {
+                titleVisible = true
+            }
+            withAnimation(.spring(duration: 0.3, bounce: 0).delay(0.28)) {
+                spinnerVisible = true
+            }
+            withAnimation(.linear(duration: 20).repeatForever(autoreverses: true)) {
+                kenBurns = true
+            }
+        }
+        .onChange(of: appState.phase) { _, newPhase in
+            guard newPhase == .playing else { return }
+            withAnimation(.spring(duration: 0.25, bounce: 0)) {
+                titleVisible = false
+            }
+            withAnimation(.spring(duration: 0.25, bounce: 0).delay(0.05)) {
+                spinnerVisible = false
             }
         }
     }
@@ -78,6 +106,8 @@ struct GameLoadingView: View {
             Image(uiImage: uiImage)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
+                .scaleEffect(kenBurns ? 1.15 : 1.05)
+                .offset(x: kenBurns ? 10 : -10, y: kenBurns ? -8 : 8)
                 .ignoresSafeArea()
                 .blur(radius: 20)
                 .overlay(Color.black.opacity(Overlay.medium))

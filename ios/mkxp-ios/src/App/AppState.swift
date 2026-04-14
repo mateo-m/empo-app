@@ -276,7 +276,8 @@ class AppState {
                     // engine renders its first frame almost immediately.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         guard state.phase == .loading else { return }
-                        withAnimation(.easeOut(duration: 0.3)) {
+                        Haptics.success()
+                        withAnimation(.spring(duration: 0.3, bounce: 0)) {
                             state.phase = .playing
                         }
                     }
@@ -346,7 +347,7 @@ class AppState {
                 }
                 AppState.shared.pauseSnapshot = snapshotImage
                 AppState.shared.pausedGame = AppState.shared.selectedGame
-                withAnimation(.easeOut(duration: 0.25)) {
+                withAnimation(.spring(duration: 0.25, bounce: 0)) {
                     AppState.shared.phase = .library
                 }
             }

@@ -204,7 +204,7 @@ private struct ImportProgressView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Stop import")
         }
-        .animation(.easeOut(duration: 0.3), value: progress)
+        .animation(.spring(duration: 0.18, bounce: 0), value: progress)
     }
 }
 
@@ -274,7 +274,6 @@ struct GameListRow: View {
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())
-        .listRowBackground(Color(.systemBackground))
     }
 }
 
@@ -337,7 +336,7 @@ private struct ListRowStatusIndicator: View {
             .transition(.blurReplace)
         }
         .frame(width: size, height: size)
-        .animation(.easeOut(duration: Motion.durationNormal), value: progress)
+        .animation(.spring(duration: Motion.durationFast, bounce: 0), value: progress)
         .animation(Motion.gentle, value: status.phase)
     }
 

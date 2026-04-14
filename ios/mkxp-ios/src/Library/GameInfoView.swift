@@ -132,7 +132,7 @@ struct GameInfoView: View {
             .ignoresSafeArea(edges: .top)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(titleScrollProgress > 0.5 ? .visible : .hidden, for: .navigationBar)
-            .animation(.smooth(duration: Motion.durationFast), value: titleScrollProgress > 0.5)
+            .animation(.spring(duration: Motion.durationFast, bounce: 0), value: titleScrollProgress > 0.5)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
@@ -159,7 +159,7 @@ struct GameInfoView: View {
                         }
                     }
                     .frame(maxWidth: 250)
-                    .animation(.smooth(duration: Motion.durationNormal), value: titleScrollProgress)
+                    .animation(.spring(duration: Motion.durationNormal, bounce: 0), value: titleScrollProgress)
                     .background(
                         GeometryReader { geo in
                             Color.clear.onAppear {

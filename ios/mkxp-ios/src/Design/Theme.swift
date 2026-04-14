@@ -147,30 +147,31 @@ extension View {
 // All tuned for a playful, fluid feel.
 
 enum Motion {
+    // -- Small elements: buttons, toggles, icons (150-200ms) --
+
     /// Quick micro-interaction — button press, toggle, small state change.
-    /// ~150ms, minimal overshoot.
-    static let snappy = Animation.spring(duration: 0.2, bounce: 0.0)
+    static let snappy = Animation.spring(duration: 0.18, bounce: 0.0)
 
-    /// General-purpose transition — list changes, layout shifts.
-    /// ~300ms, slight bounce for playfulness.
-    static let standard = Animation.spring(duration: 0.3, bounce: 0.1)
+    // -- Big elements: cards, rows, navigation, layout shifts (250-350ms) --
 
-    /// Playful, expressive motion — morphing elements, import button arc.
-    /// ~550ms, noticeable bounce.
-    static let bouncy = Animation.spring(duration: 0.55, bounce: 0.18)
+    /// General-purpose transition — list changes, layout shifts, navigation.
+    static let standard = Animation.spring(duration: 0.3, bounce: 0.0)
 
-    /// Slow, gentle transition — fade-outs, background changes.
-    /// ~400ms, no bounce.
-    static let gentle = Animation.smooth(duration: 0.4)
+    /// Playful, expressive motion — import button arc, select accents.
+    /// One of the few animations with bounce.
+    static let bouncy = Animation.spring(duration: 0.35, bounce: 0.15)
+
+    /// Gentle transition — background changes, slow reveals.
+    static let gentle = Animation.spring(duration: 0.35, bounce: 0.0)
 
     // MARK: - Durations (for non-spring animations)
 
-    /// Fast — opacity fades, color changes.
-    static let durationFast: TimeInterval = 0.15
-    /// Normal — standard transitions.
+    /// Fast — opacity fades, color changes (small elements).
+    static let durationFast: TimeInterval = 0.18
+    /// Normal — standard transitions (big elements).
     static let durationNormal: TimeInterval = 0.3
-    /// Slow — emphasis transitions.
-    static let durationSlow: TimeInterval = 0.6
+    /// Slow — emphasis transitions, loading reveals.
+    static let durationSlow: TimeInterval = 0.5
 }
 
 // ============================================================================
