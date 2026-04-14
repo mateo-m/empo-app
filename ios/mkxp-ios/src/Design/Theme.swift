@@ -70,11 +70,11 @@ enum Spacing {
     /// 16pt — section padding, screen-edge horizontal margins
     static let xl: CGFloat = 16
     /// 20pt — generous section spacing
-    static let xxl: CGFloat = 20
+    static let _2xl: CGFloat = 20
     /// 32pt — large section breaks
-    static let xxxl: CGFloat = 32
+    static let _3xl: CGFloat = 32
     /// 40pt — extra-large section breaks
-    static let xxxxl: CGFloat = 40
+    static let _4xl: CGFloat = 40
 }
 
 // MARK: - Corner Radius

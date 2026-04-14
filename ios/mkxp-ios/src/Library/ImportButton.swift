@@ -25,7 +25,7 @@ struct ImportButton: View {
             let collapsedY = headerHeight / 2
             let expandedX = geo.size.width / 2
             let emptyStateBottom = geo.size.height / 2 + emptyStateOffset + emptyStateHeight / 2
-            let expandedY = emptyStateBottom + Spacing.xxxxl + buttonHeight / 2
+            let expandedY = emptyStateBottom + Spacing._4xl + buttonHeight / 2
 
             // Arc: find center of rotation on perpendicular bisector
             let chordDX = collapsedX - expandedX
