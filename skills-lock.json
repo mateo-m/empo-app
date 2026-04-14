@@ -16,6 +16,11 @@
       "sourceType": "github",
       "computedHash": "8bdf9e4e6de7a4969147bf4828a4ad2c5aacd9fba4b690b250a85e0467ca387d"
     },
+    "mobile-design": {
+      "source": "davila7/claude-code-templates",
+      "sourceType": "github",
+      "computedHash": "27e338f7267fed0ce198852af954f79ce6746b9c94e4e530e581e19e568b8ba0"
+    },
     "mobile-ios-design": {
       "source": "wshobson/agents",
       "sourceType": "github",

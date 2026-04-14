@@ -72,19 +72,19 @@ We read from the internal FBO (the engine's render target), not FBO 0 (the scree
 
 **Retrieval (Swift, `AppState.swift`):**
 
-The paused callback runs on the engine thread. It reads the snapshot via `mkxp_getSnapshotRGBA()`, converts it to a `CGImage` → `UIImage`, and dispatches to main to store it as `AppState.pauseSnapshot`.
+The paused callback runs on the engine thread. It reads the snapshot via `mkxp_getSnapshotRGBA()`, converts it to a `CGImage` → `UIImage`, and dispatches to main to store it as `engineState.pauseSnapshot`.
 
 **Display (Swift, `GameLoadingView.swift`):**
 
-When `GameLoadingView` detects a resume (snapshot is non-nil), it shows the snapshot positioned at `appState.gameRect` — the exact viewport position the engine was using, accounting for portrait layout and safe areas. This makes the hero zoom appear to zoom into the live game.
+When `GameLoadingView` detects a resume (snapshot is non-nil), it shows the snapshot positioned at `engineState.gameRect` — the exact viewport position the engine was using, accounting for portrait layout and safe areas. This makes the hero zoom appear to zoom into the live game.
 
 **Cleanup (Swift, `PlayerView.onAppear`):**
 
-When PlayerView appears, it picks up `appState.pauseSnapshot`, copies it into local `@State`, and fades it out over 0.35s. After the fade, both the local copy and `appState.pauseSnapshot` are cleared. The live SDL rendering is now visible underneath.
+When PlayerView appears, it picks up `engineState.pauseSnapshot`, copies it into local `@State`, and fades it out over 0.35s. After the fade, both the local copy and `engineState.pauseSnapshot` are cleared. The live SDL rendering is now visible underneath.
 
 ### Portrait layout
 
-In portrait mode, the game renders at the top of the screen with touch controls below. The snapshot must be placed at `gameRect` (not stretched to fill the screen) to match this layout. `gameRect` is in logical points and already accounts for safe area insets, aspect ratio, and vertical alignment settings.
+In portrait mode, the game renders at the top of the screen with touch controls below. The snapshot must be placed at `engineState.gameRect` (not stretched to fill the screen) to match this layout. `gameRect` is in logical points and already accounts for safe area insets, aspect ratio, and vertical alignment settings.
 
 ---
 
@@ -98,15 +98,15 @@ The hero zoom from game card → GameLoadingView requires the library to be visi
 
 1. `handleGameTap` calls `appState.resume()` then `path.append(game)`.
 2. `resume()` immediately clears `pausedGame` and calls `mkxp_requestResume()` (engine unblocks), but does **not** set `phase = .playing` yet.
-3. `path.append(game)` pushes `GameLoadingView` with the hero zoom. The destination shows the snapshot at `gameRect` on a black background.
+3. `path.append(game)` pushes `GameLoadingView` with the hero zoom. The destination shows the snapshot at `engineState.gameRect` on a black background.
 
 ### Stage 2: Handoff to PlayerView
 
 4. After 0.35s (matching the hero zoom duration), `resume()` sets `phase = .playing`.
-5. The library hides (opacity 0), and PlayerView appears. PlayerView picks up the same snapshot from `appState.pauseSnapshot` and shows it at `gameRect` as an overlay — **with controls and toolbar visible alongside it**.
+5. The library hides (opacity 0), and PlayerView appears. PlayerView picks up the same snapshot from `engineState.pauseSnapshot` and shows it at `engineState.gameRect` as an overlay — **with controls and toolbar visible alongside it**.
 6. The snapshot fades out over 0.35s, revealing the live SDL rendering underneath.
 
-The snapshot appears in both views at the same `gameRect` position, so the handoff from GameLoadingView → PlayerView is seamless. Controls are visible the moment PlayerView mounts.
+The snapshot appears in both views at the same `engineState.gameRect` position, so the handoff from GameLoadingView → PlayerView is seamless. Controls are visible the moment PlayerView mounts.
 
 ---
 
@@ -117,8 +117,10 @@ The snapshot appears in both views at the same `gameRect` position, so the hando
 | `mkxp-z/src/display/graphics.cpp` | `GraphicsPrivate::checkPause()` — snapshot capture and pause delegation |
 | `mkxp-z/src/ios_bridge.cpp` | Condvar, audio pause/resume, snapshot storage |
 | `mkxp-z/src/ios_bridge.h` | Bridge API declarations |
-| `ios/mkxp-ios/src/App/AppState.swift` | `resume()`, `requestPause()`, `requestBackgroundPause()`, paused callback, snapshot conversion |
-| `ios/mkxp-ios/src/Library/GameLoadingView.swift` | Snapshot at `gameRect` during hero zoom (stage 1) |
+| `ios/mkxp-ios/src/App/PauseManager.swift` | User-initiated pause/resume state, `requestPause()`, `resume()`, snapshot ownership |
+| `ios/mkxp-ios/src/App/AppState.swift` | `returnToLibrary()`, paused callback registration, snapshot conversion |
+| `ios/mkxp-ios/src/App/EngineState.swift` | Background pause/resume (`requestBackgroundPause()`, `resumeFromBackground()`) |
+| `ios/mkxp-ios/src/Library/GameLoadingView.swift` | Snapshot at `engineState.gameRect` during hero zoom (stage 1) |
 | `ios/mkxp-ios/src/Library/GameLibraryView.swift` | `handleGameTap()` — resume flow entry point |
-| `ios/mkxp-ios/src/Player/PlayerView.swift` | Snapshot fade-out overlay with controls (stage 2), pause button |
-| `ios/mkxp-ios/src/App/RootView.swift` | Phase-based visibility (library vs. player) |
+| `ios/mkxp-ios/src/Player/PlayerView.swift` | Snapshot fade-out overlay with controls (stage 2), pause button, quit button |
+| `ios/mkxp-ios/src/App/RootView.swift` | Phase-based visibility (library vs. player), background pause triggers |
