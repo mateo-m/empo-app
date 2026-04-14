@@ -296,8 +296,8 @@ struct GameInfoView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, Spacing.xxl)
-            .padding(.bottom, Spacing.xxl)
+            .padding(.horizontal, Spacing._2xl)
+            .padding(.bottom, Spacing._2xl)
             .contentShape(Rectangle())
             .background(
                 GeometryReader { geo in
