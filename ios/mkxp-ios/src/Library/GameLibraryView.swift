@@ -1,5 +1,12 @@
 import SwiftUI
 
+private struct EmptyStateHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 struct GameLibraryView: View {
     var appState: AppState
     var heroNamespace: Namespace.ID
@@ -21,6 +28,7 @@ struct GameLibraryView: View {
     @State private var showPausedGameAlert = false
     @State private var staggerTrigger = UUID()
     @State private var entranceDelay: TimeInterval = 0.15
+    @State private var emptyStateHeight: CGFloat = 0
 
     private var showEmpty: Bool {
         library.games.isEmpty
@@ -60,10 +68,16 @@ struct GameLibraryView: View {
             .overlay {
                 if showEmpty {
                     emptyStateContent
+                        .background {
+                            GeometryReader { geo in
+                                Color.clear.preference(key: EmptyStateHeightKey.self, value: geo.size.height)
+                            }
+                        }
                         .offset(y: -30)
                         .transition(.emptyState)
                 }
             }
+            .onPreferenceChange(EmptyStateHeightKey.self) { emptyStateHeight = $0 }
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: Spacing.md) {
                     libraryHeader
@@ -114,7 +128,9 @@ struct GameLibraryView: View {
                     showImporter: $showImporter,
                     splashDismissed: splashDismissed,
                     entranceDelay: entranceDelay,
-                    headerHeight: headerHeight
+                    headerHeight: headerHeight,
+                    emptyStateHeight: emptyStateHeight,
+                    emptyStateOffset: -30
                 )
             }
             .toolbarVisibility(.hidden, for: .navigationBar)

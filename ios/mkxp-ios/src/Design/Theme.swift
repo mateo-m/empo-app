@@ -73,6 +73,8 @@ enum Spacing {
     static let xxl: CGFloat = 20
     /// 32pt — large section breaks
     static let xxxl: CGFloat = 32
+    /// 40pt — extra-large section breaks
+    static let xxxxl: CGFloat = 40
 }
 
 // MARK: - Corner Radius
