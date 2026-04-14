@@ -2,12 +2,10 @@ import Foundation
 import SwiftUI
 import Observation
 
-/// The phases of the app lifecycle.
-enum AppPhase: Equatable {
-    case library
+/// Active game phases. `nil` means the app is at rest (library).
+enum GamePhase: Equatable {
     case loading
     case playing
-    case quitting
 }
 
 /// Central state machine driving all UI transitions.
@@ -19,7 +17,7 @@ enum AppPhase: Equatable {
 class AppState {
     static let shared = AppState()
 
-    var phase: AppPhase = .library
+    var phase: GamePhase?
     var selectedGame: GameEntry?
     var errorMessage: String?
 
@@ -81,7 +79,7 @@ class AppState {
             return
         }
 
-        guard phase == .library, pausedGame == nil else { return }
+        guard phase == nil, pausedGame == nil else { return }
         selectedGame = game
         EngineState.shared.reset()
         phase = .loading
@@ -184,7 +182,7 @@ class AppState {
         selectedGame = nil
         pausedGame = nil
         EngineState.shared.reset()
-        phase = .library
+        phase = nil
     }
 
     /// Request the engine to pause and return to library.
@@ -329,7 +327,7 @@ class AppState {
                 engineState.pauseSnapshot = snapshotImage
                 appState.pausedGame = appState.selectedGame
                 withAnimation(.spring(duration: 0.25, bounce: 0)) {
-                    appState.phase = .library
+                    appState.phase = nil
                 }
             }
         }, nil)
