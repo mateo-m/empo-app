@@ -405,7 +405,6 @@ struct GameLibraryView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .disabled(game.isImporting)
                 .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                 .transition(.cardAppear)
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
