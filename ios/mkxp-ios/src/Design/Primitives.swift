@@ -10,27 +10,35 @@ enum Haptics {
     private static let medium = UIImpactFeedbackGenerator(style: .medium)
     private static let notification = UINotificationFeedbackGenerator()
 
+    private static var interfaceEnabled: Bool {
+        UserDefaults.standard.object(forKey: "interfaceHaptics") as? Bool ?? true
+    }
+
+    private static var controllerEnabled: Bool {
+        UserDefaults.standard.object(forKey: "controllerHaptics") as? Bool ?? true
+    }
+
     /// Light tap — card press, small interactions.
     static func tap() {
-        guard AppSettings.shared.interfaceHaptics else { return }
+        guard interfaceEnabled else { return }
         light.impactOccurred()
     }
 
     /// Medium impact — import complete, significant action.
     static func impact() {
-        guard AppSettings.shared.interfaceHaptics else { return }
+        guard interfaceEnabled else { return }
         medium.impactOccurred()
     }
 
     /// Success — game launched successfully.
     static func success() {
-        guard AppSettings.shared.interfaceHaptics else { return }
+        guard interfaceEnabled else { return }
         notification.notificationOccurred(.success)
     }
 
     /// Light tap for game controller buttons.
     static func controllerTap() {
-        guard AppSettings.shared.controllerHaptics else { return }
+        guard controllerEnabled else { return }
         light.impactOccurred()
     }
 }

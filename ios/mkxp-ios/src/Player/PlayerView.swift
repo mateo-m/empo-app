@@ -2,23 +2,6 @@ import SwiftUI
 import Combine
 
 // ============================================================================
-// MARK: - Conditional View Modifier
-// ============================================================================
-
-extension View {
-    /// Conditionally applies a modifier. When `condition` is false, the view
-    /// is returned unmodified — no gesture recognizers or other side-effects.
-    @ViewBuilder
-    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
-        if condition {
-            transform(self)
-        } else {
-            self
-        }
-    }
-}
-
-// ============================================================================
 // MARK: - Key Catalog
 // ============================================================================
 
@@ -28,7 +11,7 @@ struct KeyEntry: Identifiable {
     let scancode: Int32
 }
 
-let keyCatalog: [KeyEntry] = [
+private let keyCatalog: [KeyEntry] = [
     // Common RPG Maker keys
     KeyEntry(label: "Z (Confirm)",  scancode: Int32(MKXP_SCANCODE_Z)),
     KeyEntry(label: "X (Cancel)",   scancode: Int32(MKXP_SCANCODE_X)),
@@ -311,9 +294,7 @@ struct PlayerView: View {
         DPadRepresentable(size: size, editing: editMode)
             .frame(width: size, height: size)
             .position(pos)
-            .if(editMode) { view in
-                view.gesture(dpadDragGesture(in: geo))
-            }
+            .gesture(dpadDragGesture(in: geo), including: editMode ? .all : .none)
     }
 
     private func dpadDragGesture(in geo: GeometryProxy) -> some Gesture {
@@ -345,14 +326,14 @@ struct PlayerView: View {
         )
         .frame(width: button.size, height: button.size)
         .position(pos)
-        .if(editMode) { view in
-            view
-                .gesture(buttonDragGesture(id: button.id, size: button.size, in: geo))
-                .onTapGesture {
-                    editingButton = button
-                    showEditMenu = true
-                }
-        }
+        .gesture(buttonDragGesture(id: button.id, size: button.size, in: geo), including: editMode ? .all : .none)
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                editingButton = button
+                showEditMenu = true
+            },
+            including: editMode ? .all : .none
+        )
     }
 
     private func buttonDragGesture(id: UUID, size: CGFloat, in geo: GeometryProxy) -> some Gesture {

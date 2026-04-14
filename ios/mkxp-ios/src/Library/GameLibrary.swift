@@ -19,7 +19,8 @@ class GameLibrary {
 
     private init() {
         ensureGamesDirectory()
-        games = scanGames(cleanupInvalid: AppSettings.shared.cleanupInvalidGames)
+        let cleanupInvalid = UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
+        games = scanGames(cleanupInvalid: cleanupInvalid)
         syncMetadata()
     }
 
@@ -136,7 +137,8 @@ class GameLibrary {
             path: url.path,
             title: title,
             artworkPath: artworkPath,
-            originalTitle: originalTitle
+            originalTitle: originalTitle,
+            lastPlayed: metadata.lastPlayed
         )
     }
 
