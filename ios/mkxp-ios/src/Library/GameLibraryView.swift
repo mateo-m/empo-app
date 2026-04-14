@@ -162,6 +162,7 @@ struct GameLibraryView: View {
                         }
                     }
                 }
+                .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
             } message: {
                 if let game = gameToDelete {
@@ -193,6 +194,7 @@ struct GameLibraryView: View {
                     Text("\"\(paused.title)\" is still running. Quit it to play a different game?")
                 }
             }
+            .tint(nil)
             .navigationDestination(for: GameEntry.self) { game in
                 GameLoadingView(game: game)
                     .navigationTransition(.zoom(sourceID: game.id, in: heroNamespace))
