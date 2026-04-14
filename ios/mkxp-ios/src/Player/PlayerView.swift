@@ -524,7 +524,7 @@ struct PlayerView: View {
     private func resetToolbarIdleTimer() {
         toolbarIdleTask?.cancel()
         if toolbarOpacity < 1 {
-            withAnimation(.easeInOut(duration: Motion.durationFast)) {
+            withAnimation(.spring(duration: Motion.durationFast, bounce: 0)) {
                 toolbarOpacity = 1.0
             }
         }
@@ -532,7 +532,7 @@ struct PlayerView: View {
             try? await Task.sleep(for: .seconds(kToolbarIdleDelay))
             guard !Task.isCancelled else { return }
             if !editMode && !controlsHidden {
-                withAnimation(.easeInOut(duration: Motion.durationSlow)) {
+                withAnimation(.spring(duration: Motion.durationSlow, bounce: 0)) {
                     toolbarOpacity = 0.5
                 }
             }
@@ -549,7 +549,7 @@ struct PlayerView: View {
     /// Fade the snapshot overlay to reveal the live SDL surface.
     /// Called when the engine signals its first post-resume frame is on-screen.
     private func startSnapshotFade() {
-        withAnimation(.easeOut(duration: Motion.durationNormal)) {
+        withAnimation(.spring(duration: Motion.durationNormal, bounce: 0)) {
             snapshotOpacity = 0
             controlsVisible = true
         }

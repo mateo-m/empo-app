@@ -8,6 +8,24 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Brand header
+                Section {
+                    VStack(spacing: Spacing.md) {
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(.brand)
+                        Text("mkxp-z")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                        Text("\(GitInfo.commit)\(GitInfo.dirty ? " (dirty)" : "")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Spacing.md)
+                    .listRowBackground(Color.clear)
+                }
+
                 Section {
                     SettingsPicker(
                         title: "Theme",
@@ -126,14 +144,6 @@ struct SettingsView: View {
                     Text("These options are intended for debugging and troubleshooting.")
                 }
 
-                Section {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text("\(GitInfo.commit)\(GitInfo.dirty ? " (dirty)" : "")")
-                            .foregroundStyle(.secondary)
-                    }
-                }
             }
             .confirmationDialog(
                 "Enable \(featureToEnable?.label.lowercased() ?? "")?",

@@ -13,11 +13,38 @@ struct GameArtworkView: View {
     var size: CGFloat? = nil
     var cornerRadius: CGFloat = 0
     var importing: Bool = false
+    var shimmer: Bool = true
+
+    @State private var shimmerPhase: CGFloat = -1
 
     var body: some View {
         content
             .saturation(importing ? 0 : 1)
-            .animation(.easeOut(duration: 0.6), value: importing)
+            .animation(.spring(duration: 0.3, bounce: 0), value: importing)
+            .overlay {
+                if shimmer && artworkPath != nil && !importing {
+                    shimmerOverlay
+                }
+            }
+            .onAppear {
+                guard shimmer && artworkPath != nil else { return }
+                withAnimation(.easeInOut(duration: 0.8).delay(0.3)) {
+                    shimmerPhase = 2
+                }
+            }
+    }
+
+    private var shimmerOverlay: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0),
+                .init(color: .white.opacity(0.15), location: 0.5),
+                .init(color: .clear, location: 1),
+            ],
+            startPoint: UnitPoint(x: shimmerPhase - 0.3, y: shimmerPhase - 0.3),
+            endPoint: UnitPoint(x: shimmerPhase, y: shimmerPhase)
+        )
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder

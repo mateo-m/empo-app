@@ -3,6 +3,7 @@ import SwiftUI
 struct GameLibraryView: View {
     var appState: AppState
     var heroNamespace: Namespace.ID
+    var splashDismissed: Bool = true
     var library = GameLibrary.shared
     var settings = AppSettings.shared
     @State private var showImporter = false
@@ -18,6 +19,13 @@ struct GameLibraryView: View {
     @State private var gameForInfo: GameEntry?
     @State private var pendingGame: GameEntry?
     @State private var showPausedGameAlert = false
+    @State private var staggerTrigger = UUID()
+    @State private var importGlowing = false
+    @State private var importMoveTrigger = 0
+    /// Extra delay for content entrance on first mount (after splash).
+    @State private var entranceDelay: TimeInterval = 0.15
+    @State private var importRevealed = false
+    @State private var importShimmer: CGFloat = -1
 
     private var showEmpty: Bool {
         library.games.isEmpty
@@ -26,6 +34,24 @@ struct GameLibraryView: View {
     private var filteredGames: [GameEntry] {
         if searchText.isEmpty { return library.games }
         return library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    /// The most recently played game, if any (only shown when not searching).
+    private var recentlyPlayed: GameEntry? {
+        guard searchText.isEmpty else { return nil }
+        let readyGames = library.games.filter { $0.status == .ready }
+        guard readyGames.count > 1 else { return nil }  // no hero if only 1 game
+
+        var best: (GameEntry, Date)?
+        for game in readyGames {
+            let meta = GameMetadata.load(for: game.id)
+            if let lastPlayed = meta.lastPlayed {
+                if best == nil || lastPlayed > best!.1 {
+                    best = (game, lastPlayed)
+                }
+            }
+        }
+        return best?.0
     }
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -38,6 +64,14 @@ struct GameLibraryView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ZStack(alignment: .top) {
+                // Warm gradient background — subtle brand warmth
+                LinearGradient(
+                    colors: [.brand.opacity(0.06), .clear],
+                    startPoint: .top,
+                    endPoint: .center
+                )
+                .ignoresSafeArea()
+
                 if !showEmpty {
                     gameContent
                         .transition(.opacity)
@@ -54,6 +88,19 @@ struct GameLibraryView: View {
                 }
             }
             .animation(Motion.standard, value: showEmpty)
+            .onChange(of: splashDismissed) { _, dismissed in
+                if dismissed {
+                    staggerTrigger = UUID()
+                    withAnimation(.spring(duration: 0.35, bounce: 0.2).delay(entranceDelay + 0.1)) {
+                        importRevealed = true
+                    }
+                    // Clear entrance delay after first mount so subsequent
+                    // animations (view mode switch, new imports) play instantly.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        entranceDelay = 0
+                    }
+                }
+            }
             .overlay {
                 if showEmpty {
                     emptyStateContent
@@ -143,7 +190,9 @@ struct GameLibraryView: View {
         EmptyStateView(
             icon: "gamecontroller",
             title: "No Games Yet",
-            subtitle: "Add your favorite RPG Maker\ngames to get started!"
+            subtitle: "Add your favorite RPG Maker\ngames to get started!",
+            revealed: splashDismissed,
+            initialDelay: entranceDelay
         )
     }
 
@@ -204,6 +253,10 @@ struct GameLibraryView: View {
                 withAnimation(Motion.standard) {
                     settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
                 }
+                // Trigger stagger after new views mount
+                DispatchQueue.main.async {
+                    staggerTrigger = UUID()
+                }
             } label: {
                 Image(systemName: settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2")
                     .font(.body)
@@ -263,7 +316,46 @@ struct GameLibraryView: View {
                 .padding(.vertical, collapsed ? 10 : 12)
             }
             .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
+            .overlay {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .white.opacity(0.25), location: 0.5),
+                                .init(color: .clear, location: 1),
+                            ],
+                            startPoint: UnitPoint(x: importShimmer - 0.3, y: importShimmer - 0.3),
+                            endPoint: UnitPoint(x: importShimmer, y: importShimmer)
+                        )
+                    )
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: .brand.opacity(collapsed ? 0 : (importGlowing ? 0.5 : 0.15)),
+                    radius: collapsed ? 0 : (importGlowing ? 16 : 6))
             .environment(\.colorScheme, .dark)
+            // Scale-based reveal: glass effect initializes at near-zero scale
+            // (fully tinted but invisible), avoiding the gray flash that
+            // opacity-based reveals cause.
+            .scaleEffect(importRevealed ? 1 : 0.001)
+            .allowsHitTesting(importRevealed)
+            .keyframeAnimator(
+                initialValue: ImportButtonSquash(),
+                trigger: importMoveTrigger
+            ) { content, value in
+                content.scaleEffect(x: value.scaleX, y: value.scaleY)
+            } keyframes: { _ in
+                KeyframeTrack(\.scaleX) {
+                    SpringKeyframe(1.18, duration: 0.12, spring: .snappy)
+                    SpringKeyframe(0.92, duration: 0.22, spring: .bouncy)
+                    SpringKeyframe(1.0, duration: 0.3, spring: .smooth)
+                }
+                KeyframeTrack(\.scaleY) {
+                    SpringKeyframe(0.85, duration: 0.12, spring: .snappy)
+                    SpringKeyframe(1.08, duration: 0.22, spring: .bouncy)
+                    SpringKeyframe(1.0, duration: 0.3, spring: .smooth)
+                }
+            }
             // Counter-rotate to keep content upright
             .rotationEffect(.degrees(collapsed ? -arcDeg : 0))
             // Offset from arc center to expanded position
@@ -273,7 +365,25 @@ struct GameLibraryView: View {
             // Place at arc center
             .position(x: arcCenterX, y: arcCenterY)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(Motion.bouncy, value: showEmpty)
+            .animation(.spring(duration: 0.25, bounce: 0.15), value: showEmpty)
+            .onChange(of: showEmpty) { importMoveTrigger += 1 }
+            .onAppear {
+                if splashDismissed {
+                    importRevealed = true
+                    withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                        importGlowing = true
+                    }
+                }
+            }
+            .onChange(of: importRevealed) {
+                guard importRevealed else { return }
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                    importGlowing = true
+                }
+                withAnimation(.easeInOut(duration: 1.5).delay(0.4)) {
+                    importShimmer = 2
+                }
+            }
         }
     }
 
@@ -283,85 +393,131 @@ struct GameLibraryView: View {
         Group {
             if settings.libraryDisplayMode == .grid {
                 gridContent
+                    .transition(.viewModeSwitch)
             } else {
                 listContent
+                    .transition(.viewModeSwitch)
             }
         }
     }
 
     private var gridContent: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: Spacing.lg) {
-                gridItems
+            VStack(spacing: Spacing.lg) {
+                // Hero card for recently played game
+                if let hero = recentlyPlayed {
+                    heroCard(for: hero)
+                        .transition(.cardAppear)
+                }
+
+                LazyVGrid(columns: columns, spacing: Spacing.lg) {
+                    gridItems
+                }
             }
             .padding(.horizontal)
             .padding(.top, headerHeight + searchBarHeight + Spacing.xxl)
             .padding(.bottom)
-            .animation(.default, value: filteredGames.map(\.id))
+            .animation(Motion.standard, value: filteredGames.map(\.id))
         }
     }
 
-    private var listContent: some View {
-        List {
-            ForEach(filteredGames) { game in
-                let isPaused = appState.pausedGame?.id == game.id
-                GameListRow(
-                    game: game,
-                    isPaused: isPaused,
-                    heroNamespace: game.status == .ready ? heroNamespace : nil,
-                    onStopImport: game.status.phase == .importing ? {
-                        gameToDelete = game
-                        showDeleteConfirm = true
-                    } : nil
-                )
-                .onTapGesture {
-                    switch game.status {
-                    case .ready: handleGameTap(game)
-                    case .invalid: showInvalidAlert = true
-                    case .importing: break
-                    }
-                }
-                .swipeActions(edge: .leading) {
-                    if game.status == .ready {
-                        Button { gameForSettings = game } label: {
-                            Label("Settings", systemImage: "gearshape")
-                        }
-                        .tint(.brand)
+    // MARK: - Hero Card
 
-                        Button { gameForInfo = game } label: {
-                            Label("Info", systemImage: "info.circle")
-                        }
-                        .tint(.gray)
-                    }
+    private func heroCard(for game: GameEntry) -> some View {
+        let isPaused = appState.pausedGame?.id == game.id
+        return Button { handleGameTap(game) } label: {
+            Color.clear
+                .aspectRatio(2.2, contentMode: .fit)
+                .overlay {
+                    GameArtworkView(
+                        artworkPath: game.artworkPath,
+                        importing: false,
+                        shimmer: false
+                    )
                 }
-                .swipeActions(edge: .trailing) {
-                    if isPaused {
-                        Button(role: .destructive) {
-                            appState.returnToLibrary()
-                        } label: {
-                            Label("Quit", systemImage: "stop.fill")
-                        }
-                        .tint(.red)
-                    }
-
-                    Button(role: .destructive) {
-                        gameToDelete = game
-                        showDeleteConfirm = true
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                    .tint(.red)
+                .overlay {
+                    // Gradient scrim for readability
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.6)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 }
-                .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
-            }
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text("Continue playing")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text(game.title)
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .textShadow()
+                            .lineLimit(1)
+                    }
+                    .padding(Spacing.xl)
+                }
+                .overlay(alignment: .bottomTrailing) {
+                    Image(systemName: isPaused ? "pause.fill" : "play.fill")
+                        .font(.title2)
+                        .foregroundStyle(.white)
+                        .iconShadow()
+                        .padding(Spacing.xl)
+                }
+                .clipShape(.rect(cornerRadius: Radius.lg))
+                .cardShadow()
+                .matchedTransitionSource(id: game.id, in: heroNamespace) { config in
+                    config
+                        .background(.black)
+                        .clipShape(.rect(cornerRadius: Radius.lg))
+                }
         }
-    .listStyle(.plain)
-    .contentMargins(.top, headerHeight + searchBarHeight + Spacing.xxl, for: .scrollContent)
+        .buttonStyle(CardPressStyle())
+        .environment(\.colorScheme, .dark)
+        .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+    }
+
+    private var listContent: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
+                    let isPaused = appState.pausedGame?.id == game.id
+                    GameListRow(
+                        game: game,
+                        isPaused: isPaused,
+                        heroNamespace: game.status == .ready ? heroNamespace : nil,
+                        onStopImport: game.status.phase == .importing ? {
+                            gameToDelete = game
+                            showDeleteConfirm = true
+                        } : nil
+                    )
+                    .onTapGesture {
+                        switch game.status {
+                        case .ready: handleGameTap(game)
+                        case .invalid: showInvalidAlert = true
+                        case .importing: break
+                        }
+                    }
+                    .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                    .transition(.cardAppear)
+                    .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
+
+                    if index < filteredGames.count - 1 {
+                        Divider()
+                            .padding(.leading, AppSize.listArtwork + Spacing.lg * 2)
+                    }
+                }
+            }
+            .padding(.top, headerHeight + searchBarHeight + Spacing.xxl)
+            .padding(.horizontal)
+            .animation(Motion.standard, value: filteredGames.map(\.id))
+        }
     }
 
     @ViewBuilder
     private var gridItems: some View {
-        ForEach(filteredGames) { game in
+        ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
             switch game.status {
             case .importing:
                 GameCard(game: game, onStopImport: {
@@ -370,6 +526,7 @@ struct GameLibraryView: View {
                 })
                     .id("\(game.id)-importing")
                     .transition(.cardAppear)
+                    .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .invalid:
                 Button { showInvalidAlert = true } label: {
@@ -379,6 +536,7 @@ struct GameLibraryView: View {
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
                     .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                    .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .ready:
                 let isPaused = appState.pausedGame?.id == game.id
@@ -394,6 +552,7 @@ struct GameLibraryView: View {
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
                 .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
             }
         }
     }
@@ -428,6 +587,8 @@ struct GameLibraryView: View {
                 if let error = error {
                     errorMessage = error.localizedDescription
                     showErrorAlert = true
+                } else {
+                    Haptics.impact()
                 }
             }
         }
@@ -485,6 +646,13 @@ private struct GameContextMenuModifier: ViewModifier {
         }
         .tint(nil)
     }
+}
+
+// MARK: - Import Button Squash-and-Stretch
+
+private struct ImportButtonSquash {
+    var scaleX: CGFloat = 1.0
+    var scaleY: CGFloat = 1.0
 }
 
 extension View {
