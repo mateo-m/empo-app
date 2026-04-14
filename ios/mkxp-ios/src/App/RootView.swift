@@ -7,6 +7,7 @@ import SwiftUI
 /// opacity during gameplay so the transparent PlayerView shows SDL beneath.
 struct RootView: View {
     private let appState = AppState.shared
+    private let engineState = EngineState.shared
     private let layout = ControlsLayout.shared
     @Namespace private var hero
     @State private var showSplash = true
@@ -26,7 +27,7 @@ struct RootView: View {
             // the phase change is wrapped in withAnimation.  This lets
             // the library fade out smoothly without a cross-fade dim.
             if appState.phase == .playing {
-                PlayerView(appState: appState, layout: layout)
+                PlayerView(appState: appState, engineState: engineState, layout: layout)
                     .transition(.identity)
                     .zIndex(1)
             }

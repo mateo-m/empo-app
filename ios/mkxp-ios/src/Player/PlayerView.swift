@@ -87,6 +87,7 @@ private let kToolbarIdleDelay: TimeInterval = 3.0
 
 struct PlayerView: View {
     @Bindable var appState: AppState
+    @Bindable var engineState: EngineState
     var layout: ControlsLayout
     @State private var editMode = false
     @State private var controlsHidden = false
@@ -117,7 +118,7 @@ struct PlayerView: View {
     var body: some View {
         GeometryReader { geo in
             let isPortrait = geo.size.height > geo.size.width
-            let gameRect = appState.gameRect
+            let gameRect = engineState.gameRect
             let safeArea = geo.safeAreaInsets
 
             ZStack {
@@ -185,28 +186,28 @@ struct PlayerView: View {
             // until the engine signals its first frame has been swapped.
             // Hide controls until the snapshot fades to avoid visual clutter
             // during the transition.
-            if let snapshot = appState.pauseSnapshot {
+            if let snapshot = engineState.pauseSnapshot {
                 resumeSnapshot = snapshot
                 snapshotOpacity = 1
                 controlsVisible = false
 
                 // If the engine already rendered before we appeared, fade now
-                if appState.snapshotCanFade {
+                if engineState.snapshotCanFade {
                     startSnapshotFade()
                 }
             } else {
                 resetToolbarIdleTimer()
             }
         }
-        .onChange(of: appState.snapshotCanFade) { _, canFade in
+        .onChange(of: engineState.snapshotCanFade) { _, canFade in
             if canFade && resumeSnapshot != nil {
                 startSnapshotFade()
             }
         }
-        .alert("Return to Library", isPresented: $appState.showQuitConfirm) {
+        .alert("Return to Library", isPresented: $engineState.showQuitConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Quit", role: .destructive) {
-                appState.confirmQuit()
+                engineState.confirmQuit()
             }
         } message: {
             Text("Are you sure you want to quit the current game?")
@@ -362,7 +363,7 @@ struct PlayerView: View {
         let buttons: [(icon: String, label: String, action: () -> Void, tint: Color)] = {
             var list: [(icon: String, label: String, action: () -> Void, tint: Color)] = []
             if AppSettings.shared.isEnabled(.gamePause) {
-                list.append(("pause.fill", "Pause game", { appState.requestPause() }, .white.opacity(0.8)))
+                list.append(("pause.fill", "Pause game", { engineState.requestPause() }, .white.opacity(0.8)))
             }
             list.append(("keyboard", "Toggle keyboard", { toggleKeyboard() }, .white.opacity(0.8)))
             if AppSettings.shared.debugMode {
@@ -373,7 +374,7 @@ struct PlayerView: View {
                 (controlsHidden ? "eye.slash.fill" : "eye.fill", controlsHidden ? "Show controls" : "Hide controls", { toggleHideControls() }, .white.opacity(0.8)),
             ])
             if AppSettings.shared.isEnabled(.gameQuit) {
-                list.append(("xmark.circle.fill", "Quit game", { appState.requestQuit() }, .destructive))
+                list.append(("xmark.circle.fill", "Quit game", { engineState.requestQuit() }, .destructive))
             }
             return list
         }()
@@ -537,8 +538,8 @@ struct PlayerView: View {
         resetToolbarIdleTimer()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             resumeSnapshot = nil
-            appState.pauseSnapshot = nil
-            appState.snapshotCanFade = false
+            engineState.pauseSnapshot = nil
+            engineState.snapshotCanFade = false
         }
     }
 }
