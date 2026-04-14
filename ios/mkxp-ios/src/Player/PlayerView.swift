@@ -1,14 +1,10 @@
 import SwiftUI
 
-// ============================================================================
 // MARK: - Constants
-// ============================================================================
 
 private let kToolbarIdleDelay: TimeInterval = 3.0
 
-// ============================================================================
 // MARK: - PlayerView
-// ============================================================================
 
 struct PlayerView: View {
     @Bindable var appState: AppState
@@ -21,12 +17,12 @@ struct PlayerView: View {
     @State private var toolbarOpacity: Double = 1.0
     @State private var toolbarIdleTask: Task<Void, Never>?
 
-    // Resume snapshot fade-out (static double for the SDL view)
+    // Resume snapshot — fades out to reveal live SDL
     @State private var resumeSnapshot: UIImage?
     @State private var snapshotOpacity: Double = 1
     @State private var controlsVisible: Bool = true
 
-    // Edit mode trigger state (dialogs owned by ControlsEditDialogs modifier)
+    // Edit mode trigger state
     @State private var showAddSheet = false
     @State private var showResetConfirm = false
     @State private var editingButton: ButtonModel?
@@ -39,7 +35,7 @@ struct PlayerView: View {
             let safeArea = geo.safeAreaInsets
 
             ZStack {
-                // Transparent background — passes touches through to SDL
+                // Transparent — passes touches through to SDL
                 Color.clear
                     .allowsHitTesting(false)
 
@@ -80,9 +76,8 @@ struct PlayerView: View {
                     .frame(width: 0, height: 0)
                 }
 
-                // Resume snapshot overlay — a frozen frame of the game
-                // positioned at gameRect.  Fades out to reveal the live
-                // SDL rendering underneath.  See docs/pause-resume.md.
+                // Resume snapshot — positioned at gameRect, fades out when
+                // the engine swaps its first post-resume frame.
                 if let snapshot = resumeSnapshot {
                     Image(uiImage: snapshot)
                         .resizable()
@@ -99,10 +94,8 @@ struct PlayerView: View {
         .onAppear {
             TCInstallKeyEventWatcher()
 
-            // If resuming from pause, pick up the snapshot and hold it
-            // until the engine signals its first frame has been swapped.
-            // Hide controls until the snapshot fades to avoid visual clutter
-            // during the transition.
+            // Pick up the pause snapshot and hold it until the engine
+            // signals its first frame. Hide controls during transition.
             if let snapshot = engineState.pauseSnapshot {
                 resumeSnapshot = snapshot
                 snapshotOpacity = 1
@@ -374,8 +367,7 @@ struct PlayerView: View {
         }
     }
 
-    /// Fade the snapshot overlay to reveal the live SDL surface.
-    /// Called when the engine signals its first post-resume frame is on-screen.
+    /// Fade the snapshot to reveal the live SDL surface.
     private func startSnapshotFade() {
         withAnimation(.spring(duration: Motion.durationNormal, bounce: 0)) {
             snapshotOpacity = 0

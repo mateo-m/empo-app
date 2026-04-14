@@ -1,8 +1,6 @@
 import SwiftUI
 
-// ============================================================================
 // MARK: - Debug Overlay
-// ============================================================================
 
 struct DebugOverlayView: View {
     @State private var fps: Double = 0
@@ -55,7 +53,7 @@ struct DebugOverlayView: View {
             fps = mkxp_getAverageFPS()
             ringBuffer.append(fps)
 
-            // Load metadata once (title/version don't change mid-session)
+            // Load once — title/version don't change mid-session
             if !metadataLoaded {
                 rgssVersion = mkxp_getRGSSVersion()
                 if let title = mkxp_getGameTitle(), title[0] != 0 {
@@ -73,11 +71,8 @@ struct DebugOverlayView: View {
     }
 }
 
-// ============================================================================
 // MARK: - FPS Ring Buffer
-// ============================================================================
 
-/// Fixed-size ring buffer for FPS samples. O(1) append, no array shifting.
 private struct FPSRingBuffer {
     let capacity: Int
     private var buffer: [Double]

@@ -77,14 +77,10 @@ struct GameLoadingView: View {
 
     // MARK: - Resume (snapshot stand-in)
     //
-    // When resuming a paused game, the hero zoom animation needs a
-    // destination that looks like the game.  But the SDL window is a
-    // fullscreen surface behind SwiftUI — it can't participate in view
-    // transitions.  So we use the snapshot captured at pause time as a
-    // static double: a frozen frame placed at the exact gameRect position
-    // (respecting portrait layout, safe areas, etc.).  Once the hero
-    // animation finishes, AppState flips to .playing and the real SDL
-    // rendering takes over seamlessly.  See docs/pause-resume.md.
+    // The SDL window can't participate in SwiftUI transitions, so we
+    // use the pause snapshot as a static double placed at the exact
+    // gameRect position. Once the hero animation finishes, AppState
+    // flips to .playing and live SDL rendering takes over.
 
     @ViewBuilder
     private var resumeContent: some View {

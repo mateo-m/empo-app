@@ -66,22 +66,12 @@ struct GameSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                // ── Gameplay ─────────────────────────────────
                 gameplaySection
-
-                // ── Display ──────────────────────────────────
                 displaySection
-
-                // ── Portrait Layout ──────────────────────────
                 verticalAlignmentSection
-
-                // ── Performance ──────────────────────────────
                 performanceSection
-
-                // ── Engine ───────────────────────────────────
                 engineSection
 
-                // ── Reset ────────────────────────────────────
                 if settings.hasCustomizations {
                     Section {
                         Button("Reset to Defaults", role: .destructive) {

@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// The top-level view that switches between Library and Player based on AppState.
-///
-/// Library is always mounted so the NavigationStack persists across phases.
-/// This lets the reverse hero zoom play when quitting a game. Hidden via
-/// opacity during gameplay so the transparent PlayerView shows SDL beneath.
 struct RootView: View {
     private let appState = AppState.shared
     private let engineState = EngineState.shared
@@ -16,7 +11,7 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            // Library — always mounted, hidden during gameplay
+            // Always mounted so NavigationStack persists across phases
             GameLibraryView(appState: appState, heroNamespace: hero, splashDismissed: splashDismissed)
                 .opacity(appState.phase == .playing ? 0 : 1)
                 .allowsHitTesting(appState.phase != .playing)
@@ -41,7 +36,6 @@ struct RootView: View {
             }
         }
         .onAppear {
-            // Hold the splash, then start exit
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 splashDismissed = true
                 withAnimation(.spring(duration: 0.5, bounce: 0)) {
@@ -90,7 +84,6 @@ private struct SplashView: View {
 
     var body: some View {
         ZStack {
-            // Background — brand colored, fades out on exit
             Color.brand
                 .ignoresSafeArea()
                 .opacity(exiting ? 0 : 1)

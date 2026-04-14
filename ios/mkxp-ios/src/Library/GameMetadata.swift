@@ -1,8 +1,7 @@
 import Foundation
 import UIKit
 
-/// Per-game metadata stored outside the game directory, in `Documents/Metadata/`.
-/// Survives game directory clearing on redeploy. All fields are optional.
+/// Per-game metadata stored in `Documents/Metadata/`, survives game directory clearing.
 struct GameMetadata: Codable {
     var dateAdded: Date?
     var lastPlayed: Date?
@@ -44,26 +43,21 @@ struct GameMetadata: Codable {
 
     /// Cleans up values that could be corrupt from external edits.
     mutating func sanitize() {
-        // Dates must not be in the future
         let now = Date()
         if let d = dateAdded, d > now { dateAdded = now }
         if let d = lastPlayed, d > now { lastPlayed = now }
 
-        // Play time must be non-negative
         if let t = totalPlayTime, t < 0 { totalPlayTime = nil }
 
-        // Custom title must be non-empty after trimming
         if let t = customTitle {
             let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
             customTitle = trimmed.isEmpty ? nil : trimmed
         }
 
-        // Media filenames must not contain path traversal
         if let f = customArtworkFilename, !isValidFilename(f) { customArtworkFilename = nil }
         if let f = customBannerFilename, !isValidFilename(f) { customBannerFilename = nil }
     }
 
-    /// A filename is valid if it has no path separators and no traversal.
     private func isValidFilename(_ name: String) -> Bool {
         !name.isEmpty && !name.contains("/") && !name.contains("\\") && name != "." && name != ".."
     }
@@ -96,7 +90,6 @@ struct GameMetadata: Codable {
 
     // MARK: - Custom Media Paths
 
-    /// Full path to custom artwork image, or nil if not set.
     func customArtworkPath(for gameId: String) -> String? {
         guard let filename = customArtworkFilename else { return nil }
         let path = Self.mediaDirectory(for: gameId)
@@ -104,7 +97,6 @@ struct GameMetadata: Codable {
         return FileManager.default.fileExists(atPath: path) ? path : nil
     }
 
-    /// Full path to custom banner image, or nil if not set.
     func customBannerPath(for gameId: String) -> String? {
         guard let filename = customBannerFilename else { return nil }
         let path = Self.mediaDirectory(for: gameId)
@@ -114,7 +106,6 @@ struct GameMetadata: Codable {
 
     // MARK: - Image Management
 
-    /// Saves an image to the metadata media directory. Returns the filename on success.
     @discardableResult
     static func saveImage(_ image: UIImage, as name: String, for gameId: String) -> String? {
         let fm = FileManager.default
@@ -140,7 +131,6 @@ struct GameMetadata: Codable {
         }
     }
 
-    /// Removes a custom image from the media directory.
     static func removeImage(named filename: String, for gameId: String) {
         let url = mediaDirectory(for: gameId).appendingPathComponent(filename)
         try? FileManager.default.removeItem(at: url)
@@ -148,7 +138,6 @@ struct GameMetadata: Codable {
 
     // MARK: - Disk Size
 
-    /// Computes total disk usage for a game directory (async, can be slow).
     static func diskSize(for directory: URL) async -> Int64 {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {

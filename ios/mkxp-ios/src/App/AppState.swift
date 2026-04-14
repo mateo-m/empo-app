@@ -2,17 +2,11 @@ import Foundation
 import SwiftUI
 import Observation
 
-/// Active game phases. `nil` means the app is at rest (library).
 enum GamePhase: Equatable {
     case loading
     case playing
 }
 
-/// Central state machine driving all UI transitions.
-/// Registers callbacks with the C bridge to react to engine state changes.
-///
-/// Engine-specific state (viewport, snapshots, quit confirmation) lives
-/// in `EngineState` — this class handles app-level orchestration only.
 @MainActor @Observable
 class AppState {
     static let shared = AppState()
@@ -21,13 +15,11 @@ class AppState {
     var selectedGame: GameEntry?
     var errorMessage: String?
 
-    /// The game that is currently paused in the background.
-    /// Non-nil when the engine is alive but suspended on a condvar.
     var pausedGame: GameEntry?
 
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
-    private var sessionStartTime: Date?  // for play time tracking
+    private var sessionStartTime: Date?
 
     private init() {
         let logsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -35,7 +27,6 @@ class AppState {
         try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
         sessionHistoryPath = logsDir.appendingPathComponent("session-history.log").path
 
-        // Reset session history on each app launch
         let dirty = GitInfo.dirty ? " (dirty)" : ""
         let launchTime = Self.isoFormatter.string(from: Date())
         var header = "mkxp-ios session history\n"
@@ -48,12 +39,11 @@ class AppState {
         registerBridgeCallbacks()
     }
 
-    /// Keep only the most recent log files, deleting the oldest ones.
+    /// Keep only the most recent log files.
     private func pruneOldLogs(in logsDir: URL) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: logsDir, includingPropertiesForKeys: [.creationDateKey]) else { return }
 
-        // Only consider per-session log files (UUID-slug-timestamp.log), not session-history.log
         let logFiles = files.filter { $0.lastPathComponent != "session-history.log" && $0.pathExtension == "log" }
         let maxLogFiles = UserDefaults.standard.object(forKey: "maxLogFiles") as? Int ?? 20
         guard logFiles.count > maxLogFiles else { return }
@@ -71,9 +61,7 @@ class AppState {
 
     // MARK: - Actions
 
-    /// Called from NavigationLink's simultaneousGesture when user taps a card.
     func selectGame(_ game: GameEntry) {
-        // If this game is already paused, resume it instead
         if let paused = pausedGame, paused.id == game.id {
             resume()
             return
@@ -84,12 +72,11 @@ class AppState {
         EngineState.shared.reset()
         phase = .loading
 
-        // Apply per-game settings to mkxp.json before the engine reads it
         let gameDir = URL(fileURLWithPath: game.path)
         let settings = GameSettings.load(from: gameDir)
         settings.applyToConfig(in: gameDir)
 
-        // Push bridge-only settings (not in mkxp.json)
+        // These settings go through the bridge, not mkxp.json
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
         let postload = settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
         mkxp_applyPerGameSettings(alignment.bridgeValue, postload)
@@ -100,7 +87,6 @@ class AppState {
         mkxp_setGamePath(game.path)
     }
 
-    /// Creates a per-session debug log file if debug logs are enabled.
     private func configureDebugLog(for game: GameEntry) {
         guard UserDefaults.standard.bool(forKey: "debugLogs") else {
             mkxp_setDebugLogPath(nil)
@@ -120,7 +106,6 @@ class AppState {
         let filename = "\(game.id)-\(slug)-\(timestamp).log"
         let logPath = logsDir.appendingPathComponent(filename).path
 
-        // Write header with git info
         let dirty = GitInfo.dirty ? " (dirty)" : ""
         var header = "mkxp-ios debug log\n"
         header += "commit: \(GitInfo.commit)\(dirty)\n"
@@ -143,8 +128,6 @@ class AppState {
         }
     }
 
-    /// Records the elapsed wall-clock play time for the current session
-    /// and updates the game's metadata. Called when the engine terminates.
     func recordSessionPlayTime() {
         guard let game = selectedGame,
               let startTime = sessionStartTime else { return }
@@ -152,7 +135,6 @@ class AppState {
         let elapsed = Date().timeIntervalSince(startTime)
         sessionStartTime = nil
 
-        // Only record meaningful sessions (> 1 second)
         guard elapsed > 1 else { return }
 
         var metadata = GameMetadata.load(for: game.id)
@@ -162,11 +144,10 @@ class AppState {
     }
 
     /// Returns to the library and tears down the engine.
-    /// Used by quit confirmation, error dismissal, and any other exit path.
     func returnToLibrary() {
         // requestTerminate unblocks the condvar (if paused) and pushes
-        // SDL_QUIT. The engine will skip audio restoration because the
-        // terminate flag is set before the condvar is signaled.
+        // SDL_QUIT. The terminate flag is set first so the engine skips
+        // audio restoration when it wakes from the condvar.
         mkxp_requestTerminate()
         selectedGame = nil
         pausedGame = nil
@@ -174,31 +155,21 @@ class AppState {
         phase = nil
     }
 
-    /// Resume the engine from a paused state and return to gameplay.
-    /// The phase change is delayed so the hero zoom animation can play
-    /// while the library is still visible.  The snapshot stays alive —
-    /// PlayerView picks it up as a fade-out overlay so there's no flash
-    /// at the handoff, and controls are visible immediately.
+    /// Phase change is delayed so the hero zoom animation plays while
+    /// the library is still visible. The snapshot stays alive — PlayerView
+    /// picks it up as a fade-out overlay so there's no flash at handoff.
     func resume() {
         guard pausedGame != nil else { return }
         pausedGame = nil
         EngineState.shared.snapshotCanFade = false
         mkxp_requestResume()
 
-        // Delay phase change so the hero zoom plays with the library visible.
-        // When phase flips to .playing, PlayerView appears instantly (via
-        // .transition(.identity)) with the snapshot overlay at gameRect.
-        // The library fades out underneath — the snapshot stays fully
-        // visible because PlayerView's copy is at full opacity throughout.
+        // Delay so the hero zoom plays before PlayerView appears.
+        // No animation wrapper — an animated fade would expose the
+        // library grid behind the semi-transparent loading view.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            // Instant phase change — no animation.  PlayerView appears
-            // with the snapshot overlay at the exact same gameRect
-            // position, so the handoff is pixel-perfect.  An animated
-            // fade would make the library grid visible behind
-            // GameLoadingView as it becomes semi-transparent.
             self.phase = .playing
-            // Small delay so the resume snapshot settles after the
-            // hero zoom before fading.  Mirrors the fresh-start delay.
+            // Let the snapshot settle before fading to live SDL.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     EngineState.shared.snapshotCanFade = true
             }
@@ -207,20 +178,16 @@ class AppState {
 
     // MARK: - Bridge Callbacks
 
-    /// Registers C function pointer callbacks with the engine bridge.
-    /// These fire on the engine thread; each dispatches to main for UI updates.
+    /// All callbacks fire on the engine thread; each dispatches to main.
     private func registerBridgeCallbacks() {
-        // First frame rendered: fires for both fresh starts and resumes.
-        // For fresh starts (phase == .loading), transition to .playing.
-        // For resumes (phase == .playing), signal the snapshot can fade.
+        // First frame rendered — fresh start transitions to .playing,
+        // resume signals the snapshot can fade.
         mkxp_setFrameRenderedCallback({ _ in
             DispatchQueue.main.async {
                 let state = AppState.shared
                 if state.phase == .loading {
-                    // Small delay so the loading screen settles after the
-                    // hero zoom before dissolving.  Without this, the
-                    // artwork "flashes" for a split second because the
-                    // engine renders its first frame almost immediately.
+                    // Delay so the loading screen settles after the hero
+                    // zoom. Without this the artwork flashes briefly.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         guard state.phase == .loading else { return }
                         Haptics.success()
@@ -234,7 +201,6 @@ class AppState {
             }
         }, nil)
 
-        // Engine terminated: record play time, reload library after quit completes
         mkxp_setEngineTerminatedCallback({ _ in
             DispatchQueue.main.async {
                 AppState.shared.recordSessionPlayTime()
@@ -242,7 +208,6 @@ class AppState {
             }
         }, nil)
 
-        // Game rect changed: update viewport for player layout
         mkxp_setGameRectChangedCallback({ x, y, w, h, _ in
             let newRect = CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h))
             DispatchQueue.main.async {
@@ -253,7 +218,6 @@ class AppState {
             }
         }, nil)
 
-        // Error message: engine encountered a fatal error
         mkxp_setErrorMessageCallback({ msg, _ in
             guard let msg else { return }
             let message = String(cString: msg)
@@ -262,9 +226,9 @@ class AppState {
             }
         }, nil)
 
-        // Engine paused: capture snapshot and return to library (manual) or stay on player (background)
+        // Engine paused — capture snapshot on the engine thread
+        // (pointer is only valid until next pause/reset).
         mkxp_setPausedCallback({ _ in
-            // Capture snapshot on the engine thread (pointer is valid until next pause/reset)
             var snapshotImage: UIImage?
             var w: Int32 = 0
             var h: Int32 = 0
@@ -291,8 +255,7 @@ class AppState {
                 let engineState = EngineState.shared
                 guard appState.phase == .playing else { return }
                 if engineState.isBackgroundPause {
-                    // Silent pause — engine is suspended but UI stays on PlayerView.
-                    // Will auto-resume when app returns to foreground.
+                    // Silent pause — UI stays on PlayerView, auto-resumes on foreground.
                     return
                 }
                 engineState.pauseSnapshot = snapshotImage
@@ -303,7 +266,7 @@ class AppState {
             }
         }, nil)
 
-        // Engine resumed: handled in resume() method
+        // Empty — resume logic lives in resume()
         mkxp_setResumedCallback({ _ in }, nil)
     }
 
