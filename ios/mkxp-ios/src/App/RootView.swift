@@ -61,11 +61,11 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
             if appState.phase == .playing {
-                appState.requestBackgroundPause()
+                engineState.requestBackgroundPause()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            appState.resumeFromBackground()
+            engineState.resumeFromBackground()
         }
     }
 
