@@ -161,17 +161,6 @@ class AppState {
         metadata.save(for: game.id)
     }
 
-    /// User tapped the quit button — show confirmation.
-    func requestQuit() {
-        EngineState.shared.requestQuit()
-    }
-
-    /// User confirmed quit — immediately show library, then tear down engine.
-    func confirmQuit() {
-        EngineState.shared.showQuitConfirm = false
-        returnToLibrary()
-    }
-
     /// Returns to the library and tears down the engine.
     /// Used by quit confirmation, error dismissal, and any other exit path.
     func returnToLibrary() {
@@ -183,12 +172,6 @@ class AppState {
         pausedGame = nil
         EngineState.shared.reset()
         phase = nil
-    }
-
-    /// Request the engine to pause and return to library.
-    /// Called from the toolbar pause button.
-    func requestPause() {
-        EngineState.shared.requestPause()
     }
 
     /// Resume the engine from a paused state and return to gameplay.
@@ -220,18 +203,6 @@ class AppState {
                     EngineState.shared.snapshotCanFade = true
             }
         }
-    }
-
-    /// Resume the engine if it was paused by a background transition.
-    /// Called when the app returns to the foreground.
-    func resumeFromBackground() {
-        EngineState.shared.resumeFromBackground()
-    }
-
-    /// Pause the engine silently without leaving the player.
-    /// Called when the app moves to the background; auto-resumes on foreground.
-    func requestBackgroundPause() {
-        EngineState.shared.requestBackgroundPause()
     }
 
     // MARK: - Bridge Callbacks
