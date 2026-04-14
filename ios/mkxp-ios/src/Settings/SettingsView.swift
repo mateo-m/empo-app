@@ -56,6 +56,18 @@ struct SettingsView: View {
                             Text(position.label).tag(position)
                         }
                     }
+
+                    SettingsToggle(
+                        title: "Interface haptics",
+                        isOn: $settings.interfaceHaptics,
+                        description: "Gentle taps when you press buttons, toggle switches, and navigate around."
+                    )
+
+                    SettingsToggle(
+                        title: "Controller haptics",
+                        isOn: $settings.controllerHaptics,
+                        description: "Vibration feedback on the on-screen game controls while you play."
+                    )
                 } header: {
                     Text("Look & Feel")
                 } footer: {

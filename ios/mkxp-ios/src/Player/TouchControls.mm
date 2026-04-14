@@ -25,6 +25,16 @@ static void injectKey(int scancode, BOOL pressed) {
 }
 
 // ============================================================================
+// MARK: - Controller haptics
+// ============================================================================
+
+static BOOL controllerHapticsEnabled(void) {
+    // Defaults to YES when the key hasn't been set yet
+    NSObject *val = [[NSUserDefaults standardUserDefaults] objectForKey:@"controllerHaptics"];
+    return val ? [[NSUserDefaults standardUserDefaults] boolForKey:@"controllerHaptics"] : YES;
+}
+
+// ============================================================================
 // MARK: - Key event watcher (highlights buttons on hardware key events)
 // ============================================================================
 
@@ -84,6 +94,7 @@ static int scancodeForCharacter(unichar c) {
 
 @interface TCButton ()
 @property (nonatomic, weak) UITouch *trackedTouch;
+@property (nonatomic, strong) UIImpactFeedbackGenerator *haptic;
 @end
 
 @implementation TCButton
@@ -93,6 +104,7 @@ static int scancodeForCharacter(unichar c) {
     if (self) {
         _scancode = sc;
         _label = [label copy];
+        _haptic = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
         self.multipleTouchEnabled = NO;
         self.exclusiveTouch = NO;
         self.layer.cornerRadius = size / 2.0;
@@ -152,6 +164,7 @@ static int scancodeForCharacter(unichar c) {
     _trackedTouch = t;
     self.active = YES;
     injectKey(_scancode, YES);
+    if (controllerHapticsEnabled()) [_haptic impactOccurred];
 }
 
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
@@ -216,6 +229,7 @@ static int scancodeForCharacter(unichar c) {
 
 @interface TCDPadView ()
 @property (nonatomic, weak) UITouch *trackedTouch;
+@property (nonatomic, strong) UISelectionFeedbackGenerator *haptic;
 @end
 
 @implementation TCDPadView
@@ -223,6 +237,7 @@ static int scancodeForCharacter(unichar c) {
 - (instancetype)initWithSize:(CGFloat)size {
     self = [super initWithFrame:CGRectMake(0, 0, size, size)];
     if (self) {
+        _haptic = [[UISelectionFeedbackGenerator alloc] init];
         self.backgroundColor = UIColor.clearColor;
         self.multipleTouchEnabled = NO;
         self.exclusiveTouch = NO;
@@ -324,6 +339,11 @@ static int scancodeForCharacter(unichar c) {
 
     _activeDirections = newDir;
     [self setNeedsDisplay];
+
+    // Tick on direction change (not on release)
+    if (newDir != DPadNone && controllerHapticsEnabled()) {
+        [_haptic selectionChanged];
+    }
 }
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
@@ -338,6 +358,7 @@ static int scancodeForCharacter(unichar c) {
     if (_editing) return;
     UITouch *t = touches.anyObject;
     _trackedTouch = t;
+    if (controllerHapticsEnabled()) [_haptic prepare];
     [self updateDirections:[self directionForTouch:t]];
 }
 
