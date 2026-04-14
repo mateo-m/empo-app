@@ -1,12 +1,14 @@
 import SwiftUI
 
 struct GameLoadingView: View {
+    enum Mode { case loading, resuming }
+
     let game: GameEntry
     var appState = AppState.shared
     var engineState = EngineState.shared
+    var pauseManager = PauseManager.shared
 
-    /// True when this view is shown for a resume (not a fresh load).
-    private var isResume: Bool { engineState.pauseSnapshot != nil }
+    private var mode: Mode { pauseManager.pauseSnapshot != nil ? .resuming : .loading }
 
     @State private var titleVisible = false
     @State private var spinnerVisible = false
@@ -14,15 +16,11 @@ struct GameLoadingView: View {
 
     var body: some View {
         ZStack {
-            // Opaque base — ensures nothing behind this view in the
-            // NavigationStack (e.g. the game card) bleeds through
-            // during the fade-out transition.
             Color.black.ignoresSafeArea()
 
-            if isResume {
-                resumeContent
-            } else {
-                loadingContent
+            switch mode {
+            case .loading:  loadingContent
+            case .resuming: resumeContent
             }
         }
         .navigationBarBackButtonHidden(true)
@@ -84,7 +82,7 @@ struct GameLoadingView: View {
 
     @ViewBuilder
     private var resumeContent: some View {
-        if let snapshot = engineState.pauseSnapshot {
+        if let snapshot = pauseManager.pauseSnapshot {
             let rect = engineState.gameRect
             Image(uiImage: snapshot)
                 .resizable()

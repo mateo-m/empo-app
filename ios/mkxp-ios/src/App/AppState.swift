@@ -15,8 +15,6 @@ class AppState {
     var selectedGame: GameEntry?
     var errorMessage: String?
 
-    var pausedGame: GameEntry?
-
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
     private var sessionStartTime: Date?
@@ -62,14 +60,15 @@ class AppState {
     // MARK: - Actions
 
     func selectGame(_ game: GameEntry) {
-        if let paused = pausedGame, paused.id == game.id {
-            resume()
+        let pauseManager = PauseManager.shared
+        if let paused = pauseManager.pausedGame, paused.id == game.id {
+            pauseManager.resume()
             return
         }
 
-        guard phase == nil, pausedGame == nil else { return }
+        guard phase == nil, pauseManager.pausedGame == nil else { return }
         selectedGame = game
-        EngineState.shared.reset()
+        PauseManager.shared.reset()
         phase = .loading
 
         let gameDir = URL(fileURLWithPath: game.path)
@@ -145,35 +144,10 @@ class AppState {
 
     /// Returns to the library and tears down the engine.
     func returnToLibrary() {
-        // requestTerminate unblocks the condvar (if paused) and pushes
-        // SDL_QUIT. The terminate flag is set first so the engine skips
-        // audio restoration when it wakes from the condvar.
         mkxp_requestTerminate()
         selectedGame = nil
-        pausedGame = nil
-        EngineState.shared.reset()
+        PauseManager.shared.reset()
         phase = nil
-    }
-
-    /// Phase change is delayed so the hero zoom animation plays while
-    /// the library is still visible. The snapshot stays alive — PlayerView
-    /// picks it up as a fade-out overlay so there's no flash at handoff.
-    func resume() {
-        guard pausedGame != nil else { return }
-        pausedGame = nil
-        EngineState.shared.snapshotCanFade = false
-        mkxp_requestResume()
-
-        // Delay so the hero zoom plays before PlayerView appears.
-        // No animation wrapper — an animated fade would expose the
-        // library grid behind the semi-transparent loading view.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            self.phase = .playing
-            // Let the snapshot settle before fading to live SDL.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    EngineState.shared.snapshotCanFade = true
-            }
-        }
     }
 
     // MARK: - Bridge Callbacks
@@ -186,8 +160,6 @@ class AppState {
             DispatchQueue.main.async {
                 let state = AppState.shared
                 if state.phase == .loading {
-                    // Delay so the loading screen settles after the hero
-                    // zoom. Without this the artwork flashes briefly.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         guard state.phase == .loading else { return }
                         Haptics.success()
@@ -196,7 +168,7 @@ class AppState {
                         }
                     }
                 } else if state.phase == .playing {
-                    EngineState.shared.snapshotCanFade = true
+                    PauseManager.shared.snapshotCanFade = true
                 }
             }
         }, nil)
@@ -251,22 +223,10 @@ class AppState {
             }
 
             DispatchQueue.main.async {
-                let appState = AppState.shared
-                let engineState = EngineState.shared
-                guard appState.phase == .playing else { return }
-                if engineState.isBackgroundPause {
-                    // Silent pause — UI stays on PlayerView, auto-resumes on foreground.
-                    return
-                }
-                engineState.pauseSnapshot = snapshotImage
-                appState.pausedGame = appState.selectedGame
-                withAnimation(.spring(duration: 0.25, bounce: 0)) {
-                    appState.phase = nil
-                }
+                PauseManager.shared.handlePausedCallback(snapshot: snapshotImage)
             }
         }, nil)
 
-        // Empty — resume logic lives in resume()
         mkxp_setResumedCallback({ _ in }, nil)
     }
 

@@ -118,14 +118,17 @@ This keeps UIKit alive (rendering the SwiftUI Library) while the C++ engine bloc
 
 ## 6. Callback-Based State Notification
 
-**Problem:** The SwiftUI Library UI and the C++ engine communicate through a C bridge (`ios_bridge.h`). The UI needs to know when the engine changes state (game ready, viewport rect changed, engine terminated).
+**Problem:** The SwiftUI Library UI and the C++ engine communicate through a C bridge (`ios_bridge.h`). The UI needs to know when the engine changes state (first frame rendered, viewport rect changed, engine terminated).
 
 **Solution (`AppState.swift`, `ios_bridge.cpp`):** The bridge provides callback registration functions that the UI registers once at init. Callbacks fire on the engine thread; Swift dispatches to the main thread for UI updates.
 
 ```swift
 // Registered once in AppState.init()
-mkxp_setGameReadyCallback({ _ in
-    DispatchQueue.main.async { AppState.shared.phase = .playing }
+mkxp_setFrameRenderedCallback({ _ in
+    DispatchQueue.main.async {
+        // First frame: transition from .loading to .playing
+        // Resume: signal snapshot can fade
+    }
 }, nil)
 
 mkxp_setEngineTerminatedCallback({ _ in
@@ -133,11 +136,11 @@ mkxp_setEngineTerminatedCallback({ _ in
 }, nil)
 
 mkxp_setGameRectChangedCallback({ x, y, w, h, _ in
-    DispatchQueue.main.async { AppState.shared.gameRect = CGRect(...) }
+    DispatchQueue.main.async { EngineState.shared.gameRect = CGRect(...) }
 }, nil)
 ```
 
-The engine calls these callbacks from `mkxp_setGameReady()`, `mkxp_setEngineTerminated()`, and `mkxp_setGameRect()` respectively. The rect callback only fires when the value actually changes.
+The engine calls these callbacks at the appropriate points. The rect callback only fires when the value actually changes.
 
 ---
 
