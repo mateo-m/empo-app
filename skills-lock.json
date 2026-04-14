@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "9603a428066d7842afdda78037c4ea8b0b45b50bab20fb7452db9f4a08b42d85"
     },
+    "cpp-coding-standards": {
+      "source": "affaan-m/everything-claude-code",
+      "sourceType": "github",
+      "computedHash": "46787c93ed565e48ab670ddbf8204fd144437e66ee9246fa0c651aa7a1f5bf45"
+    },
     "emil-design-eng": {
       "source": "emilkowalski/skill",
       "sourceType": "github",

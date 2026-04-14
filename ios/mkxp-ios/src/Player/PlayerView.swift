@@ -1,79 +1,4 @@
 import SwiftUI
-import Combine
-
-// ============================================================================
-// MARK: - Key Catalog
-// ============================================================================
-
-struct KeyEntry: Identifiable {
-    let id = UUID()
-    let label: String
-    let scancode: Int32
-}
-
-private let keyCatalog: [KeyEntry] = [
-    // Common RPG Maker keys
-    KeyEntry(label: "Z (Confirm)",  scancode: Int32(MKXP_SCANCODE_Z)),
-    KeyEntry(label: "X (Cancel)",   scancode: Int32(MKXP_SCANCODE_X)),
-    KeyEntry(label: "Shift (Dash)", scancode: Int32(MKXP_SCANCODE_LSHIFT)),
-    KeyEntry(label: "Ctrl (Skip)",  scancode: Int32(MKXP_SCANCODE_LCTRL)),
-    KeyEntry(label: "Space",        scancode: Int32(MKXP_SCANCODE_SPACE)),
-    KeyEntry(label: "Enter",        scancode: Int32(MKXP_SCANCODE_RETURN)),
-    KeyEntry(label: "Escape",       scancode: Int32(MKXP_SCANCODE_ESCAPE)),
-    KeyEntry(label: "Tab",          scancode: Int32(MKXP_SCANCODE_TAB)),
-    // Letters
-    KeyEntry(label: "A", scancode: Int32(MKXP_SCANCODE_A)),
-    KeyEntry(label: "B", scancode: Int32(MKXP_SCANCODE_B)),
-    KeyEntry(label: "C", scancode: Int32(MKXP_SCANCODE_C)),
-    KeyEntry(label: "D", scancode: Int32(MKXP_SCANCODE_D)),
-    KeyEntry(label: "E", scancode: Int32(MKXP_SCANCODE_E)),
-    KeyEntry(label: "F", scancode: Int32(MKXP_SCANCODE_F)),
-    KeyEntry(label: "G", scancode: Int32(MKXP_SCANCODE_G)),
-    KeyEntry(label: "H", scancode: Int32(MKXP_SCANCODE_H)),
-    KeyEntry(label: "I", scancode: Int32(MKXP_SCANCODE_I)),
-    KeyEntry(label: "J", scancode: Int32(MKXP_SCANCODE_J)),
-    KeyEntry(label: "K", scancode: Int32(MKXP_SCANCODE_K)),
-    KeyEntry(label: "L", scancode: Int32(MKXP_SCANCODE_L)),
-    KeyEntry(label: "M", scancode: Int32(MKXP_SCANCODE_M)),
-    KeyEntry(label: "N", scancode: Int32(MKXP_SCANCODE_N)),
-    KeyEntry(label: "O", scancode: Int32(MKXP_SCANCODE_O)),
-    KeyEntry(label: "P", scancode: Int32(MKXP_SCANCODE_P)),
-    KeyEntry(label: "Q", scancode: Int32(MKXP_SCANCODE_Q)),
-    KeyEntry(label: "R", scancode: Int32(MKXP_SCANCODE_R)),
-    KeyEntry(label: "S", scancode: Int32(MKXP_SCANCODE_S)),
-    KeyEntry(label: "T", scancode: Int32(MKXP_SCANCODE_T)),
-    KeyEntry(label: "U", scancode: Int32(MKXP_SCANCODE_U)),
-    KeyEntry(label: "V", scancode: Int32(MKXP_SCANCODE_V)),
-    KeyEntry(label: "W", scancode: Int32(MKXP_SCANCODE_W)),
-    KeyEntry(label: "Y", scancode: Int32(MKXP_SCANCODE_Y)),
-    // Numbers
-    KeyEntry(label: "0", scancode: Int32(MKXP_SCANCODE_0)),
-    KeyEntry(label: "1", scancode: Int32(MKXP_SCANCODE_1)),
-    KeyEntry(label: "2", scancode: Int32(MKXP_SCANCODE_2)),
-    KeyEntry(label: "3", scancode: Int32(MKXP_SCANCODE_3)),
-    KeyEntry(label: "4", scancode: Int32(MKXP_SCANCODE_4)),
-    KeyEntry(label: "5", scancode: Int32(MKXP_SCANCODE_5)),
-    KeyEntry(label: "6", scancode: Int32(MKXP_SCANCODE_6)),
-    KeyEntry(label: "7", scancode: Int32(MKXP_SCANCODE_7)),
-    KeyEntry(label: "8", scancode: Int32(MKXP_SCANCODE_8)),
-    KeyEntry(label: "9", scancode: Int32(MKXP_SCANCODE_9)),
-    // Function keys
-    KeyEntry(label: "F1",  scancode: Int32(MKXP_SCANCODE_F1)),
-    KeyEntry(label: "F2",  scancode: Int32(MKXP_SCANCODE_F2)),
-    KeyEntry(label: "F3",  scancode: Int32(MKXP_SCANCODE_F3)),
-    KeyEntry(label: "F4",  scancode: Int32(MKXP_SCANCODE_F4)),
-    KeyEntry(label: "F5",  scancode: Int32(MKXP_SCANCODE_F5)),
-    KeyEntry(label: "F6",  scancode: Int32(MKXP_SCANCODE_F6)),
-    KeyEntry(label: "F7",  scancode: Int32(MKXP_SCANCODE_F7)),
-    KeyEntry(label: "F8",  scancode: Int32(MKXP_SCANCODE_F8)),
-    KeyEntry(label: "F9",  scancode: Int32(MKXP_SCANCODE_F9)),
-    KeyEntry(label: "F10", scancode: Int32(MKXP_SCANCODE_F10)),
-    KeyEntry(label: "F11", scancode: Int32(MKXP_SCANCODE_F11)),
-    KeyEntry(label: "F12", scancode: Int32(MKXP_SCANCODE_F12)),
-    // Special
-    KeyEntry(label: "Alt",       scancode: Int32(MKXP_SCANCODE_LALT)),
-    KeyEntry(label: "Backspace", scancode: Int32(MKXP_SCANCODE_BACKSPACE)),
-]
 
 // ============================================================================
 // MARK: - Constants
@@ -101,19 +26,11 @@ struct PlayerView: View {
     @State private var snapshotOpacity: Double = 1
     @State private var controlsVisible: Bool = true
 
-    // Edit mode state
+    // Edit mode trigger state (dialogs owned by ControlsEditDialogs modifier)
     @State private var showAddSheet = false
     @State private var showResetConfirm = false
     @State private var editingButton: ButtonModel?
     @State private var showEditMenu = false
-    @State private var showLabelEditor = false
-    @State private var showKeyPicker = false
-    @State private var showSizePicker = false
-    @State private var editLabelText = ""
-
-    // Drag state
-    @State private var draggedDPad = false
-    @State private var draggedButtonID: UUID?
 
     var body: some View {
         GeometryReader { geo in
@@ -212,77 +129,13 @@ struct PlayerView: View {
         } message: {
             Text("Are you sure you want to quit the current game?")
         }
-        .confirmationDialog("Add Button", isPresented: $showAddSheet) {
-            ForEach(keyCatalog) { entry in
-                Button(entry.label) {
-                    layout.addButton(label: entry.label, scancode: entry.scancode)
-                }
-            }
-        }
-        .alert("Reset Controls", isPresented: $showResetConfirm) {
-            Button("Reset", role: .destructive) {
-                withAnimation(Motion.standard) {
-                    layout.resetToDefaults()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Restore default layout?")
-        }
-        .confirmationDialog("Edit Button", isPresented: $showEditMenu) {
-            if let btn = editingButton {
-                Button("Change Label") {
-                    editLabelText = btn.label
-                    showLabelEditor = true
-                }
-                Button("Change Key (now: \(scancodeDisplayName(btn.scancode)))") {
-                    showKeyPicker = true
-                }
-                Button("Change Size (now: \(Int(btn.size)))") {
-                    showSizePicker = true
-                }
-                Button("Delete", role: .destructive) {
-                    withAnimation(Motion.snappy) {
-                        layout.removeButton(id: btn.id)
-                    }
-                }
-            }
-        }
-        .alert("Button Label", isPresented: $showLabelEditor) {
-            TextField("Label", text: $editLabelText)
-            Button("OK") {
-                if let btn = editingButton, !editLabelText.isEmpty {
-                    layout.updateButton(id: btn.id, label: editLabelText)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Enter the text to display on this button")
-        }
-        .confirmationDialog("Emulated Key", isPresented: $showKeyPicker) {
-            if let btn = editingButton {
-                ForEach(keyCatalog) { entry in
-                    let prefix = entry.scancode == btn.scancode ? "\u{2713} " : ""
-                    Button("\(prefix)\(entry.label)") {
-                        layout.updateButton(id: btn.id, scancode: entry.scancode)
-                    }
-                }
-            }
-        }
-        .confirmationDialog("Button Size", isPresented: $showSizePicker) {
-            if let btn = editingButton {
-                let sizes: [(String, CGFloat)] = [
-                    ("Small (38)", 38), ("Medium (50)", 50),
-                    ("Default (56)", 56), ("Large (68)", 68), ("XL (80)", 80),
-                ]
-                ForEach(sizes, id: \.1) { name, size in
-                    let prefix = Int(size) == Int(btn.size) ? "\u{2713} " : ""
-                    Button("\(prefix)\(name)") {
-                        layout.updateButton(id: btn.id, size: size)
-                    }
-                }
-            }
-        }
+        .controlsEditDialogs(
+            layout: layout,
+            showAddSheet: $showAddSheet,
+            showResetConfirm: $showResetConfirm,
+            editingButton: $editingButton,
+            showEditMenu: $showEditMenu
+        )
     }
 
     // MARK: - D-Pad
@@ -521,13 +374,6 @@ struct PlayerView: View {
         }
     }
 
-    private func scancodeDisplayName(_ sc: Int32) -> String {
-        for entry in keyCatalog {
-            if entry.scancode == sc { return entry.label }
-        }
-        return "Key \(sc)"
-    }
-
     /// Fade the snapshot overlay to reveal the live SDL surface.
     /// Called when the engine signals its first post-resume frame is on-screen.
     private func startSnapshotFade() {
@@ -541,106 +387,5 @@ struct PlayerView: View {
             engineState.pauseSnapshot = nil
             engineState.snapshotCanFade = false
         }
-    }
-}
-
-// ============================================================================
-// MARK: - Debug Overlay (SwiftUI)
-// ============================================================================
-
-struct DebugOverlayView: View {
-    @State private var fps: Double = 0
-    @State private var gameTitle: String = "--"
-    @State private var rgssVersion: Int32 = 0
-    @State private var ringBuffer = FPSRingBuffer(capacity: 120)
-    @State private var metadataLoaded = false
-    private let maxFPS: Double = 70
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xxs) {
-            Text(gameTitle)
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white)
-
-            Text(rgssVersion > 0 ? "Ruby 1.8 \u{00B7} RGSS\(rgssVersion)" : "Ruby 1.8")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.7))
-
-            Text(mkxp_isGameReady() != 0 ? "Running" : "Loading\u{2026}")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(mkxp_isGameReady() != 0 ? .success : .warning)
-
-            HStack(spacing: Spacing.xs) {
-                Text("\(Int(fps.rounded())) FPS")
-                    .font(.system(size: 17, weight: .bold, design: .monospaced))
-                    .foregroundStyle(fpsColor)
-
-                // FPS Graph
-                Canvas { context, size in
-                    let samples = ringBuffer.samples
-                    guard samples.count >= 2 else { return }
-                    var path = Path()
-                    for (i, sample) in samples.enumerated() {
-                        let x = CGFloat(i) / CGFloat(ringBuffer.capacity - 1) * size.width
-                        let y = size.height - (sample / maxFPS) * size.height
-                        let clamped = max(0, min(size.height, y))
-                        if i == 0 { path.move(to: CGPoint(x: x, y: clamped)) }
-                        else { path.addLine(to: CGPoint(x: x, y: clamped)) }
-                    }
-                    context.stroke(path, with: .color(fpsColor), lineWidth: 1.5)
-                }
-            }
-        }
-        .padding(Spacing.md + Spacing.xxs)
-        .background(Color.black.opacity(Overlay.medium + 0.05))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
-        .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
-            guard mkxp_isEngineTerminated() == 0 else { return }
-            fps = mkxp_getAverageFPS()
-            ringBuffer.append(fps)
-
-            // Load metadata once (title/version don't change mid-session)
-            if !metadataLoaded {
-                rgssVersion = mkxp_getRGSSVersion()
-                if let title = mkxp_getGameTitle(), title[0] != 0 {
-                    gameTitle = String(cString: title)
-                    metadataLoaded = true
-                }
-            }
-        }
-    }
-
-    private var fpsColor: Color {
-        if fps >= 55 { return .success }
-        if fps >= 30 { return .warning }
-        return .destructive
-    }
-}
-
-/// Fixed-size ring buffer for FPS samples. O(1) append, no array shifting.
-private struct FPSRingBuffer {
-    let capacity: Int
-    private var buffer: [Double]
-    private var writeIndex = 0
-    private var count = 0
-
-    init(capacity: Int) {
-        self.capacity = capacity
-        self.buffer = [Double](repeating: 0, count: capacity)
-    }
-
-    mutating func append(_ value: Double) {
-        buffer[writeIndex] = value
-        writeIndex = (writeIndex + 1) % capacity
-        if count < capacity { count += 1 }
-    }
-
-    /// Returns samples in chronological order (oldest first).
-    var samples: [Double] {
-        if count < capacity {
-            return Array(buffer[0..<count])
-        }
-        // Ring wrapped: oldest is at writeIndex, read to end then wrap
-        return Array(buffer[writeIndex..<capacity]) + Array(buffer[0..<writeIndex])
     }
 }
