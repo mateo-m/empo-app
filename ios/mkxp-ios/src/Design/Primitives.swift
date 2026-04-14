@@ -11,13 +11,28 @@ enum Haptics {
     private static let notification = UINotificationFeedbackGenerator()
 
     /// Light tap — card press, small interactions.
-    static func tap() { light.impactOccurred() }
+    static func tap() {
+        guard AppSettings.shared.interfaceHaptics else { return }
+        light.impactOccurred()
+    }
 
     /// Medium impact — import complete, significant action.
-    static func impact() { medium.impactOccurred() }
+    static func impact() {
+        guard AppSettings.shared.interfaceHaptics else { return }
+        medium.impactOccurred()
+    }
 
     /// Success — game launched successfully.
-    static func success() { notification.notificationOccurred(.success) }
+    static func success() {
+        guard AppSettings.shared.interfaceHaptics else { return }
+        notification.notificationOccurred(.success)
+    }
+
+    /// Light tap for game controller buttons.
+    static func controllerTap() {
+        guard AppSettings.shared.controllerHaptics else { return }
+        light.impactOccurred()
+    }
 }
 
 // ============================================================================
