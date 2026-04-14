@@ -6,11 +6,14 @@ struct ImportButton: View {
     var splashDismissed: Bool
     var entranceDelay: TimeInterval
     var headerHeight: CGFloat
+    var emptyStateHeight: CGFloat
+    var emptyStateOffset: CGFloat
 
     @State private var importGlowing = false
     @State private var importRevealed = false
     @State private var importShimmer: CGFloat = -1
     @State private var importMoveTrigger = 0
+    @State private var buttonHeight: CGFloat = 44
 
     var body: some View {
         GeometryReader { geo in
@@ -21,7 +24,8 @@ struct ImportButton: View {
             let collapsedX = geo.size.width - 16 - buttonSize / 2
             let collapsedY = headerHeight / 2
             let expandedX = geo.size.width / 2
-            let expandedY = geo.size.height / 2 + 110
+            let emptyStateBottom = geo.size.height / 2 + emptyStateOffset + emptyStateHeight / 2
+            let expandedY = emptyStateBottom + Spacing.xxxxl + buttonHeight / 2
 
             // Arc: find center of rotation on perpendicular bisector
             let chordDX = collapsedX - expandedX
@@ -54,6 +58,7 @@ struct ImportButton: View {
                 .padding(.vertical, collapsed ? 10 : 12)
             }
             .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { buttonHeight = $0 }
             .overlay {
                 Capsule()
                     .fill(
