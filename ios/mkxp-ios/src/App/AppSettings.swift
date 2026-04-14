@@ -74,6 +74,7 @@ enum ExperimentalFeature: String, CaseIterable, Identifiable {
 
 // MARK: - App Settings
 
+@MainActor
 @Observable
 class AppSettings {
     static let shared = AppSettings()

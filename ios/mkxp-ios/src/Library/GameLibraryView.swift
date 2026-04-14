@@ -42,16 +42,9 @@ struct GameLibraryView: View {
         let readyGames = library.games.filter { $0.status == .ready }
         guard readyGames.count > 1 else { return nil }  // no hero if only 1 game
 
-        var best: (GameEntry, Date)?
-        for game in readyGames {
-            let meta = GameMetadata.load(for: game.id)
-            if let lastPlayed = meta.lastPlayed {
-                if best == nil || lastPlayed > best!.1 {
-                    best = (game, lastPlayed)
-                }
-            }
-        }
-        return best?.0
+        return readyGames
+            .filter { $0.lastPlayed != nil }
+            .max(by: { ($0.lastPlayed ?? .distantPast) < ($1.lastPlayed ?? .distantPast) })
     }
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -63,7 +56,29 @@ struct GameLibraryView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ZStack(alignment: .top) {
+            ZStack {
+                if !showEmpty {
+                    gameContent
+                        .transition(.opacity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay {
+                if showEmpty {
+                    emptyStateContent
+                        .offset(y: -30)
+                        .transition(.emptyState)
+                }
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: Spacing.md) {
+                    libraryHeader
+                    if !showEmpty {
+                        searchBar
+                    }
+                }
+            }
+            .background {
                 // Warm gradient background — subtle brand warmth
                 LinearGradient(
                     colors: [.brand.opacity(0.06), .clear],
@@ -71,21 +86,6 @@ struct GameLibraryView: View {
                     endPoint: .center
                 )
                 .ignoresSafeArea()
-
-                if !showEmpty {
-                    gameContent
-                        .transition(.opacity)
-                } else {
-                    Spacer()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-
-                VStack(spacing: Spacing.md) {
-                    libraryHeader
-                    if !showEmpty {
-                        searchBar
-                    }
-                }
             }
             .animation(Motion.standard, value: showEmpty)
             .onChange(of: splashDismissed) { _, dismissed in
@@ -99,14 +99,6 @@ struct GameLibraryView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                         entranceDelay = 0
                     }
-                }
-            }
-            .overlay {
-                if showEmpty {
-                    emptyStateContent
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .offset(y: -30)
-                        .transition(.emptyState)
                 }
             }
             .overlay(alignment: .topTrailing) {
@@ -283,7 +275,7 @@ struct GameLibraryView: View {
             let collapsedX = geo.size.width - 16 - buttonSize / 2
             let collapsedY = headerHeight / 2
             let expandedX = geo.size.width / 2
-            let expandedY = geo.size.height / 2 + 80
+            let expandedY = geo.size.height / 2 + 110
 
             // Arc: find center of rotation on perpendicular bisector
             let chordDX = collapsedX - expandedX
@@ -390,35 +382,33 @@ struct GameLibraryView: View {
     // MARK: - Game Content
 
     private var gameContent: some View {
-        Group {
+        ScrollView {
             if settings.libraryDisplayMode == .grid {
-                gridContent
+                gridInner
                     .transition(.viewModeSwitch)
             } else {
-                listContent
+                listInner
                     .transition(.viewModeSwitch)
             }
         }
     }
 
-    private var gridContent: some View {
-        ScrollView {
-            VStack(spacing: Spacing.lg) {
-                // Hero card for recently played game
-                if let hero = recentlyPlayed {
-                    heroCard(for: hero)
-                        .transition(.cardAppear)
-                }
-
-                LazyVGrid(columns: columns, spacing: Spacing.lg) {
-                    gridItems
-                }
+    private var gridInner: some View {
+        VStack(spacing: Spacing.lg) {
+            // Hero card for recently played game
+            if let hero = recentlyPlayed {
+                heroCard(for: hero)
+                    .transition(.cardAppear)
             }
-            .padding(.horizontal)
-            .padding(.top, headerHeight + searchBarHeight + Spacing.xxl)
-            .padding(.bottom)
-            .animation(Motion.standard, value: filteredGames.map(\.id))
+
+            LazyVGrid(columns: columns, spacing: Spacing.lg) {
+                gridItems
+            }
         }
+        .padding(.horizontal)
+        .padding(.top, Spacing.lg)
+        .padding(.bottom)
+        .animation(Motion.standard, value: filteredGames.map(\.id))
     }
 
     // MARK: - Hero Card
@@ -478,11 +468,17 @@ struct GameLibraryView: View {
         .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
     }
 
-    private var listContent: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
-                    let isPaused = appState.pausedGame?.id == game.id
+    private var listInner: some View {
+        LazyVStack(spacing: 0) {
+            ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
+                let isPaused = appState.pausedGame?.id == game.id
+                Button {
+                    switch game.status {
+                    case .ready: handleGameTap(game)
+                    case .invalid: showInvalidAlert = true
+                    case .importing: break
+                    }
+                } label: {
                     GameListRow(
                         game: game,
                         isPaused: isPaused,
@@ -492,27 +488,22 @@ struct GameLibraryView: View {
                             showDeleteConfirm = true
                         } : nil
                     )
-                    .onTapGesture {
-                        switch game.status {
-                        case .ready: handleGameTap(game)
-                        case .invalid: showInvalidAlert = true
-                        case .importing: break
-                        }
-                    }
-                    .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
-                    .transition(.cardAppear)
-                    .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
+                }
+                .buttonStyle(.plain)
+                .disabled(game.isImporting)
+                .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                .transition(.cardAppear)
+                .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
-                    if index < filteredGames.count - 1 {
-                        Divider()
-                            .padding(.leading, AppSize.listArtwork + Spacing.lg * 2)
-                    }
+                if index < filteredGames.count - 1 {
+                    Divider()
+                        .padding(.leading, AppSize.listArtwork + Spacing.lg * 2)
                 }
             }
-            .padding(.top, headerHeight + searchBarHeight + Spacing.xxl)
-            .padding(.horizontal)
-            .animation(Motion.standard, value: filteredGames.map(\.id))
         }
+        .padding(.horizontal)
+        .padding(.top, Spacing.lg)
+        .animation(Motion.standard, value: filteredGames.map(\.id))
     }
 
     @ViewBuilder

@@ -31,6 +31,11 @@
       "sourceType": "github",
       "computedHash": "e4d3634171bc6caa7cc8d15f58cd2fb848dab4744493edc56ec14f4b2c8521a0"
     },
+    "swiftui-pro": {
+      "source": "twostraws/swiftui-agent-skill",
+      "sourceType": "github",
+      "computedHash": "ce653d19fd00a4874489003025e9235be542e7134ff3c543e20afeb53fc3bc9a"
+    },
     "ui-ux-pro-max": {
       "source": "nextlevelbuilder/ui-ux-pro-max-skill",
       "sourceType": "github",

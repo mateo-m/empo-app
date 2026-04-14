@@ -39,6 +39,7 @@ struct ButtonModel: Identifiable, Equatable {
 }
 
 /// Manages the layout of touch controls (d-pad + action buttons) with persistence.
+@MainActor
 @Observable
 class ControlsLayout {
     static let shared = ControlsLayout()
