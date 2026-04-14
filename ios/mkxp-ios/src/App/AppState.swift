@@ -12,32 +12,20 @@ enum AppPhase: Equatable {
 
 /// Central state machine driving all UI transitions.
 /// Registers callbacks with the C bridge to react to engine state changes.
+///
+/// Engine-specific state (viewport, snapshots, quit confirmation) lives
+/// in `EngineState` — this class handles app-level orchestration only.
 @Observable
 class AppState {
     static let shared = AppState()
 
     var phase: AppPhase = .library
-    var gameRect: CGRect = .zero
-    var showQuitConfirm = false
     var selectedGame: GameEntry?
     var errorMessage: String?
 
     /// The game that is currently paused in the background.
     /// Non-nil when the engine is alive but suspended on a condvar.
     var pausedGame: GameEntry?
-
-    /// Snapshot of the game viewport captured when pausing.
-    /// The SDL window can't participate in SwiftUI transitions, so this
-    /// frozen frame acts as a static double during the hero zoom animation.
-    /// Positioned at `gameRect` in GameLoadingView to match the portrait layout.
-    /// Cleared once the animation finishes and the live SDL view takes over.
-    /// See docs/pause-resume.md.
-    var pauseSnapshot: UIImage?
-
-    /// Set to true when the engine swaps its first frame after resume.
-    /// PlayerView watches this to know when the live SDL surface is
-    /// visible and it's safe to fade out the snapshot overlay.
-    var snapshotCanFade = false
 
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
@@ -95,8 +83,7 @@ class AppState {
 
         guard phase == .library, pausedGame == nil else { return }
         selectedGame = game
-        pauseSnapshot = nil
-        snapshotCanFade = false
+        EngineState.shared.reset()
         phase = .loading
 
         // Apply per-game settings to mkxp.json before the engine reads it
@@ -178,13 +165,12 @@ class AppState {
 
     /// User tapped the quit button — show confirmation.
     func requestQuit() {
-        guard UserDefaults.standard.bool(forKey: ExperimentalFeature.gameQuit.rawValue) else { return }
-        showQuitConfirm = true
+        EngineState.shared.requestQuit()
     }
 
     /// User confirmed quit — immediately show library, then tear down engine.
     func confirmQuit() {
-        showQuitConfirm = false
+        EngineState.shared.showQuitConfirm = false
         returnToLibrary()
     }
 
@@ -197,24 +183,14 @@ class AppState {
         mkxp_requestTerminate()
         selectedGame = nil
         pausedGame = nil
-        pauseSnapshot = nil
+        EngineState.shared.reset()
         phase = .library
     }
 
     /// Request the engine to pause and return to library.
     /// Called from the toolbar pause button.
     func requestPause() {
-        guard phase == .playing else { return }
-        isBackgroundPause = false
-        mkxp_requestPause()
-    }
-
-    /// Pause the engine silently without leaving the player.
-    /// Called when the app moves to the background; auto-resumes on foreground.
-    func requestBackgroundPause() {
-        guard phase == .playing else { return }
-        isBackgroundPause = true
-        mkxp_requestPause()
+        EngineState.shared.requestPause()
     }
 
     /// Resume the engine from a paused state and return to gameplay.
@@ -225,7 +201,7 @@ class AppState {
     func resume() {
         guard pausedGame != nil else { return }
         pausedGame = nil
-        snapshotCanFade = false
+        EngineState.shared.snapshotCanFade = false
         mkxp_requestResume()
 
         // Delay phase change so the hero zoom plays with the library visible.
@@ -243,7 +219,7 @@ class AppState {
             // Small delay so the resume snapshot settles after the
             // hero zoom before fading.  Mirrors the fresh-start delay.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                self.snapshotCanFade = true
+                    EngineState.shared.snapshotCanFade = true
             }
         }
     }
@@ -251,13 +227,14 @@ class AppState {
     /// Resume the engine if it was paused by a background transition.
     /// Called when the app returns to the foreground.
     func resumeFromBackground() {
-        guard phase == .playing, mkxp_isPaused() else { return }
-        mkxp_requestResume()
+        EngineState.shared.resumeFromBackground()
     }
 
-    /// Whether the current pause was triggered by app backgrounding
-    /// (silent — no UI transition to library).
-    private var isBackgroundPause = false
+    /// Pause the engine silently without leaving the player.
+    /// Called when the app moves to the background; auto-resumes on foreground.
+    func requestBackgroundPause() {
+        EngineState.shared.requestBackgroundPause()
+    }
 
     // MARK: - Bridge Callbacks
 
@@ -283,7 +260,7 @@ class AppState {
                         }
                     }
                 } else if state.phase == .playing {
-                    state.snapshotCanFade = true
+                    EngineState.shared.snapshotCanFade = true
                 }
             }
         }, nil)
@@ -300,8 +277,9 @@ class AppState {
         mkxp_setGameRectChangedCallback({ x, y, w, h, _ in
             let newRect = CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h))
             DispatchQueue.main.async {
-                if AppState.shared.gameRect != newRect {
-                    AppState.shared.gameRect = newRect
+                let engineState = EngineState.shared
+                if engineState.gameRect != newRect {
+                    engineState.gameRect = newRect
                 }
             }
         }, nil)
@@ -340,16 +318,18 @@ class AppState {
             }
 
             DispatchQueue.main.async {
-                guard AppState.shared.phase == .playing else { return }
-                if AppState.shared.isBackgroundPause {
+                let appState = AppState.shared
+                let engineState = EngineState.shared
+                guard appState.phase == .playing else { return }
+                if engineState.isBackgroundPause {
                     // Silent pause — engine is suspended but UI stays on PlayerView.
                     // Will auto-resume when app returns to foreground.
                     return
                 }
-                AppState.shared.pauseSnapshot = snapshotImage
-                AppState.shared.pausedGame = AppState.shared.selectedGame
+                engineState.pauseSnapshot = snapshotImage
+                appState.pausedGame = appState.selectedGame
                 withAnimation(.spring(duration: 0.25, bounce: 0)) {
-                    AppState.shared.phase = .library
+                    appState.phase = .library
                 }
             }
         }, nil)
