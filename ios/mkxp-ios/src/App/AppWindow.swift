@@ -2,7 +2,6 @@ import UIKit
 import SwiftUI
 
 // ============================================================================
-// MARK: - AppRootViewController
 // ============================================================================
 
 private class AppRootViewController: UIViewController {
@@ -35,7 +34,6 @@ private class AppRootViewController: UIViewController {
         hostingController.didMove(toParent: self)
     }
 
-    // MARK: - Orientation & Status Bar
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         .allButUpsideDown
@@ -57,7 +55,6 @@ private class AppRootViewController: UIViewController {
 }
 
 // ============================================================================
-// MARK: - AppWindow
 // ============================================================================
 
 /// Single UIWindow that floats above SDL's window and hosts all app UI.
@@ -92,7 +89,6 @@ class AppWindow: UIWindow {
     // via the bridge. Background touches are harmlessly absorbed — RGSS games
     // use keyboard input, not mouse/touch.
 
-    // MARK: - Key Window Control
 
     /// In library/loading: this window must be key for SwiftUI.
     /// In player: SDL needs key — unless keyboard mode is active.
@@ -110,7 +106,6 @@ class AppWindow: UIWindow {
         }
     }
 
-    // MARK: - Installation
 
     /// Called once at app startup (from AppLoader.m via +load).
     /// Checks for an active scene first, otherwise waits for one.

@@ -10,7 +10,6 @@ struct GameMetadata: Codable {
     var customArtworkFilename: String?  // e.g. "artwork.jpg", stored in Metadata/{id}/
     var customBannerFilename: String?   // e.g. "banner.jpg", stored in Metadata/{id}/
 
-    // MARK: - Directories
 
     private static var metadataDirectory: URL {
         FileManager.default
@@ -26,7 +25,6 @@ struct GameMetadata: Codable {
         metadataDirectory.appendingPathComponent("\(gameId).json")
     }
 
-    // MARK: - Load / Save / Delete
 
     static func load(for gameId: String) -> GameMetadata {
         let url = metadataURL(for: gameId)
@@ -39,7 +37,6 @@ struct GameMetadata: Codable {
         return metadata
     }
 
-    // MARK: - Validation
 
     /// Cleans up values that could be corrupt from external edits.
     mutating func sanitize() {
@@ -88,7 +85,6 @@ struct GameMetadata: Codable {
         }
     }
 
-    // MARK: - Custom Media Paths
 
     func customArtworkPath(for gameId: String) -> String? {
         guard let filename = customArtworkFilename else { return nil }
@@ -104,7 +100,6 @@ struct GameMetadata: Codable {
         return FileManager.default.fileExists(atPath: path) ? path : nil
     }
 
-    // MARK: - Image Management
 
     @discardableResult
     static func saveImage(_ image: UIImage, as name: String, for gameId: String) -> String? {
@@ -136,7 +131,6 @@ struct GameMetadata: Codable {
         try? FileManager.default.removeItem(at: url)
     }
 
-    // MARK: - Disk Size
 
     static func diskSize(for directory: URL) async -> Int64 {
         await withCheckedContinuation { continuation in
@@ -162,7 +156,6 @@ struct GameMetadata: Codable {
         }
     }
 
-    // MARK: - Formatting
 
     static func formatPlayTime(_ seconds: TimeInterval?) -> String {
         guard let seconds, seconds > 0 else { return "Not played yet" }
@@ -183,7 +176,6 @@ struct GameMetadata: Codable {
     }
 }
 
-// MARK: - UIImage Extension
 
 private extension UIImage {
     func resizedToFit(maxDimension: CGFloat) -> UIImage {

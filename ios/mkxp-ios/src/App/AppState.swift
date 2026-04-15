@@ -57,7 +57,6 @@ class AppState {
         }
     }
 
-    // MARK: - Actions
 
     func selectGame(_ game: GameEntry) {
         let pauseManager = PauseManager.shared
@@ -150,7 +149,6 @@ class AppState {
         phase = nil
     }
 
-    // MARK: - Bridge Callbacks
 
     /// All callbacks fire on the engine thread; each dispatches to main.
     private func registerBridgeCallbacks() {

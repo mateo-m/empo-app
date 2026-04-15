@@ -56,7 +56,6 @@ class ControlsLayout {
         }
     }
 
-    // MARK: - Defaults
 
     static let defaultDPadCenter = CGPoint(x: 0.13, y: 0.72)
     static let defaultDPadSize: CGFloat = 140
@@ -73,7 +72,6 @@ class ControlsLayout {
         buttons = Self.defaultButtons
     }
 
-    // MARK: - Persistence
 
     func save() {
         let dpadDict: [String: Any] = [
@@ -109,7 +107,6 @@ class ControlsLayout {
         return true
     }
 
-    // MARK: - Mutations
 
     func addButton(label: String, scancode: Int32) {
         // Strip parenthetical descriptions for display

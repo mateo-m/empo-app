@@ -14,7 +14,6 @@ class EngineState {
 
     private init() {}
 
-    // MARK: - Background Lifecycle
 
     func requestBackgroundPause() {
         guard AppState.shared.phase == .playing else { return }

@@ -28,7 +28,6 @@ struct GameLoadingView: View {
         .containerBackground(.black, for: .navigation)
     }
 
-    // MARK: - Loading (fresh launch)
 
     private var loadingContent: some View {
         ZStack {
@@ -73,7 +72,6 @@ struct GameLoadingView: View {
         }
     }
 
-    // MARK: - Resume (snapshot stand-in)
     //
     // The SDL window can't participate in SwiftUI transitions, so we
     // use the pause snapshot as a static double placed at the exact
@@ -93,7 +91,6 @@ struct GameLoadingView: View {
         }
     }
 
-    // MARK: - Artwork background
 
     @ViewBuilder
     private var artworkBackground: some View {

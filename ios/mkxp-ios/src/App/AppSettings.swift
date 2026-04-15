@@ -49,7 +49,6 @@ enum AppTheme: String, CaseIterable {
     }
 }
 
-// MARK: - Experimental Features
 
 enum ExperimentalFeature: String, CaseIterable, Identifiable {
     case gameQuit = "experimental.gameQuit"
@@ -72,7 +71,6 @@ enum ExperimentalFeature: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - App Settings
 
 @MainActor
 @Observable
@@ -165,7 +163,6 @@ class AppSettings {
         pushViewportBoundsColor()
     }
 
-    // MARK: - Experimental API
 
     func isEnabled(_ feature: ExperimentalFeature) -> Bool {
         experimentalFlags[feature.rawValue] ?? false
@@ -175,7 +172,6 @@ class AppSettings {
         experimentalFlags[feature.rawValue] = value
     }
 
-    // MARK: - Viewport Bounds Color
 
     private static let defaultViewportBoundsColor = Color(.sRGB, red: 1.0, green: 0.584, blue: 0.0, opacity: 0.5)
 

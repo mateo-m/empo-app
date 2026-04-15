@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - Colors
 //
 // 60-30-10 rule:
 //   60% neutral  — system backgrounds, primary/secondary text (iOS defaults)
@@ -30,7 +29,6 @@ extension ShapeStyle where Self == Color {
     static var warning: Color { .warning }
 }
 
-// MARK: - Semantic Colors
 
 extension Color {
     static let destructive = Color(uiColor: UIColor { traits in
@@ -52,7 +50,6 @@ extension Color {
     })
 }
 
-// MARK: - Spacing
 //
 // 4-point grid.
 
@@ -77,7 +74,6 @@ enum Spacing {
     static let _4xl: CGFloat = 40
 }
 
-// MARK: - Corner Radius
 
 enum Radius {
     /// 4pt — small chips, inline badges
@@ -92,7 +88,6 @@ enum Radius {
     static let xl: CGFloat = 24
 }
 
-// MARK: - Shadows
 
 extension View {
     func cardShadow() -> some View {
@@ -112,7 +107,6 @@ extension View {
     }
 }
 
-// MARK: - Animation
 //
 // Named spring presets — all tuned for a playful, fluid feel.
 
@@ -134,7 +128,6 @@ enum Motion {
     /// Gentle transition — background changes, slow reveals.
     static let gentle = Animation.spring(duration: 0.35, bounce: 0.0)
 
-    // MARK: - Durations (for non-spring animations)
 
     /// Fast — opacity fades, color changes (small elements).
     static let durationFast: TimeInterval = 0.18
@@ -144,7 +137,6 @@ enum Motion {
     static let durationSlow: TimeInterval = 0.5
 }
 
-// MARK: - Sizes
 
 enum AppSize {
     static let toolbarButton: CGFloat = 38
@@ -152,7 +144,6 @@ enum AppSize {
     static let infoArtwork: CGFloat = 80
 }
 
-// MARK: - Overlay Opacity
 
 enum Overlay {
     static let light: Double = 0.3

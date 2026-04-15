@@ -27,7 +27,6 @@ struct GameSettingsView: View {
         self.initialSettings = s
     }
 
-    // MARK: - Effective Values
 
     private var effectiveSmoothScaling: Bool {
         settings.smoothScaling ?? defaults.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
@@ -118,7 +117,6 @@ struct GameSettingsView: View {
         .tint(.brand)
     }
 
-    // MARK: - Sections
 
     private var displaySection: some View {
         Section {
@@ -289,7 +287,6 @@ struct GameSettingsView: View {
         }
     }
 
-    // MARK: - Bindings
 
     private var smoothScalingBinding: Binding<Bool> {
         Binding(
@@ -368,7 +365,6 @@ struct GameSettingsView: View {
         )
     }
 
-    // MARK: - Persistence
 
     private func save() {
         settings.save(to: gameDirectory)
@@ -379,7 +375,6 @@ struct GameSettingsView: View {
     }
 }
 
-// MARK: - Vertical Alignment Illustration
 
 /// A tiny illustration showing where the game viewport sits on a phone silhouette.
 private struct VerticalAlignmentIllustration: View {

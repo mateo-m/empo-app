@@ -40,7 +40,6 @@ struct GameEntry: Identifiable, Hashable {
         lhs.id == rhs.id && lhs.status == rhs.status && lhs.title == rhs.title && lhs.path == rhs.path && lhs.artworkPath == rhs.artworkPath && lhs.originalTitle == rhs.originalTitle && lhs.lastPlayed == rhs.lastPlayed
     }
 
-    // MARK: - INI Parsing
 
     static func parseINITitle(at gameDir: URL) -> String? {
         let fm = FileManager.default
