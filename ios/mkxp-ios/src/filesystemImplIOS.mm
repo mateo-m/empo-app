@@ -5,7 +5,7 @@
 //  iOS implementation of filesystem functions
 //
 
-#import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>
 #import <SDL_filesystem.h>
 
 #import "filesystemImpl.h"

@@ -430,10 +430,7 @@ struct GameInfoView: View {
     }
 
     private func sessionLogURL() -> URL? {
-        let logsDir = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Logs", isDirectory: true)
-        let historyLog = logsDir.appendingPathComponent("session-history.log")
+        let historyLog = AppState.logsDirectory.appendingPathComponent("session-history.log")
         return FileManager.default.fileExists(atPath: historyLog.path) ? historyLog : nil
     }
 }

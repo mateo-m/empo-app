@@ -187,21 +187,24 @@ class AppSettings {
         )
     }
 
-    private func saveViewportBoundsColor() {
+    private func resolvedRGBA() -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
         let resolved = UIColor(viewportBoundsColor)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (r, g, b, a)
+    }
+
+    private func saveViewportBoundsColor() {
+        let c = resolvedRGBA()
         let ud = UserDefaults.standard
-        ud.set(Double(r), forKey: "vpBoundsR")
-        ud.set(Double(g), forKey: "vpBoundsG")
-        ud.set(Double(b), forKey: "vpBoundsB")
-        ud.set(Double(a), forKey: "vpBoundsA")
+        ud.set(Double(c.r), forKey: "vpBoundsR")
+        ud.set(Double(c.g), forKey: "vpBoundsG")
+        ud.set(Double(c.b), forKey: "vpBoundsB")
+        ud.set(Double(c.a), forKey: "vpBoundsA")
     }
 
     func pushViewportBoundsColor() {
-        let resolved = UIColor(viewportBoundsColor)
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
-        mkxp_setViewportBoundsColor(Float(r), Float(g), Float(b), Float(a))
+        let c = resolvedRGBA()
+        mkxp_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
     }
 }

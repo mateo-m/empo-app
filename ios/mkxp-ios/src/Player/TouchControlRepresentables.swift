@@ -66,7 +66,6 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         field.spellCheckingType = UITextSpellCheckingType.no
         field.smartQuotesType = UITextSmartQuotesType.no
         field.smartDashesType = UITextSmartDashesType.no
-        field.keyboardAppearance = UIKeyboardAppearance.dark
         field.returnKeyType = UIReturnKeyType.default
         field.inputAccessoryView = TCCreateKeyboardAccessoryView()
         field.text = " " // keep a space so backspace works

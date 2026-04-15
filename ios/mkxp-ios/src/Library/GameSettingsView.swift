@@ -7,7 +7,6 @@ struct GameSettingsView: View {
     @State private var settings: GameSettings
     @State private var cheats: Bool
     @State private var defaults: GameConfigDefaults
-    @State private var needsRestart = false
 
     private let gameDirectory: URL
     private let initialSettings: GameSettings

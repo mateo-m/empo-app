@@ -193,6 +193,7 @@ static int scancodeForCharacter(unichar c) {
 }
 
 - (void)resizeToSize:(CGFloat)newSize animated:(BOOL)animated {
+    (void)animated;
     [self _applySize:newSize];
 }
 

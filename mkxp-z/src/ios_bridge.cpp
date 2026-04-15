@@ -166,10 +166,6 @@ void mkxp_requestTerminate(void) {
     SDL_PushEvent(&event);
 }
 
-int mkxp_isTerminateRequested(void) {
-    return s_terminateRequested.load(std::memory_order_acquire) ? 1 : 0;
-}
-
 int mkxp_isEngineTerminated(void) {
     return s_engineTerminated.load(std::memory_order_acquire) ? 1 : 0;
 }
@@ -243,13 +239,6 @@ void mkxp_setGameRect(float x, float y, float w, float h) {
         cb && (x != oldX || y != oldY || w != oldW || h != oldH)) {
         cb(x, y, w, h, s_gameRectChangedUserdata);
     }
-}
-
-void mkxp_getGameRect(float *x, float *y, float *w, float *h) {
-    if (x) *x = s_gameRectX.load(std::memory_order_relaxed);
-    if (y) *y = s_gameRectY.load(std::memory_order_relaxed);
-    if (w) *w = s_gameRectW.load(std::memory_order_relaxed);
-    if (h) *h = s_gameRectH.load(std::memory_order_relaxed);
 }
 
 void mkxp_getSafeAreaInsets(float *top, float *bottom, float *left, float *right) {
@@ -347,15 +336,6 @@ void mkxp_setErrorMessage(const char *message) {
     }
 }
 
-const char *mkxp_getErrorMessage(void) {
-    // Copy under lock so the returned c_str() remains valid until the
-    // next call from this thread (thread_local lifetime).
-    thread_local std::string errorCopy;
-    std::lock_guard<std::mutex> lock(s_errorMsgMutex);
-    errorCopy = s_errorMessage;
-    return errorCopy.c_str();
-}
-
 void mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *userdata) {
     s_errorMsgUserdata = userdata;
     s_errorMsgCb.store(cb, std::memory_order_release);
@@ -451,7 +431,6 @@ void mkxp_setResumedCallback(mkxp_ResumedCallback cb, void *userdata) {
 void mkxp_setFrameRenderedCallback(mkxp_FrameRenderedCallback cb, void *userdata) {
     s_frameRenderedUserdata = userdata;
     s_frameRenderedCb.store(cb, std::memory_order_release);
-    s_frameRenderedUserdata = userdata;
 }
 
 void mkxp_signalFrameRendered(void) {
