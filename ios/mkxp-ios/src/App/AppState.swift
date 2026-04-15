@@ -171,6 +171,7 @@ class AppState {
 
     func returnToLibrary() {
         terminationExpected = true
+        recordSessionPlayTime()
         removeCrashMarker()
         mkxp_requestTerminate()
         selectedGame = nil
