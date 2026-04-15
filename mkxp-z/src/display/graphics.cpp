@@ -585,8 +585,16 @@ struct GraphicsPrivate {
             // may come from different orientations, producing negative
             // or zero available dimensions.  Clamp to 1 to prevent
             // invalid viewport calculations and GL state corruption.
+            bool isPortrait = winSize.x < winSize.y;
+
+            // In landscape, ignore top/bottom safe areas — only left/right
+            // matter (notch). The home indicator overlaps the game but
+            // auto-hides during gameplay.
+            int effectiveSaTop = isPortrait ? saTopPx : 0;
+            int effectiveSaBot = isPortrait ? saBotPx : 0;
+
             int rawAvailW = winSize.x - saLeftPx - saRightPx;
-            int rawAvailH = winSize.y - saTopPx  - saBotPx;
+            int rawAvailH = winSize.y - effectiveSaTop - effectiveSaBot;
             int availW = std::max(1, rawAvailW);
             int availH = std::max(1, rawAvailH);
 
@@ -636,9 +644,9 @@ struct GraphicsPrivate {
                     scOffset.y = (topY + centerY) / 2;
                 }
             } else {
-                // Landscape: center within safe area
+                // Landscape: center within available area (no top/bottom safe area)
                 scOffset.x = saLeftPx + (availW - scSize.x) / 2;
-                scOffset.y = saBotPx  + (availH - scSize.y) / 2;
+                scOffset.y = (availH - scSize.y) / 2;
             }
         }
 #else
