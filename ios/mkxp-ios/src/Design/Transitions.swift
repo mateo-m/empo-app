@@ -1,0 +1,146 @@
+import SwiftUI
+
+struct EmptyStateView: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+    var revealed: Bool = true
+    var initialDelay: TimeInterval = 0.2
+    static let staggerInterval: TimeInterval = 0.1
+    static let elementCount = 3
+
+    @State private var iconAppeared = false
+    @State private var titleAppeared = false
+    @State private var subtitleAppeared = false
+    @State private var floating = false
+
+    var body: some View {
+        VStack(spacing: Spacing.lg) {
+            Image(systemName: icon)
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+                .offset(y: floating ? -6 : 6)
+                .animation(
+                    .easeInOut(duration: 2.4).repeatForever(autoreverses: true),
+                    value: floating
+                )
+                .opacity(iconAppeared ? 1 : 0)
+                .offset(y: iconAppeared ? 0 : 12)
+            Text(title)
+                .font(.title2)
+                .fontWeight(.bold)
+                .opacity(titleAppeared ? 1 : 0)
+                .offset(y: titleAppeared ? 0 : 12)
+            Text(subtitle)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .opacity(subtitleAppeared ? 1 : 0)
+                .offset(y: subtitleAppeared ? 0 : 12)
+        }
+        .accessibilityElement(children: .combine)
+        .onChange(of: revealed, initial: true) {
+            guard revealed, !iconAppeared else { return }
+            let spring = Animation.spring(duration: 0.3, bounce: 0)
+            let interval = Self.staggerInterval
+            withAnimation(spring.delay(initialDelay)) {
+                iconAppeared = true
+            }
+            withAnimation(spring.delay(initialDelay + interval)) {
+                titleAppeared = true
+            }
+            withAnimation(spring.delay(initialDelay + interval * 2)) {
+                subtitleAppeared = true
+            }
+            // Start floating after all elements reveal
+            let totalDelay = initialDelay + interval * 2 + 0.3
+            DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay) {
+                floating = true
+            }
+        }
+    }
+}
+
+struct StaggeredAppearance: ViewModifier {
+    let index: Int
+    let trigger: UUID
+    var initialDelay: TimeInterval = 0
+
+    private var delay: Double { initialDelay + Double(index) * 0.04 }
+
+    @State private var visible = true
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(visible ? 1 : 0)
+            .offset(y: visible ? 0 : 12)
+            .onChange(of: trigger) {
+                visible = false
+                DispatchQueue.main.async {
+                    withAnimation(Motion.standard.delay(delay)) {
+                        visible = true
+                    }
+                }
+            }
+    }
+}
+
+extension View {
+    func staggered(index: Int, trigger: UUID, initialDelay: TimeInterval = 0) -> some View {
+        modifier(StaggeredAppearance(index: index, trigger: trigger, initialDelay: initialDelay))
+    }
+}
+
+struct EmptyStateTransition: ViewModifier {
+    let active: Bool
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(active ? 0.8 : 1)
+            .opacity(active ? 0 : 1)
+            .blur(radius: active ? 10 : 0)
+    }
+}
+
+struct CardTransition: ViewModifier {
+    let active: Bool
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(active ? 0.8 : 1)
+            .opacity(active ? 0 : 1)
+            .blur(radius: active ? 6 : 0)
+    }
+}
+
+struct ViewModeSwitchTransition: ViewModifier {
+    let active: Bool
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(active ? 0.8 : 1)
+            .opacity(active ? 0 : 1)
+            .blur(radius: active ? 10 : 0)
+    }
+}
+
+extension AnyTransition {
+    static var emptyState: AnyTransition {
+        .modifier(
+            active: EmptyStateTransition(active: true),
+            identity: EmptyStateTransition(active: false)
+        )
+    }
+
+    static var cardAppear: AnyTransition {
+        .modifier(
+            active: CardTransition(active: true),
+            identity: CardTransition(active: false)
+        )
+    }
+
+    static var viewModeSwitch: AnyTransition {
+        .modifier(
+            active: ViewModeSwitchTransition(active: true),
+            identity: ViewModeSwitchTransition(active: false)
+        )
+    }
+}
