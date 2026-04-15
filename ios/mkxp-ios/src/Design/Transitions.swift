@@ -122,6 +122,18 @@ struct ViewModeSwitchTransition: ViewModifier {
     }
 }
 
+struct ControlTransition: ViewModifier {
+    let active: Bool
+    let anchor: UnitPoint
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(active ? 0.8 : 1, anchor: anchor)
+            .opacity(active ? 0 : 1)
+            .blur(radius: active ? 6 : 0)
+    }
+}
+
 extension AnyTransition {
     static var emptyState: AnyTransition {
         .modifier(
@@ -141,6 +153,13 @@ extension AnyTransition {
         .modifier(
             active: ViewModeSwitchTransition(active: true),
             identity: ViewModeSwitchTransition(active: false)
+        )
+    }
+
+    static func controlAppear(anchor: UnitPoint) -> AnyTransition {
+        .modifier(
+            active: ControlTransition(active: true, anchor: anchor),
+            identity: ControlTransition(active: false, anchor: anchor)
         )
     }
 }

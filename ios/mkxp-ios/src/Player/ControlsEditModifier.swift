@@ -1,18 +1,129 @@
 import SwiftUI
 
 
+struct ButtonEditSheet: View {
+    var layout: ControlsLayout
+    let buttonID: UUID
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var labelText = ""
+
+    private let sizes: [(String, CGFloat)] = [
+        ("Small", 44), ("Medium", 50),
+        ("Default", 56), ("Large", 68), ("Extra large", 80),
+    ]
+
+    private var button: ButtonModel? {
+        layout.buttons.first { $0.id == buttonID }
+    }
+
+    var body: some View {
+        NavigationStack {
+            if let button {
+                List {
+                    Section {
+                        HStack {
+                            Text("Label")
+                            Spacer()
+                            TextField("Label", text: $labelText)
+                                .multilineTextAlignment(.trailing)
+                                .onChange(of: labelText) { _, newValue in
+                                    if !newValue.isEmpty {
+                                        layout.updateButton(id: buttonID, label: newValue)
+                                    }
+                                }
+                        }
+
+                        NavigationLink {
+                            keyPickerList(current: button.scancode)
+                        } label: {
+                            LabeledContent("Key", value: scancodeDisplayName(button.scancode))
+                        }
+                    }
+
+                    Section("Size") {
+                        ForEach(sizes, id: \.1) { name, size in
+                            HStack {
+                                Text(name)
+                                Spacer()
+                                Text("\(Int(size))pt")
+                                    .foregroundStyle(.secondary)
+                                if Int(size) == Int(button.size) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(.brand)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                layout.updateButton(id: buttonID, size: size)
+                            }
+                        }
+                    }
+
+                Section {
+                    Button {
+                        dismiss()
+                        withAnimation(Motion.snappy) {
+                            layout.removeButton(id: buttonID)
+                        }
+                    } label: {
+                        Text("Delete button")
+                    }
+                    .buttonStyle(.secondary(tint: .destructive))
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg))
+                }
+                }
+                .navigationTitle("Edit button")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            AppWindow.setAllowKeyWindow(true)
+            labelText = button?.label ?? ""
+        }
+        .onDisappear {
+            AppWindow.setAllowKeyWindow(false)
+        }
+    }
+
+    private func keyPickerList(current scancode: Int32) -> some View {
+        List {
+            ForEach(keyCatalog) { entry in
+                HStack {
+                    Text(entry.label)
+                    Spacer()
+                    if entry.scancode == scancode {
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(.brand)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    layout.updateButton(id: buttonID, scancode: entry.scancode)
+                }
+            }
+        }
+        .navigationTitle("Emulated key")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+
 struct ControlsEditDialogs: ViewModifier {
     var layout: ControlsLayout
 
     @Binding var showAddSheet: Bool
     @Binding var showResetConfirm: Bool
     @Binding var editingButton: ButtonModel?
-    @Binding var showEditMenu: Bool
-
-    @State private var showLabelEditor = false
-    @State private var showKeyPicker = false
-    @State private var showSizePicker = false
-    @State private var editLabelText = ""
 
     func body(content: Content) -> some View {
         content
@@ -25,67 +136,14 @@ struct ControlsEditDialogs: ViewModifier {
             }
             .alert("Reset Controls", isPresented: $showResetConfirm) {
                 Button("Reset", role: .destructive) {
-                    withAnimation(Motion.standard) {
-                        layout.resetToDefaults()
-                    }
+                    layout.resetWithStagger()
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Restore default layout?")
             }
-            .confirmationDialog("Edit Button", isPresented: $showEditMenu) {
-                if let btn = editingButton {
-                    Button("Change Label") {
-                        editLabelText = btn.label
-                        showLabelEditor = true
-                    }
-                    Button("Change Key (now: \(scancodeDisplayName(btn.scancode)))") {
-                        showKeyPicker = true
-                    }
-                    Button("Change Size (now: \(Int(btn.size)))") {
-                        showSizePicker = true
-                    }
-                    Button("Delete", role: .destructive) {
-                        withAnimation(Motion.snappy) {
-                            layout.removeButton(id: btn.id)
-                        }
-                    }
-                }
-            }
-            .alert("Button Label", isPresented: $showLabelEditor) {
-                TextField("Label", text: $editLabelText)
-                Button("OK") {
-                    if let btn = editingButton, !editLabelText.isEmpty {
-                        layout.updateButton(id: btn.id, label: editLabelText)
-                    }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Enter the text to display on this button")
-            }
-            .confirmationDialog("Emulated Key", isPresented: $showKeyPicker) {
-                if let btn = editingButton {
-                    ForEach(keyCatalog) { entry in
-                        let prefix = entry.scancode == btn.scancode ? "\u{2713} " : ""
-                        Button("\(prefix)\(entry.label)") {
-                            layout.updateButton(id: btn.id, scancode: entry.scancode)
-                        }
-                    }
-                }
-            }
-            .confirmationDialog("Button Size", isPresented: $showSizePicker) {
-                if let btn = editingButton {
-                    let sizes: [(String, CGFloat)] = [
-                        ("Small (38)", 38), ("Medium (50)", 50),
-                        ("Default (56)", 56), ("Large (68)", 68), ("XL (80)", 80),
-                    ]
-                    ForEach(sizes, id: \.1) { name, size in
-                        let prefix = Int(size) == Int(btn.size) ? "\u{2713} " : ""
-                        Button("\(prefix)\(name)") {
-                            layout.updateButton(id: btn.id, size: size)
-                        }
-                    }
-                }
+            .sheet(item: $editingButton) { button in
+                ButtonEditSheet(layout: layout, buttonID: button.id)
             }
     }
 }
@@ -95,15 +153,13 @@ extension View {
         layout: ControlsLayout,
         showAddSheet: Binding<Bool>,
         showResetConfirm: Binding<Bool>,
-        editingButton: Binding<ButtonModel?>,
-        showEditMenu: Binding<Bool>
+        editingButton: Binding<ButtonModel?>
     ) -> some View {
         modifier(ControlsEditDialogs(
             layout: layout,
             showAddSheet: showAddSheet,
             showResetConfirm: showResetConfirm,
-            editingButton: editingButton,
-            showEditMenu: showEditMenu
+            editingButton: editingButton
         ))
     }
 }

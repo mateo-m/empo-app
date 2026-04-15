@@ -7,6 +7,7 @@ import SwiftUI
 struct DPadRepresentable: UIViewRepresentable {
     var size: CGFloat
     var editing: Bool
+    var dragging: Bool
 
     func makeUIView(context: Context) -> TCDPadView {
         let dpad = TCDPadView(size: size)! // swiftlint:disable:this force_unwrapping
@@ -15,6 +16,7 @@ struct DPadRepresentable: UIViewRepresentable {
 
     func updateUIView(_ dpad: TCDPadView, context: Context) {
         dpad.editing = editing
+        dpad.dragging = dragging
     }
 }
 
@@ -27,6 +29,7 @@ struct ActionButtonRepresentable: UIViewRepresentable {
     var scancode: Int32
     var buttonSize: CGFloat
     var editing: Bool
+    var dragging: Bool
 
     func makeUIView(context: Context) -> TCButton {
         let btn = TCButton(label: label, scancode: scancode, size: buttonSize)! // swiftlint:disable:this force_unwrapping
@@ -35,6 +38,7 @@ struct ActionButtonRepresentable: UIViewRepresentable {
 
     func updateUIView(_ btn: TCButton, context: Context) {
         btn.editing = editing
+        btn.dragging = dragging
         if btn.label != label {
             btn.updateLabel(label)
         }

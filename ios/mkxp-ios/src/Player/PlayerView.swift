@@ -2,6 +2,8 @@ import SwiftUI
 
 
 private let kToolbarIdleDelay: TimeInterval = 3.0
+private let kControlsZonePadding: CGFloat = 12.0
+private let kControlsZoneInnerPadding: CGFloat = 6.0
 
 
 struct PlayerView: View {
@@ -26,26 +28,34 @@ struct PlayerView: View {
     @State private var showAddSheet = false
     @State private var showResetConfirm = false
     @State private var editingButton: ButtonModel?
-    @State private var showEditMenu = false
+    @State private var draggingDPad = false
+    @State private var draggingButtonID: UUID?
 
     var body: some View {
         GeometryReader { geo in
             let isPortrait = geo.size.height > geo.size.width
             let gameRect = engineState.gameRect
             let safeArea = geo.safeAreaInsets
+            let toolbarBtnSize = isPortrait && gameRect.height > 0 ? AppSize.toolbarButton - 8 : AppSize.toolbarButton
+            let controlsMinY = toolbarBottomY(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize)
 
             ZStack {
                 // Transparent — passes touches through to SDL
                 Color.clear
                     .allowsHitTesting(false)
 
+                // Edit mode: visible zone showing where controls can be placed
+                if editMode {
+                    editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
+                }
+
                 if !controlsHidden && controlsVisible {
                     // D-Pad
-                    dpadView(in: geo)
+                    dpadView(in: geo, controlsMinY: controlsMinY)
 
                     // Action buttons
-                    ForEach(layout.buttons) { button in
-                        actionButtonView(button: button, in: geo)
+                    ForEach(Array(layout.buttons.enumerated()), id: \.element.id) { index, button in
+                        actionButtonView(button: button, index: index, in: geo, controlsMinY: controlsMinY)
                     }
                 }
 
@@ -128,72 +138,94 @@ struct PlayerView: View {
             layout: layout,
             showAddSheet: $showAddSheet,
             showResetConfirm: $showResetConfirm,
-            editingButton: $editingButton,
-            showEditMenu: $showEditMenu
+            editingButton: $editingButton
         )
     }
 
 
     @ViewBuilder
-    private func dpadView(in geo: GeometryProxy) -> some View {
+    private func dpadView(in geo: GeometryProxy, controlsMinY: CGFloat) -> some View {
         let size = layout.dpadSize
-        let pos = absolutePosition(for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size), safeArea: geo.safeAreaInsets)
+        let pos = absolutePosition(for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size), safeArea: geo.safeAreaInsets, controlsMinY: controlsMinY)
+        let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
 
-        DPadRepresentable(size: size, editing: editMode)
+        DPadRepresentable(size: size, editing: editMode, dragging: draggingDPad)
             .frame(width: size, height: size)
+            .scaleEffect(draggingDPad ? 1.08 : 1.0)
+            .animation(.spring(duration: Motion.durationFast, bounce: 0), value: draggingDPad)
             .position(pos)
-            .gesture(dpadDragGesture(in: geo), including: editMode ? .all : .none)
+            .transition(.controlAppear(anchor: anchor))
+            .gesture(dpadDragGesture(in: geo, controlsMinY: controlsMinY), including: editMode ? .all : .none)
     }
 
-    private func dpadDragGesture(in geo: GeometryProxy) -> some Gesture {
+    private func dpadDragGesture(in geo: GeometryProxy, controlsMinY: CGFloat) -> some Gesture {
         DragGesture()
             .onChanged { value in
+                if !draggingDPad { draggingDPad = true }
                 let newCenter = value.location
-                let clamped = clampToSafeArea(newCenter, controlSize: layout.dpadSize, in: geo)
+                let clamped = clampToSafeArea(newCenter, controlSize: layout.dpadSize, in: geo, controlsMinY: controlsMinY)
                 layout.dpadRelativeCenter = CGPoint(
                     x: clamped.x / geo.size.width,
                     y: clamped.y / geo.size.height
                 )
             }
             .onEnded { _ in
+                draggingDPad = false
                 layout.save()
             }
     }
 
 
     @ViewBuilder
-    private func actionButtonView(button: ButtonModel, in geo: GeometryProxy) -> some View {
-        let pos = absolutePosition(for: button.relativeCenter, in: geo.size, controlSize: CGSize(width: button.size, height: button.size), safeArea: geo.safeAreaInsets)
+    private func actionButtonView(button: ButtonModel, index: Int, in geo: GeometryProxy, controlsMinY: CGFloat) -> some View {
+        let pos = absolutePosition(for: button.relativeCenter, in: geo.size, controlSize: CGSize(width: button.size, height: button.size), safeArea: geo.safeAreaInsets, controlsMinY: controlsMinY)
+        let isDragging = draggingButtonID == button.id
+        let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
 
         ActionButtonRepresentable(
             label: button.label,
             scancode: button.scancode,
             buttonSize: button.size,
-            editing: editMode
+            editing: editMode,
+            dragging: isDragging
         )
         .frame(width: button.size, height: button.size)
+        .onTapGesture {
+            guard editMode else { return }
+            editingButton = button
+        }
+        .overlay(alignment: .topTrailing) {
+            if editMode && !isDragging {
+                Button {
+                    withAnimation(Motion.snappy) {
+                        layout.removeButton(id: button.id)
+                    }
+                } label: {
+                    Chip(systemImage: "xmark", tint: .destructive)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .scaleEffect(isDragging ? 1.08 : 1.0)
+        .animation(.spring(duration: Motion.durationFast, bounce: 0), value: isDragging)
         .position(pos)
-        .gesture(buttonDragGesture(id: button.id, size: button.size, in: geo), including: editMode ? .all : .none)
-        .simultaneousGesture(
-            TapGesture().onEnded {
-                editingButton = button
-                showEditMenu = true
-            },
-            including: editMode ? .all : .none
-        )
+        .transition(.controlAppear(anchor: anchor))
+        .gesture(buttonDragGesture(id: button.id, size: button.size, in: geo, controlsMinY: controlsMinY), including: editMode ? .all : .none)
     }
 
-    private func buttonDragGesture(id: UUID, size: CGFloat, in geo: GeometryProxy) -> some Gesture {
+    private func buttonDragGesture(id: UUID, size: CGFloat, in geo: GeometryProxy, controlsMinY: CGFloat) -> some Gesture {
         DragGesture()
             .onChanged { value in
+                if draggingButtonID != id { draggingButtonID = id }
                 let newCenter = value.location
-                let clamped = clampToSafeArea(newCenter, controlSize: size, in: geo)
+                let clamped = clampToSafeArea(newCenter, controlSize: size, in: geo, controlsMinY: controlsMinY)
                 layout.updateButton(id: id, relativeCenter: CGPoint(
                     x: clamped.x / geo.size.width,
                     y: clamped.y / geo.size.height
                 ))
             }
             .onEnded { _ in
+                draggingButtonID = nil
                 layout.save()
             }
     }
@@ -267,6 +299,54 @@ struct PlayerView: View {
     }
 
 
+    @ViewBuilder
+    private func editZoneBackground(controlsMinY: CGFloat, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
+        let bounds = zoneBounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
+        let radii = zoneCornerRadii(safeArea: safeArea)
+
+        UnevenRoundedRectangle(
+            topLeadingRadius: radii.top,
+            bottomLeadingRadius: radii.bottom,
+            bottomTrailingRadius: radii.bottom,
+            topTrailingRadius: radii.top
+        )
+        .strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5)
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: radii.top,
+                bottomLeadingRadius: radii.bottom,
+                bottomTrailingRadius: radii.bottom,
+                topTrailingRadius: radii.top
+            )
+            .fill(Color.white.opacity(0.04))
+        )
+        .frame(width: bounds.width, height: bounds.height)
+        .position(x: bounds.midX, y: bounds.midY)
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
+
+    private func zoneBounds(controlsMinY: CGFloat, safeArea: EdgeInsets, geoSize: CGSize) -> CGRect {
+        let pad = kControlsZonePadding
+        let top = controlsMinY + pad
+        let bottom = geoSize.height - safeArea.bottom - pad
+        let leading = safeArea.leading + pad
+        let trailing = geoSize.width - safeArea.trailing - pad
+        return CGRect(x: leading, y: top, width: trailing - leading, height: bottom - top)
+    }
+
+    private func zoneCornerRadii(safeArea: EdgeInsets) -> (top: CGFloat, bottom: CGFloat) {
+        let pad = kControlsZonePadding
+        let deviceCorner = (UIScreen.main.value(forKey: "displayCornerRadius") as? CGFloat) ?? 55
+        let horizontalGap = safeArea.leading + pad
+        let bottomGap = safeArea.bottom + pad
+        let minGap = min(horizontalGap, bottomGap)
+        let bottom = max(deviceCorner - minGap, Radius.sm)
+        let top = Radius.xl
+        return (top, bottom)
+    }
+
+
     private func toolbarOrigin(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize, btnSize: CGFloat, gap: CGFloat, count: CGFloat) -> CGPoint {
         let totalW = count * btnSize + (count - 1) * gap
         if isPortrait && gameRect.height > 0 {
@@ -290,24 +370,66 @@ struct PlayerView: View {
         }
     }
 
-    private func absolutePosition(for relativeCenter: CGPoint, in size: CGSize, controlSize: CGSize, safeArea: EdgeInsets) -> CGPoint {
-        let hw = controlSize.width * 0.5
-        let hh = controlSize.height * 0.5
-        let minX = safeArea.leading + hw
-        let minY = safeArea.top + hh
-        let maxX = size.width - safeArea.trailing - hw
-        let maxY = size.height - safeArea.bottom - hh
-        let cx = max(minX, min(relativeCenter.x * size.width, maxX))
-        let cy = max(minY, min(relativeCenter.y * size.height, maxY))
-        return CGPoint(x: cx, y: cy)
+    private func toolbarBottomY(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat) -> CGFloat {
+        if isPortrait && gameRect.height > 0 {
+            return gameRect.origin.y + gameRect.height + 8 + btnSize + 4
+        } else {
+            return safeArea.top + 4 + btnSize + 4
+        }
     }
 
-    private func clampToSafeArea(_ point: CGPoint, controlSize: CGFloat, in geo: GeometryProxy) -> CGPoint {
+    private func absolutePosition(for relativeCenter: CGPoint, in size: CGSize, controlSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat) -> CGPoint {
+        let pad = kControlsZonePadding + kControlsZoneInnerPadding
+        let hw = controlSize.width * 0.5
+        let hh = controlSize.height * 0.5
+        let minX = safeArea.leading + pad + hw
+        let minY = max(safeArea.top + pad + hh, controlsMinY + pad + hh)
+        let maxX = size.width - safeArea.trailing - pad - hw
+        let maxY = size.height - safeArea.bottom - pad - hh
+        let cx = max(minX, min(relativeCenter.x * size.width, maxX))
+        let cy = max(minY, min(relativeCenter.y * size.height, maxY))
+        let zone = zoneBounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: size)
+        let radii = zoneCornerRadii(safeArea: safeArea)
+        return clampToRoundedCorners(CGPoint(x: cx, y: cy), controlHalf: max(hw, hh), zone: zone, radii: radii)
+    }
+
+    private func clampToSafeArea(_ point: CGPoint, controlSize: CGFloat, in geo: GeometryProxy, controlsMinY: CGFloat) -> CGPoint {
         let safe = geo.safeAreaInsets
+        let pad = kControlsZonePadding + kControlsZoneInnerPadding
         let hw = controlSize * 0.5
-        let x = max(safe.leading + hw, min(point.x, geo.size.width - safe.trailing - hw))
-        let y = max(safe.top + hw, min(point.y, geo.size.height - safe.bottom - hw))
-        return CGPoint(x: x, y: y)
+        let x = max(safe.leading + pad + hw, min(point.x, geo.size.width - safe.trailing - pad - hw))
+        let minY = max(safe.top + pad + hw, controlsMinY + pad + hw)
+        let y = max(minY, min(point.y, geo.size.height - safe.bottom - pad - hw))
+        let zone = zoneBounds(controlsMinY: controlsMinY, safeArea: safe, geoSize: geo.size)
+        let radii = zoneCornerRadii(safeArea: safe)
+        return clampToRoundedCorners(CGPoint(x: x, y: y), controlHalf: hw, zone: zone, radii: radii)
+    }
+
+    private func clampToRoundedCorners(_ point: CGPoint, controlHalf: CGFloat, zone: CGRect, radii: (top: CGFloat, bottom: CGFloat)) -> CGPoint {
+        var p = point
+        let corners: [(cx: CGFloat, cy: CGFloat, r: CGFloat)] = [
+            (zone.minX + radii.top, zone.minY + radii.top, radii.top),
+            (zone.maxX - radii.top, zone.minY + radii.top, radii.top),
+            (zone.minX + radii.bottom, zone.maxY - radii.bottom, radii.bottom),
+            (zone.maxX - radii.bottom, zone.maxY - radii.bottom, radii.bottom),
+        ]
+        for corner in corners {
+            let inCornerX = (p.x < corner.cx && corner.cx <= zone.minX + max(radii.top, radii.bottom))
+                         || (p.x > corner.cx && corner.cx >= zone.maxX - max(radii.top, radii.bottom))
+            let inCornerY = (p.y < corner.cy && corner.cy <= zone.minY + max(radii.top, radii.bottom))
+                         || (p.y > corner.cy && corner.cy >= zone.maxY - max(radii.top, radii.bottom))
+            guard inCornerX && inCornerY else { continue }
+            let dx = p.x - corner.cx
+            let dy = p.y - corner.cy
+            let dist = sqrt(dx * dx + dy * dy)
+            let maxDist = corner.r - controlHalf - kControlsZoneInnerPadding
+            if maxDist > 0 && dist > maxDist {
+                let scale = maxDist / dist
+                p.x = corner.cx + dx * scale
+                p.y = corner.cy + dy * scale
+            }
+        }
+        return p
     }
 
 
