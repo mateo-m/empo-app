@@ -76,11 +76,6 @@ struct RootView: View {
 private struct SplashView: View {
     let exiting: Bool
     @State private var entered = false
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var contentColor: Color {
-        colorScheme == .dark ? .black : .white
-    }
 
     var body: some View {
         ZStack {
@@ -88,15 +83,14 @@ private struct SplashView: View {
                 .ignoresSafeArea()
                 .opacity(exiting ? 0 : 1)
 
-            // Retro checkerboard dither
-            PixelDitherPattern(color: contentColor)
+            PixelDitherPattern(color: .white)
                 .ignoresSafeArea()
                 .opacity(exiting ? 0 : 1)
 
             VStack(spacing: Spacing.lg) {
                 Image(systemName: "gamecontroller.fill")
                     .font(.system(size: 52))
-                    .foregroundStyle(contentColor)
+                    .foregroundStyle(.white)
                     .blur(radius: exiting ? 10 : 0)
                     .scaleEffect(exiting ? 0.8 : 1)
                     .opacity(exiting ? 0 : 1)
@@ -105,7 +99,7 @@ private struct SplashView: View {
                     .font(.title)
                     .fontWeight(.bold)
                     .fontDesign(.rounded)
-                    .foregroundStyle(contentColor)
+                    .foregroundStyle(.white)
                     .blur(radius: exiting ? 10 : 0)
                     .scaleEffect(exiting ? 0.8 : 1)
                     .opacity(exiting ? 0 : 1)
