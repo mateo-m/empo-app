@@ -11,18 +11,18 @@ enum ZipExtractor {
         guard let fh = FileHandle(forReadingAtPath: zipURL.path) else {
             throw Error.invalid("Cannot open zip file")
         }
-        defer { fh.closeFile() }
+        defer { try? fh.close() }
 
         let fm = FileManager.default
-        let fileSize = fh.seekToEndOfFile()
+        let fileSize = try fh.seekToEnd()
         guard fileSize >= 22 else { throw Error.invalid("File too small to be a zip") }
 
         // 1. Read the tail of the file to find EOCD (max 65557 bytes from the end)
         progress?("Scanning zip structure...", 0)
         let tailSize = min(UInt64(65557), fileSize)
         let tailOffset = fileSize - tailSize
-        fh.seek(toFileOffset: tailOffset)
-        let tailData = fh.readData(ofLength: Int(tailSize))
+        try fh.seek(toOffset: tailOffset)
+        let tailData = try readExactly(fh, count: Int(tailSize))
 
         guard let eocdRel = findEOCD(in: tailData) else {
             throw Error.invalid("Cannot find end of central directory")
@@ -38,11 +38,8 @@ enum ZipExtractor {
         guard cdSize > 0 && cdSize < 100_000_000 else {
             throw Error.invalid("Central directory size looks wrong: \(cdSize)")
         }
-        fh.seek(toFileOffset: UInt64(cdOffset))
-        let cdData = fh.readData(ofLength: cdSize)
-        guard cdData.count == cdSize else {
-            throw Error.invalid("Could not read full central directory")
-        }
+        try fh.seek(toOffset: UInt64(cdOffset))
+        let cdData = try readExactly(fh, count: cdSize)
 
         // 3. Parse central directory entries and extract files one by one
         var pos = 0
@@ -80,9 +77,8 @@ enum ZipExtractor {
                 try fm.createDirectory(at: entryURL, withIntermediateDirectories: true)
             } else {
                 // Read the local file header to find where file data starts
-                fh.seek(toFileOffset: UInt64(localHeaderOffset + 26))
-                let localFieldData = fh.readData(ofLength: 4)
-                guard localFieldData.count == 4 else { continue }
+                try fh.seek(toOffset: UInt64(localHeaderOffset + 26))
+                let localFieldData = try readExactly(fh, count: 4)
                 let localNameLen = Int(readU16(localFieldData, 0))
                 let localExtraLen = Int(readU16(localFieldData, 2))
                 let fileDataStart = UInt64(localHeaderOffset + 30 + localNameLen + localExtraLen)
@@ -92,8 +88,8 @@ enum ZipExtractor {
                                        withIntermediateDirectories: true)
 
                 // Read compressed data from disk
-                fh.seek(toFileOffset: fileDataStart)
-                let compData = fh.readData(ofLength: compSize)
+                try fh.seek(toOffset: fileDataStart)
+                let compData = try readExactly(fh, count: compSize)
 
                 if method == 0 {
                     // Stored (no compression)
@@ -134,6 +130,21 @@ enum ZipExtractor {
         return output
     }
 
+
+    private static func readExactly(_ fh: FileHandle, count: Int) throws -> Data {
+        var remaining = count
+        var result = Data(capacity: count)
+        while remaining > 0 {
+            guard let chunk = try fh.read(upToCount: remaining) else { break }
+            if chunk.isEmpty { break }
+            result.append(chunk)
+            remaining -= chunk.count
+        }
+        guard result.count == count else {
+            throw Error.invalid("Short read: expected \(count) bytes, got \(result.count)")
+        }
+        return result
+    }
 
     private static func readU16(_ data: Data, _ offset: Int) -> UInt16 {
         let base = data.startIndex + offset
