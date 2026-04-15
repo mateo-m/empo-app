@@ -1,6 +1,86 @@
 import SwiftUI
 
 
+struct AddButtonSheet: View {
+    var layout: ControlsLayout
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Common") {
+                    ForEach(keyCatalog.filter { isCommon($0) }) { entry in
+                        row(for: entry)
+                    }
+                }
+                Section("Letters") {
+                    ForEach(keyCatalog.filter { isLetter($0) }) { entry in
+                        row(for: entry)
+                    }
+                }
+                Section("Numbers") {
+                    ForEach(keyCatalog.filter { isNumber($0) }) { entry in
+                        row(for: entry)
+                    }
+                }
+                Section("Function keys") {
+                    ForEach(keyCatalog.filter { isFunction($0) }) { entry in
+                        row(for: entry)
+                    }
+                }
+            }
+            .navigationTitle("Add button")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func row(for entry: KeyEntry) -> some View {
+        HStack {
+            Text(entry.label)
+            Spacer()
+            Text(scancodeDisplayName(entry.scancode))
+                .foregroundStyle(.secondary)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            dismiss()
+            layout.addButton(label: entry.label, scancode: entry.scancode)
+        }
+    }
+
+    private func isCommon(_ entry: KeyEntry) -> Bool {
+        let common: Set<Int32> = [
+            Int32(MKXP_SCANCODE_Z), Int32(MKXP_SCANCODE_X),
+            Int32(MKXP_SCANCODE_LSHIFT), Int32(MKXP_SCANCODE_LCTRL),
+            Int32(MKXP_SCANCODE_SPACE), Int32(MKXP_SCANCODE_RETURN),
+            Int32(MKXP_SCANCODE_ESCAPE), Int32(MKXP_SCANCODE_TAB),
+            Int32(MKXP_SCANCODE_LALT), Int32(MKXP_SCANCODE_BACKSPACE),
+        ]
+        return common.contains(entry.scancode)
+    }
+
+    private func isLetter(_ entry: KeyEntry) -> Bool {
+        entry.scancode >= Int32(MKXP_SCANCODE_A) && entry.scancode <= Int32(MKXP_SCANCODE_Z)
+            && !isCommon(entry)
+    }
+
+    private func isNumber(_ entry: KeyEntry) -> Bool {
+        entry.scancode >= Int32(MKXP_SCANCODE_1) && entry.scancode <= Int32(MKXP_SCANCODE_0)
+    }
+
+    private func isFunction(_ entry: KeyEntry) -> Bool {
+        entry.scancode >= Int32(MKXP_SCANCODE_F1) && entry.scancode <= Int32(MKXP_SCANCODE_F12)
+    }
+}
+
+
 struct ButtonEditSheet: View {
     var layout: ControlsLayout
     let buttonID: UUID
@@ -127,12 +207,8 @@ struct ControlsEditDialogs: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .confirmationDialog("Add Button", isPresented: $showAddSheet) {
-                ForEach(keyCatalog) { entry in
-                    Button(entry.label) {
-                        layout.addButton(label: entry.label, scancode: entry.scancode)
-                    }
-                }
+            .sheet(isPresented: $showAddSheet) {
+                AddButtonSheet(layout: layout)
             }
             .alert("Reset Controls", isPresented: $showResetConfirm) {
                 Button("Reset", role: .destructive) {
