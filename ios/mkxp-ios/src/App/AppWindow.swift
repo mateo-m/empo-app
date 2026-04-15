@@ -131,7 +131,7 @@ class AppWindow: UIWindow {
 
     private static func createWindow(in scene: UIWindowScene) {
         let window = AppWindow(windowScene: scene)
-        window.frame = scene.screen.bounds
+        window.frame = scene.coordinateSpace.bounds
 
         let rootView = RootView()
         let vc = AppRootViewController(rootView: rootView)

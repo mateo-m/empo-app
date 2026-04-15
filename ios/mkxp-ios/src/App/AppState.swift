@@ -16,13 +16,16 @@ class AppState {
     var errorMessage: String?
     var engineReady = false
 
+    static let logsDirectory: URL = FileManager.default
+        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Logs", isDirectory: true)
+
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
     private var sessionStartTime: Date?
 
     private init() {
-        let logsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Logs", isDirectory: true)
+        let logsDir = Self.logsDirectory
         try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
         sessionHistoryPath = logsDir.appendingPathComponent("session-history.log").path
 
@@ -92,8 +95,7 @@ class AppState {
             return
         }
 
-        let logsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Logs", isDirectory: true)
+        let logsDir = Self.logsDirectory
         try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
 
         let slug = game.title
@@ -121,9 +123,9 @@ class AppState {
         let entry = "\n[\(timestamp)] \(game.title) [\(game.id)]\n"
         if let data = entry.data(using: .utf8),
            let fh = FileHandle(forWritingAtPath: sessionHistoryPath) {
-            fh.seekToEndOfFile()
-            fh.write(data)
-            fh.closeFile()
+            defer { try? fh.close() }
+            try? fh.seekToEnd()
+            try? fh.write(contentsOf: data)
         }
     }
 

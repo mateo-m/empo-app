@@ -22,8 +22,4 @@ final class ImageCache {
     func evict(path: String) {
         cache.removeObject(forKey: path as NSString)
     }
-
-    func clear() {
-        cache.removeAllObjects()
-    }
 }

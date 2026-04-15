@@ -6,16 +6,12 @@
 //
 
 #import <UIKit/UIKit.h>
-#import <Metal/Metal.h>
-#import <sys/sysctl.h>
 #import "system.h"
 #import "ios_bridge.h"
 
 std::string systemImpl::getSystemLanguage() {
     @autoreleasepool {
-        NSString *languageCode = NSLocale.currentLocale.languageCode;
-        NSString *countryCode = NSLocale.currentLocale.countryCode;
-        return std::string([NSString stringWithFormat:@"%@_%@", languageCode, countryCode].UTF8String);
+        return std::string(NSLocale.currentLocale.localeIdentifier.UTF8String);
     }
 }
 
@@ -26,15 +22,12 @@ std::string systemImpl::getUserName() {
 }
 
 int systemImpl::getScalingFactor() {
-    // UIScreen.mainScreen is deprecated in iOS 26.
-    // Walk the connected scenes to find a UIWindowScene and its screen.
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if ([scene isKindOfClass:[UIWindowScene class]]) {
             UIWindowScene *ws = (UIWindowScene *)scene;
-            return (int)ws.screen.scale;
+            return (int)ws.traitCollection.displayScale;
         }
     }
-    // Fallback – should not happen in practice.
     return 2;
 }
 
@@ -55,7 +48,7 @@ void openSettingsWindow() {
 }
 
 bool isMetalSupported() {
-    return MTLCreateSystemDefaultDevice() != nil;
+    return true;
 }
 
 std::string getPlistValue(const char *key) {
@@ -84,7 +77,7 @@ float mkxp_getScreenScale(void) {
         for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
             if ([scene isKindOfClass:[UIWindowScene class]]) {
                 UIWindowScene *ws = (UIWindowScene *)scene;
-                scale = ws.screen.scale;
+                scale = ws.traitCollection.displayScale;
                 break;
             }
         }

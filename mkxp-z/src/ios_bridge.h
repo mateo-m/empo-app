@@ -90,7 +90,6 @@ const char *mkxp_waitForGamePath(void);
 // Engine termination
 
 void        mkxp_requestTerminate(void);
-int         mkxp_isTerminateRequested(void);
 int         mkxp_isEngineTerminated(void);
 void        mkxp_setEngineTerminated(void);
 void        mkxp_resetBridgeState(void);
@@ -124,7 +123,6 @@ const char *mkxp_getGameTitle(void);
 // Game viewport rect (logical points)
 
 void        mkxp_setGameRect(float x, float y, float w, float h);
-void        mkxp_getGameRect(float *x, float *y, float *w, float *h);
 
 // Safe area insets (logical points, cached atomics)
 
@@ -174,7 +172,6 @@ void        mkxp_getViewportBoundsColor(float *r, float *g, float *b, float *a);
 // through the bridge for the UI to present.
 
 void        mkxp_setErrorMessage(const char *message);
-const char *mkxp_getErrorMessage(void);
 
 typedef void (*mkxp_ErrorMessageCallback)(const char *message, void *userdata);
 void        mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *userdata);

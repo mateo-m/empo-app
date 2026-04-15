@@ -102,30 +102,15 @@ enum GameImportValidator {
     /// Parses an .ini file looking for a [Game] section with a Scripts= entry.
     /// Returns the detected RGSS version and the raw scripts path.
     private static func parseIniScripts(_ iniURL: URL) -> (RGSSVersion, String)? {
-        guard let content = try? String(contentsOf: iniURL, encoding: .utf8) else {
+        guard let value = GameEntry.parseINIValue(in: iniURL, section: "game", key: "scripts") else {
             return nil
         }
-
-        var inGameSection = false
-        for line in content.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("[") {
-                inGameSection = trimmed.lowercased().hasPrefix("[game]")
-                continue
-            }
-            if inGameSection && trimmed.lowercased().hasPrefix("scripts=") {
-                let value = String(trimmed.dropFirst("scripts=".count))
-                    .trimmingCharacters(in: .whitespaces)
-                if value.isEmpty { continue }
-                let lower = value.lowercased()
-                let version: RGSSVersion
-                if lower.hasSuffix(".rvdata2") { version = .vxAce }
-                else if lower.hasSuffix(".rvdata") { version = .vx }
-                else { version = .xp }
-                return (version, value)
-            }
-        }
-        return nil
+        let lower = value.lowercased()
+        let version: RGSSVersion
+        if lower.hasSuffix(".rvdata2") { version = .vxAce }
+        else if lower.hasSuffix(".rvdata") { version = .vx }
+        else { version = .xp }
+        return (version, value)
     }
 
 
@@ -144,9 +129,11 @@ enum GameImportValidator {
         guard let fh = FileHandle(forReadingAtPath: fileURL.path) else {
             throw ImportError.invalidScripts(normalized)
         }
-        defer { fh.closeFile() }
+        defer { try? fh.close() }
 
-        let header = fh.readData(ofLength: 3)
+        guard let header = try? fh.read(upToCount: 3) else {
+            throw ImportError.invalidScripts(normalized)
+        }
         guard header.count == 3,
               header[0] == 0x04,
               header[1] == 0x08,

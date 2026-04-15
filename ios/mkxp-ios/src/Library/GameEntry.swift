@@ -42,6 +42,10 @@ struct GameEntry: Identifiable, Hashable {
 
 
     static func parseINITitle(at gameDir: URL) -> String? {
+        parseINIValue(at: gameDir, section: "game", key: "title")
+    }
+
+    static func parseINIValue(at gameDir: URL, section: String, key: String) -> String? {
         let fm = FileManager.default
         let iniURL: URL? = {
             let gameIni = gameDir.appendingPathComponent("Game.ini")
@@ -53,19 +57,26 @@ struct GameEntry: Identifiable, Hashable {
             }
             return nil
         }()
-        guard let iniURL, let data = try? String(contentsOf: iniURL, encoding: .utf8) else {
+        guard let iniURL else { return nil }
+        return parseINIValue(in: iniURL, section: section, key: key)
+    }
+
+    static func parseINIValue(in iniURL: URL, section: String, key: String) -> String? {
+        guard let data = try? String(contentsOf: iniURL, encoding: .utf8) else {
             return nil
         }
 
-        var inGameSection = false
+        let sectionLower = "[\(section)]"
+        var inSection = false
+        let keyPrefix = "\(key)="
         for line in data.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("[") {
-                inGameSection = trimmed.lowercased().hasPrefix("[game]")
+                inSection = trimmed.lowercased().hasPrefix(sectionLower)
                 continue
             }
-            if inGameSection && trimmed.lowercased().hasPrefix("title=") {
-                let value = String(trimmed.dropFirst("title=".count))
+            if inSection && trimmed.lowercased().hasPrefix(keyPrefix) {
+                let value = String(trimmed.dropFirst(keyPrefix.count))
                     .trimmingCharacters(in: .whitespaces)
                 if !value.isEmpty { return value }
             }

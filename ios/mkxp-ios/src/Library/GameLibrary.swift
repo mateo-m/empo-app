@@ -103,7 +103,7 @@ class GameLibrary {
     nonisolated private static func buildGameEntry(from url: URL, fm: FileManager = .default) -> GameEntry? {
 
         let folderName = url.lastPathComponent
-        let iniTitle = parseGameTitle(at: url) ?? "Unknown Game"
+        let iniTitle = GameEntry.parseINITitle(at: url) ?? "Unknown Game"
         let defaultArtwork = findArtwork(at: url)
 
         // ID is the UUID prefix (first 36 chars) of the folder name.
@@ -187,7 +187,7 @@ class GameLibrary {
         let title: String
         let artwork: String?
         if !isZip {
-            title = Self.parseGameTitle(at: sourceURL) ?? sourceURL.lastPathComponent
+            title = GameEntry.parseINITitle(at: sourceURL) ?? sourceURL.lastPathComponent
             artwork = Self.findArtwork(at: sourceURL)
         } else {
             title = sourceURL.deletingPathExtension().lastPathComponent
@@ -370,10 +370,6 @@ class GameLibrary {
         }
     }
 
-
-    nonisolated private static func parseGameTitle(at url: URL) -> String? {
-        GameEntry.parseINITitle(at: url)
-    }
 
     nonisolated private static func findArtwork(at url: URL) -> String? {
         let titlesDir = url.appendingPathComponent("Graphics/Titles")
