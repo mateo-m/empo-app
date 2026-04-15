@@ -311,9 +311,19 @@ struct GameLibraryView: View {
 
     private func heroCard(for game: GameEntry) -> some View {
         let isPaused = PauseManager.shared.pausedGame?.id == game.id
-        return Button { handleGameTap(game) } label: {
+        return heroCardContent(for: game, isPaused: isPaused, aspectRatio: 2.2)
+    }
+
+    private func heroListRow(for game: GameEntry) -> some View {
+        let isPaused = PauseManager.shared.pausedGame?.id == game.id
+        return heroCardContent(for: game, isPaused: isPaused, aspectRatio: 3.0)
+            .padding(.bottom, Spacing.lg)
+    }
+
+    private func heroCardContent(for game: GameEntry, isPaused: Bool, aspectRatio: CGFloat) -> some View {
+        Button { handleGameTap(game) } label: {
             Color.clear
-                .aspectRatio(2.2, contentMode: .fit)
+                .aspectRatio(aspectRatio, contentMode: .fit)
                 .overlay {
                     GameArtworkView(
                         artworkPath: game.artworkPath,
@@ -366,6 +376,11 @@ struct GameLibraryView: View {
 
     private var listInner: some View {
         LazyVStack(spacing: 0) {
+            if let hero = recentlyPlayed {
+                heroListRow(for: hero)
+                    .transition(.cardAppear)
+            }
+
             ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
                 let isPaused = PauseManager.shared.pausedGame?.id == game.id
                 Button {
