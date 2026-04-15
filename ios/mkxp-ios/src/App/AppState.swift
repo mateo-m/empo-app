@@ -15,6 +15,8 @@ class AppState {
     var selectedGame: GameEntry?
     var errorMessage: String?
     var engineReady = false
+    private(set) var pendingCrashRecovery = false
+    private var terminationExpected = false
 
     static let logsDirectory: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -23,6 +25,10 @@ class AppState {
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
     private var sessionStartTime: Date?
+
+    private static let crashMarkerURL: URL = FileManager.default
+        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent(".session-active")
 
     private init() {
         let logsDir = Self.logsDirectory
@@ -36,6 +42,10 @@ class AppState {
         header += "launched: \(launchTime)\n"
         header += "---\n"
         try? header.write(toFile: sessionHistoryPath, atomically: true, encoding: .utf8)
+
+        if FileManager.default.fileExists(atPath: Self.crashMarkerURL.path) {
+            pendingCrashRecovery = true
+        }
 
         pruneOldLogs(in: logsDir)
         registerBridgeCallbacks()
@@ -83,6 +93,8 @@ class AppState {
         let postload = settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
         mkxp_applyPerGameSettings(alignment.bridgeValue, postload)
 
+        FileManager.default.createFile(atPath: Self.crashMarkerURL.path, contents: nil)
+
         configureDebugLog(for: game)
         appendSessionHistory(game: game)
         sessionStartTime = Date()
@@ -124,8 +136,8 @@ class AppState {
         if let data = entry.data(using: .utf8),
            let fh = FileHandle(forWritingAtPath: sessionHistoryPath) {
             defer { try? fh.close() }
-            try? fh.seekToEnd()
-            try? fh.write(contentsOf: data)
+            _ = try? fh.seekToEnd()
+            _ = try? fh.write(contentsOf: data)
         }
     }
 
@@ -145,7 +157,21 @@ class AppState {
     }
 
     /// Returns to the library and tears down the engine.
+    func consumeCrashRecovery() {
+        guard pendingCrashRecovery else { return }
+        pendingCrashRecovery = false
+        errorMessage = "The game crashed due to a simulator bug. "
+            + "This won't happen on a real device."
+    }
+
+    func dismissCrashRecovery() {
+        removeCrashMarker()
+        errorMessage = nil
+    }
+
     func returnToLibrary() {
+        terminationExpected = true
+        removeCrashMarker()
         mkxp_requestTerminate()
         selectedGame = nil
         engineReady = false
@@ -155,6 +181,10 @@ class AppState {
 
 
     /// All callbacks fire on the engine thread; each dispatches to main.
+    private func removeCrashMarker() {
+        try? FileManager.default.removeItem(at: Self.crashMarkerURL)
+    }
+
     private func registerBridgeCallbacks() {
         // First frame rendered — fresh start transitions to .playing,
         // resume signals the snapshot can fade.
@@ -172,8 +202,20 @@ class AppState {
 
         mkxp_setEngineTerminatedCallback({ _ in
             Task { @MainActor in
-                AppState.shared.recordSessionPlayTime()
+                let state = AppState.shared
+                state.recordSessionPlayTime()
+                state.removeCrashMarker()
                 GameLibrary.shared.reload()
+
+                if !state.terminationExpected && state.phase != nil {
+                    state.errorMessage = "The game crashed due to a simulator bug. "
+                        + "This won't happen on a real device."
+                    state.selectedGame = nil
+                    state.engineReady = false
+                    PauseManager.shared.reset()
+                    state.phase = nil
+                }
+                state.terminationExpected = false
             }
         }, nil)
 

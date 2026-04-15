@@ -34,6 +34,7 @@ static std::atomic<bool> s_pathSet{false};
 // Engine terminated flag: set by engine after full teardown.
 static std::atomic<bool> s_engineTerminated{false};
 static std::atomic<bool> s_terminateRequested{false};
+static std::atomic<bool> s_glContextBroken{false};
 
 // Game viewport rect in logical points, updated by the engine each frame.
 static std::atomic<float> s_gameRectX{0};
@@ -196,6 +197,7 @@ void mkxp_resetBridgeState(void) {
     s_pauseRequested.store(false, std::memory_order_relaxed);
     s_paused.store(false, std::memory_order_relaxed);
     s_needsFrameRenderedSignal.store(false, std::memory_order_relaxed);
+    s_glContextBroken.store(false, std::memory_order_relaxed);
     {
         std::lock_guard<std::mutex> lock(s_snapshotMutex);
         s_snapshotData.clear();
@@ -235,9 +237,9 @@ void mkxp_setGameRect(float x, float y, float w, float h) {
     s_gameRectY.store(y, std::memory_order_relaxed);
     s_gameRectW.store(w, std::memory_order_relaxed);
     s_gameRectH.store(h, std::memory_order_relaxed);
-    if (auto cb = s_gameRectChangedCb.load(std::memory_order_acquire);
-        cb && (x != oldX || y != oldY || w != oldW || h != oldH)) {
-        cb(x, y, w, h, s_gameRectChangedUserdata);
+    auto rectCb = s_gameRectChangedCb.load(std::memory_order_acquire);
+    if (rectCb && (x != oldX || y != oldY || w != oldW || h != oldH)) {
+        rectCb(x, y, w, h, s_gameRectChangedUserdata);
     }
 }
 
@@ -330,9 +332,9 @@ void mkxp_setErrorMessage(const char *message) {
         std::lock_guard<std::mutex> lock(s_errorMsgMutex);
         s_errorMessage = message ? message : "";
     }
-    if (auto cb = s_errorMsgCb.load(std::memory_order_acquire);
-        cb && message && message[0]) {
-        cb(message, s_errorMsgUserdata);
+    auto errCb = s_errorMsgCb.load(std::memory_order_acquire);
+    if (errCb && message && message[0]) {
+        errCb(message, s_errorMsgUserdata);
     }
 }
 
@@ -479,6 +481,14 @@ void mkxp_getViewportBoundsColor(float *r, float *g, float *b, float *a) {
     if (g) *g = s_vpBoundsG.load(std::memory_order_relaxed);
     if (b) *b = s_vpBoundsB.load(std::memory_order_relaxed);
     if (a) *a = s_vpBoundsA.load(std::memory_order_relaxed);
+}
+
+void mkxp_setGLContextBroken(void) {
+    s_glContextBroken.store(true, std::memory_order_release);
+}
+
+bool mkxp_isGLContextBroken(void) {
+    return s_glContextBroken.load(std::memory_order_acquire);
 }
 
 void mkxp_setDebugLogPath(const char *path) {

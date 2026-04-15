@@ -723,9 +723,6 @@ struct GraphicsPrivate {
         bool sizeChanged = threadData->windowSizeMsg.poll(winSize);
 
 #if TARGET_OS_IPHONE
-        // Safe area insets are pushed from UIKit asynchronously.
-        // If they changed (e.g. during rotation), recalculate even
-        // if the window size didn't change.
         bool insetsChanged = mkxp_consumeSafeAreaInsetsChanged();
         if (insetsChanged && !sizeChanged) {
             char buf[256];
@@ -734,7 +731,6 @@ struct GraphicsPrivate {
                      winSize.x, winSize.y);
             mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
 
-            // Recalculate viewport with current window size
             recalculateScreenSize(threadData->config.fixedAspectRatio);
             updateScreenResoRatio(threadData);
 
@@ -840,9 +836,11 @@ struct GraphicsPrivate {
         threadData->ethread->notifyFrame();
 
 #if TARGET_OS_IPHONE
-        // Fire the one-shot "frame rendered after resume" signal so the
-        // UI knows the live SDL surface is on-screen and can fade out
-        // the snapshot overlay.
+        if (mkxp_isGLContextBroken()) {
+            shutdown();
+            return;
+        }
+
         mkxp_signalFrameRendered();
 #endif
     }
@@ -1105,6 +1103,12 @@ double Graphics::lastUpdate() {
 }
 
 void Graphics::update(bool checkForShutdown) {
+#if TARGET_OS_IPHONE
+    if (mkxp_isGLContextBroken()) {
+        shState->checkShutdown();
+        return;
+    }
+#endif
     p->threadData->rqWindowAdjust.wait();
     p->last_update = shState->runTime();
     

@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import SwiftUI
 import Observation
+import Synchronization
 
 @MainActor @Observable
 class GameLibrary {
@@ -10,11 +11,9 @@ class GameLibrary {
     var games: [GameEntry] = []
 
     private let fm = FileManager.default
-    /// Lock-protected set — accessed from both main and background threads.
-    nonisolated(unsafe) private var cancelledImports = Set<String>()
-    nonisolated(unsafe) private let cancelLock = NSLock()
+    private let cancelledImports = Mutex(Set<String>())
 
-    static let gamesDirectory: URL = FileManager.default
+    nonisolated static let gamesDirectory: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Games", isDirectory: true)
 
@@ -160,21 +159,15 @@ class GameLibrary {
     private struct ImportCancelled: Error {}
 
     nonisolated private func isImportCancelled(_ id: String) -> Bool {
-        cancelLock.lock()
-        defer { cancelLock.unlock() }
-        return cancelledImports.contains(id)
+        cancelledImports.withLock { $0.contains(id) }
     }
 
     nonisolated private func cancelImport(_ id: String) {
-        cancelLock.lock()
-        cancelledImports.insert(id)
-        cancelLock.unlock()
+        cancelledImports.withLock { _ = $0.insert(id) }
     }
 
     nonisolated private func clearCancellation(_ id: String) {
-        cancelLock.lock()
-        cancelledImports.remove(id)
-        cancelLock.unlock()
+        cancelledImports.withLock { _ = $0.remove(id) }
     }
 
     func importGame(from sourceURL: URL, completion: @escaping (Error?) -> Void) {

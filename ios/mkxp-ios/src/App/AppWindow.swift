@@ -109,10 +109,14 @@ class AppWindow: UIWindow {
 
     /// Called once at app startup (from AppLoader.m via +load).
     /// Checks for an active scene first, otherwise waits for one.
+    /// During crash recovery, accepts any connected scene so the
+    /// alert can appear without user interaction.
     @objc static func install() {
+        let recovering = AppState.shared.pendingCrashRecovery
+
         for scene in UIApplication.shared.connectedScenes {
             if let windowScene = scene as? UIWindowScene,
-               scene.activationState == .foregroundActive {
+               recovering || scene.activationState == .foregroundActive {
                 createWindow(in: windowScene)
                 return
             }
@@ -131,7 +135,7 @@ class AppWindow: UIWindow {
 
     private static func createWindow(in scene: UIWindowScene) {
         let window = AppWindow(windowScene: scene)
-        window.frame = scene.coordinateSpace.bounds
+        window.frame = scene.screen.bounds
 
         let rootView = RootView()
         let vc = AppRootViewController(rootView: rootView)
