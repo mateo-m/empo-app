@@ -122,7 +122,9 @@ class ControlsLayout {
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(delay))
                 withAnimation(.spring(duration: 0.35, bounce: 0)) {
-                    buttons.append(button)
+        withAnimation(.spring(duration: 0.35, bounce: 0)) {
+            buttons.append(button)
+        }
                 }
             }
         }
@@ -165,14 +167,15 @@ class ControlsLayout {
 
 
     func addButton(label: String, scancode: Int32) {
-        // Strip parenthetical descriptions for display
         var displayLabel = label
         if let range = label.range(of: " (") {
             displayLabel = String(label[..<range.lowerBound])
         }
         let button = ButtonModel(label: displayLabel, scancode: scancode,
                                  relativeCenter: CGPoint(x: 0.5, y: 0.5), size: 56)
-        buttons.append(button)
+        withAnimation(.spring(duration: 0.35, bounce: 0)) {
+            buttons.append(button)
+        }
     }
 
     func removeButton(id: UUID) {
