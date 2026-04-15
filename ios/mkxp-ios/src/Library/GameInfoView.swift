@@ -209,7 +209,10 @@ struct GameInfoView: View {
             // Banner image with gradient fade-out mask
             bannerBackground
                 .contentShape(Rectangle())
-                .onTapGesture { showBannerPicker = true }
+                .onTapGesture {
+                    if isEditingTitle { finishEditingTitle() }
+                    else { showBannerPicker = true }
+                }
                 .accessibilityLabel("Change banner image")
                 .mask(
                     LinearGradient(
@@ -223,15 +226,7 @@ struct GameInfoView: View {
                     )
                 )
                 .overlay(alignment: .topTrailing) {
-                    HStack(spacing: Spacing.xs) {
-                        Image(systemName: "photo")
-                        Text("Change banner")
-                    }
-                    .font(.caption2)
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, Spacing.md)
-                    .padding(.vertical, 5)
-                    .glassEffect(.regular, in: .capsule)
+                    Chip("Edit", systemImage: "photo")
                         .opacity(0.5)
                         .padding(.top, 72)
                         .padding(.trailing, Spacing.xl)
@@ -242,13 +237,16 @@ struct GameInfoView: View {
             HStack(spacing: 14) {
                 artworkView
                     .overlay(alignment: .topTrailing) {
-                        IconButton("photo", style: .glass, size: 24)
+                        Chip(systemImage: "photo")
                             .opacity(0.5)
                             .padding(Spacing.xs)
                     }
                     .elevatedShadow()
                     .contentShape(Rectangle())
-                    .onTapGesture { showArtworkPicker = true }
+                    .onTapGesture {
+                        if isEditingTitle { finishEditingTitle() }
+                        else { showArtworkPicker = true }
+                    }
                     .accessibilityLabel("Change game artwork")
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -267,7 +265,7 @@ struct GameInfoView: View {
                                 .font(.title2.weight(.bold))
                                 .lineLimit(1)
 
-                            IconButton("pencil", style: .glass, size: 30)
+                            Chip(systemImage: "pencil")
                                 .opacity(Overlay.light + 0.1)
                         }
                     }
