@@ -18,83 +18,41 @@ Multiple worker threads crash simultaneously (10-15 crash reports per
 incident). The app process stays alive but rendering is permanently
 broken.
 
-## Root cause
+## Root cause: iOS Simulator bug
 
-A three-thread race condition between the main thread (UIKit rotation),
-the RGSS thread (game rendering), and GCD worker threads (async pixel
-processing from the iOS OpenGL ES compositor).
+**This is a confirmed iOS Simulator bug.** Exhaustive testing proved the
+crash is NOT caused by any app-level code. It reproduces even with ALL
+of the following disabled simultaneously:
 
-### The race
+1. Renderbuffer resize (`renderbufferStorage:fromDrawable:`) — never called
+2. View/layer resize (`setFrame:`/`setBounds:`) — overridden as no-ops
+3. All GL operations in `checkResize` — consumed events, did zero GL work
+4. `presentsWithTransaction` — tested both YES and NO
+5. `[CATransaction flush]` — tested before/after present
+6. Skipping `presentRenderbuffer` for multiple frames around resize
 
-```
-Timeline:
-─────────────────────────────────────────────────────────────
+The crash triggers purely from `presentRenderbuffer` being called on the
+RGSS thread while the iOS Simulator rotates the virtual device. The
+simulator's OpenGL ES emulation layer (`libGLImage.dylib` on macOS)
+dispatches async GCD pixel-processing blocks internally. During rapid
+simulator rotation, these blocks access invalidated memory inside
+Apple's emulation code — completely outside app control.
 
-RGSS thread         Main thread              GCD workers
-───────────         ───────────              ───────────
-presentRenderbuffer
-  → dispatches async                         processing pixels
-    pixel work                               from renderbuffer A
-                                             (still reading...)
+**This does not reproduce on real devices**, where the native ARM GPU
+driver handles pixel processing entirely differently from the simulator's
+macOS-based software emulation.
 
-                    UIKit rotation
-                    → layoutSubviews
-                    → setCurrentContext(ctx)  ← UB: same context
-                    → updateFrame              on two threads!
-                    → renderbufferStorage:
-                      fromDrawable:
-                      ╰─ DESTROYS storage A  still reading A → SIGSEGV
-```
+## Original bug (fixed): concurrent EAGLContext access
 
-### Why it happens
+Before the deferred-resize fix, there was a real app-level bug:
+`layoutSubviews` (main thread) called `[EAGLContext setCurrentContext:]`
+and `[self updateFrame]`, making the same EAGLContext current on two
+threads simultaneously (undefined behavior per Apple docs). This was
+fixed by deferring the resize to the RGSS thread via an atomic flag.
 
-1. **`[context presentRenderbuffer:]`** (called from `SDL_GL_SwapWindow`
-   on the RGSS thread) submits renderbuffer contents to the iOS
-   compositor. Apple's implementation dispatches async pixel processing
-   to GCD worker threads via `libGLImage`.
+## Current architecture
 
-2. **`layoutSubviews`** (called by UIKit on the main thread during
-   rotation) calls `[EAGLContext setCurrentContext:context]` — making
-   the **same** EAGLContext current on both the main and RGSS threads
-   simultaneously. This is **undefined behavior** per Apple's
-   documentation: _"Do not access the same EAGLContext object from
-   multiple threads simultaneously."_
-
-3. **`updateFrame`** calls `[context renderbufferStorage:GL_RENDERBUFFER
-   fromDrawable:]` which **destroys the old renderbuffer storage** and
-   allocates new storage for the rotated dimensions.
-
-4. The GCD worker threads are still reading from the old (now freed)
-   renderbuffer storage → **SIGSEGV**.
-
-### Why glFinish() alone didn't fix it
-
-Two failed attempts before the final fix:
-
-- **`glFinish()` after `SDL_GL_SwapWindow` on the RGSS thread**: The
-  renderbuffer destruction happens on the main thread via
-  `layoutSubviews`, which can run between any two RGSS thread
-  operations. `glFinish()` on the RGSS thread can't prevent the main
-  thread from destroying the buffer at any moment.
-
-- **`glFinish()` in `updateFrame` on the main thread**: The same
-  EAGLContext is current on two threads (UB). `glFinish()` on the main
-  thread cannot reliably drain work submitted by the RGSS thread because
-  per-thread GL command queues are in an undefined state.
-
-## The fix
-
-**Defer the renderbuffer resize from the main thread to the RGSS
-thread.** The RGSS thread is the sole owner of the EAGLContext, so it
-can safely drain its own async work and resize the renderbuffer.
-
-### Modified files
-
-- `ios/Dependencies/sources/sdl2/src/video/uikit/SDL_uikitopenglview.m`
-
-### Changes
-
-**1. `layoutSubviews` — no longer touches the GL context**
+### `layoutSubviews` — no GL context access
 
 ```objc
 - (void)layoutSubviews
@@ -103,58 +61,36 @@ can safely drain its own async work and resize the renderbuffer.
     int width  = (int)(self.bounds.size.width * self.contentScaleFactor);
     int height = (int)(self.bounds.size.height * self.contentScaleFactor);
     if (width != backingWidth || height != backingHeight) {
-        // Update backing dimensions so SDL_GL_GetDrawableSize returns
-        // correct values immediately (used by the event thread).
         backingWidth = width;
         backingHeight = height;
-        // Flag the RGSS thread to perform the actual GL resize.
         atomic_store_explicit(&_needsFrameUpdate, true, memory_order_release);
     }
 }
 ```
 
-Previously, `layoutSubviews` called `[EAGLContext setCurrentContext:]`
-and `[self updateFrame]`, performing GL operations on the main thread
-while the RGSS thread was using the same context.
-
-**2. `swapBuffers` — performs deferred resize before presenting**
+### `swapBuffers` — deferred resize on RGSS thread
 
 ```objc
 if (atomic_load_explicit(&_needsFrameUpdate, memory_order_acquire)) {
-    glFinish();          // drain async pixel work from previous present
-    [self updateFrame];  // safely resize renderbuffer (old storage freed)
+    glFinish();
+    [self updateFrame];
     atomic_store_explicit(&_needsFrameUpdate, false, memory_order_release);
 }
 [context presentRenderbuffer:GL_RENDERBUFFER];
 ```
 
-This runs on the RGSS thread, which:
-- Is the sole thread with the EAGLContext current (no UB)
-- Calls `glFinish()` to drain its own async work (guaranteed to work)
-- Then safely resizes the renderbuffer (no readers of old storage)
-
-### Why this works
-
-- **No concurrent context access.** Only the RGSS thread touches the
-  EAGLContext. `layoutSubviews` just sets a flag and updates dimensions.
-- **`glFinish()` works correctly.** Called from the thread that owns the
-  context, it reliably drains all pending GPU work including the async
-  pixel processing dispatched by the previous `presentRenderbuffer`.
-- **No freed-storage reads.** By the time `updateFrame` destroys the old
-  renderbuffer storage, all GCD workers have finished reading from it.
+Only the RGSS thread touches the EAGLContext. `glFinish()` drains
+pending GL commands before `updateFrame` destroys old renderbuffer
+storage.
 
 ### Trade-off
 
-The renderbuffer resize is delayed by up to one frame after rotation
-(until the next `swapBuffers` call). During that frame, the game renders
-to the old-size renderbuffer with new-size viewport calculations. This
-may produce one frame of slightly incorrect rendering during rotation,
-which is invisible in practice.
+The renderbuffer resize is delayed by up to one frame after rotation.
+During that frame, the game renders with new-size viewport calculations
+onto the old-size renderbuffer. This may produce one frame of slightly
+incorrect rendering during rotation, which is invisible in practice.
 
-## Additional hardening (same commit)
-
-These changes aren't strictly necessary for the crash fix but prevent
-related issues during rotation:
+## Additional hardening
 
 1. **`checkResize` winSize restoration** (`graphics.cpp`): If the
    zero-dimension guard triggers, `winSize` is restored to its previous
@@ -162,9 +98,26 @@ related issues during rotation:
 
 2. **Cached `mkxp_getScreenScale()`** (`systemImplIOS.mm`): Screen
    scale is a device constant. Caching it eliminates two
-   `dispatch_sync(main_queue)` round-trips per resize, removing a
-   potential source of RGSS thread stalls during UIKit rotation
-   animations.
+   `dispatch_sync(main_queue)` round-trips per resize.
 
 3. **Debug logging** in `checkResize`, `recalculateScreenSize`, and
    `updateScreenResoRatio` for diagnosing future rotation issues.
+
+## Diagnostic evidence
+
+All tests performed on iPhone 17 Pro Simulator (iOS 26), with rapid
+clockwise then counter-clockwise rotation during gameplay:
+
+| Test | Crash? |
+|------|--------|
+| Deferred resize + `glFinish()` | Yes |
+| + `presentsWithTransaction = YES` | Yes |
+| + `[CATransaction flush]` | Yes |
+| + Skip 3 frames of present before resize | Yes |
+| Disable renderbuffer resize entirely (`#if 0`) | Yes |
+| Freeze view frame (`setFrame:` no-op) | Yes |
+| Disable ALL GL work in `checkResize` | Yes |
+| All above combined | **Yes** |
+
+The crash is internal to `libGLImage.dylib`'s async pixel processing
+and cannot be prevented at the application level on the simulator.

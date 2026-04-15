@@ -5,9 +5,9 @@ struct RootView: View {
     private let engineState = EngineState.shared
     private let layout = ControlsLayout.shared
     @Namespace private var hero
-    @State private var showSplash = true
+    @State private var showSplash = !AppState.shared.pendingCrashRecovery
     @State private var splashExiting = false
-    @State private var splashDismissed = false
+    @State private var splashDismissed = AppState.shared.pendingCrashRecovery
 
     var body: some View {
         ZStack {
@@ -36,19 +36,27 @@ struct RootView: View {
             }
         }
         .onAppear {
+            if appState.pendingCrashRecovery {
+                appState.consumeCrashRecovery()
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 splashDismissed = true
                 withAnimation(.spring(duration: 0.5, bounce: 0)) {
                     splashExiting = true
                 } completion: {
                     showSplash = false
+                    appState.consumeCrashRecovery()
                 }
             }
         }
         .alert("Something went wrong", isPresented: showErrorAlert) {
             Button("OK") {
-                appState.errorMessage = nil
-                appState.returnToLibrary()
+                if appState.phase != nil {
+                    appState.returnToLibrary()
+                } else {
+                    appState.dismissCrashRecovery()
+                }
             }
         } message: {
             Text(appState.errorMessage ?? "")
