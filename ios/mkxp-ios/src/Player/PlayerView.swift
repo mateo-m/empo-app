@@ -51,11 +51,12 @@ struct PlayerView: View {
 
                 // Toolbar (always visible unless editing)
                 if controlsVisible {
-                    if !editMode {
-                        toolbarButtons(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoSize: geo.size)
-                    } else {
-                        editToolbar(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoSize: geo.size)
-                    }
+                    toolbarButtons(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoSize: geo.size)
+                        .opacity(editMode ? 0 : 1)
+                        .allowsHitTesting(!editMode)
+                    editToolbar(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoSize: geo.size)
+                        .opacity(editMode ? 1 : 0)
+                        .allowsHitTesting(editMode)
                 }
 
                 // Debug overlay
@@ -201,22 +202,19 @@ struct PlayerView: View {
     @ViewBuilder
     private func toolbarButtons(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
         let btnSize = isPortrait && gameRect.height > 0 ? AppSize.toolbarButton - 8 : AppSize.toolbarButton
-        let iconPt: CGFloat = isPortrait && gameRect.height > 0 ? 13 : 16
         let gap: CGFloat = isPortrait ? Spacing.sm : Spacing.md
 
-        let buttons: [(icon: String, label: String, action: () -> Void, tint: Color)] = {
-            var list: [(icon: String, label: String, action: () -> Void, tint: Color)] = []
+        let buttons: [(icon: String, label: String, action: () -> Void, tint: Color?)] = {
+            var list: [(icon: String, label: String, action: () -> Void, tint: Color?)] = []
             if AppSettings.shared.isEnabled(.gamePause) {
-                list.append(("pause.fill", "Pause game", { pauseManager.requestPause() }, .white.opacity(0.8)))
+                list.append(("pause.fill", "Pause game", { pauseManager.requestPause() }, .white))
             }
-            list.append(("keyboard", "Toggle keyboard", { toggleKeyboard() }, .white.opacity(0.8)))
+            list.append(("keyboard", "Toggle keyboard", { toggleKeyboard() }, .white))
             if AppSettings.shared.debugMode {
-                list.append(("chart.line.uptrend.xyaxis", "Debug overlay", { showDebugOverlay.toggle() }, .white.opacity(0.8)))
+                list.append(("chart.line.uptrend.xyaxis", "Debug overlay", { showDebugOverlay.toggle() }, .white))
             }
-            list.append(contentsOf: [
-                ("gearshape.fill", "Edit controls", { toggleEditMode() }, .white.opacity(0.8)),
-                (controlsHidden ? "eye.slash.fill" : "eye.fill", controlsHidden ? "Show controls" : "Hide controls", { toggleHideControls() }, .white.opacity(0.8)),
-            ])
+            list.append(("gearshape.fill", "Edit controls", { toggleEditMode() }, .white))
+            list.append((controlsHidden ? "eye.slash.fill" : "eye.fill", controlsHidden ? "Show controls" : "Hide controls", { toggleHideControls() }, .white))
             if AppSettings.shared.isEnabled(.gameQuit) {
                 list.append(("xmark.circle.fill", "Quit game", { showQuitConfirm = true }, .destructive))
             }
@@ -227,16 +225,14 @@ struct PlayerView: View {
 
         HStack(spacing: gap) {
             ForEach(Array(buttons.enumerated()), id: \.offset) { _, entry in
-                Button(action: {
+                IconButton(
+                    entry.icon,
+                    style: .secondary,
+                    size: btnSize,
+                    tint: entry.tint
+                ) {
                     resetToolbarIdleTimer()
                     entry.action()
-                }) {
-                    Image(systemName: entry.icon)
-                        .font(.system(size: iconPt, weight: .medium))
-                        .foregroundStyle(entry.tint)
-                        .frame(width: btnSize, height: btnSize)
-                        .background(Color.white.opacity(0.15))
-                        .clipShape(Circle())
                 }
                 .accessibilityLabel(entry.label)
             }
@@ -316,9 +312,7 @@ struct PlayerView: View {
 
 
     private func toggleEditMode() {
-        var t = Transaction()
-        t.disablesAnimations = true
-        withTransaction(t) {
+        withAnimation(.spring(duration: Motion.durationFast, bounce: 0)) {
             editMode.toggle()
         }
         if keyboardMode {
