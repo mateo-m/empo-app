@@ -213,6 +213,11 @@ void        mkxp_setFrameRenderedCallback(mkxp_FrameRenderedCallback cb, void *u
 // Engine-internal: fires the one-shot frame-rendered signal. NOT for UI.
 void        mkxp_signalFrameRendered(void);
 
+// GL context crash detection (set by SDL layer on caught SIGSEGV/SIGBUS).
+
+void        mkxp_setGLContextBroken(void);
+bool        mkxp_isGLContextBroken(void);
+
 // Debug logging
 
 // Set log file path for this session (NULL/"" to disable).
