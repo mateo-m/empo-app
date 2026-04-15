@@ -14,6 +14,7 @@ class AppState {
     var phase: GamePhase?
     var selectedGame: GameEntry?
     var errorMessage: String?
+    var engineReady = false
 
     private let sessionHistoryPath: String
     private static let isoFormatter = ISO8601DateFormatter()
@@ -145,6 +146,7 @@ class AppState {
     func returnToLibrary() {
         mkxp_requestTerminate()
         selectedGame = nil
+        engineReady = false
         PauseManager.shared.reset()
         phase = nil
     }
@@ -155,16 +157,11 @@ class AppState {
         // First frame rendered — fresh start transitions to .playing,
         // resume signals the snapshot can fade.
         mkxp_setFrameRenderedCallback({ _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 let state = AppState.shared
-                if state.phase == .loading {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        guard state.phase == .loading else { return }
-                        Haptics.success()
-                        withAnimation(.spring(duration: 0.3, bounce: 0)) {
-                            state.phase = .playing
-                        }
-                    }
+                if state.phase == .loading, !state.engineReady {
+                    Haptics.success()
+                    state.engineReady = true
                 } else if state.phase == .playing {
                     PauseManager.shared.snapshotCanFade = true
                 }
@@ -172,7 +169,7 @@ class AppState {
         }, nil)
 
         mkxp_setEngineTerminatedCallback({ _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 AppState.shared.recordSessionPlayTime()
                 GameLibrary.shared.reload()
             }
@@ -180,7 +177,7 @@ class AppState {
 
         mkxp_setGameRectChangedCallback({ x, y, w, h, _ in
             let newRect = CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h))
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 let engineState = EngineState.shared
                 if engineState.gameRect != newRect {
                     engineState.gameRect = newRect
@@ -191,7 +188,7 @@ class AppState {
         mkxp_setErrorMessageCallback({ msg, _ in
             guard let msg else { return }
             let message = String(cString: msg)
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 AppState.shared.errorMessage = message
             }
         }, nil)
@@ -220,7 +217,7 @@ class AppState {
                 }
             }
 
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 PauseManager.shared.handlePausedCallback(snapshot: snapshotImage)
             }
         }, nil)

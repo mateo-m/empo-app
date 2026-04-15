@@ -13,6 +13,7 @@ struct GameLoadingView: View {
     @State private var titleVisible = false
     @State private var spinnerVisible = false
     @State private var kenBurns = false
+    @State private var appearedAt: ContinuousClock.Instant?
 
     var body: some View {
         ZStack {
@@ -51,6 +52,7 @@ struct GameLoadingView: View {
             }
         }
         .onAppear {
+            appearedAt = .now
             withAnimation(.spring(duration: 0.3, bounce: 0).delay(0.2)) {
                 titleVisible = true
             }
@@ -61,13 +63,13 @@ struct GameLoadingView: View {
                 kenBurns = true
             }
         }
-        .onChange(of: appState.phase) { _, newPhase in
-            guard newPhase == .playing else { return }
-            withAnimation(.spring(duration: 0.25, bounce: 0)) {
-                titleVisible = false
-            }
-            withAnimation(.spring(duration: 0.25, bounce: 0).delay(0.05)) {
-                spinnerVisible = false
+        .onChange(of: appState.engineReady) { _, ready in
+            guard ready else { return }
+            let elapsed = appearedAt.map { ContinuousClock.now - $0 } ?? .seconds(1)
+            let t = min(elapsed / .seconds(1), 1.0)
+            let duration = 0.15 + t * 0.15
+            withAnimation(.spring(duration: duration, bounce: 0)) {
+                appState.phase = .playing
             }
         }
     }
