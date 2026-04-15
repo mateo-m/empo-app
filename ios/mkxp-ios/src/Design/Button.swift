@@ -71,16 +71,17 @@ private struct PrimaryButtonBody: View {
 /// Lightly brand-tinted glass with brand-colored text — supporting actions.
 struct SecondaryButtonStyle: ButtonStyle {
     var size: ButtonSize = .lg
+    var tint: Color = .brand
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(size.font.weight(.medium))
             .multilineTextAlignment(.center)
-            .foregroundStyle(.brand)
+            .foregroundStyle(tint)
             .padding(.horizontal, size.horizontalPadding)
             .padding(.vertical, size.verticalPadding)
-            .glassEffect(.regular.tint(.brand.opacity(0.1)).interactive(), in: .capsule)
+            .glassEffect(.regular.tint(tint.opacity(0.1)).interactive(), in: .capsule)
             .opacity(isEnabled ? 1 : 0.4)
             .onChange(of: configuration.isPressed) { _, pressed in
                 if pressed { Haptics.tap() }
@@ -117,6 +118,7 @@ extension ButtonStyle where Self == PrimaryButtonStyle {
 extension ButtonStyle where Self == SecondaryButtonStyle {
     static var secondary: SecondaryButtonStyle { SecondaryButtonStyle() }
     static func secondary(size: ButtonSize) -> SecondaryButtonStyle { SecondaryButtonStyle(size: size) }
+    static func secondary(size: ButtonSize = .lg, tint: Color) -> SecondaryButtonStyle { SecondaryButtonStyle(size: size, tint: tint) }
 }
 
 extension ButtonStyle where Self == OutlineButtonStyle {

@@ -15,9 +15,9 @@
 @property (nonatomic) int scancode;
 @property (nonatomic, copy) NSString *label;
 @property (nonatomic) BOOL editing;
+@property (nonatomic) BOOL dragging;
 @property (nonatomic) BOOL active;
 @property (nonatomic, strong) UILabel *textLabel;
-@property (nonatomic, strong) UIView *deleteBadge;
 /// Position stored as fraction of superview size (for persistence / rotation)
 @property (nonatomic) CGPoint relativeCenter;
 
@@ -43,6 +43,7 @@ typedef NS_OPTIONS(NSUInteger, DPadDirection) {
 @interface TCDPadView : UIView
 @property (nonatomic) DPadDirection activeDirections;
 @property (nonatomic) BOOL editing;
+@property (nonatomic) BOOL dragging;
 @property (nonatomic) CGPoint relativeCenter;
 
 - (instancetype)initWithSize:(CGFloat)size;

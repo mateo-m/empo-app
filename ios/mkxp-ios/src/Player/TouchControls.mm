@@ -18,7 +18,7 @@ static const CGFloat kDPadDeadZone       = 0.20; // fraction of radius
 static const CGFloat kButtonHitSlop      = 10.0; // extra radius for pointInside
 static const CGFloat kDPadHitSlop        = 15.0; // extra radius for pointInside
 static const CGFloat kDPadCancelRadius   = 30.0; // extra radius before cancel on move
-static const CGFloat kBorderWidth        = 2.0;
+static const CGFloat kBorderWidth        = 1.5;
 static const CGFloat kDeleteBadgeSize    = 22.0;
 static const CGFloat kSmallFontThreshold = 50.0; // below this size, use small font
 static const CGFloat kSmallFontSize      = 12.0;
@@ -27,6 +27,7 @@ static const CGFloat kArrowFontSize      = 16.0;
 static const CGFloat kAccessoryBarHeight = 80.0;
 static const CGFloat kAccessoryFontSize  = 13.0;
 static const CGFloat kKeyTapDuration     = 0.05; // seconds
+static const CGFloat kPressScale         = 0.90;
 
 // ============================================================================
 // MARK: - Key event injection (via bridge)
@@ -107,6 +108,7 @@ static int scancodeForCharacter(unichar c) {
 @interface TCButton ()
 @property (nonatomic, weak) UITouch *trackedTouch;
 @property (nonatomic, strong) UIImpactFeedbackGenerator *haptic;
+@property (nonatomic, strong) UIVisualEffectView *blurView;
 @end
 
 @implementation TCButton
@@ -119,47 +121,65 @@ static int scancodeForCharacter(unichar c) {
         _haptic = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
         self.multipleTouchEnabled = NO;
         self.exclusiveTouch = NO;
+        self.backgroundColor = UIColor.clearColor;
         self.layer.cornerRadius = size / 2.0;
-        self.layer.borderWidth  = kBorderWidth;
-        self.layer.borderColor  = [UIColor colorWithWhite:1.0 alpha:0.7].CGColor;
-        self.backgroundColor    = [UIColor colorWithWhite:1.0 alpha:0.25];
+
+        // Glass-like blur background
+        UIBlurEffect *blur = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterialDark];
+        _blurView = [[UIVisualEffectView alloc] initWithEffect:blur];
+        _blurView.frame = self.bounds;
+        _blurView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        _blurView.userInteractionEnabled = NO;
+        _blurView.layer.cornerRadius = size / 2.0;
+        _blurView.clipsToBounds = YES;
+        [self addSubview:_blurView];
+
+        // Subtle border
+        self.layer.borderWidth = kBorderWidth;
+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.3].CGColor;
 
         _textLabel = [[UILabel alloc] initWithFrame:self.bounds];
         _textLabel.text = label;
-        _textLabel.textColor = [UIColor colorWithWhite:1.0 alpha:1.0];
-        _textLabel.font = [UIFont systemFontOfSize:(size < kSmallFontThreshold ? kSmallFontSize : kLargeFontSize) weight:UIFontWeightBold];
+        _textLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.9];
+        _textLabel.font = [UIFont systemFontOfSize:(size < kSmallFontThreshold ? kSmallFontSize : kLargeFontSize) weight:UIFontWeightSemibold];
         _textLabel.textAlignment = NSTextAlignmentCenter;
+        _textLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         [self addSubview:_textLabel];
-
-        // Delete badge (hidden until edit mode)
-        _deleteBadge = [[UIView alloc] initWithFrame:CGRectMake(size - kDeleteBadgeSize + 4, -4, kDeleteBadgeSize, kDeleteBadgeSize)];
-        _deleteBadge.backgroundColor = [UIColor systemRedColor];
-        _deleteBadge.layer.cornerRadius = kDeleteBadgeSize / 2.0;
-        _deleteBadge.hidden = YES;
-        UILabel *x = [[UILabel alloc] initWithFrame:_deleteBadge.bounds];
-        x.text = @"\u00D7";
-        x.textColor = UIColor.whiteColor;
-        x.font = [UIFont systemFontOfSize:16 weight:UIFontWeightBold];
-        x.textAlignment = NSTextAlignmentCenter;
-        [_deleteBadge addSubview:x];
-        [self addSubview:_deleteBadge];
     }
     return self;
 }
 
 - (void)setActive:(BOOL)active {
     _active = active;
-    self.backgroundColor = active
-        ? [UIColor colorWithWhite:1.0 alpha:0.50]
-        : [UIColor colorWithWhite:1.0 alpha:0.25];
+    [UIView animateWithDuration:0.15
+                          delay:0
+         usingSpringWithDamping:0.7
+          initialSpringVelocity:0
+                        options:UIViewAnimationOptionAllowUserInteraction
+                     animations:^{
+        self.transform = active ? CGAffineTransformMakeScale(kPressScale, kPressScale) : CGAffineTransformIdentity;
+        self.layer.borderColor = active
+            ? [UIColor colorWithWhite:1.0 alpha:0.6].CGColor
+            : [UIColor colorWithWhite:1.0 alpha:0.3].CGColor;
+    } completion:nil];
 }
 
 - (void)setEditing:(BOOL)editing {
     _editing = editing;
-    _deleteBadge.hidden = !editing;
-    self.layer.borderColor = editing
-        ? [UIColor systemYellowColor].CGColor
-        : [UIColor colorWithWhite:1.0 alpha:0.7].CGColor;
+}
+
+- (void)setDragging:(BOOL)dragging {
+    _dragging = dragging;
+    [UIView animateWithDuration:0.15
+                          delay:0
+         usingSpringWithDamping:0.7
+          initialSpringVelocity:0
+                        options:UIViewAnimationOptionAllowUserInteraction
+                     animations:^{
+        self.layer.borderColor = dragging
+            ? [UIColor colorWithWhite:1.0 alpha:0.6].CGColor
+            : [UIColor colorWithWhite:1.0 alpha:0.3].CGColor;
+    } completion:nil];
 }
 
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
@@ -204,9 +224,10 @@ static int scancodeForCharacter(unichar c) {
     self.bounds = CGRectMake(0, 0, newSize, newSize);
     self.center = c;
     self.layer.cornerRadius = newSize / 2.0;
+    _blurView.frame = self.bounds;
+    _blurView.layer.cornerRadius = newSize / 2.0;
     _textLabel.frame = self.bounds;
-    _textLabel.font = [UIFont systemFontOfSize:(newSize < kSmallFontThreshold ? kSmallFontSize : kLargeFontSize) weight:UIFontWeightBold];
-    _deleteBadge.frame = CGRectMake(newSize - kDeleteBadgeSize + 4, -4, kDeleteBadgeSize, kDeleteBadgeSize);
+    _textLabel.font = [UIFont systemFontOfSize:(newSize < kSmallFontThreshold ? kSmallFontSize : kLargeFontSize) weight:UIFontWeightSemibold];
     [CATransaction commit];
 }
 
@@ -237,12 +258,80 @@ static int scancodeForCharacter(unichar c) {
 @end
 
 // ============================================================================
-// MARK: - TCDPadView (directional pad)
+// TCDPadOverlayView — transparent overlay that draws cross arms and arrows
+// on top of the blur view (drawRect on the parent would render behind it).
+// ============================================================================
+
+@interface TCDPadOverlayView : UIView
+@property (nonatomic, assign) DPadDirection activeDirections;
+@end
+
+@implementation TCDPadOverlayView
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.backgroundColor = UIColor.clearColor;
+        self.userInteractionEnabled = NO;
+    }
+    return self;
+}
+
+- (void)drawRect:(CGRect)rect {
+    CGContextRef ctx = UIGraphicsGetCurrentContext();
+    CGFloat s = rect.size.width;
+    CGFloat armW = s * 0.34;
+    CGFloat off = (s - armW) / 2.0;
+    CGFloat inset = 6;
+
+    UIBezierPath *cross = [UIBezierPath bezierPath];
+    [cross appendPath:[UIBezierPath bezierPathWithRoundedRect:CGRectMake(off, inset, armW, s - inset * 2)
+                                                 cornerRadius:armW * 0.25]];
+    [cross appendPath:[UIBezierPath bezierPathWithRoundedRect:CGRectMake(inset, off, s - inset * 2, armW)
+                                                 cornerRadius:armW * 0.25]];
+
+    CGContextSetFillColorWithColor(ctx, [UIColor colorWithWhite:1.0 alpha:0.08].CGColor);
+    [cross fill];
+
+    CGFloat qS = armW * 0.65;
+    CGFloat cx = s / 2, cy = s / 2;
+    struct { DPadDirection d; CGFloat x, y; const char *arrow; } dirs[] = {
+        {DPadUp,    cx, cy - s * 0.27, "\u25B2"},
+        {DPadDown,  cx, cy + s * 0.27, "\u25BC"},
+        {DPadLeft,  cx - s * 0.27, cy, "\u25C0"},
+        {DPadRight, cx + s * 0.27, cy, "\u25B6"},
+    };
+    for (int i = 0; i < 4; i++) {
+        BOOL active = (_activeDirections & dirs[i].d) != 0;
+        if (active) {
+            CGContextSetFillColorWithColor(ctx, [UIColor colorWithWhite:1.0 alpha:0.25].CGColor);
+            CGContextFillEllipseInRect(ctx, CGRectMake(dirs[i].x - qS/2, dirs[i].y - qS/2, qS, qS));
+        }
+        NSString *arrow = [NSString stringWithUTF8String:dirs[i].arrow];
+        NSMutableParagraphStyle *ps = [NSMutableParagraphStyle new];
+        ps.alignment = NSTextAlignmentCenter;
+        NSDictionary *attrs = @{
+            NSFontAttributeName: [UIFont systemFontOfSize:kArrowFontSize weight:UIFontWeightSemibold],
+            NSForegroundColorAttributeName: [UIColor colorWithWhite:1.0 alpha:(active ? 1.0 : 0.5)],
+            NSParagraphStyleAttributeName: ps,
+        };
+        CGSize ts = [arrow sizeWithAttributes:attrs];
+        [arrow drawInRect:CGRectMake(dirs[i].x - ts.width/2, dirs[i].y - ts.height/2, ts.width, ts.height)
+           withAttributes:attrs];
+    }
+}
+
+@end
+
+// ============================================================================
+// TCDPadView (directional pad)
 // ============================================================================
 
 @interface TCDPadView ()
 @property (nonatomic, weak) UITouch *trackedTouch;
 @property (nonatomic, strong) UISelectionFeedbackGenerator *haptic;
+@property (nonatomic, strong) UIVisualEffectView *blurView;
+@property (nonatomic, strong) TCDPadOverlayView *overlayView;
 @end
 
 @implementation TCDPadView
@@ -254,60 +343,44 @@ static int scancodeForCharacter(unichar c) {
         self.backgroundColor = UIColor.clearColor;
         self.multipleTouchEnabled = NO;
         self.exclusiveTouch = NO;
+        self.clipsToBounds = YES;
+        self.layer.cornerRadius = size / 2.0;
+
+        UIBlurEffect *blur = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemUltraThinMaterialDark];
+        _blurView = [[UIVisualEffectView alloc] initWithEffect:blur];
+        _blurView.frame = self.bounds;
+        _blurView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        _blurView.userInteractionEnabled = NO;
+        _blurView.layer.cornerRadius = size / 2.0;
+        _blurView.clipsToBounds = YES;
+        [self addSubview:_blurView];
+
+        _overlayView = [[TCDPadOverlayView alloc] initWithFrame:self.bounds];
+        _overlayView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [self addSubview:_overlayView];
+
+        self.layer.borderWidth = kBorderWidth;
+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.3].CGColor;
     }
     return self;
 }
 
-- (void)drawRect:(CGRect)rect {
-    CGContextRef ctx = UIGraphicsGetCurrentContext();
-    CGFloat s = rect.size.width;
-    CGFloat armW = s * 0.36;
-    CGFloat off = (s - armW) / 2.0;
+- (void)setEditing:(BOOL)editing {
+    _editing = editing;
+}
 
-    CGContextSetFillColorWithColor(ctx, [UIColor colorWithWhite:0.3 alpha:0.5].CGColor);
-    CGContextFillEllipseInRect(ctx, rect);
-
-    UIBezierPath *cross = [UIBezierPath bezierPath];
-    [cross appendPath:[UIBezierPath bezierPathWithRoundedRect:CGRectMake(off, 4, armW, s - 8)
-                                                 cornerRadius:armW * 0.2]];
-    [cross appendPath:[UIBezierPath bezierPathWithRoundedRect:CGRectMake(4, off, s - 8, armW)
-                                                 cornerRadius:armW * 0.2]];
-
-    CGContextSetFillColorWithColor(ctx, [UIColor colorWithWhite:1.0 alpha:0.20].CGColor);
-    [cross fill];
-
-    CGContextSetStrokeColorWithColor(ctx,
-        _editing ? [UIColor systemYellowColor].CGColor
-                 : [UIColor colorWithWhite:1.0 alpha:0.65].CGColor);
-    CGContextSetLineWidth(ctx, kBorderWidth);
-    [cross stroke];
-
-    CGFloat qS = armW * 0.7;
-    CGFloat cx = s / 2, cy = s / 2;
-    struct { DPadDirection d; CGFloat x, y; const char *arrow; } dirs[] = {
-        {DPadUp,    cx, cy - s * 0.28, "\u25B2"},
-        {DPadDown,  cx, cy + s * 0.28, "\u25BC"},
-        {DPadLeft,  cx - s * 0.28, cy, "\u25C0"},
-        {DPadRight, cx + s * 0.28, cy, "\u25B6"},
-    };
-    for (int i = 0; i < 4; i++) {
-        BOOL active = (_activeDirections & dirs[i].d) != 0;
-        if (active) {
-            CGContextSetFillColorWithColor(ctx, [UIColor colorWithWhite:1.0 alpha:0.45].CGColor);
-            CGContextFillEllipseInRect(ctx, CGRectMake(dirs[i].x - qS/2, dirs[i].y - qS/2, qS, qS));
-        }
-        NSString *arrow = [NSString stringWithUTF8String:dirs[i].arrow];
-        NSMutableParagraphStyle *ps = [NSMutableParagraphStyle new];
-        ps.alignment = NSTextAlignmentCenter;
-        NSDictionary *attrs = @{
-            NSFontAttributeName: [UIFont systemFontOfSize:kArrowFontSize weight:UIFontWeightBold],
-            NSForegroundColorAttributeName: [UIColor colorWithWhite:1.0 alpha:(active ? 1.0 : 0.75)],
-            NSParagraphStyleAttributeName: ps,
-        };
-        CGSize ts = [arrow sizeWithAttributes:attrs];
-        [arrow drawInRect:CGRectMake(dirs[i].x - ts.width/2, dirs[i].y - ts.height/2, ts.width, ts.height)
-           withAttributes:attrs];
-    }
+- (void)setDragging:(BOOL)dragging {
+    _dragging = dragging;
+    [UIView animateWithDuration:0.15
+                          delay:0
+         usingSpringWithDamping:0.7
+          initialSpringVelocity:0
+                        options:UIViewAnimationOptionAllowUserInteraction
+                     animations:^{
+        self.layer.borderColor = dragging
+            ? [UIColor colorWithWhite:1.0 alpha:0.6].CGColor
+            : [UIColor colorWithWhite:1.0 alpha:0.3].CGColor;
+    } completion:nil];
 }
 
 - (DPadDirection)directionForTouch:(UITouch *)touch {
@@ -351,7 +424,8 @@ static int scancodeForCharacter(unichar c) {
     if (!(old & DPadRight) && (newDir & DPadRight)) injectKey(MKXP_SCANCODE_RIGHT, YES);
 
     _activeDirections = newDir;
-    [self setNeedsDisplay];
+    _overlayView.activeDirections = newDir;
+    [_overlayView setNeedsDisplay];
 
     // Tick on direction change (not on release)
     if (newDir != DPadNone && controllerHapticsEnabled()) {
