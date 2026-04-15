@@ -3,27 +3,30 @@ import SwiftUI
 struct Chip: View {
     private let label: String?
     private let systemImage: String?
+    private let tint: Color
 
-    /// Chip with icon and label.
-    init(_ label: String, systemImage: String) {
+    init(_ label: String, systemImage: String, tint: Color = .black.opacity(0.3)) {
         self.label = label
         self.systemImage = systemImage
+        self.tint = tint
     }
 
-    /// Icon-only chip.
-    init(systemImage: String) {
+    init(systemImage: String, tint: Color = .black.opacity(0.3)) {
         self.label = nil
         self.systemImage = systemImage
+        self.tint = tint
     }
 
-    /// Label-only chip.
-    init(_ label: String) {
+    init(_ label: String, tint: Color = .black.opacity(0.3)) {
         self.label = label
         self.systemImage = nil
+        self.tint = tint
     }
 
+    private var isIconOnly: Bool { label == nil && systemImage != nil }
+
     var body: some View {
-        HStack(spacing: Spacing.xs) {
+        let content = HStack(spacing: Spacing.xs) {
             if let systemImage {
                 Image(systemName: systemImage)
             }
@@ -32,9 +35,17 @@ struct Chip: View {
             }
         }
         .font(.caption2)
-        .foregroundStyle(.primary)
-        .padding(.horizontal, label != nil ? Spacing.md : 6)
-        .padding(.vertical, 5)
-        .glassEffect(.regular.tint(.black.opacity(0.3)), in: .capsule)
+        .foregroundStyle(.white)
+
+        if isIconOnly {
+            content
+                .padding(6)
+                .glassEffect(.regular.tint(tint), in: .circle)
+        } else {
+            content
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, 5)
+                .glassEffect(.regular.tint(tint), in: .capsule)
+        }
     }
 }
