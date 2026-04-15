@@ -4,6 +4,13 @@ import SwiftUI
 private let kToolbarIdleDelay: TimeInterval = 3.0
 private let kControlsZonePadding: CGFloat = 12.0
 private let kControlsZoneInnerPadding: CGFloat = 6.0
+private let kToolbarGap: CGFloat = 8.0
+private let kToolbarEdgePad: CGFloat = 4.0
+private let kToolbarPortraitSizeReduce: CGFloat = 8.0
+private let kEditToolbarHalfHeight: CGFloat = 20.0
+private let kMinLandscapeInset: CGFloat = 12.0
+private let kFallbackDeviceCornerRadius: CGFloat = 55.0
+private let kDragScaleFactor: CGFloat = 1.08
 
 
 struct PlayerView: View {
@@ -35,8 +42,8 @@ struct PlayerView: View {
         GeometryReader { geo in
             let isPortrait = geo.size.height > geo.size.width
             let gameRect = engineState.gameRect
-            let safeArea = geo.safeAreaInsets
-            let toolbarBtnSize = isPortrait && gameRect.height > 0 ? AppSize.toolbarButton - 8 : AppSize.toolbarButton
+            let safeArea = AppWindow.currentSafeArea
+            let toolbarBtnSize = isPortrait && gameRect.height > 0 ? AppSize.toolbarButton - kToolbarPortraitSizeReduce : AppSize.toolbarButton
             let controlsMinY = toolbarBottomY(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize)
 
             ZStack {
@@ -146,12 +153,12 @@ struct PlayerView: View {
     @ViewBuilder
     private func dpadView(in geo: GeometryProxy, controlsMinY: CGFloat) -> some View {
         let size = layout.dpadSize
-        let pos = absolutePosition(for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size), safeArea: geo.safeAreaInsets, controlsMinY: controlsMinY)
+        let pos = absolutePosition(for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size), safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY)
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
 
         DPadRepresentable(size: size, editing: editMode, dragging: draggingDPad)
             .frame(width: size, height: size)
-            .scaleEffect(draggingDPad ? 1.08 : 1.0)
+            .scaleEffect(draggingDPad ? kDragScaleFactor : 1.0)
             .animation(.spring(duration: Motion.durationFast, bounce: 0), value: draggingDPad)
             .position(pos)
             .transition(.controlAppear(anchor: anchor))
@@ -178,7 +185,7 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func actionButtonView(button: ButtonModel, index: Int, in geo: GeometryProxy, controlsMinY: CGFloat) -> some View {
-        let pos = absolutePosition(for: button.relativeCenter, in: geo.size, controlSize: CGSize(width: button.size, height: button.size), safeArea: geo.safeAreaInsets, controlsMinY: controlsMinY)
+        let pos = absolutePosition(for: button.relativeCenter, in: geo.size, controlSize: CGSize(width: button.size, height: button.size), safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY)
         let isDragging = draggingButtonID == button.id
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
 
@@ -206,7 +213,7 @@ struct PlayerView: View {
                 .transition(.scale.combined(with: .opacity))
             }
         }
-        .scaleEffect(isDragging ? 1.08 : 1.0)
+        .scaleEffect(isDragging ? kDragScaleFactor : 1.0)
         .animation(.spring(duration: Motion.durationFast, bounce: 0), value: isDragging)
         .position(pos)
         .transition(.controlAppear(anchor: anchor))
@@ -233,7 +240,7 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func toolbarButtons(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
-        let btnSize = isPortrait && gameRect.height > 0 ? AppSize.toolbarButton - 8 : AppSize.toolbarButton
+        let btnSize = isPortrait && gameRect.height > 0 ? AppSize.toolbarButton - kToolbarPortraitSizeReduce : AppSize.toolbarButton
         let gap: CGFloat = isPortrait ? Spacing.sm : Spacing.md
 
         let buttons: [(icon: String, label: String, action: () -> Void, tint: Color?)] = {
@@ -277,8 +284,8 @@ struct PlayerView: View {
     @ViewBuilder
     private func editToolbar(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
         let yPos: CGFloat = isPortrait && gameRect.height > 0
-            ? gameRect.origin.y + gameRect.height + 8 + 20
-            : safeArea.top + 4 + 20
+            ? gameRect.origin.y + gameRect.height + kToolbarGap + kEditToolbarHalfHeight
+            : max(safeArea.top, kMinLandscapeInset) + kToolbarEdgePad + kEditToolbarHalfHeight
 
         HStack(spacing: Spacing.xl) {
             Button("+ Add") { showAddSheet = true }
@@ -337,7 +344,7 @@ struct PlayerView: View {
 
     private func zoneCornerRadii(safeArea: EdgeInsets) -> (top: CGFloat, bottom: CGFloat) {
         let pad = kControlsZonePadding
-        let deviceCorner = (UIScreen.main.value(forKey: "displayCornerRadius") as? CGFloat) ?? 55
+        let deviceCorner = (UIScreen.main.value(forKey: "displayCornerRadius") as? CGFloat) ?? kFallbackDeviceCornerRadius
         let horizontalGap = safeArea.leading + pad
         let bottomGap = safeArea.bottom + pad
         let minGap = min(horizontalGap, bottomGap)
@@ -350,31 +357,34 @@ struct PlayerView: View {
     private func toolbarOrigin(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize, btnSize: CGFloat, gap: CGFloat, count: CGFloat) -> CGPoint {
         let totalW = count * btnSize + (count - 1) * gap
         if isPortrait && gameRect.height > 0 {
-            // Right-aligned, just below game
-            let x = geoSize.width - safeArea.trailing - 8 - totalW / 2
-            let y = gameRect.origin.y + gameRect.height + 8 + btnSize / 2
+            let x = geoSize.width - safeArea.trailing - kToolbarGap - totalW / 2
+            let y = gameRect.origin.y + gameRect.height + kToolbarGap + btnSize / 2
             return CGPoint(x: x, y: y)
         } else {
-            // Landscape: top-right
-            let x = geoSize.width - safeArea.trailing - 4 - totalW / 2
-            let y = safeArea.top + 4 + btnSize / 2
+            let rightInset = max(safeArea.trailing, kMinLandscapeInset)
+            let topInset = max(safeArea.top, kMinLandscapeInset)
+            let x = geoSize.width - rightInset - kToolbarEdgePad - totalW / 2
+            let y = topInset + kToolbarEdgePad + btnSize / 2
             return CGPoint(x: x, y: y)
         }
     }
 
     private func debugOverlayPosition(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets) -> CGPoint {
         if isPortrait && gameRect.height > 0 {
-            return CGPoint(x: safeArea.leading + 4 + 110, y: gameRect.origin.y + gameRect.height + 8 + 50)
+            return CGPoint(x: safeArea.leading + kToolbarEdgePad + 110, y: gameRect.origin.y + gameRect.height + kToolbarGap + 50)
         } else {
-            return CGPoint(x: safeArea.leading + 4 + 110, y: safeArea.top + 4 + 50)
+            let leftInset = max(safeArea.leading, kMinLandscapeInset)
+            let topInset = max(safeArea.top, kMinLandscapeInset)
+            return CGPoint(x: leftInset + kToolbarEdgePad + 110, y: topInset + kToolbarEdgePad + 50)
         }
     }
 
     private func toolbarBottomY(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat) -> CGFloat {
         if isPortrait && gameRect.height > 0 {
-            return gameRect.origin.y + gameRect.height + 8 + btnSize + 4
+            return gameRect.origin.y + gameRect.height + kToolbarGap + btnSize + kToolbarEdgePad
         } else {
-            return safeArea.top + 4 + btnSize + 4
+            let topInset = max(safeArea.top, kMinLandscapeInset)
+            return topInset + kToolbarEdgePad + btnSize + kToolbarEdgePad
         }
     }
 
@@ -394,7 +404,7 @@ struct PlayerView: View {
     }
 
     private func clampToSafeArea(_ point: CGPoint, controlSize: CGFloat, in geo: GeometryProxy, controlsMinY: CGFloat) -> CGPoint {
-        let safe = geo.safeAreaInsets
+        let safe = AppWindow.currentSafeArea
         let pad = kControlsZonePadding + kControlsZoneInnerPadding
         let hw = controlSize * 0.5
         let x = max(safe.leading + pad + hw, min(point.x, geo.size.width - safe.trailing - pad - hw))

@@ -98,6 +98,12 @@ class AppWindow: UIWindow {
         return allowKeyWindow
     }
 
+    static var currentSafeArea: EdgeInsets {
+        guard let window = instance else { return .init() }
+        let insets = window.safeAreaInsets
+        return EdgeInsets(top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
+    }
+
     @objc static func setAllowKeyWindow(_ allow: Bool) {
         guard let window = instance else { return }
         window.allowKeyWindow = allow
