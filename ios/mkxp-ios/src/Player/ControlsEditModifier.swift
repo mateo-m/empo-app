@@ -214,6 +214,7 @@ struct ControlsEditDialogs: ViewModifier {
                 Button("Reset", role: .destructive) {
                     layout.resetWithStagger()
                 }
+                .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Restore default layout?")
