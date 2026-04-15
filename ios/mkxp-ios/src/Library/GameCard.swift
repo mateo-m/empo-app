@@ -15,7 +15,6 @@ struct GameCard: View {
         }
     }
 
-    // MARK: - Title Inside Card
 
     private var insideCard: some View {
         Color.clear
@@ -73,7 +72,6 @@ struct GameCard: View {
             .environment(\.colorScheme, .dark)
     }
 
-    // MARK: - Title Under Card
 
     private var underCard: some View {
         VStack(spacing: Spacing.sm) {
@@ -104,7 +102,6 @@ struct GameCard: View {
         }
     }
 
-    // MARK: - Shared
 
     @ViewBuilder
     private var centerOverlay: some View {
@@ -157,7 +154,6 @@ struct GameCard: View {
     }
 }
 
-// MARK: - Import Progress Indicator
 
 private struct ImportProgressView: View {
     let progress: Double
@@ -208,7 +204,6 @@ private struct ImportProgressView: View {
     }
 }
 
-// MARK: - Game List Row
 
 struct GameListRow: View {
     let game: GameEntry
@@ -277,7 +272,6 @@ struct GameListRow: View {
     }
 }
 
-// MARK: - List Row Status Indicator (Morphing)
 
 /// Animates between importing → ready/invalid with a shared circle that morphs.
 private struct ListRowStatusIndicator: View {

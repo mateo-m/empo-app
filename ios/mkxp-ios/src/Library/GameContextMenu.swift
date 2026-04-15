@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - Game Context Menu
 
 struct GameContextMenuModifier: ViewModifier {
     let game: GameEntry

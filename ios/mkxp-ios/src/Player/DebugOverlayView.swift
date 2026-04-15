@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - Debug Overlay
 
 struct DebugOverlayView: View {
     @State private var fps: Double = 0
@@ -71,7 +70,6 @@ struct DebugOverlayView: View {
     }
 }
 
-// MARK: - FPS Ring Buffer
 
 private struct FPSRingBuffer {
     let capacity: Int

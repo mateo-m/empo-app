@@ -141,7 +141,6 @@ struct ImportButton: View {
     }
 }
 
-// MARK: - Squash-and-Stretch Keyframe Values
 
 private struct ImportButtonSquash {
     var scaleX: CGFloat = 1.0

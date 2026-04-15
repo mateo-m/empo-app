@@ -2,7 +2,6 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 
-// MARK: - Image Source Picker Modifier
 
 /// Presents a confirmation dialog with three image source options (camera roll,
 /// camera, document picker), then shows the appropriate picker.
@@ -63,7 +62,6 @@ extension View {
     }
 }
 
-// MARK: - Photo Library Picker (PHPicker)
 
 private struct PhotoLibraryPicker: UIViewControllerRepresentable {
     let onImageSelected: (UIImage) -> Void
@@ -101,7 +99,6 @@ private struct PhotoLibraryPicker: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - Camera Picker
 
 private struct CameraPicker: UIViewControllerRepresentable {
     let onImageSelected: (UIImage) -> Void
@@ -135,7 +132,6 @@ private struct CameraPicker: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - Document Picker (for images)
 
 private struct ImageDocumentPicker: UIViewControllerRepresentable {
     let onImageSelected: (UIImage) -> Void

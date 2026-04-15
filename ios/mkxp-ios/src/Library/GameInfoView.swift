@@ -29,8 +29,6 @@ struct GameInfoView: View {
         self.originalTitle = GameEntry.parseINITitle(at: gameDir) ?? "Unknown Game"
     }
 
-    // MARK: - Computed
-
     private var bannerImage: UIImage? {
         guard let path = metadata.customBannerPath(for: game.id) else { return nil }
         return ImageCache.shared.image(for: path)
@@ -100,7 +98,7 @@ struct GameInfoView: View {
                         }
                     }
 
-                    LabeledContent("ID") {
+                    LabeledContent("Local ID") {
                         Text(game.id)
                             .monospaced()
                             .font(.caption)
@@ -204,8 +202,6 @@ struct GameInfoView: View {
         .tint(.brand)
     }
 
-    // MARK: - Banner Header
-
     private let bannerHeight: CGFloat = 260
 
     private var bannerHeader: some View {
@@ -227,12 +223,15 @@ struct GameInfoView: View {
                     )
                 )
                 .overlay(alignment: .topTrailing) {
-                    Label("Change banner", systemImage: "photo")
-                        .font(.caption2)
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, Spacing.md)
-                        .padding(.vertical, 5)
-                        .glassEffect(.regular, in: .capsule)
+                    HStack(spacing: Spacing.xs) {
+                        Image(systemName: "photo")
+                        Text("Change banner")
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, 5)
+                    .glassEffect(.regular, in: .capsule)
                         .opacity(0.5)
                         .padding(.top, 72)
                         .padding(.trailing, Spacing.xl)
@@ -243,11 +242,7 @@ struct GameInfoView: View {
             HStack(spacing: 14) {
                 artworkView
                     .overlay(alignment: .topTrailing) {
-                        Image(systemName: "photo")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .padding(Spacing.sm)
-                            .glassEffect(.regular, in: .circle)
+                        IconButton("photo", style: .glass, size: 24)
                             .opacity(0.5)
                             .padding(Spacing.xs)
                     }
@@ -272,11 +267,7 @@ struct GameInfoView: View {
                                 .font(.title2.weight(.bold))
                                 .lineLimit(1)
 
-                            Image(systemName: "pencil")
-                                .font(.subheadline.weight(.semibold))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .glassEffect(.regular, in: .circle)
+                            IconButton("pencil", style: .glass, size: 30)
                                 .opacity(Overlay.light + 0.1)
                         }
                     }
@@ -358,8 +349,6 @@ struct GameInfoView: View {
         .clipShape(RoundedRectangle(cornerRadius: Radius.md))
     }
 
-    // MARK: - Formatters
-
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
@@ -372,8 +361,6 @@ struct GameInfoView: View {
         f.unitsStyle = .full
         return f
     }()
-
-    // MARK: - Actions
 
     private func finishEditingTitle() {
         guard isEditingTitle else { return }

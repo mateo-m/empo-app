@@ -1,6 +1,5 @@
 import Foundation
 
-// MARK: - Resolution Presets
 
 struct ResolutionPreset: Identifiable, Hashable, Codable {
     let width: Int
@@ -34,7 +33,6 @@ struct ResolutionPreset: Identifiable, Hashable, Codable {
     ]
 }
 
-// MARK: - Vertical Alignment
 
 enum VerticalAlignment: String, Codable, CaseIterable {
     case top
@@ -58,7 +56,6 @@ enum VerticalAlignment: String, Codable, CaseIterable {
     }
 }
 
-// MARK: - Game Settings
 
 /// Per-game settings stored as `ios_settings.json` in each game directory.
 /// All fields are optional — nil means "use game/engine default".
@@ -82,14 +79,12 @@ struct GameSettings: Codable, Equatable {
     // Engine
     var postloadScripts: Bool?         // execute postload scripts for common fixes
 
-    // MARK: - File Names
 
     private static let settingsFilename = "ios_settings.json"
     private static let originalConfigFilename = "mkxp.original.json"
     private static let configFilename = "mkxp.json"
     private static let cheatsFilename = "configuration.json"
 
-    // MARK: - Load / Save
 
     static func load(from gameDirectory: URL) -> GameSettings {
         let url = gameDirectory.appendingPathComponent(settingsFilename)
@@ -109,7 +104,6 @@ struct GameSettings: Codable, Equatable {
         }
     }
 
-    // MARK: - Cheats (separate file)
 
     static func loadCheats(from gameDirectory: URL) -> Bool {
         let url = gameDirectory.appendingPathComponent(cheatsFilename)
@@ -133,7 +127,6 @@ struct GameSettings: Codable, Equatable {
         }
     }
 
-    // MARK: - Config Merging
 
     /// Reads the game's mkxp.json defaults. Prefers the original backup
     /// over merged config so we always show the developer's intended values.
@@ -236,7 +229,6 @@ struct GameSettings: Codable, Equatable {
         self != GameSettings()
     }
 
-    // MARK: - JSON Helpers
 
     /// Parses JSON with `//` line comments (as used by mkxp.json).
     static func parseJSONWithComments(_ raw: String) -> [String: Any]? {
@@ -293,7 +285,6 @@ struct GameSettings: Codable, Equatable {
     }
 }
 
-// MARK: - Game Config Defaults
 
 /// Values from the game's mkxp.json — the developer's intended defaults.
 struct GameConfigDefaults {

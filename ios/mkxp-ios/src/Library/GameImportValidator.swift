@@ -2,7 +2,6 @@ import Foundation
 
 enum GameImportValidator {
 
-    // MARK: - Errors
 
     enum ImportError: LocalizedError {
         case unzipFailed
@@ -30,7 +29,6 @@ enum GameImportValidator {
         }
     }
 
-    // MARK: - Public
 
     /// Validates that a directory is a valid RPG Maker game we can run.
     /// Throws ImportError on failure.
@@ -77,7 +75,6 @@ enum GameImportValidator {
         throw ImportError.notAnRPGMakerGame
     }
 
-    // MARK: - RGSS Version Detection
 
     /// Detected RGSS version: 1 = XP, 2 = VX, 3 = VX Ace
     private enum RGSSVersion: Int {
@@ -101,7 +98,6 @@ enum GameImportValidator {
         return RGSSVersion(rawValue: ver)
     }
 
-    // MARK: - INI Scripts Detection
 
     /// Parses an .ini file looking for a [Game] section with a Scripts= entry.
     /// Returns the detected RGSS version and the raw scripts path.
@@ -132,7 +128,6 @@ enum GameImportValidator {
         return nil
     }
 
-    // MARK: - Script File Validation
 
     /// Validates that an RGSS scripts file (Marshal-dumped Array) exists and is valid.
     private static func validateRGSSScripts(at gameDir: URL, scriptsPath: String) throws {
@@ -170,7 +165,6 @@ enum GameImportValidator {
         }
     }
 
-    // MARK: - mkxp.json
 
     private static func customScriptPath(_ url: URL) -> String? {
         let jsonURL = url.appendingPathComponent("mkxp.json")
@@ -183,7 +177,6 @@ enum GameImportValidator {
         return script
     }
 
-    // MARK: - Runtime Support
 
     private static func checkRuntimeSupport(_ version: RGSSVersion) throws {
         // Currently we ship Ruby 1.8, which supports RGSS1 (XP) and RGSS2 (VX).
