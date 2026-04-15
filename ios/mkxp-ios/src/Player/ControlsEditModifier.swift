@@ -1,6 +1,5 @@
 import SwiftUI
 
-// MARK: - Controls Edit Dialogs
 
 struct ControlsEditDialogs: ViewModifier {
     var layout: ControlsLayout

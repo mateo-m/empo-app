@@ -71,7 +71,6 @@ struct RootView: View {
     }
 }
 
-// MARK: - Splash Screen
 
 private struct SplashView: View {
     let exiting: Bool
@@ -115,7 +114,6 @@ private struct SplashView: View {
     }
 }
 
-// MARK: - Pixel Dither Pattern
 
 private struct PixelDitherPattern: View {
     let color: Color

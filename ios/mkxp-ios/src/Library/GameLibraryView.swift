@@ -207,7 +207,6 @@ struct GameLibraryView: View {
         }
     }
 
-    // MARK: - Empty State
 
     private var emptyStateContent: some View {
         EmptyStateView(
@@ -219,21 +218,14 @@ struct GameLibraryView: View {
         )
     }
 
-    // MARK: - Header
 
     private let headerHeight: CGFloat = 56
     private let searchBarHeight: CGFloat = 44
 
     private var libraryHeader: some View {
         HStack {
-            Button(action: { showSettings = true }) {
-                Image(systemName: "gearshape")
-                    .font(.body)
-                    .padding(10)
-            }
-            .tint(.primary)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .accessibilityLabel("Settings")
+            IconButton("gearshape", style: .outline) { showSettings = true }
+                .accessibilityLabel("Settings")
             Spacer()
             Text("Library")
                 .font(.title)
@@ -246,7 +238,6 @@ struct GameLibraryView: View {
         .frame(height: headerHeight)
     }
 
-    // MARK: - Search Bar
 
     private var searchBar: some View {
         HStack(spacing: Spacing.md) {
@@ -271,22 +262,18 @@ struct GameLibraryView: View {
             .frame(height: searchBarHeight)
             .glassEffect(.regular.interactive(), in: .capsule)
 
-            Button {
+            IconButton(
+                settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2",
+                style: .outline,
+                contentTransition: .symbolEffect(.replace)
+            ) {
                 withAnimation(Motion.standard) {
                     settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
                 }
-                // Trigger stagger after new views mount
                 DispatchQueue.main.async {
                     staggerTrigger = UUID()
                 }
-            } label: {
-                Image(systemName: settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2")
-                    .font(.body)
-                    .foregroundStyle(.primary)
-                    .frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
-                    .contentTransition(.symbolEffect(.replace))
             }
-            .glassEffect(.regular.interactive(), in: .circle)
             .accessibilityLabel(settings.libraryDisplayMode == .grid ? "Switch to list" : "Switch to grid")
         }
         .padding(.horizontal)
@@ -294,7 +281,6 @@ struct GameLibraryView: View {
         .tint(.primary)
     }
 
-    // MARK: - Game Content
 
     private var gameContent: some View {
         ScrollView {
@@ -326,7 +312,6 @@ struct GameLibraryView: View {
         .animation(Motion.standard, value: filteredGames.map(\.id))
     }
 
-    // MARK: - Hero Card
 
     private func heroCard(for game: GameEntry) -> some View {
         let isPaused = PauseManager.shared.pausedGame?.id == game.id
@@ -462,7 +447,6 @@ struct GameLibraryView: View {
         }
     }
 
-    // MARK: - Game Tap Handling
 
     private func handleGameTap(_ game: GameEntry) {
         let pauseManager = PauseManager.shared
@@ -478,7 +462,6 @@ struct GameLibraryView: View {
         }
     }
 
-    // MARK: - Import
 
     private func importGames(from urls: [URL]) {
         for url in urls {

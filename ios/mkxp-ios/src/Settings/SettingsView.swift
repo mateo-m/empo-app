@@ -188,7 +188,6 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Viewport Bounds Color Picker
 
 private struct ViewportBoundsColorPicker: View {
     @Binding var color: Color
@@ -217,7 +216,6 @@ private struct ViewportBoundsColorPicker: View {
     }
 }
 
-// MARK: - Device Preview
 
 /// Miniature device mockup showing the game viewport and bounds color.
 private struct DevicePreview: View {

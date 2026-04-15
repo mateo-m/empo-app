@@ -109,7 +109,6 @@ enum ZipExtractor {
         NSLog("[ZipExtractor] extraction complete")
     }
 
-    // MARK: - Inflate
 
     private static func inflate(_ compressed: Data, expectedSize: Int) throws -> Data {
         var stream = z_stream()
@@ -135,7 +134,6 @@ enum ZipExtractor {
         return output
     }
 
-    // MARK: - Binary Helpers
 
     private static func readU16(_ data: Data, _ offset: Int) -> UInt16 {
         let base = data.startIndex + offset

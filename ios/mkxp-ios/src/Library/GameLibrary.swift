@@ -25,7 +25,6 @@ class GameLibrary {
         syncMetadata()
     }
 
-    // MARK: - Scan
 
     func reload() {
         // Scan on background to avoid blocking UI during filesystem I/O
@@ -147,7 +146,6 @@ class GameLibrary {
         )
     }
 
-    // MARK: - Entry Refresh
 
     /// Re-reads a single game entry from disk + metadata for immediate UI feedback.
     func refreshGameEntry(id: String) {
@@ -158,7 +156,6 @@ class GameLibrary {
         withAnimation { games[idx] = entry }
     }
 
-    // MARK: - Import
 
     private struct ImportCancelled: Error {}
 
@@ -336,7 +333,6 @@ class GameLibrary {
         metadata.save(for: gameId)
     }
 
-    // MARK: - Delete
 
     func deleteGame(_ entry: GameEntry, onError: ((String) -> Void)? = nil) {
         let wasImporting = entry.isImporting
@@ -374,7 +370,6 @@ class GameLibrary {
         }
     }
 
-    // MARK: - Metadata Helpers
 
     nonisolated private static func parseGameTitle(at url: URL) -> String? {
         GameEntry.parseINITitle(at: url)
@@ -395,7 +390,6 @@ class GameLibrary {
         return nil
     }
 
-    // MARK: - Private Helpers
 
     /// Turns a game title into a filesystem-friendly slug (e.g. "Pokemon Z" → "pokemon-z").
     nonisolated private static func slugify(_ string: String) -> String {

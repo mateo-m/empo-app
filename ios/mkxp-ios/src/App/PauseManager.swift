@@ -18,7 +18,6 @@ final class PauseManager {
 
     private init() {}
 
-    // MARK: - Pause
 
     func requestPause() {
         guard AppSettings.shared.isEnabled(.gamePause),
@@ -40,7 +39,6 @@ final class PauseManager {
         }
     }
 
-    // MARK: - Resume
 
     /// Phase change is delayed so the hero zoom animation plays while
     /// the library is still visible. The snapshot stays alive — PlayerView
@@ -59,7 +57,6 @@ final class PauseManager {
         }
     }
 
-    // MARK: - Reset
 
     func reset() {
         pauseSnapshot = nil

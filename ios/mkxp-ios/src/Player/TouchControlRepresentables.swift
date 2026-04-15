@@ -1,7 +1,6 @@
 import SwiftUI
 
 // ============================================================================
-// MARK: - DPadRepresentable
 // ============================================================================
 
 /// Wraps TCDPadView (ObjC++) for use in SwiftUI.
@@ -20,7 +19,6 @@ struct DPadRepresentable: UIViewRepresentable {
 }
 
 // ============================================================================
-// MARK: - ActionButtonRepresentable
 // ============================================================================
 
 /// Wraps TCButton (ObjC++) for use in SwiftUI.
@@ -51,7 +49,6 @@ struct ActionButtonRepresentable: UIViewRepresentable {
 }
 
 // ============================================================================
-// MARK: - KeyboardFieldRepresentable
 // ============================================================================
 
 /// Wraps TCKeyboardField (ObjC++) for use in SwiftUI.

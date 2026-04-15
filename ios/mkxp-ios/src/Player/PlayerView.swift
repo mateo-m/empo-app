@@ -1,10 +1,8 @@
 import SwiftUI
 
-// MARK: - Constants
 
 private let kToolbarIdleDelay: TimeInterval = 3.0
 
-// MARK: - PlayerView
 
 struct PlayerView: View {
     @Bindable var appState: AppState
@@ -134,7 +132,6 @@ struct PlayerView: View {
         )
     }
 
-    // MARK: - D-Pad
 
     @ViewBuilder
     private func dpadView(in geo: GeometryProxy) -> some View {
@@ -162,7 +159,6 @@ struct PlayerView: View {
             }
     }
 
-    // MARK: - Action Buttons
 
     @ViewBuilder
     private func actionButtonView(button: ButtonModel, in geo: GeometryProxy) -> some View {
@@ -201,7 +197,6 @@ struct PlayerView: View {
             }
     }
 
-    // MARK: - Toolbar Buttons
 
     @ViewBuilder
     private func toolbarButtons(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
@@ -250,7 +245,6 @@ struct PlayerView: View {
         .position(toolbarPosition)
     }
 
-    // MARK: - Edit Toolbar
 
     @ViewBuilder
     private func editToolbar(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
@@ -276,7 +270,6 @@ struct PlayerView: View {
         .position(x: geoSize.width / 2, y: yPos)
     }
 
-    // MARK: - Layout Helpers
 
     private func toolbarOrigin(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize, btnSize: CGFloat, gap: CGFloat, count: CGFloat) -> CGPoint {
         let totalW = count * btnSize + (count - 1) * gap
@@ -321,7 +314,6 @@ struct PlayerView: View {
         return CGPoint(x: x, y: y)
     }
 
-    // MARK: - Actions
 
     private func toggleEditMode() {
         var t = Transaction()
