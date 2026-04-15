@@ -9,11 +9,10 @@ struct ImportButton: View {
     var emptyStateHeight: CGFloat
     var emptyStateOffset: CGFloat
 
-    @State private var importGlowing = false
-    @State private var importRevealed = false
     @State private var importShimmer: CGFloat = -1
     @State private var importMoveTrigger = 0
     @State private var buttonHeight: CGFloat = 44
+    @State private var revealed = false
 
     var body: some View {
         GeometryReader { geo in
@@ -44,20 +43,12 @@ struct ImportButton: View {
             let arcDeg = (endAngle - startAngle) * 180 / .pi
 
             Button(action: { showImporter = true }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus")
-                        .font(.body.weight(.semibold))
-                    if !collapsed {
-                        Text("Import game")
-                            .font(.body.weight(.semibold))
-                            .transition(.blurReplace)
-                    }
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, collapsed ? 10 : 20)
-                .padding(.vertical, collapsed ? 10 : 12)
+                importButtonLabel(collapsed: collapsed)
             }
-            .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
+            .buttonStyle(.plain)
+            .onChange(of: collapsed) { _, _ in
+                Haptics.tap()
+            }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { buttonHeight = $0 }
             .overlay {
                 Capsule()
@@ -74,14 +65,6 @@ struct ImportButton: View {
                     )
                     .allowsHitTesting(false)
             }
-            .shadow(color: .brand.opacity(collapsed ? 0 : (importGlowing ? 0.5 : 0.15)),
-                    radius: collapsed ? 0 : (importGlowing ? 16 : 6))
-            .environment(\.colorScheme, .dark)
-            // Scale-based reveal: glass effect initializes at near-zero scale
-            // (fully tinted but invisible), avoiding the gray flash that
-            // opacity-based reveals cause.
-            .scaleEffect(importRevealed ? 1 : 0.001)
-            .allowsHitTesting(importRevealed)
             .keyframeAnimator(
                 initialValue: ImportButtonSquash(),
                 trigger: importMoveTrigger
@@ -99,6 +82,10 @@ struct ImportButton: View {
                     SpringKeyframe(1.0, duration: 0.3, spring: .smooth)
                 }
             }
+            // Entrance reveal (before arc transforms so it's in local space)
+            .opacity(revealed ? 1 : 0)
+            .scaleEffect(revealed ? 1 : 0.8)
+            .blur(radius: revealed ? 0 : 10)
             // Counter-rotate to keep content upright
             .rotationEffect(.degrees(collapsed ? -arcDeg : 0))
             // Offset from arc center to expanded position
@@ -112,30 +99,46 @@ struct ImportButton: View {
             .onChange(of: showEmpty) { importMoveTrigger += 1 }
             .onAppear {
                 if splashDismissed {
-                    importRevealed = true
-                    withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
-                        importGlowing = true
+                    revealed = true
+                    withAnimation(.easeInOut(duration: 1.5).delay(0.4)) {
+                        importShimmer = 2
                     }
                 }
             }
             .onChange(of: splashDismissed) { _, dismissed in
                 guard dismissed else { return }
-                withAnimation(.spring(duration: 0.35, bounce: 0.2).delay(entranceDelay + 0.1)) {
-                    importRevealed = true
+                let revealDelay = entranceDelay + EmptyStateView.staggerInterval * Double(EmptyStateView.elementCount)
+                withAnimation(.spring(duration: 0.3, bounce: 0).delay(revealDelay)) {
+                    revealed = true
                 }
-            }
-            .onChange(of: importRevealed) {
-                guard importRevealed else { return }
-                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
-                    importGlowing = true
-                }
-                withAnimation(.easeInOut(duration: 1.5).delay(0.4)) {
+                withAnimation(.easeInOut(duration: 1.5).delay(revealDelay + 0.5)) {
                     importShimmer = 2
                 }
             }
         }
     }
 
+    @ViewBuilder
+    private func importButtonLabel(collapsed: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "plus")
+            if !collapsed {
+                Text("Import game")
+                    .transition(.blurReplace)
+            }
+        }
+        .font(.body.weight(.semibold))
+        .foregroundStyle(.white)
+        .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+        .padding(.horizontal, collapsed ? 0 : ButtonSize.lg.horizontalPadding)
+        .padding(.vertical, collapsed ? 0 : ButtonSize.lg.verticalPadding)
+        .frame(
+            width: collapsed ? AppSize.toolbarButton : nil,
+            height: collapsed ? AppSize.toolbarButton : nil
+        )
+        .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
+        .environment(\.colorScheme, .dark)
+    }
 }
 
 // MARK: - Squash-and-Stretch Keyframe Values

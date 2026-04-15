@@ -66,12 +66,23 @@ enum ButtonSize {
     }
 }
 
-/// Brand-tinted glass with contrast text — main CTAs.
+/// Brand-tinted glass with contrast text and pulsing glow — main CTAs.
 struct PrimaryButtonStyle: ButtonStyle {
     var size: ButtonSize = .lg
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
+        PrimaryButtonBody(configuration: configuration, size: size, isEnabled: isEnabled)
+    }
+}
+
+private struct PrimaryButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let size: ButtonSize
+    let isEnabled: Bool
+    @State private var glowing = false
+
+    var body: some View {
         configuration.label
             .font(size.font.weight(.semibold))
             .multilineTextAlignment(.center)
@@ -81,10 +92,16 @@ struct PrimaryButtonStyle: ButtonStyle {
             .padding(.vertical, size.verticalPadding)
             .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
             .environment(\.colorScheme, .dark)
-            .shadow(color: .brand.opacity(0.15), radius: 6)
+            .shadow(color: .brand.opacity(glowing ? 0.5 : 0.15),
+                    radius: glowing ? 16 : 6)
             .opacity(isEnabled ? 1 : 0.4)
             .onChange(of: configuration.isPressed) { _, pressed in
                 if pressed { Haptics.tap() }
+            }
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                    glowing = true
+                }
             }
     }
 }
@@ -165,8 +182,13 @@ struct EmptyStateView: View {
     let subtitle: String
     var revealed: Bool = true
     var initialDelay: TimeInterval = 0.2
+    static let staggerInterval: TimeInterval = 0.1
+    static let elementCount = 3
+
+    @State private var iconAppeared = false
+    @State private var titleAppeared = false
+    @State private var subtitleAppeared = false
     @State private var floating = false
-    @State private var appeared = false
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
@@ -178,25 +200,38 @@ struct EmptyStateView: View {
                     .easeInOut(duration: 2.4).repeatForever(autoreverses: true),
                     value: floating
                 )
+                .opacity(iconAppeared ? 1 : 0)
+                .offset(y: iconAppeared ? 0 : 12)
             Text(title)
                 .font(.title2)
-                .fontWeight(.medium)
+                .fontWeight(.bold)
+                .opacity(titleAppeared ? 1 : 0)
+                .offset(y: titleAppeared ? 0 : 12)
             Text(subtitle)
                 .font(.subheadline)
+                .fontWeight(.medium)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .opacity(subtitleAppeared ? 1 : 0)
+                .offset(y: subtitleAppeared ? 0 : 12)
         }
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 12)
         .accessibilityElement(children: .combine)
         .onChange(of: revealed, initial: true) {
-            guard revealed, !appeared else { return }
-            withAnimation(.spring(duration: 0.3, bounce: 0).delay(initialDelay)) {
-                appeared = true
+            guard revealed, !iconAppeared else { return }
+            let spring = Animation.spring(duration: 0.3, bounce: 0)
+            let interval = Self.staggerInterval
+            withAnimation(spring.delay(initialDelay)) {
+                iconAppeared = true
             }
-            // Start floating after reveal finishes so the repeating animation
-            // triggers while the icon is visible (not while opacity is 0).
-            DispatchQueue.main.asyncAfter(deadline: .now() + initialDelay + 0.3) {
+            withAnimation(spring.delay(initialDelay + interval)) {
+                titleAppeared = true
+            }
+            withAnimation(spring.delay(initialDelay + interval * 2)) {
+                subtitleAppeared = true
+            }
+            // Start floating after all elements reveal
+            let totalDelay = initialDelay + interval * 2 + 0.3
+            DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay) {
                 floating = true
             }
         }
