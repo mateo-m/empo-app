@@ -87,7 +87,7 @@ struct GameLibraryView: View {
                 }
                 .background {
                     Rectangle()
-                        .fill(.ultraThinMaterial)
+                        .fill(Color(.systemBackground))
                         .padding(.bottom, -30)
                         .mask {
                             VStack(spacing: 0) {
@@ -104,12 +104,8 @@ struct GameLibraryView: View {
                 }
             }
             .background {
-                LinearGradient(
-                    colors: [.brand.opacity(0.06), .clear],
-                    startPoint: .top,
-                    endPoint: .center
-                )
-                .ignoresSafeArea()
+                Color(.systemBackground)
+                    .ignoresSafeArea()
             }
             .animation(Motion.standard, value: showEmpty)
             .onChange(of: splashDismissed) { _, dismissed in
