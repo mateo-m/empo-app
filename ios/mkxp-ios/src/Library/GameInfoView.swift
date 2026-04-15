@@ -58,74 +58,90 @@ struct GameInfoView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    bannerHeader
-                }
-                .listSectionMargins(.all, 0)
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .listSectionSeparator(.hidden)
+            GeometryReader { geo in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        bannerHeader(insets: geo.safeAreaInsets)
+                            .padding(.top, -geo.safeAreaInsets.top)
+                            .padding(.leading, -geo.safeAreaInsets.leading)
+                            .padding(.trailing, -geo.safeAreaInsets.trailing)
 
-                Section("Details") {
-                    LabeledContent("Date added") {
-                        if let date = metadata.dateAdded {
-                            Text(Self.dateFormatter.string(from: date))
-                        } else {
-                            Text("Unknown")
+                    GroupedSection("Details") {
+                        DetailRow("Date added") {
+                            if let date = metadata.dateAdded {
+                                Text(Self.dateFormatter.string(from: date))
+                            } else {
+                                Text("Unknown")
+                            }
+                        }
+
+                        Divider().padding(.leading, Spacing.xl)
+
+                        DetailRow("Last played") {
+                            if let date = metadata.lastPlayed {
+                                Text(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
+                            } else {
+                                Text("Never")
+                            }
+                        }
+
+                        if let time = metadata.totalPlayTime, time > 0 {
+                            Divider().padding(.leading, Spacing.xl)
+
+                            DetailRow("Play time") {
+                                Text(GameMetadata.formatPlayTime(metadata.totalPlayTime))
+                            }
+                        }
+
+                        Divider().padding(.leading, Spacing.xl)
+
+                        DetailRow("Size on disk") {
+                            if let size = diskSize {
+                                Text(GameMetadata.formatDiskSize(size))
+                            } else {
+                                ProgressView()
+                            }
+                        }
+
+                        Divider().padding(.leading, Spacing.xl)
+
+                        DetailRow("Local ID") {
+                            Text(game.id)
+                                .monospaced()
+                                .font(.caption)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .textSelection(.enabled)
                         }
                     }
 
-                    LabeledContent("Last played") {
-                        if let date = metadata.lastPlayed {
-                            Text(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
-                        } else {
-                            Text("Never")
+                    GroupedSection {
+                        Button { openInFiles() } label: {
+                            Label("Browse game files", systemImage: "folder")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, Spacing.xl)
+                                .padding(.vertical, Spacing.lg)
+                        }
+
+                        if sessionLogURL() != nil {
+                            Divider().padding(.leading, Spacing.xl)
+
+                            if let logURL = sessionLogURL() {
+                                ShareLink(item: logURL) {
+                                    Label("Export logs", systemImage: "square.and.arrow.up")
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, Spacing.xl)
+                                        .padding(.vertical, Spacing.lg)
+                                }
+                            }
                         }
                     }
-
-                    if let time = metadata.totalPlayTime, time > 0 {
-                        LabeledContent("Play time") {
-                            Text(GameMetadata.formatPlayTime(metadata.totalPlayTime))
-                        }
-                    }
-
-                    LabeledContent("Size on disk") {
-                        if let size = diskSize {
-                            Text(GameMetadata.formatDiskSize(size))
-                        } else {
-                            ProgressView()
-                        }
-                    }
-
-                    LabeledContent("Local ID") {
-                        Text(game.id)
-                            .monospaced()
-                            .font(.caption)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .textSelection(.enabled)
-                    }
-                }
-
-                Section {
-                    Button { openInFiles() } label: {
-                        Label("Browse game files", systemImage: "folder")
-                    }
-
-                    if let logURL = sessionLogURL() {
-                        ShareLink(item: logURL) {
-                            Label("Export logs", systemImage: "square.and.arrow.up")
-                        }
-                    }
-
                 }
             }
-            .listStyle(.insetGrouped)
-            .environment(\.defaultMinListHeaderHeight, 0)
-            .ignoresSafeArea(edges: .top)
+            }
+            .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(titleScrollProgress > 0.5 ? .visible : .hidden, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
             .animation(.spring(duration: Motion.durationFast, bounce: 0), value: titleScrollProgress > 0.5)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -204,7 +220,7 @@ struct GameInfoView: View {
 
     private let bannerHeight: CGFloat = 260
 
-    private var bannerHeader: some View {
+    private func bannerHeader(insets: EdgeInsets) -> some View {
         ZStack(alignment: .bottomLeading) {
             // Banner image with gradient fade-out mask
             bannerBackground
@@ -228,8 +244,8 @@ struct GameInfoView: View {
                 .overlay(alignment: .topTrailing) {
                     Chip("Edit", systemImage: "photo")
                         .opacity(0.5)
-                        .padding(.top, 72)
-                        .padding(.trailing, Spacing.xl)
+                        .padding(.top, insets.top + Spacing._3xl)
+                        .padding(.trailing, Spacing.xl + insets.trailing)
                         .opacity(1 - titleScrollProgress)
                 }
 
@@ -285,7 +301,8 @@ struct GameInfoView: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, Spacing._2xl)
+            .padding(.leading, Spacing._2xl + insets.leading)
+            .padding(.trailing, Spacing._2xl + insets.trailing)
             .padding(.bottom, Spacing._2xl)
             .contentShape(Rectangle())
             .background(
@@ -432,5 +449,56 @@ struct GameInfoView: View {
     private func sessionLogURL() -> URL? {
         let historyLog = AppState.logsDirectory.appendingPathComponent("session-history.log")
         return FileManager.default.fileExists(atPath: historyLog.path) ? historyLog : nil
+    }
+}
+
+private struct GroupedSection<Content: View>: View {
+    let header: String?
+    @ViewBuilder let content: Content
+
+    init(_ header: String? = nil, @ViewBuilder content: () -> Content) {
+        self.header = header
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let header {
+                Text(header)
+                    .font(.body.bold())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, Spacing._2xl + Spacing.xl)
+                    .padding(.bottom, Spacing.md)
+            }
+
+            VStack(spacing: 0) {
+                content
+            }
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.xl))
+            .padding(.horizontal, Spacing._2xl)
+        }
+        .padding(.top, Spacing._2xl)
+    }
+}
+
+private struct DetailRow<Content: View>: View {
+    let label: String
+    @ViewBuilder let value: Content
+
+    init(_ label: String, @ViewBuilder value: () -> Content) {
+        self.label = label
+        self.value = value()
+    }
+
+    var body: some View {
+        HStack {
+            Text(label)
+            Spacer()
+            value
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, Spacing.xl)
+        .padding(.vertical, Spacing.lg)
     }
 }
