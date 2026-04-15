@@ -74,19 +74,51 @@ class ControlsLayout {
     }
 
     func resetWithStagger() {
-        withAnimation(Motion.snappy) {
-            buttons.removeAll()
+        let defaults = Self.defaultButtons
+        var matchedIDs = Set<UUID>()
+        var matchedDefaults = Set<Int>()
+
+        // Match current buttons to defaults by label + scancode
+        var moves: [(id: UUID, center: CGPoint, size: CGFloat)] = []
+        for (di, def) in defaults.enumerated() {
+            guard let current = buttons.first(where: {
+                $0.label == def.label && $0.scancode == def.scancode && !matchedIDs.contains($0.id)
+            }) else { continue }
+
+            matchedIDs.insert(current.id)
+            matchedDefaults.insert(di)
+
+            let posChanged = abs(current.relativeCenter.x - def.relativeCenter.x) > 0.001
+                          || abs(current.relativeCenter.y - def.relativeCenter.y) > 0.001
+            let sizeChanged = abs(current.size - def.size) > 0.5
+            if posChanged || sizeChanged {
+                moves.append((current.id, def.relativeCenter, def.size))
+            }
+        }
+
+        // Animate: remove extras, move displaced, reset D-pad
+        // Controls already at default are untouched (no-op = no animation).
+        withAnimation(Motion.standard) {
+            buttons.removeAll { !matchedIDs.contains($0.id) }
+            for move in moves {
+                updateButton(id: move.id, size: move.size, relativeCenter: move.center)
+            }
             dpadRelativeCenter = Self.defaultDPadCenter
             dpadSize = Self.defaultDPadSize
         }
-        let sorted = Self.defaultButtons.sorted {
-            if $0.relativeCenter.y != $1.relativeCenter.y {
-                return $0.relativeCenter.y < $1.relativeCenter.y
+
+        // Stagger-add missing defaults (scale/blur/opacity transition)
+        let missing = defaults.enumerated()
+            .filter { !matchedDefaults.contains($0.offset) }
+            .sorted {
+                if $0.element.relativeCenter.y != $1.element.relativeCenter.y {
+                    return $0.element.relativeCenter.y < $1.element.relativeCenter.y
+                }
+                return $0.element.relativeCenter.x < $1.element.relativeCenter.x
             }
-            return $0.relativeCenter.x < $1.relativeCenter.x
-        }
-        for (index, button) in sorted.enumerated() {
-            let delay = 0.15 + Double(index) * 0.06
+
+        for (i, (_, button)) in missing.enumerated() {
+            let delay = 0.15 + Double(i) * 0.06
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(delay))
                 withAnimation(.spring(duration: 0.35, bounce: 0)) {
