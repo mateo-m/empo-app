@@ -325,7 +325,7 @@ struct PlayerView: View {
                 bottomTrailingRadius: radii.bottom,
                 topTrailingRadius: radii.top
             )
-            .fill(Color.white.opacity(0.04))
+            .fill(Color.black.opacity(Overlay.medium))
         )
         .frame(width: bounds.width, height: bounds.height)
         .position(x: bounds.midX, y: bounds.midY)
