@@ -2,13 +2,17 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// Model for a single action button's persistent state.
-struct ButtonModel: Identifiable, Equatable {
+struct ButtonModel: Identifiable, Equatable, Codable {
     let id: UUID
     var label: String
     var scancode: Int32
     var relativeCenter: CGPoint  // fraction of superview size
     var size: CGFloat
+
+    enum CodingKeys: String, CodingKey {
+        case label, scancode, size
+        case rx, ry
+    }
 
     init(label: String, scancode: Int32, relativeCenter: CGPoint, size: CGFloat) {
         self.id = UUID()
@@ -18,28 +22,37 @@ struct ButtonModel: Identifiable, Equatable {
         self.size = size
     }
 
-    init(from dict: [String: Any]) {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
         self.id = UUID()
-        self.label = dict["label"] as? String ?? ""
-        self.scancode = Int32(dict["scancode"] as? Int ?? 0)
-        let rx = dict["rx"] as? CGFloat ?? 0.5
-        let ry = dict["ry"] as? CGFloat ?? 0.5
+        self.label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
+        self.scancode = try c.decodeIfPresent(Int32.self, forKey: .scancode) ?? 0
+        let rx = try c.decodeIfPresent(CGFloat.self, forKey: .rx) ?? 0.5
+        let ry = try c.decodeIfPresent(CGFloat.self, forKey: .ry) ?? 0.5
         self.relativeCenter = CGPoint(x: rx, y: ry)
-        self.size = dict["size"] as? CGFloat ?? 56
+        self.size = try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? 56
     }
 
-    func toDict() -> [String: Any] {
-        return [
-            "label": label,
-            "scancode": Int(scancode),
-            "rx": relativeCenter.x,
-            "ry": relativeCenter.y,
-            "size": size,
-        ]
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(label, forKey: .label)
+        try c.encode(scancode, forKey: .scancode)
+        try c.encode(relativeCenter.x, forKey: .rx)
+        try c.encode(relativeCenter.y, forKey: .ry)
+        try c.encode(size, forKey: .size)
     }
 }
 
-/// Manages the layout of touch controls (d-pad + action buttons) with persistence.
+private struct PersistedLayout: Codable {
+    struct DPad: Codable {
+        var rx: CGFloat
+        var ry: CGFloat
+        var size: CGFloat
+    }
+    var dpad: DPad
+    var buttons: [ButtonModel]
+}
+
 @MainActor
 @Observable
 class ControlsLayout {
@@ -132,35 +145,25 @@ class ControlsLayout {
 
 
     func save() {
-        let dpadDict: [String: Any] = [
-            "rx": dpadRelativeCenter.x,
-            "ry": dpadRelativeCenter.y,
-            "size": dpadSize,
-        ]
-        let btnDicts = buttons.map { $0.toDict() }
-        let layout: [String: Any] = [
-            "dpad": dpadDict,
-            "buttons": btnDicts,
-        ]
-        UserDefaults.standard.set(layout, forKey: Self.savedLayoutKey)
+        let layout = PersistedLayout(
+            dpad: .init(rx: dpadRelativeCenter.x, ry: dpadRelativeCenter.y, size: dpadSize),
+            buttons: buttons
+        )
+        if let data = try? JSONEncoder().encode(layout) {
+            UserDefaults.standard.set(data, forKey: Self.savedLayoutKey)
+        }
     }
 
     @discardableResult
     func loadLayout() -> Bool {
-        guard let layout = UserDefaults.standard.dictionary(forKey: Self.savedLayoutKey) else {
+        guard let data = UserDefaults.standard.data(forKey: Self.savedLayoutKey),
+              let layout = try? JSONDecoder().decode(PersistedLayout.self, from: data) else {
             return false
         }
 
-        if let dd = layout["dpad"] as? [String: Any] {
-            let rx = dd["rx"] as? CGFloat ?? Self.defaultDPadCenter.x
-            let ry = dd["ry"] as? CGFloat ?? Self.defaultDPadCenter.y
-            dpadRelativeCenter = CGPoint(x: rx, y: ry)
-            dpadSize = dd["size"] as? CGFloat ?? Self.defaultDPadSize
-        }
-
-        if let btnDicts = layout["buttons"] as? [[String: Any]] {
-            buttons = btnDicts.map { ButtonModel(from: $0) }
-        }
+        dpadRelativeCenter = CGPoint(x: layout.dpad.rx, y: layout.dpad.ry)
+        dpadSize = layout.dpad.size
+        buttons = layout.buttons
 
         return true
     }

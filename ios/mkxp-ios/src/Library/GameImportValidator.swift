@@ -30,7 +30,6 @@ enum GameImportValidator {
     }
 
 
-    /// Validates that a directory is a valid RPG Maker game we can run.
     /// Throws ImportError on failure.
     static func validate(_ url: URL) throws {
         let fm = FileManager.default
@@ -99,7 +98,6 @@ enum GameImportValidator {
     }
 
 
-    /// Parses an .ini file looking for a [Game] section with a Scripts= entry.
     /// Returns the detected RGSS version and the raw scripts path.
     private static func parseIniScripts(_ iniURL: URL) -> (RGSSVersion, String)? {
         guard let value = GameEntry.parseINIValue(in: iniURL, section: "game", key: "scripts") else {

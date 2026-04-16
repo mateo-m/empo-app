@@ -1,10 +1,3 @@
-//
-//  filesystemImplIOS.mm
-//  mkxp-ios
-//
-//  iOS implementation of filesystem functions
-//
-
 #import <Foundation/Foundation.h>
 #import <SDL_filesystem.h>
 

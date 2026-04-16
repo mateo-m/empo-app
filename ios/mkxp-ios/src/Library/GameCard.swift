@@ -21,7 +21,6 @@ struct GameCard: View {
             .aspectRatio(1, contentMode: .fit)
             .overlay { artworkView }
             .overlay(alignment: .bottom) {
-                // Progressive blur sized to title
                 Rectangle()
                     .fill(.ultraThinMaterial)
                     .mask(
@@ -211,11 +210,9 @@ struct GameListRow: View {
     var heroNamespace: Namespace.ID? = nil
     var onStopImport: (() -> Void)? = nil
 
-    // Fallback namespace keeps the view tree stable when heroNamespace
-    // is nil (importing state).  Without this, the conditional .if()
-    // modifier was creating two structural branches — SwiftUI destroyed
-    // and recreated GameArtworkView on status change, losing @State and
-    // preventing the saturation animation.
+    // Without a stable namespace, SwiftUI creates separate structural
+    // branches and destroys/recreates GameArtworkView on status change,
+    // losing @State (breaks the saturation animation).
     @Namespace private var fallbackNamespace
 
     var body: some View {
@@ -252,7 +249,6 @@ struct GameListRow: View {
 
             Spacer()
 
-            // Status indicator (morphs between states)
             if isPaused {
                 Image(systemName: "pause.fill")
                     .font(.caption)
@@ -273,7 +269,6 @@ struct GameListRow: View {
 }
 
 
-/// Animates between importing → ready/invalid with a shared circle that morphs.
 private struct ListRowStatusIndicator: View {
     let status: GameStatus
     var onStopImport: (() -> Void)? = nil
@@ -355,5 +350,3 @@ private struct ListRowStatusIndicator: View {
         }
     }
 }
-
-// CardPressStyle is defined in Design/Primitives.swift

@@ -134,7 +134,6 @@ struct GameSettings: Codable, Equatable {
         let originalURL = gameDirectory.appendingPathComponent(originalConfigFilename)
         let configURL = gameDirectory.appendingPathComponent(configFilename)
 
-        // Prefer original backup over merged config
         let sourceURL = FileManager.default.fileExists(atPath: originalURL.path)
             ? originalURL : configURL
 
@@ -153,7 +152,7 @@ struct GameSettings: Codable, Equatable {
         }
 
         // solidFonts is an array of font names in mkxp.json; treat non-empty as "enabled"
-        let solidFontsArray = config["solidFonts"] as? [Any]
+        let solidFontsArray = config["solidFonts"] as? [String]
         let solidFontsEnabled: Bool? = solidFontsArray.map { !$0.isEmpty }
 
         return GameConfigDefaults(
@@ -174,14 +173,12 @@ struct GameSettings: Codable, Equatable {
         let configURL = gameDirectory.appendingPathComponent(Self.configFilename)
         let originalURL = gameDirectory.appendingPathComponent(Self.originalConfigFilename)
 
-        // Back up original config on first encounter
         if !FileManager.default.fileExists(atPath: originalURL.path),
            FileManager.default.fileExists(atPath: configURL.path) {
             try? FileManager.default.copyItem(at: configURL, to: originalURL)
         }
 
-        // Read the original config as base (preserves game developer's values for
-        // keys we don't override). If no original exists, read the current config.
+        // Preserves game developer's values for keys we don't override
         let sourceURL = FileManager.default.fileExists(atPath: originalURL.path)
             ? originalURL : configURL
 
@@ -191,7 +188,6 @@ struct GameSettings: Codable, Equatable {
             config = parsed
         }
 
-        // Apply overrides — only non-nil values are written
         if let v = smoothScaling { config["smoothScaling"] = v ? 1 : 0 }
         if let v = fixedAspectRatio { config["fixedAspectRatio"] = v }
         if let v = frameSkip { config["frameSkip"] = v }
@@ -208,7 +204,7 @@ struct GameSettings: Codable, Equatable {
         // Solid fonts: mkxp.json expects an array of font names.
         // When enabled via toggle, apply to all fonts with a wildcard entry.
         if let v = solidFonts {
-            config["solidFonts"] = v ? ["*"] : [] as [Any]
+            config["solidFonts"] = v ? ["*"] : [] as [String]
         }
 
         // Speed multiplier: compute fixedFramerate = 60 * multiplier.
@@ -218,7 +214,6 @@ struct GameSettings: Codable, Equatable {
             config["fixedFramerate"] = 60 * speed
         }
 
-        // Write merged config (clean JSON without comments)
         if let data = try? JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys]),
            let jsonString = String(data: data, encoding: .utf8) {
             try? jsonString.write(to: configURL, atomically: true, encoding: .utf8)
@@ -232,7 +227,6 @@ struct GameSettings: Codable, Equatable {
 
     /// Parses JSON with `//` line comments (as used by mkxp.json).
     static func parseJSONWithComments(_ raw: String) -> [String: Any]? {
-        // Strip // comments (not inside strings)
         var cleaned = ""
         var inString = false
         var escaped = false
@@ -297,7 +291,6 @@ struct GameConfigDefaults {
     var fontScale: Double?
     var solidFonts: Bool?
 
-    // Engine defaults (used when neither game config nor user override is set)
     static let engineSmoothScaling = false
     static let engineFixedAspectRatio = true
     static let engineFrameSkip = false

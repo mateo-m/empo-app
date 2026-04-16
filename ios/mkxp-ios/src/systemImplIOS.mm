@@ -1,10 +1,3 @@
-//
-//  systemImplIOS.mm
-//  mkxp-ios
-//
-//  iOS implementation of system functions
-//
-
 #import <UIKit/UIKit.h>
 #import "system.h"
 #import "ios_bridge.h"
