@@ -34,11 +34,14 @@ settings:
       - $(DEPENDENCY_SEARCH_PATH)/include/pixman-1
       - $(DEPENDENCY_SEARCH_PATH)/include/uchardet
       - $(DEPENDENCY_SEARCH_PATH)/include/freetype2
+      - $(PROJECT_DIR)/../Dependencies/ANGLE/$(PLATFORM_NAME)/include
     SYSTEM_HEADER_SEARCH_PATHS:
       - $(DEPENDENCY_SEARCH_PATH)/include/ruby18
       - $(DEPENDENCY_SEARCH_PATH)/include
+    FRAMEWORK_SEARCH_PATHS: []
     LIBRARY_SEARCH_PATHS:
       - $(DEPENDENCY_SEARCH_PATH)/lib
+      - $(PROJECT_DIR)/../Dependencies/ANGLE/$(PLATFORM_NAME)/lib
     GCC_PREPROCESSOR_DEFINITIONS:
       - MKXPZ_BUILD_XCODE
       - MKXPZ_ALCDEVICE=ALCdevice_struct
@@ -47,6 +50,7 @@ settings:
       - 'MKXPZ_GIT_HASH="\"ios\""'
       - MKXPZ_LEGACY_RUBY
       - GLES2_HEADER
+      - MKXPZ_HAS_ANGLE
       - HAVE_CONFIG_H
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: YES
@@ -147,6 +151,7 @@ targets:
       - path: ../../mkxp-z/binding/cusl-binding.cpp
       - path: ../../mkxp-z/binding/module_rpg.cpp
       - path: ../../mkxp-z/src/ios_bridge.cpp
+      - path: ../../mkxp-z/src/angle_native_layer.mm
       - path: src
         type: group
       - path: Assets.bundle
@@ -201,3 +206,7 @@ targets:
           - -framework CoreMotion
           - -framework CoreBluetooth
           - -weak_framework CoreHaptics
+          - -lANGLE_static
+          - -lEGL_static
+          - -lGLESv2_static
+    dependencies: []

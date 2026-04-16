@@ -38,6 +38,11 @@
 
 #if TARGET_OS_IPHONE
 #include "ios_bridge.h"
+#include <CoreFoundation/CoreFoundation.h>
+#ifdef MKXPZ_HAS_ANGLE
+#include <EGL/egl.h>
+#include <SDL_syswm.h>
+#endif
 #else
 // Stubs so the LSP doesn't complain when TARGET_OS_IPHONE is undefined
 static inline const char *mkxp_waitForGamePath(void) { return ""; }
@@ -94,6 +99,11 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
 static void rgssThreadError(RGSSThreadData *rtData, const std::string &msg);
 static void showInitError(const std::string &msg);
+#if TARGET_OS_IPHONE && defined(MKXPZ_HAS_ANGLE)
+static bool initANGLE(SDL_Window *win);
+static void teardownANGLE();
+extern "C" void *mkxp_getANGLENativeLayer(void *sdlWindow);
+#endif
 
 static inline const char *glGetStringInt(GLenum name) {
   return (const char *)gl.GetString(name);
@@ -115,17 +125,17 @@ static void printGLInfo() {
         if (std::regex_search(version, vmatches, std::regex("\\(ANGLE (.+) git hash: .+\\)"))) {
             Debug() << "ANGLE Version     :" << vmatches[1].str();
         }
-        return;
+    } else {
+      Debug() << "Backend      :" << "OpenGL";
+      Debug() << "GL Vendor    :" << glGetStringInt(GL_VENDOR);
+      Debug() << "GL Renderer  :" << renderer;
+      Debug() << "GL Version   :" << version;
+      Debug() << "GLSL Version :" << glGetStringInt(GL_SHADING_LANGUAGE_VERSION);
     }
-    
-  Debug() << "Backend      :" << "OpenGL";
-  Debug() << "GL Vendor    :" << glGetStringInt(GL_VENDOR);
-  Debug() << "GL Renderer  :" << renderer;
-  Debug() << "GL Version   :" << version;
-  Debug() << "GLSL Version :" << glGetStringInt(GL_SHADING_LANGUAGE_VERSION);
-  GLint maxTexSize = 0;
-  glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTexSize);
-  Debug() << "Max Tex Size :" << maxTexSize;
+
+    GLint maxTexSize = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTexSize);
+    Debug() << "Max Tex Size :" << maxTexSize;
 }
 
 static SDL_GLContext initGL(SDL_Window *win, Config &conf,
@@ -139,6 +149,54 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
  * and GL reverts the binding to 0), which is wrong on iOS. */
 #if TARGET_OS_IPHONE
 static GLuint s_iosScreenFBO = 0;
+MKXPRenderer s_currentRenderer = MKXP_RENDERER_OPENGL_ES;
+#ifdef MKXPZ_HAS_ANGLE
+EGLDisplay s_eglDisplay = EGL_NO_DISPLAY;
+EGLSurface s_eglSurface = EGL_NO_SURFACE;
+EGLContext s_eglContext = EGL_NO_CONTEXT;
+#endif
+#endif
+
+#if TARGET_OS_IPHONE
+// Wrappers that dispatch to EGL or SDL depending on renderer.
+static void mkxpGL_MakeCurrent(SDL_Window *win, SDL_GLContext ctx) {
+#ifdef MKXPZ_HAS_ANGLE
+    if (s_currentRenderer == MKXP_RENDERER_ANGLE) {
+        if (ctx)
+            eglMakeCurrent(s_eglDisplay, s_eglSurface, s_eglSurface, s_eglContext);
+        else
+            eglMakeCurrent(s_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        return;
+    }
+#endif
+    SDL_GL_MakeCurrent(win, ctx);
+}
+
+static void mkxpGL_SwapWindow(SDL_Window *win) {
+#ifdef MKXPZ_HAS_ANGLE
+    if (s_currentRenderer == MKXP_RENDERER_ANGLE) {
+        eglSwapBuffers(s_eglDisplay, s_eglSurface);
+        return;
+    }
+#endif
+    SDL_GL_SwapWindow(win);
+}
+
+// SDL_GL_GetDrawableSize returns logical points under ANGLE (no SDL GL
+// context). Query the EGL surface for the real pixel dimensions instead.
+void mkxpGL_GetDrawableSize(SDL_Window *win, int *w, int *h) {
+#ifdef MKXPZ_HAS_ANGLE
+    if (s_currentRenderer == MKXP_RENDERER_ANGLE) {
+        EGLint eglW = 0, eglH = 0;
+        eglQuerySurface(s_eglDisplay, s_eglSurface, EGL_WIDTH, &eglW);
+        eglQuerySurface(s_eglDisplay, s_eglSurface, EGL_HEIGHT, &eglH);
+        if (w) *w = eglW;
+        if (h) *h = eglH;
+        return;
+    }
+#endif
+    SDL_GL_GetDrawableSize(win, w, h);
+}
 #endif
 
 #if TARGET_OS_IPHONE
@@ -156,7 +214,7 @@ static RGSSThreadData *s_nextRTData = nullptr;   // the data for the next sessio
 int rgssThreadFun(void *userdata) {
   RGSSThreadData *threadData = static_cast<RGSSThreadData *>(userdata);
 
-  SDL_GL_MakeCurrent(threadData->window, threadData->glContext);
+  mkxpGL_MakeCurrent(threadData->window, threadData->glContext);
 
   /* Set the screen framebuffer ID and reset the binding tracker. */
   FBO::screenFramebufferID = FBO::ID(s_iosScreenFBO);
@@ -214,7 +272,7 @@ int rgssThreadFun(void *userdata) {
   }
 
   alcMakeContextCurrent(NULL);
-  SDL_GL_MakeCurrent(threadData ? threadData->window : nullptr, NULL);
+  mkxpGL_MakeCurrent(threadData ? threadData->window : nullptr, NULL);
 
   return 0;
 }
@@ -441,13 +499,20 @@ int main(int argc, char *argv[]) {
     Config initConf;
     initConf.read(argc, argv);
 
-    Uint32 winFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
-
-#ifdef GLES2_HEADER
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#ifdef MKXPZ_HAS_ANGLE
+    s_currentRenderer = mkxp_getSelectedRenderer();
 #endif
+
+    Uint32 winFlags = SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
+
+    if (s_currentRenderer != MKXP_RENDERER_ANGLE) {
+        winFlags |= SDL_WINDOW_OPENGL;
+#ifdef GLES2_HEADER
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
+    }
 
     /* Allow all orientations. Without this, SDL infers supported
      * orientations from the window w/h: a landscape-shaped game
@@ -466,12 +531,35 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    SDL_GLContext persistGLCtx = initGL(persistWin, initConf, 0);
+    SDL_GLContext persistGLCtx = nullptr;
+
+    if (s_currentRenderer == MKXP_RENDERER_ANGLE) {
+#ifdef MKXPZ_HAS_ANGLE
+        if (!initANGLE(persistWin)) {
+            SDL_DestroyWindow(persistWin);
+            return 0;
+        }
+        // Use the EGL context pointer as a non-null sentinel so
+        // mkxpGL_MakeCurrent can distinguish bind from unbind.
+        persistGLCtx = (SDL_GLContext)s_eglContext;
+        // Release from main thread — the RGSS thread will claim it.
+        // EGL contexts can only be current on one thread at a time.
+        mkxpGL_MakeCurrent(persistWin, NULL);
+        Debug() << "Using" << mkxp_rendererName(s_currentRenderer);
+#endif
+    } else {
+        persistGLCtx = initGL(persistWin, initConf, 0);
+        if (!persistGLCtx) {
+            SDL_DestroyWindow(persistWin);
+            return 0;
+        }
+        Debug() << "Using" << mkxp_rendererName(s_currentRenderer);
+    }
 
     ALCdevice *persistAlcDev = alcOpenDevice(0);
     if (!persistAlcDev) {
       showInitError("Could not detect an available audio device.");
-      SDL_GL_DeleteContext(persistGLCtx);
+      if (persistGLCtx) SDL_GL_DeleteContext(persistGLCtx);
       SDL_DestroyWindow(persistWin);
       return 0;
     }
@@ -536,7 +624,7 @@ int main(int argc, char *argv[]) {
     SDL_GetWindowSize(persistWin, &winW, &winH);
     rtData.windowSizeMsg.post(Vec2i(winW, winH));
 
-    SDL_GL_GetDrawableSize(persistWin, &drwW, &drwH);
+    mkxpGL_GetDrawableSize(persistWin, &drwW, &drwH);
     rtData.drawableSizeMsg.post(Vec2i(drwW, drwH));
 
     /* Load and post key bindings */
@@ -565,20 +653,35 @@ int main(int argc, char *argv[]) {
     rtData.rqTerm.set();
 
     /* Wait for RGSS thread to finish THIS session (not the thread itself).
-     * The thread stays alive, waiting for the next session. */
+     * The thread stays alive, waiting for the next session.
+     * On iOS, pump the run loop so SwiftUI can render (e.g. transition
+     * back to library after an error alert). SDL_Delay alone blocks
+     * the main thread and freezes the UI. */
     for (int i = 0; i < 1000; ++i) {
       if (rtData.rqTermAck) {
         Debug() << "RGSS thread ack'd request after" << i * 10 << "ms";
         break;
       }
+#if TARGET_OS_IPHONE
+      CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.01, true);
+#else
       SDL_Delay(10);
+#endif
     }
 
     if (rtData.rqTermAck) {
         /* Wait for the RGSS thread to finish cleanup (SharedState::finiInstance)
          * before we proceed. It will post s_rgssSessionDone then block on
-         * s_rgssSessionReady. */
+         * s_rgssSessionReady.
+         * On iOS, use non-blocking SemTryWait + run loop pump so the
+         * UI stays responsive during teardown. */
+#if TARGET_OS_IPHONE
+        while (SDL_SemTryWait(s_rgssSessionDone) != 0) {
+            CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.01, true);
+        }
+#else
         SDL_SemWait(s_rgssSessionDone);
+#endif
     } else {
 #if TARGET_OS_IPHONE
       mkxp_setErrorMessage(
@@ -608,14 +711,120 @@ int main(int argc, char *argv[]) {
      * briefly flash the last frame of the previous session.
      * NOTE: GL context is held by the RGSS thread (which is blocked
      * on s_rgssSessionReady). Temporarily claim it here. */
-    SDL_GL_MakeCurrent(persistWin, persistGLCtx);
+    mkxpGL_MakeCurrent(persistWin, persistGLCtx);
     gl.BindFramebuffer(GL_FRAMEBUFFER, s_iosScreenFBO);
     gl.ClearColor(0, 0, 0, 1);
     gl.Clear(GL_COLOR_BUFFER_BIT);
-    SDL_GL_SwapWindow(persistWin);
-    SDL_GL_MakeCurrent(persistWin, NULL);
+    mkxpGL_SwapWindow(persistWin);
+    mkxpGL_MakeCurrent(persistWin, NULL);
 
     Debug() << "Game session ended.";
+
+#ifdef MKXPZ_HAS_ANGLE
+    /* Hot-swap renderer if the user changed the setting between sessions.
+     * The SDL window must be destroyed and recreated because SDL bakes
+     * the layer type (CAEAGLLayer vs plain CALayer) at creation time
+     * based on the SDL_WINDOW_OPENGL flag. */
+    {
+      MKXPRenderer wantRenderer = mkxp_getSelectedRenderer();
+      if (wantRenderer != s_currentRenderer) {
+        Debug() << "Renderer change requested:"
+                << mkxp_rendererName(s_currentRenderer)
+                << "->"
+                << mkxp_rendererName(wantRenderer);
+
+        /* Tear down current renderer */
+        if (s_currentRenderer == MKXP_RENDERER_ANGLE) {
+          teardownANGLE();
+        } else if (persistGLCtx) {
+          SDL_GL_DeleteContext(persistGLCtx);
+          persistGLCtx = nullptr;
+        }
+
+        /* Destroy old window — layer type can't be changed after creation */
+        SDL_DestroyWindow(persistWin);
+        persistWin = nullptr;
+
+        /* Recreate window with correct flags */
+        Uint32 newFlags = SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
+        if (wantRenderer != MKXP_RENDERER_ANGLE) {
+          newFlags |= SDL_WINDOW_OPENGL;
+          SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+          SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+          SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+        }
+
+        SDL_SetHint(SDL_HINT_ORIENTATIONS,
+                     "Portrait LandscapeLeft LandscapeRight");
+
+        persistWin = SDL_CreateWindow(
+            conf.windowTitle.c_str(), SDL_WINDOWPOS_UNDEFINED,
+            SDL_WINDOWPOS_UNDEFINED, conf.defScreenW,
+            conf.defScreenH, newFlags);
+
+        if (!persistWin) {
+          Debug() << "Failed to recreate window for renderer swap:"
+                  << SDL_GetError();
+          /* Fatal — can't continue without a window */
+          break;
+        }
+
+        /* Init new renderer */
+        bool swapOK = false;
+        if (wantRenderer == MKXP_RENDERER_ANGLE) {
+          swapOK = initANGLE(persistWin);
+        } else {
+          persistGLCtx = initGL(persistWin, conf, nullptr);
+          swapOK = (persistGLCtx != nullptr);
+        }
+
+        if (swapOK) {
+          s_currentRenderer = wantRenderer;
+          Debug() << "Renderer swap complete -"
+                  << mkxp_rendererName(s_currentRenderer);
+        } else {
+          /* Swap failed — recreate with the old renderer */
+          Debug() << "Renderer swap failed, reverting...";
+          SDL_DestroyWindow(persistWin);
+
+          Uint32 fallbackFlags = SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
+          if (s_currentRenderer != MKXP_RENDERER_ANGLE) {
+            fallbackFlags |= SDL_WINDOW_OPENGL;
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+          }
+
+          persistWin = SDL_CreateWindow(
+              conf.windowTitle.c_str(), SDL_WINDOWPOS_UNDEFINED,
+              SDL_WINDOWPOS_UNDEFINED, conf.defScreenW,
+              conf.defScreenH, fallbackFlags);
+
+          if (!persistWin) {
+            Debug() << "Failed to recreate fallback window — fatal";
+            break;
+          }
+
+          if (s_currentRenderer == MKXP_RENDERER_ANGLE) {
+            if (!initANGLE(persistWin)) {
+              Debug() << "Failed to reinit ANGLE — fatal";
+              break;
+            }
+          } else {
+            persistGLCtx = initGL(persistWin, conf, nullptr);
+            if (!persistGLCtx) {
+              Debug() << "Failed to reinit OpenGL ES — fatal";
+              break;
+            }
+          }
+          Debug() << "Reverted to" << mkxp_rendererName(s_currentRenderer);
+        }
+
+        /* Release GL — the RGSS thread will reclaim it */
+        mkxpGL_MakeCurrent(persistWin, NULL);
+      }
+    }
+#endif
 
     continue;
     } // end while(true) game session loop
@@ -781,7 +990,7 @@ int main(int argc, char *argv[]) {
     SDL_GetWindowSize(win, &winW, &winH);
     rtData.windowSizeMsg.post(Vec2i(winW, winH));
     
-    SDL_GL_GetDrawableSize(win, &drwW, &drwH);
+    mkxpGL_GetDrawableSize(win, &drwW, &drwH);
     rtData.drawableSizeMsg.post(Vec2i(drwW, drwH));
 
     /* Load and post key bindings */
@@ -872,6 +1081,110 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 }
+
+#if TARGET_OS_IPHONE && defined(MKXPZ_HAS_ANGLE)
+static bool initANGLE(SDL_Window *win) {
+  s_eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+  if (s_eglDisplay == EGL_NO_DISPLAY) {
+    showInitError("ANGLE: eglGetDisplay failed");
+    return false;
+  }
+
+  EGLint major, minor;
+  if (!eglInitialize(s_eglDisplay, &major, &minor)) {
+    showInitError("ANGLE: eglInitialize failed");
+    return false;
+  }
+  Debug() << "ANGLE: EGL" << major << "." << minor;
+
+  EGLint configAttribs[] = {
+    EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
+    EGL_SURFACE_TYPE,    EGL_WINDOW_BIT,
+    EGL_RED_SIZE,        8,
+    EGL_GREEN_SIZE,      8,
+    EGL_BLUE_SIZE,       8,
+    EGL_ALPHA_SIZE,      8,
+    EGL_DEPTH_SIZE,      0,
+    EGL_STENCIL_SIZE,    0,
+    EGL_NONE
+  };
+  EGLConfig eglConfig;
+  EGLint numConfigs;
+  if (!eglChooseConfig(s_eglDisplay, configAttribs, &eglConfig, 1, &numConfigs) || numConfigs == 0) {
+    showInitError("ANGLE: eglChooseConfig failed");
+    return false;
+  }
+
+  // Upstream ANGLE's Metal backend expects a CALayer* as native window
+  EGLNativeWindowType nativeWindow = (EGLNativeWindowType)mkxp_getANGLENativeLayer(win);
+  if (!nativeWindow) {
+    showInitError("ANGLE: failed to get native layer from SDL window");
+    return false;
+  }
+
+  s_eglSurface = eglCreateWindowSurface(s_eglDisplay, eglConfig, nativeWindow, NULL);
+  if (s_eglSurface == EGL_NO_SURFACE) {
+    showInitError("ANGLE: eglCreateWindowSurface failed");
+    return false;
+  }
+
+  EGLint contextAttribs[] = {
+    EGL_CONTEXT_CLIENT_VERSION, 2,
+    EGL_NONE
+  };
+  s_eglContext = eglCreateContext(s_eglDisplay, eglConfig, EGL_NO_CONTEXT, contextAttribs);
+  if (s_eglContext == EGL_NO_CONTEXT) {
+    showInitError("ANGLE: eglCreateContext failed");
+    return false;
+  }
+
+  if (!eglMakeCurrent(s_eglDisplay, s_eglSurface, s_eglSurface, s_eglContext)) {
+    showInitError("ANGLE: eglMakeCurrent failed");
+    return false;
+  }
+
+  glGetProcAddressOverride = (GLGetProcAddressFunc)eglGetProcAddress;
+
+  // Capture screen FBO (may be 0 under ANGLE, unlike Apple's EAGL)
+  GLint fbo = 0;
+  glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+  s_iosScreenFBO = static_cast<GLuint>(fbo);
+
+  try {
+    initGLFunctions();
+  } catch (const Exception &exc) {
+    showInitError(exc.msg);
+    return false;
+  }
+
+  gl.ClearColor(0, 0, 0, 1);
+  gl.Clear(GL_COLOR_BUFFER_BIT);
+  eglSwapBuffers(s_eglDisplay, s_eglSurface);
+
+  printGLInfo();
+
+  eglSwapInterval(s_eglDisplay, 1);
+
+  return true;
+}
+
+static void teardownANGLE() {
+  eglMakeCurrent(s_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+  if (s_eglContext != EGL_NO_CONTEXT) {
+    eglDestroyContext(s_eglDisplay, s_eglContext);
+    s_eglContext = EGL_NO_CONTEXT;
+  }
+  if (s_eglSurface != EGL_NO_SURFACE) {
+    eglDestroySurface(s_eglDisplay, s_eglSurface);
+    s_eglSurface = EGL_NO_SURFACE;
+  }
+  if (s_eglDisplay != EGL_NO_DISPLAY) {
+    eglTerminate(s_eglDisplay);
+    s_eglDisplay = EGL_NO_DISPLAY;
+  }
+  glGetProcAddressOverride = nullptr;
+}
+#endif
 
 static SDL_GLContext initGL(SDL_Window *win, Config &conf,
                             RGSSThreadData *threadData) {
