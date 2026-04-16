@@ -67,6 +67,12 @@ struct SettingsView: View {
                         isOn: $settings.controllerHaptics,
                         description: "Vibration feedback on the on-screen game controls while you play."
                     )
+
+                    SettingsToggle(
+                        title: "Continue playing",
+                        isOn: $settings.showContinuePlaying,
+                        description: "Show a card at the top of your library to quickly jump back into your last game."
+                    )
                 } header: {
                     Text("Look & Feel")
                 } footer: {
