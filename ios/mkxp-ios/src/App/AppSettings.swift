@@ -127,6 +127,10 @@ class AppSettings {
         didSet { UserDefaults.standard.set(libraryDisplayMode.rawValue, forKey: "libraryDisplayMode") }
     }
 
+    var showContinuePlaying: Bool {
+        didSet { UserDefaults.standard.set(showContinuePlaying, forKey: "showContinuePlaying") }
+    }
+
     private var experimentalFlags: [String: Bool] {
         didSet {
             for (key, value) in experimentalFlags {
@@ -152,6 +156,7 @@ class AppSettings {
         self.titlePosition = TitlePosition(rawValue: raw) ?? .inside
         let modeRaw = UserDefaults.standard.string(forKey: "libraryDisplayMode") ?? LibraryDisplayMode.grid.rawValue
         self.libraryDisplayMode = LibraryDisplayMode(rawValue: modeRaw) ?? .grid
+        self.showContinuePlaying = UserDefaults.standard.object(forKey: "showContinuePlaying") as? Bool ?? true
 
         var flags: [String: Bool] = [:]
         for feature in ExperimentalFeature.allCases {
