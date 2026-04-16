@@ -40,6 +40,7 @@ struct GameLibraryView: View {
     }
 
     private var recentlyPlayed: GameEntry? {
+        guard settings.showContinuePlaying else { return nil }
         guard searchText.isEmpty else { return nil }
         let readyGames = library.games.filter { $0.status == .ready }
         guard readyGames.count > 1 else { return nil }  // no hero if only 1 game
