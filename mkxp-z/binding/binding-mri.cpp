@@ -52,10 +52,6 @@
 #if TARGET_OS_IPHONE
 #include "ios_bridge.h"
 #endif
-#if TARGET_OS_IPHONE
-#include <execinfo.h>
-#include <signal.h>
-#endif
 #include "util/rapidcsv.h"
 
 extern "C" {
@@ -1045,7 +1041,7 @@ bool evalScript(VALUE string, const char *filename)
 
 #define SCRIPT_SECTION_FMT (rgssVer >= 3 ? "{%04ld}" : "Section%03ld")
 
-// Declared in ios_bridge.cpp — returns the debug log path set by the UI,
+// Declared in ios_bridge.cpp - returns the debug log path set by the UI,
 // or empty string if debug logging is disabled.
 std::string mkxp_getDebugLogPath(void);
 extern "C" void mkxp_debugLog(const char *tag, const char *source, const char *message);
@@ -1587,54 +1583,8 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
     showMsg(ms);
 }
 
-#if TARGET_OS_IPHONE
-static void mkxpCrashHandler(int sig) {
-    /* Write backtrace to the debug log file */
-    std::string logPathStr = mkxp_getDebugLogPath();
-    const char *logPath = logPathStr.empty() ? nullptr : logPathStr.c_str();
-    FILE *f = logPath ? fopen(logPath, "a") : nullptr;
-    if (!f) f = fopen("/tmp/mkxp_crash.log", "a");
-    if (f) {
-        fprintf(f, "\n=== CRASH: signal %d ===\n", sig);
-        void *frames[128];
-        int count = backtrace(frames, 128);
-        char **symbols = backtrace_symbols(frames, count);
-        if (symbols) {
-            for (int i = 0; i < count; i++)
-                fprintf(f, "  %s\n", symbols[i]);
-            free(symbols);
-        }
-        fclose(f);
-    }
-    /* Also write to a known fixed location */
-    f = fopen("/tmp/mkxp_crash.log", "a");
-    if (f) {
-        fprintf(f, "\n=== CRASH: signal %d ===\n", sig);
-        void *frames[128];
-        int count = backtrace(frames, 128);
-        char **symbols = backtrace_symbols(frames, count);
-        if (symbols) {
-            for (int i = 0; i < count; i++)
-                fprintf(f, "  %s\n", symbols[i]);
-            free(symbols);
-        }
-        fclose(f);
-    }
-    /* Re-raise to get the default behavior */
-    signal(sig, SIG_DFL);
-    raise(sig);
-}
-#endif
-
 static void mriBindingExecute() {
     Config &conf = shState->rtData().config;
-
-#if TARGET_OS_IPHONE
-    /* Install crash handler to capture native backtraces */
-    signal(SIGSEGV, mkxpCrashHandler);
-    signal(SIGABRT, mkxpCrashHandler);
-    signal(SIGBUS, mkxpCrashHandler);
-#endif
     
 #if RAPI_MAJOR >= 2
     /* Normally only a ruby executable would do a sysinit,
