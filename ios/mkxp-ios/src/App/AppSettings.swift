@@ -15,6 +15,43 @@ enum LibraryDisplayMode: String, CaseIterable {
     }
 }
 
+enum LibrarySortOption: String, CaseIterable {
+    case titleAZ = "titleAZ"
+    case titleZA = "titleZA"
+    case recentlyPlayed = "recentlyPlayed"
+    case leastRecentlyPlayed = "leastRecentlyPlayed"
+    case largestSize = "largestSize"
+    case smallestSize = "smallestSize"
+    case mostPlayed = "mostPlayed"
+    case leastPlayed = "leastPlayed"
+
+    var label: String {
+        switch self {
+        case .titleAZ: "A → Z"
+        case .titleZA: "Z → A"
+        case .recentlyPlayed: "Recently played"
+        case .leastRecentlyPlayed: "Least recently played"
+        case .largestSize: "Largest first"
+        case .smallestSize: "Smallest first"
+        case .mostPlayed: "Most played"
+        case .leastPlayed: "Least played"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .titleAZ: "textformat.abc"
+        case .titleZA: "textformat.abc"
+        case .recentlyPlayed: "clock"
+        case .leastRecentlyPlayed: "clock"
+        case .largestSize: "externaldrive"
+        case .smallestSize: "externaldrive"
+        case .mostPlayed: "hourglass"
+        case .leastPlayed: "hourglass"
+        }
+    }
+}
+
 enum TitlePosition: String, CaseIterable {
     case inside = "inside"
     case under  = "under"
@@ -131,6 +168,10 @@ class AppSettings {
         didSet { UserDefaults.standard.set(showContinuePlaying, forKey: "showContinuePlaying") }
     }
 
+    var librarySortOption: LibrarySortOption {
+        didSet { UserDefaults.standard.set(librarySortOption.rawValue, forKey: "librarySortOption") }
+    }
+
     private var experimentalFlags: [String: Bool] {
         didSet {
             for (key, value) in experimentalFlags {
@@ -157,6 +198,8 @@ class AppSettings {
         let modeRaw = UserDefaults.standard.string(forKey: "libraryDisplayMode") ?? LibraryDisplayMode.grid.rawValue
         self.libraryDisplayMode = LibraryDisplayMode(rawValue: modeRaw) ?? .grid
         self.showContinuePlaying = UserDefaults.standard.object(forKey: "showContinuePlaying") as? Bool ?? true
+        let sortRaw = UserDefaults.standard.string(forKey: "librarySortOption") ?? LibrarySortOption.titleAZ.rawValue
+        self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
 
         var flags: [String: Bool] = [:]
         for feature in ExperimentalFeature.allCases {
