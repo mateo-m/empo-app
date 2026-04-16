@@ -4,6 +4,7 @@ import SwiftUI
 struct GameContextMenuModifier: ViewModifier {
     let game: GameEntry
     var appState: AppState
+    let onPlay: () -> Void
     @Binding var gameToDelete: GameEntry?
     @Binding var showDeleteConfirm: Bool
     @Binding var gameForSettings: GameEntry?
@@ -15,6 +16,22 @@ struct GameContextMenuModifier: ViewModifier {
         content.contextMenu {
             if case .ready = game.status {
                 Button {
+                    onPlay()
+                } label: {
+                    Label(isPaused ? "Resume" : "Play", systemImage: "play.fill")
+                }
+
+                if isPaused {
+                    Button(role: .destructive) {
+                        appState.returnToLibrary()
+                    } label: {
+                        Label("Quit", systemImage: "stop.fill")
+                    }
+                }
+
+                Divider()
+
+                Button {
                     gameForInfo = game
                 } label: {
                     Label("Info", systemImage: "info.circle")
@@ -24,16 +41,6 @@ struct GameContextMenuModifier: ViewModifier {
                     gameForSettings = game
                 } label: {
                     Label("Settings", systemImage: "gearshape")
-                }
-            }
-
-            if isPaused {
-                Divider()
-
-                Button(role: .destructive) {
-                    appState.returnToLibrary()
-                } label: {
-                    Label("Quit", systemImage: "stop.fill")
                 }
             }
 
@@ -51,7 +58,7 @@ struct GameContextMenuModifier: ViewModifier {
 }
 
 extension View {
-    func gameContextMenu(game: GameEntry, appState: AppState, gameToDelete: Binding<GameEntry?>, showDeleteConfirm: Binding<Bool>, gameForSettings: Binding<GameEntry?>, gameForInfo: Binding<GameEntry?>) -> some View {
-        modifier(GameContextMenuModifier(game: game, appState: appState, gameToDelete: gameToDelete, showDeleteConfirm: showDeleteConfirm, gameForSettings: gameForSettings, gameForInfo: gameForInfo))
+    func gameContextMenu(game: GameEntry, appState: AppState, onPlay: @escaping () -> Void, gameToDelete: Binding<GameEntry?>, showDeleteConfirm: Binding<Bool>, gameForSettings: Binding<GameEntry?>, gameForInfo: Binding<GameEntry?>) -> some View {
+        modifier(GameContextMenuModifier(game: game, appState: appState, onPlay: onPlay, gameToDelete: gameToDelete, showDeleteConfirm: showDeleteConfirm, gameForSettings: gameForSettings, gameForInfo: gameForInfo))
     }
 }

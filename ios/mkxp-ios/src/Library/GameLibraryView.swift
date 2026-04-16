@@ -402,7 +402,7 @@ struct GameLibraryView: View {
         }
         .buttonStyle(CardPressStyle())
         .environment(\.colorScheme, .dark)
-        .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+        .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
     }
 
     private var listInner: some View {
@@ -434,7 +434,7 @@ struct GameLibraryView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                 .transition(.cardAppear)
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
@@ -469,7 +469,7 @@ struct GameLibraryView: View {
                     .id("\(game.id)-invalid")
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
-                    .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                    .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                     .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .ready:
@@ -485,7 +485,7 @@ struct GameLibraryView: View {
                     .id("\(game.id)-\(isPaused ? "paused" : "ready")")
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
-                .gameContextMenu(game: game, appState: appState, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
             }
         }
