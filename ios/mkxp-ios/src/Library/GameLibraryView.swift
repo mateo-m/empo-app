@@ -29,14 +29,16 @@ struct GameLibraryView: View {
     @State private var staggerTrigger = UUID()
     @State private var entranceDelay: TimeInterval = 0.15
     @State private var emptyStateHeight: CGFloat = 0
+    @State private var showSortSheet = false
+    @State private var gameSizes: [String: Int64] = [:]
 
     private var showEmpty: Bool {
         library.games.isEmpty
     }
 
     private var filteredGames: [GameEntry] {
-        if searchText.isEmpty { return library.games }
-        return library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+        let base = searchText.isEmpty ? library.games : library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+        return sortGames(base)
     }
 
     private var recentlyPlayed: GameEntry? {
@@ -145,6 +147,9 @@ struct GameLibraryView: View {
             .sheet(item: $gameForInfo) { game in
                 GameInfoView(game: game)
             }
+            .sheet(isPresented: $showSortSheet) {
+                sortSheet
+            }
             .alert("Oops!", isPresented: $showErrorAlert) {
                 Button("OK") {}
             } message: {
@@ -200,6 +205,17 @@ struct GameLibraryView: View {
                 if newPhase == nil && !path.isEmpty {
                     path = NavigationPath()
                 }
+                if newPhase == nil {
+                    refreshGameSizes()
+                }
+            }
+            .onChange(of: settings.librarySortOption) { _, newSort in
+                if newSort == .largestSize || newSort == .smallestSize {
+                    refreshGameSizes()
+                }
+            }
+            .task {
+                refreshGameSizes()
             }
         }
     }
@@ -259,6 +275,11 @@ struct GameLibraryView: View {
             .frame(height: searchBarHeight)
             .glassEffect(.regular.interactive(), in: .capsule)
 
+            IconButton("arrow.up.arrow.down", style: .outline) {
+                showSortSheet = true
+            }
+            .accessibilityLabel("Sort games")
+
             IconButton(
                 settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2",
                 style: .outline,
@@ -296,6 +317,8 @@ struct GameLibraryView: View {
             if let hero = recentlyPlayed {
                 heroCard(for: hero)
                     .transition(.cardAppear)
+
+                librarySectionHeader
             }
 
             LazyVGrid(columns: columns, spacing: Spacing.lg) {
@@ -317,7 +340,16 @@ struct GameLibraryView: View {
     private func heroListRow(for game: GameEntry) -> some View {
         let isPaused = PauseManager.shared.pausedGame?.id == game.id
         return heroCardContent(for: game, isPaused: isPaused, aspectRatio: 3.0)
-            .padding(.bottom, Spacing.lg)
+    }
+
+    private var librarySectionHeader: some View {
+        HStack {
+            Text("All games")
+                .font(.callout.bold())
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.top, Spacing.sm)
     }
 
     private func heroCardContent(for game: GameEntry, isPaused: Bool, aspectRatio: CGFloat) -> some View {
@@ -378,6 +410,8 @@ struct GameLibraryView: View {
             if let hero = recentlyPlayed {
                 heroListRow(for: hero)
                     .transition(.cardAppear)
+
+                librarySectionHeader
             }
 
             ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
@@ -487,5 +521,79 @@ struct GameLibraryView: View {
                 }
             }
         }
+    }
+
+    private func sortGames(_ games: [GameEntry]) -> [GameEntry] {
+        switch settings.librarySortOption {
+        case .titleAZ:
+            return games.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .titleZA:
+            return games.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedDescending }
+        case .recentlyPlayed:
+            return games.sorted { ($0.lastPlayed ?? .distantPast) > ($1.lastPlayed ?? .distantPast) }
+        case .leastRecentlyPlayed:
+            return games.sorted { ($0.lastPlayed ?? .distantPast) < ($1.lastPlayed ?? .distantPast) }
+        case .largestSize:
+            return games.sorted { (gameSizes[$0.id] ?? 0) > (gameSizes[$1.id] ?? 0) }
+        case .smallestSize:
+            return games.sorted { (gameSizes[$0.id] ?? 0) < (gameSizes[$1.id] ?? 0) }
+        case .mostPlayed:
+            return games.sorted { (playTime(for: $0) ?? 0) > (playTime(for: $1) ?? 0) }
+        case .leastPlayed:
+            return games.sorted { (playTime(for: $0) ?? 0) < (playTime(for: $1) ?? 0) }
+        }
+    }
+
+    private func refreshGameSizes() {
+        Task {
+            var sizes: [String: Int64] = [:]
+            for game in library.games {
+                sizes[game.id] = await GameMetadata.diskSize(for: URL(fileURLWithPath: game.path))
+            }
+            gameSizes = sizes
+        }
+    }
+
+    private func playTime(for game: GameEntry) -> TimeInterval? {
+        GameMetadata.load(for: game.id).totalPlayTime
+    }
+
+    private var sortSheet: some View {
+        NavigationStack {
+            List {
+                ForEach(LibrarySortOption.allCases, id: \.self) { option in
+                    Button {
+                        withAnimation(Motion.standard) {
+                            settings.librarySortOption = option
+                        }
+                        showSortSheet = false
+                    } label: {
+                        HStack(spacing: Spacing.lg) {
+                            Image(systemName: option.icon)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 24)
+                            Text(option.label)
+                            Spacer()
+                            if settings.librarySortOption == option {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.brand)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                    }
+                    .tint(.primary)
+                }
+            }
+            .navigationTitle("Sort by")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { showSortSheet = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .tint(.brand)
     }
 }
