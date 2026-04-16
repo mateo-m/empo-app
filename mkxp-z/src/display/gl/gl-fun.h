@@ -235,4 +235,10 @@ struct GLFunctions
 extern GLFunctions gl;
 void initGLFunctions();
 
+// When non-null, initGLFunctions uses this instead of SDL_GL_GetProcAddress.
+// Set before calling initGLFunctions() when using an alternative GL loader
+// (e.g. ANGLE's eglGetProcAddress).
+typedef void *(*GLGetProcAddressFunc)(const char *);
+extern GLGetProcAddressFunc glGetProcAddressOverride;
+
 #endif // GLFUN_H

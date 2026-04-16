@@ -218,6 +218,22 @@ void        mkxp_signalFrameRendered(void);
 void        mkxp_setGLContextBroken(void);
 bool        mkxp_isGLContextBroken(void);
 
+// Renderer selection
+
+typedef enum {
+    MKXP_RENDERER_OPENGL_ES = 0,
+    MKXP_RENDERER_ANGLE     = 1,
+} MKXPRenderer;
+
+// Reads the user's preferred renderer from UserDefaults.
+MKXPRenderer mkxp_getSelectedRenderer(void);
+
+// Returns the renderer the engine is actually using right now.
+MKXPRenderer mkxp_getCurrentRenderer(void);
+
+// Human-readable label for a renderer value.
+const char  *mkxp_rendererName(MKXPRenderer renderer);
+
 // Debug logging
 
 // Set log file path for this session (NULL/"" to disable).

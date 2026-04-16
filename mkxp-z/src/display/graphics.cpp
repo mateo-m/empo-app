@@ -57,6 +57,36 @@
 
 #include <algorithm>
 #include <vector>
+
+#if TARGET_OS_IPHONE
+#ifdef MKXPZ_HAS_ANGLE
+#include <EGL/egl.h>
+#include "ios_bridge.h"
+extern MKXPRenderer s_currentRenderer;
+extern EGLDisplay s_eglDisplay;
+extern EGLSurface s_eglSurface;
+extern EGLContext s_eglContext;
+#else
+#include "ios_bridge.h"
+static const MKXPRenderer s_currentRenderer = MKXP_RENDERER_OPENGL_ES;
+#endif
+#endif
+static inline void graphicsGL_SwapWindow(SDL_Window *win) {
+#ifdef MKXPZ_HAS_ANGLE
+    if (s_currentRenderer == MKXP_RENDERER_ANGLE) { eglSwapBuffers(s_eglDisplay, s_eglSurface); return; }
+#endif
+    SDL_GL_SwapWindow(win);
+}
+static inline void graphicsGL_MakeCurrent(SDL_Window *win, SDL_GLContext ctx) {
+#ifdef MKXPZ_HAS_ANGLE
+    if (s_currentRenderer == MKXP_RENDERER_ANGLE) {
+        if (ctx) eglMakeCurrent(s_eglDisplay, s_eglSurface, s_eglSurface, s_eglContext);
+        else eglMakeCurrent(s_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        return;
+    }
+#endif
+    SDL_GL_MakeCurrent(win, ctx);
+}
 #include <errno.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -483,7 +513,12 @@ struct GraphicsPrivate {
     scSize(scRes),
     winSize(rtData->config.defScreenW, rtData->config.defScreenH),
     screen(scRes.x, scRes.y), threadData(rtData),
-    glCtx(SDL_GL_GetCurrentContext()), multithreadedMode(true),
+#if TARGET_OS_IPHONE && defined(MKXPZ_HAS_ANGLE)
+    glCtx(s_currentRenderer == MKXP_RENDERER_ANGLE ? (SDL_GLContext)s_eglContext : SDL_GL_GetCurrentContext()),
+#else
+    glCtx(SDL_GL_GetCurrentContext()),
+#endif
+    multithreadedMode(true),
     frameRate(DEF_FRAMERATE), frameCount(0), brightness(255),
     fpsLimiter(frameRate), useFrameSkip(rtData->config.frameSkip), frozen(false),
     last_update(0), last_avg_update(0), backingScaleFactor(1), integerScaleFactor(0, 0),
@@ -504,7 +539,21 @@ struct GraphicsPrivate {
             winSize = Vec2i(winW, winH);
 
             int drwW, drwH;
+#if TARGET_OS_IPHONE && defined(MKXPZ_HAS_ANGLE)
+            if (s_currentRenderer == MKXP_RENDERER_ANGLE) {
+                // SDL_GL_GetDrawableSize returns logical points under ANGLE
+                // (no SDL GL context). Query EGL surface size instead.
+                EGLint eglW = 0, eglH = 0;
+                eglQuerySurface(s_eglDisplay, s_eglSurface, EGL_WIDTH, &eglW);
+                eglQuerySurface(s_eglDisplay, s_eglSurface, EGL_HEIGHT, &eglH);
+                drwW = eglW;
+                drwH = eglH;
+            } else {
+                SDL_GL_GetDrawableSize(rtData->window, &drwW, &drwH);
+            }
+#else
             SDL_GL_GetDrawableSize(rtData->window, &drwW, &drwH);
+#endif
             backingScaleFactor = (float)drwW / winW;
             winSize = Vec2i(drwW, drwH);
         }
@@ -837,7 +886,11 @@ struct GraphicsPrivate {
     
     void swapGLBuffer() {
         fpsLimiter.delay();
+#if TARGET_OS_IPHONE
+        graphicsGL_SwapWindow(threadData->window);
+#else
         SDL_GL_SwapWindow(threadData->window);
+#endif
         
         ++frameCount;
         
@@ -972,12 +1025,15 @@ struct GraphicsPrivate {
         if (!threadData->syncPoint.mainSyncLocked())
             return;
         
-        /* Releasing the GL context before sleeping and making it
-         * current again on wakeup seems to avoid the context loss
-         * when the app moves into the background on Android */
+#if TARGET_OS_IPHONE
+        graphicsGL_MakeCurrent(threadData->window, 0);
+        threadData->syncPoint.waitMainSync();
+        graphicsGL_MakeCurrent(threadData->window, glCtx);
+#else
         SDL_GL_MakeCurrent(threadData->window, 0);
         threadData->syncPoint.waitMainSync();
         SDL_GL_MakeCurrent(threadData->window, glCtx);
+#endif
         
         fpsLimiter.resetFrameAdjust();
     }
@@ -997,7 +1053,7 @@ struct GraphicsPrivate {
         if (!(force || multithreadedMode)) return;
         
         SDL_LockMutex(glResourceLock);
-        SDL_GL_MakeCurrent(threadData->window, threadData->glContext);
+        graphicsGL_MakeCurrent(threadData->window, threadData->glContext);
     }
     
     void releaseLock(bool force = false) {
@@ -1692,7 +1748,11 @@ void Graphics::repaintWait(const AtomicFlag &exitCond, bool checkReset) {
         
         FBO::clear();
         p->metaBlitBufferFlippedScaled(scaleIsSpecial);
+#if TARGET_OS_IPHONE
+        graphicsGL_SwapWindow(p->threadData->window);
+#else
         SDL_GL_SwapWindow(p->threadData->window);
+#endif
         p->fpsLimiter.delay();
         
         p->threadData->ethread->notifyFrame();
