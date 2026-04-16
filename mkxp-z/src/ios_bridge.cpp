@@ -491,6 +491,39 @@ bool mkxp_isGLContextBroken(void) {
     return s_glContextBroken.load(std::memory_order_acquire);
 }
 
+MKXPRenderer mkxp_getSelectedRenderer(void) {
+#if TARGET_OS_IPHONE
+    CFStringRef key = CFSTR("renderer");
+    CFStringRef value = (CFStringRef)CFPreferencesCopyAppValue(key, kCFPreferencesCurrentApplication);
+    if (!value) return MKXP_RENDERER_OPENGL_ES;
+    bool isANGLE = CFStringCompare(value, CFSTR("angle"), 0) == kCFCompareEqualTo;
+    CFRelease(value);
+    return isANGLE ? MKXP_RENDERER_ANGLE : MKXP_RENDERER_OPENGL_ES;
+#else
+    return MKXP_RENDERER_OPENGL_ES;
+#endif
+}
+
+#if TARGET_OS_IPHONE
+extern MKXPRenderer s_currentRenderer;
+#endif
+
+MKXPRenderer mkxp_getCurrentRenderer(void) {
+#if TARGET_OS_IPHONE
+    return s_currentRenderer;
+#else
+    return MKXP_RENDERER_OPENGL_ES;
+#endif
+}
+
+const char *mkxp_rendererName(MKXPRenderer renderer) {
+    switch (renderer) {
+    case MKXP_RENDERER_ANGLE:     return "ANGLE (Metal)";
+    case MKXP_RENDERER_OPENGL_ES: return "OpenGL ES";
+    default:                      return "Unknown";
+    }
+}
+
 void mkxp_setDebugLogPath(const char *path) {
     std::lock_guard<std::mutex> lock(s_debugLogMutex);
     // Close previous file handle if open

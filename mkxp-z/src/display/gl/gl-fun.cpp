@@ -28,13 +28,20 @@
 #include <string>
 
 GLFunctions gl;
+GLGetProcAddressFunc glGetProcAddressOverride = nullptr;
 
 typedef const GLubyte* (APIENTRYP _PFNGLGETSTRINGIPROC) (GLenum, GLuint);
+
+static void *getProcAddress(const char *name) {
+    if (glGetProcAddressOverride)
+        return glGetProcAddressOverride(name);
+    return SDL_GL_GetProcAddress(name);
+}
 
 static void parseExtensionsCore(_PFNGLGETINTEGERVPROC GetIntegerv, BoostSet<std::string> &out)
 {
     _PFNGLGETSTRINGIPROC GetStringi =
-    (_PFNGLGETSTRINGIPROC) SDL_GL_GetProcAddress("glGetStringi");
+    (_PFNGLGETSTRINGIPROC) getProcAddress("glGetStringi");
     
     GLint extCount = 0;
     GetIntegerv(GL_NUM_EXTENSIONS, &extCount);
@@ -69,7 +76,7 @@ static void parseExtensionsCompat(_PFNGLGETSTRINGPROC GetString, BoostSet<std::s
 }
 
 #define GL_FUN(name, type) \
-gl.name = (type) SDL_GL_GetProcAddress("gl" #name EXT_SUFFIX);
+gl.name = (type) getProcAddress("gl" #name EXT_SUFFIX);
 
 #define EXC(msg) \
 Exception(Exception::MKXPError, "%s", msg)

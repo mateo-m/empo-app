@@ -53,6 +53,7 @@
 #endif
 #if TARGET_OS_IPHONE
 #include "ios_bridge.h"
+extern void mkxpGL_GetDrawableSize(SDL_Window *win, int *w, int *h);
 #endif
 
 #ifndef __APPLE__
@@ -277,7 +278,11 @@ void EventThread::process(RGSSThreadData &rtData)
                         winH = event.window.data2;
                         
                         int drwW, drwH;
+#if TARGET_OS_IPHONE
+                        mkxpGL_GetDrawableSize(win, &drwW, &drwH);
+#else
                         SDL_GL_GetDrawableSize(win, &drwW, &drwH);
+#endif
                         
                         windowSizeMsg.post(Vec2i(winW, winH));
                         drawableSizeMsg.post(Vec2i(drwW, drwH));
