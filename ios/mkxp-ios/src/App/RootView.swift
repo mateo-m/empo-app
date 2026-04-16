@@ -67,7 +67,9 @@ struct RootView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            engineState.resumeFromBackground()
+            if appState.phase == .playing {
+                engineState.resumeFromBackground()
+            }
         }
     }
 

@@ -7,10 +7,6 @@
 
 #import <UIKit/UIKit.h>
 
-// ============================================================================
-// TCButton — individual circular action button
-// ============================================================================
-
 @interface TCButton : UIView
 @property (nonatomic) int scancode;
 @property (nonatomic, copy) NSString *label;
@@ -24,13 +20,9 @@
 - (instancetype)initWithLabel:(NSString *)label scancode:(int)sc size:(CGFloat)size;
 - (void)resizeToSize:(CGFloat)newSize animated:(BOOL)animated;
 - (void)updateLabel:(NSString *)newLabel;
-- (NSDictionary *)toDict;
-+ (TCButton *)fromDict:(NSDictionary *)d;
 @end
 
-// ============================================================================
 // TCDPadView — directional pad with 8-way input
-// ============================================================================
 
 typedef NS_OPTIONS(NSUInteger, DPadDirection) {
     DPadNone  = 0,
@@ -47,33 +39,22 @@ typedef NS_OPTIONS(NSUInteger, DPadDirection) {
 @property (nonatomic) CGPoint relativeCenter;
 
 - (instancetype)initWithSize:(CGFloat)size;
-- (NSDictionary *)toDict;
 @end
 
-// ============================================================================
 // TCAccessoryBar — keyboard accessory that respects safe area insets
 @interface TCAccessoryBar : UIView
 @end
 
 // TCKeyboardField — hidden text field for system keyboard input
-// ============================================================================
 
 @interface TCKeyboardField : UITextField
 @end
-
-// ============================================================================
-// Keyboard accessory bar creation
-// ============================================================================
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 UIView *TCCreateKeyboardAccessoryView(void);
-
-// ============================================================================
-// Key event watcher (installs once, dispatches via NotificationCenter)
-// ============================================================================
 
 extern NSString *const TCKeyEventNotification;
 

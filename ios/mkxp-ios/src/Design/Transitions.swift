@@ -53,7 +53,6 @@ struct EmptyStateView: View {
             withAnimation(spring.delay(initialDelay + interval * 2)) {
                 subtitleAppeared = true
             }
-            // Start floating after all elements reveal
             let totalDelay = initialDelay + interval * 2 + 0.3
             DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay) {
                 floating = true
@@ -92,33 +91,15 @@ extension View {
     }
 }
 
-struct EmptyStateTransition: ViewModifier {
+struct ScaleFadeBlurTransition: ViewModifier {
     let active: Bool
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(active ? 0.8 : 1)
-            .opacity(active ? 0 : 1)
-            .blur(radius: active ? 10 : 0)
-    }
-}
+    let blurRadius: CGFloat
 
-struct CardTransition: ViewModifier {
-    let active: Bool
     func body(content: Content) -> some View {
         content
             .scaleEffect(active ? 0.8 : 1)
             .opacity(active ? 0 : 1)
-            .blur(radius: active ? 6 : 0)
-    }
-}
-
-struct ViewModeSwitchTransition: ViewModifier {
-    let active: Bool
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(active ? 0.8 : 1)
-            .opacity(active ? 0 : 1)
-            .blur(radius: active ? 10 : 0)
+            .blur(radius: active ? blurRadius : 0)
     }
 }
 
@@ -137,22 +118,22 @@ struct ControlTransition: ViewModifier {
 extension AnyTransition {
     static var emptyState: AnyTransition {
         .modifier(
-            active: EmptyStateTransition(active: true),
-            identity: EmptyStateTransition(active: false)
+            active: ScaleFadeBlurTransition(active: true, blurRadius: 10),
+            identity: ScaleFadeBlurTransition(active: false, blurRadius: 10)
         )
     }
 
     static var cardAppear: AnyTransition {
         .modifier(
-            active: CardTransition(active: true),
-            identity: CardTransition(active: false)
+            active: ScaleFadeBlurTransition(active: true, blurRadius: 6),
+            identity: ScaleFadeBlurTransition(active: false, blurRadius: 6)
         )
     }
 
     static var viewModeSwitch: AnyTransition {
         .modifier(
-            active: ViewModeSwitchTransition(active: true),
-            identity: ViewModeSwitchTransition(active: false)
+            active: ScaleFadeBlurTransition(active: true, blurRadius: 10),
+            identity: ScaleFadeBlurTransition(active: false, blurRadius: 10)
         )
     }
 

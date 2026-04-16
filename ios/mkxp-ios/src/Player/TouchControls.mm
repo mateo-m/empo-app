@@ -9,10 +9,6 @@
 #import "TouchControls.h"
 #include "ios_bridge.h"
 
-// ============================================================================
-// MARK: - Constants
-// ============================================================================
-
 static const CGFloat kButtonSize         = 56.0;
 static const CGFloat kDPadDeadZone       = 0.20; // fraction of radius
 static const CGFloat kButtonHitSlop      = 10.0; // extra radius for pointInside
@@ -29,27 +25,15 @@ static const CGFloat kAccessoryFontSize  = 13.0;
 static const CGFloat kKeyTapDuration     = 0.05; // seconds
 static const CGFloat kPressScale         = 0.90;
 
-// ============================================================================
-// MARK: - Key event injection (via bridge)
-// ============================================================================
-
 static void injectKey(int scancode, BOOL pressed) {
     mkxp_injectKeyEvent(scancode, pressed ? 1 : 0);
 }
-
-// ============================================================================
-// MARK: - Controller haptics
-// ============================================================================
 
 static BOOL controllerHapticsEnabled(void) {
     // Defaults to YES when the key hasn't been set yet
     NSObject *val = [[NSUserDefaults standardUserDefaults] objectForKey:@"controllerHaptics"];
     return val ? [[NSUserDefaults standardUserDefaults] boolForKey:@"controllerHaptics"] : YES;
 }
-
-// ============================================================================
-// MARK: - Key event watcher (highlights buttons on hardware key events)
-// ============================================================================
 
 NSString *const TCKeyEventNotification = @"TCKeyEvent";
 
@@ -73,9 +57,7 @@ void TCInstallKeyEventWatcher(void) {
     }
 }
 
-// ============================================================================
-// MARK: - Character-to-scancode mapping (for system keyboard)
-// ============================================================================
+// Character-to-scancode mapping (for system keyboard)
 
 static int scancodeForCharacter(unichar c) {
     if (c >= 'a' && c <= 'z') return (MKXP_SCANCODE_A + (c - 'a'));
@@ -101,9 +83,7 @@ static int scancodeForCharacter(unichar c) {
     }
 }
 
-// ============================================================================
-// MARK: - TCButton (individual action button)
-// ============================================================================
+// TCButton
 
 @interface TCButton ()
 @property (nonatomic, weak) UITouch *trackedTouch;
@@ -236,31 +216,10 @@ static int scancodeForCharacter(unichar c) {
     _textLabel.text = newLabel;
 }
 
-- (NSDictionary *)toDict {
-    return @{
-        @"label":    _label ?: @"",
-        @"scancode": @((int)_scancode),
-        @"rx":       @(_relativeCenter.x),
-        @"ry":       @(_relativeCenter.y),
-        @"size":     @(self.bounds.size.width),
-    };
-}
-
-+ (TCButton *)fromDict:(NSDictionary *)d {
-    CGFloat size = [d[@"size"] floatValue] ?: kButtonSize;
-    TCButton *b = [[TCButton alloc] initWithLabel:d[@"label"]
-                                         scancode:(int)[d[@"scancode"] intValue]
-                                             size:size];
-    b.relativeCenter = CGPointMake([d[@"rx"] floatValue], [d[@"ry"] floatValue]);
-    return b;
-}
-
 @end
 
-// ============================================================================
 // TCDPadOverlayView — transparent overlay that draws cross arms and arrows
 // on top of the blur view (drawRect on the parent would render behind it).
-// ============================================================================
 
 @interface TCDPadOverlayView : UIView
 @property (nonatomic, assign) DPadDirection activeDirections;
@@ -323,9 +282,7 @@ static int scancodeForCharacter(unichar c) {
 
 @end
 
-// ============================================================================
-// TCDPadView (directional pad)
-// ============================================================================
+// TCDPadView
 
 @interface TCDPadView ()
 @property (nonatomic, weak) UITouch *trackedTouch;
@@ -478,19 +435,9 @@ static int scancodeForCharacter(unichar c) {
     [self touchesEnded:touches withEvent:event];
 }
 
-- (NSDictionary *)toDict {
-    return @{
-        @"rx":   @(_relativeCenter.x),
-        @"ry":   @(_relativeCenter.y),
-        @"size": @(self.bounds.size.width),
-    };
-}
-
 @end
 
-// ============================================================================
-// MARK: - TCKeyboardField (intercepts backspace)
-// ============================================================================
+// TCKeyboardField (intercepts backspace)
 
 @implementation TCKeyboardField
 
@@ -508,9 +455,7 @@ static int scancodeForCharacter(unichar c) {
 
 @end
 
-// ============================================================================
-// MARK: - Keyboard accessory bar
-// ============================================================================
+// Keyboard accessory bar
 
 @interface UIView (TCAccKeyActions)
 - (void)accKeyTap:(UIButton *)sender;

@@ -15,14 +15,15 @@ class EngineState {
     private init() {}
 
 
+    /// Caller must guard `phase == .playing` before calling.
     func requestBackgroundPause() {
-        guard AppState.shared.phase == .playing else { return }
         isBackgroundPause = true
         mkxp_requestPause()
     }
 
+    /// Caller must guard `phase == .playing` before calling.
     func resumeFromBackground() {
-        guard AppState.shared.phase == .playing, mkxp_isPaused() else { return }
+        guard mkxp_isPaused() else { return }
         mkxp_requestResume()
     }
 }

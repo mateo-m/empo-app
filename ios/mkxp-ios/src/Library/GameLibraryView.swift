@@ -293,7 +293,6 @@ struct GameLibraryView: View {
 
     private var gridInner: some View {
         VStack(spacing: Spacing.lg) {
-            // Hero card for recently played game
             if let hero = recentlyPlayed {
                 heroCard(for: hero)
                     .transition(.cardAppear)
@@ -333,7 +332,6 @@ struct GameLibraryView: View {
                     )
                 }
                 .overlay {
-                    // Gradient scrim for readability
                     LinearGradient(
                         colors: [.clear, .black.opacity(0.6)],
                         startPoint: .top,
@@ -463,7 +461,7 @@ struct GameLibraryView: View {
     private func handleGameTap(_ game: GameEntry) {
         let pauseManager = PauseManager.shared
         if pauseManager.pausedGame?.id == game.id {
-            pauseManager.resume()
+            appState.resumePausedGame()
             path.append(game)
         } else if pauseManager.pausedGame != nil {
             pendingGame = game

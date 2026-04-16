@@ -24,7 +24,6 @@ struct GameInfoView: View {
         _metadata = State(initialValue: meta)
         _editingTitle = State(initialValue: meta.customTitle ?? "")
 
-        // Read the original Game.ini title (ignoring custom overrides)
         let gameDir = URL(fileURLWithPath: game.path)
         self.originalTitle = GameEntry.parseINITitle(at: gameDir) ?? "Unknown Game"
     }
@@ -123,18 +122,16 @@ struct GameInfoView: View {
                                 .padding(.vertical, Spacing.lg)
                         }
 
-                        if sessionLogURL() != nil {
-                            Divider().padding(.leading, Spacing.xl)
+                    if let logURL = sessionLogURL() {
+                        Divider().padding(.leading, Spacing.xl)
 
-                            if let logURL = sessionLogURL() {
-                                ShareLink(item: logURL) {
-                                    Label("Export logs", systemImage: "square.and.arrow.up")
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(.horizontal, Spacing.xl)
-                                        .padding(.vertical, Spacing.lg)
-                                }
-                            }
+                        ShareLink(item: logURL) {
+                            Label("Export logs", systemImage: "square.and.arrow.up")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, Spacing.xl)
+                                .padding(.vertical, Spacing.lg)
                         }
+                    }
                     }
                 }
             }
@@ -222,7 +219,6 @@ struct GameInfoView: View {
 
     private func bannerHeader(insets: EdgeInsets) -> some View {
         ZStack(alignment: .bottomLeading) {
-            // Banner image with gradient fade-out mask
             bannerBackground
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -249,7 +245,6 @@ struct GameInfoView: View {
                         .opacity(1 - titleScrollProgress)
                 }
 
-            // Artwork + Title overlay (unaffected by mask)
             HStack(spacing: 14) {
                 artworkView
                     .overlay(alignment: .topTrailing) {
@@ -322,7 +317,6 @@ struct GameInfoView: View {
         .clipped()
     }
 
-    /// Banner background — custom banner, or game artwork scaled to fill, or gradient.
     @ViewBuilder
     private var bannerBackground: some View {
         if let banner = bannerImage {
@@ -336,7 +330,6 @@ struct GameInfoView: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(height: bannerHeight)
         } else {
-            // Fallback gradient — adapts to color scheme via .surface
             LinearGradient(
                 colors: [.brand.opacity(0.3), .surface],
                 startPoint: .topLeading,

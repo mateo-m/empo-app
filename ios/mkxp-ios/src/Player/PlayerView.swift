@@ -26,12 +26,10 @@ struct PlayerView: View {
     @State private var toolbarIdleTask: Task<Void, Never>?
     @State private var showQuitConfirm = false
 
-    // Resume snapshot — fades out to reveal live SDL
     @State private var resumeSnapshot: UIImage?
     @State private var snapshotOpacity: Double = 1
     @State private var controlsVisible: Bool = true
 
-    // Edit mode trigger state
     @State private var showAddSheet = false
     @State private var showResetConfirm = false
     @State private var editingButton: ButtonModel?
@@ -47,26 +45,21 @@ struct PlayerView: View {
             let controlsMinY = toolbarBottomY(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize)
 
             ZStack {
-                // Transparent — passes touches through to SDL
                 Color.clear
                     .allowsHitTesting(false)
 
-                // Edit mode: visible zone showing where controls can be placed
                 if editMode {
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
                 }
 
                 if !controlsHidden && controlsVisible {
-                    // D-Pad
                     dpadView(in: geo, controlsMinY: controlsMinY)
 
-                    // Action buttons
                     ForEach(Array(layout.buttons.enumerated()), id: \.element.id) { index, button in
                         actionButtonView(button: button, index: index, in: geo, controlsMinY: controlsMinY)
                     }
                 }
 
-                // Toolbar (always visible unless editing)
                 if controlsVisible {
                     toolbarButtons(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoSize: geo.size)
                         .opacity(editMode ? 0 : 1)
@@ -76,14 +69,12 @@ struct PlayerView: View {
                         .allowsHitTesting(editMode)
                 }
 
-                // Debug overlay
                 if showDebugOverlay {
                     DebugOverlayView()
                         .frame(width: 220, height: 100)
                         .position(debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea))
                 }
 
-                // Hidden keyboard field
                 if keyboardMode {
                     KeyboardFieldRepresentable(
                         isActive: keyboardMode,
@@ -94,8 +85,7 @@ struct PlayerView: View {
                     .frame(width: 0, height: 0)
                 }
 
-                // Resume snapshot — positioned at gameRect, fades out when
-                // the engine swaps its first post-resume frame.
+                // Fades out when the engine swaps its first post-resume frame
                 if let snapshot = resumeSnapshot {
                     Image(uiImage: snapshot)
                         .resizable()
@@ -246,7 +236,7 @@ struct PlayerView: View {
         let buttons: [(icon: String, label: String, action: () -> Void, tint: Color?)] = {
             var list: [(icon: String, label: String, action: () -> Void, tint: Color?)] = []
             if AppSettings.shared.isEnabled(.gamePause) {
-                list.append(("pause.fill", "Pause game", { pauseManager.requestPause() }, .white))
+                list.append(("pause.fill", "Pause game", { appState.requestPause() }, .white))
             }
             list.append(("keyboard", "Toggle keyboard", { toggleKeyboard() }, .white))
             if AppSettings.shared.debugMode {
@@ -344,7 +334,10 @@ struct PlayerView: View {
 
     private func zoneCornerRadii(safeArea: EdgeInsets) -> (top: CGFloat, bottom: CGFloat) {
         let pad = kControlsZonePadding
-        let deviceCorner = (UIScreen.main.value(forKey: "displayCornerRadius") as? CGFloat) ?? kFallbackDeviceCornerRadius
+        let screen = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.screen
+        let deviceCorner = (screen?.value(forKey: "displayCornerRadius") as? CGFloat) ?? kFallbackDeviceCornerRadius
         let horizontalGap = safeArea.leading + pad
         let bottomGap = safeArea.bottom + pad
         let minGap = min(horizontalGap, bottomGap)
@@ -488,7 +481,6 @@ struct PlayerView: View {
         }
     }
 
-    /// Fade the snapshot to reveal the live SDL surface.
     private func startSnapshotFade() {
         withAnimation(.spring(duration: Motion.durationNormal, bounce: 0)) {
             snapshotOpacity = 0
