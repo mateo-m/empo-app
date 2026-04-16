@@ -3,8 +3,6 @@ import PhotosUI
 import UniformTypeIdentifiers
 
 
-/// Presents a confirmation dialog with three image source options (camera roll,
-/// camera, document picker), then shows the appropriate picker.
 struct ImageSourcePickerModifier: ViewModifier {
     @Binding var isPresented: Bool
     let title: String

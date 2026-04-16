@@ -9,10 +9,6 @@ enum Haptics {
         UserDefaults.standard.object(forKey: "interfaceHaptics") as? Bool ?? true
     }
 
-    private static var controllerEnabled: Bool {
-        UserDefaults.standard.object(forKey: "controllerHaptics") as? Bool ?? true
-    }
-
     static func tap() {
         guard interfaceEnabled else { return }
         light.impactOccurred()
@@ -28,8 +24,4 @@ enum Haptics {
         notification.notificationOccurred(.success)
     }
 
-    static func controllerTap() {
-        guard controllerEnabled else { return }
-        light.impactOccurred()
-    }
 }

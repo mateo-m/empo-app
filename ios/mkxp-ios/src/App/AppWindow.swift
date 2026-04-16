@@ -1,9 +1,6 @@
 import UIKit
 import SwiftUI
 
-// ============================================================================
-// ============================================================================
-
 private class AppRootViewController: UIViewController {
 
     private let hostingController: UIHostingController<RootView>
@@ -54,8 +51,6 @@ private class AppRootViewController: UIViewController {
     override var childForStatusBarHidden: UIViewController? { nil }
 }
 
-// ============================================================================
-// ============================================================================
 
 /// Single UIWindow that floats above SDL's window and hosts all app UI.
 /// In library/loading mode: opaque, covers SDL.
@@ -150,7 +145,6 @@ class AppWindow: UIWindow {
         window.makeKeyAndVisible()
         instance = window
 
-        // Seed safe area insets
         let insets = window.safeAreaInsets
         mkxp_setSafeAreaInsets(
             Float(insets.top), Float(insets.bottom),

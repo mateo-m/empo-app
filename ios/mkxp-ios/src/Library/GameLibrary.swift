@@ -26,7 +26,6 @@ class GameLibrary {
 
 
     func reload() {
-        // Scan on background to avoid blocking UI during filesystem I/O
         Task.detached {
             let scanned = GameLibrary.scanGames(in: GameLibrary.gamesDirectory, cleanupInvalid: false)
             let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
@@ -72,7 +71,6 @@ class GameLibrary {
                 continue
             }
 
-            // Validate once — either scan, cleanup, or mark invalid
             let isValid = (try? GameImportValidator.validate(url)) != nil
 
             if !isValid {
@@ -98,7 +96,6 @@ class GameLibrary {
         return entries
     }
 
-    /// Builds a GameEntry from a game folder. Loads metadata for custom title/artwork.
     nonisolated private static func buildGameEntry(from url: URL, fm: FileManager = .default) -> GameEntry? {
 
         let folderName = url.lastPathComponent
@@ -130,7 +127,6 @@ class GameLibrary {
             metadata.save(for: id)
         }
 
-        // Apply overrides
         let title = metadata.customTitle ?? iniTitle
         let artworkPath = metadata.customArtworkPath(for: id) ?? defaultArtwork
         let originalTitle = metadata.customTitle != nil ? iniTitle : nil
@@ -146,7 +142,6 @@ class GameLibrary {
     }
 
 
-    /// Re-reads a single game entry from disk + metadata for immediate UI feedback.
     func refreshGameEntry(id: String) {
         guard let idx = games.firstIndex(where: { $0.id == id }) else { return }
         let url = URL(fileURLWithPath: games[idx].path)
@@ -176,7 +171,6 @@ class GameLibrary {
         let isZip = sourceURL.pathExtension.lowercased() == "zip"
         let importID = UUID().uuidString
 
-        // For folders we can read metadata from the source immediately.
         let title: String
         let artwork: String?
         if !isZip {
@@ -330,12 +324,10 @@ class GameLibrary {
     func deleteGame(_ entry: GameEntry, onError: ((String) -> Void)? = nil) {
         let wasImporting = entry.isImporting
 
-        // Evict cached artwork
         if let artworkPath = entry.artworkPath {
             ImageCache.shared.evict(path: artworkPath)
         }
 
-        // Remove metadata (JSON + custom media)
         GameMetadata.delete(for: entry.id)
 
         withAnimation {
@@ -380,7 +372,6 @@ class GameLibrary {
     }
 
 
-    /// Turns a game title into a filesystem-friendly slug (e.g. "Pokemon Z" → "pokemon-z").
     nonisolated private static func slugify(_ string: String) -> String {
         let allowed = CharacterSet.alphanumerics
         let slug = string
@@ -388,7 +379,6 @@ class GameLibrary {
             .unicodeScalars
             .map { allowed.contains($0) ? String($0) : "-" }
             .joined()
-        // Collapse consecutive dashes and trim
         return slug
             .components(separatedBy: "-")
             .filter { !$0.isEmpty }
@@ -433,7 +423,6 @@ class GameLibrary {
         let gameIDs = Set(games.map(\.id))
 
         for url in contents {
-            // Extract game ID from filename: "{gameId}.json" or directory "{gameId}/"
             let name = url.deletingPathExtension().lastPathComponent
             if !gameIDs.contains(name) {
                 NSLog("[GameLibrary] Removing orphaned metadata: %@", url.lastPathComponent)

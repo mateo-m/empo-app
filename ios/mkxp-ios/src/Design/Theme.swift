@@ -108,7 +108,7 @@ extension View {
 }
 
 //
-// Named spring presets — all tuned for a playful, fluid feel.
+// Named spring presets.
 
 enum Motion {
     // -- Small elements: buttons, toggles, icons (150-200ms) --
@@ -120,10 +120,6 @@ enum Motion {
 
     /// General-purpose transition — list changes, layout shifts, navigation.
     static let standard = Animation.spring(duration: 0.3, bounce: 0.0)
-
-    /// Playful, expressive motion — import button arc, select accents.
-    /// One of the few animations with bounce.
-    static let bouncy = Animation.spring(duration: 0.35, bounce: 0.15)
 
     /// Gentle transition — background changes, slow reveals.
     static let gentle = Animation.spring(duration: 0.35, bounce: 0.0)

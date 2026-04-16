@@ -30,17 +30,27 @@ class AppState {
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent(".session-active")
 
+    private static func commitSuffix() -> String {
+        GitInfo.dirty ? " (dirty)" : ""
+    }
+
+    private static func logHeader(title: String, extras: [String] = []) -> String {
+        var header = "\(title)\n"
+        header += "commit: \(GitInfo.commit)\(commitSuffix())\n"
+        for line in extras {
+            header += "\(line)\n"
+        }
+        header += "---\n"
+        return header
+    }
+
     private init() {
         let logsDir = Self.logsDirectory
         try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
         sessionHistoryPath = logsDir.appendingPathComponent("session-history.log").path
 
-        let dirty = GitInfo.dirty ? " (dirty)" : ""
         let launchTime = Self.isoFormatter.string(from: Date())
-        var header = "mkxp-ios session history\n"
-        header += "commit: \(GitInfo.commit)\(dirty)\n"
-        header += "launched: \(launchTime)\n"
-        header += "---\n"
+        let header = Self.logHeader(title: "mkxp-ios session history", extras: ["launched: \(launchTime)"])
         try? header.write(toFile: sessionHistoryPath, atomically: true, encoding: .utf8)
 
         if FileManager.default.fileExists(atPath: Self.crashMarkerURL.path) {
@@ -51,7 +61,6 @@ class AppState {
         registerBridgeCallbacks()
     }
 
-    /// Keep only the most recent log files.
     private func pruneOldLogs(in logsDir: URL) {
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: logsDir, includingPropertiesForKeys: [.creationDateKey]) else { return }
@@ -75,7 +84,7 @@ class AppState {
     func selectGame(_ game: GameEntry) {
         let pauseManager = PauseManager.shared
         if let paused = pauseManager.pausedGame, paused.id == game.id {
-            pauseManager.resume()
+            resumePausedGame()
             return
         }
 
@@ -119,12 +128,10 @@ class AppState {
         let filename = "\(game.id)-\(slug)-\(timestamp).log"
         let logPath = logsDir.appendingPathComponent(filename).path
 
-        let dirty = GitInfo.dirty ? " (dirty)" : ""
-        var header = "mkxp-ios debug log\n"
-        header += "commit: \(GitInfo.commit)\(dirty)\n"
-        header += "game: \(game.title) [\(game.id)]\n"
-        header += "session: \(timestamp)\n"
-        header += "---\n\n"
+        let header = Self.logHeader(title: "mkxp-ios debug log", extras: [
+            "game: \(game.title) [\(game.id)]",
+            "session: \(timestamp)",
+        ]) + "\n"
         try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
 
         mkxp_setDebugLogPath(logPath)
@@ -156,12 +163,13 @@ class AppState {
         metadata.save(for: game.id)
     }
 
-    /// Returns to the library and tears down the engine.
+    private static let simulatorCrashMessage = "The game crashed due to a simulator bug. "
+        + "This won't happen on a real device."
+
     func consumeCrashRecovery() {
         guard pendingCrashRecovery else { return }
         pendingCrashRecovery = false
-        errorMessage = "The game crashed due to a simulator bug. "
-            + "This won't happen on a real device."
+        errorMessage = Self.simulatorCrashMessage
     }
 
     func dismissCrashRecovery() {
@@ -181,7 +189,49 @@ class AppState {
     }
 
 
-    /// All callbacks fire on the engine thread; each dispatches to main.
+    // MARK: - Pause lifecycle
+    // These methods coordinate PauseManager state with phase transitions.
+    // PauseManager is a pure data holder — all AppState mutations stay here.
+
+    func requestPause() {
+        guard AppSettings.shared.isEnabled(.gamePause),
+              phase == .playing else { return }
+        EngineState.shared.isBackgroundPause = false
+        mkxp_requestPause()
+    }
+
+    /// Called on the main thread from the bridge's paused callback.
+    /// Background pauses are ignored — they stay silent with no UI transition.
+    func handlePause(snapshot: UIImage?) {
+        guard phase == .playing else { return }
+        if EngineState.shared.isBackgroundPause { return }
+        let pm = PauseManager.shared
+        pm.pauseSnapshot = snapshot
+        pm.pausedGame = selectedGame
+        withAnimation(.spring(duration: 0.25, bounce: 0)) {
+            phase = nil
+        }
+    }
+
+    /// Phase change is delayed so the hero zoom animation plays while
+    /// the library is still visible. The snapshot stays alive — PlayerView
+    /// picks it up as a fade-out overlay so there's no flash at handoff.
+    func resumePausedGame() {
+        let pm = PauseManager.shared
+        guard pm.pausedGame != nil else { return }
+        pm.pausedGame = nil
+        pm.snapshotCanFade = false
+        mkxp_requestResume()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            self.phase = .playing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                pm.snapshotCanFade = true
+            }
+        }
+    }
+
+
     private func removeCrashMarker() {
         try? FileManager.default.removeItem(at: Self.crashMarkerURL)
     }
@@ -209,8 +259,7 @@ class AppState {
                 GameLibrary.shared.reload()
 
                 if !state.terminationExpected && state.phase != nil {
-                    state.errorMessage = "The game crashed due to a simulator bug. "
-                        + "This won't happen on a real device."
+                    state.errorMessage = AppState.simulatorCrashMessage
                     state.selectedGame = nil
                     state.engineReady = false
                     PauseManager.shared.reset()
@@ -263,7 +312,7 @@ class AppState {
             }
 
             Task { @MainActor in
-                PauseManager.shared.handlePausedCallback(snapshot: snapshotImage)
+                AppState.shared.handlePause(snapshot: snapshotImage)
             }
         }, nil)
 

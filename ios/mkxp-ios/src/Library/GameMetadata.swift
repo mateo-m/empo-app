@@ -76,9 +76,7 @@ struct GameMetadata: Codable {
 
     static func delete(for gameId: String) {
         let fm = FileManager.default
-        // Remove metadata JSON
         try? fm.removeItem(at: metadataURL(for: gameId))
-        // Remove media directory (custom artwork/banner)
         let mediaDir = mediaDirectory(for: gameId)
         if fm.fileExists(atPath: mediaDir.path) {
             try? fm.removeItem(at: mediaDir)
@@ -86,18 +84,19 @@ struct GameMetadata: Codable {
     }
 
 
-    func customArtworkPath(for gameId: String) -> String? {
-        guard let filename = customArtworkFilename else { return nil }
+    private func customMediaPath(filename: String?, for gameId: String) -> String? {
+        guard let filename else { return nil }
         let path = Self.mediaDirectory(for: gameId)
             .appendingPathComponent(filename).path
         return FileManager.default.fileExists(atPath: path) ? path : nil
     }
 
+    func customArtworkPath(for gameId: String) -> String? {
+        customMediaPath(filename: customArtworkFilename, for: gameId)
+    }
+
     func customBannerPath(for gameId: String) -> String? {
-        guard let filename = customBannerFilename else { return nil }
-        let path = Self.mediaDirectory(for: gameId)
-            .appendingPathComponent(filename).path
-        return FileManager.default.fileExists(atPath: path) ? path : nil
+        customMediaPath(filename: customBannerFilename, for: gameId)
     }
 
 
@@ -133,27 +132,25 @@ struct GameMetadata: Codable {
 
 
     static func diskSize(for directory: URL) async -> Int64 {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .utility).async {
-                let fm = FileManager.default
-                guard let enumerator = fm.enumerator(
-                    at: directory,
-                    includingPropertiesForKeys: [.fileSizeKey],
-                    options: [.skipsHiddenFiles]
-                ) else {
-                    continuation.resume(returning: 0)
-                    return
-                }
-
-                var total: Int64 = 0
-                for case let fileURL as URL in enumerator {
-                    if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                        total += Int64(size)
-                    }
-                }
-                continuation.resume(returning: total)
+        let directory = directory
+        return await Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            guard let enumerator = fm.enumerator(
+                at: directory,
+                includingPropertiesForKeys: [.fileSizeKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                return Int64(0)
             }
-        }
+
+            var total: Int64 = 0
+            for case let fileURL as URL in enumerator {
+                if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                    total += Int64(size)
+                }
+            }
+            return total
+        }.value
     }
 
 

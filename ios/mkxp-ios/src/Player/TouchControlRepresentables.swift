@@ -1,9 +1,5 @@
 import SwiftUI
 
-// ============================================================================
-// ============================================================================
-
-/// Wraps TCDPadView (ObjC++) for use in SwiftUI.
 struct DPadRepresentable: UIViewRepresentable {
     var size: CGFloat
     var editing: Bool
@@ -20,10 +16,6 @@ struct DPadRepresentable: UIViewRepresentable {
     }
 }
 
-// ============================================================================
-// ============================================================================
-
-/// Wraps TCButton (ObjC++) for use in SwiftUI.
 struct ActionButtonRepresentable: UIViewRepresentable {
     var label: String
     var scancode: Int32
@@ -52,15 +44,9 @@ struct ActionButtonRepresentable: UIViewRepresentable {
     }
 }
 
-// ============================================================================
-// ============================================================================
-
-/// Wraps TCKeyboardField (ObjC++) for use in SwiftUI.
-/// The text field is invisible (zero-frame) — only its keyboard + accessory matter.
+/// Invisible text field — only its keyboard + accessory bar matter.
 struct KeyboardFieldRepresentable: UIViewRepresentable {
     var isActive: Bool
-    /// Called when the keyboard field needs to become/resign first responder
-    /// through the parent window's makeKeyWindow.
     var onActivate: (() -> Void)?
 
     func makeUIView(context: Context) -> TCKeyboardField {
@@ -121,7 +107,6 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             return false
         }
 
-        // Character-to-scancode mapping (Swift equivalent of the ObjC version)
         private func scancodeForSwiftCharacter(_ c: UInt16) -> Int32 {
             let ch = Character(UnicodeScalar(c)!)
             switch ch {
