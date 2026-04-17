@@ -87,6 +87,19 @@ enum AppTheme: String, CaseIterable {
 }
 
 
+enum RendererOption: String, CaseIterable {
+    case openGLES = "opengles"
+    case angle = "angle"
+
+    var label: String {
+        switch self {
+        case .openGLES: "OpenGL ES"
+        case .angle: "ANGLE (Beta)"
+        }
+    }
+}
+
+
 enum ExperimentalFeature: String, CaseIterable, Identifiable {
     case gameQuit = "experimental.gameQuit"
     case gamePause = "experimental.gamePause"
@@ -113,6 +126,17 @@ enum ExperimentalFeature: String, CaseIterable, Identifiable {
 @Observable
 class AppSettings {
     static let shared = AppSettings()
+
+    private(set) var launchedRenderer: RendererOption
+
+    var rendererPendingRestart: Bool {
+        renderer != launchedRenderer
+    }
+
+    func syncRendererWithEngine() {
+        let current = mkxp_getCurrentRenderer()
+        launchedRenderer = current == MKXP_RENDERER_ANGLE ? .angle : .openGLES
+    }
 
     var theme: AppTheme {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: "theme") }
@@ -172,6 +196,10 @@ class AppSettings {
         didSet { UserDefaults.standard.set(librarySortOption.rawValue, forKey: "librarySortOption") }
     }
 
+    var renderer: RendererOption {
+        didSet { UserDefaults.standard.set(renderer.rawValue, forKey: "renderer") }
+    }
+
     private var experimentalFlags: [String: Bool] {
         didSet {
             for (key, value) in experimentalFlags {
@@ -200,6 +228,10 @@ class AppSettings {
         self.showContinuePlaying = UserDefaults.standard.object(forKey: "showContinuePlaying") as? Bool ?? true
         let sortRaw = UserDefaults.standard.string(forKey: "librarySortOption") ?? LibrarySortOption.titleAZ.rawValue
         self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
+        let rendererRaw = UserDefaults.standard.string(forKey: "renderer") ?? RendererOption.openGLES.rawValue
+        let resolved = RendererOption(rawValue: rendererRaw) ?? .openGLES
+        self.renderer = resolved
+        self.launchedRenderer = resolved
 
         var flags: [String: Bool] = [:]
         for feature in ExperimentalFeature.allCases {
