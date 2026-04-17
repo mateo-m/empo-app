@@ -191,12 +191,24 @@ class AppState {
         terminationExpected = true
         recordSessionPlayTime()
         removeCrashMarker()
-        mkxp_requestTerminate()
+
+        // Only talk to the engine if it's still running. After a crash
+        // the terminated callback has already fired and re-arming the
+        // hang watchdog here would trip a spurious "previous game
+        // stopped responding" alert 3s later.
+        let engineWasRunning = mkxp_isEngineTerminated() == 0
+        if engineWasRunning {
+            mkxp_requestTerminate()
+        }
+
         selectedGame = nil
         engineReady = false
         PauseManager.shared.reset()
         phase = nil
-        armHangWatchdog()
+
+        if engineWasRunning {
+            armHangWatchdog()
+        }
     }
 
     private func armHangWatchdog() {
@@ -217,7 +229,7 @@ class AppState {
     }
 
     private static let hangMessage =
-        "The previous game stopped responding and will now close."
+        "The previous game stopped responding. The app will now close."
 
 
     // MARK: - Pause lifecycle

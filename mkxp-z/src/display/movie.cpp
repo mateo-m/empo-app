@@ -78,6 +78,25 @@ Movie::~Movie()
     delete videoBitmap;
 }
 
+// Safety net for preparePlayback() spin loops: if the file is not a
+// valid Ogg Theora stream, prepped/video/audio will never come, and
+// the Ruby thread hangs in C land where checkShutdown() can't run.
+// We bail after PREP_TIMEOUT_MS and also yield promptly to a pending
+// termination or reset request.
+static const Uint32 PREP_TIMEOUT_MS = 5000;
+
+static bool prepShouldAbort(Uint32 startTicks)
+{
+    // Giving up the Ruby thread back to the main thread is handled by
+    // the main thread's rqTerm/rqReset flags. If either is set, abort
+    // the decode init so Graphics.play_movie returns and the next
+    // checkShutdown()/checkReset() can unwind the script.
+    if (shState && shState->graphics().updateMovieInput(nullptr)) {
+        return true;
+    }
+    return (SDL_GetTicks() - startTicks) >= PREP_TIMEOUT_MS;
+}
+
 bool Movie::preparePlayback()
 {
     THEORAPLAY_Io *io = (THEORAPLAY_Io *) malloc(sizeof (THEORAPLAY_Io));
@@ -95,7 +114,15 @@ bool Movie::preparePlayback()
         return false;
     }
 
+    const Uint32 prepStart = SDL_GetTicks();
+
     while (!THEORAPLAY_isInitialized(decoder)) {
+        if (prepShouldAbort(prepStart)) {
+            Debug() << "Movie: giving up on decoder init (bad file or terminate)";
+            THEORAPLAY_stopDecode(decoder);
+            decoder = nullptr;
+            return false;
+        }
         SDL_Delay(VIDEO_DELAY);
     }
 
@@ -107,6 +134,7 @@ bool Movie::preparePlayback()
             if ((THEORAPLAY_availableVideo(decoder) >= DEF_MAX_VIDEO_FRAMES)) {
                 break;
             }
+            if (prepShouldAbort(prepStart)) break;
             SDL_Delay(VIDEO_DELAY);
         }
     }
@@ -117,12 +145,18 @@ bool Movie::preparePlayback()
     }
 
     while ((video = THEORAPLAY_getVideo(decoder)) == NULL) {
+        if (prepShouldAbort(prepStart)) {
+            THEORAPLAY_stopDecode(decoder);
+            decoder = nullptr;
+            return false;
+        }
         SDL_Delay(VIDEO_DELAY);
     }
 
     audio = NULL;
     if (hasAudio) {
         while ((audio = THEORAPLAY_getAudio(decoder)) == NULL && THEORAPLAY_availableVideo(decoder) < DEF_MAX_VIDEO_FRAMES) {
+            if (prepShouldAbort(prepStart)) break;
             SDL_Delay(VIDEO_DELAY);
         }
     }

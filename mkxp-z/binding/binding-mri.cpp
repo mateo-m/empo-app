@@ -440,6 +440,12 @@ RB_METHOD(mkxpPuts) {
     rb_get_args(argc, argv, "z", &str RB_ARG_END);
     
     Debug() << str;
+#if TARGET_OS_IPHONE
+    // Mirror to the debug log so game scripts can trace behavior that
+    // lives inside big RGSS scripts (like Main). Useful when tracking
+    // down hangs.
+    mkxp_debugLog("SCRIPT", "System.puts [Ruby]", str);
+#endif
     
     return Qnil;
 }
@@ -1388,7 +1394,18 @@ static void runRMXPScripts(BacktraceData &btData) {
              */
             
             int state;
-            
+
+#if TARGET_OS_IPHONE
+            // Per-script trace. Useful when a game hangs inside a script:
+            // the last TRACE line points at the culprit.
+            {
+                char trace[600];
+                snprintf(trace, sizeof(trace), "enter %03ld %s", i,
+                         scriptName[0] ? scriptName : "(unnamed)");
+                mkxp_debugLog("TRACE", "binding-mri.cpp [C++]", trace);
+            }
+#endif
+
             evalString(string, fname, &state);
             
             /* RGSS allows reopening a class with a different superclass
@@ -1417,15 +1434,25 @@ static void runRMXPScripts(BacktraceData &btData) {
                         clsName += *p;
                 }
                 
-                /* "X is not a module" / "X is not a class" */
+                /* "X is not a module" / "X is not a class" /
+                 * "X is not a class/module" (Ruby 1.8) */
                 if (clsName.empty()) {
-                    const char *suffix1 = " is not a module";
-                    const char *suffix2 = " is not a class";
-                    const char *found = strstr(msgStr, suffix1);
-                    if (!found) found = strstr(msgStr, suffix2);
+                    static const char *suffixes[] = {
+                        " is not a class/module",
+                        " is not a module",
+                        " is not a class",
+                        nullptr,
+                    };
+                    const char *found = nullptr;
+                    for (int si = 0; suffixes[si]; ++si) {
+                        found = strstr(msgStr, suffixes[si]);
+                        if (found) break;
+                    }
                     if (found) {
                         /* Walk backwards from the suffix to extract the name.
-                         * Message format: "(eval):98350: PBTerrain is not a module" */
+                         * Messages look like:
+                         *   "(eval):98350: PBTerrain is not a module"
+                         *   "213:Bambo Reward: Foo is not a class/module" */
                         const char *end = found;
                         const char *start = end;
                         while (start > msgStr && (isalnum(start[-1]) || start[-1] == '_'))
@@ -1503,6 +1530,15 @@ static void runRMXPScripts(BacktraceData &btData) {
             
             if (state)
                 break;
+
+#if TARGET_OS_IPHONE
+            {
+                char trace[600];
+                snprintf(trace, sizeof(trace), "exit  %03ld %s", i,
+                         scriptName[0] ? scriptName : "(unnamed)");
+                mkxp_debugLog("TRACE", "binding-mri.cpp [C++]", trace);
+            }
+#endif
         }
         
         VALUE exc = rb_gv_get("$!");

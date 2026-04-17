@@ -39,9 +39,7 @@ class String
   end
 end
 
-# Encoding class doesn't exist in 1.8 either, so games referencing
-# Encoding::UTF_8 etc. blow up. Route them through the NullStub from
-# ios_compat.rb by NOT defining Encoding here: Object.const_missing
-# will return IOS::NullStub, whose #to_s is "". But games often pass
-# the result as an argument to the no-op force_encoding above, so a
-# stub is not strictly required for correctness.
+# The Encoding class doesn't exist in Ruby 1.8 either. Games that
+# reference Encoding::UTF_8 or similar still error out with NameError.
+# The String#force_encoding stub above tolerates any argument type, so
+# a dedicated Encoding stub is not required in the common case.
