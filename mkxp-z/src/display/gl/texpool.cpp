@@ -150,6 +150,16 @@ void TexPool::release(TEXFBO &obj)
 		return;
 	}
 
+	/* Reject handles from a previous session. Their GL IDs are dead
+	 * (the context that created them was destroyed), so neither caching
+	 * them nor calling glDelete* on them is safe or useful. Abandoning
+	 * them lets the driver reclaim the IDs on its own schedule. */
+	if (obj.generation != TEXFBO::currentGeneration)
+	{
+		TEXFBO::clear(obj);
+		return;
+	}
+
 	if (p->disabled)
 	{
 		/* If we're disabled, delete without caching */

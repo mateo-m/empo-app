@@ -33,6 +33,8 @@ namespace FBO
 	ID screenFramebufferID; // initialized after SDL_GL_MakeCurrent
 }
 
+unsigned TEXFBO::currentGeneration = 0;
+
 namespace GLMeta
 {
 
@@ -253,6 +255,10 @@ static void _blitBegin(FBO::ID fbo, const Vec2i &size, int scaleIsSpecial)
 	}
 }
 
+/* Blit dimension cache. Every blitBegin/blitSource overwrites these,
+ * but if a session aborts mid-blit, the values linger into the next
+ * session's first blit. resetBlitDimensions() brings them back to the
+ * safe defaults at session init. */
 int blitDstWidthLores = 1;
 int blitDstWidthHires = 1;
 int blitDstHeightLores = 1;
@@ -262,6 +268,14 @@ int blitSrcWidthLores = 1;
 int blitSrcWidthHires = 1;
 int blitSrcHeightLores = 1;
 int blitSrcHeightHires = 1;
+
+void resetBlitDimensions()
+{
+	blitDstWidthLores = blitDstWidthHires = 1;
+	blitDstHeightLores = blitDstHeightHires = 1;
+	blitSrcWidthLores = blitSrcWidthHires = 1;
+	blitSrcHeightLores = blitSrcHeightHires = 1;
+}
 
 void blitBegin(TEXFBO &target, bool preferHires, int scaleIsSpecial)
 {
