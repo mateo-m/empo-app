@@ -34,6 +34,10 @@ static std::atomic<bool> s_pathSet{false};
 // Engine terminated flag: set by engine after full teardown.
 static std::atomic<bool> s_engineTerminated{false};
 static std::atomic<bool> s_terminateRequested{false};
+// Set when the RGSS thread failed to ack a termination request in time.
+// The UI reads this via mkxp_isEngineHung() and force-quits the app
+// because the single-reused-thread architecture cannot recover.
+static std::atomic<bool> s_engineHung{false};
 static std::atomic<bool> s_glContextBroken{false};
 
 // Game viewport rect in logical points, updated by the engine each frame.
@@ -169,6 +173,14 @@ void mkxp_requestTerminate(void) {
 
 int mkxp_isEngineTerminated(void) {
     return s_engineTerminated.load(std::memory_order_acquire) ? 1 : 0;
+}
+
+int mkxp_isEngineHung(void) {
+    return s_engineHung.load(std::memory_order_acquire) ? 1 : 0;
+}
+
+void mkxp_setEngineHung(void) {
+    s_engineHung.store(true, std::memory_order_release);
 }
 
 void mkxp_setEngineTerminated(void) {
