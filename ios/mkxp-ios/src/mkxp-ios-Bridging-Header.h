@@ -3,3 +3,7 @@
 
 #import "ios_bridge.h"
 #import "TouchControls.h"
+
+// libarchive - for zip/7z/rar extraction in ArchiveExtractor.
+#import <archive.h>
+#import <archive_entry.h>
