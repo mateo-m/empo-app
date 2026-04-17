@@ -19,6 +19,18 @@
 # TOLERATE_ERRORS=false
 # LOG_NATIVE=true
 
+# RGSS Linker compatibility: stub Kernel#load_module so games that call it
+# (e.g. FMODEX, network loaders) don't raise NoMethodError. Undefined
+# constants from these libraries (Berka::*, FmodEx, etc.) are handled
+# automatically by Object.const_missing in ios_compat.rb.
+module Kernel
+  def load_module(*args)
+    # No-op on iOS - Win32 DLL loading is not supported.
+    nil
+  end
+  module_function :load_module
+end unless Kernel.respond_to?(:load_module)
+
 module Scancodes
 	SDL = { :UNKNOWN => 0x00,
 		:A => 0x04, :B => 0x05, :C => 0x06, :D => 0x07,
