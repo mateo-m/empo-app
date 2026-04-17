@@ -138,12 +138,19 @@ showCursor(false)
     textInputLock = SDL_CreateMutex();
 }
 
+SDL_TimerID hideCursorTimerID = 0;
+
 EventThread::~EventThread()
 {
+    // Cancel any pending cursor-hide timer so its callback can't fire with
+    // a dangling `this` pointer after a session switch creates a new EventThread.
+    if (hideCursorTimerID) {
+        SDL_RemoveTimer(hideCursorTimerID);
+        hideCursorTimerID = 0;
+    }
     SDL_DestroyMutex(textInputLock);
 }
 
-SDL_TimerID hideCursorTimerID = 0;
 Uint32 cursorTimerCallback(Uint32 interval, void* param)
 {
 	EventThread *ethread = static_cast<EventThread*>(param);

@@ -75,6 +75,11 @@ void blitRectangle(const IntRect &src, const IntRect &dst,
                    bool smooth = false);
 void blitEnd();
 
+/* Reset the blit dimension cache to safe defaults. Called at session
+ * init so a session that aborted mid-blit can't leak stale dimensions
+ * into the next session's first blit. */
+void resetBlitDimensions();
+
 }
 
 #endif // GLMETA_H
