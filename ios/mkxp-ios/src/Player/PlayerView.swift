@@ -72,21 +72,50 @@ struct PlayerView: View {
                 }
 
                 DebugOverlayView()
-                    .frame(width: 220, height: 100)
+                    .frame(width: AppSize.debugOverlayWidth, height: AppSize.debugOverlayHeight)
                     .position(debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea))
                     .offset(x: debugOverlayOffset.width + debugOverlayDragOffset.width,
                             y: debugOverlayOffset.height + debugOverlayDragOffset.height)
                     .gesture(
                         DragGesture()
-                            .onChanged { debugOverlayDragOffset = $0.translation }
+                            .onChanged { value in
+                                debugOverlayDragOffset = clampDebugOverlayOffset(
+                                    base: debugOverlayOffset,
+                                    delta: value.translation,
+                                    isPortrait: isPortrait,
+                                    gameRect: gameRect,
+                                    safeArea: safeArea,
+                                    geoSize: geo.size
+                                )
+                            }
                             .onEnded { value in
-                                debugOverlayOffset.width += value.translation.width
-                                debugOverlayOffset.height += value.translation.height
+                                let clamped = clampDebugOverlayOffset(
+                                    base: debugOverlayOffset,
+                                    delta: value.translation,
+                                    isPortrait: isPortrait,
+                                    gameRect: gameRect,
+                                    safeArea: safeArea,
+                                    geoSize: geo.size
+                                )
+                                debugOverlayOffset.width += clamped.width
+                                debugOverlayOffset.height += clamped.height
                                 debugOverlayDragOffset = .zero
                             }
                     )
                     .opacity(showDebugOverlay ? 1 : 0)
                     .allowsHitTesting(showDebugOverlay)
+                    .onChange(of: geo.size) {
+                        // Orientation/size change: re-clamp so the overlay
+                        // stays inside the new safe area bounds.
+                        debugOverlayOffset = clampDebugOverlayOffset(
+                            base: .zero,
+                            delta: debugOverlayOffset,
+                            isPortrait: isPortrait,
+                            gameRect: gameRect,
+                            safeArea: safeArea,
+                            geoSize: geo.size
+                        )
+                    }
 
                 if keyboardMode {
                     KeyboardFieldRepresentable(
@@ -376,13 +405,42 @@ struct PlayerView: View {
     }
 
     private func debugOverlayPosition(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets) -> CGPoint {
+        let halfW = AppSize.debugOverlayWidth / 2
+        let halfH = AppSize.debugOverlayHeight / 2
         if isPortrait && gameRect.height > 0 {
-            return CGPoint(x: safeArea.leading + kToolbarEdgePad + 110, y: gameRect.origin.y + gameRect.height + kToolbarGap + 50)
+            return CGPoint(x: safeArea.leading + kToolbarEdgePad + halfW, y: gameRect.origin.y + gameRect.height + kToolbarGap + halfH)
         } else {
             let leftInset = max(safeArea.leading, kMinLandscapeInset)
             let topInset = max(safeArea.top, kMinLandscapeInset)
-            return CGPoint(x: leftInset + kToolbarEdgePad + 110, y: topInset + kToolbarEdgePad + 50)
+            return CGPoint(x: leftInset + kToolbarEdgePad + halfW, y: topInset + kToolbarEdgePad + halfH)
         }
+    }
+
+    /// Clamps the drag delta so the overlay's final position stays within safe-area bounds.
+    /// Returns the adjusted delta (may differ from `delta` if the overlay would escape).
+    private func clampDebugOverlayOffset(
+        base: CGSize,
+        delta: CGSize,
+        isPortrait: Bool,
+        gameRect: CGRect,
+        safeArea: EdgeInsets,
+        geoSize: CGSize
+    ) -> CGSize {
+        let anchor = debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea)
+        let halfW = AppSize.debugOverlayWidth / 2
+        let halfH = AppSize.debugOverlayHeight / 2
+        let minX = safeArea.leading + halfW
+        let maxX = geoSize.width - safeArea.trailing - halfW
+        let minY = safeArea.top + halfH
+        let maxY = geoSize.height - safeArea.bottom - halfH
+
+        let proposedX = anchor.x + base.width + delta.width
+        let proposedY = anchor.y + base.height + delta.height
+        let clampedX = max(minX, min(proposedX, maxX))
+        let clampedY = max(minY, min(proposedY, maxY))
+
+        return CGSize(width: clampedX - anchor.x - base.width,
+                      height: clampedY - anchor.y - base.height)
     }
 
     private func toolbarBottomY(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat) -> CGFloat {
