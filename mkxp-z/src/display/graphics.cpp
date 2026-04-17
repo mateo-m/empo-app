@@ -185,7 +185,7 @@ public:
         glState.viewport.set(IntRect(0, 0, w, h));
         
         FBO::clear();
-        
+
         Scene::composite();
         
         if (brightEffect) {
@@ -858,13 +858,6 @@ struct GraphicsPrivate {
                          "after resize: scSize=%dx%d scOffset=%d,%d bsf=%.3f",
                          scSize.x, scSize.y, scOffset.x, scOffset.y, backingScaleFactor);
                 mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
-
-                GLenum fbStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-                GLenum glErr = glGetError();
-                snprintf(buf, sizeof(buf),
-                         "GL state: FBO status=0x%X glError=0x%X",
-                         fbStatus, glErr);
-                mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
             }
             
             SDL_Rect screen = {scOffset.x, scOffset.y, scSize.x, scSize.y};
@@ -1017,7 +1010,7 @@ struct GraphicsPrivate {
         GLMeta::blitEnd();
         
         swapGLBuffer();
-        
+
         updateAvgFPS();
     }
     
@@ -1776,10 +1769,15 @@ void Graphics::addDisposable(Disposable *d) { p->dispList.append(d->link); }
 void Graphics::remDisposable(Disposable *d) { p->dispList.remove(d->link); }
 
 void Graphics::detachAllDisposables() {
+    // Dispose GL resources while the current TexPool/GL context is still
+    // valid. Without this, Ruby GC may later destruct a session-1 Bitmap
+    // under session 2's GL context, releasing stale GL IDs into the new
+    // TexPool and corrupting subsequent texture allocations.
     IntruListLink<Disposable> *iter = p->dispList.begin();
     IntruListLink<Disposable> *end = p->dispList.end();
     while (iter != end) {
         IntruListLink<Disposable> *next = iter->next;
+        iter->data->dispose();
         iter->data->detached = true;
         iter->prev = 0;
         iter->next = 0;
