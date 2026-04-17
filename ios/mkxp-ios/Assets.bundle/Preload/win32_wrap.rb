@@ -19,10 +19,13 @@
 # TOLERATE_ERRORS=false
 # LOG_NATIVE=true
 
-# RGSS Linker compatibility: stub Kernel#load_module so games that call it
-# (e.g. FMODEX, network loaders) don't raise NoMethodError. Undefined
-# constants from these libraries (Berka::*, FmodEx, etc.) are handled
-# automatically by Object.const_missing in ios_compat.rb.
+# RGSS Linker (berka_91) compatibility: stub Kernel#load_module so
+# games that call it (FMODEX wrapper, network loaders, etc.) don't
+# crash with NoMethodError. Real Windows games rely on the linker
+# DLL side-effect of defining module constants; on iOS we can't load
+# DLLs, so the constants reference later in the script will raise
+# NameError - which binding-mri.cpp's SKIPPED handler swallows for
+# LoadError/NoMethodError cases.
 module Kernel
   def load_module(*args)
     # No-op on iOS - Win32 DLL loading is not supported.

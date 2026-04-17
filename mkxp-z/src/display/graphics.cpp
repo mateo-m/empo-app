@@ -1525,6 +1525,31 @@ void Graphics::playMovie(const char *filename, int volume_, bool skippable) {
         Debug() << "BUG: High-res Graphics playMovie not implemented";
     }
 
+    // Fast-reject formats TheoraPlay cannot decode (AVI, MP4, etc.).
+    // RMXP games commonly ship .avi intros that rely on a Windows-only
+    // plugin DLL (rubyscreen.dll). Without an extension gate the
+    // decoder thread spins forever on an unparseable file, which then
+    // causes the Ruby thread to hang in preparePlayback()'s init loop
+    // and the user gets a black screen they cannot escape.
+    {
+        const char *dot = filename ? strrchr(filename, '.') : nullptr;
+        bool supported = false;
+        if (dot) {
+            // Accept anything Ogg-based. Matches TheoraPlay's capabilities.
+            static const char *ok[] = {".ogv", ".ogg", ".ogm", nullptr};
+            for (int i = 0; ok[i]; ++i) {
+                if (strcasecmp(dot, ok[i]) == 0) { supported = true; break; }
+            }
+        }
+        if (!supported) {
+            char buf[600];
+            snprintf(buf, sizeof(buf), "skipping unsupported format: %s",
+                     filename ? filename : "(null)");
+            mkxp_debugLog("MOVIE", "graphics.cpp [C++]", buf);
+            return;
+        }
+    }
+
     Movie *movie = new Movie(skippable);
     MovieOpenHandler handler(movie->srcOps);
     shState->fileSystem().openRead(handler, filename);

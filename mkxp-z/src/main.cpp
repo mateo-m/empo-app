@@ -711,7 +711,7 @@ int main(int argc, char *argv[]) {
       // user may have already selected a different game in the Library.
       // Referring to the stuck game by title would confuse them.
       mkxp_setErrorMessage(
-          "The previous game stopped responding and will now close.");
+          "The previous game stopped responding. The app will now close.");
 #else
       SDL_ShowSimpleMessageBox(
           SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),
