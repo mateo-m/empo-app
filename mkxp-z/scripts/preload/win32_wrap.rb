@@ -19,6 +19,25 @@
 # TOLERATE_ERRORS=false
 # LOG_NATIVE=true
 
+# RGSS Linker compatibility stubs.
+# RGSS Linker (by berka_91) is a widely-used Windows-only native DLL loader.
+# When present it defines Berka:: error constants and adds Kernel#load_module.
+# Games that use it (e.g. for FMOD audio or network access) reference those
+# constants from other scripts. Define them as no-ops so the game doesn't crash
+# with NameError / NoMethodError when RGSS Linker fails to load on iOS.
+module Berka
+  class Error < StandardError; end
+  class NetErrorErr < Error; end
+end unless defined?(Berka)
+
+module Kernel
+  def load_module(*args)
+    # No-op on iOS - Win32 DLL loading is not supported.
+    nil
+  end
+  module_function :load_module
+end unless Kernel.respond_to?(:load_module)
+
 module Scancodes
 	SDL = { :UNKNOWN => 0x00,
 		:A => 0x04, :B => 0x05, :C => 0x06, :D => 0x07,
