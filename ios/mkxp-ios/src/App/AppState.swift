@@ -163,13 +163,13 @@ class AppState {
         metadata.save(for: game.id)
     }
 
-    private static let simulatorCrashMessage = "The game crashed due to a simulator bug. "
-        + "This won't happen on a real device."
+    private static let crashMessage = "It looks like the game didn't exit cleanly last time. "
+        + "Your save data should be fine."
 
     func consumeCrashRecovery() {
         guard pendingCrashRecovery else { return }
         pendingCrashRecovery = false
-        errorMessage = Self.simulatorCrashMessage
+        errorMessage = Self.crashMessage
     }
 
     func dismissCrashRecovery() {
@@ -236,6 +236,17 @@ class AppState {
         try? FileManager.default.removeItem(at: Self.crashMarkerURL)
     }
 
+    /// Remove the crash marker when backgrounding a healthy session.
+    /// Re-creates it when the app returns to foreground so a subsequent
+    /// crash after resume is still detected.
+    func clearCrashMarkerForBackground() {
+        removeCrashMarker()
+    }
+
+    func restoreCrashMarkerForForeground() {
+        FileManager.default.createFile(atPath: Self.crashMarkerURL.path, contents: nil)
+    }
+
     private func registerBridgeCallbacks() {
         // First frame rendered — fresh start transitions to .playing,
         // resume signals the snapshot can fade.
@@ -245,6 +256,7 @@ class AppState {
                 if state.phase == .loading, !state.engineReady {
                     Haptics.success()
                     state.engineReady = true
+                    AppSettings.shared.syncRendererWithEngine()
                 } else if state.phase == .playing {
                     PauseManager.shared.snapshotCanFade = true
                 }
@@ -259,7 +271,7 @@ class AppState {
                 GameLibrary.shared.reload()
 
                 if !state.terminationExpected && state.phase != nil {
-                    state.errorMessage = AppState.simulatorCrashMessage
+                    state.errorMessage = AppState.crashMessage
                     state.selectedGame = nil
                     state.engineReady = false
                     PauseManager.shared.reset()

@@ -19,6 +19,10 @@ struct DebugOverlayView: View {
                 .font(.system(size: 13, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.7))
 
+            Text(mkxp_isGameReady() != 0 ? String(cString: mkxp_rendererName(mkxp_getCurrentRenderer())) : "---")
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.7))
+
             Text(mkxp_isGameReady() != 0 ? "Running" : "Loading\u{2026}")
                 .font(.system(size: 13, weight: .medium, design: .monospaced))
                 .foregroundStyle(mkxp_isGameReady() != 0 ? .success : .warning)
