@@ -138,6 +138,8 @@ enum AppSize {
     static let toolbarButton: CGFloat = 38
     static let listArtwork: CGFloat = 48
     static let infoArtwork: CGFloat = 80
+    static let debugOverlayWidth: CGFloat = 220
+    static let debugOverlayHeight: CGFloat = 100
 }
 
 
