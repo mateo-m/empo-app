@@ -700,8 +700,18 @@ int main(int argc, char *argv[]) {
 #endif
     } else {
 #if TARGET_OS_IPHONE
+      // The RGSS thread is still running (probably in an infinite loop)
+      // and never called checkShutdown(). Our single-reused-thread
+      // architecture cannot respawn a new VM while the old one is
+      // blocked, so the only safe recovery is to force-quit the app.
+      // Mark the state and post the alert; the UI will terminate the
+      // process when the user taps OK.
+      mkxp_setEngineHung();
+      // Intentionally generic - by the time this alert is seen, the
+      // user may have already selected a different game in the Library.
+      // Referring to the stuck game by title would confuse them.
       mkxp_setErrorMessage(
-          std::string("The RGSS script seems to be stuck. "+conf.game.title+" will now force quit.").c_str());
+          "The previous game stopped responding and will now close.");
 #else
       SDL_ShowSimpleMessageBox(
           SDL_MESSAGEBOX_ERROR, conf.game.title.c_str(),

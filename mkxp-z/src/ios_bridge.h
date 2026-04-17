@@ -94,6 +94,12 @@ int         mkxp_isEngineTerminated(void);
 void        mkxp_setEngineTerminated(void);
 void        mkxp_resetBridgeState(void);
 
+// Set when the RGSS thread failed to respond to a termination request.
+// The engine is unrecoverable: the UI should force-quit the process
+// because the single-reused-thread architecture cannot respawn it.
+int         mkxp_isEngineHung(void);
+void        mkxp_setEngineHung(void);
+
 // Lifecycle callbacks (Engine -> UI)
 //
 // Fire on the engine thread. UI must dispatch to main for any updates.

@@ -18,6 +18,16 @@ class AppState {
     private(set) var pendingCrashRecovery = false
     private var terminationExpected = false
 
+    // When returnToLibrary() asks the engine to terminate, we arm a
+    // watchdog that fires after a few seconds. If the engine-terminated
+    // callback cleared this token by then, the RGSS thread ack'd cleanly
+    // and there is nothing to do. Otherwise the RGSS thread is stuck
+    // and we surface the hang alert immediately - without waiting for
+    // main.cpp's 10s timeout, which would otherwise fire on the NEXT
+    // session's Loading view and confuse the user.
+    private var pendingTerminationToken: UUID?
+    private static let hangWatchdogSeconds: UInt64 = 3
+
     static let logsDirectory: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Logs", isDirectory: true)
@@ -186,7 +196,28 @@ class AppState {
         engineReady = false
         PauseManager.shared.reset()
         phase = nil
+        armHangWatchdog()
     }
+
+    private func armHangWatchdog() {
+        let token = UUID()
+        pendingTerminationToken = token
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.hangWatchdogSeconds * 1_000_000_000)
+            guard let self else { return }
+            // If the engine-terminated callback already cleared the token
+            // (or replaced it with a newer one), do nothing.
+            guard self.pendingTerminationToken == token else { return }
+            self.pendingTerminationToken = nil
+            // Engine is stuck. Mark the bridge state so the alert's OK
+            // button force-quits, then surface the generic message.
+            mkxp_setEngineHung()
+            self.errorMessage = AppState.hangMessage
+        }
+    }
+
+    private static let hangMessage =
+        "The previous game stopped responding and will now close."
 
 
     // MARK: - Pause lifecycle
@@ -266,16 +297,27 @@ class AppState {
         mkxp_setEngineTerminatedCallback({ _ in
             Task { @MainActor in
                 let state = AppState.shared
+                // Engine ack'd termination, so the hang watchdog armed
+                // by returnToLibrary() should not fire.
+                state.pendingTerminationToken = nil
                 state.recordSessionPlayTime()
                 state.removeCrashMarker()
                 GameLibrary.shared.reload()
 
                 if !state.terminationExpected && state.phase != nil {
-                    state.errorMessage = AppState.crashMessage
+                    // Preserve a Ruby/engine error message if the error callback
+                    // already set one; otherwise fall back to the generic crash text.
+                    // Intentionally do NOT set phase = nil here: if we set phase = nil
+                    // while an error alert is already presenting, SwiftUI swallows the
+                    // NavigationStack pop. Leaving phase non-nil means the alert OK
+                    // button sees phase != nil, calls returnToLibrary(), and the pop
+                    // happens cleanly after the alert is dismissed.
+                    if state.errorMessage == nil {
+                        state.errorMessage = AppState.crashMessage
+                    }
                     state.selectedGame = nil
                     state.engineReady = false
                     PauseManager.shared.reset()
-                    state.phase = nil
                 }
                 state.terminationExpected = false
             }
