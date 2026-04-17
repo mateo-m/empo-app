@@ -28,3 +28,8 @@ compile_commands.json
 *.swo
 *~
 ios/mkxp-ios/src/App/GitInfo.generated.swift
+TODO.md
+
+# Python cache (agent skill scripts)
+__pycache__/
+*.pyc
