@@ -258,6 +258,11 @@ int rgssThreadFun(void *userdata) {
 
     SharedState::finiInstance();
 
+    /* Release GL context so the main thread can safely claim or
+     * destroy it during a hot-swap. Deleting/reusing a context
+     * that's still current on another thread is undefined behavior. */
+    mkxpGL_MakeCurrent(threadData->window, NULL);
+
     /* Signal main thread that session is done */
     SDL_SemPost(s_rgssSessionDone);
 
@@ -269,6 +274,17 @@ int rgssThreadFun(void *userdata) {
     threadData = s_nextRTData;
     if (!threadData)
       break; // null = quit
+
+    /* Reclaim the GL context for this thread. Required after a
+     * renderer hot-swap, where the old context was destroyed and
+     * a new one created on the main thread. */
+    mkxpGL_MakeCurrent(threadData->window, threadData->glContext);
+
+    /* Screen FBO may differ between renderers (EAGL uses a non-zero
+     * FBO, ANGLE typically uses 0). */
+    FBO::screenFramebufferID = FBO::ID(s_iosScreenFBO);
+    gl.BindFramebuffer(GL_FRAMEBUFFER, FBO::screenFramebufferID.gl);
+    FBO::boundFramebufferID = FBO::screenFramebufferID;
   }
 
   alcMakeContextCurrent(NULL);
@@ -773,6 +789,8 @@ int main(int argc, char *argv[]) {
         bool swapOK = false;
         if (wantRenderer == MKXP_RENDERER_ANGLE) {
           swapOK = initANGLE(persistWin);
+          if (swapOK)
+            persistGLCtx = (SDL_GLContext)s_eglContext;
         } else {
           persistGLCtx = initGL(persistWin, conf, nullptr);
           swapOK = (persistGLCtx != nullptr);
@@ -780,8 +798,12 @@ int main(int argc, char *argv[]) {
 
         if (swapOK) {
           s_currentRenderer = wantRenderer;
-          Debug() << "Renderer swap complete -"
-                  << mkxp_rendererName(s_currentRenderer);
+          char swapBuf[256];
+          snprintf(swapBuf, sizeof(swapBuf),
+                   "Renderer swap complete - %s screenFBO:%u glCtx:%s",
+                   mkxp_rendererName(s_currentRenderer), s_iosScreenFBO,
+                   persistGLCtx ? "valid" : "NULL");
+          mkxp_debugLog("HOTSWAP", "main.cpp", swapBuf);
         } else {
           /* Swap failed — recreate with the old renderer */
           Debug() << "Renderer swap failed, reverting...";
@@ -810,6 +832,7 @@ int main(int argc, char *argv[]) {
               Debug() << "Failed to reinit ANGLE — fatal";
               break;
             }
+            persistGLCtx = (SDL_GLContext)s_eglContext;
           } else {
             persistGLCtx = initGL(persistWin, conf, nullptr);
             if (!persistGLCtx) {

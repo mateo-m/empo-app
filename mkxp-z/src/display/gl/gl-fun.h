@@ -106,6 +106,7 @@ typedef void (APIENTRYP _PFNGLGENFRAMEBUFFERSPROC) (GLsizei n, GLuint* framebuff
 typedef void (APIENTRYP _PFNGLDELETEFRAMEBUFFERSPROC) (GLsizei n, const GLuint* framebuffers);
 typedef void (APIENTRYP _PFNGLBINDFRAMEBUFFERPROC) (GLenum target, GLuint framebuffer);
 typedef void (APIENTRYP _PFNGLFRAMEBUFFERTEXTURE2DPROC) (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
+typedef GLenum (APIENTRYP _PFNGLCHECKFRAMEBUFFERSTATUSPROC) (GLenum target);
 typedef void (APIENTRYP _PFNGLBLITFRAMEBUFFERPROC) (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
 
 /* Vertex array object */
@@ -195,7 +196,8 @@ typedef void (APIENTRYP _PFNGLRELEASESHADERCOMPILERPROC) (void);
 	GL_FUN(GenFramebuffers, _PFNGLGENFRAMEBUFFERSPROC) \
 	GL_FUN(DeleteFramebuffers, _PFNGLDELETEFRAMEBUFFERSPROC) \
 	GL_FUN(BindFramebuffer, _PFNGLBINDFRAMEBUFFERPROC) \
-	GL_FUN(FramebufferTexture2D, _PFNGLFRAMEBUFFERTEXTURE2DPROC)
+	GL_FUN(FramebufferTexture2D, _PFNGLFRAMEBUFFERTEXTURE2DPROC) \
+	GL_FUN(CheckFramebufferStatus, _PFNGLCHECKFRAMEBUFFERSTATUSPROC)
 
 #define GL_FBO_BLIT_FUN \
 	GL_FUN(BlitFramebuffer, _PFNGLBLITFRAMEBUFFERPROC)

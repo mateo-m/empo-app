@@ -180,6 +180,9 @@ struct SharedStatePrivate
 
 void SharedState::initInstance(RGSSThreadData *threadData)
 {
+	// Force reload on next shader compile (previous session may have used a different renderer)
+	Shader::commonHeader().clear();
+
 	/* This section is tricky because of dependencies:
 	 * SharedState depends on GlobalIBO existing,
 	 * Font depends on SharedState existing */
