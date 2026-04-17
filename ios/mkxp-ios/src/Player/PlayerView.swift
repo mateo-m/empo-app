@@ -22,6 +22,8 @@ struct PlayerView: View {
     @State private var controlsHidden = false
     @State private var keyboardMode = false
     @State private var showDebugOverlay = false
+    @State private var debugOverlayOffset: CGSize = .zero
+    @State private var debugOverlayDragOffset: CGSize = .zero
     @State private var toolbarOpacity: Double = 1.0
     @State private var toolbarIdleTask: Task<Void, Never>?
     @State private var showQuitConfirm = false
@@ -69,11 +71,22 @@ struct PlayerView: View {
                         .allowsHitTesting(editMode)
                 }
 
-                if showDebugOverlay {
-                    DebugOverlayView()
-                        .frame(width: 220, height: 100)
-                        .position(debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea))
-                }
+                DebugOverlayView()
+                    .frame(width: 220, height: 100)
+                    .position(debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea))
+                    .offset(x: debugOverlayOffset.width + debugOverlayDragOffset.width,
+                            y: debugOverlayOffset.height + debugOverlayDragOffset.height)
+                    .gesture(
+                        DragGesture()
+                            .onChanged { debugOverlayDragOffset = $0.translation }
+                            .onEnded { value in
+                                debugOverlayOffset.width += value.translation.width
+                                debugOverlayOffset.height += value.translation.height
+                                debugOverlayDragOffset = .zero
+                            }
+                    )
+                    .opacity(showDebugOverlay ? 1 : 0)
+                    .allowsHitTesting(showDebugOverlay)
 
                 if keyboardMode {
                     KeyboardFieldRepresentable(

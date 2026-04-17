@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Bindable var settings = AppSettings.shared
     @Environment(\.dismiss) private var dismiss
     @State private var featureToEnable: ExperimentalFeature?
+    @State private var pendingRenderer: RendererOption?
 
     var body: some View {
         NavigationStack {
@@ -80,34 +81,39 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    ForEach(ExperimentalFeature.allCases) { feature in
-                        let enabled = settings.isEnabled(feature)
-                        Toggle(isOn: Binding(
-                            get: { enabled },
+                    SettingsPicker(
+                        title: "Renderer",
+                        selection: Binding(
+                            get: { settings.renderer },
                             set: { newValue in
-                                if newValue {
-                                    featureToEnable = feature
+                                if newValue == .angle && settings.renderer != .angle {
+                                    pendingRenderer = newValue
                                 } else {
-                                    settings.setEnabled(feature, false)
+                                    settings.renderer = newValue
                                 }
                             }
-                        )) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(feature.label)
-                                Text(feature.description)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                            }
+                        ),
+                        description: "OpenGL ES is Apple's built-in renderer. ANGLE translates GL calls to Metal for better future compatibility."
+                    ) {
+                        ForEach(RendererOption.allCases, id: \.self) { option in
+                            Text(option.label).tag(option)
                         }
-                        .padding(.vertical, 2)
                     }
-                } header: {
-                    Text("Experimental")
-                } footer: {
-                    Text("These features are still in development and may not work as expected.")
-                }
 
-                Section {
+                    SettingsToggle(
+                        title: "Pause game",
+                        isOn: experimentalBinding(for: .gamePause),
+                        description: ExperimentalFeature.gamePause.description,
+                        isExperimental: true
+                    )
+
+                    SettingsToggle(
+                        title: "Quit game",
+                        isOn: experimentalBinding(for: .gameQuit),
+                        description: ExperimentalFeature.gameQuit.description,
+                        isExperimental: true
+                    )
+
                     SettingsToggle(
                         title: "Game overlay",
                         isOn: $settings.debugMode,
@@ -182,6 +188,26 @@ struct SettingsView: View {
             } message: {
                 Text("This feature is experimental and may not work as expected.")
             }
+            .alert(
+                "Enable ANGLE?",
+                isPresented: Binding(
+                    get: { pendingRenderer != nil },
+                    set: { if !$0 { pendingRenderer = nil } }
+                )
+            ) {
+                Button("Enable") {
+                    if let renderer = pendingRenderer {
+                        settings.renderer = renderer
+                    }
+                    pendingRenderer = nil
+                }
+                .keyboardShortcut(.defaultAction)
+                Button("Cancel", role: .cancel) {
+                    pendingRenderer = nil
+                }
+            } message: {
+                Text("ANGLE is experimental. It translates OpenGL calls to Metal and may cause rendering issues. The change will apply on the next game launch.")
+            }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -191,6 +217,19 @@ struct SettingsView: View {
             }
         }
         .tint(.brand)
+    }
+
+    private func experimentalBinding(for feature: ExperimentalFeature) -> Binding<Bool> {
+        Binding(
+            get: { settings.isEnabled(feature) },
+            set: { newValue in
+                if newValue {
+                    featureToEnable = feature
+                } else {
+                    settings.setEnabled(feature, false)
+                }
+            }
+        )
     }
 }
 

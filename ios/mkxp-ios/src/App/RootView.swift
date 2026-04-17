@@ -4,6 +4,7 @@ struct RootView: View {
     private let appState = AppState.shared
     private let engineState = EngineState.shared
     private let layout = ControlsLayout.shared
+    private let settings = AppSettings.shared
     @Namespace private var hero
     @State private var showSplash = !AppState.shared.pendingCrashRecovery
     @State private var splashExiting = false
@@ -35,6 +36,22 @@ struct RootView: View {
                     .zIndex(10)
             }
         }
+        .overlay(alignment: .bottom) {
+            if settings.rendererPendingRestart, PauseManager.shared.pausedGame != nil {
+                RendererRestartPill(to: settings.renderer)
+                    .transition(
+                        .move(edge: .bottom)
+                        .combined(with: .opacity)
+                        .combined(with: .modifier(
+                            active: BlurModifier(radius: 8),
+                            identity: BlurModifier(radius: 0)
+                        ))
+                    )
+                    .padding(.bottom, Spacing.xl)
+            }
+        }
+        .animation(.spring(duration: 0.35, bounce: 0), value: settings.rendererPendingRestart)
+        .animation(.spring(duration: 0.35, bounce: 0), value: PauseManager.shared.pausedGame == nil)
         .onAppear {
             if appState.pendingCrashRecovery {
                 appState.consumeCrashRecovery()
@@ -64,11 +81,22 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
             if appState.phase == .playing {
                 engineState.requestBackgroundPause()
+                // If the engine rendered at least one frame, this was a
+                // healthy session. Remove the crash marker so a force-kill
+                // from the app switcher won't trigger a false crash alert.
+                // Black-screen crashes leave engineReady false, so the
+                // marker persists and the alert still fires.
+                if appState.engineReady {
+                    appState.clearCrashMarkerForBackground()
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             if appState.phase == .playing {
                 engineState.resumeFromBackground()
+                // Re-create the crash marker so a crash after resume is
+                // still detected on the next launch.
+                appState.restoreCrashMarkerForForeground()
             }
         }
     }
@@ -78,6 +106,35 @@ struct RootView: View {
             get: { appState.errorMessage != nil },
             set: { if !$0 { appState.errorMessage = nil } }
         )
+    }
+}
+
+
+private struct RendererRestartPill: View {
+    let to: RendererOption
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.caption.weight(.semibold))
+
+            Text("\(to.label) will kick in once you quit the current game")
+                .font(.caption.weight(.medium))
+        }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.md)
+        .background(.brand.opacity(0.9), in: Capsule())
+        .foregroundStyle(.white)
+        .elevatedShadow()
+        .animation(.spring(duration: 0.3, bounce: 0), value: to)
+    }
+}
+
+
+private struct BlurModifier: ViewModifier {
+    let radius: CGFloat
+    func body(content: Content) -> some View {
+        content.blur(radius: radius)
     }
 }
 
