@@ -89,7 +89,7 @@ mkxp-ios/
           ImageSourcePicker.swift  # Image source selection for artwork
           ImageCache.swift         # In-memory image cache
           GameImportValidator.swift # Validates imported game structure
-          ZipExtractor.swift       # Zip extraction with progress callback
+          ArchiveExtractor.swift   # zip/7z/rar extraction via libarchive
           DocumentPickerView.swift # System document picker (UIDocumentPickerViewController)
         Settings/                  # App settings
           SettingsView.swift       # Theme picker, title position, debug toggles

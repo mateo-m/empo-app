@@ -168,12 +168,12 @@ class GameLibrary {
     func importGame(from sourceURL: URL, completion: @escaping (Error?) -> Void) {
         ensureGamesDirectory()
 
-        let isZip = sourceURL.pathExtension.lowercased() == "zip"
+        let archiveFormat = ArchiveExtractor.Format(extension: sourceURL.pathExtension)
         let importID = UUID().uuidString
 
         let title: String
         let artwork: String?
-        if !isZip {
+        if archiveFormat == nil {
             title = GameEntry.parseINITitle(at: sourceURL) ?? sourceURL.lastPathComponent
             artwork = Self.findArtwork(at: sourceURL)
         } else {
@@ -196,8 +196,8 @@ class GameLibrary {
         DispatchQueue.global(qos: .userInitiated).async {
             defer { self.clearCancellation(importID) }
             do {
-                if isZip {
-                    try self.importZip(from: sourceURL, importID: importID)
+                if archiveFormat != nil {
+                    try self.importArchive(from: sourceURL, importID: importID)
                 } else {
                     try self.importFolder(from: sourceURL, importID: importID)
                 }
@@ -285,13 +285,13 @@ class GameLibrary {
         GameLibrary.createMetadata(for: importID)
     }
 
-    nonisolated private func importZip(from sourceURL: URL, importID: String) throws {
+    nonisolated private func importArchive(from sourceURL: URL, importID: String) throws {
         let fm = FileManager.default
         let tmpDir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmpDir) }
 
-        try ZipExtractor.extract(zipURL: sourceURL, to: tmpDir) { _, pct in
+        try ArchiveExtractor.extract(archive: sourceURL, to: tmpDir) { _, pct in
             self.updateProgress(importID, pct)
         }
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
