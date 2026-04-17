@@ -9,6 +9,10 @@ struct RootView: View {
     @State private var showSplash = !AppState.shared.pendingCrashRecovery
     @State private var splashExiting = false
     @State private var splashDismissed = AppState.shared.pendingCrashRecovery
+    /// When true, the splash logo cross-fades out and the disclaimer
+    /// cross-fades in on top of the same orange background. Flipped at
+    /// the 1.2s mark only if the user hasn't acknowledged yet.
+    @State private var showDisclaimer = false
 
     var body: some View {
         ZStack {
@@ -32,8 +36,12 @@ struct RootView: View {
         .tint(.brand)
         .overlay {
             if showSplash {
-                SplashView(exiting: splashExiting)
-                    .zIndex(10)
+                SplashView(
+                    exiting: splashExiting,
+                    showDisclaimer: showDisclaimer,
+                    onAcknowledgeDisclaimer: acknowledgeAndDismissSplash
+                )
+                .zIndex(10)
             }
         }
         .overlay(alignment: .bottom) {
@@ -58,12 +66,16 @@ struct RootView: View {
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                splashDismissed = true
-                withAnimation(.spring(duration: 0.5, bounce: 0)) {
-                    splashExiting = true
-                } completion: {
-                    showSplash = false
-                    appState.consumeCrashRecovery()
+                if settings.needsDisclaimer {
+                    // Hold the splash open: fade the logo out (by entering the
+                    // "exiting" visual but without dismissing the container)
+                    // and reveal the disclaimer. The normal dismissal runs
+                    // once the user acknowledges.
+                    withAnimation(.spring(duration: 0.35, bounce: 0)) {
+                        showDisclaimer = true
+                    }
+                } else {
+                    dismissSplash()
                 }
             }
         }
@@ -113,6 +125,25 @@ struct RootView: View {
             set: { if !$0 { appState.errorMessage = nil } }
         )
     }
+
+    /// Normal splash exit: fade background + logo + any disclaimer that
+    /// might still be on screen, then unmount the splash overlay.
+    private func dismissSplash() {
+        splashDismissed = true
+        withAnimation(.spring(duration: 0.5, bounce: 0)) {
+            splashExiting = true
+        } completion: {
+            showSplash = false
+            appState.consumeCrashRecovery()
+        }
+    }
+
+    /// Called from the disclaimer's "I understand" button. Persists
+    /// the acknowledgment and runs the usual splash exit animation.
+    private func acknowledgeAndDismissSplash() {
+        settings.acknowledgeDisclaimer()
+        dismissSplash()
+    }
 }
 
 
@@ -146,8 +177,20 @@ private struct BlurModifier: ViewModifier {
 
 
 private struct SplashView: View {
+    /// True when the whole splash is animating out (fades background +
+    /// everything on top of it). This is the final exit phase.
     let exiting: Bool
+    /// True when the disclaimer has taken over - logo should fade out
+    /// and the disclaimer should fade in. Splash stays mounted.
+    let showDisclaimer: Bool
+    let onAcknowledgeDisclaimer: () -> Void
+
     @State private var entered = false
+
+    /// Combined "logo should be visually absent" flag. True during the
+    /// disclaimer phase OR during the full exit. Kept as a single
+    /// variable so the same fade/scale/blur treatment drives both.
+    private var logoHidden: Bool { exiting || showDisclaimer }
 
     var body: some View {
         ZStack {
@@ -159,25 +202,35 @@ private struct SplashView: View {
                 .ignoresSafeArea()
                 .opacity(exiting ? 0 : 1)
 
+            // Logo + wordmark. During the disclaimer phase these fade/
+            // blur/scale out but the splash background stays. Same
+            // treatment on the full exit.
             VStack(spacing: Spacing.lg) {
                 Image(systemName: "gamecontroller.fill")
                     .font(.system(size: 52))
                     .foregroundStyle(.white)
-                    .blur(radius: exiting ? 10 : 0)
-                    .scaleEffect(exiting ? 0.8 : 1)
-                    .opacity(exiting ? 0 : 1)
 
                 Text("mkxp-z")
                     .font(.title)
                     .fontWeight(.bold)
                     .fontDesign(.rounded)
                     .foregroundStyle(.white)
-                    .blur(radius: exiting ? 10 : 0)
-                    .scaleEffect(exiting ? 0.8 : 1)
-                    .opacity(exiting ? 0 : 1)
             }
-            .scaleEffect(entered ? 1 : 0.8)
-            .opacity(entered ? 1 : 0)
+            .blur(radius: logoHidden ? 10 : 0)
+            .scaleEffect(logoHidden ? 0.8 : (entered ? 1 : 0.8))
+            .opacity(logoHidden ? 0 : (entered ? 1 : 0))
+
+            // Disclaimer slides into the same centered position the
+            // logo just vacated. Only mounted while needed so the
+            // @State-driven entry animation fires fresh.
+            if showDisclaimer {
+                DisclaimerView(onAcknowledge: onAcknowledgeDisclaimer)
+                    // Fully fade during the final exit so the whole
+                    // splash collapses cleanly.
+                    .opacity(exiting ? 0 : 1)
+                    .scaleEffect(exiting ? 0.95 : 1)
+                    .blur(radius: exiting ? 10 : 0)
+            }
         }
         .onAppear {
             withAnimation(.spring(duration: 0.35, bounce: 0)) {
@@ -218,18 +271,60 @@ private struct PixelDitherPattern: View {
     }
 
     var body: some View {
-        Image(uiImage: tileImage)
-            .interpolation(.none)
-            .resizable(resizingMode: .tile)
-            .scaleEffect(scale)
-            .rotationEffect(.degrees(-15))
-            .offset(x: panning ? tileWidth * scale : 0, y: panning ? -tileHeight * scale * 0.5 : 0)
-            .onAppear {
-                withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                    panning = true
+        // Draw the tiled pattern ourselves via Canvas, re-reading the
+        // phase from wall-clock time each frame. This avoids the
+        // animation-based approach that snapped back to the origin when
+        // SwiftUI's .repeatForever reset the animated offset at the end
+        // of each cycle. With a Canvas that fills all the way to the
+        // edges and keys off `elapsed`, the pattern pans continuously
+        // with zero discontinuity: when the phase wraps from 1.0 back to
+        // 0.0 the image is pixel-identical because we've shifted by
+        // exactly one tile period.
+        TimelineView(.animation) { context in
+            let elapsed = context.date.timeIntervalSinceReferenceDate
+            let progress = elapsed.truncatingRemainder(dividingBy: cycleDuration) / cycleDuration
+
+            Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+                guard let cg = ctx.resolveSymbol(id: 0) else { return }
+
+                let scaledTileW = tileWidth * scale
+                let scaledTileH = tileHeight * scale
+                let dx = CGFloat(progress) * scaledTileW
+
+                // Rotate around the canvas centre so the grid tilts
+                // nicely. Then over-draw beyond the bounds so the
+                // rotated rectangle still fills the corners.
+                ctx.translateBy(x: size.width / 2, y: size.height / 2)
+                ctx.rotate(by: .degrees(-15))
+
+                // Pick a coverage radius generous enough that a -15 deg
+                // rotated fill still covers the biggest iPad screen.
+                let coverage = max(size.width, size.height) * 1.6
+                let startX = -coverage - scaledTileW + dx.truncatingRemainder(dividingBy: scaledTileW)
+                let startY = -coverage
+
+                var y = startY
+                while y < coverage {
+                    var x = startX
+                    while x < coverage {
+                        ctx.draw(cg, in: CGRect(x: x, y: y, width: scaledTileW, height: scaledTileH))
+                        x += scaledTileW
+                    }
+                    y += scaledTileH
                 }
+            } symbols: {
+                Image(uiImage: tileImage)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: tileWidth * scale, height: tileHeight * scale)
+                    .tag(0)
             }
+        }
     }
+
+    /// Seconds per full one-tile pan cycle. Slow enough to feel ambient,
+    /// fast enough to be perceptible without feeling busy.
+    private let cycleDuration: TimeInterval = 3
 
     // 10px circle — smooth pixel art rounding
     private func drawCircle(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {

@@ -200,6 +200,28 @@ class AppSettings {
         didSet { UserDefaults.standard.set(renderer.rawValue, forKey: "renderer") }
     }
 
+    // MARK: - Splash disclaimer acknowledgment
+    //
+    // The app is in early development and carries known instability. We
+    // show a first-launch disclaimer over the splash that the user must
+    // acknowledge to continue. The stored value is a monotonically
+    // increasing version so we can re-prompt when the disclaimer copy
+    // changes in a meaningful way (e.g., after a big architectural
+    // shift or a new class of known-broken games).
+    static let currentDisclaimerVersion = 1
+
+    var disclaimerAcknowledgedVersion: Int {
+        didSet { UserDefaults.standard.set(disclaimerAcknowledgedVersion, forKey: "disclaimerAcknowledgedVersion") }
+    }
+
+    var needsDisclaimer: Bool {
+        disclaimerAcknowledgedVersion < Self.currentDisclaimerVersion
+    }
+
+    func acknowledgeDisclaimer() {
+        disclaimerAcknowledgedVersion = Self.currentDisclaimerVersion
+    }
+
     private var experimentalFlags: [String: Bool] {
         didSet {
             for (key, value) in experimentalFlags {
@@ -232,6 +254,7 @@ class AppSettings {
         let resolved = RendererOption(rawValue: rendererRaw) ?? .openGLES
         self.renderer = resolved
         self.launchedRenderer = resolved
+        self.disclaimerAcknowledgedVersion = UserDefaults.standard.integer(forKey: "disclaimerAcknowledgedVersion")
 
         var flags: [String: Bool] = [:]
         for feature in ExperimentalFeature.allCases {
