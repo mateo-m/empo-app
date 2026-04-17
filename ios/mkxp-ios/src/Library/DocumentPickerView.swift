@@ -1,11 +1,20 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+
+extension UTType {
+    static let sevenZArchive = UTType(filenameExtension: "7z") ?? .archive
+    static let rarArchive    = UTType(filenameExtension: "rar") ?? .archive
+}
+
+
 struct DocumentPickerView: UIViewControllerRepresentable {
     var onPick: ([URL]) -> Void
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder, .zip])
+        let picker = UIDocumentPickerViewController(
+            forOpeningContentTypes: [.folder, .zip, .sevenZArchive, .rarArchive]
+        )
         picker.allowsMultipleSelection = true
         picker.delegate = context.coordinator
         picker.view.tintColor = UIColor(.brand)

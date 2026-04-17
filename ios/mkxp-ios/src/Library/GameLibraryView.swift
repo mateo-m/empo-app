@@ -16,6 +16,7 @@ struct GameLibraryView: View {
     @State private var showImporter = false
     @State private var showSettings = false
     @State private var errorMessage: String?
+    @State private var errorTitle: String = "Oops!"
     @State private var showErrorAlert = false
     @State private var gameToDelete: GameEntry?
     @State private var showDeleteConfirm = false
@@ -150,7 +151,7 @@ struct GameLibraryView: View {
             .sheet(isPresented: $showSortSheet) {
                 sortSheet
             }
-            .alert("Oops!", isPresented: $showErrorAlert) {
+            .alert(errorTitle, isPresented: $showErrorAlert) {
                 Button("OK") {}
             } message: {
                 Text(errorMessage ?? "Something went wrong.")
@@ -510,10 +511,12 @@ struct GameLibraryView: View {
     private func importGames(from urls: [URL]) {
         for url in urls {
             let accessing = url.startAccessingSecurityScopedResource()
+            let archiveName = url.deletingPathExtension().lastPathComponent
 
             library.importGame(from: url) { error in
                 if accessing { url.stopAccessingSecurityScopedResource() }
                 if let error = error {
+                    errorTitle = "Couldn't import \"\(archiveName)\""
                     errorMessage = error.localizedDescription
                     showErrorAlert = true
                 } else {

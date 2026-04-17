@@ -30,6 +30,7 @@ settings:
       - $(PROJECT_DIR)/../../mkxp-z/binding
       - $(PROJECT_DIR)/../../mkxp-z/shader
       - $(PROJECT_DIR)/shims
+      - $(PROJECT_DIR)/shims/libarchive
       - $(DEPENDENCY_SEARCH_PATH)/include/SDL2
       - $(DEPENDENCY_SEARCH_PATH)/include/pixman-1
       - $(DEPENDENCY_SEARCH_PATH)/include/uchardet
@@ -188,6 +189,7 @@ targets:
           - -lz
           - -lbz2
           - -liconv
+          - -larchive
           - -ldl
           - -lpthread
           - -framework Foundation
