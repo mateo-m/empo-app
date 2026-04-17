@@ -32,6 +32,7 @@
 #include "font.h"
 #include "eventthread.h"
 #include "gl-util.h"
+#include "gl-meta.h"
 #include "global-ibo.h"
 #include "quad.h"
 #include "binding.h"
@@ -183,6 +184,13 @@ void SharedState::initInstance(RGSSThreadData *threadData)
 	// Force reload on next shader compile (previous session may have used a different renderer)
 	Shader::commonHeader().clear();
 
+	// Bump the generation counter so any TEXFBO created by a prior session
+	// is rejected when GC'd in the new session. See TEXFBO in gl-util.h.
+	++TEXFBO::currentGeneration;
+
+	// Reset stale blit dimension cache in case a prior session aborted mid-blit.
+	GLMeta::resetBlitDimensions();
+
 	/* This section is tricky because of dependencies:
 	 * SharedState depends on GlobalIBO existing,
 	 * Font depends on SharedState existing */
@@ -218,8 +226,11 @@ void SharedState::finiInstance()
 	delete SharedState::instance->p->defaultFont;
 
 	delete SharedState::instance;
+	// Null out so `if (shState)` guards elsewhere actually work between sessions.
+	SharedState::instance = nullptr;
 
 	delete _globalIBO;
+	_globalIBO = nullptr;
 }
 
 void SharedState::setScreen(Scene &screen)
@@ -341,6 +352,12 @@ void SharedState::releaseAtlasTex(TEXFBO &tex)
 {
 	/* No point in caching an invalid object */
 	if (tex.tex == TEX::ID(0))
+		return;
+
+	/* Reject TEXFBOs stamped with an older session's generation:
+	 * their GL IDs refer to a destroyed GL context (e.g. Ruby GC
+	 * running a Tilemap destructor from session 1 during session 2). */
+	if (tex.generation != TEXFBO::currentGeneration)
 		return;
 
 	TEXFBO::fini(p->atlasTex);

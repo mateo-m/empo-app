@@ -1740,7 +1740,25 @@ static void mriBindingExecute() {
             }
         }
 
-        /* 3. Clear game globals that persist across sessions. */
+        /* 3. Clear class-level ivars that wrap C++ objects owned by the
+         *    previous session. These live on class/module objects that
+         *    survive across sessions and hold wrapped pointers into
+         *    session-1 engine state. Nil'ing them lets Ruby GC release
+         *    the stale wrappers so they can be rebuilt next session. */
+        {
+            int err = 0;
+            rb_protect([](VALUE) -> VALUE {
+                VALUE fontKlass = rb_const_get(rb_cObject, rb_intern("Font"));
+                rb_iv_set(fontKlass, "default_color",     Qnil);
+                rb_iv_set(fontKlass, "default_out_color", Qnil);
+                rb_iv_set(fontKlass, "default_name",      Qnil);
+                VALUE inputMod  = rb_const_get(rb_cObject, rb_intern("Input"));
+                rb_iv_set(inputMod, "buttoncodes", Qnil);
+                return Qnil;
+            }, Qnil, &err);
+        }
+
+        /* 4. Clear game globals that persist across sessions. */
 
         /* Engine state */
         rb_gv_set("$!", Qnil);
@@ -1778,7 +1796,7 @@ static void mriBindingExecute() {
         rb_gv_set("$data_tilesets", Qnil);
         rb_gv_set("$data_common_events", Qnil);
 
-        /* 4. Force GC to collect stale Ruby objects from previous session. */
+        /* 5. Force GC to collect stale Ruby objects from previous session. */
         rb_gc();
     }
 #ifdef __WIN32__
@@ -1792,6 +1810,13 @@ static void mriBindingExecute() {
 #endif
     
     topSelf = rgssVer == 1 ? Qnil : rb_eval_string("self");
+    // Register as a GC root so Ruby doesn't collect the value between
+    // sessions when nothing on the stack references it.
+    static bool topSelfRegistered = false;
+    if (!topSelfRegistered) {
+        rb_gc_register_address(&topSelf);
+        topSelfRegistered = true;
+    }
     
 #if RAPI_FULL > 187
     VALUE rbArgv = rb_get_argv();
