@@ -117,7 +117,8 @@ struct GameLibraryView: View {
                     staggerTrigger = UUID()
                     // Clear entrance delay after first mount so subsequent
                     // animations (view mode switch, new imports) play instantly.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(1))
                         entranceDelay = 0
                     }
                 }
@@ -182,14 +183,29 @@ struct GameLibraryView: View {
                     pendingGame = nil
                 }
                 Button("Quit and play") {
-                    if let game = pendingGame {
-                        pendingGame = nil
-                        appState.returnToLibrary()
-                    // Small delay to let the engine tear down
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            appState.selectGame(game)
-                            path.append(game)
+                    guard let game = pendingGame else { return }
+                    pendingGame = nil
+                    appState.returnToLibrary()
+                    // `returnToLibrary` sets phase=nil synchronously, but
+                    // the RGSS thread takes a moment to actually reach
+                    // `mkxp_setEngineTerminated()` and clear its pathSet
+                    // flag. If we call `selectGame` too early, the new
+                    // pathSet we set there gets clobbered by the engine's
+                    // later `s_pathSet = false` reset, and the next
+                    // session hangs in `waitForGamePath` forever.
+                    // Poll `mkxp_isEngineTerminated()` instead, which is
+                    // flipped ON by the RGSS thread right before it
+                    // enters its next waitForGamePath loop. We also
+                    // give up after ~5s to avoid looping forever if the
+                    // thread truly hung; the hang watchdog in
+                    // AppState will surface that case separately.
+                    Task { @MainActor in
+                        let deadline = Date().addingTimeInterval(5)
+                        while mkxp_isEngineTerminated() == 0 && Date() < deadline {
+                            try? await Task.sleep(for: .milliseconds(30))
                         }
+                        appState.selectGame(game)
+                        path.append(game)
                     }
                 }
             } message: {

@@ -54,7 +54,8 @@ struct EmptyStateView: View {
                 subtitleAppeared = true
             }
             let totalDelay = initialDelay + interval * 2 + 0.3
-            DispatchQueue.main.asyncAfter(deadline: .now() + totalDelay) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(totalDelay))
                 floating = true
             }
         }

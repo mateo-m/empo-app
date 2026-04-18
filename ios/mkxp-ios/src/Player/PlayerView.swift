@@ -553,12 +553,15 @@ struct PlayerView: View {
     }
 
     private func startSnapshotFade() {
+        resetToolbarIdleTimer()
         withAnimation(.spring(duration: Motion.durationNormal, bounce: 0)) {
             snapshotOpacity = 0
             controlsVisible = true
-        }
-        resetToolbarIdleTimer()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        } completion: {
+            // Tied to the fade completion instead of a wall-clock
+            // asyncAfter so we always unmount the snapshot exactly
+            // when the user no longer sees it, even if the spring
+            // duration changes.
             resumeSnapshot = nil
             pauseManager.pauseSnapshot = nil
             pauseManager.snapshotCanFade = false

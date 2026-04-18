@@ -90,7 +90,8 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                 mkxp_injectKeyEvent(sc, 1)
                 let scancode = sc
                 let upper = isUpper
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(50))
                     mkxp_injectKeyEvent(scancode, 0)
                     if upper { mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_LSHIFT), 0) }
                 }
@@ -101,7 +102,8 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
             mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_RETURN), 1)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(50))
                 mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_RETURN), 0)
             }
             return false
