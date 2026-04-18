@@ -782,19 +782,27 @@ struct GraphicsPrivate {
 #if TARGET_OS_IPHONE
         bool insetsChanged = mkxp_consumeSafeAreaInsetsChanged();
         if (insetsChanged && !sizeChanged) {
-            char buf[256];
-            snprintf(buf, sizeof(buf),
-                     "insetsChanged (no size change) winSize=%dx%d",
-                     winSize.x, winSize.y);
-            mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+            // During rotation iOS can fire several size/inset events per
+            // frame. Skip the snprintf formatting entirely when debug
+            // logging is disabled - this was a measurable hitch before.
+            if (mkxp_debugLogEnabled()) {
+                char buf[256];
+                snprintf(buf, sizeof(buf),
+                         "insetsChanged (no size change) winSize=%dx%d",
+                         winSize.x, winSize.y);
+                mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+            }
 
             recalculateScreenSize(threadData->config.fixedAspectRatio);
             updateScreenResoRatio(threadData);
 
-            snprintf(buf, sizeof(buf),
-                     "after insets recalc: scSize=%dx%d scOffset=%d,%d bsf=%.3f",
-                     scSize.x, scSize.y, scOffset.x, scOffset.y, backingScaleFactor);
-            mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+            if (mkxp_debugLogEnabled()) {
+                char buf[256];
+                snprintf(buf, sizeof(buf),
+                         "after insets recalc: scSize=%dx%d scOffset=%d,%d bsf=%.3f",
+                         scSize.x, scSize.y, scOffset.x, scOffset.y, backingScaleFactor);
+                mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+            }
 
             SDL_Rect screen = {scOffset.x, scOffset.y, scSize.x, scSize.y};
             threadData->ethread->notifyGameScreenChange(screen);
@@ -812,7 +820,7 @@ struct GraphicsPrivate {
             Vec2i drawableSize(winSize);
             threadData->drawableSizeMsg.poll(drawableSize);
 
-            {
+            if (mkxp_debugLogEnabled()) {
                 char buf[256];
                 snprintf(buf, sizeof(buf),
                          "sizeChanged: winSize=%dx%d drawable=%dx%d (was %dx%d)",
@@ -829,12 +837,14 @@ struct GraphicsPrivate {
              * Restore winSize so future frames keep using the last good value. */
             if (winSize.x <= 0 || winSize.y <= 0 ||
                 drawableSize.x <= 0 || drawableSize.y <= 0) {
-                char buf[256];
-                snprintf(buf, sizeof(buf),
-                         "REJECTED zero dims: winSize=%dx%d drawable=%dx%d, restoring %dx%d",
-                         winSize.x, winSize.y, drawableSize.x, drawableSize.y,
-                         oldWinSize.x, oldWinSize.y);
-                mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+                if (mkxp_debugLogEnabled()) {
+                    char buf[256];
+                    snprintf(buf, sizeof(buf),
+                             "REJECTED zero dims: winSize=%dx%d drawable=%dx%d, restoring %dx%d",
+                             winSize.x, winSize.y, drawableSize.x, drawableSize.y,
+                             oldWinSize.x, oldWinSize.y);
+                    mkxp_debugLog("RESIZE", "graphics.cpp [C++]", buf);
+                }
                 winSize = oldWinSize;
                 return;
             }
@@ -852,7 +862,7 @@ struct GraphicsPrivate {
             recalculateScreenSize(threadData->config.fixedAspectRatio);
             updateScreenResoRatio(threadData);
 
-            {
+            if (mkxp_debugLogEnabled()) {
                 char buf[256];
                 snprintf(buf, sizeof(buf),
                          "after resize: scSize=%dx%d scOffset=%d,%d bsf=%.3f",
