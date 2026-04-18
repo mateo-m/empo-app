@@ -6,6 +6,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
     CLANG_CXX_LANGUAGE_STANDARD: c++14
     CLANG_ENABLE_OBJC_ARC: YES
     CLANG_ENABLE_MODULES: NO
