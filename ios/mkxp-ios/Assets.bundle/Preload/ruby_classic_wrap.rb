@@ -15,8 +15,13 @@ class String
   end
 
   unless method_defined?(:encode)
+    # Real String#encode returns a NEW string (unlike #force_encoding
+    # which mutates in place and returns self). Returning `self` would
+    # alias the receiver into whatever the caller does next, so game
+    # code that does `s = x.encode("UTF-8"); s.gsub!(...)` would end
+    # up mutating `x`. Return a dup to preserve copy-on-encode.
     def encode(*_args)
-      self
+      dup
     end
   end
 

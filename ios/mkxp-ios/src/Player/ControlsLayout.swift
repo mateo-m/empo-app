@@ -135,9 +135,7 @@ class ControlsLayout {
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(delay))
                 withAnimation(.spring(duration: 0.35, bounce: 0)) {
-        withAnimation(.spring(duration: 0.35, bounce: 0)) {
-            buttons.append(button)
-        }
+                    buttons.append(button)
                 }
             }
         }

@@ -248,6 +248,12 @@ void        mkxp_setDebugLogPath(const char *path);
 // Append a tagged log line (no-op if disabled).
 void        mkxp_debugLog(const char *tag, const char *source, const char *message);
 
+// Fast-path predicate so hot-path callers can skip formatting the
+// log message entirely when debug logging is off. Approximate: it
+// may race with mkxp_setDebugLogPath but that's acceptable for a
+// debug facility.
+int         mkxp_debugLogEnabled(void);
+
 #ifdef __cplusplus
 }
 #endif

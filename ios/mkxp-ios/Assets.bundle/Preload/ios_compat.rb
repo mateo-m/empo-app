@@ -7,10 +7,15 @@
 # fork()/exec() are forbidden on iOS and cause immediate SIGKILL.
 # Neutralize all process-spawning methods at the engine level.
 module Kernel
+  # Process-spawning methods are no-ops on iOS: fork/exec would be
+  # killed by the sandbox and system("game.exe") only makes sense on
+  # Windows. Return nil so games keep running; real exec() would
+  # terminate the process but that's the entire iOS app here, so a
+  # silent no-op is the safer default.
   def system(*args) nil end
-  def exec(*args) raise SystemExit end
-  def fork(*args) nil end
-  def spawn(*args) nil end
+  def exec(*args)   nil end
+  def fork(*args)   nil end
+  def spawn(*args)  nil end
   module_function :system, :exec, :fork, :spawn
 end
 

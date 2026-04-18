@@ -108,7 +108,15 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         }
 
         private func scancodeForSwiftCharacter(_ c: UInt16) -> Int32 {
-            let ch = Character(UnicodeScalar(c)!)
+            // UnicodeScalar(UInt16) returns nil for surrogate values
+            // (0xD800-0xDFFF) that can be produced by emoji and other
+            // astral-plane input from international keyboards. Bailing
+            // out with an "unknown" scancode is fine: the engine ignores
+            // unrecognized scancodes rather than crashing the app.
+            guard let scalar = UnicodeScalar(c) else {
+                return Int32(MKXP_SCANCODE_UNKNOWN)
+            }
+            let ch = Character(scalar)
             switch ch {
             case "a"..."z":
                 return Int32(MKXP_SCANCODE_A) + Int32(c) - Int32(Character("a").asciiValue!)
