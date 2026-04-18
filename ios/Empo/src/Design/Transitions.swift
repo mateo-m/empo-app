@@ -92,6 +92,13 @@ extension View {
     }
 }
 
+struct BlurModifier: ViewModifier {
+    let radius: CGFloat
+    func body(content: Content) -> some View {
+        content.blur(radius: radius)
+    }
+}
+
 struct ScaleFadeBlurTransition: ViewModifier {
     let active: Bool
     let blurRadius: CGFloat
@@ -143,5 +150,13 @@ extension AnyTransition {
             active: ControlTransition(active: true, anchor: anchor),
             identity: ControlTransition(active: false, anchor: anchor)
         )
+    }
+
+    static var tipBanner: AnyTransition {
+        let blurIn = AnyTransition.modifier(
+            active: BlurModifier(radius: 8),
+            identity: BlurModifier(radius: 0)
+        )
+        return .opacity.combined(with: .move(edge: .top)).combined(with: blurIn)
     }
 }

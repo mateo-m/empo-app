@@ -177,14 +177,6 @@ private struct RendererRestartPill: View {
 }
 
 
-private struct BlurModifier: ViewModifier {
-    let radius: CGFloat
-    func body(content: Content) -> some View {
-        content.blur(radius: radius)
-    }
-}
-
-
 private struct SplashView: View {
     /// True when the whole splash is animating out (fades background +
     /// everything on top of it). This is the final exit phase.
