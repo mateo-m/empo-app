@@ -28,6 +28,36 @@ class AppState {
     private var pendingTerminationToken: UUID?
     private static let hangWatchdogSeconds: UInt64 = 3
 
+    // Continuations waiting for the engine-terminated callback to fire,
+    // used by selectGame() to wait for cross-session teardown before
+    // handing the engine a new path. Drained in registerBridgeCallbacks
+    // when the callback runs. No polling, no timeouts - the hang
+    // watchdog above handles the truly-stuck case by force-quitting
+    // the app, which also implicitly drains these (the process exits).
+    private var terminationWaiters: [CheckedContinuation<Void, Never>] = []
+
+    private func awaitEngineTermination() async {
+        // Fast path: engine is already terminated (previous session
+        // finished its cross-session cleanup and is parked in
+        // waitForGamePath) - hand off immediately.
+        if mkxp_isEngineTerminated() != 0 { return }
+        // No termination is in flight - we're on cold boot, the RGSS
+        // thread is waiting for its FIRST game path. Hand off
+        // immediately without parking.
+        if pendingTerminationToken == nil { return }
+        // A termination is actively in flight. Park until the
+        // engine-terminated callback drains our continuation.
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            terminationWaiters.append(cont)
+        }
+    }
+
+    private func drainTerminationWaiters() {
+        let pending = terminationWaiters
+        terminationWaiters.removeAll()
+        for cont in pending { cont.resume() }
+    }
+
     static let logsDirectory: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Logs", isDirectory: true)
@@ -117,7 +147,28 @@ class AppState {
         configureDebugLog(for: game)
         appendSessionHistory(game: game)
         sessionStartTime = Date()
-        mkxp_setGamePath(game.path)
+
+        // Wait for the RGSS thread to actually finish tearing down any
+        // previous session before we feed it the new path. If we call
+        // mkxp_setGamePath too early, the engine's own
+        // mkxp_setEngineTerminated() runs after us and clears the path
+        // flag we just set, leaving the next session stuck in
+        // waitForGamePath forever.
+        //
+        // awaitEngineTermination returns immediately when no previous
+        // session is running (isEngineTerminated is already true), and
+        // otherwise parks on a continuation that the engine-terminated
+        // callback wakes up. No polling, no wall-clock deadline: the
+        // hang watchdog in returnToLibrary is what handles a truly
+        // stuck RGSS thread by force-quitting the app.
+        //
+        // The loading view is already on screen throughout this wait,
+        // so it doubles as a "quitting" indicator when the user quickly
+        // taps a new game right after quitting.
+        Task { @MainActor in
+            await awaitEngineTermination()
+            mkxp_setGamePath(game.path)
+        }
     }
 
     private func configureDebugLog(for game: GameEntry) {
@@ -231,6 +282,36 @@ class AppState {
     private static let hangMessage =
         "The previous game stopped responding. The app will now close."
 
+    /// Hard-deadline force-quit used by the loading-view escape hatch.
+    ///
+    /// The regular hang watchdog (armHangWatchdog) shows an alert and
+    /// waits for the user to tap OK before calling exit(0). When the
+    /// user tapped "Quit to library" during loading, they're already
+    /// stuck and signaling urgency - making them read and dismiss an
+    /// alert before the app finally closes is bad UX. This helper
+    /// skips the alert entirely and exit(0)s directly after the
+    /// deadline, while still giving the engine a generous window to
+    /// terminate cleanly if it can.
+    ///
+    /// The normal engine-terminated callback path is expected to clear
+    /// `pendingTerminationToken` before the deadline in the happy
+    /// case, which cancels this helper.
+    func armLoadingEscapeForceQuit() {
+        let token = pendingTerminationToken
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self else { return }
+            // Only force-quit if the original termination request the
+            // escape hatch kicked off is still pending (i.e. the engine
+            // never ack'd). Tokens match on reentrant quits too, so a
+            // second tap doesn't double-arm.
+            guard self.pendingTerminationToken == token,
+                  token != nil else { return }
+            mkxp_setEngineHung()
+            exit(0)
+        }
+    }
+
 
     // MARK: - Pause lifecycle
     // These methods coordinate PauseManager state with phase transitions.
@@ -323,6 +404,9 @@ class AppState {
                 // Engine ack'd termination, so the hang watchdog armed
                 // by returnToLibrary() should not fire.
                 state.pendingTerminationToken = nil
+                // Wake any selectGame awaiters so the pending new
+                // session can hand its path to the RGSS thread.
+                state.drainTerminationWaiters()
                 state.recordSessionPlayTime()
                 state.removeCrashMarker()
                 GameLibrary.shared.reload()
