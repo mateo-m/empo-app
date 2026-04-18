@@ -16,7 +16,7 @@ extension Color {
     // inconsistent enough across contexts that the brand looked
     // different from screen to screen. Fixed RGB gives us one
     // predictable orange everywhere.
-    static let brand = Color(red: 0.95, green: 0.48, blue: 0.10)
+    static let brand = Color(red: 0.98, green: 0.56, blue: 0.16)
 
     /// Dark: warm dark surface with a hint of amber.
     /// Light: warm off-white with a hint of peach.
