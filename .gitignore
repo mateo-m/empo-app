@@ -2,8 +2,8 @@
 demo/games/
 
 # Build artifacts
-ios/mkxp-ios/build/
-ios/mkxp-ios/mkxp-ios.xcodeproj/
+ios/Empo/build/
+ios/Empo/Empo.xcodeproj/
 *.ipa
 
 # Dependencies (downloaded sources and build outputs)
@@ -27,7 +27,7 @@ compile_commands.json
 *.swp
 *.swo
 *~
-ios/mkxp-ios/src/App/GitInfo.generated.swift
+ios/Empo/src/App/GitInfo.generated.swift
 TODO.md
 
 # Python cache (agent skill scripts)
@@ -35,4 +35,4 @@ __pycache__/
 *.pyc
 
 # Per-contributor code signing config (see Signing.xcconfig.example)
-ios/mkxp-ios/Signing.xcconfig
+ios/Empo/Signing.xcconfig

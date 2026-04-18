@@ -124,7 +124,7 @@ class AppState {
         sessionHistoryPath = logsDir.appendingPathComponent("session-history.log").path
 
         let launchTime = Self.isoFormatter.string(from: Date())
-        let header = Self.logHeader(title: "mkxp-ios session history", extras: ["launched: \(launchTime)"])
+        let header = Self.logHeader(title: "\(AppInfo.name) session history", extras: ["launched: \(launchTime)"])
         try? header.write(toFile: sessionHistoryPath, atomically: true, encoding: .utf8)
 
         if Self.isCrashMarkerFromCurrentInstall() {
@@ -231,7 +231,7 @@ class AppState {
         let filename = "\(game.id)-\(slug)-\(timestamp).log"
         let logPath = logsDir.appendingPathComponent(filename).path
 
-        let header = Self.logHeader(title: "mkxp-ios debug log", extras: [
+        let header = Self.logHeader(title: "\(AppInfo.name) debug log", extras: [
             "game: \(game.title) [\(game.id)]",
             "session: \(timestamp)",
         ]) + "\n"

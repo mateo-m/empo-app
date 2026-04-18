@@ -213,7 +213,7 @@ private struct SplashView: View {
                     .font(.system(size: 52))
                     .foregroundStyle(.white)
 
-                Text("mkxp-z")
+                Text(AppInfo.name)
                     .font(.title)
                     .fontWeight(.bold)
                     .fontDesign(.rounded)

@@ -242,8 +242,8 @@ class AppSettings {
     }
 
     private init() {
-        let themeRaw = UserDefaults.standard.string(forKey: "theme") ?? AppTheme.dark.rawValue
-        self.theme = AppTheme(rawValue: themeRaw) ?? .dark
+        let themeRaw = UserDefaults.standard.string(forKey: "theme") ?? AppTheme.auto.rawValue
+        self.theme = AppTheme(rawValue: themeRaw) ?? .auto
         self.debugMode = UserDefaults.standard.bool(forKey: "debugMode")
         self.showViewportBounds = UserDefaults.standard.bool(forKey: "showViewportBounds")
         self.viewportBoundsColor = Self.loadViewportBoundsColor()
