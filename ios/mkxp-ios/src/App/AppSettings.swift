@@ -94,7 +94,18 @@ enum RendererOption: String, CaseIterable {
     var label: String {
         switch self {
         case .openGLES: "OpenGL ES"
-        case .angle: "ANGLE (Beta)"
+        case .angle: "ANGLE"
+        }
+    }
+
+    /// When true, the settings UI shows a "BETA" tag next to the picker's
+    /// label while this option is selected. Keeps the picker entries
+    /// terse (no "(Beta)" suffix in the menu) while still signaling the
+    /// stability status to the user once they've committed.
+    var isBeta: Bool {
+        switch self {
+        case .openGLES: false
+        case .angle:    true
         }
     }
 }
