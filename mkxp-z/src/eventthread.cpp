@@ -54,6 +54,7 @@
 #if TARGET_OS_IPHONE
 #include "ios_bridge.h"
 extern void mkxpGL_GetDrawableSize(SDL_Window *win, int *w, int *h);
+extern void mkxpGL_RefreshDrawableSize(SDL_Window *win, int *w, int *h);
 #endif
 
 #ifndef __APPLE__
@@ -286,7 +287,14 @@ void EventThread::process(RGSSThreadData &rtData)
                         
                         int drwW, drwH;
 #if TARGET_OS_IPHONE
-                        mkxpGL_GetDrawableSize(win, &drwW, &drwH);
+                        // Use the refreshing variant so ANGLE's
+                        // CAMetalLayer drawableSize gets pushed to the
+                        // new orientation BEFORE we post to the RGSS
+                        // thread. Otherwise eglQuerySurface returns
+                        // stale pre-rotation pixel dims and
+                        // Graphics::checkResize computes a nonsense
+                        // backingScaleFactor / winSize / scOffset.
+                        mkxpGL_RefreshDrawableSize(win, &drwW, &drwH);
 #else
                         SDL_GL_GetDrawableSize(win, &drwW, &drwH);
 #endif
