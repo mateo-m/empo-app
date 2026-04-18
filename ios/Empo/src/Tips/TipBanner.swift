@@ -15,7 +15,7 @@ struct TipBanner: View {
 
             Text(tip.excerpt)
                 .font(.subheadline)
-                .foregroundStyle(.primary)
+                .foregroundStyle(.brand)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if tip.hasDetail {
@@ -32,7 +32,7 @@ struct TipBanner: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.brand.opacity(0.6))
                         .frame(width: 20, height: 20)
                 }
                 .accessibilityLabel("Dismiss tip")
@@ -40,7 +40,7 @@ struct TipBanner: View {
         }
         .padding(.horizontal, Spacing.xl)
         .padding(.vertical, Spacing.lg)
-        .background(Color.brand.opacity(0.08))
+        .background(Color.brand.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: Radius.md))
         .sheet(isPresented: $showDetail) {
             if let description = tip.description {

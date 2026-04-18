@@ -70,7 +70,7 @@ struct GameInfoView: View {
                         TipBanner(tip: .gameInfoCustomization)
                             .padding(.horizontal, Spacing._2xl)
                             .padding(.top, Spacing.xl)
-                            .transition(.opacity.combined(with: .move(edge: .top)))
+                            .transition(.tipBanner)
                     }
 
                     GroupedSection("Details") {
