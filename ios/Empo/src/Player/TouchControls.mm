@@ -4,10 +4,10 @@
 // TCButton, TCDPadView, TCKeyboardField, keyboard accessory bar.
 // These are wrapped as UIViewRepresentable in Swift for use in PlayerView.
 //
-// All engine communication goes through ios_bridge.h functions.
+// All engine communication goes through app_bridge.h functions.
 
 #import "TouchControls.h"
-#include "ios_bridge.h"
+#include "app_bridge.h"
 
 static const CGFloat kButtonSize         = 56.0;
 static const CGFloat kDPadDeadZone       = 0.20; // fraction of radius

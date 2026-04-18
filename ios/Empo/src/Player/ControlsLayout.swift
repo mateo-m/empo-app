@@ -134,7 +134,7 @@ class ControlsLayout {
             let delay = 0.15 + Double(i) * 0.06
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(delay))
-                withAnimation(.spring(duration: 0.35, bounce: 0)) {
+                withAnimation(Motion.gentle) {
                     buttons.append(button)
                 }
             }
@@ -174,7 +174,7 @@ class ControlsLayout {
         }
         let button = ButtonModel(label: displayLabel, scancode: scancode,
                                  relativeCenter: CGPoint(x: 0.5, y: 0.5), size: 56)
-        withAnimation(.spring(duration: 0.35, bounce: 0)) {
+        withAnimation(Motion.gentle) {
             buttons.append(button)
         }
     }
