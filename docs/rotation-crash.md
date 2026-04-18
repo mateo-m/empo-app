@@ -1,4 +1,4 @@
-# iOS rotation crash — SIGSEGV in libGLImage
+# Simulator rotation crash - SIGSEGV in libGLImage
 
 ## Symptom
 
@@ -6,7 +6,7 @@ Rapidly rotating the device during gameplay crashes the app with SIGSEGV
 (signal 11). The crash occurs on GCD dispatch worker threads, not on the
 main or RGSS threads:
 
-```
+```text
 === CRASH: signal 11 ===
   libGLImage.dylib  __glgProcessPixelsWithProcessor_block_invoke
   libdispatch.dylib _dispatch_call_block_and_release
@@ -24,11 +24,11 @@ broken.
 crash is NOT caused by any app-level code. It reproduces even with ALL
 of the following disabled simultaneously:
 
-1. Renderbuffer resize (`renderbufferStorage:fromDrawable:`) — never called
-2. View/layer resize (`setFrame:`/`setBounds:`) — overridden as no-ops
-3. All GL operations in `checkResize` — consumed events, did zero GL work
-4. `presentsWithTransaction` — tested both YES and NO
-5. `[CATransaction flush]` — tested before/after present
+1. Renderbuffer resize (`renderbufferStorage:fromDrawable:`) - never called
+2. View/layer resize (`setFrame:`/`setBounds:`) - overridden as no-ops
+3. All GL operations in `checkResize` - consumed events, did zero GL work
+4. `presentsWithTransaction` - tested both YES and NO
+5. `[CATransaction flush]` - tested before/after present
 6. Skipping `presentRenderbuffer` for multiple frames around resize
 
 The crash triggers purely from `presentRenderbuffer` being called on the
@@ -36,7 +36,7 @@ RGSS thread while the iOS Simulator rotates the virtual device. The
 simulator's OpenGL ES emulation layer (`libGLImage.dylib` on macOS)
 dispatches async GCD pixel-processing blocks internally. During rapid
 simulator rotation, these blocks access invalidated memory inside
-Apple's emulation code — completely outside app control.
+Apple's emulation code - completely outside app control.
 
 **This does not reproduce on real devices**, where the native ARM GPU
 driver handles pixel processing entirely differently from the simulator's
@@ -52,7 +52,7 @@ fixed by deferring the resize to the RGSS thread via an atomic flag.
 
 ## Current architecture
 
-### `layoutSubviews` — no GL context access
+### `layoutSubviews` - no GL context access
 
 ```objc
 - (void)layoutSubviews
@@ -68,7 +68,7 @@ fixed by deferring the resize to the RGSS thread via an atomic flag.
 }
 ```
 
-### `swapBuffers` — deferred resize on RGSS thread
+### `swapBuffers` - deferred resize on RGSS thread
 
 ```objc
 if (atomic_load_explicit(&_needsFrameUpdate, memory_order_acquire)) {
@@ -108,16 +108,16 @@ incorrect rendering during rotation, which is invisible in practice.
 All tests performed on iPhone 17 Pro Simulator (iOS 26), with rapid
 clockwise then counter-clockwise rotation during gameplay:
 
-| Test | Crash? |
-|------|--------|
-| Deferred resize + `glFinish()` | Yes |
-| + `presentsWithTransaction = YES` | Yes |
-| + `[CATransaction flush]` | Yes |
-| + Skip 3 frames of present before resize | Yes |
-| Disable renderbuffer resize entirely (`#if 0`) | Yes |
-| Freeze view frame (`setFrame:` no-op) | Yes |
-| Disable ALL GL work in `checkResize` | Yes |
-| All above combined | **Yes** |
+| Test                                           | Crash?  |
+| ---------------------------------------------- | ------- |
+| Deferred resize + `glFinish()`                 | Yes     |
+| + `presentsWithTransaction = YES`              | Yes     |
+| + `[CATransaction flush]`                      | Yes     |
+| + Skip 3 frames of present before resize       | Yes     |
+| Disable renderbuffer resize entirely (`#if 0`) | Yes     |
+| Freeze view frame (`setFrame:` no-op)          | Yes     |
+| Disable ALL GL work in `checkResize`           | Yes     |
+| All above combined                             | **Yes** |
 
 The crash is internal to `libGLImage.dylib`'s async pixel processing
 and cannot be prevented at the application level on the simulator.
