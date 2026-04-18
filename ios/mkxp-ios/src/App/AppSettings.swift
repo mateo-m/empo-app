@@ -126,8 +126,8 @@ enum ExperimentalFeature: String, CaseIterable, Identifiable {
 
     var description: String {
         switch self {
-        case .gameQuit: "Quit the running game and return to the library."
-        case .gamePause: "Pause the engine and freeze the game in place."
+        case .gameQuit:  "Adds a Quit button to the in-game toolbar that returns you to the library."
+        case .gamePause: "Adds a Pause button to the in-game toolbar that freezes the game so you can resume it later."
         }
     }
 }
