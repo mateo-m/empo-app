@@ -1,0 +1,28 @@
+[changelog]
+header = ""
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group }}
+{% for commit in commits %}\
+- {{ commit.message | upper_first }} ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/mateo-m/empo-app/commit/{{ commit.id }}))
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^ui|^style", group = "UI" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^perf", group = "Performance" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^chore", group = "Chores" },
+  { message = ".*", group = "Other" },
+]
+filter_commits = false
+tag_pattern = "v[0-9].*"
