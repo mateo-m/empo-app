@@ -33,3 +33,7 @@
 	url = https://github.com/joiplay/ruby
 	branch = ruby_1_8
 	ignore = dirty
+[submodule "mkxp-z"]
+	path = mkxp-z
+	url = git@github.com:mateo-m/mkxp-z-apple-mobile
+	branch = dev
