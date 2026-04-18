@@ -243,7 +243,7 @@ class AppSettings {
         self.debugMode = UserDefaults.standard.bool(forKey: "debugMode")
         self.showViewportBounds = UserDefaults.standard.bool(forKey: "showViewportBounds")
         self.viewportBoundsColor = Self.loadViewportBoundsColor()
-        self.debugLogs = UserDefaults.standard.bool(forKey: "debugLogs")
+        self.debugLogs = (UserDefaults.standard.object(forKey: "debugLogs") as? Bool) ?? true
         let storedMax = UserDefaults.standard.integer(forKey: "maxLogFiles")
         self.maxLogFiles = storedMax > 0 ? storedMax : 20
         self.cleanupInvalidGames = UserDefaults.standard.bool(forKey: "cleanupInvalidGames")

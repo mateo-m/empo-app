@@ -214,7 +214,7 @@ class AppState {
     }
 
     private func configureDebugLog(for game: GameEntry) {
-        guard UserDefaults.standard.bool(forKey: "debugLogs") else {
+        guard AppSettings.shared.debugLogs else {
             mkxp_setDebugLogPath(nil)
             return
         }
