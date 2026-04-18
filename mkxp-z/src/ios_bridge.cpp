@@ -550,11 +550,25 @@ void mkxp_setDebugLogPath(const char *path) {
     }
 }
 
+// Fast-path check so callers in hot paths (resize handler, frame boundary)
+// can skip expensive formatting when logging is disabled.
+int mkxp_debugLogEnabled(void) {
+    // Reading s_debugLogFile without the mutex is safe enough here: the
+    // worst outcome is a dropped or duplicated log line if the file is
+    // being opened/closed on another thread at the same moment. For a
+    // debug log that's acceptable and avoids serializing the entire
+    // engine on every hot-path check.
+    return s_debugLogFile ? 1 : 0;
+}
+
 void mkxp_debugLog(const char *tag, const char *source, const char *message) {
     std::lock_guard<std::mutex> lock(s_debugLogMutex);
     if (!s_debugLogFile) return;
     fprintf(s_debugLogFile, "[%s] (%s) %s\n", tag, source, message);
-    fflush(s_debugLogFile);
+    // No fflush: let stdio's buffer coalesce writes. The file is flushed
+    // when closed in mkxp_setDebugLogPath or at process exit. Flushing
+    // on every log line forced a sync write to the sandboxed FS and
+    // showed up as a rotation-hitch during profiling.
 }
 
 } // extern "C"

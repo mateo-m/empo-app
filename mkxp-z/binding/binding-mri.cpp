@@ -341,7 +341,6 @@ static void mriBindingInit() {
 }
 
 static void showMsg(const std::string &msg) {
-    fprintf(stderr, "[showMsg] %s\n", msg.c_str());
     shState->eThread().showMessageBox(msg.c_str());
 }
 
@@ -1708,9 +1707,6 @@ static void mriBindingExecute() {
 
         rubyVMInitialized = true;
     } else {
-        static int sessionNum = 1;
-        sessionNum++;
-
         /* The RGSS thread is now persistent on iOS — same thread for all
          * sessions. rb_gc_stack_start should still be valid, but update
          * it as a safety measure in case the stack frame shifted. */

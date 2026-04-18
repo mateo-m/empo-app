@@ -401,7 +401,8 @@ int main(int argc, char *argv[]) {
     char dataDir[512]{};
     const char *selectedPath = mkxp_waitForGamePath();
     if (selectedPath && selectedPath[0]) {
-        strncpy(dataDir, selectedPath, sizeof(dataDir));
+        // snprintf always null-terminates, unlike strncpy.
+        snprintf(dataDir, sizeof(dataDir), "%s", selectedPath);
     }
 #endif
 
@@ -433,11 +434,11 @@ int main(int argc, char *argv[]) {
     char *tmp{};
     tmp = getenv("SRCDIR");
     if (tmp) {
-      strncpy(dataDir, tmp, sizeof(dataDir));
+      snprintf(dataDir, sizeof(dataDir), "%s", tmp);
     }
 #endif
     if (!dataDir[0]) {
-        strncpy(dataDir, mkxp_fs::getDefaultGameRoot().c_str(), sizeof(dataDir));
+        snprintf(dataDir, sizeof(dataDir), "%s", mkxp_fs::getDefaultGameRoot().c_str());
     }
     bool cwdOk = mkxp_fs::setCurrentDirectory(dataDir);
     (void)cwdOk;
@@ -601,7 +602,7 @@ int main(int argc, char *argv[]) {
         EventThread::resetAllInputStates();
         const char *nextPath = mkxp_waitForGamePath();
         if (nextPath && nextPath[0]) {
-            strncpy(dataDir, nextPath, sizeof(dataDir));
+            snprintf(dataDir, sizeof(dataDir), "%s", nextPath);
         } else {
             break; // empty path = quit
         }
