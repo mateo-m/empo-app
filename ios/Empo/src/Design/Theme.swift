@@ -92,6 +92,8 @@ enum Radius {
     static let lg: CGFloat = 16
     /// 24pt — hero elements, large artwork
     static let xl: CGFloat = 24
+    /// 56pt — modal sheets, experimental cards
+    static let sheet: CGFloat = 56
 }
 
 
@@ -130,12 +132,17 @@ enum Motion {
     /// Gentle transition — background changes, slow reveals.
     static let gentle = Animation.spring(duration: 0.35, bounce: 0.0)
 
+    /// Slow emphasis — loading reveals, large layout shifts.
+    static let slow = Animation.spring(duration: 0.5, bounce: 0.0)
+
 
     /// Fast — opacity fades, color changes (small elements).
     static let durationFast: TimeInterval = 0.18
-    /// Normal — standard transitions (big elements).
+    /// Normal - standard transitions (big elements).
     static let durationNormal: TimeInterval = 0.3
-    /// Slow — emphasis transitions, loading reveals.
+    /// Gentle - background changes, slow reveals.
+    static let durationGentle: TimeInterval = 0.35
+    /// Slow - emphasis transitions, loading reveals.
     static let durationSlow: TimeInterval = 0.5
 }
 
