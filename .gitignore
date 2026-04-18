@@ -36,3 +36,8 @@ __pycache__/
 
 # Per-contributor code signing config (see Signing.xcconfig.example)
 ios/Empo/Signing.xcconfig
+
+# Assets.bundle is assembled at build time from engine submodule sources.
+# Only .gitkeep is tracked to preserve the directory.
+ios/Empo/Assets.bundle/*
+!ios/Empo/Assets.bundle/.gitkeep
