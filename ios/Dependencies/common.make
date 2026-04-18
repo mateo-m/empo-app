@@ -6,6 +6,7 @@ INCLUDEDIR := $(BUILD_PREFIX)/include
 DOWNLOADS := ${PWD}/downloads/$(HOST)
 SOURCES := ${PWD}/sources
 PATCHES := ${PWD}
+ENGINE := ${PWD}/../../mkxp-z-apple-mobile
 NPROC := $(shell sysctl -n hw.ncpu)
 CFLAGS := -I$(INCLUDEDIR) -I$(INCLUDEDIR)/freetype2 $(TARGETFLAGS) -O3
 CXXFLAGS := $(CFLAGS)
@@ -268,8 +269,7 @@ $(LIBDIR)/libruby.3.1-static.a: $(SOURCES)/ruby/Makefile
 	$(CONFIGURE_ENV) make -j$(NPROC) libruby.3.1-static.a; \
 	cp libruby.3.1-static.a $(LIBDIR)/; \
 	cp -R include/* $(INCLUDEDIR)/; \
-	mkdir -p $(INCLUDEDIR)/ruby/internal; \
-	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby/internal/ 2>/dev/null || true
+	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby/config.h 2>/dev/null || true
 
 $(SOURCES)/ruby/Makefile: $(SOURCES)/ruby/configure
 	cd $(SOURCES)/ruby; \
@@ -289,12 +289,17 @@ $(SOURCES)/ruby/Makefile: $(SOURCES)/ruby/configure
 	ac_cv_func_pwritev=no \
 	ac_cv_func_copy_file_range=no \
 	ac_cv_func_close_range=no \
-	cross_compiling=yes
+	cross_compiling=yes; \
+	sed -i '' 's|^ASFLAGS.*=.*|ASFLAGS = $$(ARCH_FLAG) $$(INCFLAGS) $(TARGETFLAGS)|' Makefile
 
 $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 	cd $(SOURCES)/ruby; \
 	git checkout -- . 2>/dev/null; \
 	git apply $(PATCHES)/ruby31/ios.patch; \
+	for patch in $(ENGINE)/syntax-transform/3.1/[0-9]*.patch; do \
+		echo "Applying syntax transform: $$(basename $$patch)"; \
+		patch -p1 -i $$patch || exit 1; \
+	done; \
 	autoreconf -i
 
 # Ruby 1.8 (submodule: sources/ruby18)
