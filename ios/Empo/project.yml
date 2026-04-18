@@ -178,10 +178,11 @@ targets:
       - path: ../../mkxp-z-apple-mobile/binding/http-binding.cpp
       - path: ../../mkxp-z-apple-mobile/binding/cusl-binding.cpp
       - path: ../../mkxp-z-apple-mobile/binding/module_rpg.cpp
-      - path: ../../mkxp-z-apple-mobile/src/ios_bridge.cpp
+      - path: ../../mkxp-z-apple-mobile/src/app_bridge.cpp
       - path: ../../mkxp-z-apple-mobile/src/angle_native_layer.mm
       - path: src
         type: group
+      - path: PrivacyInfo.xcprivacy
       - path: Assets.bundle
         type: folder
         buildPhase: resources
@@ -243,7 +244,7 @@ targets:
           - -framework QuartzCore
           - -framework GameController
           - -framework CoreMotion
-          - -framework CoreBluetooth
+          - -weak_framework CoreBluetooth
           - -weak_framework CoreHaptics
           - -lANGLE_static
           - -lEGL_static
