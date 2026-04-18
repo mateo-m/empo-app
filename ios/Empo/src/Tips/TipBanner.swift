@@ -10,17 +10,17 @@ struct TipBanner: View {
     var body: some View {
         HStack(spacing: Spacing.md) {
             Image(systemName: "lightbulb.fill")
-                .font(.subheadline)
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(.brand)
 
             Text(tip.excerpt)
-                .font(.subheadline)
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(.brand)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if tip.hasDetail {
                 Button("More") { showDetail = true }
-                    .font(.subheadline.weight(.medium))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.brand)
             }
 
