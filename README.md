@@ -1,10 +1,10 @@
-# mkxp-ios
+# Empo
 
 An iOS port of [mkxp-z](https://github.com/mkxp-z/mkxp-z), which is itself a fork of [mkxp](https://github.com/Ancurio/mkxp). It lets you run RPG Maker XP games (RGSS1) on iPhones and iPads. Only Ruby 1.8 is bundled right now, so VX (RGSS2) and VX Ace (RGSS3) games are not currently supported.
 
 ## How it works
 
-The engine (`mkxp-z/`) does all the heavy lifting: it reimplements the RGSS runtime that RPG Maker games expect, using SDL2 for windowing and input, OpenGL ES 2.0 for rendering, OpenAL for audio, and an embedded Ruby interpreter to run game scripts. The iOS-specific code (`ios/`) builds it as a native iOS app, adds a SwiftUI game library and touch controls overlay, and bundles all the dependencies as static libraries.
+The engine (`mkxp-z-apple-mobile/`) does all the heavy lifting: it reimplements the RGSS runtime that RPG Maker games expect, using SDL2 for windowing and input, OpenGL ES 2.0 for rendering, OpenAL for audio, and an embedded Ruby interpreter to run game scripts. The iOS-specific code (`ios/`) builds it as a native iOS app, adds a SwiftUI game library and touch controls overlay, and bundles all the dependencies as static libraries.
 
 When the app launches, it presents a **game library** where you can browse imported games and import new ones (folders or `.zip` files) via the system document picker. Selecting a game hands its path to the engine, which loads the `.ini` file, `mkxp.json`, or `.rgssad` archive. A set of Ruby preload scripts run before the game's own scripts to patch over Windows-specific assumptions (Win32API calls, environment variables, etc.) so that games work without modification.
 
@@ -26,17 +26,17 @@ A transparent UIKit overlay window sits on top of SDL's OpenGL rendering surface
 - Edit mode where you can drag, resize, relabel, re-bind, or delete any button
 - The ability to add new buttons mapped to arbitrary key presses
 
-The overlay injects SDL keyboard events directly, so the engine sees them exactly as if they came from a hardware keyboard. The touch controls are self-contained in `ios/mkxp-ios/src/Player/` and do not require any engine modifications.
+The overlay injects SDL keyboard events directly, so the engine sees them exactly as if they came from a hardware keyboard. The touch controls are self-contained in `ios/Empo/src/Player/` and do not require any engine modifications.
 
 ## Project structure
 
 ```
-mkxp-ios/
+empo/
   setup.sh                           # Run once after cloning (configures git hooks)
   .githooks/                         # Tracked git hooks
     post-commit                      # Regenerates GitInfo.generated.swift
   docs/                              # Architecture and design docs
-  mkxp-z/                            # mkxp-z engine source (upstream + iOS patches)
+  mkxp-z-apple-mobile/               # Engine fork (git submodule); upstream + iOS patches
     src/
       main.cpp                     # Entry point, FBO setup, OpenAL init
       eventthread.cpp              # SDL event loop (KEYUP fix)
@@ -54,11 +54,11 @@ mkxp-ios/
       iphoneos.make                # Device target (arm64)
       build-iphonesimulator-arm64/ # Built libraries + headers (not in git)
       downloads/                   # Dependency source checkouts (not in git)
-    mkxp-ios/
+    Empo/
       project.yml                  # XcodeGen project spec
       Info.plist                   # App metadata
       src/
-        mkxp-ios-Bridging-Header.h # Bridges C engine API to Swift
+        Empo-Bridging-Header.h # Bridges C engine API to Swift
         systemImplIOS.mm           # iOS system functions (scaling factor)
         filesystemImplIOS.mm       # iOS filesystem (game root detection)
         App/                       # App lifecycle and root UI
@@ -164,23 +164,23 @@ Ruby 1.8 is built separately (see the `ruby_1_8` build notes). The resulting `li
 ### 2. Generate the Xcode project
 
 ```sh
-cd ios/mkxp-ios
+cd ios/Empo
 xcodegen generate --spec project.yml --project .
 ```
 
 ### 3. Build the app
 
 ```sh
-cd ios/mkxp-ios
-xcodebuild -project mkxp-ios.xcodeproj \
-  -target mkxp-ios \
+cd ios/Empo
+xcodebuild -project Empo.xcodeproj \
+  -target Empo \
   -sdk iphonesimulator \
   -arch arm64 \
   -configuration Debug \
   build
 ```
 
-The output is at `ios/mkxp-ios/build/Debug-iphonesimulator/mkxp-z.app`.
+The output is at `ios/Empo/build/Debug-iphonesimulator/Empo.app`.
 
 For a device build, replace `-sdk iphonesimulator` with `-sdk iphoneos`.
 
@@ -191,8 +191,8 @@ For a device build, replace `-sdk iphonesimulator` with `-sdk iphoneos`.
 xcrun simctl list devices available | grep iPhone
 
 # Install and launch
-xcrun simctl install <UDID> ios/mkxp-ios/build/Debug-iphonesimulator/mkxp-z.app
-xcrun simctl launch <UDID> com.mkxp.mkxp-ios
+xcrun simctl install <UDID> ios/Empo/build/Debug-iphonesimulator/Empo.app
+xcrun simctl launch <UDID> sh.mateo.empo
 ```
 
 ### 5. Add a game
@@ -202,7 +202,7 @@ Games are imported at runtime through the app's library UI. Tap the import butto
 For development, you can also copy game folders directly into the simulator's app container:
 
 ```sh
-CONTAINER=$(xcrun simctl get_app_container <UDID> com.mkxp.mkxp-ios data)
+CONTAINER=$(xcrun simctl get_app_container <UDID> sh.mateo.empo data)
 cp -R /path/to/your/game "$CONTAINER/Documents/Games/"
 ```
 
@@ -211,9 +211,9 @@ cp -R /path/to/your/game "$CONTAINER/Documents/Games/"
 For IDE support (clangd, etc.), a `compile_commands.json` can be generated from the Xcode build. The key is to disable header maps (which clangd can't read) and inline the response files Xcode uses:
 
 ```sh
-cd ios/mkxp-ios
-xcodebuild -project mkxp-ios.xcodeproj \
-  -target mkxp-ios -sdk iphonesimulator -arch arm64 \
+cd ios/Empo
+xcodebuild -project Empo.xcodeproj \
+  -target Empo -sdk iphonesimulator -arch arm64 \
   -configuration Debug clean build USE_HEADERMAP=NO \
   2>&1 > /tmp/build.log
 ```

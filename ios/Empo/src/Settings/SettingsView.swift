@@ -14,7 +14,7 @@ struct SettingsView: View {
                         Image(systemName: "gamecontroller.fill")
                             .font(.system(size: 36))
                             .foregroundStyle(.brand)
-                        Text("mkxp-z")
+                        Text(AppInfo.name)
                             .font(.title3)
                             .fontWeight(.bold)
                         Text("\(GitInfo.commit)\(GitInfo.dirty ? " (dirty)" : "")")
@@ -154,7 +154,7 @@ struct SettingsView: View {
                     SettingsToggle(
                         title: "Debug logs",
                         isOn: $settings.debugLogs,
-                        description: "Saves engine logs for each session. Find them in Files → mkxp-z → Logs."
+                        description: "Saves engine logs for each session. Find them in Files → \(AppInfo.name) → Logs."
                     )
 
                     if settings.debugLogs {
@@ -173,45 +173,47 @@ struct SettingsView: View {
                 }
 
             }
-            .confirmationDialog(
-                "Enable \(featureToEnable?.label.lowercased() ?? "")?",
+            // Experimental-feature opt-in sheet. Both toggle-driven
+            // features AND the ANGLE renderer switch funnel through the
+            // same presentation so the two confirmation flows feel
+            // identical. Sheets sit better than alerts for this kind
+            // of "take a moment to read" moment, and they don't
+            // anchor to any specific row the way a popover would.
+            .sheet(
                 isPresented: Binding(
                     get: { featureToEnable != nil },
                     set: { if !$0 { featureToEnable = nil } }
-                ),
-                titleVisibility: .visible
+                )
             ) {
-                Button("Enable") {
-                    if let feature = featureToEnable {
-                        settings.setEnabled(feature, true)
-                    }
-                    featureToEnable = nil
+                if let feature = featureToEnable {
+                    ExperimentalConfirmSheet(
+                        title: feature.label,
+                        message: feature.description,
+                        onCancel: { featureToEnable = nil },
+                        onConfirm: {
+                            settings.setEnabled(feature, true)
+                            featureToEnable = nil
+                        }
+                    )
                 }
-                Button("Cancel", role: .cancel) {
-                    featureToEnable = nil
-                }
-            } message: {
-                Text("This feature is experimental and may not work as expected.")
             }
-            .alert(
-                "Enable ANGLE?",
+            .sheet(
                 isPresented: Binding(
                     get: { pendingRenderer != nil },
                     set: { if !$0 { pendingRenderer = nil } }
                 )
             ) {
-                Button("Enable") {
-                    if let renderer = pendingRenderer {
-                        settings.renderer = renderer
+                ExperimentalConfirmSheet(
+                    title: "ANGLE",
+                    message: "ANGLE translates OpenGL calls to Metal and may cause rendering issues. The change will apply on the next game launch.",
+                    onCancel: { pendingRenderer = nil },
+                    onConfirm: {
+                        if let renderer = pendingRenderer {
+                            settings.renderer = renderer
+                        }
+                        pendingRenderer = nil
                     }
-                    pendingRenderer = nil
-                }
-                .keyboardShortcut(.defaultAction)
-                Button("Cancel", role: .cancel) {
-                    pendingRenderer = nil
-                }
-            } message: {
-                Text("ANGLE is experimental. It translates OpenGL calls to Metal and may cause rendering issues. The change will apply on the next game launch.")
+                )
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

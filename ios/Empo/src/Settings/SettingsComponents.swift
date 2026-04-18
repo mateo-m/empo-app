@@ -52,13 +52,27 @@ struct SettingsPicker<SelectionValue: Hashable, Content: View>: View {
 }
 
 
+/// Small flask glyph that marks a setting row as experimental. Matches
+/// the icon used in `ExperimentalConfirmSheet` so users can associate
+/// the warning chip on the confirmation sheet with this inline marker.
+/// Tapping it opens an info sheet that explains what "experimental"
+/// means in this app - useful for new users who haven't seen the
+/// confirmation flow yet.
 private struct ExperimentalBadge: View {
+    @State private var showInfo = false
+
     var body: some View {
-        Text("BETA")
-            .font(.system(size: 9, weight: .heavy, design: .rounded))
-            .foregroundStyle(.orange)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(.orange.opacity(0.15), in: Capsule())
+        Button {
+            showInfo = true
+        } label: {
+            Image(systemName: "flask.fill")
+                .font(.footnote)
+                .foregroundStyle(.brand)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Learn about experimental features")
+        .sheet(isPresented: $showInfo) {
+            ExperimentalInfoSheet()
+        }
     }
 }

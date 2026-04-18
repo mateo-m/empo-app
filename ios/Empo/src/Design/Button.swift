@@ -28,6 +28,34 @@ enum ButtonSize {
     }
 }
 
+/// Solid brand-filled glass capsule with white text — primary CTAs.
+/// Pair with `.secondary` on the supporting action.
+struct PrimaryButtonStyle: ButtonStyle {
+    var size: ButtonSize = .lg
+    var tint: Color = .brand
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(size.font.weight(.semibold))
+            .multilineTextAlignment(.center)
+            .foregroundStyle(.white)
+            .padding(.horizontal, size.horizontalPadding)
+            .padding(.vertical, size.verticalPadding)
+            .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
+            .opacity(isEnabled ? 1 : 0.4)
+            .onChange(of: configuration.isPressed) { _, pressed in
+                if pressed { Haptics.tap() }
+            }
+    }
+}
+
+extension ButtonStyle where Self == PrimaryButtonStyle {
+    static var primary: PrimaryButtonStyle { PrimaryButtonStyle() }
+    static func primary(size: ButtonSize) -> PrimaryButtonStyle { PrimaryButtonStyle(size: size) }
+    static func primary(size: ButtonSize = .lg, tint: Color) -> PrimaryButtonStyle { PrimaryButtonStyle(size: size, tint: tint) }
+}
+
 /// Lightly brand-tinted glass with brand-colored text — supporting actions.
 struct SecondaryButtonStyle: ButtonStyle {
     var size: ButtonSize = .lg
