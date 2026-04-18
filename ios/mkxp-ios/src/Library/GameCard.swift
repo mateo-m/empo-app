@@ -159,38 +159,13 @@ private struct ImportProgressView: View {
     var size: CGFloat = 36
     var tint: Color = .white
     var onStop: (() -> Void)? = nil
-    @State private var spinning = false
 
-    private var isDeterminate: Bool { progress > 0 }
-    private var lineWidth: CGFloat { size * 0.097 }
     private var stopSize: CGFloat { size * 0.333 }
 
     var body: some View {
         ZStack {
-            // Track
-            Circle()
-                .stroke(tint.opacity(0.3), lineWidth: lineWidth)
-                .frame(width: size, height: size)
+            SpinnerRing(progress: progress, size: size, tint: tint)
 
-            if isDeterminate {
-                // Determinate: radial fill
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                    .frame(width: size, height: size)
-                    .rotationEffect(.degrees(-90))
-            } else {
-                // Indeterminate: spinning arc
-                Circle()
-                    .trim(from: 0, to: 0.3)
-                    .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                    .frame(width: size, height: size)
-                    .rotationEffect(.degrees(spinning ? 360 : 0))
-                    .onAppear { spinning = true }
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
-            }
-
-            // Stop button
             Button(action: { onStop?() }) {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(tint)
@@ -199,7 +174,6 @@ private struct ImportProgressView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Stop import")
         }
-        .animation(.spring(duration: 0.18, bounce: 0), value: progress)
     }
 }
 
@@ -273,7 +247,6 @@ private struct ListRowStatusIndicator: View {
     let status: GameStatus
     var onStopImport: (() -> Void)? = nil
 
-    @State private var spinning = false
     private let size: CGFloat = AppSize.toolbarButton
     private let ringSize: CGFloat = 28
     private let lineWidth: CGFloat = 2.7
@@ -284,7 +257,6 @@ private struct ListRowStatusIndicator: View {
         if case .importing(let p) = status { return p }
         return 0
     }
-    private var isDeterminate: Bool { progress > 0 }
 
     var body: some View {
         ZStack {
@@ -295,28 +267,13 @@ private struct ListRowStatusIndicator: View {
                 .opacity(status.phase == .ready ? 1 : 0)
                 .scaleEffect(status.phase == .ready ? 1 : 0.7)
 
-            // Progress ring — visible only while importing
-            ZStack {
-                Circle()
-                    .stroke(Color.primary.opacity(0.2), lineWidth: lineWidth)
-                    .frame(width: ringSize, height: ringSize)
-
-                if isDeterminate {
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(Color.primary, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                        .frame(width: ringSize, height: ringSize)
-                        .rotationEffect(.degrees(-90))
-                } else {
-                    Circle()
-                        .trim(from: 0, to: 0.3)
-                        .stroke(Color.primary, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                        .frame(width: ringSize, height: ringSize)
-                        .rotationEffect(.degrees(spinning ? 360 : 0))
-                        .onAppear { spinning = true }
-                        .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
-                }
-            }
+            SpinnerRing(
+                progress: progress,
+                size: ringSize,
+                lineWidth: lineWidth,
+                tint: .primary,
+                trackOpacity: 0.2
+            )
             .opacity(isImporting ? 1 : 0)
             .scaleEffect(isImporting ? 1 : 0.5)
 
@@ -325,7 +282,6 @@ private struct ListRowStatusIndicator: View {
             .transition(.blurReplace)
         }
         .frame(width: size, height: size)
-        .animation(.spring(duration: Motion.durationFast, bounce: 0), value: progress)
         .animation(Motion.gentle, value: status.phase)
     }
 

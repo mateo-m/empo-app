@@ -129,13 +129,11 @@ struct PlayerView: View {
 
                 // Fades out when the engine swaps its first post-resume frame
                 if let snapshot = resumeSnapshot {
-                    Image(uiImage: snapshot)
-                        .resizable()
-                        .interpolation(.high)
-                        .frame(width: gameRect.width, height: gameRect.height)
-                        .position(x: gameRect.midX, y: gameRect.midY)
-                        .opacity(snapshotOpacity)
-                        .allowsHitTesting(false)
+                    PauseSnapshotOverlay(
+                        snapshot: snapshot,
+                        rect: gameRect,
+                        opacity: snapshotOpacity
+                    )
                 }
             }
             .allowsHitTesting(true)
