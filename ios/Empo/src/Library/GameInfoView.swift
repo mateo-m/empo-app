@@ -15,6 +15,7 @@ struct GameInfoView: View {
     @State private var navBarBottomY: CGFloat = 0
     @State private var needsLibraryRefresh = false
     @FocusState private var isTitleFocused: Bool
+    private var tipStore = TipStore.shared
 
     private let originalTitle: String
 
@@ -64,6 +65,13 @@ struct GameInfoView: View {
                             .padding(.top, -geo.safeAreaInsets.top)
                             .padding(.leading, -geo.safeAreaInsets.leading)
                             .padding(.trailing, -geo.safeAreaInsets.trailing)
+
+                    if tipStore.isVisible(.gameInfoCustomization) {
+                        TipBanner(tip: .gameInfoCustomization)
+                            .padding(.horizontal, Spacing._2xl)
+                            .padding(.top, Spacing.xl)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
 
                     GroupedSection("Details") {
                         DetailRow("Date added") {
@@ -122,7 +130,7 @@ struct GameInfoView: View {
                                 .padding(.vertical, Spacing.lg)
                         }
 
-                    if let logURL = sessionLogURL() {
+                    if let logURL = sessionLogURL(), AppSettings.shared.debugLogs {
                         Divider().padding(.leading, Spacing.xl)
 
                         ShareLink(item: logURL) {
@@ -139,7 +147,7 @@ struct GameInfoView: View {
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
-            .animation(.spring(duration: Motion.durationFast, bounce: 0), value: titleScrollProgress > 0.5)
+            .animation(Motion.snappy, value: titleScrollProgress > 0.5)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 0) {
@@ -166,7 +174,7 @@ struct GameInfoView: View {
                         }
                     }
                     .frame(maxWidth: 250)
-                    .animation(.spring(duration: Motion.durationNormal, bounce: 0), value: titleScrollProgress)
+                    .animation(Motion.standard, value: titleScrollProgress)
                     .background(
                         GeometryReader { geo in
                             Color.clear.onAppear {
@@ -225,6 +233,7 @@ struct GameInfoView: View {
                     if isEditingTitle { finishEditingTitle() }
                     else { showBannerPicker = true }
                 }
+                .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Change banner image")
                 .mask(
                     LinearGradient(
@@ -237,30 +246,19 @@ struct GameInfoView: View {
                         endPoint: .bottom
                     )
                 )
-                .overlay(alignment: .topTrailing) {
-                    Chip("Edit", systemImage: "photo")
-                        .opacity(0.5)
-                        .padding(.top, insets.top + Spacing._3xl)
-                        .padding(.trailing, Spacing.xl + insets.trailing)
-                        .opacity(1 - titleScrollProgress)
-                }
 
-            HStack(spacing: 14) {
+            HStack(spacing: Spacing.lg) {
                 artworkView
-                    .overlay(alignment: .topTrailing) {
-                        Chip(systemImage: "photo")
-                            .opacity(0.5)
-                            .padding(Spacing.xs)
-                    }
                     .elevatedShadow()
                     .contentShape(Rectangle())
                     .onTapGesture {
                         if isEditingTitle { finishEditingTitle() }
                         else { showArtworkPicker = true }
                     }
+                    .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("Change game artwork")
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
                     HStack(spacing: Spacing.sm) {
                         if isEditingTitle {
                             TextField(originalTitle, text: $editingTitle)
@@ -275,9 +273,6 @@ struct GameInfoView: View {
                             Text(displayTitle)
                                 .font(.title2.weight(.bold))
                                 .lineLimit(1)
-
-                            Chip(systemImage: "pencil")
-                                .opacity(Overlay.light + 0.1)
                         }
                     }
 
@@ -293,6 +288,8 @@ struct GameInfoView: View {
                     editingTitle = metadata.customTitle ?? ""
                     isEditingTitle = true
                 }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Edit game title")
 
                 Spacer(minLength: 0)
             }
