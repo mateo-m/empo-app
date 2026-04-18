@@ -43,13 +43,11 @@ struct PlayerView: View {
             let isPortrait = geo.size.height > geo.size.width
             let gameRect = engineState.gameRect
             let safeArea = AppWindow.currentSafeArea
-            let toolbarBtnSize = isPortrait && gameRect.height > 0 ? AppSize.toolbarButton - kToolbarPortraitSizeReduce : AppSize.toolbarButton
-            let controlsMinY = toolbarBottomY(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize)
+            let overlay = useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geo.size.height)
+            let toolbarBtnSize = isPortrait && gameRect.height > 0 && !overlay ? AppSize.toolbarButton - kToolbarPortraitSizeReduce : AppSize.toolbarButton
+            let controlsMinY = toolbarBottomY(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize, geoHeight: geo.size.height)
 
             ZStack {
-                Color.clear
-                    .allowsHitTesting(false)
-
                 if editMode {
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
                 }
@@ -71,40 +69,40 @@ struct PlayerView: View {
                         .allowsHitTesting(editMode)
                 }
 
-                DebugOverlayView()
-                    .frame(width: AppSize.debugOverlayWidth, height: AppSize.debugOverlayHeight)
-                    .position(debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea))
-                    .offset(x: debugOverlayOffset.width + debugOverlayDragOffset.width,
-                            y: debugOverlayOffset.height + debugOverlayDragOffset.height)
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                debugOverlayDragOffset = clampDebugOverlayOffset(
-                                    base: debugOverlayOffset,
-                                    delta: value.translation,
-                                    isPortrait: isPortrait,
-                                    gameRect: gameRect,
-                                    safeArea: safeArea,
-                                    geoSize: geo.size
-                                )
-                            }
-                            .onEnded { value in
-                                let clamped = clampDebugOverlayOffset(
-                                    base: debugOverlayOffset,
-                                    delta: value.translation,
-                                    isPortrait: isPortrait,
-                                    gameRect: gameRect,
-                                    safeArea: safeArea,
-                                    geoSize: geo.size
-                                )
-                                debugOverlayOffset.width += clamped.width
-                                debugOverlayOffset.height += clamped.height
-                                debugOverlayDragOffset = .zero
-                            }
-                    )
-                    .opacity(showDebugOverlay ? 1 : 0)
-                    .allowsHitTesting(showDebugOverlay)
-                    .onChange(of: geo.size) {
+                if showDebugOverlay {
+                    DebugOverlayView()
+                        .frame(width: AppSize.debugOverlayWidth, height: AppSize.debugOverlayHeight)
+                        .position(debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geo.size.height))
+                        .offset(x: debugOverlayOffset.width + debugOverlayDragOffset.width,
+                                y: debugOverlayOffset.height + debugOverlayDragOffset.height)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    debugOverlayDragOffset = clampDebugOverlayOffset(
+                                        base: debugOverlayOffset,
+                                        delta: value.translation,
+                                        isPortrait: isPortrait,
+                                        gameRect: gameRect,
+                                        safeArea: safeArea,
+                                        geoSize: geo.size
+                                    )
+                                }
+                                .onEnded { value in
+                                    let clamped = clampDebugOverlayOffset(
+                                        base: debugOverlayOffset,
+                                        delta: value.translation,
+                                        isPortrait: isPortrait,
+                                        gameRect: gameRect,
+                                        safeArea: safeArea,
+                                        geoSize: geo.size
+                                    )
+                                    debugOverlayOffset.width += clamped.width
+                                    debugOverlayOffset.height += clamped.height
+                                    debugOverlayDragOffset = .zero
+                                }
+                        )
+                        .transition(.opacity)
+                        .onChange(of: geo.size) {
                         // Orientation/size change: re-clamp so the overlay
                         // stays inside the new safe area bounds.
                         debugOverlayOffset = clampDebugOverlayOffset(
@@ -116,6 +114,7 @@ struct PlayerView: View {
                             geoSize: geo.size
                         )
                     }
+                }
 
                 if keyboardMode {
                     KeyboardFieldRepresentable(
@@ -136,7 +135,6 @@ struct PlayerView: View {
                     )
                 }
             }
-            .allowsHitTesting(true)
         }
         .ignoresSafeArea()
         .onAppear {
@@ -189,7 +187,7 @@ struct PlayerView: View {
         DPadRepresentable(size: size, editing: editMode, dragging: draggingDPad)
             .frame(width: size, height: size)
             .scaleEffect(draggingDPad ? kDragScaleFactor : 1.0)
-            .animation(.spring(duration: Motion.durationFast, bounce: 0), value: draggingDPad)
+            .animation(Motion.snappy, value: draggingDPad)
             .position(pos)
             .transition(.controlAppear(anchor: anchor))
             .gesture(dpadDragGesture(in: geo, controlsMinY: controlsMinY), including: editMode ? .all : .none)
@@ -244,7 +242,7 @@ struct PlayerView: View {
             }
         }
         .scaleEffect(isDragging ? kDragScaleFactor : 1.0)
-        .animation(.spring(duration: Motion.durationFast, bounce: 0), value: isDragging)
+        .animation(Motion.snappy, value: isDragging)
         .position(pos)
         .transition(.controlAppear(anchor: anchor))
         .gesture(buttonDragGesture(id: button.id, size: button.size, in: geo, controlsMinY: controlsMinY), including: editMode ? .all : .none)
@@ -270,7 +268,8 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func toolbarButtons(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
-        let btnSize = isPortrait && gameRect.height > 0 ? AppSize.toolbarButton - kToolbarPortraitSizeReduce : AppSize.toolbarButton
+        let overlay = useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height)
+        let btnSize = isPortrait && gameRect.height > 0 && !overlay ? AppSize.toolbarButton - kToolbarPortraitSizeReduce : AppSize.toolbarButton
         let gap: CGFloat = isPortrait ? Spacing.sm : Spacing.md
 
         let buttons: [(icon: String, label: String, action: () -> Void, tint: Color?)] = {
@@ -313,20 +312,22 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func editToolbar(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
-        let yPos: CGFloat = isPortrait && gameRect.height > 0
+        let overlay = useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height)
+        let yPos: CGFloat = isPortrait && gameRect.height > 0 && !overlay
             ? gameRect.origin.y + gameRect.height + kToolbarGap + kEditToolbarHalfHeight
             : max(safeArea.top, kMinLandscapeInset) + kToolbarEdgePad + kEditToolbarHalfHeight
 
         HStack(spacing: Spacing.xl) {
             Button("+ Add") { showAddSheet = true }
+                .accessibilityLabel("Add button")
                 .foregroundStyle(.white)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.footnote.weight(.semibold))
             Button("Reset") { showResetConfirm = true }
                 .foregroundStyle(.brand)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.footnote.weight(.semibold))
             Button("Done") { toggleEditMode() }
                 .foregroundStyle(.success)
-                .font(.system(size: 14, weight: .bold))
+                .font(.footnote.weight(.bold))
         }
         .padding(.horizontal, Spacing.xl)
         .padding(.vertical, Spacing.sm)
@@ -389,7 +390,7 @@ struct PlayerView: View {
 
     private func toolbarOrigin(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize, btnSize: CGFloat, gap: CGFloat, count: CGFloat) -> CGPoint {
         let totalW = count * btnSize + (count - 1) * gap
-        if isPortrait && gameRect.height > 0 {
+        if isPortrait && gameRect.height > 0 && !useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height) {
             let x = geoSize.width - safeArea.trailing - kToolbarGap - totalW / 2
             let y = gameRect.origin.y + gameRect.height + kToolbarGap + btnSize / 2
             return CGPoint(x: x, y: y)
@@ -402,10 +403,10 @@ struct PlayerView: View {
         }
     }
 
-    private func debugOverlayPosition(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets) -> CGPoint {
+    private func debugOverlayPosition(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat) -> CGPoint {
         let halfW = AppSize.debugOverlayWidth / 2
         let halfH = AppSize.debugOverlayHeight / 2
-        if isPortrait && gameRect.height > 0 {
+        if isPortrait && gameRect.height > 0 && !useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoHeight) {
             return CGPoint(x: safeArea.leading + kToolbarEdgePad + halfW, y: gameRect.origin.y + gameRect.height + kToolbarGap + halfH)
         } else {
             let leftInset = max(safeArea.leading, kMinLandscapeInset)
@@ -424,7 +425,7 @@ struct PlayerView: View {
         safeArea: EdgeInsets,
         geoSize: CGSize
     ) -> CGSize {
-        let anchor = debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea)
+        let anchor = debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height)
         let halfW = AppSize.debugOverlayWidth / 2
         let halfH = AppSize.debugOverlayHeight / 2
         let minX = safeArea.leading + halfW
@@ -441,8 +442,21 @@ struct PlayerView: View {
                       height: clampedY - anchor.y - base.height)
     }
 
-    private func toolbarBottomY(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat) -> CGFloat {
-        if isPortrait && gameRect.height > 0 {
+    /// Minimum vertical space below the game rect required to place the
+    /// toolbar + controls in the dedicated zone below the game. When the
+    /// game fills most of the screen (e.g. fixedAspectRatio off) there
+    /// isn't enough room, so we fall back to overlay mode (same as
+    /// landscape: toolbar at top, controls over the game).
+    private static let kMinControlsZoneHeight: CGFloat = 120
+
+    private func useOverlayLayout(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat) -> Bool {
+        guard isPortrait, gameRect.height > 0 else { return false }
+        let spaceBelow = geoHeight - (gameRect.origin.y + gameRect.height) - safeArea.bottom
+        return spaceBelow < Self.kMinControlsZoneHeight
+    }
+
+    private func toolbarBottomY(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat, geoHeight: CGFloat) -> CGFloat {
+        if isPortrait && gameRect.height > 0 && !useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoHeight) {
             return gameRect.origin.y + gameRect.height + kToolbarGap + btnSize + kToolbarEdgePad
         } else {
             let topInset = max(safeArea.top, kMinLandscapeInset)
@@ -506,7 +520,7 @@ struct PlayerView: View {
 
 
     private func toggleEditMode() {
-        withAnimation(.spring(duration: Motion.durationFast, bounce: 0)) {
+        withAnimation(Motion.snappy) {
             editMode.toggle()
         }
         if keyboardMode {
@@ -535,7 +549,7 @@ struct PlayerView: View {
     private func resetToolbarIdleTimer() {
         toolbarIdleTask?.cancel()
         if toolbarOpacity < 1 {
-            withAnimation(.spring(duration: Motion.durationFast, bounce: 0)) {
+            withAnimation(Motion.snappy) {
                 toolbarOpacity = 1.0
             }
         }
@@ -543,7 +557,7 @@ struct PlayerView: View {
             try? await Task.sleep(for: .seconds(kToolbarIdleDelay))
             guard !Task.isCancelled else { return }
             if !editMode && !controlsHidden {
-                withAnimation(.spring(duration: Motion.durationSlow, bounce: 0)) {
+                withAnimation(Motion.slow) {
                     toolbarOpacity = 0.5
                 }
             }
@@ -552,7 +566,7 @@ struct PlayerView: View {
 
     private func startSnapshotFade() {
         resetToolbarIdleTimer()
-        withAnimation(.spring(duration: Motion.durationNormal, bounce: 0)) {
+        withAnimation(Motion.standard) {
             snapshotOpacity = 0
             controlsVisible = true
         } completion: {
