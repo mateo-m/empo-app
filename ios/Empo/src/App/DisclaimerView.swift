@@ -48,17 +48,16 @@ struct DisclaimerView: View {
         .scaleEffect(entered ? 1 : 0.97)
         .opacity(entered ? 1 : 0)
         .onAppear {
-            withAnimation(.spring(duration: 0.35, bounce: 0)) {
+            withAnimation(Motion.gentle) {
                 entered = true
             }
         }
     }
 }
 
-/// White pill button over the orange splash background. Matches
-/// the existing "filled capsule" pattern used elsewhere but inverted
-/// (white surface, brand-colored text) for strong contrast against
-/// the orange pixel-dither splash.
+/// White capsule button for the orange splash background.
+/// Contrasts the brand-colored backdrop with white surface and
+/// brand-colored text.
 private struct DisclaimerButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
