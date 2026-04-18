@@ -67,26 +67,65 @@ static std::atomic<float> s_vpBoundsA{1};
 // Input bridge: cached SDL window ID for event injection.
 static std::atomic<uint32_t> s_sdlWindowID{0};
 
+// Generic holder for a callback + userdata pair. Prior code split these
+// across `std::atomic<Fn>` + bare `void *`: a setter wrote userdata
+// (non-atomic) then the pointer (release), and a reader could still
+// observe an old pointer with the new userdata, or the compiler could
+// reorder around the non-atomic write on teardown. Packing both into a
+// single shared_ptr makes set and fire see a consistent tuple.
+template <typename Fn>
+struct BridgeCallback {
+    struct Slot {
+        Fn fn;
+        void *userdata;
+    };
+
+    // shared_ptr<const Slot> so the setter can CAS a new slot while an
+    // in-flight caller still holds a reference to the old one.
+    std::shared_ptr<const Slot> slot;
+    std::mutex slotMutex;
+
+    void set(Fn fn, void *userdata) noexcept {
+        auto next = std::make_shared<const Slot>(Slot{fn, userdata});
+        std::lock_guard<std::mutex> lock(slotMutex);
+        slot = next;
+    }
+
+    // Snapshot the current slot and hand it to the caller. The caller
+    // holds a strong ref so even a concurrent set() can't pull the
+    // slot out from under them.
+    std::shared_ptr<const Slot> snapshot() noexcept {
+        std::lock_guard<std::mutex> lock(slotMutex);
+        return slot;
+    }
+
+    // Convenience: load + fire in one go. Args are forwarded straight
+    // to the stored function pointer; userdata is appended.
+    template <typename... Args>
+    void fire(Args&&... args) noexcept {
+        if (auto s = snapshot(); s && s->fn) {
+            s->fn(std::forward<Args>(args)..., s->userdata);
+        }
+    }
+
+    void clear() noexcept {
+        std::lock_guard<std::mutex> lock(slotMutex);
+        slot.reset();
+    }
+};
+
 // Key event callback: engine -> UI notification for hardware key events.
-// Userdata is always written before the callback pointer (release) so
-// the reader (acquire on the pointer) sees both consistently.
-static std::atomic<mkxp_KeyEventCallback> s_keyEventCb{nullptr};
-static void *s_keyEventUserdata = nullptr;
+static BridgeCallback<mkxp_KeyEventCallback> s_keyEventCb;
 static bool s_keyWatcherInstalled = false;
 
 // Lifecycle callbacks: engine -> UI notifications for state changes.
-// Same write-userdata-then-pointer contract as above.
-static std::atomic<mkxp_EngineTerminatedCallback> s_engineTerminatedCb{nullptr};
-static void *s_engineTerminatedUserdata = nullptr;
-
-static std::atomic<mkxp_GameRectChangedCallback> s_gameRectChangedCb{nullptr};
-static void *s_gameRectChangedUserdata = nullptr;
+static BridgeCallback<mkxp_EngineTerminatedCallback> s_engineTerminatedCb;
+static BridgeCallback<mkxp_GameRectChangedCallback> s_gameRectChangedCb;
 
 // Error message routing: engine -> UI.
 static std::mutex s_errorMsgMutex;
 static std::string s_errorMessage;
-static std::atomic<mkxp_ErrorMessageCallback> s_errorMsgCb{nullptr};
-static void *s_errorMsgUserdata = nullptr;
+static BridgeCallback<mkxp_ErrorMessageCallback> s_errorMsgCb;
 
 // Pause / Resume state.
 static std::atomic<bool> s_pauseRequested{false};
@@ -101,16 +140,13 @@ static int s_snapshotWidth = 0;
 static int s_snapshotHeight = 0;
 
 // Pause/resume callbacks.
-static std::atomic<mkxp_PausedCallback> s_pausedCb{nullptr};
-static void *s_pausedUserdata = nullptr;
-static std::atomic<mkxp_ResumedCallback> s_resumedCb{nullptr};
-static void *s_resumedUserdata = nullptr;
+static BridgeCallback<mkxp_PausedCallback> s_pausedCb;
+static BridgeCallback<mkxp_ResumedCallback> s_resumedCb;
 
 // Frame-rendered-after-resume: one-shot signal so the UI knows
 // the live SDL surface is visible and the snapshot can fade out.
 static std::atomic<bool> s_needsFrameRenderedSignal{false};
-static std::atomic<mkxp_FrameRenderedCallback> s_frameRenderedCb{nullptr};
-static void *s_frameRenderedUserdata = nullptr;
+static BridgeCallback<mkxp_FrameRenderedCallback> s_frameRenderedCb;
 
 extern "C" {
 
@@ -188,9 +224,7 @@ void mkxp_setEngineTerminated(void) {
     // Clear pathSet so the next mkxp_waitForGamePath() actually blocks
     // until the Library UI provides a new game selection.
     s_pathSet.store(false, std::memory_order_release);
-    if (auto cb = s_engineTerminatedCb.load(std::memory_order_acquire)) {
-        cb(s_engineTerminatedUserdata);
-    }
+    s_engineTerminatedCb.fire();
 }
 
 void mkxp_resetBridgeState(void) {
@@ -249,9 +283,8 @@ void mkxp_setGameRect(float x, float y, float w, float h) {
     s_gameRectY.store(y, std::memory_order_relaxed);
     s_gameRectW.store(w, std::memory_order_relaxed);
     s_gameRectH.store(h, std::memory_order_relaxed);
-    auto rectCb = s_gameRectChangedCb.load(std::memory_order_acquire);
-    if (rectCb && (x != oldX || y != oldY || w != oldW || h != oldH)) {
-        rectCb(x, y, w, h, s_gameRectChangedUserdata);
+    if (x != oldX || y != oldY || w != oldW || h != oldH) {
+        s_gameRectChangedCb.fire(x, y, w, h);
     }
 }
 
@@ -309,16 +342,13 @@ static int keyEventWatcherFn(void * /*userdata*/, SDL_Event *event) {
     if (event->type == SDL_KEYDOWN || event->type == SDL_KEYUP) {
         int pressed = (event->type == SDL_KEYDOWN) ? 1 : 0;
         int sc = (int)event->key.keysym.scancode;
-        if (auto cb = s_keyEventCb.load(std::memory_order_acquire)) {
-            cb(sc, pressed, s_keyEventUserdata);
-        }
+        s_keyEventCb.fire(sc, pressed);
     }
     return 1; // keep processing the event
 }
 
 void mkxp_setKeyEventCallback(mkxp_KeyEventCallback cb, void *userdata) {
-    s_keyEventUserdata = userdata;
-    s_keyEventCb.store(cb, std::memory_order_release);
+    s_keyEventCb.set(cb, userdata);
     if (!s_keyWatcherInstalled) {
         SDL_AddEventWatch(keyEventWatcherFn, NULL);
         s_keyWatcherInstalled = true;
@@ -328,13 +358,11 @@ void mkxp_setKeyEventCallback(mkxp_KeyEventCallback cb, void *userdata) {
 // Lifecycle callbacks
 
 void mkxp_setEngineTerminatedCallback(mkxp_EngineTerminatedCallback cb, void *userdata) {
-    s_engineTerminatedUserdata = userdata;
-    s_engineTerminatedCb.store(cb, std::memory_order_release);
+    s_engineTerminatedCb.set(cb, userdata);
 }
 
 void mkxp_setGameRectChangedCallback(mkxp_GameRectChangedCallback cb, void *userdata) {
-    s_gameRectChangedUserdata = userdata;
-    s_gameRectChangedCb.store(cb, std::memory_order_release);
+    s_gameRectChangedCb.set(cb, userdata);
 }
 
 // Error message routing
@@ -344,15 +372,13 @@ void mkxp_setErrorMessage(const char *message) {
         std::lock_guard<std::mutex> lock(s_errorMsgMutex);
         s_errorMessage = message ? message : "";
     }
-    auto errCb = s_errorMsgCb.load(std::memory_order_acquire);
-    if (errCb && message && message[0]) {
-        errCb(message, s_errorMsgUserdata);
+    if (message && message[0]) {
+        s_errorMsgCb.fire(message);
     }
 }
 
 void mkxp_setErrorMessageCallback(mkxp_ErrorMessageCallback cb, void *userdata) {
-    s_errorMsgUserdata = userdata;
-    s_errorMsgCb.store(cb, std::memory_order_release);
+    s_errorMsgCb.set(cb, userdata);
 }
 
 // Pause / Resume
@@ -387,8 +413,7 @@ void mkxp_checkPause(void) {
 
     s_paused.store(true, std::memory_order_release);
 
-    if (auto cb = s_pausedCb.load(std::memory_order_acquire))
-        cb(s_pausedUserdata);
+    s_pausedCb.fire();
 
     /* Block until resume is requested. */
     std::unique_lock<std::mutex> lock(s_pauseMutex);
@@ -404,8 +429,7 @@ void mkxp_checkPause(void) {
     /* On terminate the sources stay paused (silent) until
      * SharedState::finiInstance() deletes them. */
 
-    if (auto cb = s_resumedCb.load(std::memory_order_acquire))
-        cb(s_resumedUserdata);
+    s_resumedCb.fire();
 }
 
 bool mkxp_isPauseRequested(void) {
@@ -433,24 +457,20 @@ const unsigned char *mkxp_getSnapshotRGBA(int *width, int *height) {
 }
 
 void mkxp_setPausedCallback(mkxp_PausedCallback cb, void *userdata) {
-    s_pausedUserdata = userdata;
-    s_pausedCb.store(cb, std::memory_order_release);
+    s_pausedCb.set(cb, userdata);
 }
 
 void mkxp_setResumedCallback(mkxp_ResumedCallback cb, void *userdata) {
-    s_resumedUserdata = userdata;
-    s_resumedCb.store(cb, std::memory_order_release);
+    s_resumedCb.set(cb, userdata);
 }
 
 void mkxp_setFrameRenderedCallback(mkxp_FrameRenderedCallback cb, void *userdata) {
-    s_frameRenderedUserdata = userdata;
-    s_frameRenderedCb.store(cb, std::memory_order_release);
+    s_frameRenderedCb.set(cb, userdata);
 }
 
 void mkxp_signalFrameRendered(void) {
     if (s_needsFrameRenderedSignal.exchange(false, std::memory_order_acq_rel)) {
-        if (auto cb = s_frameRenderedCb.load(std::memory_order_acquire))
-            cb(s_frameRenderedUserdata);
+        s_frameRenderedCb.fire();
     }
 }
 
@@ -517,12 +537,12 @@ MKXPRenderer mkxp_getSelectedRenderer(void) {
 }
 
 #if TARGET_OS_IPHONE
-extern MKXPRenderer s_currentRenderer;
+extern std::atomic<MKXPRenderer> s_currentRenderer;
 #endif
 
 MKXPRenderer mkxp_getCurrentRenderer(void) {
 #if TARGET_OS_IPHONE
-    return s_currentRenderer;
+    return s_currentRenderer.load(std::memory_order_acquire);
 #else
     return MKXP_RENDERER_OPENGL_ES;
 #endif

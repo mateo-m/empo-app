@@ -30,9 +30,10 @@
 #include <SDL_rect.h>
 
 #if TARGET_OS_IPHONE
+#include <atomic>
 extern "C" int mkxp_getMetalMaxTextureSize(void);
 #include "ios_bridge.h"
-extern MKXPRenderer s_currentRenderer;
+extern std::atomic<MKXPRenderer> s_currentRenderer;
 #endif
 
 static void applyBool(GLenum state, bool mode) {
