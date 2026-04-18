@@ -585,10 +585,14 @@ void mkxp_debugLog(const char *tag, const char *source, const char *message) {
     std::lock_guard<std::mutex> lock(s_debugLogMutex);
     if (!s_debugLogFile) return;
     fprintf(s_debugLogFile, "[%s] (%s) %s\n", tag, source, message);
-    // No fflush: let stdio's buffer coalesce writes. The file is flushed
-    // when closed in mkxp_setDebugLogPath or at process exit. Flushing
-    // on every log line forced a sync write to the sandboxed FS and
-    // showed up as a rotation-hitch during profiling.
+    // Flush immediately: the RGSS thread's log writes otherwise sit in
+    // stdio's per-FILE buffer until the file closes on the next
+    // session's setDebugLogPath. If the engine stalls or the user
+    // dismisses an error alert and stays in the same session, those
+    // buffered lines are invisible - which made diagnosing the
+    // "Unable to load scripts" issue on-device impossible because
+    // the diagnostic lines never reached disk.
+    fflush(s_debugLogFile);
 }
 
 } // extern "C"
