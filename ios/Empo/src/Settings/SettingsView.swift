@@ -3,8 +3,14 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var settings = AppSettings.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var featureToEnable: ExperimentalFeature?
-    @State private var pendingRenderer: RendererOption?
+    @State private var confirmation: ExperimentalConfirmation?
+
+    private struct ExperimentalConfirmation: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+        let onConfirm: () -> Void
+    }
 
     var body: some View {
         NavigationStack {
@@ -17,7 +23,7 @@ struct SettingsView: View {
                         Text(AppInfo.name)
                             .font(.title3)
                             .fontWeight(.bold)
-                        Text("\(GitInfo.commit)\(GitInfo.dirty ? " (dirty)" : "")")
+                        Text("v\(AppInfo.version) (\(AppInfo.build)) - \(GitInfo.commit)\(GitInfo.dirty ? " (dirty)" : "")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -87,7 +93,11 @@ struct SettingsView: View {
                             get: { settings.renderer },
                             set: { newValue in
                                 if newValue == .angle && settings.renderer != .angle {
-                                    pendingRenderer = newValue
+                                    confirmation = .init(
+                                        title: "ANGLE",
+                                        message: "ANGLE translates OpenGL calls to Metal and may cause rendering issues. The change will apply on the next game launch.",
+                                        onConfirm: { settings.renderer = newValue }
+                                    )
                                 } else {
                                     settings.renderer = newValue
                                 }
@@ -158,7 +168,7 @@ struct SettingsView: View {
                     )
 
                     if settings.debugLogs {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
                             Stepper("Keep last \(settings.maxLogFiles) logs", value: $settings.maxLogFiles, in: 5...100, step: 5)
                             Text("Older logs get cleaned up automatically on launch.")
                                 .font(.footnote)
@@ -172,46 +182,55 @@ struct SettingsView: View {
                     Text("These options are intended for debugging and troubleshooting.")
                 }
 
-            }
-            // Experimental-feature opt-in sheet. Both toggle-driven
-            // features AND the ANGLE renderer switch funnel through the
-            // same presentation so the two confirmation flows feel
-            // identical. Sheets sit better than alerts for this kind
-            // of "take a moment to read" moment, and they don't
-            // anchor to any specific row the way a popover would.
-            .sheet(
-                isPresented: Binding(
-                    get: { featureToEnable != nil },
-                    set: { if !$0 { featureToEnable = nil } }
-                )
-            ) {
-                if let feature = featureToEnable {
-                    ExperimentalConfirmSheet(
-                        title: feature.label,
-                        message: feature.description,
-                        onCancel: { featureToEnable = nil },
-                        onConfirm: {
-                            settings.setEnabled(feature, true)
-                            featureToEnable = nil
+                Section {
+                    NavigationLink {
+                        LicensesView()
+                    } label: {
+                        Label("Open-source licenses", systemImage: "doc.text")
+                    }
+
+                    Link(destination: URL(string: "https://github.com/mateo-m/empo-app/wiki/privacy-policy")!) {
+                        Label {
+                            HStack {
+                                Text("Privacy Policy")
+                                Spacer()
+                                Image(systemName: "arrow.up.forward")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "hand.raised")
                         }
-                    )
+                    }
+                    .tint(.primary)
+
+                    Link(destination: URL(string: "https://github.com/mateo-m/empo-app/issues")!) {
+                        Label {
+                            HStack {
+                                Text("Report an issue")
+                                Spacer()
+                                Image(systemName: "arrow.up.forward")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "ladybug")
+                        }
+                    }
+                    .tint(.primary)
+                } header: {
+                    Text("About")
                 }
+
             }
-            .sheet(
-                isPresented: Binding(
-                    get: { pendingRenderer != nil },
-                    set: { if !$0 { pendingRenderer = nil } }
-                )
-            ) {
+            .sheet(item: $confirmation) { item in
                 ExperimentalConfirmSheet(
-                    title: "ANGLE",
-                    message: "ANGLE translates OpenGL calls to Metal and may cause rendering issues. The change will apply on the next game launch.",
-                    onCancel: { pendingRenderer = nil },
+                    title: item.title,
+                    message: item.message,
+                    onCancel: { confirmation = nil },
                     onConfirm: {
-                        if let renderer = pendingRenderer {
-                            settings.renderer = renderer
-                        }
-                        pendingRenderer = nil
+                        item.onConfirm()
+                        confirmation = nil
                     }
                 )
             }
@@ -231,7 +250,11 @@ struct SettingsView: View {
             get: { settings.isEnabled(feature) },
             set: { newValue in
                 if newValue {
-                    featureToEnable = feature
+                    confirmation = .init(
+                        title: feature.label,
+                        message: feature.description,
+                        onConfirm: { settings.setEnabled(feature, true) }
+                    )
                 } else {
                     settings.setEnabled(feature, false)
                 }
@@ -251,13 +274,13 @@ private struct ViewportBoundsColorPicker: View {
             }
 
             Section {
-                HStack(spacing: 20) {
+                HStack(spacing: Spacing._2xl) {
                     Spacer()
                     DevicePreview(color: color, isLandscape: false)
                     DevicePreview(color: color, isLandscape: true)
                     Spacer()
                 }
-                .padding(.vertical, 16)
+                .padding(.vertical, Spacing.xl)
                 .listRowBackground(Color.clear)
             } header: {
                 Text("Preview")

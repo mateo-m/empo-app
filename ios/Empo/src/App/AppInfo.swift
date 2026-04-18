@@ -20,4 +20,14 @@ enum AppInfo {
         }
         return "App"
     }()
+
+    /// Marketing version string (e.g. "1.0").
+    static let version: String = {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }()
+
+    /// Build number (e.g. "1").
+    static let build: String = {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+    }()
 }
