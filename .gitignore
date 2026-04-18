@@ -33,3 +33,6 @@ TODO.md
 # Python cache (agent skill scripts)
 __pycache__/
 *.pyc
+
+# Per-contributor code signing config (see Signing.xcconfig.example)
+ios/mkxp-ios/Signing.xcconfig
