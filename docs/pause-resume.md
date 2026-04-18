@@ -66,7 +66,7 @@ mkxp_setSnapshot(pixels.data(), w, h);
 
 We read from the internal FBO (the engine's render target), not FBO 0 (the screen), because iOS gives undefined content for the on-screen framebuffer after `swapBuffers`. The engine's 2D projection maps Y top-to-bottom, so the pixel data is already in the correct orientation — no vertical flip needed.
 
-**Storage (bridge, `ios_bridge.cpp`):**
+**Storage (bridge, `app_bridge.cpp`):**
 
 `mkxp_setSnapshot()` copies the RGBA data into a `std::vector<unsigned char>`. `mkxp_getSnapshotRGBA()` returns a pointer to the buffer. The data is valid until the next pause or `mkxp_resetBridgeState()`.
 
@@ -115,8 +115,8 @@ The snapshot appears in both views at the same `engineState.gameRect` position, 
 | File | Role |
 |------|------|
 | `mkxp-z/src/display/graphics.cpp` | `GraphicsPrivate::checkPause()` — snapshot capture and pause delegation |
-| `mkxp-z/src/ios_bridge.cpp` | Condvar, audio pause/resume, snapshot storage |
-| `mkxp-z/src/ios_bridge.h` | Bridge API declarations |
+| `mkxp-z/src/app_bridge.cpp` | Condvar, audio pause/resume, snapshot storage |
+| `mkxp-z/src/app_bridge.h` | Bridge API declarations |
 | `ios/Empo/src/App/PauseManager.swift` | User-initiated pause/resume state, `requestPause()`, `resume()`, snapshot ownership |
 | `ios/Empo/src/App/AppState.swift` | `returnToLibrary()`, paused callback registration, snapshot conversion |
 | `ios/Empo/src/App/EngineState.swift` | Background pause/resume (`requestBackgroundPause()`, `resumeFromBackground()`) |

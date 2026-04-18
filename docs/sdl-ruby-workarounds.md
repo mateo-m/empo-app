@@ -38,10 +38,10 @@ SDL_GL_MakeCurrent(persistWin, NULL);
 On iOS, SDL creates a non-zero FBO backed by `CAEAGLLayer`. This ID is captured **once** right after context creation and reused forever. Re-querying `GL_FRAMEBUFFER_BINDING` on subsequent sessions would return 0 (because `SharedState::finiInstance` deleted all game FBOs), which is wrong.
 
 ```cpp
-static GLuint s_iosScreenFBO = 0;
+static GLuint s_screenFBO = 0;
 // Captured once:
 glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
-s_iosScreenFBO = static_cast<GLuint>(fbo);
+s_screenFBO = static_cast<GLuint>(fbo);
 ```
 
 ---
@@ -102,7 +102,7 @@ SDL_Thread *rgssThread = SDL_CreateThreadWithStackSize(
 
 ## 5. Run Loop Pumping While Waiting
 
-**Problem (`ios_bridge.cpp`):** `SDL_main` runs on the main thread on iOS. When the engine is waiting for the user to select a game from the Library UI, UIKit must still be able to render and handle events.
+**Problem (`app_bridge.cpp`):** `SDL_main` runs on the main thread on iOS. When the engine is waiting for the user to select a game from the Library UI, UIKit must still be able to render and handle events.
 
 **Solution:** The wait loop pumps `CFRunLoop` manually:
 
@@ -118,9 +118,9 @@ This keeps UIKit alive (rendering the SwiftUI Library) while the C++ engine bloc
 
 ## 6. Callback-Based State Notification
 
-**Problem:** The SwiftUI Library UI and the C++ engine communicate through a C bridge (`ios_bridge.h`). The UI needs to know when the engine changes state (first frame rendered, viewport rect changed, engine terminated).
+**Problem:** The SwiftUI Library UI and the C++ engine communicate through a C bridge (`app_bridge.h`). The UI needs to know when the engine changes state (first frame rendered, viewport rect changed, engine terminated).
 
-**Solution (`AppState.swift`, `ios_bridge.cpp`):** The bridge provides callback registration functions that the UI registers once at init. Callbacks fire on the engine thread; Swift dispatches to the main thread for UI updates.
+**Solution (`AppState.swift`, `app_bridge.cpp`):** The bridge provides callback registration functions that the UI registers once at init. Callbacks fire on the engine thread; Swift dispatches to the main thread for UI updates.
 
 ```swift
 // Registered once in AppState.init()

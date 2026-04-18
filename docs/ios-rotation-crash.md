@@ -96,7 +96,7 @@ incorrect rendering during rotation, which is invisible in practice.
    zero-dimension guard triggers, `winSize` is restored to its previous
    value instead of keeping the bad value from `windowSizeMsg.poll()`.
 
-2. **Cached `mkxp_getScreenScale()`** (`systemImplIOS.mm`): Screen
+2. **Cached `mkxp_getScreenScale()`** (`systemImpl.mm`): Screen
    scale is a device constant. Caching it eliminates two
    `dispatch_sync(main_queue)` round-trips per resize.
 
