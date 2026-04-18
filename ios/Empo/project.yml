@@ -63,6 +63,33 @@ targets:
     type: application
     platform: iOS
     preBuildScripts:
+      - name: Assemble Assets.bundle
+        script: |
+          ENGINE="${PROJECT_DIR}/../../mkxp-z-apple-mobile"
+          BUNDLE="${PROJECT_DIR}/Assets.bundle"
+
+          # Shaders
+          mkdir -p "$BUNDLE/Shaders"
+          cp "$ENGINE"/shader/*.frag "$BUNDLE/Shaders/" 2>/dev/null || true
+          cp "$ENGINE"/shader/*.vert "$BUNDLE/Shaders/" 2>/dev/null || true
+          cp "$ENGINE"/shader/*.h    "$BUNDLE/Shaders/" 2>/dev/null || true
+
+          # Fonts
+          mkdir -p "$BUNDLE/Fonts"
+          cp "$ENGINE"/assets/liberation.ttf   "$BUNDLE/Fonts/"
+          cp "$ENGINE"/assets/wqymicrohei.ttf  "$BUNDLE/Fonts/"
+
+          # Loose assets
+          cp "$ENGINE"/assets/gamecontrollerdb.txt "$BUNDLE/"
+          cp "$ENGINE"/assets/icon.png             "$BUNDLE/"
+
+          # Preload scripts
+          mkdir -p "$BUNDLE/Preload"
+          cp "$ENGINE"/scripts/preload/*.rb "$BUNDLE/Preload/"
+
+          # Postload scripts
+          mkdir -p "$BUNDLE/Postload"
+          cp "$ENGINE"/scripts/postload/*.rb "$BUNDLE/Postload/"
       - name: Generate Git Info
         script: |
           COMMIT=$(git -C "${PROJECT_DIR}/../.." rev-parse --short HEAD 2>/dev/null || echo "unknown")
