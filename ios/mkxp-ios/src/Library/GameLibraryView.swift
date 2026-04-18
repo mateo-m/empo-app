@@ -33,13 +33,22 @@ struct GameLibraryView: View {
     @State private var showSortSheet = false
     @State private var gameSizes: [String: Int64] = [:]
 
-    private var showEmpty: Bool {
-        library.games.isEmpty
+    // Derived filter/sort pipeline cached here so it only recomputes
+    // when one of its inputs actually changes. Recomputing on every
+    // body tick was wasteful: both the grid and list rendered it once
+    // each, then the two `.animation(value:)` modifiers mapped it to
+    // [String], so a single render rebuilt the list 4x.
+    @State private var filteredGames: [GameEntry] = []
+
+    private func recomputeFilteredGames() {
+        let base = searchText.isEmpty
+            ? library.games
+            : library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+        filteredGames = sortGames(base)
     }
 
-    private var filteredGames: [GameEntry] {
-        let base = searchText.isEmpty ? library.games : library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-        return sortGames(base)
+    private var showEmpty: Bool {
+        library.games.isEmpty
     }
 
     private var recentlyPlayed: GameEntry? {
@@ -55,8 +64,13 @@ struct GameLibraryView: View {
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
-    private var columns: [GridItem] {
-        let count = verticalSizeClass == .compact ? 5 : 3
+    // Cached grid columns, rebuilt only when the size class changes.
+    // Previously this was a computed property that allocated a fresh
+    // array on every body tick.
+    @State private var columns: [GridItem] = Self.makeColumns(compact: false)
+
+    private static func makeColumns(compact: Bool) -> [GridItem] {
+        let count = compact ? 5 : 3
         return Array(repeating: GridItem(.flexible(), spacing: Spacing.lg), count: count)
     }
 
@@ -210,13 +224,32 @@ struct GameLibraryView: View {
                     refreshGameSizes()
                 }
             }
-            .onChange(of: settings.librarySortOption) { _, newSort in
-                if newSort == .largestSize || newSort == .smallestSize {
-                    refreshGameSizes()
+            .modifier(DerivedStateBinder(
+                librarySortOption: settings.librarySortOption,
+                searchText: searchText,
+                games: library.games,
+                gameSizes: gameSizes,
+                verticalSizeClass: verticalSizeClass,
+                onSortChanged: { newSort in
+                    if newSort == .largestSize || newSort == .smallestSize {
+                        refreshGameSizes()
+                    }
+                    recomputeFilteredGames()
+                },
+                onSearchOrGamesChanged: recomputeFilteredGames,
+                onGameSizesChanged: {
+                    if settings.librarySortOption == .largestSize
+                        || settings.librarySortOption == .smallestSize {
+                        recomputeFilteredGames()
+                    }
+                },
+                onSizeClassChanged: { newClass in
+                    columns = Self.makeColumns(compact: newClass == .compact)
                 }
-            }
+            ))
             .task {
                 refreshGameSizes()
+                recomputeFilteredGames()
             }
         }
     }
@@ -329,7 +362,7 @@ struct GameLibraryView: View {
         .padding(.horizontal)
         .padding(.top, Spacing.lg)
         .padding(.bottom)
-        .animation(Motion.standard, value: filteredGames.map(\.id))
+        .animation(Motion.standard, value: filteredGames)
     }
 
 
@@ -365,12 +398,21 @@ struct GameLibraryView: View {
                     )
                 }
                 .overlay {
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.6)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                    Rectangle()
+                        .fill(LinearGradient(
+                            colors: [.clear, .black.opacity(0.6)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ))
                 }
+                // Flatten the artwork + gradient + text labels into a
+                // single render pass before the clip shape. Without
+                // this, rotation resizes each overlay layer with its
+                // own implicit animation, so the gradient (and its
+                // underlying Rectangle frame) visibly lags behind the
+                // artwork which is a direct ImageView resizing in
+                // lockstep with the card frame.
+                .compositingGroup()
                 .overlay(alignment: .bottomLeading) {
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text("Continue playing")
@@ -447,7 +489,7 @@ struct GameLibraryView: View {
         }
         .padding(.horizontal)
         .padding(.top, Spacing.lg)
-        .animation(Motion.standard, value: filteredGames.map(\.id))
+        .animation(Motion.standard, value: filteredGames)
     }
 
     @ViewBuilder
@@ -598,5 +640,31 @@ struct GameLibraryView: View {
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .tint(.brand)
+    }
+}
+
+// Off-body modifier that owns the reactive wiring for GameLibraryView's
+// cached derived state. Keeping these .onChange calls inline inflated
+// the main body past Swift's type-checker budget, so we encapsulate
+// them here where each input/callback is explicit and cheap to
+// type-check independently.
+private struct DerivedStateBinder: ViewModifier {
+    let librarySortOption: LibrarySortOption
+    let searchText: String
+    let games: [GameEntry]
+    let gameSizes: [String: Int64]
+    let verticalSizeClass: UserInterfaceSizeClass?
+    let onSortChanged: (LibrarySortOption) -> Void
+    let onSearchOrGamesChanged: () -> Void
+    let onGameSizesChanged: () -> Void
+    let onSizeClassChanged: (UserInterfaceSizeClass?) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: librarySortOption) { _, new in onSortChanged(new) }
+            .onChange(of: searchText) { _, _ in onSearchOrGamesChanged() }
+            .onChange(of: games) { _, _ in onSearchOrGamesChanged() }
+            .onChange(of: gameSizes) { _, _ in onGameSizesChanged() }
+            .onChange(of: verticalSizeClass, initial: true) { _, new in onSizeClassChanged(new) }
     }
 }
