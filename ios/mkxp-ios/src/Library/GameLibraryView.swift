@@ -33,18 +33,19 @@ struct GameLibraryView: View {
     @State private var showSortSheet = false
     @State private var gameSizes: [String: Int64] = [:]
 
-    // Derived filter/sort pipeline cached here so it only recomputes
-    // when one of its inputs actually changes. Recomputing on every
-    // body tick was wasteful: both the grid and list rendered it once
-    // each, then the two `.animation(value:)` modifiers mapped it to
-    // [String], so a single render rebuilt the list 4x.
-    @State private var filteredGames: [GameEntry] = []
-
-    private func recomputeFilteredGames() {
+    // Derived filter/sort pipeline. A previous attempt cached this in
+    // @State and re-derived via .onChange, but passing library.games
+    // through a ViewModifier broke the Observation dependency so stale
+    // entries stuck around after reload (an imported game stayed in
+    // the progress state forever). Keeping it computed means it
+    // tracks library.games directly. Filter + sort on 10s of entries
+    // is cheap; .map(\.id) in `.animation(value:)` was the actual
+    // hot-loop offender and we've dropped it.
+    private var filteredGames: [GameEntry] {
         let base = searchText.isEmpty
             ? library.games
             : library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-        filteredGames = sortGames(base)
+        return sortGames(base)
     }
 
     private var showEmpty: Bool {
@@ -224,32 +225,16 @@ struct GameLibraryView: View {
                     refreshGameSizes()
                 }
             }
-            .modifier(DerivedStateBinder(
-                librarySortOption: settings.librarySortOption,
-                searchText: searchText,
-                games: library.games,
-                gameSizes: gameSizes,
-                verticalSizeClass: verticalSizeClass,
-                onSortChanged: { newSort in
-                    if newSort == .largestSize || newSort == .smallestSize {
-                        refreshGameSizes()
-                    }
-                    recomputeFilteredGames()
-                },
-                onSearchOrGamesChanged: recomputeFilteredGames,
-                onGameSizesChanged: {
-                    if settings.librarySortOption == .largestSize
-                        || settings.librarySortOption == .smallestSize {
-                        recomputeFilteredGames()
-                    }
-                },
-                onSizeClassChanged: { newClass in
-                    columns = Self.makeColumns(compact: newClass == .compact)
+            .onChange(of: settings.librarySortOption) { _, newSort in
+                if newSort == .largestSize || newSort == .smallestSize {
+                    refreshGameSizes()
                 }
-            ))
+            }
+            .onChange(of: verticalSizeClass, initial: true) { _, newClass in
+                columns = Self.makeColumns(compact: newClass == .compact)
+            }
             .task {
                 refreshGameSizes()
-                recomputeFilteredGames()
             }
         }
     }
@@ -368,12 +353,18 @@ struct GameLibraryView: View {
 
     private func heroCard(for game: GameEntry) -> some View {
         let isPaused = PauseManager.shared.pausedGame?.id == game.id
-        return heroCardContent(for: game, isPaused: isPaused, aspectRatio: 2.2)
+        // In landscape the narrower vertical space means a 2.2:1 ratio
+        // hero card eats most of the screen and pushes the grid below
+        // the fold. Widen it in compact-height so the card stays
+        // visible but the grid also gets breathing room.
+        let ratio: CGFloat = verticalSizeClass == .compact ? 4.5 : 2.2
+        return heroCardContent(for: game, isPaused: isPaused, aspectRatio: ratio)
     }
 
     private func heroListRow(for game: GameEntry) -> some View {
         let isPaused = PauseManager.shared.pausedGame?.id == game.id
-        return heroCardContent(for: game, isPaused: isPaused, aspectRatio: 3.0)
+        let ratio: CGFloat = verticalSizeClass == .compact ? 5.0 : 3.0
+        return heroCardContent(for: game, isPaused: isPaused, aspectRatio: ratio)
     }
 
     private var librarySectionHeader: some View {
@@ -643,28 +634,4 @@ struct GameLibraryView: View {
     }
 }
 
-// Off-body modifier that owns the reactive wiring for GameLibraryView's
-// cached derived state. Keeping these .onChange calls inline inflated
-// the main body past Swift's type-checker budget, so we encapsulate
-// them here where each input/callback is explicit and cheap to
-// type-check independently.
-private struct DerivedStateBinder: ViewModifier {
-    let librarySortOption: LibrarySortOption
-    let searchText: String
-    let games: [GameEntry]
-    let gameSizes: [String: Int64]
-    let verticalSizeClass: UserInterfaceSizeClass?
-    let onSortChanged: (LibrarySortOption) -> Void
-    let onSearchOrGamesChanged: () -> Void
-    let onGameSizesChanged: () -> Void
-    let onSizeClassChanged: (UserInterfaceSizeClass?) -> Void
 
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: librarySortOption) { _, new in onSortChanged(new) }
-            .onChange(of: searchText) { _, _ in onSearchOrGamesChanged() }
-            .onChange(of: games) { _, _ in onSearchOrGamesChanged() }
-            .onChange(of: gameSizes) { _, _ in onGameSizesChanged() }
-            .onChange(of: verticalSizeClass, initial: true) { _, new in onSizeClassChanged(new) }
-    }
-}
