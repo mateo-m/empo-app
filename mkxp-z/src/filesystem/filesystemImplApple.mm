@@ -51,7 +51,21 @@ std::string filesystemImpl::getCurrentDirectory() {
 
 std::string filesystemImpl::normalizePath(const char *path, bool preferred, bool absolute) {
     @autoreleasepool {
-        NSString *nspath = [NSURL fileURLWithPath: PATHTONS(path)].URLByStandardizingPath.path;
+        // When caller wants a relative path and the input is already
+        // relative, skip the NSURL roundtrip entirely. Feeding a
+        // relative string like "Data/Scripts.rxdata" to
+        // `NSURL fileURLWithPath:` resolves it against "/" to produce
+        // "/Data/Scripts.rxdata", and the pwd-strip below then
+        // fails to find the cwd prefix (because there is none), so
+        // we were returning a bogus leading-slash path that PhysFS
+        // couldn't look up. Keep relative paths relative.
+        NSString *input = PATHTONS(path);
+        if (!absolute && ![input hasPrefix:@"/"]) {
+            NSString *normalized = [input stringByReplacingOccurrencesOfString:@"\\" withString:@"/"];
+            return std::string(NSTOPATH(normalized));
+        }
+
+        NSString *nspath = [NSURL fileURLWithPath:input].URLByStandardizingPath.path;
         NSString *pwd = [NSString stringWithFormat:@"%@/", NSFileManager.defaultManager.currentDirectoryPath];
         if (!absolute) {
             nspath = [nspath stringByReplacingOccurrencesOfString:pwd withString:@""];
