@@ -93,7 +93,12 @@ struct SettingsView: View {
                                 }
                             }
                         ),
-                        description: "OpenGL ES is Apple's built-in renderer. ANGLE translates GL calls to Metal for better future compatibility."
+                        description: "OpenGL ES is Apple's built-in renderer. ANGLE translates GL calls to Metal for better future compatibility.",
+                        // Show the BETA badge next to the picker's label
+                        // only when the user has selected a beta-flagged
+                        // renderer, rather than baking "(Beta)" into the
+                        // menu items. Keeps the picker entries terse.
+                        isExperimental: settings.renderer.isBeta
                     ) {
                         ForEach(RendererOption.allCases, id: \.self) { option in
                             Text(option.label).tag(option)
