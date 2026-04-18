@@ -127,21 +127,14 @@ struct GameLoadingView: View {
         }
     }
 
-    //
     // The SDL window can't participate in SwiftUI transitions, so we
     // use the pause snapshot as a static double placed at the exact
     // gameRect position. Once the hero animation finishes, AppState
     // flips to .playing and live SDL rendering takes over.
-
     @ViewBuilder
     private var resumeContent: some View {
         if let snapshot = pauseManager.pauseSnapshot {
-            let rect = engineState.gameRect
-            Image(uiImage: snapshot)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: rect.width, height: rect.height)
-                .position(x: rect.midX, y: rect.midY)
+            PauseSnapshotOverlay(snapshot: snapshot, rect: engineState.gameRect)
                 .ignoresSafeArea()
         }
     }
