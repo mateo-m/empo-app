@@ -59,6 +59,7 @@ struct GameLoadingView: View {
                     .progressViewStyle(.circular)
                     .tint(.white)
                     .scaleEffect(1.2)
+                    .accessibilityLabel("Loading game")
                     .opacity(spinnerVisible ? 1 : 0)
                     .offset(y: spinnerVisible ? 0 : 12)
             }
@@ -72,10 +73,10 @@ struct GameLoadingView: View {
         }
         .onAppear {
             appearedAt = .now
-            withAnimation(.spring(duration: 0.3, bounce: 0).delay(0.2)) {
+            withAnimation(Motion.standard.delay(0.2)) {
                 titleVisible = true
             }
-            withAnimation(.spring(duration: 0.3, bounce: 0).delay(0.28)) {
+            withAnimation(Motion.standard.delay(0.28)) {
                 spinnerVisible = true
             }
             withAnimation(.linear(duration: 20).repeatForever(autoreverses: true)) {
@@ -84,7 +85,7 @@ struct GameLoadingView: View {
         }
         .task {
             try? await Task.sleep(for: Self.cancelAppearDelay)
-            withAnimation(.spring(duration: 0.35, bounce: 0)) {
+            withAnimation(Motion.gentle) {
                 cancelVisible = true
             }
         }
@@ -93,7 +94,7 @@ struct GameLoadingView: View {
             // Slow zoom-in as a visual cue that the game is imminent.
             // Runs independently from the phase transition below so it
             // starts immediately and plays through the handoff.
-            withAnimation(.spring(duration: 0.8, bounce: 0)) {
+            withAnimation(.spring(duration: 0.8, bounce: 0.0)) {
                 readyZoom = true
             }
             let elapsed = appearedAt.map { ContinuousClock.now - $0 } ?? .seconds(1)

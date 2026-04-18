@@ -59,7 +59,7 @@ struct ExperimentalInfoSheet: View {
             Image(systemName: "circle.fill")
                 .font(.system(size: 5))
                 .foregroundStyle(.brand)
-                .padding(.top, 6)
+                .padding(.top, Spacing.sm)
             Text(text)
                 .fixedSize(horizontal: false, vertical: true)
         }

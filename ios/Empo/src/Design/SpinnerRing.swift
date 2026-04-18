@@ -52,6 +52,6 @@ struct SpinnerRing: View {
                     )
             }
         }
-        .animation(.spring(duration: 0.18, bounce: 0), value: progress)
+        .animation(Motion.snappy, value: progress)
     }
 }
