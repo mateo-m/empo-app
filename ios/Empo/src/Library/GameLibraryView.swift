@@ -32,6 +32,7 @@ struct GameLibraryView: View {
     @State private var emptyStateHeight: CGFloat = 0
     @State private var showSortSheet = false
     @State private var gameSizes: [String: Int64] = [:]
+    @State private var sizesTask: Task<Void, Never>?
 
     // Derived filter/sort pipeline. A previous attempt cached this in
     // @State and re-derived via .onChange, but passing library.games
@@ -329,6 +330,11 @@ struct GameLibraryView: View {
                     .transition(.viewModeSwitch)
             }
         }
+        .overlay {
+            if !searchText.isEmpty && filteredGames.isEmpty {
+                ContentUnavailableView.search(text: searchText)
+            }
+        }
     }
 
     private var gridInner: some View {
@@ -467,7 +473,7 @@ struct GameLibraryView: View {
                         } : nil
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(ListRowPressStyle())
                 .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                 .transition(.cardAppear)
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
@@ -588,11 +594,14 @@ struct GameLibraryView: View {
     }
 
     private func refreshGameSizes() {
-        Task {
+        sizesTask?.cancel()
+        sizesTask = Task {
             var sizes: [String: Int64] = [:]
             for game in library.games {
+                guard !Task.isCancelled else { return }
                 sizes[game.id] = await GameMetadata.diskSize(for: URL(fileURLWithPath: game.path))
             }
+            guard !Task.isCancelled else { return }
             gameSizes = sizes
         }
     }

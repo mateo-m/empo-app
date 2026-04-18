@@ -19,7 +19,7 @@ struct EmptyStateView: View {
             Image(systemName: icon)
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-                .offset(y: floating ? -6 : 6)
+                .offset(y: floating ? -3 : 3)
                 .animation(
                     .easeInOut(duration: 2.4).repeatForever(autoreverses: true),
                     value: floating
@@ -42,7 +42,7 @@ struct EmptyStateView: View {
         .accessibilityElement(children: .combine)
         .onChange(of: revealed, initial: true) {
             guard revealed, !iconAppeared else { return }
-            let spring = Animation.spring(duration: 0.3, bounce: 0)
+            let spring = Motion.standard
             let interval = Self.staggerInterval
             withAnimation(spring.delay(initialDelay)) {
                 iconAppeared = true

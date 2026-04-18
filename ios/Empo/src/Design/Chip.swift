@@ -39,12 +39,12 @@ struct Chip: View {
 
         if isIconOnly {
             content
-                .padding(6)
+                .padding(Spacing.sm)
                 .glassEffect(.regular.tint(tint), in: .circle)
         } else {
             content
                 .padding(.horizontal, Spacing.md)
-                .padding(.vertical, 5)
+                .padding(.vertical, Spacing.xs)
                 .glassEffect(.regular.tint(tint), in: .capsule)
         }
     }

@@ -23,5 +23,6 @@ struct PauseSnapshotOverlay: View {
             .position(x: rect.midX, y: rect.midY)
             .opacity(opacity)
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
