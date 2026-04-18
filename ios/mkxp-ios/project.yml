@@ -158,6 +158,17 @@ targets:
       - path: Assets.bundle
         type: folder
         buildPhase: resources
+    # Code signing is configured via a local, untracked xcconfig
+    # (Signing.xcconfig at the repo root of this target) so contributors
+    # can each drop in their own Apple Developer team ID without
+    # touching the project file. See Signing.xcconfig.example for the
+    # expected format. xcodegen will still generate a working project
+    # if the file is absent; the build then fails at signing time with
+    # a clear "no team selected" error rather than quietly signing
+    # under someone else's identity.
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mkxp.mkxp-ios
@@ -165,7 +176,6 @@ targets:
         PRODUCT_NAME: mkxp-z
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
-        
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/mkxp-ios-Bridging-Header.h
         OTHER_LDFLAGS:
