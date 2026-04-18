@@ -516,7 +516,14 @@ struct GameLibraryView: View {
                                 .clipShape(.rect(cornerRadius: Radius.md))
                         }
                 }
-                    .id("\(game.id)-\(isPaused ? "paused" : "ready")")
+                    // NOTE: no .id("...-\(isPaused)") here on purpose.
+                    // Forcing a remount on pause toggle destroys the
+                    // matchedTransitionSource mid-animation, which
+                    // makes the exit hero zoom snap to a fallback
+                    // frame at its end. GameCard already animates its
+                    // own pause overlay via GameStatusIndicator's
+                    // internal .animation(Motion.gentle, value: …),
+                    // so no remount is needed.
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
                 .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
