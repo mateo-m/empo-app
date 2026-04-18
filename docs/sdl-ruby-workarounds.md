@@ -4,8 +4,8 @@
 
 The iOS port of mkxp-z runs multiple game sessions within a single process. Two fundamental constraints make this non-trivial:
 
-1. **SDL cannot be restarted** — `SDL_Init`/`SDL_Quit` and window/GL context creation are designed for a single process lifetime.
-2. **Ruby 1.8 cannot be restarted** — `ruby_init()` and `ruby_cleanup()` are one-shot operations; calling `ruby_cleanup()` corrupts internal state and a subsequent `ruby_init()` crashes with SIGSEGV.
+1. **SDL cannot be restarted** - `SDL_Init`/`SDL_Quit` and window/GL context creation are designed for a single process lifetime.
+2. **Ruby 1.8 cannot be restarted** - `ruby_init()` and `ruby_cleanup()` are one-shot operations; calling `ruby_cleanup()` corrupts internal state and a subsequent `ruby_init()` crashes with SIGSEGV.
 
 These constraints cascade into every layer of the architecture.
 
@@ -28,7 +28,7 @@ ALCcontext *persistAlcCtx = alcCreateContext(persistAlcDev, 0);
 At the end of each session, the GL and AL contexts are **detached** from the RGSS thread (not destroyed), so the next session's thread can claim them:
 
 ```cpp
-// Don't destroy — just detach from the dying thread
+// Don't destroy - just detach from the dying thread
 alcMakeContextCurrent(NULL);
 SDL_GL_MakeCurrent(persistWin, NULL);
 ```
@@ -52,7 +52,7 @@ s_screenFBO = static_cast<GLuint>(fbo);
 
 **Solution (`main.cpp`):** A `while(true)` loop on the main thread manages game sessions. Each iteration spawns a new RGSS thread for the game, waits for it to finish, then loops back to wait for the next game selection.
 
-```
+```text
 main thread:  SDL_Init → create window → while(true) { wait for game → spawn RGSS thread → wait for thread → cleanup → continue }
 RGSS thread:  load game → run Ruby → exit thread
 ```
@@ -81,7 +81,7 @@ On subsequent sessions, the VM is manually patched:
    rb_gc_stack_start = (VALUE *)&stack_anchor;
    ```
 
-2. **Exception state**: Leftover `$!` from the previous session is cleared. `$@` is NOT set when `$!` is nil — Ruby 1.8 raises `ArgumentError` in that case.
+2. **Exception state**: Leftover `$!` from the previous session is cleared. `$@` is NOT set when `$!` is nil - Ruby 1.8 raises `ArgumentError` in that case.
 
 3. **Loaded features**: `$LOADED_FEATURES` and `$"` are cleared so `require` works fresh in the new session.
 
@@ -172,12 +172,12 @@ void mkxp_requestTerminate(void) {
 
 The architecture can be summarized as:
 
-| Constraint                 | Workaround                                 |
-| -------------------------- | ------------------------------------------ |
-| SDL can't restart          | Persistent window/GL/AL, session loop      |
-| Ruby 1.8 can't restart     | Keep VM alive, patch GC stack, clear state |
-| Ruby 1.8 small stack       | 4MB RGSS thread stack                      |
-| Main thread blocked by SDL | Pump CFRunLoop manually                    |
+| Constraint                 | Workaround                                      |
+| -------------------------- | ----------------------------------------------- |
+| SDL can't restart          | Persistent window/GL/AL, session loop           |
+| Ruby 1.8 can't restart     | Keep VM alive, patch GC stack, clear state      |
+| Ruby 1.8 small stack       | 4MB RGSS thread stack                           |
+| Main thread blocked by SDL | Pump CFRunLoop manually                         |
 | No C++→Swift callbacks     | C function pointer callbacks (dispatch to main) |
-| No direct engine kill      | Inject SDL_QUIT event                      |
-| SDL owns a UIWindow        | Float SwiftUI window above it              |
+| No direct engine kill      | Inject SDL_QUIT event                           |
+| SDL owns a UIWindow        | Float SwiftUI window above it                   |

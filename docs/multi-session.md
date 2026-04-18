@@ -1,10 +1,10 @@
-# iOS Multi-Session Game Compatibility
+# Multi-Session Game Compatibility
 
 ## Context
 
-See `sdl-ruby-workarounds.md` for the foundational architecture (persistent SDL, persistent Ruby VM, session loop). This document covers the **game-level compatibility problems** that arise when running multiple RPG Maker games in sequence within a single process — and the fixes for each.
+See `sdl-ruby-workarounds.md` for the foundational architecture (persistent SDL, persistent Ruby VM, session loop). This document covers the **game-level compatibility problems** that arise when running multiple RPG Maker games in sequence within a single process - and the fixes for each.
 
-**Why this is hard:** Android emulators (JoiPlay) sidestep this entirely by calling `Process.killProcess()` after each game. iOS can't kill its own process, so we have to clean up the Ruby VM state manually between sessions. No version of CRuby supports `ruby_cleanup()` followed by `ruby_init()` — the VM is designed for single-use. Some workarounds (like `rb_gc_stack_start` patching and string-based constant names) are Ruby 1.8-specific, but the core problem and most game-level bugs apply to any Ruby version.
+**Why this is hard:** Android emulators (JoiPlay) sidestep this entirely by calling `Process.killProcess()` after each game. iOS can't kill its own process, so we have to clean up the Ruby VM state manually between sessions. No version of CRuby supports `ruby_cleanup()` followed by `ruby_init()` - the VM is designed for single-use. Some workarounds (like `rb_gc_stack_start` patching and string-based constant names) are Ruby 1.8-specific, but the core problem and most game-level bugs apply to any Ruby version.
 
 **Test matrix:** All fixes were validated with: Z→Z, U→U, U→Z→U→Z (where Z = Pokemon Z, U = Pokemon Uranium).
 
@@ -14,21 +14,21 @@ See `sdl-ruby-workarounds.md` for the foundational architecture (persistent SDL,
 
 At the end of each game session, before running the next game, the following cleanup runs in `mriBindingExecute()` (`binding-mri.cpp`):
 
-1. **Update `rb_gc_stack_start`** — Point Ruby 1.8's GC stack scanner at the current thread's stack frame
-2. **Pre-create `MkxpNullMouse` instance** — Must happen before step 3 removes `Game_Mouse` class
-3. **Remove game-defined constants** — Diff `Object.constants` against a baseline captured after `mriBindingInit()`. Remove anything the game added. Uses `rb_funcall(rb_cObject, rb_intern("remove_const"), ...)` via C API
-4. **Remove Input singleton methods** — Games add singleton methods to `Input` (e.g., Pokemon Essentials). These must be cleaned. `Graphics` singleton methods are NOT removed — doing so corrupts viewport state
-5. **Clear game globals** — `$mouse` gets the `MkxpNullMouse` shim (see Bug 6). All other game globals are set to `nil`
-6. **Force `rb_gc()`** — Collect stale RGSS objects from the previous session
-7. **`mriBindingInit()`** — Re-register all native RGSS classes and methods (Sprite, Window, Viewport, etc.)
-8. **Preload scripts run** — `platform_compat.rb` re-applies monkey patches (must happen every session, see Bug 5)
-9. **Game scripts run** — New game starts fresh
+1. **Update `rb_gc_stack_start`** - Point Ruby 1.8's GC stack scanner at the current thread's stack frame
+2. **Pre-create `MkxpNullMouse` instance** - Must happen before step 3 removes `Game_Mouse` class
+3. **Remove game-defined constants** - Diff `Object.constants` against a baseline captured after `mriBindingInit()`. Remove anything the game added. Uses `rb_funcall(rb_cObject, rb_intern("remove_const"), ...)` via C API
+4. **Remove Input singleton methods** - Games add singleton methods to `Input` (e.g., Pokemon Essentials). These must be cleaned. `Graphics` singleton methods are NOT removed - doing so corrupts viewport state
+5. **Clear game globals** - `$mouse` gets the `MkxpNullMouse` shim (see Bug 6). All other game globals are set to `nil`
+6. **Force `rb_gc()`** - Collect stale RGSS objects from the previous session
+7. **`mriBindingInit()`** - Re-register all native RGSS classes and methods (Sprite, Window, Viewport, etc.)
+8. **Preload scripts run** - `platform_compat.rb` re-applies monkey patches (must happen every session, see Bug 5)
+9. **Game scripts run** - New game starts fresh
 
 ### Baseline Constant Capture
 
 The baseline is captured once, after the first `mriBindingInit()` but before any preload or game scripts. This gives us the "clean" set of constants that should persist across sessions. Anything not in the baseline was defined by a game and must be removed.
 
-The capture uses the C API (`rb_funcall(rb_cObject, rb_intern("constants"), 0)`) and stores constant names in a `std::set<std::string>`. Ruby 1.8's `Object.constants` returns **strings**, not symbols — using `SYM2ID()` on them crashes (see Bug 10).
+The capture uses the C API (`rb_funcall(rb_cObject, rb_intern("constants"), 0)`) and stores constant names in a `std::set<std::string>`. Ruby 1.8's `Object.constants` returns **strings**, not symbols - using `SYM2ID()` on them crashes (see Bug 10).
 
 ---
 
@@ -48,7 +48,7 @@ The capture uses the C API (`rb_funcall(rb_cObject, rb_intern("constants"), 0)`)
 
 **Symptom:** Stack overflow on session 2. `Dir.chdir` calls itself infinitely.
 
-**Root cause:** `platform_compat.rb` aliases `Dir.chdir` to wrap it with nil-safety. On session 2, the preload runs again and re-aliases — but now the "original" method IS the wrapped version, creating a recursive loop.
+**Root cause:** `platform_compat.rb` aliases `Dir.chdir` to wrap it with nil-safety. On session 2, the preload runs again and re-aliases - but now the "original" method IS the wrapped version, creating a recursive loop.
 
 **Fix:** Guard the alias with `unless method_defined?(:_mkxp_orig_chdir)`.
 
@@ -83,9 +83,10 @@ end
 **Root cause:** RPG Maker games reference Windows DLLs (`System32.dll`, etc.) that obviously don't exist on iOS.
 
 **Fix (binding-mri.cpp, iOS only):**
+
 - **LoadError**: Skip entirely (log and continue to next script)
 - **SyntaxError**: Skip entirely (some encrypted archives produce these)
-- **NoMethodError**: Skip ONLY when the receiver is `Module` or `Class` (missing DLL-provided methods). Do NOT skip when receiver is `NilClass` or `FalseClass` — those are real game logic bugs that need to surface
+- **NoMethodError**: Skip ONLY when the receiver is `Module` or `Class` (missing DLL-provided methods). Do NOT skip when receiver is `NilClass` or `FalseClass` - those are real game logic bugs that need to surface
 
 ---
 
@@ -97,15 +98,15 @@ end
 
 **Fix (`platform_compat.rb`):** Monkey-patch property accessors on `Sprite`, `Window`, `Viewport`, `Plane`, and `Tilemap` to rescue `RGSSError` and return safe defaults (0 for numeric, false for boolean, "" for string).
 
-**Critical detail:** These patches must re-apply **every session**. `mriBindingInit()` re-registers native methods on session 2+, overwriting our Ruby wrappers. Therefore, the `platform_compat.rb` preload does NOT use `next if method_defined?` guards for these patches — they intentionally re-wrap every time.
+**Critical detail:** These patches must re-apply **every session**. `mriBindingInit()` re-registers native methods on session 2+, overwriting our Ruby wrappers. Therefore, the `platform_compat.rb` preload does NOT use `next if method_defined?` guards for these patches - they intentionally re-wrap every time.
 
 ---
 
 ### Bug 6: Cross-Session `$mouse` Contamination
 
-**Symptom:** Session 2 crashes with `NoMethodError` on `$mouse` — the variable holds a `Game_Mouse` instance whose class no longer exists.
+**Symptom:** Session 2 crashes with `NoMethodError` on `$mouse` - the variable holds a `Game_Mouse` instance whose class no longer exists.
 
-**Root cause:** Game A defines `Game_Mouse` and sets `$mouse = Game_Mouse.new`. Constant cleanup removes the `Game_Mouse` class, but `$mouse` still references the orphaned instance. Setting `$mouse = nil` doesn't work either — Ruby 1.8's `defined?($mouse)` returns `"global-variable"` even after assigning nil, so games that guard with `if defined?($mouse)` still try to use it.
+**Root cause:** Game A defines `Game_Mouse` and sets `$mouse = Game_Mouse.new`. Constant cleanup removes the `Game_Mouse` class, but `$mouse` still references the orphaned instance. Setting `$mouse = nil` doesn't work either - Ruby 1.8's `defined?($mouse)` returns `"global-variable"` even after assigning nil, so games that guard with `if defined?($mouse)` still try to use it.
 
 **Fix:** Create a `MkxpNullMouse` shim class that absorbs all method calls:
 
@@ -127,9 +128,10 @@ The instance is pre-created **before** constant cleanup (step 2 in the cleanup s
 
 **Symptom:** SIGSEGV in `Graphics::update()` on session 2, accessing freed memory through the disposable linked list.
 
-**Root cause:** Each RGSS object (Sprite, Window, etc.) registers itself in `Graphics`' intrusive linked list via `Disposable`. When Ruby's GC eventually collects objects from the **previous** session, their `~Disposable()` destructor follows stale `prev`/`next` pointers — which now point into the **new** session's list, corrupting it.
+**Root cause:** Each RGSS object (Sprite, Window, etc.) registers itself in `Graphics`' intrusive linked list via `Disposable`. When Ruby's GC eventually collects objects from the **previous** session, their `~Disposable()` destructor follows stale `prev`/`next` pointers - which now point into the **new** session's list, corrupting it.
 
 **Fix:**
+
 - Added `bool detached` flag to `Disposable` class (`disposable.h`)
 - `Graphics::detachAllDisposables()` walks the list after session ends, sets `detached = true` on each node, and nulls their link pointers
 - `~Disposable()` checks `detached` and skips `remDisposable()` if true
@@ -151,11 +153,12 @@ The instance is pre-created **before** constant cleanup (step 2 in the cleanup s
 
 **Symptom:** App is killed by the OS (SIGKILL / `__stack_chk_fail`) on Uranium's second session.
 
-**Root cause:** Pokemon Uranium has a "Hard Reset" script (85 bytes) that checks `$game_exists` and calls `system('Uranium')` + `exit` to relaunch itself as a new process. On session 2, `$game_exists` persists as `true` (from the previous session), so `system()` calls `fork()+exec()` — **forbidden on iOS**. The OS kills the app immediately.
+**Root cause:** Pokemon Uranium has a "Hard Reset" script (85 bytes) that checks `$game_exists` and calls `system('Uranium')` + `exit` to relaunch itself as a new process. On session 2, `$game_exists` persists as `true` (from the previous session), so `system()` calls `fork()+exec()` - **forbidden on iOS**. The OS kills the app immediately.
 
 **Debugging journey:** This was the hardest bug to find. We ruled out SyntaxError in script 253, GC corruption, and thread-local storage issues. The breakthrough came from logging the actual script content of every evaluated section and discovering the 85-byte script calling `system()`.
 
 **Fix (`platform_compat.rb`):**
+
 - Neutralize `Kernel#system`, `Kernel#exec`, `Kernel#fork`, `Kernel#spawn` to be no-ops
 - Clear `$game_exists = nil` in preload so the hard-reset path is never reached
 
@@ -183,13 +186,13 @@ end
 
 ## Files Modified
 
-| File | Changes |
-|------|---------|
-| `binding-mri.cpp` | Session cleanup, TypeError retry loop, error skip, baseline capture, debug logging, crash handler |
-| `main.cpp` | Persistent RGSS thread with semaphore loop, `detachAllDisposables()` call, SDL_SetWindowSize guard |
-| `graphics.h` / `graphics.cpp` | `detachAllDisposables()` method |
-| `scene.cpp` | `Scene::~Scene()` nulls SceneElement link pointers |
-| `disposable.h` | `bool detached` flag, guarded destructor |
-| `app_bridge.h` / `app_bridge.cpp` | `mkxp_debugLog()`, `mkxp_setDebugLogPath()`, `mkxp_getDebugLogPath()` |
-| `platform_compat.rb` | system/exec/fork neutralization, disposed object patches, MkxpNullMouse, Dir.chdir guard, env stubs |
-| `win32_wrap.rb` | `kappatalize()` strips non-alphanumeric characters |
+| File                              | Changes                                                                                             |
+| --------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `binding-mri.cpp`                 | Session cleanup, TypeError retry loop, error skip, baseline capture, debug logging, crash handler   |
+| `main.cpp`                        | Persistent RGSS thread with semaphore loop, `detachAllDisposables()` call, SDL_SetWindowSize guard  |
+| `graphics.h` / `graphics.cpp`     | `detachAllDisposables()` method                                                                     |
+| `scene.cpp`                       | `Scene::~Scene()` nulls SceneElement link pointers                                                  |
+| `disposable.h`                    | `bool detached` flag, guarded destructor                                                            |
+| `app_bridge.h` / `app_bridge.cpp` | `mkxp_debugLog()`, `mkxp_setDebugLogPath()`, `mkxp_getDebugLogPath()`                               |
+| `platform_compat.rb`              | system/exec/fork neutralization, disposed object patches, MkxpNullMouse, Dir.chdir guard, env stubs |
+| `win32_wrap.rb`                   | `kappatalize()` strips non-alphanumeric characters                                                  |
