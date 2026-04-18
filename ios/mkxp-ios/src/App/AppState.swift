@@ -70,6 +70,40 @@ class AppState {
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent(".session-active")
 
+    /// The crash marker is written each time a game session starts and
+    /// removed when it ends cleanly. If it's still on disk on the
+    /// next app launch, something killed the previous session
+    /// unexpectedly (user-killed-app, OOM, C++ crash).
+    ///
+    /// But reinstalls also leave the marker behind, since the
+    /// Documents directory is preserved across installs. We don't
+    /// want to accuse a fresh install of "not exiting cleanly" when
+    /// the user simply redeployed from Xcode or updated via the App
+    /// Store. Compare the marker's mtime with the executable's
+    /// bundle mtime: if the binary is newer, the marker is stale.
+    private static func isCrashMarkerFromCurrentInstall() -> Bool {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: crashMarkerURL.path) else { return false }
+
+        guard let markerAttrs = try? fm.attributesOfItem(atPath: crashMarkerURL.path),
+              let markerMtime = markerAttrs[.modificationDate] as? Date else {
+            // Couldn't stat the marker - assume current install so we
+            // don't silently swallow a real crash. Conservative default.
+            return true
+        }
+
+        // Bundle's executable is replaced on every install. Its mtime
+        // is a reliable "install time" proxy across simulators, real
+        // devices, TestFlight, and App Store updates.
+        guard let execPath = Bundle.main.executablePath,
+              let bundleAttrs = try? fm.attributesOfItem(atPath: execPath),
+              let bundleMtime = bundleAttrs[.modificationDate] as? Date else {
+            return true
+        }
+
+        return markerMtime > bundleMtime
+    }
+
     private static func commitSuffix() -> String {
         GitInfo.dirty ? " (dirty)" : ""
     }
@@ -93,8 +127,16 @@ class AppState {
         let header = Self.logHeader(title: "mkxp-ios session history", extras: ["launched: \(launchTime)"])
         try? header.write(toFile: sessionHistoryPath, atomically: true, encoding: .utf8)
 
-        if FileManager.default.fileExists(atPath: Self.crashMarkerURL.path) {
+        if Self.isCrashMarkerFromCurrentInstall() {
             pendingCrashRecovery = true
+        } else {
+            // Stale marker from a previous install (dev redeploy,
+            // TestFlight update, reinstall from App Store). The
+            // session it was recording can't have been in this
+            // binary, so treat the crash state as already resolved
+            // and clean up. Avoids a spurious "didn't exit cleanly"
+            // alert on first launch after a redeploy.
+            try? FileManager.default.removeItem(at: Self.crashMarkerURL)
         }
 
         pruneOldLogs(in: logsDir)
