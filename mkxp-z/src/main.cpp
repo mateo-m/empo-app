@@ -399,6 +399,62 @@ static void setupWindowIcon(const Config &conf, SDL_Window *win) {
   }
 }
 
+// Initialize SDL and its subsidiary libs in the order they depend on
+// each other: SDL core (video+controller+timer) -> user events ->
+// SDL_image -> SDL_ttf -> SDL_sound. If anything fails, tear down
+// the previous ones before returning false so the process leaves
+// no resources dangling even on init failure.
+//
+// Returns true on full success. On failure the caller should return
+// from main() - an error message box has already been shown via
+// showInitError().
+static bool initSDLLibs() {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_TIMER) < 0) {
+    showInitError(std::string("Error initializing SDL: ") + SDL_GetError());
+    return false;
+  }
+
+  if (!EventThread::allocUserEvents()) {
+    showInitError("Error allocating SDL user events");
+    SDL_Quit();
+    return false;
+  }
+
+  const int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
+  if (IMG_Init(imgFlags) != imgFlags) {
+    showInitError(std::string("Error initializing SDL_image: ") + SDL_GetError());
+    SDL_Quit();
+    return false;
+  }
+
+  if (TTF_Init() < 0) {
+    showInitError(std::string("Error initializing SDL_ttf: ") + SDL_GetError());
+    IMG_Quit();
+    SDL_Quit();
+    return false;
+  }
+
+  if (Sound_Init() == 0) {
+    showInitError(std::string("Error initializing SDL_sound: ") + Sound_GetError());
+    TTF_Quit();
+    IMG_Quit();
+    SDL_Quit();
+    return false;
+  }
+
+  return true;
+}
+
+// Reverse order of initSDLLibs. Safe to call even if only some libs
+// were initialized (each *_Quit is idempotent-ish; SDL_sound's Quit
+// is Sound_Quit).
+static void shutdownSDLLibs() {
+  Sound_Quit();
+  TTF_Quit();
+  IMG_Quit();
+  SDL_Quit();
+}
+
 int main(int argc, char *argv[]) {
   try {
 
@@ -423,14 +479,10 @@ int main(int argc, char *argv[]) {
 
     SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 
-    /* initialize SDL first */
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_TIMER) < 0) {
-      showInitError(std::string("Error initializing SDL: ") + SDL_GetError());
-      return 0;
-    }
-
-    if (!EventThread::allocUserEvents()) {
-      showInitError("Error allocating SDL user events");
+    if (!initSDLLibs()) {
+#ifdef MKXPZ_STEAM
+      STEAMSHIM_deinit();
+#endif
       return 0;
     }
 
@@ -452,51 +504,11 @@ int main(int argc, char *argv[]) {
     (void)cwdOk;
 #endif
 
-    int imgFlags = IMG_INIT_PNG | IMG_INIT_JPG;
-    if (IMG_Init(imgFlags) != imgFlags) {
-      showInitError(std::string("Error initializing SDL_image: ") +
-                    SDL_GetError());
-      SDL_Quit();
-
-#ifdef MKXPZ_STEAM
-      STEAMSHIM_deinit();
-#endif
-
-      return 0;
-    }
-
-    if (TTF_Init() < 0) {
-      showInitError(std::string("Error initializing SDL_ttf: ") +
-                    SDL_GetError());
-      IMG_Quit();
-      SDL_Quit();
-
-#ifdef MKXPZ_STEAM
-      STEAMSHIM_deinit();
-#endif
-
-      return 0;
-    }
-
-    if (Sound_Init() == 0) {
-      showInitError(std::string("Error initializing SDL_sound: ") +
-                    Sound_GetError());
-      TTF_Quit();
-      IMG_Quit();
-      SDL_Quit();
-
-#ifdef MKXPZ_STEAM
-      STEAMSHIM_deinit();
-#endif
-
-      return 0;
-    }
-
 #ifdef MKXPZ_STEAM
     if (!STEAMSHIM_init()) {
       showInitError("Failed to initialize Steamworks. The application cannot "
                     "continue launching.");
-      SDL_Quit();
+      shutdownSDLLibs();
       return 0;
     }
 #endif
@@ -996,10 +1008,7 @@ int main(int argc, char *argv[]) {
     if (!alcDev) {
       showInitError("Could not detect an available audio device.");
       SDL_DestroyWindow(win);
-      TTF_Quit();
-      IMG_Quit();
-      SDL_Quit();
-
+      shutdownSDLLibs();
 #ifdef MKXPZ_STEAM
       STEAMSHIM_deinit();
 #endif
@@ -1106,10 +1115,7 @@ int main(int argc, char *argv[]) {
 #ifdef MKXPZ_STEAM
     STEAMSHIM_deinit();
 #endif
-    Sound_Quit();
-    TTF_Quit();
-    IMG_Quit();
-    SDL_Quit();
+    shutdownSDLLibs();
 
     return 0;
   } catch (const Exception &exc) {
