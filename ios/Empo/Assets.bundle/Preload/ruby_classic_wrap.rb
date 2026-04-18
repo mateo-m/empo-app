@@ -1,7 +1,7 @@
 # ruby_classic_wrap.rb
 # Minimal compatibility layer for Ruby 1.8 on mkxp-z.
 #
-# iOS ships Ruby 1.8 (see ios/mkxp-ios/project.yml -lruby18-static).
+# iOS ships Ruby 1.8 (see ios/Empo/project.yml -lruby18-static).
 # Ruby 1.8 has no concept of string encoding, so methods that games
 # written for Ruby 1.9+ expect (force_encoding, encode, encoding, ...)
 # raise NoMethodError. Stub them as no-ops so scripts that sprinkle

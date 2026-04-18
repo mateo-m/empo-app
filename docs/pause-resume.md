@@ -117,10 +117,10 @@ The snapshot appears in both views at the same `engineState.gameRect` position, 
 | `mkxp-z/src/display/graphics.cpp` | `GraphicsPrivate::checkPause()` — snapshot capture and pause delegation |
 | `mkxp-z/src/ios_bridge.cpp` | Condvar, audio pause/resume, snapshot storage |
 | `mkxp-z/src/ios_bridge.h` | Bridge API declarations |
-| `ios/mkxp-ios/src/App/PauseManager.swift` | User-initiated pause/resume state, `requestPause()`, `resume()`, snapshot ownership |
-| `ios/mkxp-ios/src/App/AppState.swift` | `returnToLibrary()`, paused callback registration, snapshot conversion |
-| `ios/mkxp-ios/src/App/EngineState.swift` | Background pause/resume (`requestBackgroundPause()`, `resumeFromBackground()`) |
-| `ios/mkxp-ios/src/Library/GameLoadingView.swift` | Snapshot at `engineState.gameRect` during hero zoom (stage 1) |
-| `ios/mkxp-ios/src/Library/GameLibraryView.swift` | `handleGameTap()` — resume flow entry point |
-| `ios/mkxp-ios/src/Player/PlayerView.swift` | Snapshot fade-out overlay with controls (stage 2), pause button, quit button |
-| `ios/mkxp-ios/src/App/RootView.swift` | Phase-based visibility (library vs. player), background pause triggers |
+| `ios/Empo/src/App/PauseManager.swift` | User-initiated pause/resume state, `requestPause()`, `resume()`, snapshot ownership |
+| `ios/Empo/src/App/AppState.swift` | `returnToLibrary()`, paused callback registration, snapshot conversion |
+| `ios/Empo/src/App/EngineState.swift` | Background pause/resume (`requestBackgroundPause()`, `resumeFromBackground()`) |
+| `ios/Empo/src/Library/GameLoadingView.swift` | Snapshot at `engineState.gameRect` during hero zoom (stage 1) |
+| `ios/Empo/src/Library/GameLibraryView.swift` | `handleGameTap()` — resume flow entry point |
+| `ios/Empo/src/Player/PlayerView.swift` | Snapshot fade-out overlay with controls (stage 2), pause button, quit button |
+| `ios/Empo/src/App/RootView.swift` | Phase-based visibility (library vs. player), background pause triggers |
