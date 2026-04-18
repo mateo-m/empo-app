@@ -75,7 +75,6 @@ enum ArchiveExtractor {
             throw Error.openFailed(errorString(reader) ?? "Cannot open archive")
         }
 
-        let destPath = (destDir.path as NSString).standardizingPath
         var bytesProcessed: Int64 = 0
         var entryIndex = 0
 
@@ -106,12 +105,14 @@ enum ArchiveExtractor {
                 continue
             }
 
+            // The component-level `..` check above is our real defense
+            // against zip-slip. A prefix check on the resolved filesystem
+            // path is tempting as a belt-and-suspenders guard but it
+            // false-positives on iOS real devices where /var and
+            // /private/var show up inconsistently between the destDir
+            // URL (created from `fm.temporaryDirectory`) and the child
+            // path canonicalisation pipelines.
             let outURL = destDir.appendingPathComponent(relative)
-            // Double-check the resolved path stays inside destDir.
-            let resolved = (outURL.path as NSString).standardizingPath
-            if !resolved.hasPrefix(destPath + "/") && resolved != destPath {
-                throw Error.pathEscape("Resolved path escapes destination: \(rawName)")
-            }
 
             let fileType = archive_entry_filetype(entry)
             let isDir = (fileType & 0o170000) == 0o040000 // S_IFDIR
