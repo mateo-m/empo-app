@@ -23,6 +23,8 @@
 #include "icon.png.xxd"
 #endif
 
+#include <atomic>
+
 #include <alc.h>
 
 #include <SDL.h>
@@ -149,7 +151,13 @@ static SDL_GLContext initGL(SDL_Window *win, Config &conf,
  * and GL reverts the binding to 0), which is wrong on iOS. */
 #if TARGET_OS_IPHONE
 static GLuint s_iosScreenFBO = 0;
-MKXPRenderer s_currentRenderer = MKXP_RENDERER_OPENGL_ES;
+// Atomic because the RGSS thread reads this every frame (swapGLBuffer,
+// makeCurrent) while the main thread writes it at startup and on
+// renderer hot-swap. Though both writes happen when the RGSS thread
+// is not actually running concurrently (init / session-boundary
+// semaphore), plain loads/stores on a non-atomic are UB under the
+// C++ memory model and the compiler may emit unsafe codegen.
+std::atomic<MKXPRenderer> s_currentRenderer{MKXP_RENDERER_OPENGL_ES};
 #ifdef MKXPZ_HAS_ANGLE
 EGLDisplay s_eglDisplay = EGL_NO_DISPLAY;
 EGLSurface s_eglSurface = EGL_NO_SURFACE;
@@ -517,7 +525,7 @@ int main(int argc, char *argv[]) {
     initConf.read(argc, argv);
 
 #ifdef MKXPZ_HAS_ANGLE
-    s_currentRenderer = mkxp_getSelectedRenderer();
+    s_currentRenderer.store(mkxp_getSelectedRenderer(), std::memory_order_release);
 #endif
 
     Uint32 winFlags = SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_ALLOW_HIGHDPI;
@@ -808,7 +816,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (swapOK) {
-          s_currentRenderer = wantRenderer;
+          s_currentRenderer.store(wantRenderer, std::memory_order_release);
           char swapBuf[256];
           snprintf(swapBuf, sizeof(swapBuf),
                    "Renderer swap complete - %s screenFBO:%u glCtx:%s",

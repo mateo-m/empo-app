@@ -60,9 +60,10 @@
 
 #if TARGET_OS_IPHONE
 #ifdef MKXPZ_HAS_ANGLE
+#include <atomic>
 #include <EGL/egl.h>
 #include "ios_bridge.h"
-extern MKXPRenderer s_currentRenderer;
+extern std::atomic<MKXPRenderer> s_currentRenderer;
 extern EGLDisplay s_eglDisplay;
 extern EGLSurface s_eglSurface;
 extern EGLContext s_eglContext;
