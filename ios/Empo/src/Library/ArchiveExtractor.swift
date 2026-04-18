@@ -51,7 +51,18 @@ enum ArchiveExtractor {
             try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
         }
 
-        let totalBytes = (try? fm.attributesOfItem(atPath: archiveURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+        // For 7z we intentionally ignore the file size and trickle
+        // progress by entry index. libarchive reads the entire solid
+        // compressed block upfront, so `archive_filter_bytes` would
+        // jump to ~100% on the first entry even though extraction has
+        // barely started, flashing the progress ring as fully-filled.
+        let is7z = archiveURL.pathExtension.lowercased() == "7z"
+        let totalBytes: Int64
+        if is7z {
+            totalBytes = 0
+        } else {
+            totalBytes = (try? fm.attributesOfItem(atPath: archiveURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+        }
 
         guard let reader = archive_read_new() else {
             throw Error.openFailed("archive_read_new failed")
