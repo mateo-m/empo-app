@@ -1058,7 +1058,7 @@ static void logRubyError(const char *type, const char *detail) {
 static void runRMXPScripts(BacktraceData &btData) {
     const Config &conf = shState->rtData().config;
     const std::string &scriptPack = conf.game.scripts;
-    
+
     if (scriptPack.empty()) {
         showMsg("No script file has been specified. Check the game's INI and try again.");
         return;
