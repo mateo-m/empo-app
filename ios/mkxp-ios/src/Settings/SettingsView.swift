@@ -93,7 +93,7 @@ struct SettingsView: View {
                                 }
                             }
                         ),
-                        description: "OpenGL ES is Apple's built-in renderer. ANGLE translates GL calls to Metal for better future compatibility.",
+                        description: "OpenGL ES is the stable default. ANGLE is experimental and translates OpenGL calls to Metal.",
                         // Show the BETA badge next to the picker's label
                         // only when the user has selected a beta-flagged
                         // renderer, rather than baking "(Beta)" into the
@@ -122,13 +122,13 @@ struct SettingsView: View {
                     SettingsToggle(
                         title: "Game overlay",
                         isOn: $settings.debugMode,
-                        description: "Shows the game name, Ruby version, and FPS while you play."
+                        description: "Adds a button to the in-game toolbar that toggles a draggable overlay showing the title, Ruby version, renderer, and FPS."
                     )
 
                     SettingsToggle(
                         title: "Show viewport bounds",
                         isOn: $settings.showViewportBounds,
-                        description: "Tints the area outside the game viewport so you can see where controls can go."
+                        description: "Fills the framebuffer area outside the game viewport with a color of your choosing."
                     )
 
                     if settings.showViewportBounds {
@@ -148,7 +148,7 @@ struct SettingsView: View {
                     SettingsToggle(
                         title: "Clean up broken imports",
                         isOn: $settings.cleanupInvalidGames,
-                        description: "Automatically removes games that didn't import properly."
+                        description: "Removes games that didn't import properly on the next app launch."
                     )
 
                     SettingsToggle(
