@@ -109,7 +109,17 @@ struct GameLoadingView: View {
     private var cancelButton: some View {
         if cancelVisible {
             Button("Quit to library") {
+                // During loading the RGSS thread may not have reached a
+                // yield point yet (scripts running back-to-back don't
+                // call Graphics.update/Input.update), so the normal
+                // terminate request can sit unprocessed. returnToLibrary
+                // arms the standard 3s watchdog (alert -> user OK ->
+                // exit) but on the loading view we'd rather not make
+                // the user read an alert on top of being stuck. Also
+                // arm a 5s hard-deadline force-quit so the app closes
+                // cleanly even if the engine never ack's.
                 appState.returnToLibrary()
+                appState.armLoadingEscapeForceQuit()
             }
             .buttonStyle(.secondary(size: .md, tint: .white))
             .padding(.bottom, Spacing.xl)
