@@ -1,6 +1,6 @@
 #import <UIKit/UIKit.h>
 #import "system.h"
-#import "ios_bridge.h"
+#import "app_bridge.h"
 
 std::string systemImpl::getSystemLanguage() {
     @autoreleasepool {

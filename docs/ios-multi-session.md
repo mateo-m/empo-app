@@ -21,7 +21,7 @@ At the end of each game session, before running the next game, the following cle
 5. **Clear game globals** — `$mouse` gets the `MkxpNullMouse` shim (see Bug 6). All other game globals are set to `nil`
 6. **Force `rb_gc()`** — Collect stale RGSS objects from the previous session
 7. **`mriBindingInit()`** — Re-register all native RGSS classes and methods (Sprite, Window, Viewport, etc.)
-8. **Preload scripts run** — `ios_compat.rb` re-applies monkey patches (must happen every session, see Bug 5)
+8. **Preload scripts run** — `platform_compat.rb` re-applies monkey patches (must happen every session, see Bug 5)
 9. **Game scripts run** — New game starts fresh
 
 ### Baseline Constant Capture
@@ -48,7 +48,7 @@ The capture uses the C API (`rb_funcall(rb_cObject, rb_intern("constants"), 0)`)
 
 **Symptom:** Stack overflow on session 2. `Dir.chdir` calls itself infinitely.
 
-**Root cause:** `ios_compat.rb` aliases `Dir.chdir` to wrap it with nil-safety. On session 2, the preload runs again and re-aliases — but now the "original" method IS the wrapped version, creating a recursive loop.
+**Root cause:** `platform_compat.rb` aliases `Dir.chdir` to wrap it with nil-safety. On session 2, the preload runs again and re-aliases — but now the "original" method IS the wrapped version, creating a recursive loop.
 
 **Fix:** Guard the alias with `unless method_defined?(:_mkxp_orig_chdir)`.
 
@@ -95,9 +95,9 @@ end
 
 **Root cause:** Game code accesses properties of disposed RGSS objects. `disposed?` returns false but the native C++ object has been freed.
 
-**Fix (`ios_compat.rb`):** Monkey-patch property accessors on `Sprite`, `Window`, `Viewport`, `Plane`, and `Tilemap` to rescue `RGSSError` and return safe defaults (0 for numeric, false for boolean, "" for string).
+**Fix (`platform_compat.rb`):** Monkey-patch property accessors on `Sprite`, `Window`, `Viewport`, `Plane`, and `Tilemap` to rescue `RGSSError` and return safe defaults (0 for numeric, false for boolean, "" for string).
 
-**Critical detail:** These patches must re-apply **every session**. `mriBindingInit()` re-registers native methods on session 2+, overwriting our Ruby wrappers. Therefore, the `ios_compat.rb` preload does NOT use `next if method_defined?` guards for these patches — they intentionally re-wrap every time.
+**Critical detail:** These patches must re-apply **every session**. `mriBindingInit()` re-registers native methods on session 2+, overwriting our Ruby wrappers. Therefore, the `platform_compat.rb` preload does NOT use `next if method_defined?` guards for these patches — they intentionally re-wrap every time.
 
 ---
 
@@ -155,7 +155,7 @@ The instance is pre-created **before** constant cleanup (step 2 in the cleanup s
 
 **Debugging journey:** This was the hardest bug to find. We ruled out SyntaxError in script 253, GC corruption, and thread-local storage issues. The breakthrough came from logging the actual script content of every evaluated section and discovering the 85-byte script calling `system()`.
 
-**Fix (`ios_compat.rb`):**
+**Fix (`platform_compat.rb`):**
 - Neutralize `Kernel#system`, `Kernel#exec`, `Kernel#fork`, `Kernel#spawn` to be no-ops
 - Clear `$game_exists = nil` in preload so the hard-reset path is never reached
 
@@ -190,6 +190,6 @@ end
 | `graphics.h` / `graphics.cpp` | `detachAllDisposables()` method |
 | `scene.cpp` | `Scene::~Scene()` nulls SceneElement link pointers |
 | `disposable.h` | `bool detached` flag, guarded destructor |
-| `ios_bridge.h` / `ios_bridge.cpp` | `mkxp_debugLog()`, `mkxp_setDebugLogPath()`, `mkxp_getDebugLogPath()` |
-| `ios_compat.rb` | system/exec/fork neutralization, disposed object patches, MkxpNullMouse, Dir.chdir guard, env stubs |
+| `app_bridge.h` / `app_bridge.cpp` | `mkxp_debugLog()`, `mkxp_setDebugLogPath()`, `mkxp_getDebugLogPath()` |
+| `platform_compat.rb` | system/exec/fork neutralization, disposed object patches, MkxpNullMouse, Dir.chdir guard, env stubs |
 | `win32_wrap.rb` | `kappatalize()` strips non-alphanumeric characters |
