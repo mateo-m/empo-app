@@ -205,6 +205,27 @@ void mkxpGL_GetDrawableSize(SDL_Window *win, int *w, int *h) {
 #endif
     SDL_GL_GetDrawableSize(win, w, h);
 }
+
+#ifdef MKXPZ_HAS_ANGLE
+extern "C" void mkxp_refreshANGLENativeLayerSize(void *sdlWindow, int *outW, int *outH);
+#endif
+
+// Use at rotation / resize events. Under ANGLE, eglQuerySurface
+// returns a drawable size cached during the last obtainNextDrawable
+// call - i.e., last frame's pre-rotation dims. Instead of trusting
+// that cache, we drive the Metal layer update ourselves on the main
+// thread and return the resulting pixel size. Under OpenGL ES this
+// falls through to the normal query since SDL's EAGL view updates
+// its backing dims synchronously in layoutSubviews.
+void mkxpGL_RefreshDrawableSize(SDL_Window *win, int *w, int *h) {
+#ifdef MKXPZ_HAS_ANGLE
+    if (s_currentRenderer == MKXP_RENDERER_ANGLE) {
+        mkxp_refreshANGLENativeLayerSize(win, w, h);
+        return;
+    }
+#endif
+    SDL_GL_GetDrawableSize(win, w, h);
+}
 #endif
 
 #if TARGET_OS_IPHONE
