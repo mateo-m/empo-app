@@ -57,8 +57,8 @@ enum VerticalAlignment: String, Codable, CaseIterable {
 }
 
 
-/// Per-game settings stored as `ios_settings.json` in each game directory.
-/// All fields are optional — nil means "use game/engine default".
+/// Per-game settings stored as `game_settings.json` in each game directory.
+/// All fields are optional - nil means "use game/engine default".
 struct GameSettings: Codable, Equatable {
     // Display
     var smoothScaling: Bool?           // true = bilinear (1), false = pixel-perfect (0)
@@ -80,7 +80,7 @@ struct GameSettings: Codable, Equatable {
     var postloadScripts: Bool?         // execute postload scripts for common fixes
 
 
-    private static let settingsFilename = "ios_settings.json"
+    private static let settingsFilename = "game_settings.json"
     private static let originalConfigFilename = "mkxp.original.json"
     private static let configFilename = "mkxp.json"
     private static let cheatsFilename = "configuration.json"

@@ -100,17 +100,7 @@ struct GameSettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .onChange(of: settings.smoothScaling) { save() }
-            .onChange(of: settings.fixedAspectRatio) { save() }
-            .onChange(of: settings.frameSkip) { save() }
-            .onChange(of: settings.speedMultiplier) { save() }
-            .onChange(of: settings.fontScale) { save() }
-            .onChange(of: settings.vsync) { save() }
-            .onChange(of: settings.pathCache) { save() }
-            .onChange(of: settings.solidFonts) { save() }
-            .onChange(of: settings.postloadScripts) { save() }
-            .onChange(of: settings.verticalAlignment) { save() }
-            .onChange(of: settings.resolution) { save() }
+            .onChange(of: settings) { save() }
             .onChange(of: cheats) { saveCheats() }
         }
         .tint(.brand)
