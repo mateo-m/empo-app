@@ -44,7 +44,7 @@ empo/
       display/graphics.cpp         # Rendering pipeline
       display/gl/                  # OpenGL ES 2.0 backend
       audio/                       # Audio subsystem (OpenAL + SDL_sound)
-      ios_bridge.cpp               # C bridge for iOS <-> engine communication
+      app_bridge.cpp               # C bridge for app <-> engine communication
     binding/                       # Ruby/RGSS bindings (MRI)
     shader/                        # GLSL shaders (embedded at compile time)
   ios/
@@ -59,8 +59,8 @@ empo/
       Info.plist                   # App metadata
       src/
         Empo-Bridging-Header.h # Bridges C engine API to Swift
-        systemImplIOS.mm           # iOS system functions (scaling factor)
-        filesystemImplIOS.mm       # iOS filesystem (game root detection)
+        systemImpl.mm              # Platform system functions (scaling factor)
+        filesystemImpl.mm          # Platform filesystem (game root detection)
         App/                       # App lifecycle and root UI
           AppLoader.m              # +load bootstrap (creates UIWindow before main)
           AppWindow.swift          # UIWindow above SDL, theme observation
@@ -109,7 +109,7 @@ empo/
         SettingsMenuController.h   # Stub for macOS settings menu
       Assets.bundle/
         Preload/                   # Ruby scripts loaded before game scripts
-          ios_compat.rb            # Engine-level iOS patches (fork, env vars, Dir.chdir)
+          platform_compat.rb         # Engine-level platform patches (fork, env vars, Dir.chdir)
           pokemon_compat.rb        # Pokemon Essentials/fangame patches (disposed objects, $mouse)
           ruby_classic_wrap.rb     # Ruby 1.8 compatibility helpers
           win32_wrap.rb            # Win32API emulation layer (CC0, by Ancurio)
@@ -265,7 +265,7 @@ OpenGLES, OpenAL, Foundation, UIKit, CoreGraphics, CoreVideo, CoreAudio, AudioTo
 
 - `win32_wrap.rb` by Ancurio and Splendide Imaginarius, released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 - `mkxp_wrap.rb` by Splendide Imaginarius, released under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
-- `ios_compat.rb`, `pokemon_compat.rb`, `pokemon_input.rb`, and `ruby_classic_wrap.rb` are part of this project
+- `platform_compat.rb`, `pokemon_compat.rb`, `pokemon_input.rb`, and `ruby_classic_wrap.rb` are part of this project
 
 ## License
 
