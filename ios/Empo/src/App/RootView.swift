@@ -1,5 +1,11 @@
 import SwiftUI
 
+private enum SplashTiming {
+    static let holdDuration: TimeInterval = 1.2
+    static let cycleDuration: TimeInterval = 3
+    static let frameInterval: TimeInterval = 1.0 / 60.0
+}
+
 struct RootView: View {
     private let appState = AppState.shared
     private let engineState = EngineState.shared
@@ -58,8 +64,8 @@ struct RootView: View {
                     .padding(.bottom, Spacing.xl)
             }
         }
-        .animation(.spring(duration: 0.35, bounce: 0), value: settings.rendererPendingRestart)
-        .animation(.spring(duration: 0.35, bounce: 0), value: PauseManager.shared.pausedGame == nil)
+        .animation(Motion.gentle, value: settings.rendererPendingRestart)
+        .animation(Motion.gentle, value: PauseManager.shared.pausedGame == nil)
         .task {
             if appState.pendingCrashRecovery {
                 appState.consumeCrashRecovery()
@@ -69,13 +75,13 @@ struct RootView: View {
             // to either the disclaimer (first launch) or the library.
             // .task cancels on disappear so if the view is ever torn
             // down early, the sleep unwinds cleanly.
-            try? await Task.sleep(for: .milliseconds(1200))
+            try? await Task.sleep(for: .milliseconds(Int(SplashTiming.holdDuration * 1000)))
             if settings.needsDisclaimer {
                 // Hold the splash open: fade the logo out (by entering
                 // the "exiting" visual but without dismissing the
                 // container) and reveal the disclaimer. The normal
                 // dismissal runs once the user acknowledges.
-                withAnimation(.spring(duration: 0.35, bounce: 0)) {
+                withAnimation(Motion.gentle) {
                     showDisclaimer = true
                 }
             } else {
@@ -133,7 +139,7 @@ struct RootView: View {
     /// might still be on screen, then unmount the splash overlay.
     private func dismissSplash() {
         splashDismissed = true
-        withAnimation(.spring(duration: 0.5, bounce: 0)) {
+        withAnimation(Motion.slow) {
             splashExiting = true
         } completion: {
             showSplash = false
@@ -166,7 +172,7 @@ private struct RendererRestartPill: View {
         .background(.brand.opacity(0.9), in: Capsule())
         .foregroundStyle(.white)
         .elevatedShadow()
-        .animation(.spring(duration: 0.3, bounce: 0), value: to)
+        .animation(Motion.standard, value: to)
     }
 }
 
@@ -209,12 +215,8 @@ private struct SplashView: View {
             // blur/scale out but the splash background stays. Same
             // treatment on the full exit.
             VStack(spacing: Spacing.lg) {
-                Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: 52))
-                    .foregroundStyle(.white)
-
                 Text(AppInfo.name)
-                    .font(.title)
+                    .font(.system(size: 40))
                     .fontWeight(.bold)
                     .fontDesign(.rounded)
                     .foregroundStyle(.white)
@@ -236,7 +238,7 @@ private struct SplashView: View {
             }
         }
         .onAppear {
-            withAnimation(.spring(duration: 0.35, bounce: 0)) {
+            withAnimation(Motion.gentle) {
                 entered = true
             }
         }
@@ -246,91 +248,85 @@ private struct SplashView: View {
 
 private struct PixelDitherPattern: View {
     let color: Color
+
     private let cellSize: CGFloat = 14
     private let scale: CGFloat = 5
-
-    @State private var panning = false
 
     private var tileWidth: CGFloat { cellSize * 3 }
     private var tileHeight: CGFloat { cellSize * 2 }
 
-    private var tileImage: UIImage {
-        let uiColor = UIColor(color).withAlphaComponent(0.08)
-        let size = CGSize(width: tileWidth, height: tileHeight)
+    @State private var phase: Double = 0
+    @State private var lastTick: TimeInterval?
+
+    nonisolated(unsafe) private static let cachedTileImage: UIImage = {
+        let tileW: CGFloat = 14 * 3
+        let tileH: CGFloat = 14 * 2
+        let uiColor = UIColor.white.withAlphaComponent(0.08)
+        let size = CGSize(width: tileW, height: tileH)
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
             uiColor.setFill()
-
-            // Row 0: circle, cross, diamond
             drawCircle(ctx, ox: 2, oy: 2)
             drawCross(ctx, ox: 16, oy: 2)
             drawDiamond(ctx, ox: 30, oy: 2)
-
-            // Row 1 (rotated order): diamond, circle, cross
             drawDiamond(ctx, ox: 2, oy: 16)
             drawCircle(ctx, ox: 16, oy: 16)
             drawCross(ctx, ox: 30, oy: 16)
         }
-    }
+    }()
 
     var body: some View {
-        // Draw the tiled pattern ourselves via Canvas, re-reading the
-        // phase from wall-clock time each frame. This avoids the
-        // animation-based approach that snapped back to the origin when
-        // SwiftUI's .repeatForever reset the animated offset at the end
-        // of each cycle. With a Canvas that fills all the way to the
-        // edges and keys off `elapsed`, the pattern pans continuously
-        // with zero discontinuity: when the phase wraps from 1.0 back to
-        // 0.0 the image is pixel-identical because we've shifted by
-        // exactly one tile period.
-        TimelineView(.animation) { context in
-            let elapsed = context.date.timeIntervalSinceReferenceDate
-            let progress = elapsed.truncatingRemainder(dividingBy: cycleDuration) / cycleDuration
+        Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+            guard let cg = ctx.resolveSymbol(id: 0) else { return }
 
-            Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
-                guard let cg = ctx.resolveSymbol(id: 0) else { return }
+            let scaledTileW = tileWidth * scale
+            let scaledTileH = tileHeight * scale
+            let dx = CGFloat(phase) * scaledTileW
 
-                let scaledTileW = tileWidth * scale
-                let scaledTileH = tileHeight * scale
-                let dx = CGFloat(progress) * scaledTileW
+            // Rotate around the canvas centre so the grid tilts
+            // nicely. Then over-draw beyond the bounds so the
+            // rotated rectangle still fills the corners.
+            ctx.translateBy(x: size.width / 2, y: size.height / 2)
+            ctx.rotate(by: .degrees(-15))
 
-                // Rotate around the canvas centre so the grid tilts
-                // nicely. Then over-draw beyond the bounds so the
-                // rotated rectangle still fills the corners.
-                ctx.translateBy(x: size.width / 2, y: size.height / 2)
-                ctx.rotate(by: .degrees(-15))
+            // Pick a coverage radius generous enough that a -15 deg
+            // rotated fill still covers the biggest iPad screen.
+            let coverage = max(size.width, size.height) * 1.6
+            let startX = -coverage - scaledTileW + dx.truncatingRemainder(dividingBy: scaledTileW)
+            let startY = -coverage
 
-                // Pick a coverage radius generous enough that a -15 deg
-                // rotated fill still covers the biggest iPad screen.
-                let coverage = max(size.width, size.height) * 1.6
-                let startX = -coverage - scaledTileW + dx.truncatingRemainder(dividingBy: scaledTileW)
-                let startY = -coverage
-
-                var y = startY
-                while y < coverage {
-                    var x = startX
-                    while x < coverage {
-                        ctx.draw(cg, in: CGRect(x: x, y: y, width: scaledTileW, height: scaledTileH))
-                        x += scaledTileW
-                    }
-                    y += scaledTileH
+            var y = startY
+            while y < coverage {
+                var x = startX
+                while x < coverage {
+                    ctx.draw(cg, in: CGRect(x: x, y: y, width: scaledTileW, height: scaledTileH))
+                    x += scaledTileW
                 }
-            } symbols: {
-                Image(uiImage: tileImage)
-                    .interpolation(.none)
-                    .resizable()
-                    .frame(width: tileWidth * scale, height: tileHeight * scale)
-                    .tag(0)
+                y += scaledTileH
+            }
+        } symbols: {
+            Image(uiImage: Self.cachedTileImage)
+                .interpolation(.none)
+                .resizable()
+                .frame(width: tileWidth * scale, height: tileHeight * scale)
+                .tag(0)
+        }
+        .task {
+            lastTick = nil
+            while !Task.isCancelled {
+                let now = Date.timeIntervalSinceReferenceDate
+                if let lastTick {
+                    phase = (phase + (now - lastTick) / SplashTiming.cycleDuration)
+                        .truncatingRemainder(dividingBy: 1.0)
+                }
+                self.lastTick = now
+                try? await Task.sleep(for: .milliseconds(Int(SplashTiming.frameInterval * 1000)))
             }
         }
     }
 
-    /// Seconds per full one-tile pan cycle. Slow enough to feel ambient,
-    /// fast enough to be perceptible without feeling busy.
-    private let cycleDuration: TimeInterval = 3
-
-    // 10px circle — smooth pixel art rounding
-    private func drawCircle(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
+    // 10px circle - smooth pixel art rounding
+    private static func drawCircle(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
         let rows: [(x: CGFloat, w: CGFloat)] = [
             (3, 4), (2, 6), (1, 8), (1, 8), (0, 10),
             (0, 10), (1, 8), (1, 8), (2, 6), (3, 4),
@@ -340,8 +336,8 @@ private struct PixelDitherPattern: View {
         }
     }
 
-    // 10px bold X — 3px-wide strokes, rounded single-pixel tips
-    private func drawCross(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
+    // 10px bold X - 3px-wide strokes, rounded single-pixel tips
+    private static func drawCross(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
         let rects: [(x: CGFloat, y: CGFloat, w: CGFloat)] = [
             (1, 0, 1), (8, 0, 1),
             (0, 1, 3), (7, 1, 3),
@@ -359,8 +355,8 @@ private struct PixelDitherPattern: View {
         }
     }
 
-    // 10px diamond — pointed rhombus
-    private func drawDiamond(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
+    // 10px diamond - pointed rhombus
+    private static func drawDiamond(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
         let rows: [(x: CGFloat, w: CGFloat)] = [
             (4, 2), (3, 4), (2, 6), (1, 8), (0, 10),
             (0, 10), (1, 8), (2, 6), (3, 4), (4, 2),
