@@ -212,13 +212,9 @@ class AppSettings {
     }
 
     // MARK: - Splash disclaimer acknowledgment
-    //
-    // The app is in early development and carries known instability. We
-    // show a first-launch disclaimer over the splash that the user must
-    // acknowledge to continue. The stored value is a monotonically
-    // increasing version so we can re-prompt when the disclaimer copy
-    // changes in a meaningful way (e.g., after a big architectural
-    // shift or a new class of known-broken games).
+
+    /// Monotonically increasing version so we can re-prompt when the
+    /// disclaimer copy changes meaningfully.
     static let currentDisclaimerVersion = 1
 
     var disclaimerAcknowledgedVersion: Int {
