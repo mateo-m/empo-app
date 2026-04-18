@@ -374,7 +374,7 @@ class AppState {
         let pm = PauseManager.shared
         pm.pauseSnapshot = snapshot
         pm.pausedGame = selectedGame
-        withAnimation(.spring(duration: 0.25, bounce: 0)) {
+        withAnimation(Motion.snappy) {
             phase = nil
         }
     }
@@ -490,27 +490,29 @@ class AppState {
             }
         }, nil)
 
-        // Engine paused — capture snapshot on the engine thread
-        // (pointer is only valid until next pause/reset).
+        // Engine paused - capture snapshot while lock is held.
         mkxp_setPausedCallback({ _ in
             var snapshotImage: UIImage?
             var w: Int32 = 0
             var h: Int32 = 0
-            if let ptr = mkxp_getSnapshotRGBA(&w, &h), w > 0, h > 0 {
-                let bytesPerRow = Int(w) * 4
-                let totalBytes = bytesPerRow * Int(h)
-                let data = Data(bytes: ptr, count: totalBytes)
-                if let provider = CGDataProvider(data: data as CFData),
-                   let cgImage = CGImage(
-                       width: Int(w), height: Int(h),
-                       bitsPerComponent: 8, bitsPerPixel: 32,
-                       bytesPerRow: bytesPerRow,
-                       space: CGColorSpaceCreateDeviceRGB(),
-                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                       provider: provider,
-                       decode: nil, shouldInterpolate: true,
-                       intent: .defaultIntent) {
-                    snapshotImage = UIImage(cgImage: cgImage)
+            if mkxp_getSnapshotSize(&w, &h), w > 0, h > 0 {
+                let totalBytes = Int(w) * Int(h) * 4
+                var buffer = [UInt8](repeating: 0, count: totalBytes)
+                if mkxp_copySnapshotRGBA(&buffer, Int32(totalBytes), &w, &h) {
+                    let data = Data(buffer)
+                    let bytesPerRow = Int(w) * 4
+                    if let provider = CGDataProvider(data: data as CFData),
+                       let cgImage = CGImage(
+                           width: Int(w), height: Int(h),
+                           bitsPerComponent: 8, bitsPerPixel: 32,
+                           bytesPerRow: bytesPerRow,
+                           space: CGColorSpaceCreateDeviceRGB(),
+                           bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                           provider: provider,
+                           decode: nil, shouldInterpolate: true,
+                           intent: .defaultIntent) {
+                        snapshotImage = UIImage(cgImage: cgImage)
+                    }
                 }
             }
 
