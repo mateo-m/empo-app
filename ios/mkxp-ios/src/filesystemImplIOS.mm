@@ -37,7 +37,33 @@ std::string filesystemImpl::getCurrentDirectory() {
 
 std::string filesystemImpl::normalizePath(const char *path, bool preferred, bool absolute) {
     @autoreleasepool {
-        NSString *nspath = [NSURL fileURLWithPath:PATHTONS(path)].URLByStandardizingPath.path;
+        // IMPORTANT (iOS real device): do not feed a relative path into
+        // `NSURL fileURLWithPath:`. That API resolves the relative
+        // string against Foundation's view of the cwd, which on device
+        // may be reported as `/var/mobile/...` while
+        // `NSFileManager.defaultManager.currentDirectoryPath` may
+        // return `/private/var/mobile/...` (or vice versa). The two
+        // are the same path via the /var -> /private/var symlink, but
+        // the literal strings differ, so the cwd-prefix strip below
+        // silently fails. The result is a spurious absolute path
+        // (e.g. `/private/var/mobile/.../Data/Scripts.rxdata`) that
+        // PhysFS then treats as relative to its DIR mount's `.`
+        // prefix, producing `./private/var/.../Data/Scripts.rxdata`
+        // which of course doesn't exist. This is why
+        // `PHYSFS_exists("Data/Scripts.rxdata")` fails on device
+        // while `PHYSFS_enumerateFiles("Data")` (which the engine
+        // calls directly, bypassing normalize) sees the file.
+        //
+        // Keep relative inputs relative. Only the real absolute-path
+        // codepath needs the NSURL roundtrip (used by e.g. bitmap
+        // save, pref-dir canonicalisation).
+        NSString *input = PATHTONS(path);
+        if (!absolute && ![input hasPrefix:@"/"]) {
+            NSString *normalized = [input stringByReplacingOccurrencesOfString:@"\\" withString:@"/"];
+            return std::string(NSTOPATH(normalized));
+        }
+
+        NSString *nspath = [NSURL fileURLWithPath:input].URLByStandardizingPath.path;
         NSString *pwd = [NSString stringWithFormat:@"%@/", NSFileManager.defaultManager.currentDirectoryPath];
         if (!absolute) {
             nspath = [nspath stringByReplacingOccurrencesOfString:pwd withString:@""];
