@@ -108,7 +108,7 @@ struct ImportButton: View {
             .onChange(of: splashDismissed) { _, dismissed in
                 guard dismissed else { return }
                 let revealDelay = entranceDelay + EmptyStateView.staggerInterval * Double(EmptyStateView.elementCount)
-                withAnimation(.spring(duration: 0.3, bounce: 0).delay(revealDelay)) {
+                withAnimation(Motion.standard.delay(revealDelay)) {
                     revealed = true
                 }
                 withAnimation(.easeInOut(duration: 1.5).delay(revealDelay + 0.5)) {
@@ -120,7 +120,7 @@ struct ImportButton: View {
 
     @ViewBuilder
     private func importButtonLabel(collapsed: Bool) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.md) {
             Image(systemName: "plus")
             if !collapsed {
                 Text("Import game")

@@ -9,13 +9,8 @@ import SwiftUI
 /// The palette intensifies the current scheme rather than inverting it:
 /// dark mode gets a deeper-than-system-dark surface, light mode gets a
 /// brighter-than-system-light surface. This creates clear figure/ground
-/// separation without the jarring full inversion. Rounded corners are
+/// separation without jarring full inversion. Rounded corners are
 /// exaggerated (48pt) so the sheet reads as a card, not a system surface.
-/// Palette for the experimental sheets. Dark mode gets a deeper-than-
-/// dark surface; light mode gets a brighter-than-light surface. This
-/// keeps the sheet feeling like a distinct layer on top of Settings
-/// without the jarring full-inversion of the previous white-on-dark
-/// approach.
 enum ExperimentalSheetPalette {
     static func background(for scheme: ColorScheme) -> Color {
         scheme == .dark
@@ -78,7 +73,7 @@ struct ExperimentalSheetScaffold<Content: View>: View {
                 // Thin luminance edge gives the sheet a defined boundary
                 // against the dimmed content underneath, creating visual
                 // lift without a drop shadow.
-                RoundedRectangle(cornerRadius: 56)
+                RoundedRectangle(cornerRadius: Radius.sheet)
                     .strokeBorder(
                         Color.white.opacity(colorScheme == .dark ? 0.08 : 0.0),
                         lineWidth: 1
@@ -86,6 +81,6 @@ struct ExperimentalSheetScaffold<Content: View>: View {
             }
         }
         .presentationDragIndicator(.visible)
-        .presentationCornerRadius(56)
+        .presentationCornerRadius(Radius.sheet)
     }
 }

@@ -16,7 +16,7 @@ struct GameArtworkView: View {
     var body: some View {
         content
             .saturation(importing ? 0 : 1)
-            .animation(.spring(duration: 0.3, bounce: 0), value: importing)
+            .animation(Motion.standard, value: importing)
             .overlay {
                 if shimmer && artworkPath != nil && !importing {
                     shimmerOverlay
