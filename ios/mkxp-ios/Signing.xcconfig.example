@@ -1,0 +1,14 @@
+// Signing.xcconfig
+//
+// Copy this file to Signing.xcconfig (same directory) and set your
+// Apple Developer Team ID below. Signing.xcconfig is gitignored so
+// each contributor keeps their own team on their machine without
+// committing it.
+//
+// To find your team ID:
+//   Xcode > Settings > Accounts > (your Apple ID) > Manage Certificates
+//   Or: System Settings > Apple ID, then look for the membership details.
+//   A free personal Apple ID also works for on-device development.
+//
+// Uncomment and fill in:
+// DEVELOPMENT_TEAM = YOUR10CHARID
