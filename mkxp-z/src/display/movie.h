@@ -63,22 +63,29 @@ struct MovieOpenHandler : FileSystem::OpenHandler
 
 struct Movie
 {
-    THEORAPLAY_Decoder *decoder;
-    const THEORAPLAY_AudioPacket *audio;
-    const THEORAPLAY_VideoFrame *video;
-    bool hasVideo;
-    bool hasAudio;
-    bool skippable;
-    Bitmap *videoBitmap;
-    SDL_RWops srcOps;
-    SDL_Thread *audioThread;
+    // Default member initializers so every field has a defined value
+    // even on error paths where preparePlayback() returns before
+    // touching them. The destructor reads hasAudio / audioMutex /
+    // audioQueue{Head,Tail} / audioSource / alBuffers unconditionally;
+    // if any were uninitialized, aborting on a bad movie file would
+    // produce UB (dereferencing garbage pointers or freeing bogus
+    // AL handles). See preparePlayback() early-abort paths.
+    THEORAPLAY_Decoder *decoder = nullptr;
+    const THEORAPLAY_AudioPacket *audio = nullptr;
+    const THEORAPLAY_VideoFrame *video = nullptr;
+    bool hasVideo = false;
+    bool hasAudio = false;
+    bool skippable = false;
+    Bitmap *videoBitmap = nullptr;
+    SDL_RWops srcOps{};
+    SDL_Thread *audioThread = nullptr;
     AtomicFlag audioThreadTermReq;
-    volatile AudioQueue *audioQueueHead;
-    volatile AudioQueue *audioQueueTail;
-    ALuint audioSource;
-    ALuint alBuffers[STREAM_BUFS];
-    ALshort audioBuffer[MOVIE_AUDIO_BUFFER_SIZE];
-    SDL_mutex *audioMutex;
+    volatile AudioQueue *audioQueueHead = nullptr;
+    volatile AudioQueue *audioQueueTail = nullptr;
+    ALuint audioSource = 0;
+    ALuint alBuffers[STREAM_BUFS]{};
+    ALshort audioBuffer[MOVIE_AUDIO_BUFFER_SIZE]{};
+    SDL_mutex *audioMutex = nullptr;
 
     Movie(bool skippable_);
     ~Movie();

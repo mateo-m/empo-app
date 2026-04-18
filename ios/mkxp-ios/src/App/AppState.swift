@@ -259,6 +259,12 @@ class AppState {
     /// Phase change is delayed so the hero zoom animation plays while
     /// the library is still visible. The snapshot stays alive — PlayerView
     /// picks it up as a fade-out overlay so there's no flash at handoff.
+    ///
+    /// The `pm.pausedGame == nil` guard in the Task prevents a stray
+    /// `phase = .playing` after the user cancelled mid-resume by
+    /// returning to the library; previously the chained asyncAfter
+    /// calls could race past `returnToLibrary()` and put the app back
+    /// into .playing with no game loaded.
     func resumePausedGame() {
         let pm = PauseManager.shared
         guard pm.pausedGame != nil else { return }
@@ -266,11 +272,16 @@ class AppState {
         pm.snapshotCanFade = false
         mkxp_requestResume()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard let self, pm.pausedGame == nil else { return }
             self.phase = .playing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                pm.snapshotCanFade = true
-            }
+            // The frame-rendered callback in registerBridgeCallbacks
+            // also flips `snapshotCanFade` once the engine has drawn
+            // a real frame; this timed fallback just guarantees the
+            // snapshot fades out even if the callback is delayed.
+            try? await Task.sleep(for: .milliseconds(300))
+            pm.snapshotCanFade = true
         }
     }
 

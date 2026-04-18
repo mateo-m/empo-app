@@ -60,23 +60,26 @@ struct RootView: View {
         }
         .animation(.spring(duration: 0.35, bounce: 0), value: settings.rendererPendingRestart)
         .animation(.spring(duration: 0.35, bounce: 0), value: PauseManager.shared.pausedGame == nil)
-        .onAppear {
+        .task {
             if appState.pendingCrashRecovery {
                 appState.consumeCrashRecovery()
                 return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                if settings.needsDisclaimer {
-                    // Hold the splash open: fade the logo out (by entering the
-                    // "exiting" visual but without dismissing the container)
-                    // and reveal the disclaimer. The normal dismissal runs
-                    // once the user acknowledges.
-                    withAnimation(.spring(duration: 0.35, bounce: 0)) {
-                        showDisclaimer = true
-                    }
-                } else {
-                    dismissSplash()
+            // Hold the splash visible for ~1.2s before transitioning
+            // to either the disclaimer (first launch) or the library.
+            // .task cancels on disappear so if the view is ever torn
+            // down early, the sleep unwinds cleanly.
+            try? await Task.sleep(for: .milliseconds(1200))
+            if settings.needsDisclaimer {
+                // Hold the splash open: fade the logo out (by entering
+                // the "exiting" visual but without dismissing the
+                // container) and reveal the disclaimer. The normal
+                // dismissal runs once the user acknowledges.
+                withAnimation(.spring(duration: 0.35, bounce: 0)) {
+                    showDisclaimer = true
                 }
+            } else {
+                dismissSplash()
             }
         }
         .alert("Something went wrong", isPresented: showErrorAlert) {
