@@ -104,44 +104,16 @@ struct GameCard: View {
 
     @ViewBuilder
     private var centerOverlay: some View {
-        switch game.status {
-        case .importing:
+        // Dim the artwork a little for non-ready states so the
+        // indicator reads clearly against busy thumbnails.
+        if game.status.phase != .ready {
             Color.black.opacity(Overlay.light)
-            ImportProgressView(progress: game.importProgress, onStop: onStopImport)
-        case .invalid:
-            Color.black.opacity(Overlay.light)
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.title2)
-                .foregroundStyle(.warning)
-                .iconShadow()
-        case .ready:
-            if isPaused {
-                // Paused indicator
-                Color.black.opacity(Overlay.light + 0.05)
-                Image(systemName: "pause.fill")
-                    .font(.title3)
-                    .foregroundStyle(.white)
-                    .iconShadow()
-            } else {
-                Image(systemName: "play.fill")
-                    .font(.title3)
-                    .foregroundStyle(.white)
-                    .iconShadow()
-                    .background(
-                        Circle()
-                            .fill(.thinMaterial)
-                            .mask(
-                                RadialGradient(
-                                    colors: [.white, .white.opacity(0.5), .white.opacity(0.15), .clear],
-                                    center: .center,
-                                    startRadius: 0,
-                                    endRadius: 30
-                                )
-                            )
-                            .frame(width: 60, height: 60)
-                    )
-            }
         }
+        GameStatusIndicator(
+            kind: .resolve(status: game.status, paused: isPaused),
+            onStopImport: onStopImport,
+            size: 36
+        )
     }
 
     @ViewBuilder
@@ -150,30 +122,6 @@ struct GameCard: View {
             artworkPath: game.artworkPath,
             importing: game.status.phase == .importing
         )
-    }
-}
-
-
-private struct ImportProgressView: View {
-    let progress: Double
-    var size: CGFloat = 36
-    var tint: Color = .white
-    var onStop: (() -> Void)? = nil
-
-    private var stopSize: CGFloat { size * 0.333 }
-
-    var body: some View {
-        ZStack {
-            SpinnerRing(progress: progress, size: size, tint: tint)
-
-            Button(action: { onStop?() }) {
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(tint)
-                    .frame(width: stopSize, height: stopSize)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Stop import")
-        }
     }
 }
 
@@ -223,19 +171,10 @@ struct GameListRow: View {
 
             Spacer()
 
-            if isPaused {
-                Image(systemName: "pause.fill")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Circle())
-            } else {
-                ListRowStatusIndicator(
-                    status: game.status,
-                    onStopImport: onStopImport
-                )
-            }
+            GameStatusIndicator(
+                kind: .resolve(status: game.status, paused: isPaused),
+                onStopImport: onStopImport
+            )
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())
@@ -243,30 +182,77 @@ struct GameListRow: View {
 }
 
 
-private struct ListRowStatusIndicator: View {
-    let status: GameStatus
+/// Unified status badge used by both the grid card centerOverlay and the
+/// list row trailing edge. Renders the circular glass background,
+/// determinate/indeterminate progress ring (for imports), and the inner
+/// icon (stop / play / pause / warning) as a coherent animated unit.
+///
+/// Takes a single `GameStatusIndicator.Kind` so the four mutually
+/// exclusive display states are exhaustive at the type level. Callers
+/// at the grid/list sites compute `.kind` from
+/// `game.status` + `PauseManager.pausedGame` - mixing those two
+/// concerns into the enum here would muddle `GameStatus` which only
+/// knows about filesystem/import state, not about whether a session is
+/// currently paused.
+struct GameStatusIndicator: View {
+    /// Exhaustive set of visual states. Paused is its own case
+    /// (rather than a boolean on top of ready) so the `switch` in
+    /// `innerIcon` and `indicatorBody` covers every branch without
+    /// conditional flags.
+    enum Kind: Hashable {
+        case importing(progress: Double)
+        case ready
+        case paused
+        case invalid
+    }
+
+    let kind: Kind
     var onStopImport: (() -> Void)? = nil
+    /// Overall diameter. All inner metrics (ring, icon, stop square)
+    /// scale from this single value so the list (34pt) and card (56pt)
+    /// sites both look proportional.
+    var size: CGFloat = AppSize.toolbarButton
 
-    private let size: CGFloat = AppSize.toolbarButton
-    private let ringSize: CGFloat = 28
-    private let lineWidth: CGFloat = 2.7
-    private let stopSize: CGFloat = 9.5
+    @Environment(\.colorScheme) private var colorScheme
 
-    private var isImporting: Bool { status.phase == .importing }
+    private var ringSize: CGFloat    { size * 0.82 }
+    private var lineWidth: CGFloat   { size * 0.079 }
+    private var stopSize: CGFloat    { size * 0.28 }
+    private var iconFont: Font {
+        size >= 44 ? .title3 : .caption
+    }
+
     private var progress: Double {
-        if case .importing(let p) = status { return p }
+        if case .importing(let p) = kind { return p }
         return 0
     }
 
-    var body: some View {
-        ZStack {
-            // Background circle — fills in on ready, hidden on invalid
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: size, height: size)
-                .opacity(status.phase == .ready ? 1 : 0)
-                .scaleEffect(status.phase == .ready ? 1 : 0.7)
+    /// Paused state gets an inverted scheme for emphasis: a light badge
+    /// in dark mode and a dark badge in light mode. Makes it pop
+    /// against the surrounding glass/artwork without screaming for
+    /// attention, which wouldn't be right for a passive "paused" state.
+    private var pausedForeground: Color {
+        colorScheme == .dark ? .black : .white
+    }
+    private var pausedBackgroundTint: Color {
+        colorScheme == .dark ? .white : .black
+    }
 
+    var body: some View {
+        // Shared glass chrome across ready / paused / invalid states.
+        // Importing hides it because the SpinnerRing already provides
+        // its own ring-as-container; stacking two rims looks muddled.
+        // Uses the same `.glassEffect(.regular, in: .circle)` styling
+        // as IconButton so the indicator reads as a sibling to toolbar
+        // icons rather than a bespoke material blob.
+        indicatorBody
+            .frame(width: size, height: size)
+            .animation(Motion.gentle, value: kind)
+    }
+
+    @ViewBuilder
+    private var indicatorBody: some View {
+        let core = ZStack {
             SpinnerRing(
                 progress: progress,
                 size: ringSize,
@@ -274,20 +260,29 @@ private struct ListRowStatusIndicator: View {
                 tint: .primary,
                 trackOpacity: 0.2
             )
-            .opacity(isImporting ? 1 : 0)
-            .scaleEffect(isImporting ? 1 : 0.5)
+            .opacity({ if case .importing = kind { true } else { false } }() ? 1 : 0)
+            .scaleEffect({ if case .importing = kind { true } else { false } }() ? 1 : 0.5)
 
-            // Inner icon — stop square morphs to play or warning
+            // Inner icon — morphs between stop / play / pause / warning
             innerIcon
-            .transition(.blurReplace)
+                .transition(.blurReplace)
         }
-        .frame(width: size, height: size)
-        .animation(Motion.gentle, value: status.phase)
+
+        switch kind {
+        case .importing:
+            core
+        case .paused:
+            // Inverted scheme tint so the paused badge reads stronger
+            // than the ambient ready state.
+            core.glassEffect(.regular.tint(pausedBackgroundTint), in: .circle)
+        case .ready, .invalid:
+            core.glassEffect(.regular, in: .circle)
+        }
     }
 
     @ViewBuilder
     private var innerIcon: some View {
-        switch status.phase {
+        switch kind {
         case .importing:
             Button(action: { onStopImport?() }) {
                 RoundedRectangle(cornerRadius: 2.5)
@@ -298,11 +293,29 @@ private struct ListRowStatusIndicator: View {
             .accessibilityLabel("Stop import")
         case .ready:
             Image(systemName: "play.fill")
-                .font(.caption)
+                .font(iconFont)
                 .foregroundStyle(.primary)
+        case .paused:
+            Image(systemName: "pause.fill")
+                .font(iconFont)
+                .foregroundStyle(pausedForeground)
         case .invalid:
             Image(systemName: "exclamationmark.triangle.fill")
+                .font(iconFont)
                 .foregroundStyle(.warning)
+        }
+    }
+}
+
+extension GameStatusIndicator.Kind {
+    /// Helper for the common call shape: feed the file-system status
+    /// and the session-paused flag, get the right visual kind.
+    /// Keeps the "paused only makes sense on ready" rule in one place.
+    static func resolve(status: GameStatus, paused: Bool) -> Self {
+        switch status {
+        case .importing(let progress): .importing(progress: progress)
+        case .invalid: .invalid
+        case .ready: paused ? .paused : .ready
         }
     }
 }
