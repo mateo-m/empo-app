@@ -298,7 +298,7 @@ $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 	git apply $(PATCHES)/ruby31/ios.patch; \
 	for patch in $(ENGINE)/syntax-transform/3.1/[0-9]*.patch; do \
 		echo "Applying syntax transform: $$(basename $$patch)"; \
-		patch -p1 -i $$patch || exit 1; \
+		patch -p1 --fuzz=3 -i $$patch || exit 1; \
 	done; \
 	autoreconf -i
 
