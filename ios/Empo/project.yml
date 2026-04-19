@@ -214,6 +214,7 @@ targets:
           - -lSDL2_sound
           - -lSDL2_ttf
           - -lruby.3.1-static
+          - -lruby.3.1-ext
           - -lfreetype
           - -lpixman-1
           - -lpng16

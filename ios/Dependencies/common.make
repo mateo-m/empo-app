@@ -262,7 +262,7 @@ $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 	cd $(SOURCES)/freetype; ./autogen.sh
 
 # Ruby 3.1 (submodule: sources/ruby)
-ruby: init_dirs $(LIBDIR)/libruby.3.1-static.a
+ruby: init_dirs $(LIBDIR)/libruby.3.1-static.a $(LIBDIR)/libruby.3.1-ext.a
 
 $(LIBDIR)/libruby.3.1-static.a: $(SOURCES)/ruby/Makefile
 	cd $(SOURCES)/ruby; \
@@ -270,6 +270,32 @@ $(LIBDIR)/libruby.3.1-static.a: $(SOURCES)/ruby/Makefile
 	cp libruby.3.1-static.a $(LIBDIR)/; \
 	cp -R include/* $(INCLUDEDIR)/; \
 	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby/config.h 2>/dev/null || true
+
+# Build Ruby 3.1 extensions (zlib, stringio, strscan, digest, etc.) plus
+# encoding libs into libruby.3.1-ext.a. Mirrors the Ruby 1.8 pattern (see
+# RUBY18_EXTS above). ext/extinit.o and enc/encinit.o replace the dmyext.o
+# and dmyenc.o stubs that live in libruby.3.1-static.a.
+$(LIBDIR)/libruby.3.1-ext.a: $(LIBDIR)/libruby.3.1-static.a
+	cd $(SOURCES)/ruby; \
+	$(CONFIGURE_ENV) make -j$(NPROC) exts encs || true
+	@TMPDIR=$$(mktemp -d); \
+	cd $$TMPDIR; \
+	for a in $$(find $(SOURCES)/ruby/ext -name "*.a" -not -path "*/test/*") \
+	         $(SOURCES)/ruby/enc/libenc.a $(SOURCES)/ruby/enc/libtrans.a; do \
+		[ -f "$$a" ] || continue; \
+		sub=$$(basename $$a .a); \
+		mkdir -p "$$sub"; \
+		(cd "$$sub" && $(AR) x "$$a"); \
+	done; \
+	cp $(SOURCES)/ruby/ext/extinit.o .; \
+	cp $(SOURCES)/ruby/enc/encinit.o .; \
+	$(AR) rcs $(LIBDIR)/libruby.3.1-ext.a extinit.o encinit.o */*.o; \
+	$(RANLIB) $(LIBDIR)/libruby.3.1-ext.a; \
+	rm -rf $$TMPDIR
+	@# Strip dmyext.o and dmyenc.o from the core static lib so the real
+	@# Init_ext and Init_enc in libruby.3.1-ext.a win at link time.
+	$(AR) d $(LIBDIR)/libruby.3.1-static.a dmyext.o dmyenc.o || true
+	$(RANLIB) $(LIBDIR)/libruby.3.1-static.a
 
 $(SOURCES)/ruby/Makefile: $(SOURCES)/ruby/configure
 	cd $(SOURCES)/ruby; \
