@@ -164,13 +164,21 @@ enum GameImportValidator {
 
 
     private static func checkRuntimeSupport(_ version: RGSSVersion) throws {
-        // Currently we ship Ruby 1.8, which supports RGSS1 (XP) and RGSS2 (VX).
-        // RGSS3 (VX Ace) requires Ruby 1.9+ which we don't have yet.
-        if version == .vxAce {
-            throw ImportError.unsupportedRuntime(
-                "This game requires RPG Maker VX Ace (RGSS3) which isn't supported yet. "
-                + "Only RPG Maker XP and VX games are currently supported."
-            )
+        // Ask the engine which RGSS versions this build supports. The mask
+        // depends on which Ruby runtime is linked (legacy Ruby 1.8 only runs
+        // RGSS1 + RGSS2; Ruby 3.x with syntax transform runs all three).
+        let mask = Int(mkxp_getSupportedRGSSVersionMask())
+        let bit = 1 << (version.rawValue - 1)
+        if mask & bit != 0 { return }
+
+        let label: String
+        switch version {
+        case .xp:    label = "RPG Maker XP (RGSS1)"
+        case .vx:    label = "RPG Maker VX (RGSS2)"
+        case .vxAce: label = "RPG Maker VX Ace (RGSS3)"
         }
+        throw ImportError.unsupportedRuntime(
+            "This game requires \(label), which isn't supported right now."
+        )
     }
 }
