@@ -227,48 +227,54 @@ struct GameSettings: Codable, Equatable {
 
     /// Parses JSON with `//` line comments (as used by mkxp.json).
     static func parseJSONWithComments(_ raw: String) -> [String: Any]? {
+        // Normalize CRLF/CR to LF first. Swift treats `\r\n` as a single
+        // grapheme cluster that never equals `"\n"`, which would make the
+        // comment-skip loop below consume the rest of the file.
+        let normalized = raw.replacingOccurrences(of: "\r\n", with: "\n")
+                            .replacingOccurrences(of: "\r", with: "\n")
+
         var cleaned = ""
         var inString = false
         var escaped = false
-        var i = raw.startIndex
+        var i = normalized.startIndex
 
-        while i < raw.endIndex {
-            let c = raw[i]
+        while i < normalized.endIndex {
+            let c = normalized[i]
 
             if escaped {
                 cleaned.append(c)
                 escaped = false
-                i = raw.index(after: i)
+                i = normalized.index(after: i)
                 continue
             }
 
             if c == "\\" && inString {
                 cleaned.append(c)
                 escaped = true
-                i = raw.index(after: i)
+                i = normalized.index(after: i)
                 continue
             }
 
             if c == "\"" {
                 inString.toggle()
                 cleaned.append(c)
-                i = raw.index(after: i)
+                i = normalized.index(after: i)
                 continue
             }
 
             if !inString && c == "/" {
-                let next = raw.index(after: i)
-                if next < raw.endIndex && raw[next] == "/" {
+                let next = normalized.index(after: i)
+                if next < normalized.endIndex && normalized[next] == "/" {
                     // Skip to end of line
-                    while i < raw.endIndex && raw[i] != "\n" {
-                        i = raw.index(after: i)
+                    while i < normalized.endIndex && normalized[i] != "\n" {
+                        i = normalized.index(after: i)
                     }
                     continue
                 }
             }
 
             cleaned.append(c)
-            i = raw.index(after: i)
+            i = normalized.index(after: i)
         }
 
         guard let data = cleaned.data(using: .utf8),
