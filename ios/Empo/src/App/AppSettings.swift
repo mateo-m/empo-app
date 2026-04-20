@@ -87,30 +87,6 @@ enum AppTheme: String, CaseIterable {
 }
 
 
-enum RendererOption: String, CaseIterable {
-    case openGLES = "opengles"
-    case angle = "angle"
-
-    var label: String {
-        switch self {
-        case .openGLES: "OpenGL ES"
-        case .angle: "ANGLE"
-        }
-    }
-
-    /// When true, the settings UI shows a "BETA" tag next to the picker's
-    /// label while this option is selected. Keeps the picker entries
-    /// terse (no "(Beta)" suffix in the menu) while still signaling the
-    /// stability status to the user once they've committed.
-    var isBeta: Bool {
-        switch self {
-        case .openGLES: false
-        case .angle:    true
-        }
-    }
-}
-
-
 enum ExperimentalFeature: String, CaseIterable, Identifiable {
     case gameQuit = "experimental.gameQuit"
     case gamePause = "experimental.gamePause"
@@ -137,17 +113,6 @@ enum ExperimentalFeature: String, CaseIterable, Identifiable {
 @Observable
 class AppSettings {
     static let shared = AppSettings()
-
-    private(set) var launchedRenderer: RendererOption
-
-    var rendererPendingRestart: Bool {
-        renderer != launchedRenderer
-    }
-
-    func syncRendererWithEngine() {
-        let current = mkxp_getCurrentRenderer()
-        launchedRenderer = current == MKXP_RENDERER_ANGLE ? .angle : .openGLES
-    }
 
     var theme: AppTheme {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: "theme") }
@@ -207,10 +172,6 @@ class AppSettings {
         didSet { UserDefaults.standard.set(librarySortOption.rawValue, forKey: "librarySortOption") }
     }
 
-    var renderer: RendererOption {
-        didSet { UserDefaults.standard.set(renderer.rawValue, forKey: "renderer") }
-    }
-
     // MARK: - Splash disclaimer acknowledgment
 
     /// Monotonically increasing version so we can re-prompt when the
@@ -257,10 +218,6 @@ class AppSettings {
         self.showContinuePlaying = UserDefaults.standard.object(forKey: "showContinuePlaying") as? Bool ?? true
         let sortRaw = UserDefaults.standard.string(forKey: "librarySortOption") ?? LibrarySortOption.titleAZ.rawValue
         self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
-        let rendererRaw = UserDefaults.standard.string(forKey: "renderer") ?? RendererOption.openGLES.rawValue
-        let resolved = RendererOption(rawValue: rendererRaw) ?? .openGLES
-        self.renderer = resolved
-        self.launchedRenderer = resolved
         self.disclaimerAcknowledgedVersion = UserDefaults.standard.integer(forKey: "disclaimerAcknowledgedVersion")
 
         var flags: [String: Bool] = [:]

@@ -1,45 +1,45 @@
-# SDL & Ruby 1.8 Lifecycle Workarounds
+# SDL & Ruby Lifecycle Workarounds
 
 ## Why This Exists
 
 The iOS port of mkxp-z runs multiple game sessions within a single process. Two fundamental constraints make this non-trivial:
 
-1. **SDL cannot be restarted** - `SDL_Init`/`SDL_Quit` and window/GL context creation are designed for a single process lifetime.
-2. **Ruby 1.8 cannot be restarted** - `ruby_init()` and `ruby_cleanup()` are one-shot operations; calling `ruby_cleanup()` corrupts internal state and a subsequent `ruby_init()` crashes with SIGSEGV.
+1. **SDL cannot be restarted** - `SDL_Init`/`SDL_Quit` and window creation are designed for a single process lifetime.
+2. **Ruby cannot be restarted** - `ruby_init()` and `ruby_cleanup()` are one-shot operations; calling `ruby_cleanup()` destroys the VM and a subsequent `ruby_init()` crashes because Ruby's `Init_*` functions stash VALUEs in file-scope statics that don't get reset.
 
 These constraints cascade into every layer of the architecture.
 
 ---
 
-## 1. Persistent SDL Window, GL Context, and OpenAL Device
+## 1. Persistent SDL Window, ANGLE EGL Context, and OpenAL Device
 
-**Problem:** SDL creates an OpenGL window on `SDL_Init`. Destroying and recreating it between game sessions causes GL context issues on iOS.
+**Problem:** SDL creates a window on `SDL_Init`. Destroying and recreating it between game sessions causes GL context issues on iOS.
 
-**Solution (`main.cpp`):** The SDL window, GL context, and OpenAL device are created **once** and reused across all game sessions.
+**Solution (`main.cpp`):** The SDL window, ANGLE EGL context, and OpenAL device are created **once** and reused across all game sessions. iOS uses ANGLE (OpenGL ES over Metal) exclusively - the legacy EAGL/OpenGL ES path was removed because it crashed on device rotation due to a threading race in SDL's `CAEAGLLayer` renderbuffer reallocation, and Apple deprecated OpenGL ES in iOS 12.
 
 ```cpp
 // Created once, persist for the process lifetime
-SDL_Window *persistWin = SDL_CreateWindow(...);
-SDL_GLContext persistGLCtx = initGL(persistWin, ...);
+SDL_Window *persistWin = SDL_CreateWindow(...);  // no SDL_WINDOW_OPENGL - ANGLE uses a plain CALayer
+initANGLE(persistWin);  // sets up s_eglDisplay / s_eglSurface / s_eglContext
 ALCdevice *persistAlcDev = alcOpenDevice(0);
 ALCcontext *persistAlcCtx = alcCreateContext(persistAlcDev, 0);
 ```
 
-At the end of each session, the GL and AL contexts are **detached** from the RGSS thread (not destroyed), so the next session's thread can claim them:
+At the end of each session, the EGL and AL contexts are **detached** from the RGSS thread (not destroyed), so the next session's thread can claim them:
 
 ```cpp
 // Don't destroy - just detach from the dying thread
 alcMakeContextCurrent(NULL);
-SDL_GL_MakeCurrent(persistWin, NULL);
+eglMakeCurrent(s_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 ```
 
 ### Screen FBO Capture
 
-On iOS, SDL creates a non-zero FBO backed by `CAEAGLLayer`. This ID is captured **once** right after context creation and reused forever. Re-querying `GL_FRAMEBUFFER_BINDING` on subsequent sessions would return 0 (because `SharedState::finiInstance` deleted all game FBOs), which is wrong.
+The screen FBO is captured once right after `initANGLE()` and reused forever. Under ANGLE/Metal it's typically 0, but we never re-query `GL_FRAMEBUFFER_BINDING` on subsequent sessions because `SharedState::finiInstance` deleted all game FBOs by then.
 
 ```cpp
 static GLuint s_screenFBO = 0;
-// Captured once:
+// Captured once in initANGLE:
 glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
 s_screenFBO = static_cast<GLuint>(fbo);
 ```
@@ -66,37 +66,23 @@ Between sessions:
 
 ---
 
-## 3. Ruby 1.8 VM Kept Alive Across Sessions
+## 3. Ruby VM Kept Alive Across Sessions
 
-**Problem (`binding-mri.cpp`):** `ruby_cleanup()` partially destructs the VM. A subsequent `ruby_init()` doesn't fully reinitialize it, causing SIGSEGV on the second game session.
+**Problem (`binding-mri.cpp`):** Calling `ruby_cleanup()` destroys the VM struct but leaves dangling static C pointers in extension `Init_*` functions (e.g. `Init_String` stashes class VALUEs in file-scope statics). A subsequent `ruby_init()` crashes in `rb_call_inits`. This is a known upstream Ruby limitation (see `FUTURE.md`).
 
-**Solution:** A `static bool rubyVMInitialized` guard ensures `ruby_init()` and all `Init_*` extension calls happen exactly once. `ruby_cleanup(0)` is skipped entirely on iOS.
+**Solution:** The Ruby VM is initialized **once** and kept alive for the lifetime of the process. `mriBindingExecute` is split into:
 
-On subsequent sessions, the VM is manually patched:
+- `InitOnce` - `ruby_init`, `topSelf` registration, runs once per process.
+- `PerSession` - `mriBindingInit`, script execution, runs every session to reinstall C methods on top of game-script redefinitions.
 
-1. **GC stack pointer** (`rb_gc_stack_start`): Ruby 1.8's GC scans the thread stack for object references. When the RGSS thread changes between sessions, the old stack is unmapped. The GC stack base must be updated to point at the new thread's stack.
+Between sessions, `resetBetweenSessions()` scrubs user-level state:
 
-   ```cpp
-   volatile VALUE stack_anchor = Qnil;
-   rb_gc_stack_start = (VALUE *)&stack_anchor;
-   ```
-
-2. **Exception state**: Leftover `$!` from the previous session is cleared. `$@` is NOT set when `$!` is nil - Ruby 1.8 raises `ArgumentError` in that case.
-
-3. **Loaded features**: `$LOADED_FEATURES` and `$"` are cleared so `require` works fresh in the new session.
-
----
-
-## 4. Ruby 1.8 Stack Size
-
-**Problem:** Ruby 1.8's GC scans the **entire** thread stack (`mark_locations_array`). The default 512KB pthread stack on iOS is insufficient and causes SIGBUS when GC hits the stack guard page.
-
-**Solution:** The RGSS thread is created with a 4MB stack (matching the default main-thread stack size on Apple platforms):
-
-```cpp
-SDL_Thread *rgssThread = SDL_CreateThreadWithStackSize(
-    rgssThreadFun, "rgss", 4 * 1024 * 1024, &rtData);
-```
+- Removes non-baseline constants from `Object`.
+- Clears class/instance variables on engine-owned classes (`Bitmap`, `Sprite`, `Window`, etc.).
+- Nils standard RGSS globals (`$game_*`, `$data_*`).
+- Removes non-baseline singleton methods from `Input` / `Graphics` / `Audio`.
+- Invokes Ruby-side `$__mkxp_reset_hooks`.
+- Forces a GC cycle.
 
 ---
 
@@ -174,9 +160,8 @@ The architecture can be summarized as:
 
 | Constraint                 | Workaround                                      |
 | -------------------------- | ----------------------------------------------- |
-| SDL can't restart          | Persistent window/GL/AL, session loop           |
-| Ruby 1.8 can't restart     | Keep VM alive, patch GC stack, clear state      |
-| Ruby 1.8 small stack       | 4MB RGSS thread stack                           |
+| SDL can't restart          | Persistent window/EGL/AL, session loop          |
+| Ruby can't restart         | Keep VM alive, reset state between sessions     |
 | Main thread blocked by SDL | Pump CFRunLoop manually                         |
 | No C++→Swift callbacks     | C function pointer callbacks (dispatch to main) |
 | No direct engine kill      | Inject SDL_QUIT event                           |
