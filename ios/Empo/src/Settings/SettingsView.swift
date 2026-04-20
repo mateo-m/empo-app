@@ -99,34 +99,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    SettingsPicker(
-                        title: "Renderer",
-                        selection: Binding(
-                            get: { settings.renderer },
-                            set: { newValue in
-                                if newValue == .angle && settings.renderer != .angle {
-                                    confirmation = .init(
-                                        title: "ANGLE",
-                                        message: "ANGLE translates OpenGL calls to Metal and may cause rendering issues. The change will apply on the next game launch.",
-                                        onConfirm: { settings.renderer = newValue }
-                                    )
-                                } else {
-                                    settings.renderer = newValue
-                                }
-                            }
-                        ),
-                        description: "OpenGL ES is the stable default. ANGLE is experimental and translates OpenGL calls to Metal.",
-                        // Show the BETA badge next to the picker's label
-                        // only when the user has selected a beta-flagged
-                        // renderer, rather than baking "(Beta)" into the
-                        // menu items. Keeps the picker entries terse.
-                        isExperimental: settings.renderer.isBeta
-                    ) {
-                        ForEach(RendererOption.allCases, id: \.self) { option in
-                            Text(option.label).tag(option)
-                        }
-                    }
-
                     SettingsToggle(
                         title: "Pause game",
                         isOn: experimentalBinding(for: .gamePause),

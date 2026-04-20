@@ -433,7 +433,6 @@ class AppState {
                 if state.phase == .loading, !state.engineReady {
                     Haptics.success()
                     state.engineReady = true
-                    AppSettings.shared.syncRendererWithEngine()
                 } else if state.phase == .playing {
                     PauseManager.shared.snapshotCanFade = true
                 }

@@ -24,6 +24,11 @@ struct PlayerView: View {
     @State private var showDebugOverlay = false
     @State private var debugOverlayOffset: CGSize = .zero
     @State private var debugOverlayDragOffset: CGSize = .zero
+    /// Measured height of the debug overlay (it grows when long titles
+    /// wrap). Reported back from DebugOverlayView via a PreferenceKey.
+    /// Starts at the fallback value so the clamp math works before the
+    /// first measurement pass.
+    @State private var debugOverlayHeight: CGFloat = AppSize.debugOverlayInitialHeight
     @State private var toolbarOpacity: Double = 1.0
     @State private var toolbarIdleTask: Task<Void, Never>?
     @State private var showQuitConfirm = false
@@ -71,7 +76,22 @@ struct PlayerView: View {
 
                 if showDebugOverlay {
                     DebugOverlayView()
-                        .frame(width: AppSize.debugOverlayWidth, height: AppSize.debugOverlayHeight)
+                        .frame(width: AppSize.debugOverlayWidth)
+                        .onPreferenceChange(DebugOverlayHeightKey.self) { height in
+                            // Measured on SwiftUI's layout pass. When it grows
+                            // (e.g. long title wraps), re-clamp the current
+                            // offset so the overlay doesn't drift off-screen.
+                            guard height > 0 else { return }
+                            debugOverlayHeight = height
+                            debugOverlayOffset = clampDebugOverlayOffset(
+                                base: .zero,
+                                delta: debugOverlayOffset,
+                                isPortrait: isPortrait,
+                                gameRect: gameRect,
+                                safeArea: safeArea,
+                                geoSize: geo.size
+                            )
+                        }
                         .position(debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geo.size.height))
                         .offset(x: debugOverlayOffset.width + debugOverlayDragOffset.width,
                                 y: debugOverlayOffset.height + debugOverlayDragOffset.height)
@@ -405,7 +425,7 @@ struct PlayerView: View {
 
     private func debugOverlayPosition(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat) -> CGPoint {
         let halfW = AppSize.debugOverlayWidth / 2
-        let halfH = AppSize.debugOverlayHeight / 2
+        let halfH = debugOverlayHeight / 2
         if isPortrait && gameRect.height > 0 && !useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoHeight) {
             return CGPoint(x: safeArea.leading + kToolbarEdgePad + halfW, y: gameRect.origin.y + gameRect.height + kToolbarGap + halfH)
         } else {
@@ -427,7 +447,7 @@ struct PlayerView: View {
     ) -> CGSize {
         let anchor = debugOverlayPosition(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height)
         let halfW = AppSize.debugOverlayWidth / 2
-        let halfH = AppSize.debugOverlayHeight / 2
+        let halfH = debugOverlayHeight / 2
         let minX = safeArea.leading + halfW
         let maxX = geoSize.width - safeArea.trailing - halfW
         let minY = safeArea.top + halfH
