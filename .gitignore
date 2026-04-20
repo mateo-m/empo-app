@@ -28,8 +28,11 @@ compile_commands.json
 *.swo
 *~
 ios/Empo/src/App/GitInfo.generated.swift
-TODO.md
-FUTURE.md
+
+*.md
+!/docs/**/*.md
+!/ios/**/*.md
+!/README.md
 
 # Python cache (agent skill scripts)
 __pycache__/
