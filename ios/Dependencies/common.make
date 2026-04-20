@@ -6,6 +6,7 @@ INCLUDEDIR := $(BUILD_PREFIX)/include
 DOWNLOADS := ${PWD}/downloads/$(HOST)
 SOURCES := ${PWD}/sources
 PATCHES := ${PWD}
+ENGINE := ${PWD}/../../mkxp-z-apple-mobile
 NPROC := $(shell sysctl -n hw.ncpu)
 CFLAGS := -I$(INCLUDEDIR) -I$(INCLUDEDIR)/freetype2 $(TARGETFLAGS) -O3
 CXXFLAGS := $(CFLAGS)
@@ -261,15 +262,40 @@ $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 	cd $(SOURCES)/freetype; ./autogen.sh
 
 # Ruby 3.1 (submodule: sources/ruby)
-ruby: init_dirs $(LIBDIR)/libruby.3.1-static.a
+ruby: init_dirs $(LIBDIR)/libruby.3.1-static.a $(LIBDIR)/libruby.3.1-ext.a
 
 $(LIBDIR)/libruby.3.1-static.a: $(SOURCES)/ruby/Makefile
 	cd $(SOURCES)/ruby; \
 	$(CONFIGURE_ENV) make -j$(NPROC) libruby.3.1-static.a; \
 	cp libruby.3.1-static.a $(LIBDIR)/; \
 	cp -R include/* $(INCLUDEDIR)/; \
-	mkdir -p $(INCLUDEDIR)/ruby/internal; \
-	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby/internal/ 2>/dev/null || true
+	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby/config.h 2>/dev/null || true
+
+# Build Ruby 3.1 extensions (zlib, stringio, strscan, digest, etc.) plus
+# encoding libs into libruby.3.1-ext.a. Mirrors the Ruby 1.8 pattern (see
+# RUBY18_EXTS above). ext/extinit.o and enc/encinit.o replace the dmyext.o
+# and dmyenc.o stubs that live in libruby.3.1-static.a.
+$(LIBDIR)/libruby.3.1-ext.a: $(LIBDIR)/libruby.3.1-static.a
+	cd $(SOURCES)/ruby; \
+	$(CONFIGURE_ENV) make -j$(NPROC) exts encs || true
+	@TMPDIR=$$(mktemp -d); \
+	cd $$TMPDIR; \
+	for a in $$(find $(SOURCES)/ruby/ext -name "*.a" -not -path "*/test/*") \
+	         $(SOURCES)/ruby/enc/libenc.a $(SOURCES)/ruby/enc/libtrans.a; do \
+		[ -f "$$a" ] || continue; \
+		sub=$$(basename $$a .a); \
+		mkdir -p "$$sub"; \
+		(cd "$$sub" && $(AR) x "$$a"); \
+	done; \
+	cp $(SOURCES)/ruby/ext/extinit.o .; \
+	cp $(SOURCES)/ruby/enc/encinit.o .; \
+	$(AR) rcs $(LIBDIR)/libruby.3.1-ext.a extinit.o encinit.o */*.o; \
+	$(RANLIB) $(LIBDIR)/libruby.3.1-ext.a; \
+	rm -rf $$TMPDIR
+	@# Strip dmyext.o and dmyenc.o from the core static lib so the real
+	@# Init_ext and Init_enc in libruby.3.1-ext.a win at link time.
+	$(AR) d $(LIBDIR)/libruby.3.1-static.a dmyext.o dmyenc.o || true
+	$(RANLIB) $(LIBDIR)/libruby.3.1-static.a
 
 $(SOURCES)/ruby/Makefile: $(SOURCES)/ruby/configure
 	cd $(SOURCES)/ruby; \
@@ -289,12 +315,17 @@ $(SOURCES)/ruby/Makefile: $(SOURCES)/ruby/configure
 	ac_cv_func_pwritev=no \
 	ac_cv_func_copy_file_range=no \
 	ac_cv_func_close_range=no \
-	cross_compiling=yes
+	cross_compiling=yes; \
+	sed -i '' 's|^ASFLAGS.*=.*|ASFLAGS = $$(ARCH_FLAG) $$(INCFLAGS) $(TARGETFLAGS)|' Makefile
 
 $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 	cd $(SOURCES)/ruby; \
 	git checkout -- . 2>/dev/null; \
 	git apply $(PATCHES)/ruby31/ios.patch; \
+	for patch in $(ENGINE)/syntax-transform/3.1/[0-9]*.patch; do \
+		echo "Applying syntax transform: $$(basename $$patch)"; \
+		patch -p1 --fuzz=3 -i $$patch || exit 1; \
+	done; \
 	autoreconf -i
 
 # Ruby 1.8 (submodule: sources/ruby18)
