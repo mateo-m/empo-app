@@ -17,12 +17,13 @@ struct SettingsView: View {
             Form {
                 Section {
                     VStack(spacing: Spacing.md) {
-                        Image(systemName: "gamecontroller.fill")
-                            .font(.system(size: 36))
-                            .foregroundStyle(.brand)
+                        // Match splash screen wordmark styling so the
+                        // first run and the settings header feel
+                        // continuous.
                         Text(AppInfo.name)
-                            .font(.title3)
+                            .font(.system(size: 40))
                             .fontWeight(.bold)
+                            .fontDesign(.rounded)
                         Text("v\(AppInfo.version) (\(AppInfo.build)) - \(GitInfo.commit)\(GitInfo.dirty ? " (dirty)" : "")")
                             .font(.caption)
                             .foregroundStyle(.secondary)
