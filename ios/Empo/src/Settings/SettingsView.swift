@@ -4,6 +4,7 @@ struct SettingsView: View {
     @Bindable var settings = AppSettings.shared
     @Environment(\.dismiss) private var dismiss
     @State private var confirmation: ExperimentalConfirmation?
+    @State private var showBuildInfo = false
 
     private struct ExperimentalConfirmation: Identifiable {
         let id = UUID()
@@ -11,6 +12,8 @@ struct SettingsView: View {
         let message: String
         let onConfirm: () -> Void
     }
+
+
 
     var body: some View {
         NavigationStack {
@@ -24,9 +27,17 @@ struct SettingsView: View {
                             .font(.system(size: 40))
                             .fontWeight(.bold)
                             .fontDesign(.rounded)
-                        Text("v\(AppInfo.version) (\(AppInfo.build)) - \(GitInfo.commit)\(GitInfo.dirty ? " (dirty)" : "")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        // Tap the marketing version to reveal full build
+                        // details (commit, dirty flag, non-default branch).
+                        Button {
+                            showBuildInfo = true
+                        } label: {
+                            Text("v\(AppInfo.version)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Show build details")
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, Spacing.md)
@@ -235,6 +246,9 @@ struct SettingsView: View {
                     }
                 )
             }
+            .sheet(isPresented: $showBuildInfo) {
+                BuildInfoSheet()
+            }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -261,6 +275,119 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+}
+
+
+/// Presented as a sheet when the user taps the version label in the
+/// settings header. Shows build details as a grouped list styled to
+/// match GameInfoView. The branch row is only included when the
+/// current branch differs from the default, so release builds on
+/// `main` stay minimal.
+///
+/// Uses the same navigation-stack-with-inline-title pattern as
+/// SettingsView / GameInfoView / GameSettingsView so the toolbar reads
+/// as native chrome (centered inline title, trailing Close button).
+private struct BuildInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var measuredHeight: CGFloat = 0
+
+    /// A detail row shown in the list. `value` is the copyable string; the
+    /// optional `annotation` is rendered next to it but NOT part of the
+    /// text-selection range so users can long-press to copy just the
+    /// canonical value (e.g. the commit hash without a "(dirty)" suffix).
+    private struct Row: Identifiable {
+        let label: String
+        let value: String
+        var annotation: String? = nil
+        var id: String { label }
+    }
+
+    private var rows: [Row] {
+        var r: [Row] = []
+        r.append(Row(label: "Version", value: AppInfo.version))
+        r.append(Row(label: "Build", value: AppInfo.build))
+        r.append(Row(
+            label: "Commit",
+            value: GitInfo.commit,
+            annotation: GitInfo.dirty ? "(dirty)" : nil
+        ))
+        if !GitInfo.branch.isEmpty, GitInfo.branch != GitInfo.defaultBranch {
+            r.append(Row(label: "Branch", value: GitInfo.branch))
+        }
+        return r
+    }
+
+    /// Approximate navigation bar height. The inline nav bar is
+    /// ~44pt but sits above a small status bar drag area; 56 covers
+    /// both comfortably without visibly overshooting.
+    private let navBarAllowance: CGFloat = 56
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 {
+                            Divider().padding(.leading, Spacing.xl)
+                        }
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                            Text(row.label)
+                            Spacer(minLength: Spacing.md)
+                            // RootView applies `.fontDesign(.rounded)`
+                            // to the entire app tree, which overrides
+                            // any `.font(design: .monospaced)` we set
+                            // here via environment resolution. Override
+                            // back to `.monospaced` explicitly so the
+                            // value's font actually reads as fixed-width.
+                            Text(row.value)
+                                .font(.system(size: 15))
+                                .fontDesign(.monospaced)
+                                .textSelection(.enabled)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            if let annotation = row.annotation {
+                                Text(annotation)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, Spacing.xl)
+                        .padding(.vertical, Spacing.lg)
+                    }
+                }
+                .background(Color(.secondarySystemGroupedBackground))
+                .clipShape(RoundedRectangle(cornerRadius: Radius.xl))
+                .padding(.horizontal, Spacing._2xl)
+                .padding(.vertical, Spacing._2xl)
+            }
+            // Force intrinsic sizing so the geometry reader below
+            // measures the content's real height, not the proposed
+            // full-screen height.
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .top)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { newHeight in
+                measuredHeight = newHeight
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Build Info")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                        .tint(.brand)
+                }
+            }
+        }
+        .presentationDetents(
+            measuredHeight > 0
+                ? [.height(measuredHeight + navBarAllowance)]
+                : [.medium]
+        )
+        .presentationDragIndicator(.visible)
     }
 }
 
