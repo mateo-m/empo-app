@@ -47,7 +47,6 @@ settings:
     GCC_PREPROCESSOR_DEFINITIONS:
       - MKXPZ_BUILD_XCODE
       - MKXPZ_ALCDEVICE=ALCdevice_struct
-      - MKXPZ_MINIFFI
       - 'MKXPZ_VERSION="\"1.0.0\""'
       - 'MKXPZ_GIT_HASH="\"ios\""'
       - 'MKXPZ_RUBY_VERSION="\"3.1\""'
@@ -126,14 +125,9 @@ targets:
       - path: ../../mkxp-z-apple-mobile/src/eventthread.cpp
       - path: ../../mkxp-z-apple-mobile/src/sharedstate.cpp
       - path: ../../mkxp-z-apple-mobile/src/config.cpp
-      - path: ../../mkxp-z-apple-mobile/src/settingsmenu.cpp
       - path: ../../mkxp-z-apple-mobile/src/crypto/rgssad.cpp
       - path: ../../mkxp-z-apple-mobile/src/util/iniconfig.cpp
-      - path: ../../mkxp-z-apple-mobile/src/system/systemImpl.cpp
-        buildPhase: none
       - path: ../../mkxp-z-apple-mobile/src/filesystem/filesystem.cpp
-      - path: ../../mkxp-z-apple-mobile/src/filesystem/filesystemImpl.cpp
-        buildPhase: none
       - path: ../../mkxp-z-apple-mobile/src/input/input.cpp
       - path: ../../mkxp-z-apple-mobile/src/input/keybindings.cpp
       - path: ../../mkxp-z-apple-mobile/src/audio/audio.cpp
@@ -192,10 +186,7 @@ targets:
       - path: ../../mkxp-z-apple-mobile/binding/audio-binding.cpp
       - path: ../../mkxp-z-apple-mobile/binding/graphics-binding.cpp
       - path: ../../mkxp-z-apple-mobile/binding/filesystem-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/miniffi.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/miniffi-binding.cpp
       - path: ../../mkxp-z-apple-mobile/binding/http-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/cusl-binding.cpp
       - path: ../../mkxp-z-apple-mobile/binding/module_rpg.cpp
       - path: ../../mkxp-z-apple-mobile/src/app_bridge.cpp
       - path: ../../mkxp-z-apple-mobile/src/angle_native_layer.mm
