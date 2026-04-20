@@ -142,7 +142,10 @@ struct GameListRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.lg) {
-            // Artwork thumbnail
+            // Artwork thumbnail. The transition source id is suffixed
+            // with `-item` so this row doesn't conflict with the
+            // "Continue playing" hero card above the list, which
+            // registers the same game id under a different suffix.
             GameArtworkView(
                 artworkPath: game.artworkPath,
                 placeholderIconSize: 16,
@@ -150,7 +153,7 @@ struct GameListRow: View {
                 cornerRadius: Radius.sm,
                 importing: game.status.phase == .importing
             )
-            .matchedTransitionSource(id: game.id, in: heroNamespace ?? fallbackNamespace) { config in
+            .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) { config in
                 config
                     .background(.black)
                     .clipShape(.rect(cornerRadius: Radius.sm))
