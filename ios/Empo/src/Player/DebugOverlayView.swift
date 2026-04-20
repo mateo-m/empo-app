@@ -15,7 +15,7 @@ struct DebugOverlayView: View {
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
                 .foregroundStyle(.white)
 
-            Text(rgssVersion > 0 ? "Ruby 1.8 \u{00B7} RGSS\(rgssVersion)" : "Ruby 1.8")
+            Text(rubyAndRgssLine)
                 .font(.system(size: 13, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.7))
 
@@ -71,6 +71,11 @@ struct DebugOverlayView: View {
         if fps >= 55 { return .success }
         if fps >= 30 { return .warning }
         return .destructive
+    }
+
+    private var rubyAndRgssLine: String {
+        let ruby = String(cString: mkxp_getRubyVersion())
+        return rgssVersion > 0 ? "Ruby \(ruby) \u{00B7} RGSS\(rgssVersion)" : "Ruby \(ruby)"
     }
 }
 
