@@ -12,21 +12,10 @@ struct ExperimentalInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ExperimentalSheetScaffold {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.xs) {
-                    Image(systemName: "flask.fill")
-                    Text("Experimental")
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.brand)
-
-                Text("What's this?")
-                    .font(.title2.weight(.bold))
-                    .fontDesign(.rounded)
-                    .foregroundStyle(ExperimentalSheetPalette.foreground(for: colorScheme))
-            }
-
+        ExperimentalSheetScaffold(
+            title: "What's this?",
+            caption: .init("Experimental", systemImage: "flask.fill")
+        ) {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 bulletRow(
                     "Experimental features are works in progress."
@@ -41,7 +30,7 @@ struct ExperimentalInfoSheet: View {
                     "If something breaks while one is on, disable it and see if the problem goes away."
                 )
             }
-            .font(.body.weight(.medium))
+            .font(.subheadline)
             .foregroundStyle(ExperimentalSheetPalette.secondaryForeground(for: colorScheme))
 
             Button {

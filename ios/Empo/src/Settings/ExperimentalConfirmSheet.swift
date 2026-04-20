@@ -15,26 +15,11 @@ struct ExperimentalConfirmSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ExperimentalSheetScaffold {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                HStack(spacing: Spacing.xs) {
-                    Image(systemName: "flask.fill")
-                    Text("Experimental")
-                }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.brand)
-
-                Text("Enable \"\(title)\"?")
-                    .font(.title2.weight(.bold))
-                    .fontDesign(.rounded)
-                    .foregroundStyle(ExperimentalSheetPalette.foreground(for: colorScheme))
-            }
-
-            Text(message)
-                .font(.body.weight(.medium))
-                .foregroundStyle(ExperimentalSheetPalette.secondaryForeground(for: colorScheme))
-                .fixedSize(horizontal: false, vertical: true)
-
+        ExperimentalSheetScaffold(
+            title: "Enable \"\(title)\"?",
+            caption: .init("Experimental", systemImage: "flask.fill"),
+            message: message
+        ) {
             VStack(spacing: Spacing.md) {
                 Button {
                     onConfirm()
