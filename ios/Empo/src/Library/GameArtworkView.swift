@@ -57,8 +57,22 @@ struct GameArtworkView: View {
                 image
             }
         } else {
+            // Base uses secondarySystemBackground so light mode lands on
+            // a soft gray instead of pure white (which reads cheap when
+            // it sits right next to vibrant artwork on the other cards).
+            // A subtle top-to-bottom highlight gradient adds depth so
+            // the placeholder feels crafted rather than flat.
             let placeholder = ZStack {
-                Color(.tertiarySystemBackground)
+                Color(.secondarySystemBackground)
+                LinearGradient(
+                    stops: [
+                        .init(color: .white.opacity(0.10), location: 0),
+                        .init(color: .clear, location: 0.5),
+                        .init(color: .black.opacity(0.05), location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
                 Image(systemName: placeholderIcon)
                     .font(.system(size: placeholderIconSize))
                     .foregroundStyle(.quaternary)
