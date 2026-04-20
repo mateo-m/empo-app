@@ -39,7 +39,6 @@ settings:
       - $(DEPENDENCY_SEARCH_PATH)/include/freetype2
       - $(PROJECT_DIR)/../Dependencies/ANGLE/$(PLATFORM_NAME)/include
     SYSTEM_HEADER_SEARCH_PATHS:
-      - $(DEPENDENCY_SEARCH_PATH)/include/ruby18
       - $(DEPENDENCY_SEARCH_PATH)/include
     FRAMEWORK_SEARCH_PATHS: []
     LIBRARY_SEARCH_PATHS:
@@ -51,8 +50,8 @@ settings:
       - MKXPZ_MINIFFI
       - 'MKXPZ_VERSION="\"1.0.0\""'
       - 'MKXPZ_GIT_HASH="\"ios\""'
-      - 'MKXPZ_RUBY_VERSION="\"1.8\""'
-      - MKXPZ_LEGACY_RUBY
+      - 'MKXPZ_RUBY_VERSION="\"3.1\""'
+      - MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES
       - GLES2_HEADER
       - MKXPZ_HAS_ANGLE
       - HAVE_CONFIG_H
@@ -215,8 +214,8 @@ targets:
           - -lSDL2_image
           - -lSDL2_sound
           - -lSDL2_ttf
-          - -lruby18-static
-          - -lruby18-ext
+          - -lruby.3.1-static
+          - -lruby.3.1-ext
           - -lfreetype
           - -lpixman-1
           - -lpng16

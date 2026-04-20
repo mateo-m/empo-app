@@ -188,6 +188,14 @@ struct GameSettings: Codable, Equatable {
             config = parsed
         }
 
+        // Always enable Ruby 1.8 compatibility syntax transform for RGSS1/2
+        // games. Without this the engine runs Ruby 3.1 strict mode and rejects
+        // 1.8-era syntax (`when X:`, `retry` outside rescue, unparenthesized
+        // method calls with spaces, etc.) at parse time.
+        if config["syntaxTransform"] == nil {
+            config["syntaxTransform"] = 2
+        }
+
         if let v = smoothScaling { config["smoothScaling"] = v ? 1 : 0 }
         if let v = fixedAspectRatio { config["fixedAspectRatio"] = v }
         if let v = frameSkip { config["frameSkip"] = v }
