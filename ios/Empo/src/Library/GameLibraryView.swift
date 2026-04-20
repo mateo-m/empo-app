@@ -7,6 +7,24 @@ private struct EmptyStateHeightKey: PreferenceKey {
     }
 }
 
+/// Where a game tap originated from. Used to disambiguate
+/// `matchedTransitionSource` when the same game is shown in multiple
+/// places at once (e.g. "Continue playing" hero card + the usual grid
+/// tile underneath). Each location registers a distinct source id so
+/// the exit zoom animation lands on whichever one the user actually
+/// tapped.
+private enum GameTapSource {
+    case hero
+    case item
+
+    func transitionID(for gameID: String) -> String {
+        switch self {
+        case .hero: return "\(gameID)-hero"
+        case .item: return "\(gameID)-item"
+        }
+    }
+}
+
 struct GameLibraryView: View {
     var appState: AppState
     var heroNamespace: Namespace.ID
@@ -33,6 +51,10 @@ struct GameLibraryView: View {
     @State private var showSortSheet = false
     @State private var gameSizes: [String: Int64] = [:]
     @State private var sizesTask: Task<Void, Never>?
+    /// Per-game record of which visual source triggered the most recent
+    /// navigation into the player. Drives `.navigationTransition(.zoom)`
+    /// so the exit animation lands on the same spot the user tapped.
+    @State private var tappedSource: [String: GameTapSource] = [:]
 
     // Derived filter/sort pipeline. A previous attempt cached this in
     // @State and re-derived via .onChange, but passing library.games
@@ -215,8 +237,15 @@ struct GameLibraryView: View {
             }
             .tint(nil)
             .navigationDestination(for: GameEntry.self) { game in
+                // The zoom destination targets whichever visible source
+                // the user tapped (hero card vs grid/list item). If we
+                // don't remember (e.g. external deep link), fall back to
+                // the grid/list item source id since that's the one
+                // always visible in the library.
+                let source = tappedSource[game.id] ?? .item
                 GameLoadingView(game: game)
-                    .navigationTransition(.zoom(sourceID: game.id, in: heroNamespace))
+                    .navigationTransition(.zoom(sourceID: source.transitionID(for: game.id),
+                                                in: heroNamespace))
             }
             .onChange(of: appState.phase) { _, newPhase in
                 if newPhase == nil && !path.isEmpty {
@@ -384,7 +413,7 @@ struct GameLibraryView: View {
     }
 
     private func heroCardContent(for game: GameEntry, isPaused: Bool, aspectRatio: CGFloat) -> some View {
-        Button { handleGameTap(game) } label: {
+        Button { handleGameTap(game, from: .hero) } label: {
             Color.clear
                 .aspectRatio(aspectRatio, contentMode: .fit)
                 .overlay {
@@ -434,7 +463,8 @@ struct GameLibraryView: View {
                 }
                 .clipShape(.rect(cornerRadius: Radius.lg))
                 .cardShadow()
-                .matchedTransitionSource(id: game.id, in: heroNamespace) { config in
+                .matchedTransitionSource(id: GameTapSource.hero.transitionID(for: game.id),
+                                         in: heroNamespace) { config in
                     config
                         .background(.black)
                         .clipShape(.rect(cornerRadius: Radius.lg))
@@ -442,7 +472,7 @@ struct GameLibraryView: View {
         }
         .buttonStyle(CardPressStyle())
         .environment(\.colorScheme, .dark)
-        .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+        .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game, from: .hero) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
     }
 
     private var listInner: some View {
@@ -458,7 +488,7 @@ struct GameLibraryView: View {
                 let isPaused = PauseManager.shared.pausedGame?.id == game.id
                 Button {
                     switch game.status {
-                    case .ready: handleGameTap(game)
+                    case .ready: handleGameTap(game, from: .item)
                     case .invalid: showInvalidAlert = true
                     case .importing: break
                     }
@@ -474,7 +504,7 @@ struct GameLibraryView: View {
                     )
                 }
                 .buttonStyle(ListRowPressStyle())
-                .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game, from: .item) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                 .transition(.cardAppear)
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
@@ -509,14 +539,15 @@ struct GameLibraryView: View {
                     .id("\(game.id)-invalid")
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
-                    .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                    .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game, from: .item) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                     .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .ready:
                 let isPaused = PauseManager.shared.pausedGame?.id == game.id
-                Button { handleGameTap(game) } label: {
+                Button { handleGameTap(game, from: .item) } label: {
                     GameCard(game: game, isPaused: isPaused)
-                        .matchedTransitionSource(id: game.id, in: heroNamespace) { config in
+                        .matchedTransitionSource(id: GameTapSource.item.transitionID(for: game.id),
+                                                 in: heroNamespace) { config in
                             config
                                 .background(.black)
                                 .clipShape(.rect(cornerRadius: Radius.md))
@@ -532,14 +563,15 @@ struct GameLibraryView: View {
                     // so no remount is needed.
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
-                .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game, from: .item) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
             }
         }
     }
 
 
-    private func handleGameTap(_ game: GameEntry) {
+    private func handleGameTap(_ game: GameEntry, from source: GameTapSource = .item) {
+        tappedSource[game.id] = source
         let pauseManager = PauseManager.shared
         if pauseManager.pausedGame?.id == game.id {
             appState.resumePausedGame()
