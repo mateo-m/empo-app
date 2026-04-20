@@ -471,7 +471,6 @@ struct GameLibraryView: View {
                 }
         }
         .buttonStyle(CardPressStyle())
-        .environment(\.colorScheme, .dark)
         .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game, from: .hero) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
     }
 
