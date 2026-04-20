@@ -34,18 +34,90 @@ enum ExperimentalSheetPalette {
 struct ExperimentalSheetScaffold<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var measuredHeight: CGFloat = 0
+
+    /// Shown centered at the top of the sheet in the native inline
+    /// nav-bar title style (`.headline` weight/size). Required because
+    /// every sheet that uses this scaffold has a title and we want them
+    /// to look and feel consistent with the rest of the app's sheets.
+    let title: String
+
+    /// Optional small chip-like label rendered directly below the
+    /// title, e.g. an "Experimental" tag with a flask icon. Positioned
+    /// as a subtitle annotation rather than a pre-title overline so
+    /// the title always comes first in the visual hierarchy.
+    let caption: Caption?
+
+    /// Optional short descriptive paragraph rendered under the title
+    /// block, styled to match iOS alert/action-sheet message text
+    /// (`.subheadline`, regular weight, secondary color, centered).
+    /// Sheets with richer multi-paragraph or bullet content should
+    /// leave this nil and render that content in `content` instead.
+    let message: String?
+
     let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    struct Caption {
+        let text: String
+        let systemImage: String?
+
+        init(_ text: String, systemImage: String? = nil) {
+            self.text = text
+            self.systemImage = systemImage
+        }
+    }
+
+    init(
+        title: String,
+        caption: Caption? = nil,
+        message: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.caption = caption
+        self.message = message
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing._2xl) {
+            // Header: title, optional caption beneath it, optional
+            // description message. The title matches iOS native inline
+            // nav bar titles (.headline, centered) and the description
+            // matches alert/action-sheet message text (.subheadline,
+            // regular, secondary) so this scaffold sits alongside the
+            // rest of the app's sheets without feeling bespoke.
+            VStack(spacing: Spacing.sm) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(ExperimentalSheetPalette.foreground(for: colorScheme))
+                    .multilineTextAlignment(.center)
+
+                if let caption {
+                    HStack(spacing: Spacing.xs) {
+                        if let systemImage = caption.systemImage {
+                            Image(systemName: systemImage)
+                        }
+                        Text(caption.text)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.brand)
+                }
+
+                if let message {
+                    Text(message)
+                        .font(.subheadline)
+                        .foregroundStyle(ExperimentalSheetPalette.secondaryForeground(for: colorScheme))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, Spacing.xs)
+                }
+            }
+            .frame(maxWidth: .infinity)
+
             content
         }
         .padding(.horizontal, Spacing._2xl)
-        .padding(.top, Spacing._3xl)
+        .padding(.top, Spacing._2xl)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         // Force the VStack to use its intrinsic height instead of
         // expanding to fill the proposed height. Without this, the
@@ -82,5 +154,9 @@ struct ExperimentalSheetScaffold<Content: View>: View {
         }
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(Radius.sheet)
+        // Tapping the dimmed backdrop must NOT dismiss; the user has
+        // to use one of the sheet's own buttons. This also blocks the
+        // drag-to-dismiss gesture.
+        .interactiveDismissDisabled(true)
     }
 }
