@@ -36,6 +36,12 @@ struct GameCard: View {
                     )
                     .frame(height: titleHeight * 2.5)
                     .allowsHitTesting(false)
+                    // Force dark scheme on the material so its tint
+                    // stays dark — ensures the white title stays
+                    // readable against every artwork.  Scoped here so
+                    // the artwork placeholder underneath keeps its
+                    // actual-scheme color.
+                    .environment(\.colorScheme, .dark)
             }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -66,9 +72,6 @@ struct GameCard: View {
             .overlay { centerOverlay }
             .clipShape(.rect(cornerRadius: Radius.md))
             .cardShadow()
-            // Force dark scheme so the material overlay stays dark-tinted —
-            // ensures white text is readable even on the light-mode placeholder.
-            .environment(\.colorScheme, .dark)
     }
 
 
