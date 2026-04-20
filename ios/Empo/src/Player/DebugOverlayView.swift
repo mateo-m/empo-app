@@ -1,6 +1,18 @@
 import SwiftUI
 
 
+/// Preference key used by the overlay to report its measured height
+/// back to PlayerView, so the draggable clamp math matches whatever
+/// size the content actually settles at (long titles / wrapped lines
+/// make the overlay taller than the fixed-height guess).
+struct DebugOverlayHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+
 struct DebugOverlayView: View {
     @State private var fps: Double = 0
     @State private var gameTitle: String = "--"
@@ -11,28 +23,28 @@ struct DebugOverlayView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
-            Text(gameTitle)
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white)
+            gameTitleBlock
 
-            Text(rubyAndRgssLine)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.7))
+            debugText(rubyLine)
+            debugText(rendererLine)
 
-            Text(mkxp_isGameReady() != 0 ? String(cString: mkxp_rendererName(mkxp_getCurrentRenderer())) : "---")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.7))
+            if let device = metalDeviceLine {
+                debugText(device)
+            }
 
-            Text(mkxp_isGameReady() != 0 ? "Running" : "Loading\u{2026}")
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(mkxp_isGameReady() != 0 ? .success : .warning)
+            debugText(
+                mkxp_isGameReady() != 0 ? "Running" : "Loading\u{2026}",
+                color: mkxp_isGameReady() != 0 ? .success : .warning
+            )
 
             HStack(spacing: Spacing.xs) {
                 Text("\(Int(fps.rounded())) FPS")
                     .font(.system(size: 17, weight: .bold, design: .monospaced))
                     .foregroundStyle(fpsColor)
 
-                // FPS Graph
+                // FPS Graph. Canvas has no intrinsic content size so we
+                // constrain it to a fixed height; otherwise it grabs every
+                // available point and bloats the overlay vertically.
                 Canvas { context, size in
                     let samples = ringBuffer.samples
                     guard samples.count >= 2 else { return }
@@ -46,11 +58,20 @@ struct DebugOverlayView: View {
                     }
                     context.stroke(path, with: .color(fpsColor), lineWidth: 1.5)
                 }
+                .frame(height: 28)
             }
         }
         .padding(Spacing.md + Spacing.xxs)
         .background(Color.black.opacity(Overlay.medium + 0.05))
         .clipShape(RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: DebugOverlayHeightKey.self,
+                    value: proxy.size.height
+                )
+            }
+        )
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
             guard mkxp_isEngineTerminated() == 0 else { return }
             fps = mkxp_getAverageFPS()
@@ -73,9 +94,65 @@ struct DebugOverlayView: View {
         return .destructive
     }
 
-    private var rubyAndRgssLine: String {
-        let ruby = String(cString: mkxp_getRubyVersion())
-        return rgssVersion > 0 ? "Ruby \(ruby) \u{00B7} RGSS\(rgssVersion)" : "Ruby \(ruby)"
+    /// Monospaced text row with the overlay's default styling. Wraps
+    /// to additional lines when the content exceeds the overlay's
+    /// fixed width instead of truncating.
+    @ViewBuilder
+    private func debugText(
+        _ text: String,
+        weight: Font.Weight = .medium,
+        size: CGFloat = 13,
+        color: Color = .white.opacity(0.7)
+    ) -> some View {
+        Text(text)
+            .font(.system(size: size, weight: weight, design: .monospaced))
+            .foregroundStyle(color)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Game title with the RGSS version next to it when it fits on one
+    /// line (separated by a middle-dot), or stacked on a second line
+    /// when it doesn't. ViewThatFits picks the first child whose
+    /// measured size is <= the proposed width; we list the single-line
+    /// version first and fall back to the two-row variant if the
+    /// overlay's 220pt width can't hold the full title + dot + RGSS.
+    @ViewBuilder
+    private var gameTitleBlock: some View {
+        if rgssVersion > 0 {
+            ViewThatFits(in: .horizontal) {
+                debugText(
+                    "\(gameTitle) \u{00B7} RGSS\(rgssVersion)",
+                    weight: .bold, size: 14, color: .white
+                )
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    debugText(gameTitle, weight: .bold, size: 14, color: .white)
+                    debugText("RGSS\(rgssVersion)", weight: .bold, size: 14, color: .white)
+                }
+            }
+        } else {
+            debugText(gameTitle, weight: .bold, size: 14, color: .white)
+        }
+    }
+
+    private var rubyLine: String {
+        "Ruby \(String(cString: mkxp_getRubyVersion()))"
+    }
+
+    /// Renderer line. Shows the ANGLE version once GL has initialized;
+    /// falls back to `ANGLE (Metal)` before then.
+    private var rendererLine: String {
+        let version = String(cString: mkxp_getANGLEVersion())
+        if version == "unknown" {
+            return "ANGLE (Metal)"
+        }
+        return "ANGLE \(version) (Metal)"
+    }
+
+    /// Metal device line. Hidden (returns nil) until GL has initialized.
+    private var metalDeviceLine: String? {
+        let device = String(cString: mkxp_getMetalDeviceName())
+        return device == "unknown" ? nil : device
     }
 }
 

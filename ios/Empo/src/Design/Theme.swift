@@ -152,7 +152,10 @@ enum AppSize {
     static let listArtwork: CGFloat = 48
     static let infoArtwork: CGFloat = 80
     static let debugOverlayWidth: CGFloat = 220
-    static let debugOverlayHeight: CGFloat = 100
+    /// Fallback height used only until the overlay has reported its
+    /// actual rendered size via `DebugOverlayHeightKey`. Long titles or
+    /// wrapped lines make the real height grow beyond this.
+    static let debugOverlayInitialHeight: CGFloat = 140
 }
 
 
