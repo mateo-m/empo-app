@@ -51,6 +51,7 @@ settings:
       - MKXPZ_MINIFFI
       - 'MKXPZ_VERSION="\"1.0.0\""'
       - 'MKXPZ_GIT_HASH="\"ios\""'
+      - 'MKXPZ_RUBY_VERSION="\"1.8\""'
       - MKXPZ_LEGACY_RUBY
       - GLES2_HEADER
       - MKXPZ_HAS_ANGLE
