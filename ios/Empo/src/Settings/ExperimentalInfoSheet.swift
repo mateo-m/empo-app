@@ -5,17 +5,15 @@ import SwiftUI
 /// means so users can decide whether to enable the feature before
 /// hitting the confirmation flow.
 ///
-/// Shares the inverted-scheme scaffold with `ExperimentalConfirmSheet`
-/// so the two read as a coherent family.
+/// Shares the native `NavigationStack` + principal-toolbar layout
+/// with `ExperimentalConfirmSheet` so the two read as a family.
 struct ExperimentalInfoSheet: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @State private var measuredHeight: CGFloat = 0
+    private let chromeAllowance: CGFloat = 64
 
     var body: some View {
-        ExperimentalSheetScaffold(
-            title: "What's this?",
-            caption: .init("Experimental", systemImage: "flask.fill")
-        ) {
+        NavigationStack {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 bulletRow(
                     "Experimental features are works in progress."
@@ -31,16 +29,44 @@ struct ExperimentalInfoSheet: View {
                 )
             }
             .font(.subheadline)
-            .foregroundStyle(ExperimentalSheetPalette.secondaryForeground(for: colorScheme))
-
-            Button {
-                dismiss()
-            } label: {
-                Text("Got it")
-                    .frame(maxWidth: .infinity)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, Spacing._2xl)
+            .padding(.vertical, Spacing._2xl)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { newHeight in
+                measuredHeight = newHeight
             }
-            .buttonStyle(.primary)
+            .background(Color(.systemGroupedBackground))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text("What's this?")
+                            .font(.headline)
+                        HStack(spacing: Spacing.xxs) {
+                            Image(systemName: "flask.fill")
+                                .font(.system(size: 9))
+                            Text("Experimental")
+                        }
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.brand)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                        .tint(.brand)
+                }
+            }
         }
+        .presentationDetents(
+            measuredHeight > 0
+                ? [.height(measuredHeight + chromeAllowance)]
+                : [.medium]
+        )
+        .presentationDragIndicator(.visible)
     }
 
     private func bulletRow(_ text: String) -> some View {
