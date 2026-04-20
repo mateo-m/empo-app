@@ -50,22 +50,6 @@ struct RootView: View {
                 .zIndex(10)
             }
         }
-        .overlay(alignment: .bottom) {
-            if settings.rendererPendingRestart, PauseManager.shared.pausedGame != nil {
-                RendererRestartPill(to: settings.renderer)
-                    .transition(
-                        .move(edge: .bottom)
-                        .combined(with: .opacity)
-                        .combined(with: .modifier(
-                            active: BlurModifier(radius: 8),
-                            identity: BlurModifier(radius: 0)
-                        ))
-                    )
-                    .padding(.bottom, Spacing.xl)
-            }
-        }
-        .animation(Motion.gentle, value: settings.rendererPendingRestart)
-        .animation(Motion.gentle, value: PauseManager.shared.pausedGame == nil)
         .task {
             if appState.pendingCrashRecovery {
                 appState.consumeCrashRecovery()
@@ -152,27 +136,6 @@ struct RootView: View {
     private func acknowledgeAndDismissSplash() {
         settings.acknowledgeDisclaimer()
         dismissSplash()
-    }
-}
-
-
-private struct RendererRestartPill: View {
-    let to: RendererOption
-
-    var body: some View {
-        HStack(spacing: Spacing.sm) {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.caption.weight(.semibold))
-
-            Text("\(to.label) will kick in once you quit the current game")
-                .font(.caption.weight(.medium))
-        }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.vertical, Spacing.md)
-        .background(.brand.opacity(0.9), in: Capsule())
-        .foregroundStyle(.white)
-        .elevatedShadow()
-        .animation(Motion.standard, value: to)
     }
 }
 
