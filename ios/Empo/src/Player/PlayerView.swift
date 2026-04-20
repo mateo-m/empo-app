@@ -6,7 +6,6 @@ private let kControlsZonePadding: CGFloat = 12.0
 private let kControlsZoneInnerPadding: CGFloat = 6.0
 private let kToolbarGap: CGFloat = 8.0
 private let kToolbarEdgePad: CGFloat = 4.0
-private let kToolbarPortraitSizeReduce: CGFloat = 8.0
 private let kEditToolbarHalfHeight: CGFloat = 20.0
 private let kMinLandscapeInset: CGFloat = 12.0
 private let kFallbackDeviceCornerRadius: CGFloat = 55.0
@@ -49,12 +48,30 @@ struct PlayerView: View {
             let gameRect = engineState.gameRect
             let safeArea = AppWindow.currentSafeArea
             let overlay = useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geo.size.height)
-            let toolbarBtnSize = isPortrait && gameRect.height > 0 && !overlay ? AppSize.toolbarButton - kToolbarPortraitSizeReduce : AppSize.toolbarButton
+            // Toolbar sits at the top-right of the device in every
+            // layout, so the portrait-specific size reduction (used when
+            // the toolbar was cramped in the zone below the game) no
+            // longer applies.
+            let toolbarBtnSize = AppSize.toolbarButton
             let controlsMinY = toolbarBottomY(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize, geoHeight: geo.size.height)
 
             ZStack {
                 if editMode {
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
+                }
+
+                // Invisible tap layer that dismisses the keyboard when
+                // it's open. Placed below controls + toolbar so those
+                // stay tappable, but above the SDL game view so any
+                // tap on the game area folds the keyboard away.
+                // Matches the standard iOS "tap outside to dismiss"
+                // behavior for text fields.
+                if keyboardMode {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            toggleKeyboard()
+                        }
                 }
 
                 if !controlsHidden && controlsVisible {
@@ -288,8 +305,7 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func toolbarButtons(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
-        let overlay = useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height)
-        let btnSize = isPortrait && gameRect.height > 0 && !overlay ? AppSize.toolbarButton - kToolbarPortraitSizeReduce : AppSize.toolbarButton
+        let btnSize = AppSize.toolbarButton
         let gap: CGFloat = isPortrait ? Spacing.sm : Spacing.md
 
         let buttons: [(icon: String, label: String, action: () -> Void, tint: Color?)] = {
@@ -409,18 +425,17 @@ struct PlayerView: View {
 
 
     private func toolbarOrigin(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize, btnSize: CGFloat, gap: CGFloat, count: CGFloat) -> CGPoint {
+        // Always anchor the toolbar to the top-right of the device
+        // viewport. In portrait we used to tuck it below the game rect,
+        // which left the keyboard-toggle button covered by the keyboard
+        // whenever it was up. Placing it at the top keeps it reachable
+        // in every orientation + layout mode.
         let totalW = count * btnSize + (count - 1) * gap
-        if isPortrait && gameRect.height > 0 && !useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height) {
-            let x = geoSize.width - safeArea.trailing - kToolbarGap - totalW / 2
-            let y = gameRect.origin.y + gameRect.height + kToolbarGap + btnSize / 2
-            return CGPoint(x: x, y: y)
-        } else {
-            let rightInset = max(safeArea.trailing, kMinLandscapeInset)
-            let topInset = max(safeArea.top, kMinLandscapeInset)
-            let x = geoSize.width - rightInset - kToolbarEdgePad - totalW / 2
-            let y = topInset + kToolbarEdgePad + btnSize / 2
-            return CGPoint(x: x, y: y)
-        }
+        let rightInset = max(safeArea.trailing, kMinLandscapeInset)
+        let topInset = max(safeArea.top, kMinLandscapeInset)
+        let x = geoSize.width - rightInset - kToolbarEdgePad - totalW / 2
+        let y = topInset + kToolbarEdgePad + btnSize / 2
+        return CGPoint(x: x, y: y)
     }
 
     private func debugOverlayPosition(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat) -> CGPoint {
@@ -475,9 +490,14 @@ struct PlayerView: View {
         return spaceBelow < Self.kMinControlsZoneHeight
     }
 
+    /// Top edge of the controls zone - controls can only live below
+    /// this Y. In portrait with space below the game, the zone begins
+    /// right at the game's bottom edge (toolbar is now at the top so
+    /// it doesn't push controls down). In overlay / landscape, the
+    /// zone begins below the toolbar that sits in the top-right.
     private func toolbarBottomY(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat, geoHeight: CGFloat) -> CGFloat {
         if isPortrait && gameRect.height > 0 && !useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoHeight) {
-            return gameRect.origin.y + gameRect.height + kToolbarGap + btnSize + kToolbarEdgePad
+            return gameRect.origin.y + gameRect.height + kToolbarGap
         } else {
             let topInset = max(safeArea.top, kMinLandscapeInset)
             return topInset + kToolbarEdgePad + btnSize + kToolbarEdgePad
