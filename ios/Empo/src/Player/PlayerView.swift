@@ -28,7 +28,10 @@ struct PlayerView: View {
     /// Starts at the fallback value so the clamp math works before the
     /// first measurement pass.
     @State private var debugOverlayHeight: CGFloat = AppSize.debugOverlayInitialHeight
-    @State private var toolbarOpacity: Double = 1.0
+    /// Toolbar starts dimmed so it doesn't dominate attention when the
+    /// player first loads. Any tap (on the toolbar, on the game area,
+    /// etc.) restores it to full opacity via `resetToolbarIdleTimer()`.
+    @State private var toolbarOpacity: Double = 0.3
     @State private var toolbarIdleTask: Task<Void, Never>?
     @State private var showQuitConfirm = false
 
@@ -52,7 +55,7 @@ struct PlayerView: View {
             // layout, so the portrait-specific size reduction (used when
             // the toolbar was cramped in the zone below the game) no
             // longer applies.
-            let toolbarBtnSize = AppSize.toolbarButton
+            let toolbarBtnSize = IconButtonSize.sm.points
             let controlsMinY = toolbarBottomY(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize, geoHeight: geo.size.height)
 
             ZStack {
@@ -179,7 +182,13 @@ struct PlayerView: View {
 
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
-                if let snapshot = pauseManager.pauseSnapshot {
+            //
+            // The toolbar is deliberately NOT reset to full opacity on
+            // first appear - it stays at its `toolbarOpacity` default
+            // (0.3, dimmed) so it doesn't dominate attention when the
+            // player first loads. Any user interaction starts the
+            // normal restore-then-fade cycle.
+            if let snapshot = pauseManager.pauseSnapshot {
                 resumeSnapshot = snapshot
                 snapshotOpacity = 1
                 controlsVisible = false
@@ -187,8 +196,6 @@ struct PlayerView: View {
                 if pauseManager.snapshotCanFade {
                     startSnapshotFade()
                 }
-            } else {
-                resetToolbarIdleTimer()
             }
         }
         .onChange(of: pauseManager.snapshotCanFade) { _, canFade in
@@ -305,7 +312,7 @@ struct PlayerView: View {
 
     @ViewBuilder
     private func toolbarButtons(isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
-        let btnSize = AppSize.toolbarButton
+        let btnSize = IconButtonSize.sm.points
         let gap: CGFloat = isPortrait ? Spacing.sm : Spacing.md
 
         let buttons: [(icon: String, label: String, action: () -> Void, tint: Color?)] = {
@@ -331,8 +338,8 @@ struct PlayerView: View {
             ForEach(Array(buttons.enumerated()), id: \.offset) { _, entry in
                 IconButton(
                     entry.icon,
-                    style: .secondary,
-                    size: btnSize,
+                    style: .outline,
+                    size: IconButtonSize.sm,
                     tint: entry.tint
                 ) {
                     resetToolbarIdleTimer()
@@ -598,14 +605,18 @@ struct PlayerView: View {
             guard !Task.isCancelled else { return }
             if !editMode && !controlsHidden {
                 withAnimation(Motion.slow) {
-                    toolbarOpacity = 0.5
+                    toolbarOpacity = 0.3
                 }
             }
         }
     }
 
     private func startSnapshotFade() {
-        resetToolbarIdleTimer()
+        // Deliberately do NOT reset the toolbar idle timer here. The
+        // toolbar should stay dimmed when the game first becomes
+        // playable - users don't need the buttons screaming for
+        // attention the moment the snapshot lifts. They'll dim in as
+        // soon as the user taps anywhere.
         withAnimation(Motion.standard) {
             snapshotOpacity = 0
             controlsVisible = true
