@@ -154,7 +154,7 @@ class GameLibrary {
         cancelledImports.withLock { _ = $0.remove(id) }
     }
 
-    func importGame(from sourceURL: URL, completion: @escaping (Error?) -> Void) {
+    func importGame(from sourceURL: URL, completion: @escaping @MainActor @Sendable (Error?) -> Void) {
         ensureGamesDirectory()
 
         let archiveFormat = ArchiveExtractor.Format(extension: sourceURL.pathExtension)
@@ -182,7 +182,7 @@ class GameLibrary {
             ))
         }
 
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task.detached(priority: .userInitiated) {
             defer { self.clearCancellation(importID) }
             do {
                 if archiveFormat != nil {
@@ -190,7 +190,7 @@ class GameLibrary {
                 } else {
                     try self.importFolder(from: sourceURL, importID: importID)
                 }
-                DispatchQueue.main.async {
+                await MainActor.run {
                     GameLibrary.shared.reload()
                     completion(nil)
                 }
@@ -198,7 +198,7 @@ class GameLibrary {
                 NSLog("[GameLibrary] Import cancelled: %@", importID)
             } catch {
                 NSLog("[GameLibrary] Import error: %@", "\(error)")
-                DispatchQueue.main.async {
+                await MainActor.run {
                     withAnimation {
                         GameLibrary.shared.games.removeAll { $0.id == importID }
                     }
@@ -209,7 +209,7 @@ class GameLibrary {
     }
 
     nonisolated private func updateProgress(_ importID: String, _ progress: Double) {
-        DispatchQueue.main.async {
+        Task { @MainActor in
             let lib = GameLibrary.shared
             guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
             lib.games[idx].status = .importing(progress: progress)
@@ -223,7 +223,7 @@ class GameLibrary {
         let artwork = GameLibrary.findArtwork(at: gameDir)
         guard title != nil || artwork != nil else { return title }
 
-        DispatchQueue.main.async {
+        Task { @MainActor in
             let lib = GameLibrary.shared
             guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
             withAnimation {
@@ -310,7 +310,7 @@ class GameLibrary {
     }
 
 
-    func deleteGame(_ entry: GameEntry, onError: ((String) -> Void)? = nil) {
+    func deleteGame(_ entry: GameEntry, onError: (@MainActor @Sendable (String) -> Void)? = nil) {
         let wasImporting = entry.isImporting
 
         if let artworkPath = entry.artworkPath {
@@ -329,14 +329,14 @@ class GameLibrary {
         }
 
         let pathToDelete = entry.path
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task.detached(priority: .userInitiated) {
             let fm = FileManager.default
             do {
                 guard fm.fileExists(atPath: pathToDelete) else { return }
                 try fm.removeItem(atPath: pathToDelete)
             } catch {
                 NSLog("[GameLibrary] Delete error: %@", "\(error)")
-                DispatchQueue.main.async {
+                await MainActor.run {
                     GameLibrary.shared.reload()
                     onError?(error.localizedDescription)
                 }

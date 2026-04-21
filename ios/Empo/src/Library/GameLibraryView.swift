@@ -291,7 +291,7 @@ struct GameLibraryView: View {
                 withAnimation(Motion.standard) {
                     settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
                 }
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     staggerTrigger = UUID()
                 }
             }

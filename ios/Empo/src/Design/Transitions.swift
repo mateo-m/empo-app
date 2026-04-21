@@ -74,7 +74,7 @@ struct StaggeredAppearance: ViewModifier {
             .offset(y: visible ? 0 : 12)
             .onChange(of: trigger) {
                 visible = false
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     withAnimation(Motion.standard.delay(delay)) {
                         visible = true
                     }
