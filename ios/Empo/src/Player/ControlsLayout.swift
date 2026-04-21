@@ -8,18 +8,24 @@ struct ButtonModel: Identifiable, Equatable, Codable {
     var scancode: Int32
     var relativeCenter: CGPoint  // fraction of superview size
     var size: CGFloat
+    /// Per-button opacity in [0, 1]. Applied to the whole button view,
+    /// so it tones down both the glass background and the label.
+    /// Defaults to 1.0 (fully opaque) for new and legacy-decoded
+    /// buttons so existing saved layouts remain unchanged.
+    var opacity: Double
 
     enum CodingKeys: String, CodingKey {
-        case label, scancode, size
+        case label, scancode, size, opacity
         case rx, ry
     }
 
-    init(label: String, scancode: Int32, relativeCenter: CGPoint, size: CGFloat) {
+    init(label: String, scancode: Int32, relativeCenter: CGPoint, size: CGFloat, opacity: Double = 1.0) {
         self.id = UUID()
         self.label = label
         self.scancode = scancode
         self.relativeCenter = relativeCenter
         self.size = size
+        self.opacity = opacity
     }
 
     init(from decoder: Decoder) throws {
@@ -31,6 +37,7 @@ struct ButtonModel: Identifiable, Equatable, Codable {
         let ry = try c.decodeIfPresent(CGFloat.self, forKey: .ry) ?? 0.5
         self.relativeCenter = CGPoint(x: rx, y: ry)
         self.size = try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? 56
+        self.opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0
     }
 
     func encode(to encoder: Encoder) throws {
@@ -40,6 +47,7 @@ struct ButtonModel: Identifiable, Equatable, Codable {
         try c.encode(relativeCenter.x, forKey: .rx)
         try c.encode(relativeCenter.y, forKey: .ry)
         try c.encode(size, forKey: .size)
+        try c.encode(opacity, forKey: .opacity)
     }
 }
 
@@ -48,6 +56,10 @@ private struct PersistedLayout: Codable {
         var rx: CGFloat
         var ry: CGFloat
         var size: CGFloat
+        /// Per-D-pad opacity in [0, 1]. Decoded with a 1.0 fallback
+        /// so older persisted layouts (missing the key) continue
+        /// loading without surprising transparency.
+        var opacity: Double?
     }
     var dpad: DPad
     var buttons: [ButtonModel]
@@ -62,6 +74,7 @@ class ControlsLayout {
 
     var dpadRelativeCenter: CGPoint = CGPoint(x: 0.13, y: 0.72)
     var dpadSize: CGFloat = 140
+    var dpadOpacity: Double = 1.0
     var buttons: [ButtonModel] = []
 
     private init() {
@@ -83,6 +96,7 @@ class ControlsLayout {
     func resetToDefaults() {
         dpadRelativeCenter = Self.defaultDPadCenter
         dpadSize = Self.defaultDPadSize
+        dpadOpacity = 1.0
         buttons = Self.defaultButtons
     }
 
@@ -118,6 +132,7 @@ class ControlsLayout {
             }
             dpadRelativeCenter = Self.defaultDPadCenter
             dpadSize = Self.defaultDPadSize
+            dpadOpacity = 1.0
         }
 
         // Stagger-add missing defaults (scale/blur/opacity transition)
@@ -144,7 +159,7 @@ class ControlsLayout {
 
     func save() {
         let layout = PersistedLayout(
-            dpad: .init(rx: dpadRelativeCenter.x, ry: dpadRelativeCenter.y, size: dpadSize),
+            dpad: .init(rx: dpadRelativeCenter.x, ry: dpadRelativeCenter.y, size: dpadSize, opacity: dpadOpacity),
             buttons: buttons
         )
         if let data = try? JSONEncoder().encode(layout) {
@@ -161,6 +176,7 @@ class ControlsLayout {
 
         dpadRelativeCenter = CGPoint(x: layout.dpad.rx, y: layout.dpad.ry)
         dpadSize = layout.dpad.size
+        dpadOpacity = layout.dpad.opacity ?? 1.0
         buttons = layout.buttons
 
         return true
@@ -183,11 +199,12 @@ class ControlsLayout {
         buttons.removeAll { $0.id == id }
     }
 
-    func updateButton(id: UUID, label: String? = nil, scancode: Int32? = nil, size: CGFloat? = nil, relativeCenter: CGPoint? = nil) {
+    func updateButton(id: UUID, label: String? = nil, scancode: Int32? = nil, size: CGFloat? = nil, relativeCenter: CGPoint? = nil, opacity: Double? = nil) {
         guard let index = buttons.firstIndex(where: { $0.id == id }) else { return }
         if let label { buttons[index].label = label }
         if let scancode { buttons[index].scancode = scancode }
         if let size { buttons[index].size = size }
         if let relativeCenter { buttons[index].relativeCenter = relativeCenter }
+        if let opacity { buttons[index].opacity = opacity }
     }
 }

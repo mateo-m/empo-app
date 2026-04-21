@@ -95,7 +95,7 @@ enum ExperimentalFeature: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .gameQuit: "Quit game"
+        case .gameQuit:  "Quit game"
         case .gamePause: "Pause game"
         }
     }

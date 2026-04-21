@@ -1,50 +1,11 @@
 import SwiftUI
 
-struct DPadRepresentable: UIViewRepresentable {
-    var size: CGFloat
-    var editing: Bool
-    var dragging: Bool
-
-    func makeUIView(context: Context) -> TCDPadView {
-        let dpad = TCDPadView(size: size)! // swiftlint:disable:this force_unwrapping
-        return dpad
-    }
-
-    func updateUIView(_ dpad: TCDPadView, context: Context) {
-        dpad.editing = editing
-        dpad.dragging = dragging
-    }
-}
-
-struct ActionButtonRepresentable: UIViewRepresentable {
-    var label: String
-    var scancode: Int32
-    var buttonSize: CGFloat
-    var editing: Bool
-    var dragging: Bool
-
-    func makeUIView(context: Context) -> TCButton {
-        let btn = TCButton(label: label, scancode: scancode, size: buttonSize)! // swiftlint:disable:this force_unwrapping
-        return btn
-    }
-
-    func updateUIView(_ btn: TCButton, context: Context) {
-        btn.editing = editing
-        btn.dragging = dragging
-        if btn.label != label {
-            btn.updateLabel(label)
-        }
-        if btn.scancode != scancode {
-            btn.scancode = scancode
-        }
-        let currentSize = btn.bounds.size.width
-        if abs(currentSize - buttonSize) > 1 {
-            btn.resize(toSize: buttonSize, animated: true)
-        }
-    }
-}
-
-/// Invisible text field — only its keyboard + accessory bar matter.
+/// Invisible UIKit text field used exclusively to bring up the
+/// system keyboard and route its text and return-key events into
+/// the engine via `mkxp_injectKeyEvent`. The visible on-screen
+/// controls (D-pad, action buttons) are plain SwiftUI now - see
+/// `GameControls.swift` - so this is the only UIViewRepresentable
+/// the player still needs.
 struct KeyboardFieldRepresentable: UIViewRepresentable {
     var isActive: Bool
     var onActivate: (() -> Void)?
