@@ -29,8 +29,9 @@ struct GameLibraryView: View {
     var appState: AppState
     var heroNamespace: Namespace.ID
     var splashDismissed: Bool = true
-    var library = GameLibrary.shared
-    var settings = AppSettings.shared
+    @Environment(\.gameLibrary) private var library
+    @Environment(\.appSettings) private var settings
+    @Environment(\.pauseManager) private var pauseManager
     @State private var showImporter = false
     @State private var showSettings = false
     @State private var errorMessage: String?
@@ -231,7 +232,7 @@ struct GameLibraryView: View {
                     path.append(game)
                 }
             } message: {
-                if let paused = PauseManager.shared.pausedGame {
+                if let paused = pauseManager.pausedGame {
                     Text("\"\(paused.title)\" is still running. Quit it to play a different game?")
                 }
             }
@@ -387,7 +388,7 @@ struct GameLibraryView: View {
 
 
     private func heroCard(for game: GameEntry) -> some View {
-        let isPaused = PauseManager.shared.pausedGame?.id == game.id
+        let isPaused = pauseManager.pausedGame?.id == game.id
         // In landscape the narrower vertical space means a 2.2:1 ratio
         // hero card eats most of the screen and pushes the grid below
         // the fold. Widen it in compact-height so the card stays
@@ -397,7 +398,7 @@ struct GameLibraryView: View {
     }
 
     private func heroListRow(for game: GameEntry) -> some View {
-        let isPaused = PauseManager.shared.pausedGame?.id == game.id
+        let isPaused = pauseManager.pausedGame?.id == game.id
         let ratio: CGFloat = verticalSizeClass == .compact ? 5.0 : 3.0
         return heroCardContent(for: game, isPaused: isPaused, aspectRatio: ratio)
     }
@@ -484,7 +485,7 @@ struct GameLibraryView: View {
             }
 
             ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
-                let isPaused = PauseManager.shared.pausedGame?.id == game.id
+                let isPaused = pauseManager.pausedGame?.id == game.id
                 Button {
                     switch game.status {
                     case .ready: handleGameTap(game, from: .item)
@@ -542,7 +543,7 @@ struct GameLibraryView: View {
                     .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .ready:
-                let isPaused = PauseManager.shared.pausedGame?.id == game.id
+                let isPaused = pauseManager.pausedGame?.id == game.id
                 Button { handleGameTap(game, from: .item) } label: {
                     GameCard(game: game, isPaused: isPaused)
                         .matchedTransitionSource(id: GameTapSource.item.transitionID(for: game.id),
@@ -571,7 +572,6 @@ struct GameLibraryView: View {
 
     private func handleGameTap(_ game: GameEntry, from source: GameTapSource = .item) {
         tappedSource[game.id] = source
-        let pauseManager = PauseManager.shared
         if pauseManager.pausedGame?.id == game.id {
             appState.resumePausedGame()
             path.append(game)

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Bindable var settings = AppSettings.shared
+    @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
     @State private var confirmation: ExperimentalConfirmation?
     @State private var showBuildInfo = false
@@ -16,7 +16,8 @@ struct SettingsView: View {
 
 
     var body: some View {
-        NavigationStack {
+        @Bindable var settings = settings
+        return NavigationStack {
             Form {
                 Section {
                     VStack(spacing: Spacing.md) {
