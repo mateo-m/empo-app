@@ -7,24 +7,6 @@ private struct EmptyStateHeightKey: PreferenceKey {
     }
 }
 
-/// Where a game tap originated from. Used to disambiguate
-/// `matchedTransitionSource` when the same game is shown in multiple
-/// places at once (e.g. "Continue playing" hero card + the usual grid
-/// tile underneath). Each location registers a distinct source id so
-/// the exit zoom animation lands on whichever one the user actually
-/// tapped.
-private enum GameTapSource {
-    case hero
-    case item
-
-    func transitionID(for gameID: String) -> String {
-        switch self {
-        case .hero: return "\(gameID)-hero"
-        case .item: return "\(gameID)-item"
-        }
-    }
-}
-
 struct GameLibraryView: View {
     var appState: AppState
     var heroNamespace: Namespace.ID
@@ -69,7 +51,7 @@ struct GameLibraryView: View {
         let base = searchText.isEmpty
             ? library.games
             : library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-        return sortGames(base)
+        return GameSorting.sort(base, option: settings.librarySortOption, sizes: gameSizes)
     }
 
     private var showEmpty: Bool {
@@ -283,7 +265,6 @@ struct GameLibraryView: View {
 
 
     private let headerHeight: CGFloat = 56
-    private let searchBarHeight: CGFloat = 44
 
     private var libraryHeader: some View {
         HStack {
@@ -303,38 +284,10 @@ struct GameLibraryView: View {
 
 
     private var searchBar: some View {
-        HStack(spacing: Spacing.md) {
-            HStack(spacing: Spacing.md) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search games", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.primary)
-                    }
-                    .accessibilityLabel("Clear search")
-                }
-            }
-            .padding(.horizontal, Spacing.lg)
-            .frame(height: searchBarHeight)
-            .glassEffect(.regular.interactive(), in: .capsule)
-
-            IconButton("arrow.up.arrow.down", style: .outline) {
-                showSortSheet = true
-            }
-            .accessibilityLabel("Sort games")
-
-            IconButton(
-                settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2",
-                style: .outline,
-                contentTransition: .symbolEffect(.replace)
-            ) {
+        LibrarySearchBar(
+            searchText: $searchText,
+            showSortSheet: $showSortSheet,
+            onDisplayModeToggle: {
                 withAnimation(Motion.standard) {
                     settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
                 }
@@ -342,11 +295,7 @@ struct GameLibraryView: View {
                     staggerTrigger = UUID()
                 }
             }
-            .accessibilityLabel(settings.libraryDisplayMode == .grid ? "Switch to list" : "Switch to grid")
-        }
-        .padding(.horizontal)
-        .padding(.bottom, Spacing.xs)
-        .tint(.primary)
+        )
     }
 
 
@@ -394,13 +343,35 @@ struct GameLibraryView: View {
         // the fold. Widen it in compact-height so the card stays
         // visible but the grid also gets breathing room.
         let ratio: CGFloat = verticalSizeClass == .compact ? 4.5 : 2.2
-        return heroCardContent(for: game, isPaused: isPaused, aspectRatio: ratio)
+        return GameHeroCard(
+            game: game,
+            isPaused: isPaused,
+            aspectRatio: ratio,
+            heroNamespace: heroNamespace,
+            appState: appState,
+            onTap: { handleGameTap(game, from: .hero) },
+            gameToDelete: $gameToDelete,
+            showDeleteConfirm: $showDeleteConfirm,
+            gameForSettings: $gameForSettings,
+            gameForInfo: $gameForInfo
+        )
     }
 
     private func heroListRow(for game: GameEntry) -> some View {
         let isPaused = pauseManager.pausedGame?.id == game.id
         let ratio: CGFloat = verticalSizeClass == .compact ? 5.0 : 3.0
-        return heroCardContent(for: game, isPaused: isPaused, aspectRatio: ratio)
+        return GameHeroCard(
+            game: game,
+            isPaused: isPaused,
+            aspectRatio: ratio,
+            heroNamespace: heroNamespace,
+            appState: appState,
+            onTap: { handleGameTap(game, from: .hero) },
+            gameToDelete: $gameToDelete,
+            showDeleteConfirm: $showDeleteConfirm,
+            gameForSettings: $gameForSettings,
+            gameForInfo: $gameForInfo
+        )
     }
 
     private var librarySectionHeader: some View {
@@ -411,68 +382,6 @@ struct GameLibraryView: View {
             Spacer()
         }
         .padding(.top, Spacing.sm)
-    }
-
-    private func heroCardContent(for game: GameEntry, isPaused: Bool, aspectRatio: CGFloat) -> some View {
-        Button { handleGameTap(game, from: .hero) } label: {
-            Color.clear
-                .aspectRatio(aspectRatio, contentMode: .fit)
-                .overlay {
-                    GameArtworkView(
-                        artworkPath: game.artworkPath,
-                        importing: false,
-                        shimmer: false
-                    )
-                }
-                .overlay {
-                    Rectangle()
-                        .fill(LinearGradient(
-                            colors: [.clear, .black.opacity(0.6)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ))
-                }
-                // Flatten the artwork + gradient + text labels into a
-                // single render pass before the clip shape. Without
-                // this, rotation resizes each overlay layer with its
-                // own implicit animation, so the gradient (and its
-                // underlying Rectangle frame) visibly lags behind the
-                // artwork which is a direct ImageView resizing in
-                // lockstep with the card frame.
-                .compositingGroup()
-                .overlay(alignment: .bottomLeading) {
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("Continue playing")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.white.opacity(0.7))
-                        Text(game.title)
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                            .textShadow()
-                            .lineLimit(1)
-                    }
-                    .padding(Spacing.xl)
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: isPaused ? "pause.fill" : "play.fill")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .iconShadow()
-                        .padding(Spacing.xl)
-                }
-                .clipShape(.rect(cornerRadius: Radius.lg))
-                .cardShadow()
-                .matchedTransitionSource(id: GameTapSource.hero.transitionID(for: game.id),
-                                         in: heroNamespace) { config in
-                    config
-                        .background(.black)
-                        .clipShape(.rect(cornerRadius: Radius.lg))
-                }
-        }
-        .buttonStyle(CardPressStyle())
-        .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game, from: .hero) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
     }
 
     private var listInner: some View {
@@ -603,27 +512,6 @@ struct GameLibraryView: View {
         }
     }
 
-    private func sortGames(_ games: [GameEntry]) -> [GameEntry] {
-        switch settings.librarySortOption {
-        case .titleAZ:
-            return games.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        case .titleZA:
-            return games.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedDescending }
-        case .recentlyPlayed:
-            return games.sorted { ($0.lastPlayed ?? .distantPast) > ($1.lastPlayed ?? .distantPast) }
-        case .leastRecentlyPlayed:
-            return games.sorted { ($0.lastPlayed ?? .distantPast) < ($1.lastPlayed ?? .distantPast) }
-        case .largestSize:
-            return games.sorted { (gameSizes[$0.id] ?? 0) > (gameSizes[$1.id] ?? 0) }
-        case .smallestSize:
-            return games.sorted { (gameSizes[$0.id] ?? 0) < (gameSizes[$1.id] ?? 0) }
-        case .mostPlayed:
-            return games.sorted { (playTime(for: $0) ?? 0) > (playTime(for: $1) ?? 0) }
-        case .leastPlayed:
-            return games.sorted { (playTime(for: $0) ?? 0) < (playTime(for: $1) ?? 0) }
-        }
-    }
-
     private func refreshGameSizes() {
         sizesTask?.cancel()
         sizesTask = Task {
@@ -637,47 +525,8 @@ struct GameLibraryView: View {
         }
     }
 
-    private func playTime(for game: GameEntry) -> TimeInterval? {
-        GameMetadata.load(for: game.id).totalPlayTime
-    }
-
     private var sortSheet: some View {
-        NavigationStack {
-            List {
-                ForEach(LibrarySortOption.allCases, id: \.self) { option in
-                    Button {
-                        withAnimation(Motion.standard) {
-                            settings.librarySortOption = option
-                        }
-                        showSortSheet = false
-                    } label: {
-                        HStack(spacing: Spacing.lg) {
-                            Image(systemName: option.icon)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 24)
-                            Text(option.label)
-                            Spacer()
-                            if settings.librarySortOption == option {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.brand)
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                    }
-                    .tint(.primary)
-                }
-            }
-            .navigationTitle("Sort by")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { showSortSheet = false }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
-        .tint(.brand)
+        LibrarySortSheet(isPresented: $showSortSheet)
     }
 }
 
