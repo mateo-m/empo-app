@@ -19,15 +19,19 @@ class GameLibrary {
 
     private init() {
         ensureGamesDirectory()
-        let cleanupInvalid = UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
-        games = Self.scanGames(in: Self.gamesDirectory, cleanupInvalid: cleanupInvalid)
-        syncMetadata()
+        // Initial scan runs off-main via reload(). The library is
+        // observable and empty until the scan completes, which keeps
+        // first render of the library instant on cold storage.
+        reload(initialLoad: true)
     }
 
 
-    func reload() {
+    func reload(initialLoad: Bool = false) {
+        let cleanupInvalid = initialLoad
+            ? UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
+            : false
         Task.detached {
-            let scanned = GameLibrary.scanGames(in: GameLibrary.gamesDirectory, cleanupInvalid: false)
+            let scanned = GameLibrary.scanGames(in: GameLibrary.gamesDirectory, cleanupInvalid: cleanupInvalid)
             let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
 
             await MainActor.run {
@@ -37,7 +41,9 @@ class GameLibrary {
                     for i in lib.games.indices {
                         let id = lib.games[i].id
                         if let fresh = scannedByID[id] {
-                            lib.games[i] = fresh
+                            if lib.games[i] != fresh {
+                                lib.games[i] = fresh
+                            }
                             updatedIDs.insert(id)
                         }
                     }
@@ -47,6 +53,9 @@ class GameLibrary {
                     for entry in scanned where !updatedIDs.contains(entry.id) {
                         lib.games.append(entry)
                     }
+                }
+                if initialLoad {
+                    lib.syncMetadata()
                 }
             }
         }
