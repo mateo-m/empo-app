@@ -14,6 +14,7 @@ struct DebugOverlayHeightKey: PreferenceKey {
 
 
 struct DebugOverlayView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var fps: Double = 0
     @State private var gameTitle: String = "--"
     @State private var rgssVersion: Int32 = 0
@@ -72,18 +73,28 @@ struct DebugOverlayView: View {
                 )
             }
         )
-        .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
-            guard mkxp_isEngineTerminated() == 0 else { return }
-            fps = mkxp_getAverageFPS()
-            ringBuffer.append(fps)
+        .task(id: scenePhase) {
+            // .task integrates with view cancellation AND re-runs when
+            // scenePhase changes, so the FPS poll pauses while the
+            // app is backgrounded (scenePhase != .active) and resumes
+            // when it foregrounds. No wasted main-thread wakes in the
+            // background.
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                if mkxp_isEngineTerminated() == 0 {
+                    fps = mkxp_getAverageFPS()
+                    ringBuffer.append(fps)
 
-            // Load once — title/version don't change mid-session
-            if !metadataLoaded {
-                rgssVersion = mkxp_getRGSSVersion()
-                if let title = mkxp_getGameTitle(), title[0] != 0 {
-                    gameTitle = String(cString: title)
-                    metadataLoaded = true
+                    // Load once - title/version don't change mid-session
+                    if !metadataLoaded {
+                        rgssVersion = mkxp_getRGSSVersion()
+                        if let title = mkxp_getGameTitle(), title[0] != 0 {
+                            gameTitle = String(cString: title)
+                            metadataLoaded = true
+                        }
+                    }
                 }
+                try? await Task.sleep(for: .milliseconds(100))
             }
         }
     }
