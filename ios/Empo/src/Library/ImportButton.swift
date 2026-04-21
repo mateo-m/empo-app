@@ -8,11 +8,19 @@ struct ImportButton: View {
     var headerHeight: CGFloat
     var emptyStateHeight: CGFloat
     var emptyStateOffset: CGFloat
+    /// True while one or more pre-flight validations are running.
+    /// During this window the button swaps its "Import game" label
+    /// for a "Validating" spinner and taps prompt a cancel
+    /// confirmation instead of opening the picker.
+    var isValidating: Bool = false
+    var onRequestCancelValidation: (() -> Void)? = nil
 
     @State private var importShimmer: CGFloat = -1
     @State private var importMoveTrigger = 0
     @State private var buttonHeight: CGFloat = AppSize.minTapTarget
     @State private var revealed = false
+
+
 
     var body: some View {
         GeometryReader { geo in
@@ -42,7 +50,13 @@ struct ImportButton: View {
             let endAngle = atan2(collapsedY - arcCenterY, collapsedX - arcCenterX)
             let arcDeg = (endAngle - startAngle) * 180 / .pi
 
-            Button(action: { showImporter = true }) {
+            Button(action: {
+                if isValidating {
+                    onRequestCancelValidation?()
+                } else {
+                    showImporter = true
+                }
+            }) {
                 importButtonLabel(collapsed: collapsed)
             }
             .buttonStyle(.plain)
@@ -96,6 +110,7 @@ struct ImportButton: View {
             .position(x: arcCenterX, y: arcCenterY)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.spring(duration: 0.25, bounce: 0.15), value: showEmpty)
+            .animation(Motion.standard, value: isValidating)
             .onChange(of: showEmpty) { importMoveTrigger += 1 }
             .onAppear {
                 if splashDismissed {
@@ -121,9 +136,12 @@ struct ImportButton: View {
     @ViewBuilder
     private func importButtonLabel(collapsed: Bool) -> some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: "plus")
+            importButtonIcon
+                .id(isValidating ? "validating" : "idle")
+                .transition(.blurReplace)
             if !collapsed {
-                Text("Import game")
+                Text(isValidating ? "Validating" : "Import game")
+                    .contentTransition(.numericText())
                     .transition(.blurReplace)
             }
         }
@@ -138,6 +156,15 @@ struct ImportButton: View {
         )
         .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
         .darkGlass()
+    }
+
+    @ViewBuilder
+    private var importButtonIcon: some View {
+        if isValidating {
+            SpinnerRing(progress: 0, size: 18, lineWidth: 2)
+        } else {
+            Image(systemName: "plus")
+        }
     }
 }
 
