@@ -13,13 +13,29 @@ struct DebugOverlayHeightKey: PreferenceKey {
 }
 
 
+/// Observable state backing `DebugOverlayView`. Kept in the player
+/// view as a long-lived property so the overlay can be
+/// transitioned in and out (via `if showDebugOverlay { ... }`)
+/// without losing its FPS graph, cached game title, or RGSS version.
+@MainActor @Observable
+final class DebugOverlayState {
+    var fps: Double = 0
+    var gameTitle: String = "--"
+    var rgssVersion: Int32 = 0
+    var ringBuffer = FPSRingBuffer(capacity: 120)
+    var metadataLoaded = false
+}
+
+
 struct DebugOverlayView: View {
-    @State private var fps: Double = 0
-    @State private var gameTitle: String = "--"
-    @State private var rgssVersion: Int32 = 0
-    @State private var ringBuffer = FPSRingBuffer(capacity: 120)
-    @State private var metadataLoaded = false
+    let state: DebugOverlayState
     private let maxFPS: Double = 70
+
+    // Local aliases so the existing view body stays legible.
+    private var fps: Double { state.fps }
+    private var gameTitle: String { state.gameTitle }
+    private var rgssVersion: Int32 { state.rgssVersion }
+    private var ringBuffer: FPSRingBuffer { state.ringBuffer }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -62,8 +78,8 @@ struct DebugOverlayView: View {
             }
         }
         .padding(Spacing.md + Spacing.xxs)
-        .background(Color.black.opacity(Overlay.medium + 0.05))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
+        .environment(\.colorScheme, .dark)
         .background(
             GeometryReader { proxy in
                 Color.clear.preference(
@@ -74,15 +90,14 @@ struct DebugOverlayView: View {
         )
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
             guard mkxp_isEngineTerminated() == 0 else { return }
-            fps = mkxp_getAverageFPS()
-            ringBuffer.append(fps)
+            state.fps = mkxp_getAverageFPS()
+            state.ringBuffer.append(state.fps)
 
-            // Load once — title/version don't change mid-session
-            if !metadataLoaded {
-                rgssVersion = mkxp_getRGSSVersion()
+            if !state.metadataLoaded {
+                state.rgssVersion = mkxp_getRGSSVersion()
                 if let title = mkxp_getGameTitle(), title[0] != 0 {
-                    gameTitle = String(cString: title)
-                    metadataLoaded = true
+                    state.gameTitle = String(cString: title)
+                    state.metadataLoaded = true
                 }
             }
         }
@@ -157,7 +172,7 @@ struct DebugOverlayView: View {
 }
 
 
-private struct FPSRingBuffer {
+struct FPSRingBuffer {
     let capacity: Int
     private var buffer: [Double]
     private var writeIndex = 0

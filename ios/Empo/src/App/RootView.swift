@@ -214,9 +214,6 @@ private struct PixelDitherPattern: View {
     private var tileWidth: CGFloat { cellSize * 3 }
     private var tileHeight: CGFloat { cellSize * 2 }
 
-    @State private var phase: Double = 0
-    @State private var lastTick: TimeInterval?
-
     nonisolated(unsafe) private static let cachedTileImage: UIImage = {
         let tileW: CGFloat = 14 * 3
         let tileH: CGFloat = 14 * 2
@@ -235,51 +232,40 @@ private struct PixelDitherPattern: View {
     }()
 
     var body: some View {
-        Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
-            guard let cg = ctx.resolveSymbol(id: 0) else { return }
+        // TimelineView drives Canvas with the system's display link,
+        // so the pattern pauses automatically when the scene is
+        // inactive. No manual Task.sleep loop or phase @State.
+        TimelineView(.animation) { ctx in
+            let phase = ctx.date.timeIntervalSinceReferenceDate / SplashTiming.cycleDuration
+            Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+                guard let cg = ctx.resolveSymbol(id: 0) else { return }
 
-            let scaledTileW = tileWidth * scale
-            let scaledTileH = tileHeight * scale
-            let dx = CGFloat(phase) * scaledTileW
+                let scaledTileW = tileWidth * scale
+                let scaledTileH = tileHeight * scale
+                let dx = CGFloat(phase.truncatingRemainder(dividingBy: 1.0)) * scaledTileW
 
-            // Rotate around the canvas centre so the grid tilts
-            // nicely. Then over-draw beyond the bounds so the
-            // rotated rectangle still fills the corners.
-            ctx.translateBy(x: size.width / 2, y: size.height / 2)
-            ctx.rotate(by: .degrees(-15))
+                ctx.translateBy(x: size.width / 2, y: size.height / 2)
+                ctx.rotate(by: .degrees(-15))
 
-            // Pick a coverage radius generous enough that a -15 deg
-            // rotated fill still covers the biggest iPad screen.
-            let coverage = max(size.width, size.height) * 1.6
-            let startX = -coverage - scaledTileW + dx.truncatingRemainder(dividingBy: scaledTileW)
-            let startY = -coverage
+                let coverage = max(size.width, size.height) * 1.6
+                let startX = -coverage - scaledTileW + dx.truncatingRemainder(dividingBy: scaledTileW)
+                let startY = -coverage
 
-            var y = startY
-            while y < coverage {
-                var x = startX
-                while x < coverage {
-                    ctx.draw(cg, in: CGRect(x: x, y: y, width: scaledTileW, height: scaledTileH))
-                    x += scaledTileW
+                var y = startY
+                while y < coverage {
+                    var x = startX
+                    while x < coverage {
+                        ctx.draw(cg, in: CGRect(x: x, y: y, width: scaledTileW, height: scaledTileH))
+                        x += scaledTileW
+                    }
+                    y += scaledTileH
                 }
-                y += scaledTileH
-            }
-        } symbols: {
-            Image(uiImage: Self.cachedTileImage)
-                .interpolation(.none)
-                .resizable()
-                .frame(width: tileWidth * scale, height: tileHeight * scale)
-                .tag(0)
-        }
-        .task {
-            lastTick = nil
-            while !Task.isCancelled {
-                let now = Date.timeIntervalSinceReferenceDate
-                if let lastTick {
-                    phase = (phase + (now - lastTick) / SplashTiming.cycleDuration)
-                        .truncatingRemainder(dividingBy: 1.0)
-                }
-                self.lastTick = now
-                try? await Task.sleep(for: .milliseconds(Int(SplashTiming.frameInterval * 1000)))
+            } symbols: {
+                Image(uiImage: Self.cachedTileImage)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: tileWidth * scale, height: tileHeight * scale)
+                    .tag(0)
             }
         }
     }

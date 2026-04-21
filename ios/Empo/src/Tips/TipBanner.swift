@@ -34,6 +34,8 @@ struct TipBanner: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.brand.opacity(0.6))
                         .frame(width: 20, height: 20)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Dismiss tip")
             }
