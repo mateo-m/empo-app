@@ -10,8 +10,6 @@ struct ButtonModel: Identifiable, Equatable, Codable {
     var size: CGFloat
     /// Per-button opacity in [0, 1]. Applied to the whole button view,
     /// so it tones down both the glass background and the label.
-    /// Defaults to 1.0 (fully opaque) for new and legacy-decoded
-    /// buttons so existing saved layouts remain unchanged.
     var opacity: Double
 
     enum CodingKeys: String, CodingKey {
@@ -70,15 +68,6 @@ private struct PersistedLayout: Codable {
 class ControlsLayout {
     static let shared = ControlsLayout()
 
-    /// UserDefaults key prefix. The full key for a given game is
-    /// `controlsLayout.<gameID>`. The pre-per-game global key
-    /// (`touchControlsLayout`) is removed during `switchGame` to
-    /// avoid leaving an orphan entry behind for users who launched
-    /// the app before this change. Since the app isn't live yet, no
-    /// migration is needed - all games start at factory defaults.
-    private static let savedLayoutKeyPrefix = "controlsLayout."
-    private static let legacyGlobalKey = "touchControlsLayout"
-
     /// Stable identifier of the game these controls are currently
     /// bound to. `switchGame(id:)` updates this; mutators save to the
     /// corresponding per-game key. `nil` means no game is active -
@@ -92,15 +81,7 @@ class ControlsLayout {
     var buttons: [ButtonModel] = []
 
     private init() {
-        // No game bound yet - just populate with factory defaults so
-        // library-screen UI that reads the layout (if any) sees a
-        // sensible state. Actual loads happen on `switchGame(id:)`.
         resetToDefaults()
-
-        // Remove the pre-per-game global key if it's still hanging
-        // around from an older build. Idempotent; runs on every
-        // process launch.
-        UserDefaults.standard.removeObject(forKey: Self.legacyGlobalKey)
     }
 
     /// Bind the layout instance to a specific game's stored layout.
@@ -127,7 +108,7 @@ class ControlsLayout {
 
     private var savedLayoutKey: String? {
         guard let id = currentGameID else { return nil }
-        return Self.savedLayoutKeyPrefix + id
+        return DefaultsKey.controlsLayout(gameID: id)
     }
 
 
