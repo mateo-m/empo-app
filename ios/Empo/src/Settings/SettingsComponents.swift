@@ -28,7 +28,6 @@ struct SettingsPicker<SelectionValue: Hashable, Content: View>: View {
     let title: String
     @Binding var selection: SelectionValue
     let description: String
-    var isExperimental: Bool = false
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -36,12 +35,7 @@ struct SettingsPicker<SelectionValue: Hashable, Content: View>: View {
             Picker(selection: $selection) {
                 content()
             } label: {
-                HStack(spacing: Spacing.xs) {
-                    Text(title)
-                    if isExperimental {
-                        ExperimentalBadge()
-                    }
-                }
+                Text(title)
             }
             Text(description)
                 .font(.footnote)

@@ -1,9 +1,6 @@
 import SwiftUI
 
 
-private let kToolbarIdleDelay: TimeInterval = 3.0
-
-
 struct PlayerView: View {
     @Bindable var appState: AppState
     @Bindable var engineState: EngineState
@@ -22,7 +19,7 @@ struct PlayerView: View {
     /// Toolbar starts dimmed so it doesn't dominate attention when the
     /// player first loads. Any tap (on the toolbar, on the game area,
     /// etc.) restores it to full opacity via `resetToolbarIdleTimer()`.
-    @State private var toolbarOpacity: Double = 0.3
+    @State private var toolbarOpacity: Double = Alpha.toolbarDim
     @State private var toolbarIdleTask: Task<Void, Never>?
     @State private var showQuitConfirm = false
 
@@ -206,7 +203,7 @@ struct PlayerView: View {
             bottomTrailingRadius: radii.bottom,
             topTrailingRadius: radii.top
         )
-        .strokeBorder(Color.white.opacity(0.2), lineWidth: 1.5)
+        .strokeBorder(Color.white.opacity(Alpha.border), lineWidth: 1.5)
         .background(
             UnevenRoundedRectangle(
                 topLeadingRadius: radii.top,
@@ -214,7 +211,7 @@ struct PlayerView: View {
                 bottomTrailingRadius: radii.bottom,
                 topTrailingRadius: radii.top
             )
-            .fill(Color.black.opacity(Overlay.medium))
+            .fill(Color.black.opacity(Scrim.medium))
         )
         .frame(width: bounds.width, height: bounds.height)
         .position(x: bounds.midX, y: bounds.midY)
@@ -258,11 +255,11 @@ struct PlayerView: View {
             }
         }
         toolbarIdleTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(kToolbarIdleDelay))
+            try? await Task.sleep(for: .seconds(Timing.toolbarIdleDelay))
             guard !Task.isCancelled else { return }
             if !editMode && !controlsHidden {
                 withAnimation(Motion.slow) {
-                    toolbarOpacity = 0.3
+                    toolbarOpacity = Alpha.toolbarDim
                 }
             }
         }

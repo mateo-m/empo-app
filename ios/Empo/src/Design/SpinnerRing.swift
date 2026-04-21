@@ -46,10 +46,7 @@ struct SpinnerRing: View {
                     .frame(width: size, height: size)
                     .rotationEffect(.degrees(spinning ? 360 : 0))
                     .onAppear { spinning = true }
-                    .animation(
-                        .linear(duration: 1).repeatForever(autoreverses: false),
-                        value: spinning
-                    )
+                    .animation(Motion.spinner, value: spinning)
             }
         }
         .animation(Motion.snappy, value: progress)

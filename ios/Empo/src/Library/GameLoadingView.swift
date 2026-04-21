@@ -153,7 +153,7 @@ struct GameLoadingView: View {
                 .offset(x: kenBurns ? 10 : -10, y: kenBurns ? -8 : 8)
                 .ignoresSafeArea()
                 .blur(radius: 20)
-                .overlay(Color.black.opacity(Overlay.medium))
+                .overlay(Color.black.opacity(Scrim.medium))
         } else {
             Color.black.ignoresSafeArea()
         }

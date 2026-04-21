@@ -5,19 +5,19 @@ struct Chip: View {
     private let systemImage: String?
     private let tint: Color
 
-    init(_ label: String, systemImage: String, tint: Color = .black.opacity(0.3)) {
+    init(_ label: String, systemImage: String, tint: Color = .chipScrim) {
         self.label = label
         self.systemImage = systemImage
         self.tint = tint
     }
 
-    init(systemImage: String, tint: Color = .black.opacity(0.3)) {
+    init(systemImage: String, tint: Color = .chipScrim) {
         self.label = nil
         self.systemImage = systemImage
         self.tint = tint
     }
 
-    init(_ label: String, tint: Color = .black.opacity(0.3)) {
+    init(_ label: String, tint: Color = .chipScrim) {
         self.label = label
         self.systemImage = nil
         self.tint = tint

@@ -179,7 +179,7 @@ struct DPad: View {
                         .fill(
                             LinearGradient(
                                 colors: [.white.opacity(0.28), .white.opacity(0)],
-                                startPoint: dir.highlightGradientStart(armFraction: armFraction),
+                                startPoint: dir.highlightGradientStart,
                                 endPoint: dir.highlightGradientEnd(armFraction: armFraction)
                             )
                         )
@@ -372,7 +372,7 @@ enum DPadDirection: CaseIterable, Hashable {
     /// axis), and its inner edge is at the center-square boundary,
     /// which in UnitPoints is `(1 - armFraction) / 2` from the
     /// outer edge.
-    func highlightGradientStart(armFraction: CGFloat) -> UnitPoint {
+    var highlightGradientStart: UnitPoint {
         switch self {
         case .up:    return UnitPoint(x: 0.5, y: 0)
         case .down:  return UnitPoint(x: 0.5, y: 1)

@@ -67,7 +67,7 @@ struct GameHeroCard: View {
                         Text("Continue playing")
                             .font(.caption)
                             .fontWeight(.medium)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.white.opacity(Alpha.textMuted))
                         Text(game.title)
                             .font(.title3)
                             .fontWeight(.bold)
