@@ -19,6 +19,7 @@ struct GameLibraryView: View {
     @State private var errorMessage: String?
     @State private var errorTitle: String = "Oops!"
     @State private var showErrorAlert = false
+    @State private var showCancelValidationAlert = false
     @State private var gameToDelete: GameEntry?
     @State private var showDeleteConfirm = false
     @State private var showInvalidAlert = false
@@ -52,6 +53,18 @@ struct GameLibraryView: View {
             ? library.games
             : library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
         return GameSorting.sort(base, option: settings.librarySortOption, sizes: gameSizes)
+    }
+
+    /// Synthetic cards for pre-flight validations, pinned to the top
+    /// of the grid/list. These only render when the library is
+    /// already populated - the empty-state flow keeps validation
+    /// feedback on the Import button so the empty state doesn't
+    /// bounce in and out on invalid imports.
+    private var pendingValidationEntries: [GameEntry] {
+        guard !library.games.isEmpty else { return [] }
+        return library.pendingImports.values
+            .sorted { $0.id < $1.id }
+            .map(\.syntheticEntry)
     }
 
     private var showEmpty: Bool {
@@ -152,7 +165,13 @@ struct GameLibraryView: View {
                     entranceDelay: entranceDelay,
                     headerHeight: headerHeight,
                     emptyStateHeight: emptyStateHeight,
-                    emptyStateOffset: -AppSize.emptyStateOffset
+                    emptyStateOffset: -AppSize.emptyStateOffset,
+                    // Only the empty-state Import button shows a
+                    // validating label. When the library already has
+                    // games, pre-flight feedback lives on the grid/list
+                    // cards instead (see pendingValidationEntries).
+                    isValidating: showEmpty && !library.pendingImports.isEmpty,
+                    onRequestCancelValidation: { showCancelValidationAlert = true }
                 )
             }
             .toolbarVisibility(.hidden, for: .navigationBar)
@@ -198,6 +217,16 @@ struct GameLibraryView: View {
                 Button("OK") {}
             } message: {
                 Text("This game couldn't be loaded properly. You can delete it and try importing again.")
+            }
+            .alert("Cancel import?", isPresented: $showCancelValidationAlert) {
+                Button("Keep importing", role: .cancel) {}
+                Button("Cancel import", role: .destructive) {
+                    for id in library.pendingImports.keys {
+                        library.cancelPendingImport(id)
+                    }
+                }
+            } message: {
+                Text("The game is still being validated. Cancelling will stop the import.")
             }
             .alert("A game is paused", isPresented: $showPausedGameAlert) {
                 Button("Cancel", role: .cancel) {
@@ -393,6 +422,15 @@ struct GameLibraryView: View {
                 librarySectionHeader
             }
 
+            ForEach(pendingValidationEntries, id: \.id) { pending in
+                GameListRow(
+                    game: pending,
+                    onStopImport: { showCancelValidationAlert = true }
+                )
+                .id("\(pending.id)-pending")
+                .transition(.cardAppear)
+            }
+
             ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
                 let isPaused = pauseManager.pausedGame?.id == game.id
                 Button {
@@ -426,10 +464,20 @@ struct GameLibraryView: View {
         .padding(.horizontal)
         .padding(.top, Spacing.lg)
         .animation(Motion.standard, value: filteredGames)
+        .animation(Motion.standard, value: pendingValidationEntries)
     }
 
     @ViewBuilder
     private var gridItems: some View {
+        ForEach(pendingValidationEntries, id: \.id) { pending in
+            GameCard(
+                game: pending,
+                onStopImport: { showCancelValidationAlert = true }
+            )
+            .id("\(pending.id)-pending")
+            .transition(.cardAppear)
+        }
+
         ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
             switch game.status {
             case .importing:
