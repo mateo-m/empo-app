@@ -98,7 +98,7 @@ struct GameLibraryView: View {
                                 Color.clear.preference(key: EmptyStateHeightKey.self, value: geo.size.height)
                             }
                         }
-                        .offset(y: -30)
+                        .offset(y: -AppSize.emptyStateOffset)
                         .transition(.emptyState)
                 }
             }
@@ -152,7 +152,7 @@ struct GameLibraryView: View {
                     entranceDelay: entranceDelay,
                     headerHeight: headerHeight,
                     emptyStateHeight: emptyStateHeight,
-                    emptyStateOffset: -30
+                    emptyStateOffset: -AppSize.emptyStateOffset
                 )
             }
             .toolbarVisibility(.hidden, for: .navigationBar)
@@ -264,7 +264,7 @@ struct GameLibraryView: View {
     }
 
 
-    private let headerHeight: CGFloat = 56
+    private let headerHeight: CGFloat = AppSize.libraryHeader
 
     private var libraryHeader: some View {
         HStack {

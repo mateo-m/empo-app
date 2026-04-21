@@ -17,13 +17,10 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: Spacing.lg) {
             Image(systemName: icon)
-                .font(.system(size: 48))
+                .font(.system(size: IconSize.emptyState))
                 .foregroundStyle(.secondary)
                 .offset(y: floating ? -3 : 3)
-                .animation(
-                    .easeInOut(duration: 2.4).repeatForever(autoreverses: true),
-                    value: floating
-                )
+                .animation(Motion.float, value: floating)
                 .opacity(iconAppeared ? 1 : 0)
                 .offset(y: iconAppeared ? 0 : 12)
             Text(title)
@@ -67,7 +64,7 @@ struct StaggeredAppearance: ViewModifier {
     let trigger: UUID
     var initialDelay: TimeInterval = 0
 
-    private var delay: Double { initialDelay + Double(index) * 0.04 }
+    private var delay: Double { initialDelay + Double(index) * Motion.staggerFast }
 
     @State private var visible = true
 

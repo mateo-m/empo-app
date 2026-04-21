@@ -195,14 +195,20 @@ enum Motion {
 
     // -- Stagger --
 
-    /// Interval between successive items in a cascading entrance
-    /// (library grid, settings list). Slightly longer than
-    /// `staggerFast` so a row of 6-8 items reads as a wave.
-    static let staggerInterval: TimeInterval = 0.04
-
-    /// Faster stagger used in denser/wider lists where the sum of
-    /// delays would otherwise feel sluggish.
+    /// Interval between successive items in a dense list/grid cascade
+    /// (library grid, settings rows). Short so a long list doesn't feel
+    /// sluggish by the time the tail catches up.
     static let staggerFast: TimeInterval = 0.04
+
+    /// Slightly wider interval for sparser reveals (D-pad buttons
+    /// repopulating after a layout reset). Reads as a deliberate wave
+    /// rather than a ripple.
+    static let staggerMedium: TimeInterval = 0.06
+
+    /// Initial delay before a cascading controls reveal begins. Gives
+    /// the parent layout a beat to settle before buttons start
+    /// arriving.
+    static let controlsAppearDelay: TimeInterval = 0.15
 
     // -- Durations (for manual withAnimation(.easeInOut(duration:))) --
 
@@ -238,6 +244,14 @@ enum AppSize {
 
     /// Library/settings navigation header tap area.
     static let libraryHeader: CGFloat = 56
+
+    /// Apple HIG minimum interactive target - import button and other
+    /// primary CTAs default to this when not otherwise constrained.
+    static let minTapTarget: CGFloat = 44
+
+    /// Vertical offset used by the library empty state to lift its
+    /// illustration above center when there's a search bar above.
+    static let emptyStateOffset: CGFloat = 30
 
     /// Slider value-label pinned width (right-aligned, so values like
     /// "100%" don't visually jump as the label width fluctuates).
@@ -283,14 +297,33 @@ enum Alpha {
     static let border: Double = 0.2
     /// Brand tint behind `.secondary` surfaces.
     static let brandTintBackground: Double = 0.1
+    /// Disabled control foreground (glass CTAs with `.isEnabled == false`).
+    static let disabled: Double = 0.4
+    /// Drop shadow opacity for small floating affordances.
+    static let shadow: Double = 0.2
+    /// Filled indicator fills over secondary-styled surfaces.
+    static let indicatorFill: Double = 0.3
+    /// Hairline stroke over secondary-styled surfaces.
+    static let indicatorStroke: Double = 0.4
+    /// Dimmed player toolbar opacity - the toolbar rests at this
+    /// value while idle and returns to 1 on any touch inside the
+    /// player.
+    static let toolbarDim: Double = 0.3
 }
 
 
-/// Backwards-compat shim so incremental site-by-site migration is
-/// safe: existing `Overlay.light/medium/heavy` call sites keep
-/// working while we migrate to the split `Scrim` / `Alpha` tokens.
-enum Overlay {
-    static let light: Double = Scrim.light
-    static let medium: Double = Scrim.medium
-    static let heavy: Double = Scrim.heavy
+/// Time-based design tokens. Use for idle timers and other
+/// user-perceivable durations that aren't animation curves (those
+/// live on `Motion`).
+enum Timing {
+    /// How long the player toolbar stays at full opacity after the
+    /// last touch before dimming back to `Alpha.toolbarDim`.
+    static let toolbarIdleDelay: TimeInterval = 3.0
+}
+
+
+/// Default scrim tint baked into `Chip` so small glyph badges get a
+/// consistent dim behind them without every site passing a literal.
+extension Color {
+    static let chipScrim = Color.black.opacity(Scrim.light)
 }

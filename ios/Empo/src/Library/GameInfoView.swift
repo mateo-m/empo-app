@@ -389,8 +389,7 @@ struct GameInfoView: View {
         needsLibraryRefresh = true
     }
 
-    private func removeCustomImage(kind: String,
-                                   pathGetter: (GameMetadata) -> String?,
+    private func removeCustomImage(pathGetter: (GameMetadata) -> String?,
                                    filenameGetter: (GameMetadata) -> String?,
                                    filenameSetter: (inout GameMetadata, String?) -> Void) {
         if let path = pathGetter(metadata) {
@@ -411,8 +410,7 @@ struct GameInfoView: View {
     }
 
     private func removeArtwork() {
-        removeCustomImage(kind: "artwork",
-                         pathGetter: { $0.customArtworkPath(for: game.id) },
+        removeCustomImage(pathGetter: { $0.customArtworkPath(for: game.id) },
                          filenameGetter: { $0.customArtworkFilename },
                          filenameSetter: { $0.customArtworkFilename = $1 })
     }
@@ -424,8 +422,7 @@ struct GameInfoView: View {
     }
 
     private func removeBanner() {
-        removeCustomImage(kind: "banner",
-                         pathGetter: { $0.customBannerPath(for: game.id) },
+        removeCustomImage(pathGetter: { $0.customBannerPath(for: game.id) },
                          filenameGetter: { $0.customBannerFilename },
                          filenameSetter: { $0.customBannerFilename = $1 })
     }
