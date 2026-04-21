@@ -4,9 +4,10 @@ struct GameCard: View {
     let game: GameEntry
     var isPaused: Bool = false
     var onStopImport: (() -> Void)? = nil
+    @Environment(\.appSettings) private var settings
     @State private var titleHeight: CGFloat = 40
 
-    private var titlePosition: TitlePosition { AppSettings.shared.titlePosition }
+    private var titlePosition: TitlePosition { settings.titlePosition }
 
     var body: some View {
         switch titlePosition {
