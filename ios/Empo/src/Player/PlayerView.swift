@@ -42,6 +42,7 @@ struct PlayerView: View {
     @State private var showAddSheet = false
     @State private var showResetConfirm = false
     @State private var editingButton: ButtonModel?
+    @State private var editingDPad = false
     @State private var draggingDPad = false
     @State private var draggingButtonID: UUID?
 
@@ -217,7 +218,8 @@ struct PlayerView: View {
             layout: layout,
             showAddSheet: $showAddSheet,
             showResetConfirm: $showResetConfirm,
-            editingButton: $editingButton
+            editingButton: $editingButton,
+            editingDPad: $editingDPad
         )
     }
 
@@ -227,13 +229,20 @@ struct PlayerView: View {
         let size = layout.dpadSize
         let pos = absolutePosition(for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size), safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY)
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
-
-        DPadRepresentable(size: size, editing: editMode, dragging: draggingDPad)
+        DPad(size: size, editing: editMode)
             .frame(width: size, height: size)
+            .opacity(layout.dpadOpacity)
             .scaleEffect(draggingDPad ? kDragScaleFactor : 1.0)
             .animation(Motion.snappy, value: draggingDPad)
             .position(pos)
             .transition(.controlAppear(anchor: anchor))
+            // Tap-to-edit only fires in edit mode. Tapping the D-pad
+            // during normal play falls through to the DPad's own
+            // gesture for direction input.
+            .onTapGesture {
+                guard editMode else { return }
+                editingDPad = true
+            }
             .gesture(dpadDragGesture(in: geo, controlsMinY: controlsMinY), including: editMode ? .all : .none)
     }
 
@@ -260,15 +269,14 @@ struct PlayerView: View {
         let pos = absolutePosition(for: button.relativeCenter, in: geo.size, controlSize: CGSize(width: button.size, height: button.size), safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY)
         let isDragging = draggingButtonID == button.id
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
-
-        ActionButtonRepresentable(
+        ActionButton(
             label: button.label,
             scancode: button.scancode,
-            buttonSize: button.size,
-            editing: editMode,
-            dragging: isDragging
+            size: button.size,
+            editing: editMode
         )
         .frame(width: button.size, height: button.size)
+        .opacity(button.opacity)
         .onTapGesture {
             guard editMode else { return }
             editingButton = button

@@ -55,7 +55,6 @@ struct ExperimentalConfirmSheet: View {
             } action: { newHeight in
                 measuredHeight = newHeight
             }
-            .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
