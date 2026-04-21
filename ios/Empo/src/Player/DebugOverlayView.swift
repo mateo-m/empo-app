@@ -79,7 +79,7 @@ struct DebugOverlayView: View {
         }
         .padding(Spacing.md + Spacing.xxs)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
-        .environment(\.colorScheme, .dark)
+        .darkGlass()
         .background(
             GeometryReader { proxy in
                 Color.clear.preference(
