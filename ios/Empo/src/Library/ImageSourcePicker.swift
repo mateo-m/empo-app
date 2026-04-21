@@ -88,7 +88,7 @@ private struct PhotoLibraryPicker: UIViewControllerRepresentable {
 
             provider.loadObject(ofClass: UIImage.self) { image, _ in
                 if let image = image as? UIImage {
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         self.parent.onImageSelected(image)
                     }
                 }
