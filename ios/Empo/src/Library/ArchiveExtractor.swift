@@ -12,11 +12,17 @@ enum ArchiveExtractor {
         case readFailed(String)
         case writeFailed(String)
         case pathEscape(String)
+        /// Thrown when the caller's `shouldCancel` closure returns
+        /// `true` between libarchive entry reads. Callers use this
+        /// to distinguish a user cancel from a genuine error.
+        case cancelled
 
         var errorDescription: String? {
             switch self {
             case .openFailed(let s), .readFailed(let s), .writeFailed(let s), .pathEscape(let s):
                 return s
+            case .cancelled:
+                return "Cancelled"
             }
         }
     }
@@ -39,12 +45,111 @@ enum ArchiveExtractor {
     }
 
 
+    /// Extract only entries matching `include` from `archiveURL` into
+    /// `destDir`. Used by the import pre-flight to pull a small,
+    /// targeted subset of the archive (e.g. the `.ini` + scripts
+    /// files) for validation without paying the cost of a full
+    /// extract.
+    ///
+    /// Paths passed to `include` are relative to the archive root
+    /// (same normalisation as `Peek.entries`).
+    static func extractSelective(
+        archive archiveURL: URL,
+        to destDir: URL,
+        shouldCancel: (() -> Bool)? = nil,
+        /// When non-nil and returns `true`, the walk stops after
+        /// the current entry is processed. Used by pre-flight
+        /// validation to short-circuit once the needed scripts
+        /// file has been pulled, avoiding a full walk to EOF.
+        stopWhen: (() -> Bool)? = nil,
+        include: (String) -> Bool
+    ) throws {
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: destDir.path) {
+            try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
+        }
+
+        guard let reader = archive_read_new() else {
+            throw Error.openFailed("archive_read_new failed")
+        }
+        defer { archive_read_free(reader) }
+
+        archive_read_support_format_all(reader)
+        archive_read_support_filter_all(reader)
+
+        let blockSize = 10 * 1024 * 1024
+        let openResult = archiveURL.path.withCString {
+            archive_read_open_filename(reader, $0, blockSize)
+        }
+        guard openResult == ARCHIVE_OK else {
+            throw Error.openFailed(errorString(reader) ?? "Cannot open archive")
+        }
+
+        var entry: OpaquePointer?
+        while true {
+            if shouldCancel?() == true { throw Error.cancelled }
+            let headerResult = archive_read_next_header(reader, &entry)
+            if headerResult == ARCHIVE_EOF { break }
+            if headerResult == ARCHIVE_RETRY { continue }
+            if headerResult < ARCHIVE_WARN {
+                throw Error.readFailed(errorString(reader) ?? "Archive read failure")
+            }
+            guard let entry else { continue }
+
+            guard let cPath = archive_entry_pathname(entry) else {
+                archive_read_data_skip(reader)
+                continue
+            }
+            let rawName = String(cString: cPath)
+            let relative = rawName.replacingOccurrences(of: "\\", with: "/")
+            let components = relative.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+            if relative.hasPrefix("/") || components.contains("..") {
+                archive_read_data_skip(reader)
+                continue
+            }
+            if relative.isEmpty || relative.hasPrefix("__MACOSX/") || relative == ".DS_Store" {
+                archive_read_data_skip(reader)
+                continue
+            }
+
+            let fileType = archive_entry_filetype(entry)
+            let isDir = (fileType & 0o170000) == 0o040000
+            if isDir {
+                archive_read_data_skip(reader)
+                continue
+            }
+
+            if !include(relative) {
+                archive_read_data_skip(reader)
+                continue
+            }
+
+            let outURL = destDir.appendingPathComponent(relative)
+            let parent = outURL.deletingLastPathComponent()
+            if !fm.fileExists(atPath: parent.path) {
+                try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
+            }
+            try writeEntry(reader: reader, to: outURL)
+
+            if stopWhen?() == true { break }
+        }
+    }
+
+
     /// Extract an archive to `destDir`. Reports progress in [0, 1] via the
     /// optional callback. The callback runs on the caller's thread.
+    ///
+    /// `onFileWritten` fires after each file is written to disk,
+    /// providing the archive-relative path and the URL on disk.
+    /// Used by the import pipeline to surface artwork early (as
+    /// soon as `Graphics/Titles/*` lands) without waiting for the
+    /// full extract to finish.
     static func extract(
         archive archiveURL: URL,
         to destDir: URL,
-        progress: ((String, Double) -> Void)? = nil
+        shouldCancel: (() -> Bool)? = nil,
+        progress: ((String, Double) -> Void)? = nil,
+        onFileWritten: ((String, URL) -> Void)? = nil
     ) throws {
         let fm = FileManager.default
         if !fm.fileExists(atPath: destDir.path) {
@@ -91,6 +196,7 @@ enum ArchiveExtractor {
 
         var entry: OpaquePointer?
         while true {
+            if shouldCancel?() == true { throw Error.cancelled }
             let headerResult = archive_read_next_header(reader, &entry)
             if headerResult == ARCHIVE_EOF { break }
             if headerResult == ARCHIVE_RETRY { continue }
@@ -139,6 +245,7 @@ enum ArchiveExtractor {
             }
 
             try writeEntry(reader: reader, to: outURL)
+            onFileWritten?(relative, outURL)
 
             entryIndex += 1
             if let progress {

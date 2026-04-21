@@ -18,7 +18,7 @@ enum GameImportValidator {
             case .corruptZip(let detail):
                 return "Corrupt zip file: \(detail)"
             case .notAnRPGMakerGame:
-                return "This doesn't appear to be an RPG Maker game. No valid Game.ini or RGSS archive was found."
+                return "This doesn't appear to be an RPG Maker game. No recognised game configuration was found."
             case .unsupportedRuntime(let detail):
                 return detail
             case .missingScripts(let path):
@@ -30,7 +30,11 @@ enum GameImportValidator {
     }
 
 
-    /// Throws ImportError on failure.
+    /// Throws ImportError on failure. Validates a folder already
+    /// present on disk - used both for full extracted imports and
+    /// folder-based imports. For archives we peek first via
+    /// `preflightArchive` to avoid paying the full extract cost
+    /// before the user sees confirmation the game is valid.
     static func validate(_ url: URL) throws {
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(atPath: url.path) else {
@@ -72,6 +76,259 @@ enum GameImportValidator {
 
         // Nothing matched — not an RPG Maker game
         throw ImportError.notAnRPGMakerGame
+    }
+
+
+    /// Pre-flight check for archive imports. Walks the archive
+    /// once (a second pass only runs when the game uses a
+    /// non-standard scripts path) and selectively extracts just
+    /// the validation files (`.ini`, `mkxp.json`, and
+    /// `Data/Scripts.*`) into `scratchDir` so the normal folder
+    /// validator can inspect them. Returns the URL of the game
+    /// root inside `scratchDir` (for the caller to read
+    /// `parseINITitle` against). Throws with a user-facing
+    /// `ImportError` if the archive isn't a supported RPG Maker
+    /// game.
+    ///
+    /// The single-walk strategy assumes RPG Maker games keep the
+    /// scripts file at the default `Data/Scripts.{rxdata,rvdata,
+    /// rvdata2}` path (which is essentially all of them). If a
+    /// game hard-codes a custom scripts path via Game.ini's
+    /// `Scripts=` key we fall through to a targeted second pass.
+    ///
+    /// Artwork is not pulled by the pre-flight: archive order
+    /// typically places `Data/Scripts.*` before `Graphics/Titles/*`,
+    /// so a walk wide enough to catch both would no longer
+    /// short-circuit on typical archives. The full-extract pass
+    /// surfaces artwork mid-flight via its per-file callback
+    /// instead.
+    @discardableResult
+    static func preflightArchive(
+        at archiveURL: URL,
+        scratchDir: URL,
+        shouldCancel: (() -> Bool)? = nil
+    ) throws -> URL {
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: scratchDir.path) {
+            try fm.createDirectory(at: scratchDir, withIntermediateDirectories: true)
+        }
+
+        // State tracked during the walk. The walk stops early
+        // when any of these prove the game is valid:
+        //   1. RGSS archive marker (`.rgssad`/`.rgss2a`/`.rgss3a`)
+        //      at the game root - its name alone is sufficient.
+        //   2. We've pulled both a root `.ini`/`mkxp.json` AND a
+        //      `Data/Scripts.*` file. Between them the folder
+        //      validator has everything it needs - no point
+        //      walking the rest of a 700MB archive just to hit
+        //      EOF.
+        var rgssArchiveVersion: RGSSVersion?
+        var sawMetadata = false
+        var sawScripts = false
+
+        do {
+            try ArchiveExtractor.extractSelective(
+                archive: archiveURL,
+                to: scratchDir,
+                shouldCancel: shouldCancel,
+                stopWhen: {
+                    rgssArchiveVersion != nil || (sawMetadata && sawScripts)
+                }
+            ) { path in
+                let components = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+                // `depth` counts how many folder hops away from the
+                // archive root the entry sits. We accept files at
+                // depth 0 (flat archive) and depth 1 (wrapper
+                // folder) for metadata; scripts files live one
+                // deeper because they're inside Data/.
+                let depth = components.count - 1
+                guard let name = components.last?.lowercased() else { return false }
+
+                // Game root metadata files.
+                if depth <= 1 {
+                    if name.hasSuffix(".ini") || name == "mkxp.json" {
+                        sawMetadata = true
+                        return true
+                    }
+                    if name.hasSuffix(".rgssad") {
+                        rgssArchiveVersion = .xp
+                        return false
+                    }
+                    if name.hasSuffix(".rgss2a") {
+                        rgssArchiveVersion = .vx
+                        return false
+                    }
+                    if name.hasSuffix(".rgss3a") {
+                        rgssArchiveVersion = .vxAce
+                        return false
+                    }
+                }
+
+                // Speculative scripts extraction: catches the
+                // default `Data/Scripts.*` layout. Games with a
+                // custom Scripts= path fall through to the second
+                // pass below.
+                if depth == 1 || depth == 2 {
+                    let parent = components.count >= 2 ? components[components.count - 2].lowercased() : ""
+                    if parent == "data",
+                       name.hasPrefix("scripts."),
+                       name.hasSuffix(".rxdata") || name.hasSuffix(".rvdata") || name.hasSuffix(".rvdata2") {
+                        sawScripts = true
+                        return true
+                    }
+                }
+
+                // Artwork is deliberately NOT extracted here.
+                // Archives tend to be alphabetical, putting
+                // `Data/Scripts.*` before `Graphics/Titles/*`, so
+                // the walk's `stopWhen` predicate would fire before
+                // any artwork is reached. The full-extract pass
+                // later surfaces artwork via its per-file callback.
+
+                return false
+            }
+        } catch ArchiveExtractor.Error.cancelled {
+            throw ArchiveExtractor.Error.cancelled
+        } catch {
+            throw ImportError.corruptZip(error.localizedDescription)
+        }
+
+        // Determine where the game root landed inside scratchDir
+        // based on what actually got extracted (matches the
+        // post-extraction logic that the full import uses later).
+        let gameRoot = findGameRoot(in: scratchDir, fm: fm)
+
+        // Fast path: RGSS-archived games were identified by name
+        // during the walk.
+        if let version = rgssArchiveVersion {
+            try checkRuntimeSupport(version)
+            return gameRoot
+        }
+
+        // Parse any extracted .ini for its `Scripts=` key.
+        var scriptsPath: String?
+        var detectedVersion: RGSSVersion?
+        if let items = try? fm.contentsOfDirectory(atPath: gameRoot.path) {
+            for item in items where item.lowercased().hasSuffix(".ini") {
+                let iniURL = gameRoot.appendingPathComponent(item)
+                if let (version, path) = parseIniScripts(iniURL) {
+                    detectedVersion = version
+                    scriptsPath = path
+                    break
+                }
+            }
+        }
+
+        // Fall back to mkxp.json's customScript when no ini
+        // yielded a scripts path.
+        var customScriptPath: String?
+        let mkxpURL = gameRoot.appendingPathComponent("mkxp.json")
+        if scriptsPath == nil, fm.fileExists(atPath: mkxpURL.path) {
+            customScriptPath = Self.customScriptPath(gameRoot)
+            if customScriptPath == nil {
+                throw ImportError.notAnRPGMakerGame
+            }
+            detectedVersion = rgssVersionFromMkxpJson(gameRoot)
+        }
+
+        guard scriptsPath != nil || customScriptPath != nil else {
+            throw ImportError.notAnRPGMakerGame
+        }
+
+        if let detectedVersion {
+            try checkRuntimeSupport(detectedVersion)
+        }
+
+        // Validate the scripts/customScript file. Usually already
+        // on disk from the single walk; second pass only runs when
+        // the game uses a non-standard path.
+        if let scriptsPath {
+            let normalized = scriptsPath.replacingOccurrences(of: "\\", with: "/")
+            try ensureFileExtracted(
+                relativePath: normalized,
+                gameRoot: gameRoot,
+                archiveURL: archiveURL,
+                scratchDir: scratchDir,
+                shouldCancel: shouldCancel
+            )
+            try validateRGSSScripts(at: gameRoot, scriptsPath: normalized)
+        } else if let customScriptPath {
+            let normalized = customScriptPath.replacingOccurrences(of: "\\", with: "/")
+            try ensureFileExtracted(
+                relativePath: normalized,
+                gameRoot: gameRoot,
+                archiveURL: archiveURL,
+                scratchDir: scratchDir,
+                shouldCancel: shouldCancel
+            )
+            try validateCustomScript(at: gameRoot, scriptPath: normalized)
+        }
+
+        return gameRoot
+    }
+
+
+    /// Ensures `gameRoot/relativePath` exists on disk, running a
+    /// targeted second archive walk only when the speculative
+    /// first walk didn't pull the file. Handles both flat and
+    /// single-wrapper archives by stripping the wrapper from
+    /// archive paths before matching.
+    private static func ensureFileExtracted(
+        relativePath: String,
+        gameRoot: URL,
+        archiveURL: URL,
+        scratchDir: URL,
+        shouldCancel: (() -> Bool)?
+    ) throws {
+        let fm = FileManager.default
+        let expected = gameRoot.appendingPathComponent(relativePath)
+        if fm.fileExists(atPath: expected.path) { return }
+
+        let wrapperPrefix: String? = gameRoot == scratchDir
+            ? nil
+            : gameRoot.lastPathComponent + "/"
+
+        var extracted = false
+        try ArchiveExtractor.extractSelective(
+            archive: archiveURL,
+            to: scratchDir,
+            shouldCancel: shouldCancel,
+            stopWhen: { extracted }
+        ) { rawPath in
+            let archivePath = rawPath.replacingOccurrences(of: "\\", with: "/")
+            let gameRelative: String
+            if let prefix = wrapperPrefix {
+                guard archivePath.hasPrefix(prefix) else { return false }
+                gameRelative = String(archivePath.dropFirst(prefix.count))
+            } else {
+                gameRelative = archivePath
+            }
+            let match = gameRelative.caseInsensitiveCompare(relativePath) == .orderedSame
+            if match { extracted = true }
+            return match
+        }
+    }
+
+
+    /// Determine the effective game root inside `scratchDir`. If
+    /// exactly one directory sits at the top (ignoring macOS
+    /// metadata), that directory is the wrapper; otherwise files
+    /// are flat inside `scratchDir` itself. Mirrors the logic used
+    /// by `GameLibrary.findGameRoot` after full extraction.
+    private static func findGameRoot(in scratchDir: URL, fm: FileManager) -> URL {
+        guard let items = try? fm.contentsOfDirectory(
+            at: scratchDir,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return scratchDir }
+
+        let meaningful = items.filter { $0.lastPathComponent != "__MACOSX" }
+        if meaningful.count == 1,
+           let single = meaningful.first,
+           (try? single.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+            return single
+        }
+        return scratchDir
     }
 
 

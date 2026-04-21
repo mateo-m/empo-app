@@ -4,11 +4,45 @@ import SwiftUI
 import Observation
 import Synchronization
 
+/// In-flight import that's still in its pre-flight validation phase.
+/// Once the pre-flight passes, the matching `GameEntry` is appended
+/// to `games` with `.importing(progress:)` status and the pending
+/// entry is cleared - progress from that point on lives on the real
+/// game card/row. On any pre-flight failure, the pending entry is
+/// dropped without the user ever seeing a half-broken skeleton.
+///
+/// Rendering of the validating state is delegated to the call site:
+/// when the library is empty the Import button hoists it onto its
+/// own label; when the library already has games the grid/list
+/// renders a synthetic card via `syntheticEntry` so the status
+/// feedback stays anchored where the user expects it.
+struct PendingImport: Identifiable, Hashable {
+    let id: String
+    let sourceName: String
+
+    /// Placeholder `GameEntry` used when rendering the pending
+    /// import inside the existing grid/list. Path is empty because
+    /// nothing is on disk yet; `progress: 0` renders as the
+    /// indeterminate spinner inside `GameStatusIndicator`, which is
+    /// the right visual read for the pre-flight validation phase.
+    var syntheticEntry: GameEntry {
+        GameEntry(
+            id: id,
+            path: "",
+            title: sourceName,
+            artworkPath: nil,
+            status: .importing(progress: 0)
+        )
+    }
+}
+
+
 @MainActor @Observable
 class GameLibrary {
     static let shared = GameLibrary()
 
     var games: [GameEntry] = []
+    var pendingImports: [String: PendingImport] = [:]
 
     private let fm = FileManager.default
     private let cancelledImports = Mutex(Set<String>())
@@ -142,6 +176,35 @@ class GameLibrary {
 
     private struct ImportCancelled: Error {}
 
+    /// Errors surfaced from the import pipeline with display-ready
+    /// messages. Used to remap low-level Foundation errors (disk
+    /// full, permission denied) into text the user can act on.
+    enum ImportError: LocalizedError {
+        case outOfSpace
+
+        var errorDescription: String? {
+            switch self {
+            case .outOfSpace:
+                return "Not enough space to import. Free up space on your device and try again."
+            }
+        }
+    }
+
+    /// True when `error` is the Foundation / POSIX flavor of "disk
+    /// full". Covers both `NSFileWriteOutOfSpaceError` (from
+    /// FileManager writes) and `ENOSPC` (from libc-level calls that
+    /// libarchive bubbles up as NSError).
+    nonisolated private static func isOutOfSpace(_ error: Error) -> Bool {
+        let ns = error as NSError
+        if ns.domain == NSCocoaErrorDomain && ns.code == NSFileWriteOutOfSpaceError {
+            return true
+        }
+        if ns.domain == NSPOSIXErrorDomain && ns.code == Int(ENOSPC) {
+            return true
+        }
+        return false
+    }
+
     nonisolated private func isImportCancelled(_ id: String) -> Bool {
         cancelledImports.withLock { $0.contains(id) }
     }
@@ -154,41 +217,36 @@ class GameLibrary {
         cancelledImports.withLock { _ = $0.remove(id) }
     }
 
+    /// Cancel an import that's still in its pre-validation phase
+    /// (visible only via `pendingImports`). The detached task sees
+    /// the cancellation flag at its next checkpoint, unwinds temp
+    /// files, and removes the pending entry.
+    func cancelPendingImport(_ importID: String) {
+        cancelImport(importID)
+    }
+
     func importGame(from sourceURL: URL, completion: @escaping @MainActor @Sendable (Error?) -> Void) {
         ensureGamesDirectory()
 
         let archiveFormat = ArchiveExtractor.Format(extension: sourceURL.pathExtension)
         let importID = UUID().uuidString
+        let sourceName = archiveFormat == nil
+            ? sourceURL.lastPathComponent
+            : sourceURL.deletingPathExtension().lastPathComponent
 
-        let title: String
-        let artwork: String?
-        if archiveFormat == nil {
-            title = GameEntry.parseINITitle(at: sourceURL) ?? sourceURL.lastPathComponent
-            artwork = Self.findArtwork(at: sourceURL)
-        } else {
-            title = sourceURL.deletingPathExtension().lastPathComponent
-            artwork = nil
-        }
-
-        // Skeleton card uses the same ID as the final entry, so SwiftUI
-        // animates in-place when reload() provides the real data.
-        withAnimation {
-            games.append(GameEntry(
-                id: importID,
-                path: "",
-                title: title,
-                artworkPath: artwork,
-                status: .importing(progress: 0)
-            ))
-        }
+        // Pre-flight phase: button shows "Validating", library keeps
+        // its current UI (empty state or existing list). Once
+        // pre-flight passes we commit a progress card to `games` and
+        // extraction/finalisation runs with the card visible.
+        pendingImports[importID] = PendingImport(id: importID, sourceName: sourceName)
 
         Task.detached(priority: .userInitiated) {
             defer { self.clearCancellation(importID) }
             do {
                 if archiveFormat != nil {
-                    try self.importArchive(from: sourceURL, importID: importID)
+                    try self.importArchive(from: sourceURL, importID: importID, sourceName: sourceName)
                 } else {
-                    try self.importFolder(from: sourceURL, importID: importID)
+                    try self.importFolder(from: sourceURL, importID: importID, sourceName: sourceName)
                 }
                 await MainActor.run {
                     GameLibrary.shared.reload()
@@ -196,47 +254,80 @@ class GameLibrary {
                 }
             } catch is ImportCancelled {
                 NSLog("[GameLibrary] Import cancelled: %@", importID)
+                await MainActor.run {
+                    _ = GameLibrary.shared.pendingImports.removeValue(forKey: importID)
+                    GameLibrary.shared.games.removeAll { $0.id == importID }
+                }
             } catch {
                 NSLog("[GameLibrary] Import error: %@", "\(error)")
+                let surfaced: Error = Self.isOutOfSpace(error) ? ImportError.outOfSpace : error
                 await MainActor.run {
-                    withAnimation {
-                        GameLibrary.shared.games.removeAll { $0.id == importID }
-                    }
-                    completion(error)
+                    _ = GameLibrary.shared.pendingImports.removeValue(forKey: importID)
+                    GameLibrary.shared.games.removeAll { $0.id == importID }
+                    completion(surfaced)
                 }
             }
         }
     }
 
-    nonisolated private func updateProgress(_ importID: String, _ progress: Double) {
+    /// Commits a progress-card `GameEntry` to `games` and drops the
+    /// matching pending entry. Called from the import pipeline once
+    /// pre-flight validation passes - from this point on the user
+    /// can see and cancel the import from the card itself.
+    nonisolated private func commitPendingToCard(_ importID: String, title: String, artworkPath: String?) {
+        Task { @MainActor in
+            let lib = GameLibrary.shared
+            withAnimation {
+                _ = lib.pendingImports.removeValue(forKey: importID)
+                lib.games.append(GameEntry(
+                    id: importID,
+                    path: "",
+                    title: title,
+                    artworkPath: artworkPath,
+                    status: .importing(progress: 0)
+                ))
+            }
+        }
+    }
+
+    /// Swap in the card's artwork mid-extract, once the archive
+    /// has yielded a `Graphics/Titles/*` image. Called more than
+    /// once per import: each time the extractor finds an
+    /// alphabetically-smaller candidate the card updates to
+    /// match, mirroring the rule used by `findArtwork` after the
+    /// full extract completes so the card doesn't flicker to a
+    /// different artwork when the import finishes. Rebuilding the
+    /// entry (rather than mutating `artworkPath` on the existing
+    /// one) goes through SwiftUI's normal diffing so the card
+    /// cross-fades the placeholder to the real artwork.
+    nonisolated private func updateCardArtwork(_ importID: String, artworkPath: String) {
+        Task { @MainActor in
+            let lib = GameLibrary.shared
+            guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
+            guard lib.games[idx].artworkPath != artworkPath else { return }
+            withAnimation {
+                lib.games[idx] = GameEntry(
+                    id: importID,
+                    path: lib.games[idx].path,
+                    title: lib.games[idx].title,
+                    artworkPath: artworkPath,
+                    originalTitle: lib.games[idx].originalTitle,
+                    lastPlayed: lib.games[idx].lastPlayed,
+                    status: lib.games[idx].status
+                )
+            }
+        }
+    }
+
+    /// Updates the extraction progress on the already-committed
+    /// progress card (not on `pendingImports`, which was cleared
+    /// once pre-flight passed).
+    nonisolated private func updateCardProgress(_ importID: String, _ progress: Double) {
         Task { @MainActor in
             let lib = GameLibrary.shared
             guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
             lib.games[idx].status = .importing(progress: progress)
         }
-    }
-
-    /// Updates the skeleton card's title and artwork mid-import (e.g. after zip extraction).
-    @discardableResult
-    nonisolated private func updateSkeleton(_ importID: String, gameDir: URL) -> String? {
-        let title = GameEntry.parseINITitle(at: gameDir)
-        let artwork = GameLibrary.findArtwork(at: gameDir)
-        guard title != nil || artwork != nil else { return title }
-
-        Task { @MainActor in
-            let lib = GameLibrary.shared
-            guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
-            withAnimation {
-                lib.games[idx] = GameEntry(
-                    id: importID,
-                    path: "",
-                    title: title ?? lib.games[idx].title,
-                    artworkPath: artwork ?? lib.games[idx].artworkPath,
-                    status: .importing(progress: lib.games[idx].importProgress)
-                )
-            }
-        }
-        return title
     }
 
     nonisolated private func destinationURL(for importID: String, title: String?) -> URL {
@@ -245,7 +336,7 @@ class GameLibrary {
         return Self.gamesDirectory.appendingPathComponent(folderName)
     }
 
-    nonisolated private func importFolder(from sourceURL: URL, importID: String) throws {
+    nonisolated private func importFolder(from sourceURL: URL, importID: String, sourceName: String) throws {
         let fm = FileManager.default
         let folderName = sourceURL.lastPathComponent
 
@@ -254,53 +345,152 @@ class GameLibrary {
         try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmpDir) }
 
+        // Pre-flight: copy once into tmp (cheaper than moving the
+        // source and having no rollback if validation fails) and
+        // validate the copy. This is the only "Validating" phase
+        // the user sees on the button.
         try fm.copyItem(at: sourceURL, to: tmpDest)
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
         try GameImportValidator.validate(tmpDest)
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
-        let title = GameEntry.parseINITitle(at: tmpDest)
+        // Pre-flight passed - commit the progress card so the rest
+        // of the import has a visible home for progress/cancel UI.
+        let title = GameEntry.parseINITitle(at: tmpDest) ?? sourceName
+        let artworkPath = Self.findArtwork(at: tmpDest)
+        if let path = artworkPath {
+            // Warm the decode cache before `tmpDest`'s defer-backed
+            // cleanup kicks in so the card keeps rendering the
+            // artwork across the move-then-reload window.
+            _ = ImageCache.shared.image(for: path)
+        }
+        commitPendingToCard(importID, title: title, artworkPath: artworkPath)
+
+        // Folder imports don't have a meaningful extraction-progress
+        // phase (the heavy copy already happened in the pre-flight).
+        // Jump directly to the move; if the card gets cancelled in
+        // the brief window before the move finishes, the cancel
+        // path below cleans up.
+        updateCardProgress(importID, 1.0)
+
         let destURL = destinationURL(for: importID, title: title)
         try fm.moveItem(at: tmpDest, to: destURL)
 
-        // If cancelled right after move, clean up the destination
-        if isImportCancelled(importID) {
-            try? fm.removeItem(at: destURL)
-            throw ImportCancelled()
+        var committed = false
+        defer {
+            if !committed {
+                try? fm.removeItem(at: destURL)
+            }
         }
 
-        // Create initial metadata
+        if isImportCancelled(importID) { throw ImportCancelled() }
         GameLibrary.createMetadata(for: importID)
+        committed = true
     }
 
-    nonisolated private func importArchive(from sourceURL: URL, importID: String) throws {
+    nonisolated private func importArchive(from sourceURL: URL, importID: String, sourceName: String) throws {
         let fm = FileManager.default
+
+        // Pre-flight scratch: throwaway dir where we selectively
+        // extract just the validation files. Lives only for the
+        // length of the pre-flight phase.
+        let preflightDir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: preflightDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: preflightDir) }
+
+        let preflightRoot: URL
+        do {
+            preflightRoot = try GameImportValidator.preflightArchive(
+                at: sourceURL,
+                scratchDir: preflightDir,
+                shouldCancel: { self.isImportCancelled(importID) }
+            )
+        } catch ArchiveExtractor.Error.cancelled {
+            throw ImportCancelled()
+        }
+        guard !isImportCancelled(importID) else { throw ImportCancelled() }
+
+        // Pre-flight passed - pick up the title we learned from
+        // the extracted `.ini` so the committed card shows the
+        // real name while the rest of the archive extracts in the
+        // background. Artwork fills in mid-extract via the
+        // extract() callback below.
+        let title = GameEntry.parseINITitle(at: preflightRoot) ?? sourceName
+        commitPendingToCard(importID, title: title, artworkPath: nil)
+
+        // Full extraction now runs visibly - progress feeds the
+        // committed card's `.importing(progress:)` status.
         let tmpDir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmpDir) }
 
-        try ArchiveExtractor.extract(archive: sourceURL, to: tmpDir) { _, pct in
-            self.updateProgress(importID, pct)
+        // Mid-extract artwork surfacing. `findArtwork` picks the
+        // alphabetically-smallest image under `Graphics/Titles/`,
+        // so we mirror that rule here by keeping the smallest
+        // filename we've seen and updating the card every time a
+        // smaller one comes through. This guarantees the card's
+        // artwork matches what the post-reload card will show
+        // (otherwise the card would swap to a different image
+        // once the import finished, which looks like a flicker).
+        let bestArtworkFilename = Mutex<String?>(nil)
+        do {
+            try ArchiveExtractor.extract(
+                archive: sourceURL,
+                to: tmpDir,
+                shouldCancel: { self.isImportCancelled(importID) },
+                progress: { _, pct in
+                    self.updateCardProgress(importID, pct)
+                },
+                onFileWritten: { relative, diskURL in
+                    // Accept any image under a `Graphics/Titles/`
+                    // folder regardless of depth (handles flat and
+                    // single-wrapper archives alike).
+                    let lower = relative.lowercased()
+                    guard lower.contains("graphics/titles/") else { return }
+                    let ext = (relative as NSString).pathExtension.lowercased()
+                    guard ["png", "jpg", "jpeg", "bmp"].contains(ext) else { return }
+
+                    let filename = (relative as NSString).lastPathComponent
+                    let shouldUpdate = bestArtworkFilename.withLock { best -> Bool in
+                        if let current = best, current <= filename { return false }
+                        best = filename
+                        return true
+                    }
+                    guard shouldUpdate else { return }
+
+                    // The file is at `diskURL` right now, but
+                    // `tmpDir` will be swept after the full
+                    // extract+move completes. Warm the decode
+                    // cache at that path so the card renders the
+                    // cached UIImage even after the file moves
+                    // (the NSCache entry survives; the subsequent
+                    // reload() points the card at the permanent
+                    // `destURL/Graphics/Titles/*` and reads fresh
+                    // from there).
+                    _ = ImageCache.shared.image(for: diskURL.path)
+                    self.updateCardArtwork(importID, artworkPath: diskURL.path)
+                }
+            )
+        } catch ArchiveExtractor.Error.cancelled {
+            throw ImportCancelled()
         }
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
         let gameRoot = try GameLibrary.findGameRoot(in: tmpDir)
-        let title = updateSkeleton(importID, gameDir: gameRoot)
-        try GameImportValidator.validate(gameRoot)
-        guard !isImportCancelled(importID) else { throw ImportCancelled() }
-
         let destURL = destinationURL(for: importID, title: title)
         try fm.moveItem(at: gameRoot, to: destURL)
 
-        // If cancelled right after move, clean up the destination
-        if isImportCancelled(importID) {
-            try? fm.removeItem(at: destURL)
-            throw ImportCancelled()
+        var committed = false
+        defer {
+            if !committed {
+                try? fm.removeItem(at: destURL)
+            }
         }
 
-        // Create initial metadata
+        if isImportCancelled(importID) { throw ImportCancelled() }
         GameLibrary.createMetadata(for: importID)
+        committed = true
     }
 
     nonisolated private static func createMetadata(for gameId: String) {
