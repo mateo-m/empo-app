@@ -1,5 +1,21 @@
 import SwiftUI
 
+/// Size scale for `IconButton`. Mirrors `ButtonSize` so call sites can
+/// pick a semantic scale instead of hardcoding points. The enum
+/// resolves to a frame side length; the SF Symbol scales with it via
+/// the existing 0.42 ratio in `IconButton.icon`.
+enum IconButtonSize {
+    case sm, md, lg
+
+    var points: CGFloat {
+        switch self {
+        case .sm: 32
+        case .md: AppSize.toolbarButton   // 38, the default
+        case .lg: 44
+        }
+    }
+}
+
 struct IconButton: View {
     let systemName: String
     let style: Style
@@ -19,6 +35,10 @@ struct IconButton: View {
         self.action = action
     }
 
+    init(_ systemName: String, style: Style = .outline, size: IconButtonSize, tint: Color? = nil, contentTransition: ContentTransition = .identity, action: @escaping () -> Void) {
+        self.init(systemName, style: style, size: size.points, tint: tint, contentTransition: contentTransition, action: action)
+    }
+
     init(_ systemName: String, style: Style = .outline, size: CGFloat = AppSize.toolbarButton, tint: Color? = nil) {
         self.systemName = systemName
         self.style = style
@@ -26,6 +46,10 @@ struct IconButton: View {
         self.tint = tint
         self.contentTransition = .identity
         self.action = nil
+    }
+
+    init(_ systemName: String, style: Style = .outline, size: IconButtonSize, tint: Color? = nil) {
+        self.init(systemName, style: style, size: size.points, tint: tint)
     }
 
     var body: some View {
