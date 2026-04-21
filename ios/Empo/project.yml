@@ -65,6 +65,11 @@ targets:
     platform: iOS
     preBuildScripts:
       - name: Assemble Assets.bundle
+        # Force every build. The script globs the engine's shader/font/
+        # script directories and copies whatever is there, so declaring
+        # a static outputFiles list would drift out of date and silently
+        # drop newly-added assets.
+        basedOnDependencyAnalysis: false
         script: |
           ENGINE="${PROJECT_DIR}/../../mkxp-z-apple-mobile"
           BUNDLE="${PROJECT_DIR}/Assets.bundle"
