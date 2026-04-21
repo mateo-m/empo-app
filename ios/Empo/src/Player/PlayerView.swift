@@ -356,6 +356,11 @@ struct PlayerView: View {
                 .accessibilityLabel(entry.label)
             }
         }
+        // Pin the Liquid Glass material to the dark variant so the
+        // toolbar matches the on-screen controls (D-pad, action
+        // buttons) and doesn't shift appearance with the system
+        // color scheme or the backdrop brightness of the game.
+        .environment(\.colorScheme, .dark)
         .opacity(toolbarOpacity)
         .position(toolbarPosition)
     }
