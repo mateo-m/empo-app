@@ -172,6 +172,9 @@ class AppState {
 
         guard phase == nil, pauseManager.pausedGame == nil else { return }
         selectedGame = game
+        // Bind the controls layout to this game so edits during play
+        // persist to this game's per-game slot (not a global one).
+        ControlsLayout.shared.switchGame(id: game.id)
         PauseManager.shared.reset()
         phase = .loading
 
@@ -295,6 +298,11 @@ class AppState {
         }
 
         selectedGame = nil
+        // Unbind the controls layout so any library-screen UI that
+        // reads it sees a neutral default, and mutations (shouldn't
+        // happen, but still) don't write to the last-played game's
+        // slot. `switchGame(nil)` also flushes any pending edits.
+        ControlsLayout.shared.switchGame(id: nil)
         engineReady = false
         PauseManager.shared.reset()
         phase = nil
@@ -464,6 +472,7 @@ class AppState {
                         state.errorMessage = AppState.crashMessage
                     }
                     state.selectedGame = nil
+                    ControlsLayout.shared.switchGame(id: nil)
                     state.engineReady = false
                     PauseManager.shared.reset()
                 }
