@@ -16,7 +16,8 @@ struct PlayerView: View {
     @Bindable var appState: AppState
     @Bindable var engineState: EngineState
     var layout: ControlsLayout
-    var pauseManager = PauseManager.shared
+    @Environment(\.pauseManager) private var pauseManager
+    @Environment(\.appSettings) private var settings
     @State private var editMode = false
     @State private var controlsHidden = false
     @State private var keyboardMode = false
@@ -277,16 +278,16 @@ struct PlayerView: View {
 
         let buttons: [(icon: String, label: String, action: () -> Void, tint: Color?)] = {
             var list: [(icon: String, label: String, action: () -> Void, tint: Color?)] = []
-            if AppSettings.shared.isEnabled(.gamePause) {
+            if settings.isEnabled(.gamePause) {
                 list.append(("pause.fill", "Pause game", { appState.requestPause() }, .white))
             }
             list.append(("keyboard", "Toggle keyboard", { toggleKeyboard() }, .white))
-            if AppSettings.shared.debugMode {
+            if settings.debugMode {
                 list.append(("chart.line.uptrend.xyaxis", "Debug overlay", { showDebugOverlay.toggle() }, .white))
             }
             list.append(("gearshape.fill", "Edit controls", { toggleEditMode() }, .white))
             list.append((controlsHidden ? "eye.slash.fill" : "eye.fill", controlsHidden ? "Show controls" : "Hide controls", { toggleHideControls() }, .white))
-            if AppSettings.shared.isEnabled(.gameQuit) {
+            if settings.isEnabled(.gameQuit) {
                 list.append(("xmark.circle.fill", "Quit game", { showQuitConfirm = true }, .destructive))
             }
             return list

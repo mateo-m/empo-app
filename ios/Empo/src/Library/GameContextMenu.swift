@@ -9,8 +9,9 @@ struct GameContextMenuModifier: ViewModifier {
     @Binding var showDeleteConfirm: Bool
     @Binding var gameForSettings: GameEntry?
     @Binding var gameForInfo: GameEntry?
+    @Environment(\.pauseManager) private var pauseManager
 
-    private var isPaused: Bool { PauseManager.shared.pausedGame?.id == game.id }
+    private var isPaused: Bool { pauseManager.pausedGame?.id == game.id }
 
     func body(content: Content) -> some View {
         content.contextMenu {
