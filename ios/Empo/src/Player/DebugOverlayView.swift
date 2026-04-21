@@ -117,7 +117,7 @@ struct DebugOverlayView: View {
         _ text: String,
         weight: Font.Weight = .medium,
         size: CGFloat = 13,
-        color: Color = .white.opacity(0.7)
+        color: Color = .white.opacity(Alpha.textMuted)
     ) -> some View {
         Text(text)
             .font(.system(size: size, weight: weight, design: .monospaced))

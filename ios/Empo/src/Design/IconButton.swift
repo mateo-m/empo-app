@@ -66,7 +66,7 @@ struct IconButton: View {
         switch style {
         case .primary: return .white
         case .secondary: return .brand
-        case .outline: return .primary.opacity(0.7)
+        case .outline: return .primary.opacity(Alpha.textMuted)
         }
     }
 
@@ -94,7 +94,7 @@ private struct IconGlassModifier: ViewModifier {
         case .primary:
             content.glassEffect(.regular.tint(.brand).interactive(), in: .circle)
         case .secondary:
-            content.glassEffect(.regular.tint(.brand.opacity(0.1)).interactive(), in: .circle)
+            content.glassEffect(.regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .circle)
         case .outline:
             content.glassEffect(hasAction ? .regular.interactive() : .regular, in: .circle)
         }

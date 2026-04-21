@@ -108,7 +108,7 @@ struct PlayerEditToolbar: View {
         }
         .padding(.horizontal, Spacing.xl)
         .padding(.vertical, Spacing.sm)
-        .background(Color.black.opacity(Overlay.heavy))
+        .background(Color.black.opacity(Scrim.heavy))
         .clipShape(RoundedRectangle(cornerRadius: Radius.md))
         .position(x: geoSize.width / 2, y: yPos)
     }
