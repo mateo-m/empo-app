@@ -173,7 +173,7 @@ struct SettingsView: View {
                         Label("Open-source licenses", systemImage: "doc.text")
                     }
 
-                    Link(destination: URL(string: "https://github.com/mateo-m/empo-app/wiki/privacy-policy")!) {
+                    Link(destination: URL(string: "https://github.com/mateo-m/empo-app/wiki/privacy-policy") ?? URL.empoHomepage) {
                         Label {
                             HStack {
                                 Text("Privacy Policy")
@@ -188,7 +188,7 @@ struct SettingsView: View {
                     }
                     .tint(.primary)
 
-                    Link(destination: URL(string: "https://github.com/mateo-m/empo-app/issues")!) {
+                    Link(destination: URL(string: "https://github.com/mateo-m/empo-app/issues") ?? URL.empoHomepage) {
                         Label {
                             HStack {
                                 Text("Report an issue")
@@ -509,4 +509,12 @@ private struct DevicePreview: View {
             return GameRect(width: gameW, height: gameH, offsetX: 0, offsetY: offsetY)
         }
     }
+}
+
+private extension URL {
+    /// Fallback for any URL literal that fails to parse. Empty string
+    /// URL initialization is the only way to guarantee a non-nil URL
+    /// at compile time without a force-unwrap, so we use the project
+    /// homepage as a safe landing page.
+    static let empoHomepage = URL(string: "https://github.com/mateo-m/empo-app") ?? URL(fileURLWithPath: "/")
 }
