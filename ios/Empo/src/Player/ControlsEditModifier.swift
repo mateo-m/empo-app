@@ -140,6 +140,27 @@ struct ButtonEditSheet: View {
                         }
                     }
 
+                    Section("Opacity") {
+                        // Slider drives the button's transparency via
+                        // a synthesized binding. The label shows the
+                        // integer percentage so the user knows the
+                        // exact value (same idiom as Photos' adjust
+                        // panels).
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { button.opacity },
+                                    set: { layout.updateButton(id: buttonID, opacity: $0) }
+                                ),
+                                in: 0.2...1.0
+                            )
+                            Text("\(Int(button.opacity * 100))%")
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .frame(width: 48, alignment: .trailing)
+                        }
+                    }
+
                 Section {
                     Button {
                         dismiss()
@@ -198,12 +219,81 @@ struct ButtonEditSheet: View {
 }
 
 
+/// Edit sheet specific to the D-pad. The D-pad isn't configurable
+/// the same way action buttons are (no label, no key assignment, no
+/// delete) so it gets its own slimmed-down sheet with just size and
+/// opacity controls.
+struct DPadEditSheet: View {
+    var layout: ControlsLayout
+    @Environment(\.dismiss) private var dismiss
+
+    /// Size presets match the action button sheet's progression so
+    /// the two controls feel consistent when sized alongside each
+    /// other. The D-pad's default (140pt) is the middle preset.
+    private let sizes: [(String, CGFloat)] = [
+        ("Small", 110), ("Medium", 125),
+        ("Default", 140), ("Large", 160), ("Extra large", 180),
+    ]
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Size") {
+                    ForEach(sizes, id: \.1) { name, size in
+                        HStack {
+                            Text(name)
+                            Spacer()
+                            Text("\(Int(size))pt")
+                                .foregroundStyle(.secondary)
+                            if Int(size) == Int(layout.dpadSize) {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.brand)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            layout.dpadSize = size
+                        }
+                    }
+                }
+
+                Section("Opacity") {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { layout.dpadOpacity },
+                                set: { layout.dpadOpacity = $0 }
+                            ),
+                            in: 0.2...1.0
+                        )
+                        Text("\(Int(layout.dpadOpacity * 100))%")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                }
+            }
+            .navigationTitle("Edit D-pad")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+
 struct ControlsEditDialogs: ViewModifier {
     var layout: ControlsLayout
 
     @Binding var showAddSheet: Bool
     @Binding var showResetConfirm: Bool
     @Binding var editingButton: ButtonModel?
+    @Binding var editingDPad: Bool
 
     func body(content: Content) -> some View {
         content
@@ -222,6 +312,9 @@ struct ControlsEditDialogs: ViewModifier {
             .sheet(item: $editingButton) { button in
                 ButtonEditSheet(layout: layout, buttonID: button.id)
             }
+            .sheet(isPresented: $editingDPad) {
+                DPadEditSheet(layout: layout)
+            }
     }
 }
 
@@ -230,13 +323,15 @@ extension View {
         layout: ControlsLayout,
         showAddSheet: Binding<Bool>,
         showResetConfirm: Binding<Bool>,
-        editingButton: Binding<ButtonModel?>
+        editingButton: Binding<ButtonModel?>,
+        editingDPad: Binding<Bool>
     ) -> some View {
         modifier(ControlsEditDialogs(
             layout: layout,
             showAddSheet: showAddSheet,
             showResetConfirm: showResetConfirm,
-            editingButton: editingButton
+            editingButton: editingButton,
+            editingDPad: editingDPad
         ))
     }
 }
