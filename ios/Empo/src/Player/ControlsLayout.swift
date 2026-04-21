@@ -70,7 +70,21 @@ private struct PersistedLayout: Codable {
 class ControlsLayout {
     static let shared = ControlsLayout()
 
-    private static let savedLayoutKey = "touchControlsLayout"
+    /// UserDefaults key prefix. The full key for a given game is
+    /// `controlsLayout.<gameID>`. The pre-per-game global key
+    /// (`touchControlsLayout`) is removed during `switchGame` to
+    /// avoid leaving an orphan entry behind for users who launched
+    /// the app before this change. Since the app isn't live yet, no
+    /// migration is needed - all games start at factory defaults.
+    private static let savedLayoutKeyPrefix = "controlsLayout."
+    private static let legacyGlobalKey = "touchControlsLayout"
+
+    /// Stable identifier of the game these controls are currently
+    /// bound to. `switchGame(id:)` updates this; mutators save to the
+    /// corresponding per-game key. `nil` means no game is active -
+    /// mutations are kept in memory but not persisted, which prevents
+    /// drive-by saves during library-screen interactions.
+    private(set) var currentGameID: String?
 
     var dpadRelativeCenter: CGPoint = CGPoint(x: 0.13, y: 0.72)
     var dpadSize: CGFloat = 140
@@ -78,9 +92,42 @@ class ControlsLayout {
     var buttons: [ButtonModel] = []
 
     private init() {
-        if !loadLayout() {
-            resetToDefaults()
+        // No game bound yet - just populate with factory defaults so
+        // library-screen UI that reads the layout (if any) sees a
+        // sensible state. Actual loads happen on `switchGame(id:)`.
+        resetToDefaults()
+
+        // Remove the pre-per-game global key if it's still hanging
+        // around from an older build. Idempotent; runs on every
+        // process launch.
+        UserDefaults.standard.removeObject(forKey: Self.legacyGlobalKey)
+    }
+
+    /// Bind the layout instance to a specific game's stored layout.
+    /// Called from `AppState.selectGame(_:)` when a game starts, and
+    /// again with `nil` from `returnToLibrary()` when the user exits.
+    ///
+    /// The transition flow:
+    ///   1. Save the *previous* game's current in-memory state to
+    ///      its per-game key (so any pending edits aren't lost).
+    ///   2. Update `currentGameID`.
+    ///   3. Load the new game's saved layout, or fall back to
+    ///      factory defaults if this is the first time the game is
+    ///      being played.
+    func switchGame(id newGameID: String?) {
+        if currentGameID != nil {
+            save()
         }
+        currentGameID = newGameID
+        if newGameID != nil, loadLayout() {
+            return
+        }
+        resetToDefaults()
+    }
+
+    private var savedLayoutKey: String? {
+        guard let id = currentGameID else { return nil }
+        return Self.savedLayoutKeyPrefix + id
     }
 
 
@@ -157,19 +204,30 @@ class ControlsLayout {
     }
 
 
+    /// Persist the current layout under the active game's per-game
+    /// key. No-op when `currentGameID` is nil - without a bound game
+    /// there's nowhere to save. Safe to call from drag-end / exit-
+    /// edit-mode paths; the guard prevents library-screen UI mutations
+    /// from accidentally writing to a previous game's slot.
     func save() {
+        guard let key = savedLayoutKey else { return }
         let layout = PersistedLayout(
             dpad: .init(rx: dpadRelativeCenter.x, ry: dpadRelativeCenter.y, size: dpadSize, opacity: dpadOpacity),
             buttons: buttons
         )
         if let data = try? JSONEncoder().encode(layout) {
-            UserDefaults.standard.set(data, forKey: Self.savedLayoutKey)
+            UserDefaults.standard.set(data, forKey: key)
         }
     }
 
+    /// Load the active game's persisted layout into this instance.
+    /// Returns false if there's no saved layout for the current game
+    /// (so the caller can fall back to factory defaults). Also returns
+    /// false when no game is bound.
     @discardableResult
     func loadLayout() -> Bool {
-        guard let data = UserDefaults.standard.data(forKey: Self.savedLayoutKey),
+        guard let key = savedLayoutKey,
+              let data = UserDefaults.standard.data(forKey: key),
               let layout = try? JSONDecoder().decode(PersistedLayout.self, from: data) else {
             return false
         }
