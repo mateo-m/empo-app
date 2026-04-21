@@ -163,8 +163,8 @@ class AppWindow: UIWindow {
     private static func observePhase(window: AppWindow) {
         withObservationTracking {
             _ = AppState.shared.phase
-        } onChange: {
-            DispatchQueue.main.async { [weak window] in
+        } onChange: { [weak window] in
+            Task { @MainActor in
                 window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
                 if let window { observePhase(window: window) }
             }
@@ -174,8 +174,8 @@ class AppWindow: UIWindow {
     private static func observeTheme(window: AppWindow) {
         withObservationTracking {
             _ = AppSettings.shared.theme
-        } onChange: {
-            DispatchQueue.main.async { [weak window] in
+        } onChange: { [weak window] in
+            Task { @MainActor in
                 window?.overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle
                 if let window { observeTheme(window: window) }
             }
