@@ -6,6 +6,8 @@ import SwiftUI
 /// D-pad and every action button at ~60 Hz while the overlay is
 /// being dragged).
 struct DraggableDebugOverlay: View {
+    let state: DebugOverlayState
+    let visible: Bool
     let isPortrait: Bool
     let gameRect: CGRect
     let safeArea: EdgeInsets
@@ -17,8 +19,16 @@ struct DraggableDebugOverlay: View {
     @State private var height: CGFloat = AppSize.debugOverlayInitialHeight
 
     var body: some View {
-        DebugOverlayView()
+        if visible {
+            innerOverlay
+                .transition(.controlAppear(anchor: .topLeading))
+        }
+    }
+
+    private var innerOverlay: some View {
+        DebugOverlayView(state: state)
             .frame(width: AppSize.debugOverlayWidth)
+            .contentShape(Rectangle())
             .onPreferenceChange(DebugOverlayHeightKey.self) { newHeight in
                 guard newHeight > 0 else { return }
                 height = newHeight
@@ -39,7 +49,6 @@ struct DraggableDebugOverlay: View {
                         dragOffset = .zero
                     }
             )
-            .transition(.opacity)
             .onChange(of: geoSize) {
                 offset = clampDelta(base: .zero, delta: offset)
             }

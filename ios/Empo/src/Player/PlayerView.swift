@@ -21,6 +21,11 @@ struct PlayerView: View {
     @State private var controlsHidden = false
     @State private var keyboardMode = false
     @State private var showDebugOverlay = false
+    /// Long-lived state for the debug overlay. Kept on `PlayerView`
+    /// so the overlay can be transitioned in/out via `if visible`
+    /// without losing its FPS graph, cached game title, or RGSS
+    /// version across show/hide cycles.
+    @State private var debugOverlayState = DebugOverlayState()
     /// Toolbar starts dimmed so it doesn't dominate attention when the
     /// player first loads. Any tap (on the toolbar, on the game area,
     /// etc.) restores it to full opacity via `resetToolbarIdleTimer()`.
@@ -88,20 +93,21 @@ struct PlayerView: View {
                         .allowsHitTesting(editMode)
                 }
 
-                if showDebugOverlay {
-                    DraggableDebugOverlay(
+                DraggableDebugOverlay(
+                    state: debugOverlayState,
+                    visible: showDebugOverlay,
+                    isPortrait: isPortrait,
+                    gameRect: gameRect,
+                    safeArea: safeArea,
+                    geoSize: geo.size,
+                    useOverlayLayout: useOverlayLayout(
                         isPortrait: isPortrait,
                         gameRect: gameRect,
                         safeArea: safeArea,
-                        geoSize: geo.size,
-                        useOverlayLayout: useOverlayLayout(
-                            isPortrait: isPortrait,
-                            gameRect: gameRect,
-                            safeArea: safeArea,
-                            geoHeight: geo.size.height
-                        )
+                        geoHeight: geo.size.height
                     )
-                }
+                )
+                .allowsHitTesting(showDebugOverlay)
 
                 if keyboardMode {
                     KeyboardFieldRepresentable(
