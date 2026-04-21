@@ -312,7 +312,7 @@ struct PlayerView: View {
         // toolbar matches the on-screen controls (D-pad, action
         // buttons) and doesn't shift appearance with the system
         // color scheme or the backdrop brightness of the game.
-        .environment(\.colorScheme, .dark)
+        .darkGlass()
         .opacity(toolbarOpacity)
         .position(toolbarPosition)
     }

@@ -51,7 +51,7 @@ struct GameLoadingView: View {
                     .font(.title)
                     .fontWeight(.bold)
                     .foregroundStyle(.white)
-                    .shadow(radius: 4)
+                    .heroTitleShadow()
                     .opacity(titleVisible ? 1 : 0)
                     .offset(y: titleVisible ? 0 : 12)
 

@@ -24,9 +24,7 @@ struct SettingsView: View {
                         // first run and the settings header feel
                         // continuous.
                         Text(AppInfo.name)
-                            .font(.system(size: 40))
-                            .fontWeight(.bold)
-                            .fontDesign(.rounded)
+                            .font(AppFont.wordmark)
                         // Tap the marketing version to reveal full build
                         // details (commit, dirty flag, non-default branch).
                         Button {
