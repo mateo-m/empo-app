@@ -15,151 +15,20 @@ class AppState {
     var selectedGame: GameEntry?
     var errorMessage: String?
     var engineReady = false
-    private(set) var pendingCrashRecovery = false
     private var terminationExpected = false
 
-    // When returnToLibrary() asks the engine to terminate, we arm a
-    // watchdog that fires after a few seconds. If the engine-terminated
-    // callback cleared this token by then, the RGSS thread ack'd cleanly
-    // and there is nothing to do. Otherwise the RGSS thread is stuck
-    // and we surface the hang alert immediately - without waiting for
-    // main.cpp's 10s timeout, which would otherwise fire on the NEXT
-    // session's Loading view and confuse the user.
-    private var pendingTerminationToken: UUID?
-    private static let hangWatchdogSeconds: UInt64 = 3
+    private let crashTracker = CrashTracker()
+    private let sessionLogger = SessionLogger()
+    private let termination = EngineTerminationCoordinator()
 
-    // Continuations waiting for the engine-terminated callback to fire,
-    // used by selectGame() to wait for cross-session teardown before
-    // handing the engine a new path. Drained in registerBridgeCallbacks
-    // when the callback runs. No polling, no timeouts - the hang
-    // watchdog above handles the truly-stuck case by force-quitting
-    // the app, which also implicitly drains these (the process exits).
-    private var terminationWaiters: [CheckedContinuation<Void, Never>] = []
+    var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
 
-    private func awaitEngineTermination() async {
-        // Fast path: engine is already terminated (previous session
-        // finished its cross-session cleanup and is parked in
-        // waitForGamePath) - hand off immediately.
-        if mkxp_isEngineTerminated() != 0 { return }
-        // No termination is in flight - we're on cold boot, the RGSS
-        // thread is waiting for its FIRST game path. Hand off
-        // immediately without parking.
-        if pendingTerminationToken == nil { return }
-        // A termination is actively in flight. Park until the
-        // engine-terminated callback drains our continuation.
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            terminationWaiters.append(cont)
-        }
-    }
-
-    private func drainTerminationWaiters() {
-        let pending = terminationWaiters
-        terminationWaiters.removeAll()
-        for cont in pending { cont.resume() }
-    }
-
-    static let logsDirectory: URL = FileManager.default
-        .urls(for: .documentDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Logs", isDirectory: true)
-
-    private let sessionHistoryPath: String
-    private static let isoFormatter = ISO8601DateFormatter()
-    private var sessionStartTime: Date?
-
-    private static let crashMarkerURL: URL = FileManager.default
-        .urls(for: .documentDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent(".session-active")
-
-    /// The crash marker is written each time a game session starts and
-    /// removed when it ends cleanly. If it's still on disk on the
-    /// next app launch, something killed the previous session
-    /// unexpectedly (user-killed-app, OOM, C++ crash).
-    ///
-    /// But reinstalls also leave the marker behind, since the
-    /// Documents directory is preserved across installs. We don't
-    /// want to accuse a fresh install of "not exiting cleanly" when
-    /// the user simply redeployed from Xcode or updated via the App
-    /// Store. Compare the marker's mtime with the executable's
-    /// bundle mtime: if the binary is newer, the marker is stale.
-    private static func isCrashMarkerFromCurrentInstall() -> Bool {
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: crashMarkerURL.path) else { return false }
-
-        guard let markerAttrs = try? fm.attributesOfItem(atPath: crashMarkerURL.path),
-              let markerMtime = markerAttrs[.modificationDate] as? Date else {
-            // Couldn't stat the marker - assume current install so we
-            // don't silently swallow a real crash. Conservative default.
-            return true
-        }
-
-        // Bundle's executable is replaced on every install. Its mtime
-        // is a reliable "install time" proxy across simulators, real
-        // devices, TestFlight, and App Store updates.
-        guard let execPath = Bundle.main.executablePath,
-              let bundleAttrs = try? fm.attributesOfItem(atPath: execPath),
-              let bundleMtime = bundleAttrs[.modificationDate] as? Date else {
-            return true
-        }
-
-        return markerMtime > bundleMtime
-    }
-
-    private static func commitSuffix() -> String {
-        GitInfo.dirty ? " (dirty)" : ""
-    }
-
-    private static func logHeader(title: String, extras: [String] = []) -> String {
-        var header = "\(title)\n"
-        header += "commit: \(GitInfo.commit)\(commitSuffix())\n"
-        for line in extras {
-            header += "\(line)\n"
-        }
-        header += "---\n"
-        return header
-    }
+    /// Preserved as a namespaced alias so call sites outside AppState
+    /// don't reach into SessionLogger directly.
+    static var logsDirectory: URL { SessionLogger.logsDirectory }
 
     private init() {
-        let logsDir = Self.logsDirectory
-        try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
-        sessionHistoryPath = logsDir.appendingPathComponent("session-history.log").path
-
-        let launchTime = Self.isoFormatter.string(from: Date())
-        let header = Self.logHeader(title: "\(AppInfo.name) session history", extras: ["launched: \(launchTime)"])
-        try? header.write(toFile: sessionHistoryPath, atomically: true, encoding: .utf8)
-
-        if Self.isCrashMarkerFromCurrentInstall() {
-            pendingCrashRecovery = true
-        } else {
-            // Stale marker from a previous install (dev redeploy,
-            // TestFlight update, reinstall from App Store). The
-            // session it was recording can't have been in this
-            // binary, so treat the crash state as already resolved
-            // and clean up. Avoids a spurious "didn't exit cleanly"
-            // alert on first launch after a redeploy.
-            try? FileManager.default.removeItem(at: Self.crashMarkerURL)
-        }
-
-        pruneOldLogs(in: logsDir)
         registerBridgeCallbacks()
-    }
-
-    private func pruneOldLogs(in logsDir: URL) {
-        let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(at: logsDir, includingPropertiesForKeys: [.creationDateKey]) else { return }
-
-        let logFiles = files.filter { $0.lastPathComponent != "session-history.log" && $0.pathExtension == "log" }
-        let maxLogFiles = UserDefaults.standard.object(forKey: DefaultsKey.maxLogFiles) as? Int ?? 20
-        guard logFiles.count > maxLogFiles else { return }
-
-        let sorted = logFiles.sorted {
-            let d0 = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-            let d1 = (try? $1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-            return d0 < d1
-        }
-
-        for file in sorted.prefix(sorted.count - maxLogFiles) {
-            try? fm.removeItem(at: file)
-        }
     }
 
 
@@ -187,11 +56,8 @@ class AppState {
         let postload = settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
         mkxp_applyPerGameSettings(alignment.bridgeValue, postload)
 
-        FileManager.default.createFile(atPath: Self.crashMarkerURL.path, contents: nil)
-
-        configureDebugLog(for: game)
-        appendSessionHistory(game: game)
-        sessionStartTime = Date()
+        crashTracker.writeMarker()
+        sessionLogger.beginSession(for: game, debugLogsEnabled: AppSettings.shared.debugLogs)
 
         // Wait for the RGSS thread to actually finish tearing down any
         // previous session before we feed it the new path. If we call
@@ -201,92 +67,43 @@ class AppState {
         // waitForGamePath forever.
         //
         // awaitEngineTermination returns immediately when no previous
-        // session is running (isEngineTerminated is already true), and
-        // otherwise parks on a continuation that the engine-terminated
-        // callback wakes up. No polling, no wall-clock deadline: the
-        // hang watchdog in returnToLibrary is what handles a truly
-        // stuck RGSS thread by force-quitting the app.
+        // session is running, and otherwise parks on a continuation
+        // that the engine-terminated callback wakes up. No polling, no
+        // wall-clock deadline: the hang watchdog in returnToLibrary is
+        // what handles a truly stuck RGSS thread by force-quitting the
+        // app.
         //
         // The loading view is already on screen throughout this wait,
         // so it doubles as a "quitting" indicator when the user quickly
         // taps a new game right after quitting.
         Task { @MainActor in
-            await awaitEngineTermination()
+            await termination.awaitEngineTermination()
             mkxp_setGamePath(game.path)
         }
     }
 
-    private func configureDebugLog(for game: GameEntry) {
-        guard AppSettings.shared.debugLogs else {
-            mkxp_setDebugLogPath(nil)
-            return
-        }
-
-        let logsDir = Self.logsDirectory
-        try? FileManager.default.createDirectory(at: logsDir, withIntermediateDirectories: true)
-
-        let slug = game.title
-            .lowercased()
-            .replacingOccurrences(of: "[^a-z0-9]+", with: "-", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-        let timestamp = Self.isoFormatter.string(from: Date())
-            .replacingOccurrences(of: ":", with: "-")
-        let filename = "\(game.id)-\(slug)-\(timestamp).log"
-        let logPath = logsDir.appendingPathComponent(filename).path
-
-        let header = Self.logHeader(title: "\(AppInfo.name) debug log", extras: [
-            "game: \(game.title) [\(game.id)]",
-            "session: \(timestamp)",
-        ]) + "\n"
-        try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
-
-        mkxp_setDebugLogPath(logPath)
-    }
-
-    private func appendSessionHistory(game: GameEntry) {
-        let timestamp = Self.isoFormatter.string(from: Date())
-        let entry = "\n[\(timestamp)] \(game.title) [\(game.id)]\n"
-        if let data = entry.data(using: .utf8),
-           let fh = FileHandle(forWritingAtPath: sessionHistoryPath) {
-            defer { try? fh.close() }
-            _ = try? fh.seekToEnd()
-            _ = try? fh.write(contentsOf: data)
-        }
-    }
-
     func recordSessionPlayTime() {
-        guard let game = selectedGame,
-              let startTime = sessionStartTime else { return }
-
-        let elapsed = Date().timeIntervalSince(startTime)
-        sessionStartTime = nil
-
-        guard elapsed > 1 else { return }
-
-        var metadata = GameMetadata.load(for: game.id)
-        metadata.totalPlayTime = (metadata.totalPlayTime ?? 0) + elapsed
-        metadata.lastPlayed = Date()
-        metadata.save(for: game.id)
+        sessionLogger.recordSessionPlayTime(for: selectedGame)
     }
 
     private static let crashMessage = "It looks like the game didn't exit cleanly last time. "
         + "Your save data should be fine."
 
     func consumeCrashRecovery() {
-        guard pendingCrashRecovery else { return }
-        pendingCrashRecovery = false
+        guard crashTracker.pendingCrashRecovery else { return }
+        crashTracker.consumeRecovery()
         errorMessage = Self.crashMessage
     }
 
     func dismissCrashRecovery() {
-        removeCrashMarker()
+        crashTracker.removeMarker()
         errorMessage = nil
     }
 
     func returnToLibrary() {
         terminationExpected = true
         recordSessionPlayTime()
-        removeCrashMarker()
+        crashTracker.removeMarker()
 
         // Only talk to the engine if it's still running. After a crash
         // the terminated callback has already fired and re-arming the
@@ -308,58 +125,14 @@ class AppState {
         phase = nil
 
         if engineWasRunning {
-            armHangWatchdog()
+            termination.armHangWatchdog { [weak self] message in
+                self?.errorMessage = message
+            }
         }
     }
 
-    private func armHangWatchdog() {
-        let token = UUID()
-        pendingTerminationToken = token
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: Self.hangWatchdogSeconds * 1_000_000_000)
-            guard let self else { return }
-            // If the engine-terminated callback already cleared the token
-            // (or replaced it with a newer one), do nothing.
-            guard self.pendingTerminationToken == token else { return }
-            self.pendingTerminationToken = nil
-            // Engine is stuck. Mark the bridge state so the alert's OK
-            // button force-quits, then surface the generic message.
-            mkxp_setEngineHung()
-            self.errorMessage = AppState.hangMessage
-        }
-    }
-
-    private static let hangMessage =
-        "The previous game stopped responding. The app will now close."
-
-    /// Hard-deadline force-quit used by the loading-view escape hatch.
-    ///
-    /// The regular hang watchdog (armHangWatchdog) shows an alert and
-    /// waits for the user to tap OK before calling exit(0). When the
-    /// user tapped "Quit to library" during loading, they're already
-    /// stuck and signaling urgency - making them read and dismiss an
-    /// alert before the app finally closes is bad UX. This helper
-    /// skips the alert entirely and exit(0)s directly after the
-    /// deadline, while still giving the engine a generous window to
-    /// terminate cleanly if it can.
-    ///
-    /// The normal engine-terminated callback path is expected to clear
-    /// `pendingTerminationToken` before the deadline in the happy
-    /// case, which cancels this helper.
     func armLoadingEscapeForceQuit() {
-        let token = pendingTerminationToken
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(5))
-            guard let self else { return }
-            // Only force-quit if the original termination request the
-            // escape hatch kicked off is still pending (i.e. the engine
-            // never ack'd). Tokens match on reentrant quits too, so a
-            // second tap doesn't double-arm.
-            guard self.pendingTerminationToken == token,
-                  token != nil else { return }
-            mkxp_setEngineHung()
-            exit(0)
-        }
+        termination.armLoadingEscapeForceQuit()
     }
 
 
@@ -417,19 +190,15 @@ class AppState {
     }
 
 
-    private func removeCrashMarker() {
-        try? FileManager.default.removeItem(at: Self.crashMarkerURL)
-    }
-
     /// Remove the crash marker when backgrounding a healthy session.
     /// Re-creates it when the app returns to foreground so a subsequent
     /// crash after resume is still detected.
     func clearCrashMarkerForBackground() {
-        removeCrashMarker()
+        crashTracker.removeMarker()
     }
 
     func restoreCrashMarkerForForeground() {
-        FileManager.default.createFile(atPath: Self.crashMarkerURL.path, contents: nil)
+        crashTracker.writeMarker()
     }
 
     private func registerBridgeCallbacks() {
@@ -450,14 +219,11 @@ class AppState {
         mkxp_setEngineTerminatedCallback({ _ in
             Task { @MainActor in
                 let state = AppState.shared
-                // Engine ack'd termination, so the hang watchdog armed
-                // by returnToLibrary() should not fire.
-                state.pendingTerminationToken = nil
-                // Wake any selectGame awaiters so the pending new
-                // session can hand its path to the RGSS thread.
-                state.drainTerminationWaiters()
+                // Engine ack'd termination: cancel the hang watchdog
+                // and wake selectGame awaiters.
+                state.termination.handleEngineTerminatedAck()
                 state.recordSessionPlayTime()
-                state.removeCrashMarker()
+                state.crashTracker.removeMarker()
                 GameLibrary.shared.reload()
 
                 if !state.terminationExpected && state.phase != nil {
@@ -498,7 +264,7 @@ class AppState {
             }
         }, nil)
 
-        // Engine paused - capture snapshot while lock is held.
+        // Engine paused — capture snapshot while lock is held.
         mkxp_setPausedCallback({ _ in
             var snapshotImage: UIImage?
             var w: Int32 = 0
