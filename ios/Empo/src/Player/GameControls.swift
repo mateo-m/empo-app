@@ -54,6 +54,11 @@ struct ActionButton: View {
         .frame(width: size, height: size)
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
+        // Force the dark Liquid Glass variant to match the D-pad.
+        // Both controls pin to `.dark` so the glass material looks
+        // consistent regardless of the system interface style or
+        // the brightness of the game content behind them.
+        .environment(\.colorScheme, .dark)
         .contentShape(Circle())
         // Touch dispatch. minimumDistance=0 makes this a press-tracking
         // gesture that fires on touch-down (not after a drag threshold).
@@ -208,6 +213,16 @@ struct DPad: View {
         // the plus silhouette.
         .scaleEffect(pressed ? 0.96 : 1.0)
         .animation(.spring(response: 0.2, dampingFraction: 0.7), value: pressed)
+        // Force the dark Liquid Glass variant so the plus clip shape
+        // doesn't render noticeably brighter than the action buttons'
+        // circles. With the default (system) color scheme, iOS 26's
+        // glass material resolves differently on a concave clip (our
+        // plus) than on a convex clip (our action-button circles),
+        // which showed up in dark gameplay scenes as a near-white
+        // D-pad next to translucent-dark action buttons. Pinning to
+        // .dark here locks the material in one mode and keeps the
+        // two visually consistent.
+        .environment(\.colorScheme, .dark)
         // Hit-test the full bounding circle so slightly imprecise
         // presses (between arms, just outside the plus shape) still
         // engage. The wedge math in updateDirections decides which
