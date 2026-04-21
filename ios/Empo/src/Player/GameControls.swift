@@ -50,13 +50,13 @@ struct ActionButton: View {
                 .foregroundStyle(.white.opacity(0.9))
         }
         .frame(width: size, height: size)
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
+        .scaleEffect(isPressed ? PressScale.standard : 1.0)
+        .animation(Motion.controlPress, value: isPressed)
         // Force the dark Liquid Glass variant to match the D-pad.
         // Both controls pin to `.dark` so the glass material looks
         // consistent regardless of the system interface style or
         // the brightness of the game content behind them.
-        .environment(\.colorScheme, .dark)
+        .darkGlass()
         .contentShape(Circle())
         // Touch dispatch. minimumDistance=0 makes this a press-tracking
         // gesture that fires on touch-down (not after a drag threshold).
@@ -184,7 +184,7 @@ struct DPad: View {
                             )
                         )
                         .opacity(activeDirections.contains(dir) ? 1 : 0)
-                        .animation(.easeOut(duration: 0.08), value: activeDirections)
+                        .animation(Motion.instant, value: activeDirections)
                 }
             }
             .clipShape(plus)
@@ -208,8 +208,8 @@ struct DPad: View {
         // alone scales only the glass layer; this keeps everything
         // visually coherent including the highlights' clip against
         // the plus silhouette.
-        .scaleEffect(pressed ? 0.96 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: pressed)
+        .scaleEffect(pressed ? PressScale.standard : 1.0)
+        .animation(Motion.controlPress, value: pressed)
         // Force the dark Liquid Glass variant so the plus clip shape
         // doesn't render noticeably brighter than the action buttons'
         // circles. With the default (system) color scheme, iOS 26's
@@ -219,7 +219,7 @@ struct DPad: View {
         // D-pad next to translucent-dark action buttons. Pinning to
         // .dark here locks the material in one mode and keeps the
         // two visually consistent.
-        .environment(\.colorScheme, .dark)
+        .darkGlass()
         // Hit-test the full bounding circle so slightly imprecise
         // presses (between arms, just outside the plus shape) still
         // engage. The wedge math in updateDirections decides which

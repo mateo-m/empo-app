@@ -41,7 +41,7 @@ struct GameCard: View {
                     // readable against every artwork.  Scoped here so
                     // the artwork placeholder underneath keeps its
                     // actual-scheme color.
-                    .environment(\.colorScheme, .dark)
+                    .darkGlass()
             }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 1) {

@@ -171,14 +171,9 @@ private struct SplashView: View {
             // treatment on the full exit.
             VStack(spacing: Spacing.lg) {
                 Text(AppInfo.name)
-                    .font(.system(size: 40))
-                    .fontWeight(.bold)
-                    .fontDesign(.rounded)
+                    .font(AppFont.wordmark)
                     .foregroundStyle(.white)
-                    // Matches the game title shadow in GameLoadingView
-                    // so the splash and the loading view feel like the
-                    // same moment from the user's perspective.
-                    .shadow(radius: 4)
+                    .heroTitleShadow()
             }
             .blur(radius: logoHidden ? 10 : 0)
             .scaleEffect(logoHidden ? 0.8 : (entered ? 1 : 0.8))
