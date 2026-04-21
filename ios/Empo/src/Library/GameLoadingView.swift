@@ -4,9 +4,9 @@ struct GameLoadingView: View {
     enum Mode { case loading, resuming }
 
     let game: GameEntry
-    var appState = AppState.shared
-    var engineState = EngineState.shared
-    var pauseManager = PauseManager.shared
+    @Environment(\.appState) private var appState
+    @Environment(\.engineState) private var engineState
+    @Environment(\.pauseManager) private var pauseManager
 
     private var mode: Mode { pauseManager.pauseSnapshot != nil ? .resuming : .loading }
 

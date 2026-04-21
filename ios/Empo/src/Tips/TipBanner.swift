@@ -3,7 +3,7 @@ import SwiftUI
 
 struct TipBanner: View {
     let tip: Tip
-    var store = TipStore.shared
+    @Environment(\.tipStore) private var store
 
     @State private var showDetail = false
 

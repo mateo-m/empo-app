@@ -7,14 +7,20 @@ private enum SplashTiming {
 }
 
 struct RootView: View {
-    private let appState = AppState.shared
-    private let engineState = EngineState.shared
-    private let layout = ControlsLayout.shared
-    private let settings = AppSettings.shared
+    @Environment(\.appState) private var appState
+    @Environment(\.engineState) private var engineState
+    @Environment(\.controlsLayout) private var layout
+    @Environment(\.appSettings) private var settings
     @Namespace private var hero
-    @State private var showSplash = !AppState.shared.pendingCrashRecovery
+    @State private var showSplash: Bool
     @State private var splashExiting = false
-    @State private var splashDismissed = AppState.shared.pendingCrashRecovery
+    @State private var splashDismissed: Bool
+
+    init() {
+        let recovering = AppState.shared.pendingCrashRecovery
+        _showSplash = State(initialValue: !recovering)
+        _splashDismissed = State(initialValue: recovering)
+    }
     /// When true, the splash logo cross-fades out and the disclaimer
     /// cross-fades in on top of the same orange background. Flipped at
     /// the 1.2s mark only if the user hasn't acknowledged yet.

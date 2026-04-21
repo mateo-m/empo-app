@@ -2,7 +2,9 @@ import SwiftUI
 
 struct GameInfoView: View {
     let game: GameEntry
-    var library = GameLibrary.shared
+    @Environment(\.gameLibrary) private var library
+    @Environment(\.tipStore) private var tipStore
+    @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
 
     @State private var metadata: GameMetadata
@@ -15,7 +17,6 @@ struct GameInfoView: View {
     @State private var navBarBottomY: CGFloat = 0
     @State private var needsLibraryRefresh = false
     @FocusState private var isTitleFocused: Bool
-    private var tipStore = TipStore.shared
 
     private let originalTitle: String
 
@@ -130,7 +131,7 @@ struct GameInfoView: View {
                                 .padding(.vertical, Spacing.lg)
                         }
 
-                    if let logURL = sessionLogURL(), AppSettings.shared.debugLogs {
+                    if let logURL = sessionLogURL(), settings.debugLogs {
                         Divider().padding(.leading, Spacing.xl)
 
                         ShareLink(item: logURL) {
