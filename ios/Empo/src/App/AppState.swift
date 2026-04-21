@@ -148,7 +148,7 @@ class AppState {
         guard let files = try? fm.contentsOfDirectory(at: logsDir, includingPropertiesForKeys: [.creationDateKey]) else { return }
 
         let logFiles = files.filter { $0.lastPathComponent != "session-history.log" && $0.pathExtension == "log" }
-        let maxLogFiles = UserDefaults.standard.object(forKey: "maxLogFiles") as? Int ?? 20
+        let maxLogFiles = UserDefaults.standard.object(forKey: DefaultsKey.maxLogFiles) as? Int ?? 20
         guard logFiles.count > maxLogFiles else { return }
 
         let sorted = logFiles.sorted {
