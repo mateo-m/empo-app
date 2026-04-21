@@ -115,16 +115,16 @@ class AppSettings {
     static let shared = AppSettings()
 
     var theme: AppTheme {
-        didSet { UserDefaults.standard.set(theme.rawValue, forKey: "theme") }
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: DefaultsKey.theme) }
     }
 
     var debugMode: Bool {
-        didSet { UserDefaults.standard.set(debugMode, forKey: "debugMode") }
+        didSet { UserDefaults.standard.set(debugMode, forKey: DefaultsKey.debugMode) }
     }
 
     var showViewportBounds: Bool {
         didSet {
-            UserDefaults.standard.set(showViewportBounds, forKey: "showViewportBounds")
+            UserDefaults.standard.set(showViewportBounds, forKey: DefaultsKey.showViewportBounds)
             mkxp_setShowViewportBounds(showViewportBounds)
         }
     }
@@ -137,39 +137,39 @@ class AppSettings {
     }
 
     var debugLogs: Bool {
-        didSet { UserDefaults.standard.set(debugLogs, forKey: "debugLogs") }
+        didSet { UserDefaults.standard.set(debugLogs, forKey: DefaultsKey.debugLogs) }
     }
 
     var maxLogFiles: Int {
-        didSet { UserDefaults.standard.set(maxLogFiles, forKey: "maxLogFiles") }
+        didSet { UserDefaults.standard.set(maxLogFiles, forKey: DefaultsKey.maxLogFiles) }
     }
 
     var cleanupInvalidGames: Bool {
-        didSet { UserDefaults.standard.set(cleanupInvalidGames, forKey: "cleanupInvalidGames") }
+        didSet { UserDefaults.standard.set(cleanupInvalidGames, forKey: DefaultsKey.cleanupInvalidGames) }
     }
 
     var interfaceHaptics: Bool {
-        didSet { UserDefaults.standard.set(interfaceHaptics, forKey: "interfaceHaptics") }
+        didSet { UserDefaults.standard.set(interfaceHaptics, forKey: DefaultsKey.interfaceHaptics) }
     }
 
     var controllerHaptics: Bool {
-        didSet { UserDefaults.standard.set(controllerHaptics, forKey: "controllerHaptics") }
+        didSet { UserDefaults.standard.set(controllerHaptics, forKey: DefaultsKey.controllerHaptics) }
     }
 
     var titlePosition: TitlePosition {
-        didSet { UserDefaults.standard.set(titlePosition.rawValue, forKey: "titlePosition") }
+        didSet { UserDefaults.standard.set(titlePosition.rawValue, forKey: DefaultsKey.titlePosition) }
     }
 
     var libraryDisplayMode: LibraryDisplayMode {
-        didSet { UserDefaults.standard.set(libraryDisplayMode.rawValue, forKey: "libraryDisplayMode") }
+        didSet { UserDefaults.standard.set(libraryDisplayMode.rawValue, forKey: DefaultsKey.libraryDisplayMode) }
     }
 
     var showContinuePlaying: Bool {
-        didSet { UserDefaults.standard.set(showContinuePlaying, forKey: "showContinuePlaying") }
+        didSet { UserDefaults.standard.set(showContinuePlaying, forKey: DefaultsKey.showContinuePlaying) }
     }
 
     var librarySortOption: LibrarySortOption {
-        didSet { UserDefaults.standard.set(librarySortOption.rawValue, forKey: "librarySortOption") }
+        didSet { UserDefaults.standard.set(librarySortOption.rawValue, forKey: DefaultsKey.librarySortOption) }
     }
 
     // MARK: - Splash disclaimer acknowledgment
@@ -179,7 +179,7 @@ class AppSettings {
     static let currentDisclaimerVersion = 1
 
     var disclaimerAcknowledgedVersion: Int {
-        didSet { UserDefaults.standard.set(disclaimerAcknowledgedVersion, forKey: "disclaimerAcknowledgedVersion") }
+        didSet { UserDefaults.standard.set(disclaimerAcknowledgedVersion, forKey: DefaultsKey.disclaimerAcknowledgedVersion) }
     }
 
     var needsDisclaimer: Bool {
@@ -199,30 +199,31 @@ class AppSettings {
     }
 
     private init() {
-        let themeRaw = UserDefaults.standard.string(forKey: "theme") ?? AppTheme.auto.rawValue
+        let ud = UserDefaults.standard
+        let themeRaw = ud.string(forKey: DefaultsKey.theme) ?? AppTheme.auto.rawValue
         self.theme = AppTheme(rawValue: themeRaw) ?? .auto
-        self.debugMode = UserDefaults.standard.bool(forKey: "debugMode")
-        self.showViewportBounds = UserDefaults.standard.bool(forKey: "showViewportBounds")
+        self.debugMode = ud.bool(forKey: DefaultsKey.debugMode)
+        self.showViewportBounds = ud.bool(forKey: DefaultsKey.showViewportBounds)
         self.viewportBoundsColor = Self.loadViewportBoundsColor()
-        self.debugLogs = (UserDefaults.standard.object(forKey: "debugLogs") as? Bool) ?? true
-        let storedMax = UserDefaults.standard.integer(forKey: "maxLogFiles")
+        self.debugLogs = (ud.object(forKey: DefaultsKey.debugLogs) as? Bool) ?? true
+        let storedMax = ud.integer(forKey: DefaultsKey.maxLogFiles)
         self.maxLogFiles = storedMax > 0 ? storedMax : 20
-        self.cleanupInvalidGames = UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
-        // Haptics default to on — UserDefaults.bool returns false for unset keys
-        self.interfaceHaptics = UserDefaults.standard.object(forKey: "interfaceHaptics") as? Bool ?? true
-        self.controllerHaptics = UserDefaults.standard.object(forKey: "controllerHaptics") as? Bool ?? true
-        let raw = UserDefaults.standard.string(forKey: "titlePosition") ?? TitlePosition.inside.rawValue
+        self.cleanupInvalidGames = ud.bool(forKey: DefaultsKey.cleanupInvalidGames)
+        // Haptics default to on - UserDefaults.bool returns false for unset keys
+        self.interfaceHaptics = ud.object(forKey: DefaultsKey.interfaceHaptics) as? Bool ?? true
+        self.controllerHaptics = ud.object(forKey: DefaultsKey.controllerHaptics) as? Bool ?? true
+        let raw = ud.string(forKey: DefaultsKey.titlePosition) ?? TitlePosition.inside.rawValue
         self.titlePosition = TitlePosition(rawValue: raw) ?? .inside
-        let modeRaw = UserDefaults.standard.string(forKey: "libraryDisplayMode") ?? LibraryDisplayMode.grid.rawValue
+        let modeRaw = ud.string(forKey: DefaultsKey.libraryDisplayMode) ?? LibraryDisplayMode.grid.rawValue
         self.libraryDisplayMode = LibraryDisplayMode(rawValue: modeRaw) ?? .grid
-        self.showContinuePlaying = UserDefaults.standard.object(forKey: "showContinuePlaying") as? Bool ?? true
-        let sortRaw = UserDefaults.standard.string(forKey: "librarySortOption") ?? LibrarySortOption.titleAZ.rawValue
+        self.showContinuePlaying = ud.object(forKey: DefaultsKey.showContinuePlaying) as? Bool ?? true
+        let sortRaw = ud.string(forKey: DefaultsKey.librarySortOption) ?? LibrarySortOption.titleAZ.rawValue
         self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
-        self.disclaimerAcknowledgedVersion = UserDefaults.standard.integer(forKey: "disclaimerAcknowledgedVersion")
+        self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
 
         var flags: [String: Bool] = [:]
         for feature in ExperimentalFeature.allCases {
-            flags[feature.rawValue] = UserDefaults.standard.bool(forKey: feature.rawValue)
+            flags[feature.rawValue] = ud.bool(forKey: feature.rawValue)
         }
         self.experimentalFlags = flags
 
@@ -244,13 +245,13 @@ class AppSettings {
 
     private static func loadViewportBoundsColor() -> Color {
         let ud = UserDefaults.standard
-        guard ud.object(forKey: "vpBoundsR") != nil else { return defaultViewportBoundsColor }
+        guard ud.object(forKey: DefaultsKey.viewportBoundsR) != nil else { return defaultViewportBoundsColor }
         return Color(
             .sRGB,
-            red: ud.double(forKey: "vpBoundsR"),
-            green: ud.double(forKey: "vpBoundsG"),
-            blue: ud.double(forKey: "vpBoundsB"),
-            opacity: ud.double(forKey: "vpBoundsA")
+            red: ud.double(forKey: DefaultsKey.viewportBoundsR),
+            green: ud.double(forKey: DefaultsKey.viewportBoundsG),
+            blue: ud.double(forKey: DefaultsKey.viewportBoundsB),
+            opacity: ud.double(forKey: DefaultsKey.viewportBoundsA)
         )
     }
 
@@ -264,10 +265,10 @@ class AppSettings {
     private func saveViewportBoundsColor() {
         let c = resolvedRGBA()
         let ud = UserDefaults.standard
-        ud.set(Double(c.r), forKey: "vpBoundsR")
-        ud.set(Double(c.g), forKey: "vpBoundsG")
-        ud.set(Double(c.b), forKey: "vpBoundsB")
-        ud.set(Double(c.a), forKey: "vpBoundsA")
+        ud.set(Double(c.r), forKey: DefaultsKey.viewportBoundsR)
+        ud.set(Double(c.g), forKey: DefaultsKey.viewportBoundsG)
+        ud.set(Double(c.b), forKey: DefaultsKey.viewportBoundsB)
+        ud.set(Double(c.a), forKey: DefaultsKey.viewportBoundsA)
     }
 
     func pushViewportBoundsColor() {

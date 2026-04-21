@@ -28,7 +28,7 @@ class GameLibrary {
 
     func reload(initialLoad: Bool = false) {
         let cleanupInvalid = initialLoad
-            ? UserDefaults.standard.bool(forKey: "cleanupInvalidGames")
+            ? UserDefaults.standard.bool(forKey: DefaultsKey.cleanupInvalidGames)
             : false
         Task.detached {
             let scanned = GameLibrary.scanGames(in: GameLibrary.gamesDirectory, cleanupInvalid: cleanupInvalid)
@@ -111,31 +111,11 @@ class GameLibrary {
         let iniTitle = GameEntry.parseINITitle(at: url) ?? "Unknown Game"
         let defaultArtwork = findArtwork(at: url)
 
-        // ID is the UUID prefix (first 36 chars) of the folder name.
-        // Legacy folders without a UUID use the full folder name.
-        let id: String
-        if folderName.count >= 36,
-           UUID(uuidString: String(folderName.prefix(36))) != nil {
-            id = String(folderName.prefix(36))
-        } else {
-            id = folderName
-        }
+        // Import writes the UUID as the first 36 chars of the folder
+        // name. The game's id is just that UUID.
+        let id = String(folderName.prefix(36))
 
-        // Load metadata for custom title/artwork overrides
-        var metadata = GameMetadata.load(for: id)
-        var needsSave = false
-
-        // Set dateAdded retroactively if not present (pre-existing game)
-        if metadata.dateAdded == nil {
-            let attrs = try? fm.attributesOfItem(atPath: url.path)
-            metadata.dateAdded = (attrs?[.creationDate] as? Date) ?? Date()
-            needsSave = true
-        }
-
-        if needsSave {
-            metadata.save(for: id)
-        }
-
+        let metadata = GameMetadata.load(for: id)
         let title = metadata.customTitle ?? iniTitle
         let artworkPath = metadata.customArtworkPath(for: id) ?? defaultArtwork
         let originalTitle = metadata.customTitle != nil ? iniTitle : nil

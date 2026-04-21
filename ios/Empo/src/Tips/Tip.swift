@@ -41,16 +41,15 @@ extension Tip {
 final class TipStore {
     static let shared = TipStore()
 
-    private static let prefix = "tip.dismissed."
-
     private var dismissedAt: [String: Date]
 
     private init() {
         var loaded: [String: Date] = [:]
         let defaults = UserDefaults.standard
         let allKeys = defaults.dictionaryRepresentation().keys
-        for key in allKeys where key.hasPrefix(Self.prefix) {
-            let tipID = String(key.dropFirst(Self.prefix.count))
+        let prefix = DefaultsKey.tipDismissedPrefix
+        for key in allKeys where key.hasPrefix(prefix) {
+            let tipID = String(key.dropFirst(prefix.count))
             if let timestamp = defaults.object(forKey: key) as? Double {
                 loaded[tipID] = Date(timeIntervalSince1970: timestamp)
             }
@@ -74,6 +73,9 @@ final class TipStore {
         guard tip.isDismissable else { return }
         let now = Date()
         dismissedAt[tip.id] = now
-        UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Self.prefix + tip.id)
+        UserDefaults.standard.set(
+            now.timeIntervalSince1970,
+            forKey: DefaultsKey.tipDismissed(tipID: tip.id)
+        )
     }
 }

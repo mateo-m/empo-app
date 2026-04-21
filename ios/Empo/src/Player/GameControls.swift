@@ -1,9 +1,7 @@
 import SwiftUI
 
 /// On-screen action button and D-pad, rendered with SwiftUI + the
-/// Liquid Glass material (iOS 26+). These are the only implementation
-/// of the touch controls - the legacy UIKit views were removed along
-/// with the migration feature flag.
+/// Liquid Glass material.
 ///
 /// Touch-dispatch semantics:
 ///   - `mkxp_injectKeyEvent(scancode, 1)` on press-down,
@@ -67,8 +65,7 @@ struct ActionButton: View {
         .gesture(editing ? nil : pressGesture)
         // If the user enters edit mode while this button is pressed, or
         // the button is removed from the layout while pressed, release
-        // the key explicitly. UIKit's touchesCancelled is unreliable in
-        // these cases - we saw stuck keys in the legacy impl.
+        // the key explicitly.
         .onChange(of: editing) { _, newValue in
             if newValue {
                 releaseIfHeld()
