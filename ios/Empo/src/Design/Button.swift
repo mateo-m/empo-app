@@ -43,7 +43,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .padding(.horizontal, size.horizontalPadding)
             .padding(.vertical, size.verticalPadding)
             .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
-            .opacity(isEnabled ? 1 : 0.4)
+            .opacity(isEnabled ? 1 : Alpha.disabled)
             .onChange(of: configuration.isPressed) { _, pressed in
                 if pressed { Haptics.tap() }
             }
@@ -69,8 +69,8 @@ struct SecondaryButtonStyle: ButtonStyle {
             .foregroundStyle(tint)
             .padding(.horizontal, size.horizontalPadding)
             .padding(.vertical, size.verticalPadding)
-            .glassEffect(.regular.tint(tint.opacity(0.1)).interactive(), in: .capsule)
-            .opacity(isEnabled ? 1 : 0.4)
+            .glassEffect(.regular.tint(tint.opacity(Alpha.brandTintBackground)).interactive(), in: .capsule)
+            .opacity(isEnabled ? 1 : Alpha.disabled)
             .onChange(of: configuration.isPressed) { _, pressed in
                 if pressed { Haptics.tap() }
             }
@@ -87,7 +87,7 @@ extension ButtonStyle where Self == SecondaryButtonStyle {
 struct CardPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .scaleEffect(configuration.isPressed ? PressScale.standard : 1)
             .animation(Motion.snappy, value: configuration.isPressed)
             .onChange(of: configuration.isPressed) { _, pressed in
                 if pressed { Haptics.tap() }
@@ -99,7 +99,7 @@ struct CardPressStyle: ButtonStyle {
 struct ListRowPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .opacity(configuration.isPressed ? 0.7 : 1)
+            .opacity(configuration.isPressed ? Alpha.textMuted : 1)
             .animation(Motion.snappy, value: configuration.isPressed)
     }
 }

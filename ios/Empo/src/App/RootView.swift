@@ -3,7 +3,6 @@ import SwiftUI
 private enum SplashTiming {
     static let holdDuration: TimeInterval = 1.2
     static let cycleDuration: TimeInterval = 3
-    static let frameInterval: TimeInterval = 1.0 / 60.0
 }
 
 struct RootView: View {

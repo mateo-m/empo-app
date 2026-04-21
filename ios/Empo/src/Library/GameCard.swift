@@ -58,7 +58,7 @@ struct GameCard: View {
                     if let originalTitle = game.originalTitle {
                         Text(originalTitle)
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.white.opacity(Alpha.textMuted))
                             .textShadow()
                             .lineLimit(1)
                     }
@@ -111,7 +111,7 @@ struct GameCard: View {
         // Dim the artwork a little for non-ready states so the
         // indicator reads clearly against busy thumbnails.
         if game.status.phase != .ready {
-            Color.black.opacity(Overlay.light)
+            Color.black.opacity(Scrim.light)
         }
         GameStatusIndicator(
             kind: .resolve(status: game.status, paused: isPaused),

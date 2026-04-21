@@ -157,7 +157,7 @@ struct SettingsView: View {
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(.vertical, 2)
+                        .padding(.vertical, Spacing.xxs)
                     }
                 } header: {
                     Text("Advanced")
@@ -292,7 +292,7 @@ private struct BuildInfoSheet: View {
     /// Approximate navigation bar height. The inline nav bar is
     /// ~44pt but sits above a small status bar drag area; 56 covers
     /// both comfortably without visibly overshooting.
-    private let navBarAllowance: CGFloat = 56
+    private let navBarAllowance: CGFloat = AppSize.libraryHeader
 
     var body: some View {
         NavigationStack {
@@ -413,7 +413,7 @@ private struct DevicePreview: View {
                 .fill(.secondary.opacity(0.15))
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(.secondary.opacity(0.4), lineWidth: 1)
+                        .stroke(.secondary.opacity(Alpha.indicatorStroke), lineWidth: 1)
                 )
 
             // Screen area
@@ -448,7 +448,7 @@ private struct DevicePreview: View {
                     bottomTrailingRadius: 4,
                     topTrailingRadius: 4
                 )
-                .fill(.secondary.opacity(0.3))
+                .fill(.secondary.opacity(Alpha.indicatorFill))
                 .frame(width: notchHeight, height: 20)
                 .offset(x: -(deviceW / 2 - notchHeight / 2))
             } else {
@@ -459,7 +459,7 @@ private struct DevicePreview: View {
                     bottomTrailingRadius: 4,
                     topTrailingRadius: 0
                 )
-                .fill(.secondary.opacity(0.3))
+                .fill(.secondary.opacity(Alpha.indicatorFill))
                 .frame(width: 28, height: notchHeight)
                 .offset(y: -(deviceH / 2 - notchHeight / 2))
             }

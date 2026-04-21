@@ -11,7 +11,7 @@ struct ImportButton: View {
 
     @State private var importShimmer: CGFloat = -1
     @State private var importMoveTrigger = 0
-    @State private var buttonHeight: CGFloat = 44
+    @State private var buttonHeight: CGFloat = AppSize.minTapTarget
     @State private var revealed = false
 
     var body: some View {
@@ -129,7 +129,7 @@ struct ImportButton: View {
         }
         .font(.body.weight(.semibold))
         .foregroundStyle(.white)
-        .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+        .shadow(color: .black.opacity(Alpha.shadow), radius: 2, y: 1)
         .padding(.horizontal, collapsed ? 0 : ButtonSize.lg.horizontalPadding)
         .padding(.vertical, collapsed ? 0 : ButtonSize.lg.verticalPadding)
         .frame(

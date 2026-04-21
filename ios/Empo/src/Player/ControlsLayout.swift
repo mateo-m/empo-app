@@ -174,7 +174,7 @@ class ControlsLayout {
             }
 
         for (i, (_, button)) in missing.enumerated() {
-            let delay = 0.15 + Double(i) * 0.06
+            let delay = Motion.controlsAppearDelay + Double(i) * Motion.staggerMedium
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(delay))
                 withAnimation(Motion.gentle) {
