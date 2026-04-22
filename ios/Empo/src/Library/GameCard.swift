@@ -143,10 +143,10 @@ struct GameListRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.lg) {
-            // Artwork thumbnail. The transition source id is suffixed
-            // with `-item` so this row doesn't conflict with the
-            // "Continue playing" hero card above the list, which
-            // registers the same game id under a different suffix.
+            // Transition source id is suffixed with `-item` so this
+            // row doesn't conflict with the "Continue playing" hero
+            // card above the list, which registers the same game id
+            // under a different suffix.
             GameArtworkView(
                 artworkPath: game.artworkPath,
                 placeholderIconSize: 16,
@@ -160,7 +160,6 @@ struct GameListRow: View {
                     .clipShape(.rect(cornerRadius: Radius.sm))
             }
 
-            // Title and original name
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(game.title)
                     .font(.body)
@@ -270,7 +269,6 @@ struct GameStatusIndicator: View {
             .opacity({ if case .importing = kind { true } else { false } }() ? 1 : 0)
             .scaleEffect({ if case .importing = kind { true } else { false } }() ? 1 : 0.5)
 
-            // Inner icon — morphs between stop / play / pause / warning
             innerIcon
                 .transition(.blurReplace)
         }

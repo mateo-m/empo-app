@@ -509,8 +509,6 @@ class GameLibrary {
 
                         hasTentativeExeArtwork.withLock { $0 = true }
                         if isGameExe {
-                            // Canonical binary - no further .exe
-                            // needs to be inspected.
                             exeArtworkLocked.withLock { $0 = true }
                         }
                         self.updateCardArtwork(importID, artworkPath: sidecarURL.path)

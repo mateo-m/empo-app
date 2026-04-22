@@ -196,7 +196,6 @@ struct DPad: View {
             }
             .clipShape(plus)
 
-            // Chevrons, one in the center of each arm.
             ForEach(DPadDirection.allCases, id: \.self) { dir in
                 Image(systemName: dir.symbolName)
                     .font(.system(size: size * 0.14, weight: .semibold))
@@ -204,7 +203,6 @@ struct DPad: View {
                     .offset(dir.glyphOffset(size: size, armFraction: armFraction))
             }
 
-            // Center dot.
             Circle()
                 .fill(.white.opacity(0.5))
                 .frame(width: size * 0.16, height: size * 0.16)
@@ -458,7 +456,6 @@ struct DPadDirectionSet: OptionSet {
         }
     }
 
-    /// Iterate over set directions, for use with `for dir in set`.
     func forEach(_ body: (DPadDirection) -> Void) {
         if contains(.up)    { body(.up) }
         if contains(.down)  { body(.down) }

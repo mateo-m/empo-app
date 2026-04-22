@@ -137,8 +137,6 @@ class AppState {
 
 
     // MARK: - Pause lifecycle
-    // These methods coordinate PauseManager state with phase transitions.
-    // PauseManager is a pure data holder — all AppState mutations stay here.
 
     func requestPause() {
         guard AppSettings.shared.isEnabled(.gamePause),

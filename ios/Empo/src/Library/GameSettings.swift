@@ -273,7 +273,6 @@ struct GameSettings: Codable, Equatable {
             if !inString && c == "/" {
                 let next = normalized.index(after: i)
                 if next < normalized.endIndex && normalized[next] == "/" {
-                    // Skip to end of line
                     while i < normalized.endIndex && normalized[i] != "\n" {
                         i = normalized.index(after: i)
                     }

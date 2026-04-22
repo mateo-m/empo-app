@@ -238,7 +238,6 @@ enum ArchiveExtractor {
                 continue
             }
 
-            // Make sure the parent directory exists for nested files.
             let parent = outURL.deletingLastPathComponent()
             if !fm.fileExists(atPath: parent.path) {
                 try? fm.createDirectory(at: parent, withIntermediateDirectories: true)

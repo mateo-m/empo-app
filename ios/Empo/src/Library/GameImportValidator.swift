@@ -74,7 +74,6 @@ enum GameImportValidator {
             }
         }
 
-        // Nothing matched — not an RPG Maker game
         throw ImportError.notAnRPGMakerGame
     }
 
@@ -205,7 +204,6 @@ enum GameImportValidator {
             return gameRoot
         }
 
-        // Parse any extracted .ini for its `Scripts=` key.
         var scriptsPath: String?
         var detectedVersion: RGSSVersion?
         if let items = try? fm.contentsOfDirectory(atPath: gameRoot.path) {
