@@ -88,8 +88,9 @@ enum AppTheme: String, CaseIterable {
 
 
 enum ExperimentalFeature: String, CaseIterable, Identifiable {
-    case gameQuit = "experimental.gameQuit"
     case gamePause = "experimental.gamePause"
+    case gameQuit = "experimental.gameQuit"
+    case cheats = "experimental.cheats"
 
     var id: String { rawValue }
 
@@ -97,6 +98,7 @@ enum ExperimentalFeature: String, CaseIterable, Identifiable {
         switch self {
         case .gameQuit:  "Quit game"
         case .gamePause: "Pause game"
+        case .cheats:    "Cheats"
         }
     }
 
@@ -104,6 +106,7 @@ enum ExperimentalFeature: String, CaseIterable, Identifiable {
         switch self {
         case .gameQuit:  "Adds a Quit button to the in-game toolbar that returns you to the library."
         case .gamePause: "Adds a Pause button to the in-game toolbar that freezes the game so you can resume it later."
+        case .cheats:    "Adds a Cheats button to the in-game toolbar that opens a JoiPlay-compatible cheat menu. Works in most Pokemon Essentials and RPG Maker XP/VX/VX Ace games."
         }
     }
 }
