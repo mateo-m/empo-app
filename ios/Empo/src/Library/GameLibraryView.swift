@@ -17,6 +17,10 @@ struct GameLibraryView: View {
     @State private var showImporter = false
     @State private var showSettings = false
     @State private var errorMessage: String?
+    // TODO(localization): once the app has a strings catalog these
+    // copy fallbacks should move into it alongside the other
+    // user-facing text. Keep the literals here for now so the
+    // existing string-search audit still points at a single spot.
     @State private var errorTitle: String = "Oops!"
     @State private var showErrorAlert = false
     @State private var showCancelValidationAlert = false

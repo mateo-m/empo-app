@@ -60,6 +60,12 @@ struct ImportButton: View {
                 importButtonLabel(collapsed: collapsed)
             }
             .buttonStyle(.plain)
+            // Label text is either hidden ("+" only, collapsed state)
+            // or localised to "Import game"; either way VoiceOver
+            // needs a stable announcement that doesn't flip between
+            // "Plus button" and "Import game button" during the
+            // collapsed<->expanded morph.
+            .accessibilityLabel(isValidating ? "Cancel import" : "Import game")
             .onChange(of: collapsed) { _, _ in
                 Haptics.tap()
             }

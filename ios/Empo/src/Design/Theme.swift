@@ -141,11 +141,17 @@ enum AppFont {
     /// A small bold button label (used by inline CTAs and chips).
     static let buttonSmall = Font.footnote.weight(.semibold)
 
-    /// Fixed-width monospaced body for the debug overlay.
-    static let debugBody = Font.footnote.monospaced()
+    /// Monospaced body row used by each line of the debug overlay.
+    static let debugBody = Font.system(size: 13, weight: .medium, design: .monospaced)
 
-    /// Bold monospaced title for the debug overlay.
-    static let debugTitle = Font.body.bold().monospaced()
+    /// Bold monospaced title for the game name + RGSS version line
+    /// at the top of the debug overlay.
+    static let debugTitle = Font.system(size: 14, weight: .bold, design: .monospaced)
+
+    /// Bold monospaced FPS readout (slightly larger than the body
+    /// rows so the current frame rate is the first thing the eye
+    /// lands on when the overlay is visible).
+    static let debugFPS = Font.system(size: 17, weight: .bold, design: .monospaced)
 }
 
 //
