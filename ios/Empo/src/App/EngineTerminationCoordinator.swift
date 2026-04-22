@@ -15,11 +15,11 @@ final class EngineTerminationCoordinator {
 
     private static let hangWatchdogSeconds: UInt64 = 3
 
-    // When returnToLibrary() asks the engine to terminate, we arm a
+    // When returnToLibrary() asks the engine to terminate, this arms a
     // watchdog that fires after a few seconds. If the engine-terminated
     // callback clears this token by then, the RGSS thread ack'd cleanly
     // and there's nothing to do. Otherwise the RGSS thread is stuck and
-    // we surface the hang alert immediately — without waiting for
+    // the hang alert surfaces immediately — without waiting for
     // main.cpp's 10s timeout, which would otherwise fire on the NEXT
     // session's Loading view and confuse the user.
     private var pendingToken: UUID?
@@ -37,12 +37,12 @@ final class EngineTerminationCoordinator {
         // finished its cross-session cleanup and is parked in
         // waitForGamePath) — hand off immediately.
         if mkxp_isEngineTerminated() != 0 { return }
-        // No termination is in flight — we're on cold boot, the RGSS
+        // No termination is in flight — this is a cold boot, the RGSS
         // thread is waiting for its FIRST game path. Hand off
         // immediately without parking.
         if pendingToken == nil { return }
         // A termination is actively in flight. Park until the
-        // engine-terminated callback drains our continuation.
+        // engine-terminated callback drains the continuation.
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             waiters.append(cont)
         }

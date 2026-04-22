@@ -15,8 +15,8 @@ import UIKit
 /// resources, reassembled into a standalone `.ico` blob for
 /// `UIImage(data:)`. The import table is consulted so that in
 /// games which ship multiple executables (e.g. Pokemon Uranium's
-/// `Uranium.exe` + `Patcher.exe`) we pick the one that actually
-/// imports `RGSS*.dll` and skip updater / installer binaries.
+/// `Uranium.exe` + `Patcher.exe`) the one that actually imports
+/// `RGSS*.dll` gets picked and updater / installer binaries are skipped.
 ///
 /// Anything unexpected (bad signatures, truncated data, overflows)
 /// returns nil rather than throwing so the caller can fall back to
@@ -152,7 +152,7 @@ enum ExecutableIconExtractor {
 
 // MARK: - PEImage
 
-/// Minimal PE reader covering the parts we use:
+/// Minimal PE reader covering just the pieces used here:
 ///   - section table (so RVAs can be translated to file offsets)
 ///   - data directories (used for the import table)
 ///   - resource tree walking (used for icon extraction)
@@ -164,7 +164,7 @@ struct PEImage {
     private let reader: ByteReader
     private let sections: [Section]
     /// Start offset of the 16-entry data directory inside the
-    /// optional header, kept so we can lazily fetch individual
+    /// optional header, kept for lazy fetching of individual
     /// directories (import, resource, etc.) without re-parsing
     /// the optional header.
     private let dataDirectoryBase: Int
@@ -179,7 +179,7 @@ struct PEImage {
     }
 
 
-    /// Offsets + record sizes inside the PE layout we care about.
+    /// Offsets + record sizes inside the PE layout used below.
     /// See <https://learn.microsoft.com/en-us/windows/win32/debug/pe-format>.
     private enum Layout {
         static let dosPEPointer: Int = 0x3C
@@ -331,7 +331,7 @@ struct PEImage {
         let end = tableOffset + Int(importSize)
 
         // IMAGE_IMPORT_DESCRIPTOR array terminated by a zeroed
-        // entry. We read the Name RVA, resolve it to a file
+        // entry. Read the Name RVA, resolve it to a file
         // offset, then read a null-terminated ASCII string.
         while cursor + Layout.importDescriptorSize <= end {
             guard let nameRVA = reader.readUInt32(at: cursor + Layout.importDescriptorNameOffset) else {
@@ -350,7 +350,7 @@ struct PEImage {
 
     // MARK: - Icons
 
-    /// Windows resource type constants we consume.
+    /// Windows resource type constants consumed here.
     /// <https://learn.microsoft.com/en-us/windows/win32/menurc/resource-types>
     private enum ResourceType: UInt32 {
         case icon = 3
@@ -386,7 +386,7 @@ struct PEImage {
             groups: &groups
         )
 
-        // Pick the largest icon variant we can actually emit. A
+        // Pick the largest icon variant that can actually be emitted. A
         // variant is only usable when its matching RT_ICON
         // payload is present in the icons dict - some PEs
         // reference variants in GROUP_ICON that the ID subtree
@@ -468,7 +468,7 @@ struct PEImage {
             }
 
             // Level-0 entries are resource types. Skip everything
-            // that isn't an icon type so we don't recurse into
+            // that isn't an icon type so the walk doesn't recurse into
             // version info / strings / manifests.
             if level == 0 {
                 if nameOrId & 0x80000000 != 0 { continue }

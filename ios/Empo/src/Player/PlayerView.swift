@@ -276,7 +276,7 @@ struct PlayerView: View {
             controlsVisible = true
         } completion: {
             // Tied to the fade completion instead of a wall-clock
-            // asyncAfter so we always unmount the snapshot exactly
+            // asyncAfter so the snapshot unmounts exactly
             // when the user no longer sees it, even if the spring
             // duration changes.
             resumeSnapshot = nil

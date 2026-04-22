@@ -307,8 +307,8 @@ private struct BuildInfoSheet: View {
                             Spacer(minLength: Spacing.md)
                             // RootView applies `.fontDesign(.rounded)`
                             // to the entire app tree, which overrides
-                            // any `.font(design: .monospaced)` we set
-                            // here via environment resolution. Override
+                            // any `.font(design: .monospaced)` set here via
+                            // environment resolution. Override
                             // back to `.monospaced` explicitly so the
                             // value's font actually reads as fixed-width.
                             Text(row.value)
@@ -513,7 +513,7 @@ private struct DevicePreview: View {
 private extension URL {
     /// Fallback for any URL literal that fails to parse. Empty string
     /// URL initialization is the only way to guarantee a non-nil URL
-    /// at compile time without a force-unwrap, so we use the project
-    /// homepage as a safe landing page.
+    /// at compile time without a force-unwrap, so the project homepage
+    /// serves as a safe landing page.
     static let empoHomepage = URL(string: "https://github.com/mateo-m/empo-app") ?? URL(fileURLWithPath: "/")
 }

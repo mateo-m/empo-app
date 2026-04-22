@@ -64,7 +64,7 @@ struct GameArtworkView: View {
     }
 
     /// Renders the image loaded from disk. PE-extracted icons
-    /// (our sidecar files) typically ship with transparent
+    /// (the sidecar files) typically ship with transparent
     /// backgrounds; stretching them to `.fill` would let the
     /// transparency reveal whatever surface sits behind the card,
     /// which looks wrong when the artwork is meant to be the
@@ -139,7 +139,7 @@ struct GameArtworkView: View {
     }
 
     /// Artwork stored at the sidecar path is always a PE icon
-    /// we extracted from `Game.exe`. Using the filename as the
+    /// extracted from `Game.exe`. Using the filename as the
     /// signal avoids per-pixel alpha scans and stays consistent
     /// with the side that wrote the file.
     private func isExecutableIconSidecar(path: String) -> Bool {
