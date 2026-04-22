@@ -129,6 +129,7 @@ targets:
       - path: ../../mkxp-z-apple-mobile/src/main.cpp
       - path: ../../mkxp-z-apple-mobile/src/eventthread.cpp
       - path: ../../mkxp-z-apple-mobile/src/sharedstate.cpp
+      - path: ../../mkxp-z-apple-mobile/src/patcher.cpp
       - path: ../../mkxp-z-apple-mobile/src/config.cpp
       - path: ../../mkxp-z-apple-mobile/src/crypto/rgssad.cpp
       - path: ../../mkxp-z-apple-mobile/src/util/iniconfig.cpp
