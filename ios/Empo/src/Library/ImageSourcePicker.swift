@@ -16,18 +16,16 @@ struct ImageSourcePickerModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .confirmationDialog(title, isPresented: $isPresented, titleVisibility: .visible) {
-                Button("Camera Roll") { showPhotoPicker = true }
-
-                if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                    Button("Take Photo") { showCamera = true }
-                }
-
-                Button("Choose File") { showDocumentPicker = true }
-
-                if hasExisting, let onRemove {
-                    Button("Remove", role: .destructive) { onRemove() }
-                }
+            .sheet(isPresented: $isPresented) {
+                ImageSourceSheet(
+                    isPresented: $isPresented,
+                    title: title,
+                    hasExisting: hasExisting,
+                    onPickPhoto: { showPhotoPicker = true },
+                    onTakePhoto: { showCamera = true },
+                    onPickFile: { showDocumentPicker = true },
+                    onRemove: onRemove
+                )
             }
             .sheet(isPresented: $showPhotoPicker) {
                 PhotoLibraryPicker(onImageSelected: onImageSelected)
