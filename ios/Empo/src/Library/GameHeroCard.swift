@@ -83,6 +83,12 @@ struct GameHeroCard: View {
                         .foregroundStyle(.white)
                         .iconShadow()
                         .padding(Spacing.xl)
+                        // Icon is decorative - the whole card is
+                        // already a tappable "resume game" target
+                        // announced by the enclosing Button, so
+                        // reading the glyph separately would just
+                        // repeat context for VoiceOver users.
+                        .accessibilityHidden(true)
                 }
                 .clipShape(.rect(cornerRadius: Radius.lg))
                 .cardShadow()
