@@ -174,7 +174,7 @@ class AppSettings {
 
     // MARK: - Splash disclaimer acknowledgment
 
-    /// Monotonically increasing version so we can re-prompt when the
+    /// Monotonically increasing version so the flow can re-prompt when the
     /// disclaimer copy changes meaningfully.
     static let currentDisclaimerVersion = 1
 

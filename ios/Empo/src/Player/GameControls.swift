@@ -129,7 +129,7 @@ struct DPad: View {
     @State private var activeDirections: DPadDirectionSet = []
 
     /// Once the finger drags more than `slideOffMargin` past the D-pad
-    /// edge we release all directions but keep the gesture alive so
+    /// edge all directions are released but the gesture stays alive so
     /// sliding back in re-engages.
     @State private var slideOff: Bool = false
 
@@ -196,7 +196,6 @@ struct DPad: View {
             }
             .clipShape(plus)
 
-            // Chevrons, one in the center of each arm.
             ForEach(DPadDirection.allCases, id: \.self) { dir in
                 Image(systemName: dir.symbolName)
                     .font(.system(size: size * 0.14, weight: .semibold))
@@ -204,7 +203,6 @@ struct DPad: View {
                     .offset(dir.glyphOffset(size: size, armFraction: armFraction))
             }
 
-            // Center dot.
             Circle()
                 .fill(.white.opacity(0.5))
                 .frame(width: size * 0.16, height: size * 0.16)
@@ -220,8 +218,8 @@ struct DPad: View {
         // Force the dark Liquid Glass variant so the plus clip shape
         // doesn't render noticeably brighter than the action buttons'
         // circles. With the default (system) color scheme, iOS 26's
-        // glass material resolves differently on a concave clip (our
-        // plus) than on a convex clip (our action-button circles),
+        // glass material resolves differently on a concave clip (the
+        // plus) than on a convex clip (the action-button circles),
         // which showed up in dark gameplay scenes as a near-white
         // D-pad next to translucent-dark action buttons. Pinning to
         // .dark here locks the material in one mode and keeps the
@@ -269,7 +267,7 @@ struct DPad: View {
     private func updateDirections(at location: CGPoint) {
         // DragGesture.location is in the gesture's view space, so the
         // view's own center is at (size/2, size/2). Compute the offset
-        // from center to map the touch into our directional wedges.
+        // from center to map the touch into the directional wedges.
         let cx = radius
         let cy = radius
         let dx = location.x - cx
@@ -277,8 +275,8 @@ struct DPad: View {
         let distance = sqrt(dx * dx + dy * dy)
 
         // Slide-off: release everything but stay engaged. If the user
-        // drags their thumb back inside the D-pad, we pick up again on
-        // the next onChanged.
+        // drags their thumb back inside the D-pad, the next onChanged
+        // picks up again.
         if distance > radius + DPadConstants.slideOffMargin {
             if !slideOff {
                 slideOff = true
@@ -297,7 +295,7 @@ struct DPad: View {
         }
 
         // 8-wedge angular mapping with pi/8 thresholds. The UIKit impl
-        // uses atan2 with the same math; we port it verbatim.
+        // uses atan2 with the same math; ported verbatim.
         // atan2(dy, dx) in SwiftUI's view coordinate space has +y down,
         // so "up" is -y which corresponds to an angle near -pi/2.
         let angle = atan2(dy, dx)
@@ -381,7 +379,7 @@ enum DPadDirection: CaseIterable, Hashable {
     /// Points are in UnitPoint space of the FULL D-pad bounding box
     /// (not the arm's local rect), because SwiftUI's
     /// `.fill(LinearGradient(...))` resolves UnitPoints against the
-    /// shape's full frame. Our `DPadArmHighlight` shape receives
+    /// shape's full frame. The `DPadArmHighlight` shape receives
     /// the D-pad rect and draws a path inside one arm, so the
     /// gradient must be sized to cover only the arm's extent to
     /// be visible; `.top` -> `.bottom` across the full D-pad would
@@ -458,7 +456,6 @@ struct DPadDirectionSet: OptionSet {
         }
     }
 
-    /// Iterate over set directions, for use with `for dir in set`.
     func forEach(_ body: (DPadDirection) -> Void) {
         if contains(.up)    { body(.up) }
         if contains(.down)  { body(.down) }

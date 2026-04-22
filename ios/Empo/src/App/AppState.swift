@@ -60,10 +60,10 @@ class AppState {
         sessionLogger.beginSession(for: game, debugLogsEnabled: AppSettings.shared.debugLogs)
 
         // Wait for the RGSS thread to actually finish tearing down any
-        // previous session before we feed it the new path. If we call
-        // mkxp_setGamePath too early, the engine's own
-        // mkxp_setEngineTerminated() runs after us and clears the path
-        // flag we just set, leaving the next session stuck in
+        // previous session before feeding it the new path. If
+        // mkxp_setGamePath is called too early, the engine's own
+        // mkxp_setEngineTerminated() runs afterwards and clears the path
+        // flag just set, leaving the next session stuck in
         // waitForGamePath forever.
         //
         // awaitEngineTermination returns immediately when no previous
@@ -137,8 +137,6 @@ class AppState {
 
 
     // MARK: - Pause lifecycle
-    // These methods coordinate PauseManager state with phase transitions.
-    // PauseManager is a pure data holder — all AppState mutations stay here.
 
     func requestPause() {
         guard AppSettings.shared.isEnabled(.gamePause),
@@ -229,7 +227,7 @@ class AppState {
                 if !state.terminationExpected && state.phase != nil {
                     // Preserve a Ruby/engine error message if the error callback
                     // already set one; otherwise fall back to the generic crash text.
-                    // Intentionally do NOT set phase = nil here: if we set phase = nil
+                    // Intentionally do NOT set phase = nil here: setting phase = nil
                     // while an error alert is already presenting, SwiftUI swallows the
                     // NavigationStack pop. Leaving phase non-nil means the alert OK
                     // button sees phase != nil, calls returnToLibrary(), and the pop

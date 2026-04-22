@@ -156,7 +156,7 @@ enum ArchiveExtractor {
             try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
         }
 
-        // For 7z we intentionally ignore the file size and trickle
+        // For 7z the file size is intentionally ignored and progress trickles
         // progress by entry index. libarchive reads the entire solid
         // compressed block upfront, so `archive_filter_bytes` would
         // jump to ~100% on the first entry even though extraction has
@@ -175,7 +175,7 @@ enum ArchiveExtractor {
         defer { archive_read_free(reader) }
 
         // Enable every format/filter libarchive supports. Small code footprint,
-        // and we don't want to guess the format from the extension: JGP files
+        // and guessing the format from the extension isn't reliable: JGP files
         // can legitimately be identified as zip, but a user could rename a 7z
         // file to something else. libarchive sniffs the content.
         archive_read_support_format_all(reader)
@@ -209,7 +209,7 @@ enum ArchiveExtractor {
             let rawName = String(cString: cPath)
 
             // Normalise and reject path traversal (zip-slip and friends).
-            // We split on "/" and check for components that are exactly "..",
+            // Split on "/" and check for components that are exactly "..",
             // not substrings - "file..ext" is a valid filename and must not be
             // rejected.
             let relative = rawName.replacingOccurrences(of: "\\", with: "/")
@@ -222,7 +222,7 @@ enum ArchiveExtractor {
                 continue
             }
 
-            // The component-level `..` check above is our real defense
+            // The component-level `..` check above is the real defense
             // against zip-slip. A prefix check on the resolved filesystem
             // path is tempting as a belt-and-suspenders guard but it
             // false-positives on iOS real devices where /var and
@@ -238,7 +238,6 @@ enum ArchiveExtractor {
                 continue
             }
 
-            // Make sure the parent directory exists for nested files.
             let parent = outURL.deletingLastPathComponent()
             if !fm.fileExists(atPath: parent.path) {
                 try? fm.createDirectory(at: parent, withIntermediateDirectories: true)

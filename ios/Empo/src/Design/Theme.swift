@@ -12,9 +12,9 @@ import SwiftUI
 extension Color {
     // Pinned brand orange as a fixed RGB - not Color.orange. SwiftUI's
     // semantic Color.orange shifts toward yellow when rendered on
-    // white backgrounds (like our inverted sheets), and the shift is
+    // white backgrounds (like inverted sheets), and the shift is
     // inconsistent enough across contexts that the brand looked
-    // different from screen to screen. Fixed RGB gives us one
+    // different from screen to screen. Fixed RGB resolves to one
     // predictable orange everywhere.
     static let brand = Color(red: 0.98, green: 0.56, blue: 0.16)
 

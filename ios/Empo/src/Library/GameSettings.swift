@@ -129,7 +129,7 @@ struct GameSettings: Codable, Equatable {
 
 
     /// Reads the game's mkxp.json defaults. Prefers the original backup
-    /// over merged config so we always show the developer's intended values.
+    /// over merged config so the developer's intended values always show.
     static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
         let originalURL = gameDirectory.appendingPathComponent(originalConfigFilename)
         let configURL = gameDirectory.appendingPathComponent(configFilename)
@@ -168,7 +168,7 @@ struct GameSettings: Codable, Equatable {
     }
 
     /// Merges these settings into the game's mkxp.json.
-    /// Backs up the original config on first call so we can revert.
+    /// Backs up the original config on first call so the change can be reverted.
     func applyToConfig(in gameDirectory: URL) {
         let configURL = gameDirectory.appendingPathComponent(Self.configFilename)
         let originalURL = gameDirectory.appendingPathComponent(Self.originalConfigFilename)
@@ -178,7 +178,7 @@ struct GameSettings: Codable, Equatable {
             try? FileManager.default.copyItem(at: configURL, to: originalURL)
         }
 
-        // Preserves game developer's values for keys we don't override
+        // Preserves game developer's values for keys that aren't overridden
         let sourceURL = FileManager.default.fileExists(atPath: originalURL.path)
             ? originalURL : configURL
 
@@ -273,7 +273,6 @@ struct GameSettings: Codable, Equatable {
             if !inString && c == "/" {
                 let next = normalized.index(after: i)
                 if next < normalized.endIndex && normalized[next] == "/" {
-                    // Skip to end of line
                     while i < normalized.endIndex && normalized[i] != "\n" {
                         i = normalized.index(after: i)
                     }

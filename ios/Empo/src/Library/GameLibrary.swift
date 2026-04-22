@@ -236,7 +236,7 @@ class GameLibrary {
 
         // Pre-flight phase: button shows "Validating", library keeps
         // its current UI (empty state or existing list). Once
-        // pre-flight passes we commit a progress card to `games` and
+        // pre-flight passes a progress card is committed to `games` and
         // extraction/finalisation runs with the card visible.
         pendingImports[importID] = PendingImport(id: importID, sourceName: sourceName)
 
@@ -392,8 +392,8 @@ class GameLibrary {
     nonisolated private func importArchive(from sourceURL: URL, importID: String, sourceName: String) throws {
         let fm = FileManager.default
 
-        // Pre-flight scratch: throwaway dir where we selectively
-        // extract just the validation files. Lives only for the
+        // Pre-flight scratch: throwaway dir for selectively
+        // extracting just the validation files. Lives only for the
         // length of the pre-flight phase.
         let preflightDir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try fm.createDirectory(at: preflightDir, withIntermediateDirectories: true)
@@ -411,11 +411,10 @@ class GameLibrary {
         }
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
-        // Pre-flight passed - pick up the title we learned from
-        // the extracted `.ini` so the committed card shows the
-        // real name while the rest of the archive extracts in the
-        // background. Artwork fills in mid-extract via the
-        // extract() callback below.
+        // Pre-flight passed - pick up the title from the extracted
+        // `.ini` so the committed card shows the real name while the
+        // rest of the archive extracts in the background. Artwork
+        // fills in mid-extract via the extract() callback below.
         let title = GameEntry.parseINITitle(at: preflightRoot) ?? sourceName
         commitPendingToCard(importID, title: title, artworkPath: nil)
 
@@ -510,8 +509,6 @@ class GameLibrary {
 
                         hasTentativeExeArtwork.withLock { $0 = true }
                         if isGameExe {
-                            // Canonical binary - no further .exe
-                            // needs to be inspected.
                             exeArtworkLocked.withLock { $0 = true }
                         }
                         self.updateCardArtwork(importID, artworkPath: sidecarURL.path)
@@ -617,8 +614,8 @@ class GameLibrary {
         // sidecar is written once at import time (or lazily
         // on-demand below) and carries the "official" game icon
         // the developer shipped inside the executable. Only fall
-        // through to `Graphics/Titles/` when we couldn't produce
-        // an icon from the `.exe` (or no `.exe` exists).
+        // through to `Graphics/Titles/` when no icon could be produced
+        // from the `.exe` (or no `.exe` exists).
         let sidecar = url.appendingPathComponent(ExecutableIconExtractor.sidecarFilename)
         if fm.fileExists(atPath: sidecar.path) {
             return sidecar.path

@@ -56,8 +56,8 @@ final class CrashTracker {
 
         guard let markerAttrs = try? fm.attributesOfItem(atPath: markerURL.path),
               let markerMtime = markerAttrs[.modificationDate] as? Date else {
-            // Couldn't stat the marker — assume current install so we
-            // don't silently swallow a real crash. Conservative default.
+            // Couldn't stat the marker — assume current install so this
+            // doesn't silently swallow a real crash. Conservative default.
             return true
         }
 

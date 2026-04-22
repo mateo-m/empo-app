@@ -58,8 +58,8 @@ struct DebugOverlayView: View {
                     .font(AppFont.debugFPS)
                     .foregroundStyle(fpsColor)
 
-                // FPS Graph. Canvas has no intrinsic content size so we
-                // constrain it to a fixed height; otherwise it grabs every
+                // FPS Graph. Canvas has no intrinsic content size;
+                // constrained to a fixed height; otherwise it grabs every
                 // available point and bloats the overlay vertically.
                 Canvas { context, size in
                     let samples = ringBuffer.samples
@@ -130,8 +130,8 @@ struct DebugOverlayView: View {
     /// Game title with the RGSS version next to it when it fits on one
     /// line (separated by a middle-dot), or stacked on a second line
     /// when it doesn't. ViewThatFits picks the first child whose
-    /// measured size is <= the proposed width; we list the single-line
-    /// version first and fall back to the two-row variant if the
+    /// measured size is <= the proposed width; the single-line variant
+    /// is listed first and falls back to the two-row variant if the
     /// overlay's 220pt width can't hold the full title + dot + RGSS.
     @ViewBuilder
     private var gameTitleBlock: some View {

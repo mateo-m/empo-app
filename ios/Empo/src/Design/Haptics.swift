@@ -7,7 +7,7 @@ enum Haptics {
 
     // Read from the in-memory AppSettings instead of UserDefaults so
     // every button press doesn't pay for a disk-backed lookup. The
-    // AppSettings singleton is @MainActor-isolated; we assume
+    // AppSettings singleton is @MainActor-isolated; the haptics site assumes
     // isolation here because all haptic call sites are already main.
     @MainActor
     private static var interfaceEnabled: Bool {

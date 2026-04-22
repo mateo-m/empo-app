@@ -21,8 +21,8 @@ struct GameLoadingView: View {
     @State private var readyZoom = false
     private static let readyZoomScale: CGFloat = 1.08
 
-    /// Escape hatch while loading: after a short delay we reveal a
-    /// Cancel button so the user can bail if a game hangs during
+    /// Escape hatch while loading: after a short delay a
+    /// Cancel button is revealed so the user can bail if a game hangs during
     /// boot (common with broken Win32 DLL dependencies or bad scripts).
     @State private var cancelVisible = false
     private static let cancelAppearDelay: Duration = .seconds(2)
@@ -115,8 +115,8 @@ struct GameLoadingView: View {
                 // call Graphics.update/Input.update), so the normal
                 // terminate request can sit unprocessed. returnToLibrary
                 // arms the standard 3s watchdog (alert -> user OK ->
-                // exit) but on the loading view we'd rather not make
-                // the user read an alert on top of being stuck. Also
+                // exit) but on the loading view forcing the user to read
+                // an alert on top of being stuck is bad UX. Also
                 // arm a 5s hard-deadline force-quit so the app closes
                 // cleanly even if the engine never ack's.
                 appState.returnToLibrary()
@@ -128,8 +128,8 @@ struct GameLoadingView: View {
         }
     }
 
-    // The SDL window can't participate in SwiftUI transitions, so we
-    // use the pause snapshot as a static double placed at the exact
+    // The SDL window can't participate in SwiftUI transitions, so
+    // the pause snapshot is placed as a static double at the exact
     // gameRect position. Once the hero animation finishes, AppState
     // flips to .playing and live SDL rendering takes over.
     @ViewBuilder
