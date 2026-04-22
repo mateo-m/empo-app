@@ -425,15 +425,30 @@ class GameLibrary {
         try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmpDir) }
 
-        // Mid-extract artwork surfacing. `findArtwork` picks the
-        // alphabetically-smallest image under `Graphics/Titles/`,
-        // so we mirror that rule here by keeping the smallest
-        // filename we've seen and updating the card every time a
-        // smaller one comes through. This guarantees the card's
-        // artwork matches what the post-reload card will show
-        // (otherwise the card would swap to a different image
-        // once the import finished, which looks like a flicker).
-        let bestArtworkFilename = Mutex<String?>(nil)
+        // Mid-extract artwork surfacing. Two sources are mirrored
+        // against the post-reload `findArtwork` rule:
+        //   1. The `.exe` icon (preferred). Only executables that
+        //      import `rgss*.dll` qualify - patchers, updaters,
+        //      and installer binaries sitting next to the game
+        //      (e.g. Pokemon Uranium's `Patcher.exe`) get skipped
+        //      wholesale. `Game.exe` is the canonical RPG Maker
+        //      binary and wins outright when present; other
+        //      qualifying `.exe`s set a tentative sidecar that
+        //      `Game.exe` can still overwrite if it arrives
+        //      later in archive order.
+        //   2. Alphabetically-smallest `Graphics/Titles/*` image
+        //      (fallback). Only used when no qualifying
+        //      executable has landed yet - once one does,
+        //      subsequent Titles updates are ignored because the
+        //      card would flicker when post-reload `findArtwork`
+        //      picks the exe sidecar over the title image.
+        //
+        // Both hooks rebuild the committed `GameEntry` through
+        // `updateCardArtwork`, so the card cross-fades as the
+        // better source lands.
+        let exeArtworkLocked = Mutex(false)
+        let hasTentativeExeArtwork = Mutex(false)
+        let bestTitlesFilename = Mutex<String?>(nil)
         do {
             try ArchiveExtractor.extract(
                 archive: sourceURL,
@@ -443,16 +458,76 @@ class GameLibrary {
                     self.updateCardProgress(importID, pct)
                 },
                 onFileWritten: { relative, diskURL in
-                    // Accept any image under a `Graphics/Titles/`
-                    // folder regardless of depth (handles flat and
-                    // single-wrapper archives alike).
                     let lower = relative.lowercased()
+                    let filename = (relative as NSString).lastPathComponent
+
+                    // `.exe` branch - only consider root-level
+                    // executables (depth 0 or 1, matching the
+                    // archive's optional wrapper folder).
+                    if lower.hasSuffix(".exe") {
+                        let components = lower.split(separator: "/", omittingEmptySubsequences: false)
+                        let depth = components.count - 1
+                        guard depth <= 1 else { return }
+                        if exeArtworkLocked.withLock({ $0 }) { return }
+
+                        let isGameExe = filename.lowercased() == "game.exe"
+                        // Skip utility binaries (patchers,
+                        // updaters, launchers, etc.) outright.
+                        // `Game.exe` bypasses this check because
+                        // it's the canonical RPG Maker default.
+                        if !isGameExe, ExecutableIconExtractor.isUtilityExecutable(filename: filename) {
+                            return
+                        }
+                        // Non-canonical binaries defer to any
+                        // previously-written tentative sidecar:
+                        // only `Game.exe` can still overwrite
+                        // because it's the rule winner at
+                        // post-reload scan time. Accepting a
+                        // second non-`Game.exe` here would cause
+                        // a flicker when the library rescan
+                        // later picks a different one.
+                        if !isGameExe, hasTentativeExeArtwork.withLock({ $0 }) { return }
+
+                        guard let data = try? Data(contentsOf: diskURL, options: .mappedIfSafe) else {
+                            return
+                        }
+                        guard let pe = PEImage(data: data),
+                              let image = pe.extractIcon(),
+                              let png = image.pngData() else {
+                            return
+                        }
+
+                        let parent = diskURL.deletingLastPathComponent()
+                        let sidecarURL = parent.appendingPathComponent(ExecutableIconExtractor.sidecarFilename)
+                        do {
+                            try png.write(to: sidecarURL)
+                        } catch {
+                            NSLog("[GameLibrary] Sidecar write failed: %@", "\(error)")
+                            return
+                        }
+                        ImageCache.shared.evict(path: sidecarURL.path)
+                        _ = ImageCache.shared.image(for: sidecarURL.path)
+
+                        hasTentativeExeArtwork.withLock { $0 = true }
+                        if isGameExe {
+                            // Canonical binary - no further .exe
+                            // needs to be inspected.
+                            exeArtworkLocked.withLock { $0 = true }
+                        }
+                        self.updateCardArtwork(importID, artworkPath: sidecarURL.path)
+                        return
+                    }
+
+                    // Titles fallback - skip once an RGSS exe
+                    // icon has landed (the card would flicker
+                    // when post-reload findArtwork picks the exe
+                    // sidecar over the title image).
+                    guard !hasTentativeExeArtwork.withLock({ $0 }) else { return }
                     guard lower.contains("graphics/titles/") else { return }
                     let ext = (relative as NSString).pathExtension.lowercased()
                     guard ["png", "jpg", "jpeg", "bmp"].contains(ext) else { return }
 
-                    let filename = (relative as NSString).lastPathComponent
-                    let shouldUpdate = bestArtworkFilename.withLock { best -> Bool in
+                    let shouldUpdate = bestTitlesFilename.withLock { best -> Bool in
                         if let current = best, current <= filename { return false }
                         best = filename
                         return true
@@ -536,8 +611,23 @@ class GameLibrary {
 
 
     nonisolated private static func findArtwork(at url: URL) -> String? {
-        let titlesDir = url.appendingPathComponent("Graphics/Titles")
         let fm = FileManager.default
+
+        // Prefer the pre-extracted `.exe` icon when available. The
+        // sidecar is written once at import time (or lazily
+        // on-demand below) and carries the "official" game icon
+        // the developer shipped inside the executable. Only fall
+        // through to `Graphics/Titles/` when we couldn't produce
+        // an icon from the `.exe` (or no `.exe` exists).
+        let sidecar = url.appendingPathComponent(ExecutableIconExtractor.sidecarFilename)
+        if fm.fileExists(atPath: sidecar.path) {
+            return sidecar.path
+        }
+        if let sidecarPath = ExecutableIconExtractor.writeSidecarIfPossible(in: url) {
+            return sidecarPath
+        }
+
+        let titlesDir = url.appendingPathComponent("Graphics/Titles")
         guard let items = try? fm.contentsOfDirectory(atPath: titlesDir.path) else { return nil }
 
         let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "bmp"]
