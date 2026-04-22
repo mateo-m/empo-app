@@ -82,7 +82,7 @@ struct RootView: View {
                 if mkxp_isEngineHung() != 0 {
                     // RGSS thread is still running inside a script that
                     // never yielded to checkShutdown(). The process must
-                    // be killed because we cannot respawn Ruby in-place.
+                    // be killed because Ruby can't be respawned in-place.
                     exit(0)
                 }
                 if appState.phase != nil {

@@ -51,7 +51,7 @@ struct GameLibraryView: View {
     // the progress state forever). Keeping it computed means it
     // tracks library.games directly. Filter + sort on 10s of entries
     // is cheap; .map(\.id) in `.animation(value:)` was the actual
-    // hot-loop offender and we've dropped it.
+    // hot-loop offender and was dropped.
     private var filteredGames: [GameEntry] {
         let base = searchText.isEmpty
             ? library.games
@@ -254,9 +254,9 @@ struct GameLibraryView: View {
             .tint(nil)
             .navigationDestination(for: GameEntry.self) { game in
                 // The zoom destination targets whichever visible source
-                // the user tapped (hero card vs grid/list item). If we
-                // don't remember (e.g. external deep link), fall back to
-                // the grid/list item source id since that's the one
+                // the user tapped (hero card vs grid/list item). When
+                // the source is unknown (e.g. external deep link), fall back
+                // to the grid/list item source id since that's the one
                 // always visible in the library.
                 let source = tappedSource[game.id] ?? .item
                 GameLoadingView(game: game)

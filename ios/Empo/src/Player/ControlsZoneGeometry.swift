@@ -18,7 +18,7 @@ enum ControlsZone {
     /// Minimum vertical space below the game rect required to place
     /// the toolbar + controls in the dedicated zone below the game.
     /// When the game fills most of the screen (fixedAspectRatio off)
-    /// there isn't enough room, so we fall back to overlay mode (same
+    /// there isn't enough room, so the layout falls back to overlay mode (same
     /// as landscape: toolbar at top, controls over the game).
     static let minControlsZoneHeight: CGFloat = 120
 
@@ -66,7 +66,7 @@ enum ControlsZone {
     }
 
     /// Always anchor the toolbar to the top-right of the device
-    /// viewport. In portrait we used to tuck it below the game rect,
+    /// viewport. In portrait it used to tuck below the game rect,
     /// which left the keyboard-toggle button covered by the keyboard
     /// whenever it was up. Placing it at the top keeps it reachable
     /// in every orientation + layout mode.
