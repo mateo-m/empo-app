@@ -98,19 +98,14 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    SettingsToggle(
-                        title: "Pause game",
-                        isOn: experimentalBinding(for: .gamePause),
-                        description: ExperimentalFeature.gamePause.description,
-                        isExperimental: true
-                    )
-
-                    SettingsToggle(
-                        title: "Quit game",
-                        isOn: experimentalBinding(for: .gameQuit),
-                        description: ExperimentalFeature.gameQuit.description,
-                        isExperimental: true
-                    )
+                    ForEach(ExperimentalFeature.allCases) { feature in
+                        SettingsToggle(
+                            title: feature.label,
+                            isOn: experimentalBinding(for: feature),
+                            description: feature.description,
+                            isExperimental: true
+                        )
+                    }
 
                     SettingsToggle(
                         title: "Game overlay",
