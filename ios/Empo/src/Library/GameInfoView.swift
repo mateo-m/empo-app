@@ -191,14 +191,14 @@ struct GameInfoView: View {
             }
             .imageSourcePicker(
                 isPresented: $showArtworkPicker,
-                title: "Game artwork",
+                title: "Artwork",
                 hasExisting: hasCustomArtwork,
                 onImageSelected: { saveArtwork($0) },
                 onRemove: { removeArtwork() }
             )
             .imageSourcePicker(
                 isPresented: $showBannerPicker,
-                title: "Game banner",
+                title: "Banner",
                 hasExisting: hasCustomBanner,
                 onImageSelected: { saveBanner($0) },
                 onRemove: { removeBanner() }
