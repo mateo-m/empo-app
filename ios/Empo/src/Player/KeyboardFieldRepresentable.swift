@@ -40,6 +40,22 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
     class Coordinator: NSObject, UITextFieldDelegate {
         func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange,
                        replacementString string: String) -> Bool {
+            // Backspace arrives here as an empty replacement string
+            // over a non-zero range. UIKit's `deleteBackward` override
+            // on TCKeyboardField doesn't fire when `text` is non-empty
+            // (we prime it with a space so the on-screen Bksp key
+            // stays enabled), so the empty-replacement case has to be
+            // translated into a scancode injection explicitly.
+            if string.isEmpty && range.length > 0 {
+                mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_BACKSPACE), 1)
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_BACKSPACE), 0)
+                }
+                textField.text = " "
+                return false
+            }
+
             for char in string {
                 let c = char.utf16.first ?? 0
                 let isUpper = (c >= UInt16(Character("A").asciiValue!) &&
