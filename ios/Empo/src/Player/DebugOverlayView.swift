@@ -55,7 +55,7 @@ struct DebugOverlayView: View {
 
             HStack(spacing: Spacing.xs) {
                 Text("\(Int(fps.rounded())) FPS")
-                    .font(.system(size: 17, weight: .bold, design: .monospaced))
+                    .font(AppFont.debugFPS)
                     .foregroundStyle(fpsColor)
 
                 // FPS Graph. Canvas has no intrinsic content size so we
@@ -111,16 +111,17 @@ struct DebugOverlayView: View {
 
     /// Monospaced text row with the overlay's default styling. Wraps
     /// to additional lines when the content exceeds the overlay's
-    /// fixed width instead of truncating.
+    /// fixed width instead of truncating. Font defaults to
+    /// `AppFont.debugBody`; callers that need a bigger/bolder
+    /// variant (e.g. the title line) pass the corresponding token.
     @ViewBuilder
     private func debugText(
         _ text: String,
-        weight: Font.Weight = .medium,
-        size: CGFloat = 13,
+        font: Font = AppFont.debugBody,
         color: Color = .white.opacity(Alpha.textMuted)
     ) -> some View {
         Text(text)
-            .font(.system(size: size, weight: weight, design: .monospaced))
+            .font(font)
             .foregroundStyle(color)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
@@ -138,15 +139,15 @@ struct DebugOverlayView: View {
             ViewThatFits(in: .horizontal) {
                 debugText(
                     "\(gameTitle) \u{00B7} RGSS\(rgssVersion)",
-                    weight: .bold, size: 14, color: .white
+                    font: AppFont.debugTitle, color: .white
                 )
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    debugText(gameTitle, weight: .bold, size: 14, color: .white)
-                    debugText("RGSS\(rgssVersion)", weight: .bold, size: 14, color: .white)
+                    debugText(gameTitle, font: AppFont.debugTitle, color: .white)
+                    debugText("RGSS\(rgssVersion)", font: AppFont.debugTitle, color: .white)
                 }
             }
         } else {
-            debugText(gameTitle, weight: .bold, size: 14, color: .white)
+            debugText(gameTitle, font: AppFont.debugTitle, color: .white)
         }
     }
 
