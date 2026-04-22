@@ -114,6 +114,21 @@ class AppState {
             mkxp_requestTerminate()
         }
 
+        tearDownSessionState()
+
+        if engineWasRunning {
+            termination.armHangWatchdog { [weak self] message in
+                self?.errorMessage = message
+            }
+        }
+    }
+
+    /// Resets per-session UI state without touching the engine or
+    /// crash marker. Shared by the explicit `returnToLibrary` path
+    /// and the engine-initiated clean-exit path (game's own
+    /// "Exit to desktop" menu) so both drop back to the library
+    /// through the same transition.
+    private func tearDownSessionState() {
         selectedGame = nil
         // Unbind the controls layout so any library-screen UI that
         // reads it sees a neutral default, and mutations (shouldn't
@@ -123,12 +138,6 @@ class AppState {
         engineReady = false
         PauseManager.shared.reset()
         phase = nil
-
-        if engineWasRunning {
-            termination.armHangWatchdog { [weak self] message in
-                self?.errorMessage = message
-            }
-        }
     }
 
     func armLoadingEscapeForceQuit() {
@@ -225,20 +234,28 @@ class AppState {
                 GameLibrary.shared.reload()
 
                 if !state.terminationExpected && state.phase != nil {
-                    // Preserve a Ruby/engine error message if the error callback
-                    // already set one; otherwise fall back to the generic crash text.
-                    // Intentionally do NOT set phase = nil here: setting phase = nil
-                    // while an error alert is already presenting, SwiftUI swallows the
-                    // NavigationStack pop. Leaving phase non-nil means the alert OK
-                    // button sees phase != nil, calls returnToLibrary(), and the pop
-                    // happens cleanly after the alert is dismissed.
-                    if state.errorMessage == nil {
-                        state.errorMessage = AppState.crashMessage
+                    let cleanExit = mkxp_didEngineExitCleanly() != 0
+                    if cleanExit {
+                        // Ruby raised SystemExit (e.g. the game's own
+                        // "Exit to desktop" menu): drop back to the
+                        // library silently through the shared teardown.
+                        state.tearDownSessionState()
+                    } else {
+                        // Preserve a Ruby/engine error message if the error callback
+                        // already set one; otherwise fall back to the generic crash text.
+                        // Intentionally do NOT set phase = nil here: setting phase = nil
+                        // while an error alert is already presenting, SwiftUI swallows the
+                        // NavigationStack pop. Leaving phase non-nil means the alert OK
+                        // button sees phase != nil, calls returnToLibrary(), and the pop
+                        // happens cleanly after the alert is dismissed.
+                        if state.errorMessage == nil {
+                            state.errorMessage = AppState.crashMessage
+                        }
+                        state.selectedGame = nil
+                        ControlsLayout.shared.switchGame(id: nil)
+                        state.engineReady = false
+                        PauseManager.shared.reset()
                     }
-                    state.selectedGame = nil
-                    ControlsLayout.shared.switchGame(id: nil)
-                    state.engineReady = false
-                    PauseManager.shared.reset()
                 }
                 state.terminationExpected = false
             }

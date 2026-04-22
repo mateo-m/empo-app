@@ -22,6 +22,7 @@ struct PlayerView: View {
     @State private var toolbarOpacity: Double = Alpha.toolbarDim
     @State private var toolbarIdleTask: Task<Void, Never>?
     @State private var showQuitConfirm = false
+    @State private var cheatsEnabled = false
 
     @State private var resumeSnapshot: UIImage?
     @State private var snapshotOpacity: Double = 1
@@ -91,6 +92,7 @@ struct PlayerView: View {
                         onToggleEditMode: { toggleEditMode() },
                         onToggleHideControls: { toggleHideControls() },
                         onRequestPause: { appState.requestPause() },
+                        onToggleCheats: { toggleCheats() },
                         onResetIdleTimer: { resetToolbarIdleTimer() }
                     )
                     .opacity(editMode ? 0 : 1)
@@ -244,6 +246,29 @@ struct PlayerView: View {
         keyboardMode.toggle()
         if !keyboardMode {
             AppWindow.setAllowKeyWindow(false)
+        }
+    }
+
+    /// Toggle the JoiPlay-derived cheat menu. First tap arms $CHEATS
+    /// and injects a HOME keypress so the in-game Scene_Cheat hook
+    /// fires immediately; second tap disables $CHEATS again. The
+    /// Ruby-side poller installed by the engine keeps $CHEATS in
+    /// sync with the bridge flag each Input.update.
+    private func toggleCheats() {
+        cheatsEnabled.toggle()
+        mkxp_setCheatsEnabled(cheatsEnabled)
+        if cheatsEnabled {
+            // Inject a synthetic HOME keypress. The Ruby side's
+            // Input.trigger?(HOME) returns true only on the frame the
+            // key transitions from released to pressed, so the KEYUP
+            // must land at least one RGSS tick (~16ms @ 60fps) after
+            // the KEYDOWN. Otherwise both events get consumed in the
+            // same eventthread batch and Input.update never observes
+            // the pressed-edge the Scene_Map hook is waiting for.
+            mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_HOME), 1)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_HOME), 0)
+            }
         }
     }
 

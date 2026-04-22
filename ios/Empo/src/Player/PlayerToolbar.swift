@@ -16,6 +16,7 @@ struct PlayerToolbar: View {
     let onToggleEditMode: () -> Void
     let onToggleHideControls: () -> Void
     let onRequestPause: () -> Void
+    let onToggleCheats: () -> Void
     let onResetIdleTimer: () -> Void
     @Environment(\.appSettings) private var settings
 
@@ -27,6 +28,9 @@ struct PlayerToolbar: View {
             var list: [ToolbarEntry] = []
             if settings.isEnabled(.gamePause) {
                 list.append(ToolbarEntry(icon: "pause.fill", label: "Pause game", tint: .white, action: onRequestPause))
+            }
+            if settings.isEnabled(.cheats) {
+                list.append(ToolbarEntry(icon: "wand.and.stars", label: "Cheats menu", tint: .white, action: onToggleCheats))
             }
             list.append(ToolbarEntry(icon: "keyboard", label: "Toggle keyboard", tint: .white, action: onToggleKeyboard))
             if settings.debugMode {
