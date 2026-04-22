@@ -269,14 +269,14 @@ struct PlayerView: View {
         // Deliberately do NOT reset the toolbar idle timer here. The
         // toolbar should stay dimmed when the game first becomes
         // playable - users don't need the buttons screaming for
-        // attention the moment the snapshot lifts. They'll dim in as
-        // soon as the user taps anywhere.
+        // attention the moment the snapshot lifts. They'll brighten
+        // in as soon as the user taps anywhere.
         withAnimation(Motion.standard) {
             snapshotOpacity = 0
             controlsVisible = true
         } completion: {
             // Tied to the fade completion instead of a wall-clock
-            // asyncAfter so we always unmount the snapshot exactly
+            // asyncAfter so the snapshot unmounts exactly
             // when the user no longer sees it, even if the spring
             // duration changes.
             resumeSnapshot = nil

@@ -106,13 +106,15 @@ struct ImportButton: View {
             .opacity(revealed ? 1 : 0)
             .scaleEffect(revealed ? 1 : 0.8)
             .blur(radius: revealed ? 0 : 10)
-            // Counter-rotate to keep content upright
+            // Counter-rotate to keep content upright through the
+            // sweep. The three modifiers below step the button
+            // from the expanded anchor to the collapsed anchor
+            // along an arc: offset to the expanded position
+            // relative to the arc center, rotate by the sweep
+            // angle, then place at the arc center.
             .rotationEffect(.degrees(collapsed ? -arcDeg : 0))
-            // Offset from arc center to expanded position
             .offset(x: offX, y: offY)
-            // Arc sweep rotation
             .rotationEffect(.degrees(collapsed ? arcDeg : 0))
-            // Place at arc center
             .position(x: arcCenterX, y: arcCenterY)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.spring(duration: 0.25, bounce: 0.15), value: showEmpty)

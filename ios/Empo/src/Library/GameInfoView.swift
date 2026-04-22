@@ -160,8 +160,8 @@ struct GameInfoView: View {
                             .frame(height: 20 * titleScrollProgress, alignment: .bottom)
                             .opacity(titleScrollProgress)
 
-                        // Subtitle: cross-fade between headline and caption sizes
-                        // (font changes aren't animatable, so we overlay both)
+                        // Subtitle cross-fades between headline and caption sizes.
+                        // Font changes aren't animatable, so both are overlaid.
                         ZStack {
                             Text("Information")
                                 .font(.headline)

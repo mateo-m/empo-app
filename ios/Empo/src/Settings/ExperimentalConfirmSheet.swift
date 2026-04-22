@@ -2,12 +2,11 @@ import SwiftUI
 
 /// Opt-in confirmation sheet for experimental features.
 ///
-/// Used when the user flips an experimental toggle or picks the ANGLE
-/// renderer. Uses the native `NavigationStack` + inline-title pattern
-/// with a principal toolbar slot that renders the title plus an
-/// "Experimental" subtitle chip - same composition as GameInfoView.
-/// The sheet cannot be dismissed by tapping the backdrop; the user
-/// must pick Enable or Cancel.
+/// Used when the user flips an experimental toggle. Uses the native
+/// `NavigationStack` + inline-title pattern with a principal toolbar
+/// slot that renders the title plus an "Experimental" subtitle chip -
+/// same composition as GameInfoView. The sheet cannot be dismissed
+/// by tapping the backdrop; the user must pick Enable or Cancel.
 struct ExperimentalConfirmSheet: View {
     let title: String
     let message: String

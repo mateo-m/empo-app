@@ -32,7 +32,7 @@ enum GameImportValidator {
 
     /// Throws ImportError on failure. Validates a folder already
     /// present on disk - used both for full extracted imports and
-    /// folder-based imports. For archives we peek first via
+    /// folder-based imports. Archives peek first via
     /// `preflightArchive` to avoid paying the full extract cost
     /// before the user sees confirmation the game is valid.
     static func validate(_ url: URL) throws {
@@ -45,7 +45,7 @@ enum GameImportValidator {
 
         // 1. Check for RGSS archive — definitive proof + version detection.
         //    When an archive is present, scripts are packed inside it and
-        //    we can't validate them without decrypting, so just check version.
+        //    scripts can't be validated without decrypting, so only the version is checked.
         if let version = rgssVersionFromArchive(lowercaseItems) {
             try checkRuntimeSupport(version)
             return
@@ -74,7 +74,6 @@ enum GameImportValidator {
             }
         }
 
-        // Nothing matched — not an RPG Maker game
         throw ImportError.notAnRPGMakerGame
     }
 
@@ -94,7 +93,7 @@ enum GameImportValidator {
     /// scripts file at the default `Data/Scripts.{rxdata,rvdata,
     /// rvdata2}` path (which is essentially all of them). If a
     /// game hard-codes a custom scripts path via Game.ini's
-    /// `Scripts=` key we fall through to a targeted second pass.
+    /// `Scripts=` key falls through to a targeted second pass.
     ///
     /// Artwork is not pulled by the pre-flight: archive order
     /// typically places `Data/Scripts.*` before `Graphics/Titles/*`,
@@ -117,7 +116,7 @@ enum GameImportValidator {
         // when any of these prove the game is valid:
         //   1. RGSS archive marker (`.rgssad`/`.rgss2a`/`.rgss3a`)
         //      at the game root - its name alone is sufficient.
-        //   2. We've pulled both a root `.ini`/`mkxp.json` AND a
+        //   2. Both a root `.ini`/`mkxp.json` AND a
         //      `Data/Scripts.*` file. Between them the folder
         //      validator has everything it needs - no point
         //      walking the rest of a 700MB archive just to hit
@@ -137,7 +136,7 @@ enum GameImportValidator {
             ) { path in
                 let components = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
                 // `depth` counts how many folder hops away from the
-                // archive root the entry sits. We accept files at
+                // archive root the entry sits. Files are accepted at
                 // depth 0 (flat archive) and depth 1 (wrapper
                 // folder) for metadata; scripts files live one
                 // deeper because they're inside Data/.
@@ -205,7 +204,6 @@ enum GameImportValidator {
             return gameRoot
         }
 
-        // Parse any extracted .ini for its `Scripts=` key.
         var scriptsPath: String?
         var detectedVersion: RGSSVersion?
         if let items = try? fm.contentsOfDirectory(atPath: gameRoot.path) {

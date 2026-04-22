@@ -141,11 +141,9 @@ struct ButtonEditSheet: View {
                     }
 
                     Section("Opacity") {
-                        // Slider drives the button's transparency via
-                        // a synthesized binding. The label shows the
-                        // integer percentage so the user knows the
-                        // exact value (same idiom as Photos' adjust
-                        // panels).
+                        // Integer-percent label mirrors the Photos
+                        // adjust-panel idiom so the slider's exact
+                        // value stays visible while dragging.
                         HStack {
                             Slider(
                                 value: Binding(
