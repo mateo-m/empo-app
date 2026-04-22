@@ -176,13 +176,11 @@ struct GameInfoView: View {
                     }
                     .frame(maxWidth: 250)
                     .animation(Motion.standard, value: titleScrollProgress)
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear.onAppear {
-                                navBarBottomY = geo.frame(in: .global).maxY
-                            }
-                        }
-                    )
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.frame(in: .global).maxY
+                    } action: { newValue in
+                        navBarBottomY = newValue
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") { dismiss() }

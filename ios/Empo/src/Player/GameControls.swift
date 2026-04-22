@@ -58,6 +58,13 @@ struct ActionButton: View {
         // the brightness of the game content behind them.
         .darkGlass()
         .contentShape(Circle())
+        // VoiceOver: the visible glyph (`A`, `B`, `X`, `Y`, etc.) reads
+        // as a letter otherwise, which gives no hint that it's a game
+        // input. Announce it explicitly so users know they're holding
+        // a gamepad button. The editing state is announced separately
+        // by the layout's edit-mode container.
+        .accessibilityLabel("\(label) button")
+        .accessibilityAddTraits(.isButton)
         // Touch dispatch. minimumDistance=0 makes this a press-tracking
         // gesture that fires on touch-down (not after a drag threshold).
         // Only install when NOT editing so the parent's drag-to-reposition
@@ -225,6 +232,18 @@ struct DPad: View {
         // engage. The wedge math in updateDirections decides which
         // direction a given touch point represents.
         .contentShape(Circle())
+        // VoiceOver: describe as a directional pad so users know the
+        // control responds to directional gestures rather than
+        // treating it as a decorative glyph. Direction detection is
+        // continuous-touch based so there's no per-direction button
+        // to expose individually.
+        .accessibilityLabel("Directional pad")
+        .accessibilityHint("Touch and drag to move the character")
+        // VoiceOver otherwise swallows the drag gesture because it
+        // interprets taps as element activation. Direct interaction
+        // tells VoiceOver to pass raw touches through so holding
+        // and sliding across directions works with the rotor off.
+        .accessibilityAddTraits(.allowsDirectInteraction)
         .gesture(editing ? nil : dpadGesture)
         .onChange(of: editing) { _, newValue in
             if newValue {
