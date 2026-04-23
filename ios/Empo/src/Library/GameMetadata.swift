@@ -10,6 +10,23 @@ struct GameMetadata: Codable {
     var customArtworkFilename: String?  // e.g. "artwork.jpg", stored in Metadata/{id}/
     var customBannerFilename: String?   // e.g. "banner.jpg", stored in Metadata/{id}/
 
+    // Title sourced from the import, not from a user edit. For JGP
+    // imports this comes from the manifest's `name` field, which
+    // the packager chose on purpose (often cleaner than what
+    // Game.ini happens to say). The library uses this as the base
+    // title, but users can still override it with `customTitle`
+    // afterwards. nil for non-JGP imports, which fall back to
+    // Game.ini's title as the base.
+    var baseTitle: String?
+
+    // JoiPlay JGP manifest fields carried over at import time. Shared
+    // across all imports of the same JGP so we can detect duplicates
+    // when the same archive is imported twice and offer the user a
+    // replace/duplicate/cancel choice.
+    var manifestId: String?
+    var manifestVersion: String?
+    var manifestDescription: String?
+
 
     private static var metadataDirectory: URL {
         FileManager.default
@@ -128,6 +145,26 @@ struct GameMetadata: Codable {
     static func removeImage(named filename: String, for gameId: String) {
         let url = mediaDirectory(for: gameId).appendingPathComponent(filename)
         try? FileManager.default.removeItem(at: url)
+    }
+
+
+    /// Returns any game IDs whose metadata has the given JGP manifest id.
+    /// Used to detect when a user imports the same JGP archive twice so
+    /// the import flow can offer to replace the existing entry or add a
+    /// second copy.
+    static func gameIDs(withManifestId manifestId: String) -> [String] {
+        let fm = FileManager.default
+        let dir = metadataDirectory
+        guard let entries = try? fm.contentsOfDirectory(atPath: dir.path) else {
+            return []
+        }
+        return entries.compactMap { name -> String? in
+            guard name.hasSuffix(".json") else { return nil }
+            let gameId = String(name.dropLast(".json".count))
+            let metadata = load(for: gameId)
+            guard metadata.manifestId == manifestId else { return nil }
+            return gameId
+        }
     }
 
 

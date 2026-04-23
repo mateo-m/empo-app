@@ -78,6 +78,15 @@ struct GameSettings: Codable, Equatable {
 
     // Engine
     var postloadScripts: Bool?         // execute postload scripts for common fixes
+    // Nil = default (Ruby 1.8 compat for max PE fangame compatibility).
+    // True = disable syntaxTransform so the engine runs pure Ruby 3.
+    // Needed for games that ship Ruby-3-era scripts (keyword-arg
+    // hash shorthand, numbered block params, etc.) - notably Pokemon
+    // Reborn 19.5+, PE v20+, and any game packaged for the mkxp-z
+    // runtime. Detected automatically during JGP import by scanning
+    // .rb scripts for Ruby-3-only syntax, but users can also flip
+    // this manually per game if the heuristic misses.
+    var useModernRuby: Bool?
 
 
     private static let settingsFilename = "game_settings.json"
@@ -125,6 +134,72 @@ struct GameSettings: Codable, Equatable {
         if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: url, options: .atomic)
         }
+    }
+
+
+    /// Scans a freshly-imported game folder for Ruby 3-only syntax
+    /// markers and returns true if any are found. Used by the
+    /// import pipeline to set `useModernRuby` so the engine runs
+    /// without the Ruby 1.8 compat transform for games that ship
+    /// modern Ruby source (Reborn 19.5+, PE v20+, mkxp-z JGPs).
+    ///
+    /// Heuristic-only: looks for keyword-arg shorthand
+    /// (`id: -1,`, `foo: "bar",`) anywhere inside `.rb` files at
+    /// the game root or `Scripts/` subfolder. The 1.8-era syntax
+    /// for the same idea is `:id => -1`, so the `key: value,`
+    /// form is a strong Ruby-3 signal. False positives on comments
+    /// or strings containing that pattern are possible but rare
+    /// and have no ill effect - disabling the transform on a 1.8
+    /// game still runs it as Ruby 3, which works for everything
+    /// except legacy constructs the transform would have rewritten
+    /// (and we can flip the setting manually afterwards).
+    static func detectModernRubyScripts(in gameDirectory: URL) -> Bool {
+        let fm = FileManager.default
+
+        // Search depth is capped by the enumerator's defaults.
+        // Stop at the first positive match to keep big fangames
+        // from scanning thousands of files on import.
+        let candidates = [
+            gameDirectory,
+            gameDirectory.appendingPathComponent("Scripts"),
+            gameDirectory.appendingPathComponent("Data"),
+        ]
+
+        // Ruby 3 keyword-arg shorthand inside method calls. A word
+        // followed by a colon and a literal value or variable, with
+        // no `=>` rocket before it. Excludes YAML-style ":foo"
+        // symbols by requiring the identifier BEFORE the colon.
+        let modernRegex = try? NSRegularExpression(
+            pattern: "\\n\\s*[a-z_][a-zA-Z0-9_]*:\\s+(-?\\d|\"|\\[|\\{|true|false|nil|:)",
+            options: []
+        )
+        guard let regex = modernRegex else { return false }
+
+        for root in candidates {
+            guard fm.fileExists(atPath: root.path),
+                  let enumerator = fm.enumerator(at: root,
+                      includingPropertiesForKeys: nil,
+                      options: [.skipsHiddenFiles])
+            else { continue }
+
+            var filesScanned = 0
+            for case let url as URL in enumerator {
+                if url.pathExtension.lowercased() != "rb" { continue }
+                filesScanned += 1
+                // Hard cap so a pathological game tree can't stall
+                // the import pipeline.
+                if filesScanned > 200 { break }
+
+                guard let text = try? String(contentsOf: url, encoding: .utf8)
+                else { continue }
+
+                let range = NSRange(text.startIndex..., in: text)
+                if regex.firstMatch(in: text, options: [], range: range) != nil {
+                    return true
+                }
+            }
+        }
+        return false
     }
 
 
@@ -188,11 +263,20 @@ struct GameSettings: Codable, Equatable {
             config = parsed
         }
 
-        // Always enable Ruby 1.8 compatibility syntax transform for RGSS1/2
-        // games. Without this the engine runs Ruby 3.1 strict mode and rejects
-        // 1.8-era syntax (`when X:`, `retry` outside rescue, unparenthesized
-        // method calls with spaces, etc.) at parse time.
-        if config["syntaxTransform"] == nil {
+        // Ruby compatibility mode. Most PE fangames are written in
+        // Ruby 1.8 syntax and need `syntaxTransform: 2` so the
+        // engine translates old forms (`when X:`, unparenthesized
+        // method chains, legacy hash rockets, etc) before Ruby 3
+        // parses them. Games targeting the modern `mkxp-z` runtime
+        // - Reborn 19.5+, PE v20+, anything packaged as an mkxp-z
+        // JGP - ship actual Ruby 3 source (keyword-arg shorthand
+        // `id: -1`, `foo: "bar"`) which the 1.8 transform would
+        // mis-parse. For those we explicitly disable the transform
+        // by writing `syntaxTransform: 0`. The import-time detector
+        // flips useModernRuby when it finds Ruby-3-only syntax.
+        if let modern = useModernRuby, modern {
+            config["syntaxTransform"] = 0
+        } else if config["syntaxTransform"] == nil {
             config["syntaxTransform"] = 2
         }
 

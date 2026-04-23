@@ -10,6 +10,8 @@ enum GameImportValidator {
         case unsupportedRuntime(String)
         case missingScripts(String)
         case invalidScripts(String)
+        // JoiPlay .jgp specific
+        case invalidJgpManifest
 
         var errorDescription: String? {
             switch self {
@@ -25,6 +27,8 @@ enum GameImportValidator {
                 return "Script file not found: \(path)"
             case .invalidScripts(let path):
                 return "Script file is not a valid RGSS data file: \(path)"
+            case .invalidJgpManifest:
+                return "The JoiPlay archive is missing or has an invalid manifest.json."
             }
         }
     }

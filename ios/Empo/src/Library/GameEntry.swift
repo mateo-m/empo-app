@@ -19,9 +19,16 @@ enum GameStatus: Hashable {
 struct GameEntry: Identifiable, Hashable {
     let id: String           // UUID used as folder name
     let path: String         // full path to game folder
-    let title: String        // display title (custom override or original)
+    let title: String        // display title (custom override or base)
     let artworkPath: String? // first image in Graphics/Titles/, if any
-    var originalTitle: String? = nil // from Game.ini — non-nil only when a custom title is set
+    // The engine's own title for the game (parsed from Game.ini),
+    // surfaced on the library card alongside `title` when they
+    // differ. Non-nil only when the display title has been
+    // overridden - by a user-set customTitle or a JGP manifest
+    // name - so users can still see what the game calls itself
+    // inside the RGSS runtime. nil means `title` IS the engine
+    // title and showing it twice would be redundant.
+    var engineTitle: String? = nil
     var lastPlayed: Date? = nil      // from metadata, cached at scan time
     var status: GameStatus = .ready
 
@@ -37,7 +44,7 @@ struct GameEntry: Identifiable, Hashable {
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: GameEntry, rhs: GameEntry) -> Bool {
-        lhs.id == rhs.id && lhs.status == rhs.status && lhs.title == rhs.title && lhs.path == rhs.path && lhs.artworkPath == rhs.artworkPath && lhs.originalTitle == rhs.originalTitle && lhs.lastPlayed == rhs.lastPlayed
+        lhs.id == rhs.id && lhs.status == rhs.status && lhs.title == rhs.title && lhs.path == rhs.path && lhs.artworkPath == rhs.artworkPath && lhs.engineTitle == rhs.engineTitle && lhs.lastPlayed == rhs.lastPlayed
     }
 
 
