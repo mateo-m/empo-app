@@ -5,6 +5,15 @@ import UniformTypeIdentifiers
 extension UTType {
     static let sevenZArchive = UTType(filenameExtension: "7z") ?? .archive
     static let rarArchive    = UTType(filenameExtension: "rar") ?? .archive
+    /// JoiPlay archive. Declared via `exportedAs` in Info.plist so
+    /// Files.app can open .jgp with us, but we look up the
+    /// filename-extension-based UTType first so the document picker
+    /// accepts .jgp even when the Launch Services index hasn't
+    /// caught up (first run after install, or simulator state).
+    /// Falling back to our exported type matches how 7z/rar behave.
+    static let jgpArchive    = UTType(filenameExtension: "jgp")
+                               ?? UTType(exportedAs: "cyou.joiplay.jgp",
+                                         conformingTo: .zip)
 }
 
 
@@ -13,7 +22,7 @@ struct DocumentPickerView: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
         let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [.folder, .zip, .sevenZArchive, .rarArchive]
+            forOpeningContentTypes: [.folder, .zip, .sevenZArchive, .rarArchive, .jgpArchive]
         )
         picker.allowsMultipleSelection = true
         picker.delegate = context.coordinator

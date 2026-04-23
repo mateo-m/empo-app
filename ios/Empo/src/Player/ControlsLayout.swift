@@ -112,6 +112,32 @@ class ControlsLayout {
     }
 
 
+    /// Seed an initial layout for a game ID that isn't currently
+    /// active. Used by the JGP import path so the game starts with
+    /// the layout bundled in the archive rather than our defaults.
+    /// Overwrites any existing persisted layout, so only call during
+    /// first import. Marked `nonisolated` because it only writes to
+    /// UserDefaults and touches no instance state, which lets the
+    /// import pipeline (running on a background Task) seed layouts
+    /// without hopping to the main actor.
+    nonisolated static func writeInitialPerGameLayout(
+        gameID: String,
+        dpadCenter: CGPoint,
+        dpadSize: CGFloat,
+        dpadOpacity: Double = 1.0,
+        buttons: [ButtonModel]
+    ) {
+        let layout = PersistedLayout(
+            dpad: .init(rx: dpadCenter.x, ry: dpadCenter.y,
+                        size: dpadSize, opacity: dpadOpacity),
+            buttons: buttons
+        )
+        guard let data = try? JSONEncoder().encode(layout) else { return }
+        UserDefaults.standard.set(data,
+            forKey: DefaultsKey.controlsLayout(gameID: gameID))
+    }
+
+
     static let defaultDPadCenter = CGPoint(x: 0.13, y: 0.72)
     static let defaultDPadSize: CGFloat = 140
     static let defaultButtons: [ButtonModel] = [
