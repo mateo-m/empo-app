@@ -218,7 +218,15 @@ extension JgpConfiguration {
         s.frameSkip = frameSkip
         s.solidFonts = solidFonts
         s.pathCache = pathCache
-        s.postloadScripts = enablePostloadScripts
+        // Intentionally NOT mapping `enablePostloadScripts` onto our
+        // `postloadScripts` setting. JoiPlay's flag controls its own
+        // JoiPlay-specific postload hooks; ours controls the engine's
+        // compat-shim pipeline (NilClass safe-stubs, $joiplay signal,
+        // MKXP.plugin_version, Graphics.poke_* aliases, Pokemon-
+        // specific session-reset hooks, etc.). JGPs that set
+        // `enablePostloadScripts: false` (notably Reborn) still
+        // depend on our compat shims to boot, so leave our postload
+        // path enabled by default.
 
         if let scaleStr = fontScale, let scale = Double(scaleStr) {
             s.fontScale = scale
