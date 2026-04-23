@@ -24,6 +24,17 @@ final class DebugOverlayState {
     var rgssVersion: Int32 = 0
     var ringBuffer = FPSRingBuffer(capacity: 120)
     var metadataLoaded = false
+    /// Resident memory in MB (phys_footprint via task_vm_info, matching
+    /// what Xcode's memory gauge and the App Store "Memory" stat show).
+    /// 0 when the query isn't available yet or fails (e.g. sandboxed
+    /// variant that denies the mach port). Refreshed on the same 10Hz
+    /// tick as FPS so we can eyeball a growing number over time to
+    /// spot leaks from the compat layer without reaching for Instruments.
+    var memoryMB: Double = 0
+    /// Rolling memory samples for the overlay's mini-graph. Same
+    /// capacity as the FPS buffer so the two line charts stay
+    /// visually aligned.
+    var memoryBuffer = FPSRingBuffer(capacity: 120)
 }
 
 
@@ -36,6 +47,7 @@ struct DebugOverlayView: View {
     private var gameTitle: String { state.gameTitle }
     private var rgssVersion: Int32 { state.rgssVersion }
     private var ringBuffer: FPSRingBuffer { state.ringBuffer }
+    private var memoryMB: Double { state.memoryMB }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -53,10 +65,14 @@ struct DebugOverlayView: View {
                 color: mkxp_isGameReady() != 0 ? .success : .warning
             )
 
+            memoryRow
+
             HStack(spacing: Spacing.xs) {
                 Text("\(Int(fps.rounded())) FPS")
                     .font(AppFont.debugFPS)
+                    .monospacedDigit()
                     .foregroundStyle(fpsColor)
+                    .frame(width: 90, alignment: .leading)
 
                 // FPS Graph. Canvas has no intrinsic content size;
                 // constrained to a fixed height; otherwise it grabs every
@@ -92,6 +108,10 @@ struct DebugOverlayView: View {
             guard mkxp_isEngineTerminated() == 0 else { return }
             state.fps = mkxp_getAverageFPS()
             state.ringBuffer.append(state.fps)
+            state.memoryMB = Self.currentMemoryMB()
+            if state.memoryMB > 0 {
+                state.memoryBuffer.append(state.memoryMB)
+            }
 
             if !state.metadataLoaded {
                 state.rgssVersion = mkxp_getRGSSVersion()
@@ -101,6 +121,73 @@ struct DebugOverlayView: View {
                 }
             }
         }
+    }
+
+    /// Row that mirrors the FPS row layout: left-aligned label,
+    /// right-flexible graph. The graph autoscales between the
+    /// minimum and maximum seen values so small growth is still
+    /// visible even as the baseline increases, which is exactly
+    /// what we want for spotting leak trends.
+    @ViewBuilder
+    private var memoryRow: some View {
+        HStack(spacing: Spacing.xs) {
+            // Fixed-width slot with monospaced digits so digit-count
+            // changes (e.g. 99 MB -> 100 MB) don't nudge the graph
+            // left/right mid-session.
+            Text(memoryLine)
+                .font(AppFont.debugBody)
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(Alpha.textMuted))
+                .frame(width: 90, alignment: .leading)
+
+            Canvas { context, size in
+                let samples = state.memoryBuffer.samples
+                guard samples.count >= 2 else { return }
+                let lo = samples.min() ?? 0
+                let hi = samples.max() ?? 0
+                // Guard against a flat line collapsing the graph to
+                // a vertical bar: pad the range so it visibly
+                // occupies the canvas.
+                let range = max(hi - lo, 1)
+                var path = Path()
+                for (i, sample) in samples.enumerated() {
+                    let x = CGFloat(i) / CGFloat(state.memoryBuffer.capacity - 1) * size.width
+                    let y = size.height - ((sample - lo) / range) * size.height
+                    let clamped = max(0, min(size.height, y))
+                    if i == 0 { path.move(to: CGPoint(x: x, y: clamped)) }
+                    else { path.addLine(to: CGPoint(x: x, y: clamped)) }
+                }
+                context.stroke(path, with: .color(.white.opacity(Alpha.textMuted)), lineWidth: 1.5)
+            }
+            .frame(height: 28)
+        }
+    }
+
+    /// App-level memory footprint in MB. Uses `phys_footprint` from
+    /// task_vm_info, which is the same number Xcode's memory gauge
+    /// reports and what Apple uses to decide jetsam pressure.
+    /// Returns 0 on failure (query denied, sandboxed variant).
+    private static func currentMemoryMB() -> Double {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size
+        )
+        let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        guard kerr == KERN_SUCCESS else { return 0 }
+        return Double(info.phys_footprint) / 1_048_576.0
+    }
+
+    /// Memory line. Shows "--" while the first sample settles, then
+    /// the current footprint.
+    private var memoryLine: String {
+        if memoryMB <= 0 {
+            return "Memory --"
+        }
+        return String(format: "Memory %.0f MB", memoryMB)
     }
 
     private var fpsColor: Color {
