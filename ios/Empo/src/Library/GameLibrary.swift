@@ -150,18 +150,47 @@ class GameLibrary {
         let id = String(folderName.prefix(36))
 
         let metadata = GameMetadata.load(for: id)
-        let title = metadata.customTitle ?? iniTitle
+        // Title priority: user's customTitle > import-time baseTitle
+        // (JGP manifest name) > Game.ini title. The `engineTitle`
+        // subtitle on the library card only surfaces when the user
+        // has explicitly set a `customTitle` that diverges from the
+        // engine's Game.ini title - so we can show both their
+        // chosen name and what the game calls itself. JGP imports
+        // deliberately use the manifest as the authoritative title
+        // and don't show a subtitle; JoiPlay's chosen name is THE
+        // name, and surfacing Game.ini alongside would just clutter
+        // the card with a near-duplicate.
+        let baseTitle = metadata.baseTitle ?? iniTitle
+        let title = metadata.customTitle ?? baseTitle
         let artworkPath = metadata.customArtworkPath(for: id) ?? defaultArtwork
-        let originalTitle = metadata.customTitle != nil ? iniTitle : nil
+        let engineTitle: String? = {
+            guard metadata.customTitle != nil else { return nil }
+            return title != iniTitle ? iniTitle : nil
+        }()
 
         return GameEntry(
             id: id,
             path: url.path,
             title: title,
             artworkPath: artworkPath,
-            originalTitle: originalTitle,
+            engineTitle: engineTitle,
             lastPlayed: metadata.lastPlayed
         )
+    }
+
+    /// Comparator used to decide whether to surface the engine's
+    /// Game.ini title on a library card. Strips diacritics and
+    /// case-folds so cosmetically-equivalent names ("Pokemon
+    /// Reborn" vs "Pokémon Reborn") don't produce a nearly-
+    /// duplicate subtitle. Trailing/leading whitespace is also
+    /// ignored so a stray newline in Game.ini doesn't trip it.
+    nonisolated private static func titlesMeaningfullyDiffer(_ a: String, _ b: String) -> Bool {
+        let folded: (String) -> String = { raw in
+            raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                .folding(options: [.diacriticInsensitive, .caseInsensitive],
+                         locale: Locale(identifier: "en_US_POSIX"))
+        }
+        return folded(a) != folded(b)
     }
 
 
@@ -311,7 +340,7 @@ class GameLibrary {
                     path: lib.games[idx].path,
                     title: lib.games[idx].title,
                     artworkPath: artworkPath,
-                    originalTitle: lib.games[idx].originalTitle,
+                    engineTitle: lib.games[idx].engineTitle,
                     lastPlayed: lib.games[idx].lastPlayed,
                     status: lib.games[idx].status
                 )
@@ -385,6 +414,7 @@ class GameLibrary {
         }
 
         if isImportCancelled(importID) { throw ImportCancelled() }
+        Self.detectAndPersistModernRuby(in: destURL)
         GameLibrary.createMetadata(for: importID)
         committed = true
     }
@@ -550,6 +580,18 @@ class GameLibrary {
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
         let gameRoot = try GameLibrary.findGameRoot(in: tmpDir)
+
+        // JGP post-processing: if the archive was a JoiPlay .jgp,
+        // parse manifest/configuration/gamepad, reject unsupported
+        // runtimes, strip the JGP-specific files from the game
+        // folder so they don't ship next to the engine files, and
+        // keep a `JgpImport` bundle so we can seed metadata +
+        // settings after the final move. Regular .zip imports skip
+        // this branch entirely.
+        let jgpBundle: Jgp.Bundle? = sourceURL.pathExtension.lowercased() == "jgp"
+            ? try Self.preprocessJgp(at: gameRoot)
+            : nil
+
         let destURL = destinationURL(for: importID, title: title)
         try fm.moveItem(at: gameRoot, to: destURL)
 
@@ -561,14 +603,144 @@ class GameLibrary {
         }
 
         if isImportCancelled(importID) { throw ImportCancelled() }
-        GameLibrary.createMetadata(for: importID)
+        if let bundle = jgpBundle {
+            Self.finalizeJgpImport(
+                importID: importID,
+                destURL: destURL,
+                bundle: bundle
+            )
+        } else {
+            GameLibrary.createMetadata(for: importID)
+        }
         committed = true
+    }
+
+    /// JoiPlay .jgp post-extract step. Parses the three JSON
+    /// sidecars, rejects unsupported runtimes, and removes the
+    /// sidecars + icon from the game folder so the runtime sees a
+    /// clean RGSS tree. The returned `Bundle` carries everything
+    /// we need to seed metadata + settings once the folder is
+    /// moved to its final destination.
+    nonisolated private static func preprocessJgp(at gameRoot: URL) throws -> Jgp.Bundle {
+        guard let bundle = Jgp.parseBundle(at: gameRoot) else {
+            throw GameImportValidator.ImportError.invalidJgpManifest
+        }
+
+        switch bundle.manifest.type {
+        case .rpgmxp, .rpgmvx, .rpgmvxace, .mkxpZ:
+            break
+        case .unsupported(let raw):
+            throw GameImportValidator.ImportError.unsupportedRuntime(
+                "This JoiPlay archive uses '\(raw)' which isn't supported. "
+                + "Only RPG Maker XP, VX, VX Ace, and mkxp-z games are currently supported."
+            )
+        }
+
+        let fm = FileManager.default
+        for name in ["manifest.json", "configuration.json", "gamepad.json"] {
+            try? fm.removeItem(at: gameRoot.appendingPathComponent(name))
+        }
+        if let iconRel = bundle.manifest.icon, !iconRel.isEmpty {
+            try? fm.removeItem(at: gameRoot.appendingPathComponent(iconRel))
+        }
+
+        return bundle
+    }
+
+    /// Seed metadata + per-game settings + per-game control layout
+    /// for a freshly-imported JGP. Runs on the import thread after
+    /// the game folder is at its permanent destination so all
+    /// side-effect paths (game_settings.json, mkxp.json, metadata
+    /// sidecar, UserDefaults layout key) use the final locations.
+    nonisolated private static func finalizeJgpImport(
+        importID: String,
+        destURL: URL,
+        bundle: Jgp.Bundle
+    ) {
+        // Seed engine settings from the bundled configuration. The
+        // cheats flag is a separate sidecar (configuration.json in
+        // our GameSettings namespace) because it outlives the
+        // mkxp.json regeneration on settings-reset.
+        var settings = bundle.configuration?.toGameSettings() ?? GameSettings()
+
+        // Ruby-syntax detection. JoiPlay's "mkxp-z" runtime
+        // label plus Reborn-style bootstrap games ship actual
+        // Ruby 3 source, so force useModernRuby for those. For
+        // other runtime types we scan `.rb` files for Ruby 3
+        // markers as a fallback - catches PE v20+ games that
+        // still tag themselves as rpgmxp but have been ported
+        // to the modern Essentials codebase.
+        if bundle.manifest.type == .mkxpZ {
+            settings.useModernRuby = true
+        } else if GameSettings.detectModernRubyScripts(in: destURL) {
+            settings.useModernRuby = true
+        }
+
+        settings.applyToConfig(in: destURL)
+        settings.save(to: destURL)
+        if let cheats = bundle.configuration?.cheats {
+            GameSettings.saveCheats(cheats, to: destURL)
+        }
+
+        // Seed the per-game control layout from the JGP gamepad
+        // hints. Users can still re-arrange in the player toolbar
+        // afterwards and their edits override this seed.
+        if let gamepad = bundle.gamepad {
+            let seed = gamepad.toSeedLayout()
+            ControlsLayout.writeInitialPerGameLayout(
+                gameID: importID,
+                dpadCenter: seed.dpadCenter,
+                dpadSize: seed.dpadSize,
+                buttons: seed.buttons
+            )
+        }
+
+        // Metadata carries manifest fields and the JGP icon (if
+        // present) as custom artwork so the library card shows
+        // JoiPlay's canonical branding for the game. The manifest
+        // name becomes the BASE title (not a custom override) -
+        // the library resolves title as customTitle ?? baseTitle ??
+        // iniTitle, so the user still sees the manifest name first
+        // but can type their own customTitle on top if desired,
+        // and Game.ini's title stays available as the final
+        // fallback when there's no manifest.
+        var metadata = GameMetadata()
+        metadata.dateAdded = Date()
+        metadata.baseTitle = bundle.manifest.name
+        metadata.manifestId = bundle.manifest.id
+        metadata.manifestVersion = bundle.manifest.version
+        metadata.manifestDescription = bundle.manifest.description
+
+        if let iconData = bundle.iconData,
+           let image = UIImage(data: iconData),
+           let filename = GameMetadata.saveImage(image, as: "artwork", for: importID) {
+            metadata.customArtworkFilename = filename
+        }
+
+        metadata.save(for: importID)
     }
 
     nonisolated private static func createMetadata(for gameId: String) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
         metadata.save(for: gameId)
+    }
+
+    /// Scans the freshly-extracted game folder for Ruby 3 syntax
+    /// markers and persists `useModernRuby: true` + updates
+    /// mkxp.json if any are found. A no-op for classical PE
+    /// fangames written in Ruby 1.8 - the heuristic only fires on
+    /// games that actually ship Ruby 3 source (Reborn 19.5+,
+    /// PE v20+, anything built on modern Essentials). JGP imports
+    /// have their own detection path in `finalizeJgpImport` that
+    /// also honors the manifest's runtime hint; this helper covers
+    /// the plain .zip / folder import path.
+    nonisolated private static func detectAndPersistModernRuby(in gameDirectory: URL) {
+        guard GameSettings.detectModernRubyScripts(in: gameDirectory) else { return }
+        var settings = GameSettings.load(from: gameDirectory)
+        settings.useModernRuby = true
+        settings.applyToConfig(in: gameDirectory)
+        settings.save(to: gameDirectory)
     }
 
 

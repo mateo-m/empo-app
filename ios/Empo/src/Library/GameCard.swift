@@ -55,8 +55,8 @@ struct GameCard: View {
                         .minimumScaleFactor(0.75)
                         .multilineTextAlignment(.leading)
 
-                    if let originalTitle = game.originalTitle {
-                        Text(originalTitle)
+                    if let engineTitle = game.engineTitle {
+                        Text(engineTitle)
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(Alpha.textMuted))
                             .textShadow()
@@ -95,8 +95,8 @@ struct GameCard: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
 
-                if let originalTitle = game.originalTitle {
-                    Text(originalTitle)
+                if let engineTitle = game.engineTitle {
+                    Text(engineTitle)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -167,8 +167,8 @@ struct GameListRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                if let originalTitle = game.originalTitle {
-                    Text(originalTitle)
+                if let engineTitle = game.engineTitle {
+                    Text(engineTitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

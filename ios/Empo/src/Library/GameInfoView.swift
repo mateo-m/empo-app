@@ -27,7 +27,16 @@ struct GameInfoView: View {
         _editingTitle = State(initialValue: meta.customTitle ?? "")
 
         let gameDir = URL(fileURLWithPath: game.path)
-        self.originalTitle = GameEntry.parseINITitle(at: gameDir) ?? "Unknown Game"
+        // Title shown when the user hasn't set a customTitle. For
+        // JGP imports this is the manifest name; for plain
+        // folder/zip imports it's the Game.ini title. The label
+        // under the text field (and the text-field placeholder)
+        // both track this so resetting the custom title gives the
+        // user back what the import originally showed, not the
+        // raw Game.ini one which may be uglier.
+        self.originalTitle = meta.baseTitle
+            ?? GameEntry.parseINITitle(at: gameDir)
+            ?? "Unknown Game"
     }
 
     private var bannerImage: UIImage? {
