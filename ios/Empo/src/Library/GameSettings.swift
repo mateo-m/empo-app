@@ -165,15 +165,44 @@ struct GameSettings: Codable, Equatable {
             gameDirectory.appendingPathComponent("Data"),
         ]
 
-        // Ruby 3 keyword-arg shorthand inside method calls. A word
-        // followed by a colon and a literal value or variable, with
-        // no `=>` rocket before it. Excludes YAML-style ":foo"
-        // symbols by requiring the identifier BEFORE the colon.
+        // Ruby-3 keyword-arg shorthand. A name followed by `:` and a
+        // space then a literal/variable, NOT preceded by `:` (which
+        // would make it a symbol literal) and NOT followed by `:`
+        // (which would make it a constant like `Foo::Bar`).
+        //
+        // We match two call-sites:
+        //   1. Start of a line (formatted kwargs):
+        //        method_call(
+        //          name: "bar",
+        //          other: 123
+        //        )
+        //   2. Inline after `(` `,` or `{` (single-line kwargs):
+        //        method_call(name: "bar", other: 123)
+        //        { name: "bar" }
+        //
+        // The original detector only caught case 1, missing inline
+        // calls like Infinite Fusion's `Game.save(safe: safesave)` on
+        // a single line. That mis-flagged IF as a 1.8 game, leading
+        // to `syntaxTransform: 2` being written and the engine
+        // rejecting `safe:` as "unexpected ':'".
+        //
+        // The value side `(-?\d|...|[a-z])` admits a leading
+        // lowercase identifier so that `safe: safesave` (value is a
+        // local variable) matches too, not just literal values.
         let modernRegex = try? NSRegularExpression(
-            pattern: "\\n\\s*[a-z_][a-zA-Z0-9_]*:\\s+(-?\\d|\"|\\[|\\{|true|false|nil|:)",
-            options: []
+            pattern: "(?:^|(?<=[(,{]))\\s*[a-z_][a-zA-Z0-9_]*:\\s+(-?\\d|\"|'|\\[|\\{|true|false|nil|:[a-zA-Z_]|[a-z_])",
+            options: [.anchorsMatchLines]
         )
         guard let regex = modernRegex else { return false }
+
+        // Scan cap. The old limit of 200 tripped on Infinite Fusion
+        // (541 .rb files scattered deep in `Data/Scripts/NNN_*/`),
+        // causing the detector to miss the modern syntax and flip
+        // `syntaxTransform` to 2 anyway. 2000 is plenty of headroom
+        // for the largest PE fangames (Reborn ~1200, Rejuvenation
+        // ~1500) without risking a slow import on a pathological
+        // tree.
+        let scanCap = 2000
 
         for root in candidates {
             guard fm.fileExists(atPath: root.path),
@@ -186,9 +215,7 @@ struct GameSettings: Codable, Equatable {
             for case let url as URL in enumerator {
                 if url.pathExtension.lowercased() != "rb" { continue }
                 filesScanned += 1
-                // Hard cap so a pathological game tree can't stall
-                // the import pipeline.
-                if filesScanned > 200 { break }
+                if filesScanned > scanCap { break }
 
                 guard let text = try? String(contentsOf: url, encoding: .utf8)
                 else { continue }
@@ -274,11 +301,27 @@ struct GameSettings: Codable, Equatable {
         // mis-parse. For those we explicitly disable the transform
         // by writing `syntaxTransform: 0`. The import-time detector
         // flips useModernRuby when it finds Ruby-3-only syntax.
-        if let modern = useModernRuby, modern {
-            config["syntaxTransform"] = 0
-        } else if config["syntaxTransform"] == nil {
-            config["syntaxTransform"] = 2
+        //
+        // Launch-time re-detection: if the user hasn't explicitly
+        // set useModernRuby (nil = "auto") we re-run the detector
+        // every launch. This recovers games imported before a
+        // detector fix from being stuck on `syntaxTransform: 2`
+        // because the first scan missed their modern syntax.
+        // Concrete case: Infinite Fusion has 541 .rb files scattered
+        // in `Data/Scripts/NNN_*/` and uses inline keyword-args
+        // (`Game.save(safe: safesave)`) - the original detector's
+        // 200-file cap + line-start-anchored regex missed it, so
+        // mkxp.json stayed at `syntaxTransform: 2` and Ruby 3.1
+        // rejected `safe:` as "unexpected ':'". With the improved
+        // detector run at launch, the flag flips to 0 and the game
+        // parses cleanly.
+        let resolvedModern: Bool
+        if let modern = useModernRuby {
+            resolvedModern = modern
+        } else {
+            resolvedModern = Self.detectModernRubyScripts(in: gameDirectory)
         }
+        config["syntaxTransform"] = resolvedModern ? 0 : 2
 
         if let v = smoothScaling { config["smoothScaling"] = v ? 1 : 0 }
         if let v = fixedAspectRatio { config["fixedAspectRatio"] = v }
