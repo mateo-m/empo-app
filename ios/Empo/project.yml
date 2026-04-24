@@ -31,6 +31,10 @@ settings:
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/util
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/binding
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/shader
+      # H-Mode7 port (//hmode7-apple-mobile submodule). Headers live
+      # next to the .cpp sources; the binding layer includes them via
+      # short names (hm7_apply_opacity.h etc.).
+      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/hmode7/src
       - $(PROJECT_DIR)/shims
       - $(PROJECT_DIR)/shims/libarchive
       - $(DEPENDENCY_SEARCH_PATH)/include/SDL2
@@ -54,6 +58,12 @@ settings:
       - GLES2_HEADER
       - MKXPZ_HAS_ANGLE
       - HAVE_CONFIG_H
+      # Selects the real mkxp-z Bitmap/Table/Ruby wrappers in
+      # hmode7-apple-mobile/src/hm7_bindings.cpp. Without this the
+      # file compiles the unit-test stub path (returns nullptr for
+      # everything), which would make the renderer produce no
+      # output despite the binding being registered.
+      - HM7_HAVE_MKXP_BITMAP
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: YES
   configs:
@@ -194,6 +204,20 @@ targets:
       - path: ../../mkxp-z-apple-mobile/binding/filesystem-binding.cpp
       - path: ../../mkxp-z-apple-mobile/binding/http-binding.cpp
       - path: ../../mkxp-z-apple-mobile/binding/module_rpg.cpp
+      # H-Mode7 native renderer binding.
+      - path: ../../mkxp-z-apple-mobile/binding/hmode7-binding.cpp
+      # H-Mode7 port sources. Each .cpp is a single function from the
+      # original MGC_Hmode7_1_4_4.cpp, ported to top-down SDL surfaces
+      # and Ruby 3.1 MRI. See //hmode7-apple-mobile/docs/HMODE7_PORT_DESIGN.md.
+      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_bindings.cpp
+      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_apply_opacity.cpp
+      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_apply_zoom.cpp
+      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_apply_lighting.cpp
+      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_compute_m7.cpp
+      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_draw_heightmap.cpp
+      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_draw_textureset.cpp
+      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_draw_map_tileset.cpp
+      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_render.cpp
       - path: ../../mkxp-z-apple-mobile/src/app_bridge.cpp
       - path: ../../mkxp-z-apple-mobile/src/angle_native_layer.mm
       - path: src
