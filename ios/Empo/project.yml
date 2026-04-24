@@ -74,6 +74,65 @@ targets:
     type: application
     platform: iOS
     preBuildScripts:
+      - name: Verify hmode7 submodule is up to date
+        # Guard against a stale h-mode7 port submodule. The port is
+        # maintained in a sibling repo (//hmode7-apple-mobile) and
+        # included here as the `hmode7/` submodule. Because it's a
+        # submodule, `git pull` in mkxp-z-apple-mobile does NOT pull
+        # its contents - you'd get the recorded commit ID and keep
+        # whatever working-tree state was there.
+        #
+        # This caused a real debugging wasted hour: the "canonical"
+        # port repo at `/tmp/hmode7-apple-mobile` was being edited,
+        # but the build was compiling the SUBMODULE copy which hadn't
+        # been updated. xcodebuild succeeded each time with stale
+        # code, and the rendering bugs "reappeared" every test run.
+        #
+        # The rule going forward: edit the submodule directly
+        # (`mkxp-z-apple-mobile/hmode7/src/*.cpp`), commit from there,
+        # push to origin, and bump the parent-repo submodule pointer.
+        # This script fails the build if either:
+        #   (a) the submodule working tree has uncommitted changes, OR
+        #   (b) the submodule HEAD is behind `origin/main`.
+        # Both conditions mean the build would pick up code that
+        # wouldn't match what's committed, silently. Fast-fail with
+        # a clear message instead.
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          HMODE7_DIR="${PROJECT_DIR}/../../mkxp-z-apple-mobile/hmode7"
+          if [ ! -d "$HMODE7_DIR" ]; then
+              echo "error: hmode7 submodule missing at $HMODE7_DIR" >&2
+              echo "hint: run 'git submodule update --init --recursive' in mkxp-z-apple-mobile" >&2
+              exit 1
+          fi
+          cd "$HMODE7_DIR"
+
+          # Uncommitted working-tree changes.
+          if ! git diff --quiet HEAD; then
+              echo "error: hmode7 submodule has uncommitted changes:" >&2
+              git status --short >&2
+              echo "hint: commit+push from the submodule, then 'git submodule update' in the parent" >&2
+              exit 1
+          fi
+
+          # Local commits that haven't been pushed.
+          CURRENT="$(git rev-parse HEAD)"
+          BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+          if [ "$BRANCH" = "HEAD" ]; then BRANCH="main"; fi
+          # Fetch silently to learn the remote tip; timeouts don't
+          # fail the build (offline dev still works), but mismatch
+          # with the locally-known remote does.
+          git fetch --quiet origin "$BRANCH" 2>/dev/null || true
+          REMOTE="$(git rev-parse "origin/${BRANCH}" 2>/dev/null || echo "")"
+          if [ -n "$REMOTE" ] && [ "$CURRENT" != "$REMOTE" ]; then
+              echo "error: hmode7 submodule is out of sync with origin/${BRANCH}" >&2
+              echo "  submodule HEAD: $CURRENT" >&2
+              echo "  origin/$BRANCH: $REMOTE" >&2
+              echo "hint: from mkxp-z-apple-mobile/hmode7, run 'git push' then update the submodule pointer" >&2
+              exit 1
+          fi
+
       - name: Assemble Assets.bundle
         # Force every build. The script globs the engine's shader/font/
         # script directories and copies whatever is there, so declaring
