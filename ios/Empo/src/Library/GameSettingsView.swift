@@ -1,5 +1,16 @@
 import SwiftUI
 
+/// Three-way Ruby parser compatibility selection exposed in the
+/// Game Settings sheet. Maps to `GameSettings.useModernRuby`:
+///   auto   -> nil  (detector scans .rb files at launch)
+///   modern -> true (force syntaxTransform = 0, Ruby 3 strict)
+///   compat -> false (force syntaxTransform = 2, Ruby 1.8 compat)
+enum RubyCompatMode: String, CaseIterable, Hashable {
+    case auto
+    case modern
+    case compat
+}
+
 struct GameSettingsView: View {
     let game: GameEntry
     @Environment(\.dismiss) private var dismiss
@@ -236,6 +247,20 @@ struct GameSettingsView: View {
                 isOn: pathCacheBinding,
                 description: "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
             )
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Picker("Ruby compatibility", selection: rubyCompatBinding) {
+                    Text("Auto-detect").tag(RubyCompatMode.auto)
+                    Text("Modern (Ruby 3)").tag(RubyCompatMode.modern)
+                    Text("Legacy (Ruby 1.8)").tag(RubyCompatMode.compat)
+                }
+                .pickerStyle(.navigationLink)
+
+                Text("Auto-detect scans the game's scripts and picks Modern if it finds Ruby-3-only syntax, otherwise Legacy. Override if a game fails to launch with a script error or behaves incorrectly.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, Spacing.xxs)
         } header: {
             Text("Engine")
         } footer: {
@@ -337,6 +362,29 @@ struct GameSettingsView: View {
         Binding(
             get: { effectivePostloadScripts },
             set: { settings.postloadScripts = $0 }
+        )
+    }
+
+    /// Tri-state picker backing for `GameSettings.useModernRuby`:
+    /// nil -> auto (run the Ruby-3-syntax detector on launch),
+    /// true -> force Modern (syntaxTransform = 0),
+    /// false -> force Legacy (syntaxTransform = 2).
+    private var rubyCompatBinding: Binding<RubyCompatMode> {
+        Binding(
+            get: {
+                switch settings.useModernRuby {
+                case nil: return .auto
+                case .some(true): return .modern
+                case .some(false): return .compat
+                }
+            },
+            set: { mode in
+                switch mode {
+                case .auto: settings.useModernRuby = nil
+                case .modern: settings.useModernRuby = true
+                case .compat: settings.useModernRuby = false
+                }
+            }
         )
     }
 
