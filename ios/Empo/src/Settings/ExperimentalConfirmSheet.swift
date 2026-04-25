@@ -60,6 +60,8 @@ struct ExperimentalConfirmSheet: View {
                     VStack(spacing: 1) {
                         Text("Enable \"\(title)\"?")
                             .font(.headline)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                         HStack(spacing: Spacing.xxs) {
                             Image(systemName: "flask.fill")
                                 .font(.system(size: 9))
@@ -68,6 +70,7 @@ struct ExperimentalConfirmSheet: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.brand)
                     }
+                    .sheetTitle()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Cancel") {

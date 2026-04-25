@@ -54,6 +54,7 @@ struct ExperimentalInfoSheet: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.brand)
                     }
+                    .sheetTitle()
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Close") { dismiss() }
