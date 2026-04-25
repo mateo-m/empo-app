@@ -16,7 +16,6 @@ struct GameSettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var settings: GameSettings
-    @State private var cheats: Bool
     @State private var defaults: GameConfigDefaults
 
     private let gameDirectory: URL
@@ -27,19 +26,17 @@ struct GameSettingsView: View {
         self.game = game
         let dir = URL(fileURLWithPath: game.path)
         self.gameDirectory = dir
-        // Per-game managed config (mkxp.json, game_settings.json,
-        // configuration.json) lives outside the game folder so the
-        // imported game directory stays untouched. See
+        // Per-game managed config (mkxp.json, game_settings.json)
+        // lives outside the game folder so the imported game
+        // directory stays untouched. See
         // `EmpoState.directory(forGameId:)`.
         let stateDir = EmpoState.directory(forGameId: game.id)
         self.stateDirectory = stateDir
 
         let s = GameSettings.load(from: stateDir)
         let defs = GameSettings.readGameDefaults(from: stateDir)
-        let cheatsVal = GameSettings.loadCheats(from: stateDir)
 
         _settings = State(initialValue: s)
-        _cheats = State(initialValue: cheatsVal)
         _defaults = State(initialValue: defs)
         self.initialSettings = s
     }
@@ -119,7 +116,6 @@ struct GameSettingsView: View {
                 }
             }
             .onChange(of: settings) { save() }
-            .onChange(of: cheats) { saveCheats() }
         }
         .tint(.brand)
     }
@@ -295,15 +291,12 @@ struct GameSettingsView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.vertical, Spacing.xxs)
-
-            SettingsToggle(
-                title: "Cheats",
-                isOn: $cheats,
-                description: "Enable cheat mode. Only works if the game supports it."
-            )
         } header: {
             Text("Gameplay")
         } footer: {
+            // Cheats live in App Settings (Experimental section) -
+            // the per-game toggle was orthogonal stored-but-unused
+            // state, see commit message and TODO.md "P0 #3".
             Text("Options that change how you play the game.")
         }
     }
@@ -412,10 +405,6 @@ struct GameSettingsView: View {
 
     private func save() {
         settings.save(to: stateDirectory)
-    }
-
-    private func saveCheats() {
-        GameSettings.saveCheats(cheats, to: stateDirectory)
     }
 }
 

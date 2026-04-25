@@ -50,9 +50,9 @@ class AppState {
         let gameDir = URL(fileURLWithPath: game.path)
 
         // Per-game managed config (mkxp.json, patches.json,
-        // game_settings.json, configuration.json) lives in
-        // `Documents/EmpoState/<id>/` so the imported game folder
-        // stays a faithful mirror of what the user dropped in.
+        // game_settings.json) lives in `Documents/EmpoState/<id>/`
+        // so the imported game folder stays a faithful mirror of
+        // what the user dropped in.
         let stateDir = EmpoState.directory(forGameId: game.id)
 
         // Tell the engine where to find managed config. The engine's
