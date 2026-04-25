@@ -138,7 +138,10 @@ struct GameLibraryView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: Spacing.md) {
                     libraryHeader
-                    if !showEmpty {
+                    // Hide search / sort / display / select chrome
+                    // in selection mode - the user is already in a
+                    // focused mode and these actions don't apply.
+                    if !showEmpty && !selectionMode {
                         searchBar
                     }
                 }
@@ -352,20 +355,14 @@ struct GameLibraryView: View {
                     .font(.title)
                     .fontWeight(.bold)
                 Spacer()
-                // Selection-mode entry point. Tapping enters
-                // selection mode without pre-selecting anything;
-                // the user picks which games to act on next. Hidden
-                // when the library is empty since multi-select on
-                // zero games has no targets.
-                if !showEmpty {
-                    IconButton("checkmark.circle", style: .outline) {
-                        enterSelectionMode()
-                    }
-                    .accessibilityLabel("Select multiple games")
-                } else {
-                    Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
-                        .accessibilityHidden(true)
-                }
+                // Right-side placeholder. Keeping the symmetry slot
+                // empty (rather than putting the Select-multiple
+                // icon here) avoids colliding with the floating
+                // ImportButton which sits at the same screen
+                // position. The Select-multiple entry point lives
+                // in LibrarySearchBar instead.
+                Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.horizontal)
@@ -385,7 +382,8 @@ struct GameLibraryView: View {
                 Task { @MainActor in
                     staggerTrigger = UUID()
                 }
-            }
+            },
+            onSelectMultiple: { enterSelectionMode() }
         )
     }
 

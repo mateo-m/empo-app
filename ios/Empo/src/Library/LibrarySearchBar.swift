@@ -7,6 +7,7 @@ struct LibrarySearchBar: View {
     @Binding var searchText: String
     @Binding var showSortSheet: Bool
     let onDisplayModeToggle: () -> Void
+    let onSelectMultiple: () -> Void
     @Environment(\.appSettings) private var settings
 
     private let searchBarHeight: CGFloat = 44
@@ -47,6 +48,17 @@ struct LibrarySearchBar: View {
                 onDisplayModeToggle()
             }
             .accessibilityLabel(settings.libraryDisplayMode == .grid ? "Switch to list" : "Switch to grid")
+
+            // Multi-select entry point. Sits in the same row as
+            // sort and grid/list because all three are "act on the
+            // library" actions. Top-right of the header is owned by
+            // the floating ImportButton, so this stays here even
+            // though it's the kind of action a user might also
+            // expect in the header chrome.
+            IconButton("checkmark.circle", style: .outline) {
+                onSelectMultiple()
+            }
+            .accessibilityLabel("Select multiple games")
         }
         .padding(.horizontal)
         .padding(.bottom, Spacing.xs)
