@@ -41,4 +41,36 @@ enum EmpoState {
         let dir = root().appendingPathComponent(gameId)
         try? FileManager.default.removeItem(at: dir)
     }
+
+    /// Snapshot the developer-shipped `mkxp.json` (if any) from the
+    /// imported game folder into `<stateDir>/mkxp.original.json`.
+    ///
+    /// `mkxp.original.json` is consumed by
+    /// `GameSettings.readGameDefaults` (to populate the "default"
+    /// rows in the Game Settings sheet with the developer's
+    /// intended values) and by `GameSettings.applyToConfig` as the
+    /// merge base, so values the developer specified that we
+    /// haven't overridden in our settings UI (e.g. `customScript`,
+    /// font lists, audio rates) are preserved on every regeneration
+    /// of `<stateDir>/mkxp.json`.
+    ///
+    /// Idempotent: only copies when the destination doesn't already
+    /// exist. Run at every launch (cheap I/O when there's nothing
+    /// to do) so an existing import without a snapshot - either
+    /// from a build before this hook landed, or from a JGP whose
+    /// state dir was created before the developer mkxp.json was
+    /// present - gets backfilled lazily without a forced upgrade
+    /// pass. If the game folder has no mkxp.json the snapshot is
+    /// simply absent and downstream code falls through to the
+    /// (currently empty) state-dir mkxp.json + engine defaults.
+    static func snapshotOriginalConfig(forGameId gameId: String,
+                                       gameDirectory: URL) {
+        let fm = FileManager.default
+        let stateDir = directory(forGameId: gameId)
+        let dest = stateDir.appendingPathComponent("mkxp.original.json")
+        guard !fm.fileExists(atPath: dest.path) else { return }
+        let source = gameDirectory.appendingPathComponent("mkxp.json")
+        guard fm.fileExists(atPath: source.path) else { return }
+        try? fm.copyItem(at: source, to: dest)
+    }
 }
