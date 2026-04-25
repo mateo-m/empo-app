@@ -676,10 +676,15 @@ class GameLibrary {
             settings.useModernRuby = true
         }
 
-        settings.applyToConfig(in: destURL)
-        settings.save(to: destURL)
+        // Persist managed config (mkxp.json, game_settings.json,
+        // configuration.json) into the per-game state directory
+        // (Documents/EmpoState/<id>/), NOT the imported game folder
+        // - see EmpoState.swift for the rationale.
+        let stateDir = EmpoState.directory(forGameId: importID)
+        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: destURL)
+        settings.save(to: stateDir)
         if let cheats = bundle.configuration?.cheats {
-            GameSettings.saveCheats(cheats, to: destURL)
+            GameSettings.saveCheats(cheats, to: stateDir)
         }
 
         // Seed the per-game control layout from the JGP gamepad
@@ -737,10 +742,15 @@ class GameLibrary {
     /// the plain .zip / folder import path.
     nonisolated private static func detectAndPersistModernRuby(in gameDirectory: URL) {
         guard GameSettings.detectModernRubyScripts(in: gameDirectory) else { return }
-        var settings = GameSettings.load(from: gameDirectory)
+        // Game folder layout is `Documents/Games/<id>/`; the per-game
+        // state directory is named by the same id under
+        // `Documents/EmpoState/`.
+        let gameId = gameDirectory.lastPathComponent
+        let stateDir = EmpoState.directory(forGameId: gameId)
+        var settings = GameSettings.load(from: stateDir)
         settings.useModernRuby = true
-        settings.applyToConfig(in: gameDirectory)
-        settings.save(to: gameDirectory)
+        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: gameDirectory)
+        settings.save(to: stateDir)
     }
 
 
@@ -752,6 +762,12 @@ class GameLibrary {
         }
 
         GameMetadata.delete(for: entry.id)
+
+        // Tear down the per-game state directory along with the
+        // game folder. Otherwise stale mkxp.json / patches.json /
+        // game_settings.json would linger if the user re-imported
+        // the same game id later.
+        EmpoState.remove(forGameId: entry.id)
 
         withAnimation {
             games.removeAll { $0.id == entry.id }
