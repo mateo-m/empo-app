@@ -20,16 +20,23 @@ struct GameSettingsView: View {
     @State private var defaults: GameConfigDefaults
 
     private let gameDirectory: URL
+    private let stateDirectory: URL
     private let initialSettings: GameSettings
 
     init(game: GameEntry) {
         self.game = game
         let dir = URL(fileURLWithPath: game.path)
         self.gameDirectory = dir
+        // Per-game managed config (mkxp.json, game_settings.json,
+        // configuration.json) lives outside the game folder so the
+        // imported game directory stays untouched. See
+        // `EmpoState.directory(forGameId:)`.
+        let stateDir = EmpoState.directory(forGameId: game.id)
+        self.stateDirectory = stateDir
 
-        let s = GameSettings.load(from: dir)
-        let defs = GameSettings.readGameDefaults(from: dir)
-        let cheatsVal = GameSettings.loadCheats(from: dir)
+        let s = GameSettings.load(from: stateDir)
+        let defs = GameSettings.readGameDefaults(from: stateDir)
+        let cheatsVal = GameSettings.loadCheats(from: stateDir)
 
         _settings = State(initialValue: s)
         _cheats = State(initialValue: cheatsVal)
@@ -86,7 +93,7 @@ struct GameSettingsView: View {
                         Button("Reset to Defaults", role: .destructive) {
                             withAnimation {
                                 settings = GameSettings()
-                                defaults = GameSettings.readGameDefaults(from: gameDirectory)
+                                defaults = GameSettings.readGameDefaults(from: stateDirectory)
                             }
                         }
                     } footer: {
@@ -404,11 +411,11 @@ struct GameSettingsView: View {
 
 
     private func save() {
-        settings.save(to: gameDirectory)
+        settings.save(to: stateDirectory)
     }
 
     private func saveCheats() {
-        GameSettings.saveCheats(cheats, to: gameDirectory)
+        GameSettings.saveCheats(cheats, to: stateDirectory)
     }
 }
 

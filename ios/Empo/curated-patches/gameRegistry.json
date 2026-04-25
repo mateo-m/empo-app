@@ -1,0 +1,55 @@
+// Empo curated game registry.
+//
+// Maps import-time signals (JGP manifest ids, Game.ini Title strings,
+// file fingerprints) to canonical Empo game ids. The canonical id is
+// what `Patches/<id>/patches.json` is keyed by.
+//
+// Resolution order at import:
+//   1. manifestId   - exact match against JGP manifest.id
+//   2. iniTitle     - case-insensitive substring match against Game.ini Title
+//   3. fingerprint  - file size+hash match (only when the above are
+//                     ambiguous; computed lazily)
+//
+// Multiple matchers per game are union'd: any one match resolves the id.
+// First matching game wins. Games not in this registry get only
+// `_global/patches.json` (no per-game patches).
+{
+  "games": [
+    {
+      "id": "pokemon-insurgence",
+      "name": "Pokemon Insurgence",
+      "matchers": [
+        { "type": "iniTitle", "value": "pokemon insurgence" }
+      ]
+    },
+    {
+      "id": "pokemon-infinite-fusion",
+      "name": "Pokemon Infinite Fusion",
+      "matchers": [
+        { "type": "iniTitle", "value": "infinitefusion" },
+        { "type": "iniTitle", "value": "infinite fusion" }
+      ]
+    },
+    {
+      "id": "pokemon-reborn",
+      "name": "Pokemon Reborn",
+      "matchers": [
+        { "type": "iniTitle", "value": "pokemon reborn" }
+      ]
+    },
+    {
+      "id": "pokemon-z",
+      "name": "Pokemon Z",
+      "matchers": [
+        { "type": "iniTitle", "value": "pokemon z" }
+      ]
+    },
+    {
+      "id": "pokemon-uranium",
+      "name": "Pokemon Uranium",
+      "matchers": [
+        { "type": "iniTitle", "value": "pokemon uranium" }
+      ]
+    }
+  ]
+}

@@ -95,8 +95,14 @@ struct GameSettings: Codable, Equatable {
     private static let cheatsFilename = "configuration.json"
 
 
-    static func load(from gameDirectory: URL) -> GameSettings {
-        let url = gameDirectory.appendingPathComponent(settingsFilename)
+    /// Read the game's settings sidecar.
+    ///
+    /// `stateDirectory` is the per-game `EmpoState/<id>/` directory
+    /// (see `EmpoState.directory(forGameId:)`), NOT the imported
+    /// game folder - settings live outside the game folder so the
+    /// imported game directory stays pristine.
+    static func load(from stateDirectory: URL) -> GameSettings {
+        let url = stateDirectory.appendingPathComponent(settingsFilename)
         guard let data = try? Data(contentsOf: url),
               let settings = try? JSONDecoder().decode(GameSettings.self, from: data) else {
             return GameSettings()
@@ -104,8 +110,10 @@ struct GameSettings: Codable, Equatable {
         return settings
     }
 
-    func save(to gameDirectory: URL) {
-        let url = gameDirectory.appendingPathComponent(Self.settingsFilename)
+    /// Write the game's settings sidecar to its `EmpoState/<id>/`
+    /// directory.
+    func save(to stateDirectory: URL) {
+        let url = stateDirectory.appendingPathComponent(Self.settingsFilename)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let data = try? encoder.encode(self) {
@@ -114,8 +122,8 @@ struct GameSettings: Codable, Equatable {
     }
 
 
-    static func loadCheats(from gameDirectory: URL) -> Bool {
-        let url = gameDirectory.appendingPathComponent(cheatsFilename)
+    static func loadCheats(from stateDirectory: URL) -> Bool {
+        let url = stateDirectory.appendingPathComponent(cheatsFilename)
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return false
@@ -123,8 +131,8 @@ struct GameSettings: Codable, Equatable {
         return json["cheats"] as? Bool ?? false
     }
 
-    static func saveCheats(_ value: Bool, to gameDirectory: URL) {
-        let url = gameDirectory.appendingPathComponent(cheatsFilename)
+    static func saveCheats(_ value: Bool, to stateDirectory: URL) {
+        let url = stateDirectory.appendingPathComponent(cheatsFilename)
         var json: [String: Any] = [:]
         if let data = try? Data(contentsOf: url),
            let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -232,9 +240,12 @@ struct GameSettings: Codable, Equatable {
 
     /// Reads the game's mkxp.json defaults. Prefers the original backup
     /// over merged config so the developer's intended values always show.
-    static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
-        let originalURL = gameDirectory.appendingPathComponent(originalConfigFilename)
-        let configURL = gameDirectory.appendingPathComponent(configFilename)
+    /// `stateDirectory` is the per-game `EmpoState/<id>/` directory
+    /// where managed config files live (mkxp.json,
+    /// mkxp.original.json) - NOT the imported game folder.
+    static func readGameDefaults(from stateDirectory: URL) -> GameConfigDefaults {
+        let originalURL = stateDirectory.appendingPathComponent(originalConfigFilename)
+        let configURL = stateDirectory.appendingPathComponent(configFilename)
 
         let sourceURL = FileManager.default.fileExists(atPath: originalURL.path)
             ? originalURL : configURL
@@ -269,11 +280,18 @@ struct GameSettings: Codable, Equatable {
         )
     }
 
-    /// Merges these settings into the game's mkxp.json.
-    /// Backs up the original config on first call so the change can be reverted.
-    func applyToConfig(in gameDirectory: URL) {
-        let configURL = gameDirectory.appendingPathComponent(Self.configFilename)
-        let originalURL = gameDirectory.appendingPathComponent(Self.originalConfigFilename)
+    /// Merges these settings into the game's mkxp.json (in the
+    /// `EmpoState/<id>/` directory, not the imported game folder).
+    /// Backs up the original config on first call so the change can
+    /// be reverted.
+    ///
+    /// `stateDirectory` is the per-game state directory where
+    /// mkxp.json + mkxp.original.json live; `gameDirectory` is the
+    /// imported game folder, used only by the launch-time
+    /// modern-Ruby detector that scans `.rb` script files.
+    func applyToConfig(stateDirectory: URL, gameDirectory: URL) {
+        let configURL = stateDirectory.appendingPathComponent(Self.configFilename)
+        let originalURL = stateDirectory.appendingPathComponent(Self.originalConfigFilename)
 
         if !FileManager.default.fileExists(atPath: originalURL.path),
            FileManager.default.fileExists(atPath: configURL.path) {

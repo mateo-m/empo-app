@@ -165,6 +165,18 @@ targets:
           # Postload scripts
           mkdir -p "$BUNDLE/Postload"
           cp "$ENGINE"/scripts/postload/*.rb "$BUNDLE/Postload/"
+
+          # Curated game patches.
+          # Mirror layout (gameRegistry.json + _global/ + per-game
+          # subdirs) into the bundle so the runtime can resolve a
+          # canonical id from the game's manifest/Game.ini and write
+          # the merged patches.json into the game folder at launch.
+          # See ios/Empo/curated-patches/gameRegistry.json for the
+          # registry schema and `src/Library/PatcherDistribution.swift`
+          # (Empo) for the resolver + writer.
+          rm -rf "$BUNDLE/Patches"
+          mkdir -p "$BUNDLE/Patches"
+          cp -R "${PROJECT_DIR}/curated-patches/"* "$BUNDLE/Patches/"
       - name: Generate Git Info
         # Force this script to run every build. Without this, Xcode sees
         # the declared output file already on disk and skips the script,
