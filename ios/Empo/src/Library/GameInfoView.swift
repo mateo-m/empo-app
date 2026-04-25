@@ -22,11 +22,13 @@ struct GameInfoView: View {
 
     init(game: GameEntry) {
         self.game = game
-        let meta = GameMetadata.load(for: game.id)
+        // GameInfoView is only shown for ready entries that have a
+        // committed container on disk.
+        let container = game.container!
+        let meta = GameMetadata.load(from: container)
         _metadata = State(initialValue: meta)
         _editingTitle = State(initialValue: meta.customTitle ?? "")
 
-        let gameDir = URL(fileURLWithPath: game.path)
         // Title shown when the user hasn't set a customTitle. For
         // JGP imports this is the manifest name; for plain
         // folder/zip imports it's the Game.ini title. The label
@@ -35,12 +37,15 @@ struct GameInfoView: View {
         // user back what the import originally showed, not the
         // raw Game.ini one which may be uglier.
         self.originalTitle = meta.baseTitle
-            ?? GameEntry.parseINITitle(at: gameDir)
+            ?? GameEntry.parseINITitle(at: container.gameURL)
             ?? "Unknown Game"
     }
 
+    private var container: GameContainer? { game.container }
+
     private var bannerImage: UIImage? {
-        guard let path = metadata.customBannerPath(for: game.id) else { return nil }
+        guard let container,
+              let path = metadata.customBannerPath(in: container) else { return nil }
         return ImageCache.shared.image(for: path)
     }
 
@@ -51,7 +56,8 @@ struct GameInfoView: View {
     /// here so `bannerBackground` and `artworkView` agree without
     /// duplicating the branch.
     private var resolvedArtworkPath: String? {
-        metadata.customArtworkPath(for: game.id) ?? game.artworkPath
+        guard let container else { return game.artworkPath }
+        return metadata.customArtworkPath(in: container) ?? game.artworkPath
     }
 
     private var artworkImage: UIImage? {
@@ -216,9 +222,14 @@ struct GameInfoView: View {
                 onRemove: { removeBanner() }
             )
             .task {
-                diskSize = await GameMetadata.diskSize(
-                    for: URL(fileURLWithPath: game.path)
-                )
+                if let container {
+                    // Disk size of the entire container (Game/ +
+                    // EmpoState/ + Logs/ + Metadata/) - what users
+                    // expect to see when asking "how big is this
+                    // game on my device". Game/ dominates by far
+                    // (tens of MB to GB) so the rest is rounding.
+                    diskSize = await GameMetadata.diskSize(for: container.url)
+                }
             }
             .onDisappear {
                 if needsLibraryRefresh {
@@ -380,58 +391,61 @@ struct GameInfoView: View {
     private func finishEditingTitle() {
         guard isEditingTitle else { return }
         isEditingTitle = false
+        guard let container else { return }
         let title = editingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         metadata.customTitle = title.isEmpty ? nil : title
-        metadata.save(for: game.id)
+        metadata.save(to: container)
         needsLibraryRefresh = true
     }
 
     private func saveCustomImage(_ image: UIImage, kind: String,
-                                 pathGetter: (GameMetadata) -> String?,
+                                 pathGetter: (GameMetadata, GameContainer) -> String?,
                                  filenameSetter: (inout GameMetadata, String?) -> Void) {
-        if let path = pathGetter(metadata) {
+        guard let container else { return }
+        if let path = pathGetter(metadata, container) {
             ImageCache.shared.evict(path: path)
         }
-        guard let filename = GameMetadata.saveImage(image, as: kind, for: game.id) else { return }
+        guard let filename = GameMetadata.saveImage(image, as: kind, in: container) else { return }
         filenameSetter(&metadata, filename)
-        metadata.save(for: game.id)
+        metadata.save(to: container)
         needsLibraryRefresh = true
     }
 
-    private func removeCustomImage(pathGetter: (GameMetadata) -> String?,
+    private func removeCustomImage(pathGetter: (GameMetadata, GameContainer) -> String?,
                                    filenameGetter: (GameMetadata) -> String?,
                                    filenameSetter: (inout GameMetadata, String?) -> Void) {
-        if let path = pathGetter(metadata) {
+        guard let container else { return }
+        if let path = pathGetter(metadata, container) {
             ImageCache.shared.evict(path: path)
         }
         if let filename = filenameGetter(metadata) {
-            GameMetadata.removeImage(named: filename, for: game.id)
+            GameMetadata.removeImage(named: filename, in: container)
         }
         filenameSetter(&metadata, nil)
-        metadata.save(for: game.id)
+        metadata.save(to: container)
         needsLibraryRefresh = true
     }
 
     private func saveArtwork(_ image: UIImage) {
         saveCustomImage(image, kind: "artwork",
-                       pathGetter: { $0.customArtworkPath(for: game.id) },
+                       pathGetter: { $0.customArtworkPath(in: $1) },
                        filenameSetter: { $0.customArtworkFilename = $1 })
     }
 
     private func removeArtwork() {
-        removeCustomImage(pathGetter: { $0.customArtworkPath(for: game.id) },
+        removeCustomImage(pathGetter: { $0.customArtworkPath(in: $1) },
                          filenameGetter: { $0.customArtworkFilename },
                          filenameSetter: { $0.customArtworkFilename = $1 })
     }
 
     private func saveBanner(_ image: UIImage) {
         saveCustomImage(image, kind: "banner",
-                       pathGetter: { $0.customBannerPath(for: game.id) },
+                       pathGetter: { $0.customBannerPath(in: $1) },
                        filenameSetter: { $0.customBannerFilename = $1 })
     }
 
     private func removeBanner() {
-        removeCustomImage(pathGetter: { $0.customBannerPath(for: game.id) },
+        removeCustomImage(pathGetter: { $0.customBannerPath(in: $1) },
                          filenameGetter: { $0.customBannerFilename },
                          filenameSetter: { $0.customBannerFilename = $1 })
     }
@@ -444,7 +458,8 @@ struct GameInfoView: View {
     }
 
     private func sessionLogURL() -> URL? {
-        let historyLog = AppState.logsDirectory.appendingPathComponent("session-history.log")
+        guard let container else { return nil }
+        let historyLog = container.sessionHistoryURL
         return FileManager.default.fileExists(atPath: historyLog.path) ? historyLog : nil
     }
 }
