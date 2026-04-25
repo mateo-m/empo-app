@@ -55,6 +55,12 @@ class AppState {
         // what the user dropped in.
         let stateDir = EmpoState.directory(forGameId: game.id)
 
+        // Snapshot the developer's shipped mkxp.json (if any) into
+        // `<stateDir>/mkxp.original.json` so applyToConfig can use
+        // it as a merge base. Idempotent: only copies on first
+        // launch (or when the snapshot hasn't been backfilled yet).
+        EmpoState.snapshotOriginalConfig(forGameId: game.id, gameDirectory: gameDir)
+
         // Tell the engine where to find managed config. The engine's
         // Config::read and Patcher constructor check this directory
         // first for mkxp.json and patches.json before falling back
