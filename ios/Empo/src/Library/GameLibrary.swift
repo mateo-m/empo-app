@@ -414,6 +414,11 @@ class GameLibrary {
         }
 
         if isImportCancelled(importID) { throw ImportCancelled() }
+        // Snapshot developer's mkxp.json BEFORE
+        // detectAndPersistModernRuby runs (which may write our own
+        // mkxp.json via applyToConfig). The launch path also calls
+        // this snapshot helper as a backstop.
+        EmpoState.snapshotOriginalConfig(forGameId: importID, gameDirectory: destURL)
         Self.detectAndPersistModernRuby(in: destURL)
         GameLibrary.createMetadata(for: importID)
         committed = true
@@ -677,7 +682,19 @@ class GameLibrary {
         // into the per-game state directory
         // (Documents/EmpoState/<id>/), NOT the imported game folder
         // - see EmpoState.swift for the rationale.
+        //
+        // Snapshot the developer's shipped mkxp.json (if any) into
+        // mkxp.original.json BEFORE applyToConfig runs so the
+        // merge-base read inside applyToConfig sees the developer's
+        // values. Without this, applyToConfig would write our
+        // synthesized config first, and any later snapshot would
+        // be a copy of OUR output rather than the developer's
+        // intent. The launch path also calls this snapshot helper
+        // (idempotent), so this is belt-and-braces for the import
+        // codepath where applyToConfig fires before the first
+        // launch.
         let stateDir = EmpoState.directory(forGameId: importID)
+        EmpoState.snapshotOriginalConfig(forGameId: importID, gameDirectory: destURL)
         settings.applyToConfig(stateDirectory: stateDir, gameDirectory: destURL)
         settings.save(to: stateDir)
 

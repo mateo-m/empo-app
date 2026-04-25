@@ -258,21 +258,29 @@ struct GameSettings: Codable, Equatable {
 
     /// Merges these settings into the game's mkxp.json (in the
     /// `EmpoState/<id>/` directory, not the imported game folder).
-    /// Backs up the original config on first call so the change can
-    /// be reverted.
     ///
     /// `stateDirectory` is the per-game state directory where
     /// mkxp.json + mkxp.original.json live; `gameDirectory` is the
     /// imported game folder, used only by the launch-time
     /// modern-Ruby detector that scans `.rb` script files.
+    ///
+    /// `mkxp.original.json` (the developer's shipped config, if any)
+    /// is captured by `EmpoState.snapshotOriginalConfig` at launch
+    /// time before `applyToConfig` runs - NOT here. An earlier
+    /// version of this method had a lazy "copy current mkxp.json
+    /// to mkxp.original.json on second launch if no .original.json
+    /// existed" branch, which is structurally broken: by the second
+    /// launch the state-dir mkxp.json is our own generated file,
+    /// not the developer's, so the snapshot was a copy of our
+    /// output rather than the developer's intent. The current flow
+    /// snapshots from the game folder at launch and is idempotent
+    /// (only copies when `<stateDir>/mkxp.original.json` doesn't
+    /// already exist), which preserves the developer's values
+    /// regardless of how many times we regenerate the state-dir
+    /// mkxp.json from settings.
     func applyToConfig(stateDirectory: URL, gameDirectory: URL) {
         let configURL = stateDirectory.appendingPathComponent(Self.configFilename)
         let originalURL = stateDirectory.appendingPathComponent(Self.originalConfigFilename)
-
-        if !FileManager.default.fileExists(atPath: originalURL.path),
-           FileManager.default.fileExists(atPath: configURL.path) {
-            try? FileManager.default.copyItem(at: configURL, to: originalURL)
-        }
 
         // Preserves game developer's values for keys that aren't overridden
         let sourceURL = FileManager.default.fileExists(atPath: originalURL.path)
