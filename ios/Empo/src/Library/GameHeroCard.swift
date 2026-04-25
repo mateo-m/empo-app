@@ -35,6 +35,13 @@ struct GameHeroCard: View {
     @Binding var gameForSettings: GameEntry?
     @Binding var gameForInfo: GameEntry?
 
+    /// Tracked height of the bottom label block. Drives the
+    /// height of the masked-material overlay below so the blur/
+    /// gradient region scales with whatever the labels need
+    /// (single-line vs. wrapped game title) without hardcoding.
+    /// Same pattern as GameCard.insideCard.
+    @State private var labelHeight: CGFloat = 60
+
     var body: some View {
         Button(action: onTap) {
             Color.clear
@@ -46,13 +53,31 @@ struct GameHeroCard: View {
                         shimmer: false
                     )
                 }
-                .overlay {
+                .overlay(alignment: .bottom) {
+                    // Frosted-glass gradient region that fades the
+                    // bottom of the artwork into a blurred dark
+                    // surface so the title text reads cleanly.
+                    // Same construction as GameCard.insideCard - an
+                    // ultraThinMaterial rectangle masked by a
+                    // top-fading gradient, pinned to dark scheme via
+                    // .darkGlass() so the tint stays consistent
+                    // regardless of system color scheme.
                     Rectangle()
-                        .fill(LinearGradient(
-                            colors: [.clear, .black.opacity(0.6)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ))
+                        .fill(.ultraThinMaterial)
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white, location: 0),
+                                    .init(color: .white.opacity(0.6), location: 0.5),
+                                    .init(color: .clear, location: 1.0),
+                                ],
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
+                        )
+                        .frame(height: labelHeight * 2.5)
+                        .allowsHitTesting(false)
+                        .darkGlass()
                 }
                 // Flatten the artwork + gradient + text labels into a
                 // single render pass before the clip shape. Without
@@ -76,6 +101,11 @@ struct GameHeroCard: View {
                             .lineLimit(1)
                     }
                     .padding(Spacing.xl)
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.height
+                    } action: { newHeight in
+                        labelHeight = newHeight
+                    }
                 }
                 .overlay(alignment: .bottomTrailing) {
                     Image(systemName: isPaused ? "pause.fill" : "play.fill")

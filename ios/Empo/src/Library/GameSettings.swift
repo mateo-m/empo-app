@@ -88,6 +88,15 @@ struct GameSettings: Codable, Equatable {
     // this manually per game if the heuristic misses.
     var useModernRuby: Bool?
 
+    // Force the Pokemon Essentials on-screen ABC grid for text entry
+    // instead of the iOS soft keyboard. Default false (use the soft
+    // keyboard, which works for IF / Reborn / Insurgence). Flip on
+    // for games whose keyboard scene adds custom keys or layouts
+    // that the iOS soft keyboard can't drive. Routes through the
+    // `mkxp_setUseOnScreenKeyboard` bridge to `pokemon_input.rb`'s
+    // `USEKEYBOARDTEXTENTRY = false` override.
+    var useOnScreenKeyboard: Bool?
+
 
     private static let settingsFilename = "game_settings.json"
     private static let originalConfigFilename = "mkxp.original.json"

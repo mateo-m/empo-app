@@ -110,34 +110,16 @@ extension View {
         shadow(color: .black.opacity(0.25), radius: 8, y: 4)
     }
 
-    /// Hero title halo for large wordmarks overlaid on artwork
-    /// (splash "Empo", GameLoadingView title). Renders a blurred
-    /// copy of the content underneath with `blendMode(.screen)` so
-    /// the surrounding pixels lighten toward the title's color,
-    /// producing an aura/glow effect that lets bold text pop on
-    /// busy artwork without stamping a flat dark halo. Original
-    /// text renders on top unmodified.
+    /// Drop shadow used on hero title text overlaid on game
+    /// artwork, both on the splash and inside game-loading
+    /// screens.
     func heroTitleShadow() -> some View {
-        modifier(HeroTitleHaloModifier())
+        shadow(radius: 4)
     }
 
-    /// Drop shadow for smaller text overlaid on artwork (card
-    /// titles, hero card title, list-row subtitles). A clean
-    /// SwiftUI `.shadow` is plenty here - the previous attempt at
-    /// an overlay-blended duplicate copy produced a white-glow
-    /// look on dark artwork, which read as mistaken styling
-    /// rather than a shadow. `.compositingGroup` keeps the shadow
-    /// tied to the actual rendered text silhouette so it doesn't
-    /// double-stamp through child views.
     func textShadow() -> some View {
-        self
-            .compositingGroup()
-            .shadow(color: .black.opacity(0.6), radius: 2.5, x: 0, y: 1)
+        shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
-
-    // (TextShadowModifier is defined below extension View {} since
-    //  ViewModifier conformance can't live inside an extension on
-    //  a protocol.)
 
     /// Width cap + truncation discipline for the principal-toolbar
     /// VStack on every custom-titled sheet. Without this, long titles
@@ -165,25 +147,10 @@ extension View {
 }
 
 
-/// Backing modifier for `.heroTitleShadow()`. Renders the content
-/// twice in a ZStack: a blurred + screen-blended copy beneath that
-/// lightens nearby pixels (the "halo"), and the original above.
-/// Screen-blend means the halo lightens dark backdrops (where bold
-/// titles need help to pop) and barely affects light backdrops
-/// (where the halo would otherwise blow out). Works well for the
-/// splash wordmark + game-loading-screen title against gradients
-/// and game artwork respectively.
-private struct HeroTitleHaloModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        ZStack {
-            content
-                .blur(radius: 6)
-                .opacity(0.5)
-                .blendMode(.screen)
-            content
-        }
-    }
-}
+
+
+
+
 
 
 /// Typography tokens used for one-off sites that don't fit a
