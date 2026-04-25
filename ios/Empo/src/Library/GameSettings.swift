@@ -88,14 +88,14 @@ struct GameSettings: Codable, Equatable {
     // this manually per game if the heuristic misses.
     var useModernRuby: Bool?
 
-    // Force the Pokemon Essentials on-screen ABC grid for text entry
-    // instead of the iOS soft keyboard. Default false (use the soft
-    // keyboard, which works for IF / Reborn / Insurgence). Flip on
-    // for games whose keyboard scene adds custom keys or layouts
-    // that the iOS soft keyboard can't drive. Routes through the
-    // `mkxp_setUseOnScreenKeyboard` bridge to `pokemon_input.rb`'s
-    // `USEKEYBOARDTEXTENTRY = false` override.
-    var useOnScreenKeyboard: Bool?
+    // Force the Pokemon Essentials in-game keyboard scene for text
+    // entry instead of the iOS soft keyboard. Default false (use
+    // the soft keyboard, which works for IF / Reborn / Insurgence).
+    // Flip on for games whose keyboard scene adds custom keys or
+    // layouts that the iOS soft keyboard can't drive. Routes
+    // through the `mkxp_setUseInGameKeyboard` bridge to
+    // `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
+    var useInGameKeyboard: Bool?
 
 
     private static let settingsFilename = "game_settings.json"
@@ -219,6 +219,93 @@ struct GameSettings: Codable, Equatable {
                 }
             }
         }
+        return false
+    }
+
+
+    /// Best-effort "is this a Pokemon Essentials fangame?" detector.
+    /// Used to set the default for `useInGameKeyboard` so PE games
+    /// surface their built-in keyboard scene by default (PE 16-18
+    /// era games don't handle the iOS soft-keyboard backspace path
+    /// cleanly without our `pokemon_input.rb` shim, and the in-game
+    /// scene's keyboard navigation is the more natural UX for
+    /// those games anyway).
+    ///
+    /// Three signals, ANY-of. All require PE's actual code, data,
+    /// or runtime presence so non-PE games can't false-positive
+    /// simply by being Pokemon-themed (we deliberately do NOT
+    /// title-match on "pokemon" / "poké" / "pokémon" since plenty
+    /// of games reference the franchise by name without using PE
+    /// under the hood):
+    ///
+    ///   1. Runtime marker `<stateDir>/.pokemon_essentials_detected`
+    ///      written by `pokemon_input.rb` on a previous launch
+    ///      when `$PokemonSystem` was defined. Catches PE games
+    ///      whose scripts live inside an rgssad-encrypted archive
+    ///      where signals 2 and 3 below can't see plaintext PE
+    ///      identifiers. First launch falls through to signals 2/3
+    ///      (and may default to OFF if those also miss); every
+    ///      subsequent launch reads the marker and defaults ON.
+    ///
+    ///   2. `Data/Scripts.rxdata|rvdata|rvdata2` byte-contains a
+    ///      PE script-name signature (`PokeBattle_*`,
+    ///      `PokemonSystem`, `PokemonEntry`, `Compiler_PBS`).
+    ///      Script names live in the marshaled rxdata array as
+    ///      plain ASCII bytes - the source bodies are zlib-
+    ///      compressed but the names aren't, so a raw byte search
+    ///      works without a marshal decoder. Catches PE forks that
+    ///      ship scripts in plaintext rxdata (Vinemon, Edelweiss
+    ///      Chronicles, etc.).
+    ///
+    ///   3. `Data/` contains PE-style compiled PBS data shards
+    ///      (`abilities.dat`, `species.dat`, `moves.dat`, etc.).
+    ///      PE 19+ ships compiled PBS as `*.dat` files alongside
+    ///      the rxdata; vanilla RGSS games don't ship these
+    ///      specific filenames. Catches newer PE forks where the
+    ///      scripts file is a small ScriptLoader stub and the bulk
+    ///      of code lives in external `Data/Scripts/*.rb`.
+    static func detectPokemonEssentials(in gameDirectory: URL,
+                                        stateDirectory: URL) -> Bool {
+        let fm = FileManager.default
+
+        // Signal 1: runtime-detection marker from a prior launch.
+        let marker = stateDirectory
+            .appendingPathComponent(".pokemon_essentials_detected")
+        if fm.fileExists(atPath: marker.path) { return true }
+
+        // Signal 2: Scripts.rxdata byte-grep for PE script names.
+        let scriptCandidates = [
+            "Data/Scripts.rxdata",
+            "Data/Scripts.rvdata",
+            "Data/Scripts.rvdata2",
+        ]
+        let scriptSignatures: [Data] = [
+            Data("PokeBattle".utf8),
+            Data("PokemonSystem".utf8),
+            Data("PokemonEntry".utf8),
+            Data("Compiler_PBS".utf8),
+        ]
+        for relPath in scriptCandidates {
+            let url = gameDirectory.appendingPathComponent(relPath)
+            guard let data = try? Data(contentsOf: url), data.count > 1024
+            else { continue }
+            for sig in scriptSignatures {
+                if data.range(of: sig) != nil { return true }
+            }
+        }
+
+        // Signal 3: PE-style compiled PBS data files.
+        let dataDir = gameDirectory.appendingPathComponent("Data")
+        let peDataMarkers = [
+            "abilities.dat", "species.dat", "moves.dat",
+            "pokemon.dat", "pokemon_forms.dat", "items.dat",
+            "trainer_types.dat", "encounters.dat",
+        ]
+        for marker in peDataMarkers {
+            let url = dataDir.appendingPathComponent(marker)
+            if fm.fileExists(atPath: url.path) { return true }
+        }
+
         return false
     }
 

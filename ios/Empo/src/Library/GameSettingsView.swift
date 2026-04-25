@@ -27,6 +27,12 @@ struct GameSettingsView: View {
     private let gameDirectory: URL
     private let stateDirectory: URL
     private let initialSettings: GameSettings
+    /// Computed once at init: true if the game's `Game.ini` Title
+    /// contains a Pokemon-family keyword. Used as the default for
+    /// the In-game keyboard toggle when the user hasn't explicitly
+    /// set `settings.useInGameKeyboard`. Cached so the toggle UI
+    /// doesn't re-read the file on every render.
+    private let isPokemonEssentialsDefault: Bool
 
     init(game: GameEntry) {
         self.game = game
@@ -45,6 +51,9 @@ struct GameSettingsView: View {
         _settings = State(initialValue: s)
         _defaults = State(initialValue: defs)
         self.initialSettings = s
+        self.isPokemonEssentialsDefault = GameSettings.detectPokemonEssentials(
+            in: dir, stateDirectory: stateDir
+        )
     }
 
 
@@ -280,7 +289,7 @@ struct GameSettingsView: View {
             SettingsToggle(
                 title: "Postload scripts",
                 isOn: postloadScriptsBinding,
-                description: "Run scripts that apply common fixes for Pokemon Essentials games."
+                description: "Run Empo's compatibility scripts after the game's own scripts have loaded. Includes generic RGSS shims (RGSS plugin stubs, cheat menu, nil-safe stubs) and Pokemon Essentials specific fixes (graphics, input, online stubs, session reset, tilemap, window skin)."
             )
 
             SettingsToggle(
@@ -290,9 +299,9 @@ struct GameSettingsView: View {
             )
 
             SettingsToggle(
-                title: "On-screen keyboard",
-                isOn: useOnScreenKeyboardBinding,
-                description: "Use the game's built-in ABC grid for name entry instead of the iOS soft keyboard. Enable for Pokemon Essentials games whose keyboard layout has custom keys."
+                title: "In-game keyboard",
+                isOn: useInGameKeyboardBinding,
+                description: "Use the game's built-in keyboard scene for name entry instead of the iOS soft keyboard. Enable for Pokemon Essentials games whose keyboard layout has custom keys."
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -409,10 +418,10 @@ struct GameSettingsView: View {
         )
     }
 
-    private var useOnScreenKeyboardBinding: Binding<Bool> {
+    private var useInGameKeyboardBinding: Binding<Bool> {
         Binding(
-            get: { settings.useOnScreenKeyboard ?? false },
-            set: { settings.useOnScreenKeyboard = $0 }
+            get: { settings.useInGameKeyboard ?? isPokemonEssentialsDefault },
+            set: { settings.useInGameKeyboard = $0 }
         )
     }
 
