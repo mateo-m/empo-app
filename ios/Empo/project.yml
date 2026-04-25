@@ -177,6 +177,16 @@ targets:
           rm -rf "$BUNDLE/Patches"
           mkdir -p "$BUNDLE/Patches"
           cp -R "${PROJECT_DIR}/curated-patches/"* "$BUNDLE/Patches/"
+
+          # Splash background icon pack. Pixelated 16x16 SVGs that
+          # the splash's PixelDitherPattern picks N random ones from
+          # each launch instead of the historical hand-coded
+          # circle/cross/diamond shapes. See `src/Design/SplashIcons.swift`
+          # for the loader + parser and RootView.swift for the
+          # consumer.
+          rm -rf "$BUNDLE/SplashIcons"
+          mkdir -p "$BUNDLE/SplashIcons"
+          cp "${PROJECT_DIR}/curated-splash-icons/"*.svg "$BUNDLE/SplashIcons/"
       - name: Generate Git Info
         # Force this script to run every build. Without this, Xcode sees
         # the declared output file already on disk and skips the script,
