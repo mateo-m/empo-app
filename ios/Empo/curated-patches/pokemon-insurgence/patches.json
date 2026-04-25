@@ -1,55 +1,67 @@
 // Pokemon Insurgence curated patches.
 //
 // Source-text fixes for known Insurgence bugs that cripple iOS play.
-// Replaces the runtime postload override approach (see
-// scripts/postload/pokemon_region_fix.rb) with a script-source rewrite
-// that's authoritative and platform-portable.
+// Replaces the runtime postload override approach with a script-source
+// rewrite that's authoritative and platform-portable.
 //
 // Format: JoiPlay-compatible. Keys without prefix do literal substring
 // replace; keys prefixed with "[regex]" use std::regex_replace
 // ECMAScript syntax.
 {
   "rpgm": [
-    // 1. Fix `getRegion` Ruby-1.8 idiom that crashes on Ruby 3.
+    // 1. Fix `getRegion` Ruby-1.8 idiom that crashes on Ruby 3,
+    //    AND make it locale-aware off Windows.
     //
     // Original (Scripts/186-Deuks_Region.rb:16-31):
     //   def getRegion
     //     z = getCountryCode.to_i
     //     z=1 if (z==2)
-    //     x = z.to_s.split('').map      # <- bare .map returns
-    //                                   #    Enumerator on Ruby 3
-    //     y = x[0]                      # <- Enumerator has no #[]
+    //     x = z.to_s.split('').map      # bare .map returns
+    //                                   # Enumerator on Ruby 3
+    //     y = x[0]                      # Enumerator has no #[]
     //     m = y.to_i
     //     ...
     //   end
     //
-    // Replacement: short-circuit to `return 2` (English), matching the
-    // game's own commented-out fallback in 157-PokemonUtilities.rb:125
-    // ("Use 'English' by default"). The full body wouldn't work on
-    // iOS anyway: `getCountryCode` reads from the Windows registry
-    // (MiniRegistry::HKEY_CURRENT_USER) which doesn't exist outside
-    // Windows, so the original always returned 0 (Unknown) on iOS
-    // even before the Ruby-3 .map regression. Hard-coding 2 matches
-    // user-visible behaviour on a properly-configured Windows
-    // English install, which is what the game's UI is laid out for.
+    // The function feeds into 157-PokemonUtilities.rb's language
+    // dispatch. The original derives a language id from the first
+    // digit of `getCountryCode` (a Win32 Geo ID read from the
+    // registry: 244 = USA, 81 = Japan, 84 = France, etc.). On
+    // iOS there's no registry, so `getCountryCode` always returns
+    // 0 - effectively "Unknown" - and Insurgence's UI silently
+    // falls back to English regardless of user locale.
     //
-    // The lazy [\s\S]*? matches across newlines (std::regex's `.`
-    // doesn't include newline). Crucially, the closing `end` must
-    // be at column 0 (no leading whitespace) - that's what
-    // distinguishes the outer `end` of a top-level `def` from the
-    // inner `end` of any if/while/begin block in the method body.
-    // `getRegion`'s body in 186-Deuks_Region.rb DOES contain
-    // `if/elsif/end` so a `\n\s*end\b` pattern would lazily snap
-    // to the inner end and leave the outer end dangling, producing
-    // a SyntaxError that skips the whole script and leaves
-    // `getRegion` undefined - which then surfaces as
-    // `NoMethodError: undefined ... getRegion` from PokeBattle_Trainer.
-    // The `\nend\b` anchor (no leading whitespace before `end`)
-    // forces the regex past every indented inner end to the real
-    // method terminator.
+    // Replacement: branch on `System.user_language[0..1]` (the
+    // ISO 639-1 language code from `NSLocale.languageCode` /
+    // `mkxp_sys::getSystemLanguage()`) and return PE's canonical
+    // pbGetLanguage values. The map matches the upstream PE 21
+    // implementation (Maruno17/pokemon-essentials, Data/Scripts/
+    // 019_Utilities/001_Utilities.rb#pbGetLanguage):
+    //
+    //   ja -> 1 (Japanese)
+    //   en -> 2 (English, also default)
+    //   fr -> 3 (French)
+    //   it -> 4 (Italian)
+    //   de -> 5 (German)
+    //   es -> 7 (Spanish)
+    //   ko -> 8 (Korean)
+    //
+    // The `rescue "en"` guards against the `System` binding not
+    // existing on bizarre setups (none expected on our iOS build,
+    // belt-and-braces). `to_s[0..1]` handles both "en" and any
+    // hypothetical full identifier ("en_US") even though our
+    // engine returns the bare language code.
+    //
+    // Regex anchoring: lazy [\s\S]*? matches across newlines
+    // (std::regex's `.` doesn't include newline). The closing
+    // `end` must be at column 0 so the regex doesn't snap to an
+    // inner if/elsif/end inside the original method body and
+    // leave the outer end dangling (which would be a SyntaxError
+    // and skip the whole script, surfacing as `NoMethodError:
+    // undefined ... getRegion` from PokeBattle_Trainer).
     {
       "key": "[regex]def getRegion\\b[\\s\\S]*?\\nend\\b",
-      "value": "def getRegion\n  return 2\nend"
+      "value": "def getRegion\n  lang = (System.user_language rescue \"en\").to_s\n  case lang[0..1]\n  when \"ja\" then return 1\n  when \"en\" then return 2\n  when \"fr\" then return 3\n  when \"it\" then return 4\n  when \"de\" then return 5\n  when \"es\" then return 7\n  when \"ko\" then return 8\n  end\n  return 2\nend"
     }
   ]
 }
