@@ -138,10 +138,7 @@ struct GameLibraryView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: Spacing.md) {
                     libraryHeader
-                    // Hide search / sort / display / select chrome
-                    // in selection mode - the user is already in a
-                    // focused mode and these actions don't apply.
-                    if !showEmpty && !selectionMode {
+                    if !showEmpty {
                         searchBar
                     }
                 }
@@ -199,7 +196,7 @@ struct GameLibraryView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if selectionMode {
+                if selectionMode && !selectedIDs.isEmpty {
                     bulkDeleteButton
                         .padding(.bottom, Spacing._2xl)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -383,7 +380,8 @@ struct GameLibraryView: View {
                     staggerTrigger = UUID()
                 }
             },
-            onSelectMultiple: { enterSelectionMode() }
+            onSelectMultiple: { enterSelectionMode() },
+            hideSelectMultiple: selectionMode
         )
     }
 
@@ -714,10 +712,13 @@ struct GameLibraryView: View {
     }
 
     /// Floating bulk-delete CTA shown over the library content
-    /// when in selection mode. Routed through the design system's
-    /// `.primary` glass-capsule style with a red tint so it reads
-    /// as the same family of action as the rest of the app's
-    /// primary buttons - not an iOS toolbar bar.
+    /// when in selection mode AND at least one game is selected.
+    /// Routed through the design system's `.primary` glass-capsule
+    /// style with a red tint so it reads as the same family of
+    /// action as the rest of the app's primary buttons - not an
+    /// iOS toolbar bar. Visibility is gated at the call-site so
+    /// the button physically appears/disappears with the selection
+    /// (no greyed-out empty state taking up screen real estate).
     private var bulkDeleteButton: some View {
         Button(role: .destructive) {
             showBulkDeleteConfirm = true
@@ -725,7 +726,6 @@ struct GameLibraryView: View {
             Label("Delete (\(selectedIDs.count))", systemImage: "trash")
         }
         .buttonStyle(.primary(tint: .red))
-        .disabled(selectedIDs.isEmpty)
     }
 
     private func handleGameTap(_ game: GameEntry, from source: GameTapSource = .item) {

@@ -8,6 +8,11 @@ struct LibrarySearchBar: View {
     @Binding var showSortSheet: Bool
     let onDisplayModeToggle: () -> Void
     let onSelectMultiple: () -> Void
+    /// Hide the Select-multiple icon while the library is already
+    /// in selection mode (the header's "Done" button is the exit
+    /// affordance). Search / sort / display-mode stay available so
+    /// users can find specific games to add to the selection.
+    var hideSelectMultiple: Bool = false
     @Environment(\.appSettings) private var settings
 
     private let searchBarHeight: CGFloat = 44
@@ -55,10 +60,12 @@ struct LibrarySearchBar: View {
             // the floating ImportButton, so this stays here even
             // though it's the kind of action a user might also
             // expect in the header chrome.
-            IconButton("checkmark.circle", style: .outline) {
-                onSelectMultiple()
+            if !hideSelectMultiple {
+                IconButton("checkmark.circle", style: .outline) {
+                    onSelectMultiple()
+                }
+                .accessibilityLabel("Select multiple games")
             }
-            .accessibilityLabel("Select multiple games")
         }
         .padding(.horizontal)
         .padding(.bottom, Spacing.xs)
