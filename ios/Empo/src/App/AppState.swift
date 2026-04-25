@@ -68,6 +68,17 @@ class AppState {
         mkxp_setManagedConfigDir(stateDir.path)
 
         let settings = GameSettings.load(from: stateDir)
+
+        // syntaxTransform travels via the bridge, NOT mkxp.json,
+        // so mkxp.json stays a clean mirror of the developer's
+        // engine-config layer. Has to be set before the engine
+        // reaches `initSyntaxTransform` (during the RGSS-thread
+        // bootstrap kicked off by mkxp_setGamePath later in this
+        // method) - selectGame is the right place for it.
+        mkxp_setSyntaxTransformMode(
+            settings.resolveSyntaxTransformMode(gameDirectory: gameDir)
+        )
+
         settings.applyToConfig(stateDirectory: stateDir, gameDirectory: gameDir)
 
         // Apply Empo's curated patches.json (auto-discovered by the
