@@ -9,12 +9,6 @@ struct GameContextMenuModifier: ViewModifier {
     @Binding var showDeleteConfirm: Bool
     @Binding var gameForSettings: GameEntry?
     @Binding var gameForInfo: GameEntry?
-    /// Closure invoked by the "Select Multiple" item to enter
-    /// the library's multi-select mode pre-seeded with this
-    /// game's id. Optional so the context menu still works on
-    /// surfaces that don't host the selection state (e.g. the
-    /// hero card, where multi-select isn't meaningful).
-    var onEnterMultiSelect: (() -> Void)? = nil
     @Environment(\.pauseManager) private var pauseManager
 
     private var isPaused: Bool { pauseManager.pausedGame?.id == game.id }
@@ -49,14 +43,6 @@ struct GameContextMenuModifier: ViewModifier {
                 } label: {
                     Label("Settings", systemImage: "gearshape")
                 }
-
-                if let onEnterMultiSelect {
-                    Button {
-                        onEnterMultiSelect()
-                    } label: {
-                        Label("Select Multiple", systemImage: "checkmark.circle")
-                    }
-                }
             }
 
             Divider()
@@ -79,8 +65,7 @@ extension View {
                          gameToDelete: Binding<GameEntry?>,
                          showDeleteConfirm: Binding<Bool>,
                          gameForSettings: Binding<GameEntry?>,
-                         gameForInfo: Binding<GameEntry?>,
-                         onEnterMultiSelect: (() -> Void)? = nil) -> some View {
+                         gameForInfo: Binding<GameEntry?>) -> some View {
         modifier(GameContextMenuModifier(
             game: game,
             appState: appState,
@@ -88,8 +73,7 @@ extension View {
             gameToDelete: gameToDelete,
             showDeleteConfirm: showDeleteConfirm,
             gameForSettings: gameForSettings,
-            gameForInfo: gameForInfo,
-            onEnterMultiSelect: onEnterMultiSelect
+            gameForInfo: gameForInfo
         ))
     }
 }
