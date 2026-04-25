@@ -289,6 +289,12 @@ struct GameSettingsView: View {
                 description: "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
             )
 
+            SettingsToggle(
+                title: "On-screen keyboard",
+                isOn: useOnScreenKeyboardBinding,
+                description: "Use the game's built-in ABC grid for name entry instead of the iOS soft keyboard. Enable for Pokemon Essentials games whose keyboard layout has custom keys."
+            )
+
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Picker("Ruby compatibility", selection: rubyCompatBinding) {
                     Text(autoDetectLabel).tag(RubyCompatMode.auto)
@@ -400,6 +406,13 @@ struct GameSettingsView: View {
         Binding(
             get: { effectivePostloadScripts },
             set: { settings.postloadScripts = $0 }
+        )
+    }
+
+    private var useOnScreenKeyboardBinding: Binding<Bool> {
+        Binding(
+            get: { settings.useOnScreenKeyboard ?? false },
+            set: { settings.useOnScreenKeyboard = $0 }
         )
     }
 

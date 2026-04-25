@@ -199,7 +199,13 @@ struct GameLibraryView: View {
                 if selectionMode && !selectedIDs.isEmpty {
                     bulkDeleteButton
                         .padding(.bottom, Spacing._2xl)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        // Blur + scale + opacity rather than slide-up.
+                        // Reuses `.cardAppear` (the same transition the
+                        // grid/list cards use on enter/exit) so the
+                        // delete button feels like it belongs to the
+                        // same animation family as the rest of the
+                        // library content.
+                        .transition(.cardAppear)
                 }
             }
             .modifier(BulkDeleteAlert(
