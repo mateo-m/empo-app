@@ -125,9 +125,12 @@ struct GameSettingsView: View {
                         Text(game.title)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                         Text("Settings")
                             .font(.headline)
                     }
+                    .sheetTitle()
                 }
             }
             .toolbar {

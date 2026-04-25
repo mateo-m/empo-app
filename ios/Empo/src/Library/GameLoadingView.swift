@@ -155,7 +155,21 @@ struct GameLoadingView: View {
                 .blur(radius: 20)
                 .overlay(Color.black.opacity(Scrim.medium))
         } else {
-            Color.black.ignoresSafeArea()
+            // No artwork: fall through to the unified placeholder
+            // (gradient + gamecontroller glyph) used everywhere else
+            // in the library. Skip the Ken Burns / blur path - those
+            // are tuned for photographic artwork and would muddy the
+            // already-soft gradient. A scrim still goes on top so the
+            // foreground title text retains contrast.
+            ZStack {
+                GameArtworkView(
+                    artworkPath: nil,
+                    placeholderIconSize: 96,
+                    shimmer: false
+                )
+                Color.black.opacity(Scrim.medium)
+            }
+            .ignoresSafeArea()
         }
     }
 }

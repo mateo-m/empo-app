@@ -44,14 +44,19 @@ struct GameInfoView: View {
         return ImageCache.shared.image(for: path)
     }
 
+    /// Path to the artwork to render: user-set custom override
+    /// first, then whatever the import pipeline resolved into
+    /// `game.artworkPath` (extracted exec icon -> Graphics/Titles
+    /// -> nil). Same chain other library surfaces honor; centralized
+    /// here so `bannerBackground` and `artworkView` agree without
+    /// duplicating the branch.
+    private var resolvedArtworkPath: String? {
+        metadata.customArtworkPath(for: game.id) ?? game.artworkPath
+    }
+
     private var artworkImage: UIImage? {
-        if let path = metadata.customArtworkPath(for: game.id) {
-            return ImageCache.shared.image(for: path)
-        }
-        if let path = game.artworkPath {
-            return ImageCache.shared.image(for: path)
-        }
-        return nil
+        guard let path = resolvedArtworkPath else { return nil }
+        return ImageCache.shared.image(for: path)
     }
 
     private var hasCustomArtwork: Bool {
@@ -183,7 +188,7 @@ struct GameInfoView: View {
                                 .opacity(titleScrollProgress)
                         }
                     }
-                    .frame(maxWidth: 250)
+                    .sheetTitle()
                     .animation(Motion.standard, value: titleScrollProgress)
                     .onGeometryChange(for: CGFloat.self) { proxy in
                         proxy.frame(in: .global).maxY
@@ -344,22 +349,19 @@ struct GameInfoView: View {
         }
     }
 
+    /// Foreground artwork tile that floats over the banner. Routed
+    /// through `GameArtworkView` so the placeholder matches the
+    /// rest of the library (gradient + gamecontroller glyph), and
+    /// custom artwork picks up the same icon-composite handling
+    /// that grid/list cards already use for transparent PE icons.
     private var artworkView: some View {
-        Group {
-            if let artwork = artworkImage {
-                Image(uiImage: artwork)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                ZStack {
-                    Color(.tertiarySystemFill)
-                    Image(systemName: "photo")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .frame(width: AppSize.infoArtwork, height: AppSize.infoArtwork)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        GameArtworkView(
+            artworkPath: resolvedArtworkPath,
+            placeholderIconSize: 32,
+            size: AppSize.infoArtwork,
+            cornerRadius: Radius.md,
+            shimmer: false
+        )
     }
 
     private static let dateFormatter: DateFormatter = {
