@@ -88,14 +88,30 @@ class AppState {
         // and no _global rules apply.
         PatcherDistribution.applyToGame(at: stateDir, gameDirectory: gameDir, gameId: game.id)
 
+        // sessionLogger has to open the per-session log file before
+        // any bridge call that writes to `mkxp_debugLog` - otherwise
+        // those early lines are silently dropped because the file
+        // isn't open yet.
+        crashTracker.writeMarker()
+        sessionLogger.beginSession(for: game, debugLogsEnabled: AppSettings.shared.debugLogs)
+
         // These settings go through the bridge, not mkxp.json
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
         let postload = settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
         mkxp_applyPerGameSettings(alignment.bridgeValue, postload)
-        mkxp_setUseOnScreenKeyboard(settings.useOnScreenKeyboard ?? false)
-
-        crashTracker.writeMarker()
-        sessionLogger.beginSession(for: game, debugLogsEnabled: AppSettings.shared.debugLogs)
+        // Default the in-game-keyboard toggle to ON for Pokemon
+        // Essentials fan games (Insurgence, Uranium, Reborn, etc.)
+        // since their PE-era keyboard scene is the better UX path
+        // for those games and our backspace shim in
+        // pokemon_input.rb already handles the soft-keyboard case.
+        // Non-PE games default to false (use the iOS soft keyboard).
+        // The user's explicit toggle (true/false in
+        // GameSettings.useInGameKeyboard) always wins over the
+        // detector.
+        let inGameKeyboardDefault = GameSettings.detectPokemonEssentials(
+            in: gameDir, stateDirectory: stateDir
+        )
+        mkxp_setUseInGameKeyboard(settings.useInGameKeyboard ?? inGameKeyboardDefault)
 
         // Wait for the RGSS thread to actually finish tearing down any
         // previous session before feeding it the new path. If
