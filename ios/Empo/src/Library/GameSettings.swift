@@ -214,6 +214,42 @@ struct GameSettings: Codable, Equatable {
     }
 
 
+    /// Resolve the engine's `syntaxTransform` mode for this game.
+    /// Honors an explicit `useModernRuby` setting; runs the .rb
+    /// scanner when the setting is nil ("auto").
+    ///
+    /// Most PE fangames are written in Ruby 1.8 syntax and need
+    /// the LEGACY transform so the engine rewrites old forms
+    /// (`when X:`, unparenthesized method chains, legacy hash
+    /// rockets, etc) before Ruby 3 parses them. Games targeting
+    /// the modern mkxp-z runtime - Reborn 19.5+, PE v20+, anything
+    /// packaged as an mkxp-z JGP - ship actual Ruby 3 source
+    /// (keyword-arg shorthand `id: -1`, `foo: "bar"`) which the
+    /// 1.8 transform would mis-parse, so we DISABLE the transform
+    /// for those.
+    ///
+    /// Auto-detect runs the scanner at every launch so games
+    /// imported before a scanner fix can recover. Concrete case:
+    /// Infinite Fusion has 541 .rb files scattered in
+    /// `Data/Scripts/NNN_*/` and uses inline keyword-args
+    /// (`Game.save(safe: safesave)`); the original detector's
+    /// 200-file cap + line-start-anchored regex missed it, so the
+    /// game was stuck in LEGACY mode and Ruby 3.1 rejected `safe:`
+    /// as "unexpected ':'". With the improved scanner run at
+    /// launch, the mode flips to DISABLED and the game parses
+    /// cleanly.
+    func resolveSyntaxTransformMode(gameDirectory: URL) -> MKXPSyntaxTransformMode {
+        let modern: Bool
+        if let m = useModernRuby {
+            modern = m
+        } else {
+            modern = Self.detectModernRubyScripts(in: gameDirectory)
+        }
+        return modern ? MKXP_SYNTAX_TRANSFORM_DISABLED
+                      : MKXP_SYNTAX_TRANSFORM_LEGACY
+    }
+
+
     /// Reads the game's mkxp.json defaults. Prefers the original backup
     /// over merged config so the developer's intended values always show.
     /// `stateDirectory` is the per-game `EmpoState/<id>/` directory
@@ -292,38 +328,21 @@ struct GameSettings: Codable, Equatable {
             config = parsed
         }
 
-        // Ruby compatibility mode. Most PE fangames are written in
-        // Ruby 1.8 syntax and need `syntaxTransform: 2` so the
-        // engine translates old forms (`when X:`, unparenthesized
-        // method chains, legacy hash rockets, etc) before Ruby 3
-        // parses them. Games targeting the modern `mkxp-z` runtime
-        // - Reborn 19.5+, PE v20+, anything packaged as an mkxp-z
-        // JGP - ship actual Ruby 3 source (keyword-arg shorthand
-        // `id: -1`, `foo: "bar"`) which the 1.8 transform would
-        // mis-parse. For those we explicitly disable the transform
-        // by writing `syntaxTransform: 0`. The import-time detector
-        // flips useModernRuby when it finds Ruby-3-only syntax.
+        // syntaxTransform USED to be written here. It now travels via
+        // the engine bridge (`mkxp_setSyntaxTransformMode`, called
+        // from `AppState.selectGame` via
+        // `resolveSyntaxTransformMode(gameDirectory:)`). Keeping
+        // mkxp.json free of host-managed keys means
+        // `mkxp.original.json` snapshots and the per-game-defaults
+        // UI mirror the developer's intent only.
         //
-        // Launch-time re-detection: if the user hasn't explicitly
-        // set useModernRuby (nil = "auto") we re-run the detector
-        // every launch. This recovers games imported before a
-        // detector fix from being stuck on `syntaxTransform: 2`
-        // because the first scan missed their modern syntax.
-        // Concrete case: Infinite Fusion has 541 .rb files scattered
-        // in `Data/Scripts/NNN_*/` and uses inline keyword-args
-        // (`Game.save(safe: safesave)`) - the original detector's
-        // 200-file cap + line-start-anchored regex missed it, so
-        // mkxp.json stayed at `syntaxTransform: 2` and Ruby 3.1
-        // rejected `safe:` as "unexpected ':'". With the improved
-        // detector run at launch, the flag flips to 0 and the game
-        // parses cleanly.
-        let resolvedModern: Bool
-        if let modern = useModernRuby {
-            resolvedModern = modern
-        } else {
-            resolvedModern = Self.detectModernRubyScripts(in: gameDirectory)
-        }
-        config["syntaxTransform"] = resolvedModern ? 0 : 2
+        // Strip any stale syntaxTransform key carried over from
+        // older Empo builds (or from a developer's mkxp.original.json
+        // that happened to have one) so the merged config is clean.
+        // The bridge value wins regardless, but cleaning the file
+        // also keeps mkxp.json readable as documentation of what
+        // the user/developer chose.
+        config.removeValue(forKey: "syntaxTransform")
 
         if let v = smoothScaling { config["smoothScaling"] = v ? 1 : 0 }
         if let v = fixedAspectRatio { config["fixedAspectRatio"] = v }

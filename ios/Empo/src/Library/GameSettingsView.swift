@@ -17,6 +17,12 @@ struct GameSettingsView: View {
 
     @State private var settings: GameSettings
     @State private var defaults: GameConfigDefaults
+    /// Result of the Ruby-syntax scanner used by `useModernRuby = nil`
+    /// ("auto"). nil while the scan is still running, then true if
+    /// the game ships Ruby 3 source, false otherwise. Surfaced in
+    /// the picker label so users see what "Auto-detect" would pick
+    /// without having to flip the setting and watch the game start.
+    @State private var autoDetectedModern: Bool?
 
     private let gameDirectory: URL
     private let stateDirectory: URL
@@ -76,6 +82,20 @@ struct GameSettingsView: View {
         settings.resolution ?? defaults.resolution
     }
 
+    /// Human-readable label for the "Auto-detect" picker row that
+    /// also reveals which mode the scanner resolved to. Reads
+    /// `autoDetectedModern` (populated by the .task scan):
+    ///   - while scanning -> "Auto-detect"
+    ///   - scan done, modern hit -> "Auto-detect (Modern)"
+    ///   - scan done, no hit -> "Auto-detect (Legacy)"
+    private var autoDetectLabel: String {
+        switch autoDetectedModern {
+        case nil:           "Auto-detect"
+        case .some(true):   "Auto-detect (Modern)"
+        case .some(false):  "Auto-detect (Legacy)"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -116,6 +136,21 @@ struct GameSettingsView: View {
                 }
             }
             .onChange(of: settings) { save() }
+            .task {
+                // Run the Ruby-syntax scanner off the main thread.
+                // detectModernRubyScripts walks `Scripts/` and
+                // `Data/` looking for keyword-arg shorthand and can
+                // visit a few hundred .rb files on big fangames -
+                // doing it on the main actor would stutter the
+                // sheet open animation. We don't need cancellation
+                // because the scanner has its own bounded work
+                // (`scanCap = 2000` files, returns on first match).
+                let dir = gameDirectory
+                let result = await Task.detached(priority: .userInitiated) {
+                    GameSettings.detectModernRubyScripts(in: dir)
+                }.value
+                autoDetectedModern = result
+            }
         }
         .tint(.brand)
     }
@@ -253,7 +288,7 @@ struct GameSettingsView: View {
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Picker("Ruby compatibility", selection: rubyCompatBinding) {
-                    Text("Auto-detect").tag(RubyCompatMode.auto)
+                    Text(autoDetectLabel).tag(RubyCompatMode.auto)
                     Text("Modern (Ruby 3)").tag(RubyCompatMode.modern)
                     Text("Legacy (Ruby 1.8)").tag(RubyCompatMode.compat)
                 }
