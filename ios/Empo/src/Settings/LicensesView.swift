@@ -208,6 +208,19 @@ private let licenses: [LicenseEntry] = [
        d) make other distribution arrangements with the author.
     """),
 
+    LicenseEntry("Smallbits icon pack", license: "Smallbits License (free for commercial use)", text: """
+    Smallbits - 200+ pixelated icons on an 8x8 grid.
+    Designed by Minor Adventures (Amsterdam, Netherlands).
+    https://smallbits.design
+
+    Used by the splash background's panning pattern. The icons are free for personal and commercial use; the license forbids repackaging them for resale (icon marketplaces, UI kits where the icons are the main draw, etc.). We embed only a curated subset (geometric primitives - circle, square, diamond, heart, star, plus, cube, sphere) and the full pack ships in `Assets.bundle/SplashIcons/` for use in future surfaces.
+
+    Smallbits License Agreement (TL;DR):
+      "Smallbits is free. Use the icons in personal or commercial projects, modify them however you like, include them in client work and end products. Just don't repackage the icons to sell them as icons - no uploading to marketplaces, no bundling them into UI kits or themes where the icons are the main event, no reselling the files."
+
+    Full terms at https://smallbits.design/license.
+    """),
+
     LicenseEntry("SDL2", license: "zlib License", text: """
     Copyright (C) 1997-2024 Sam Lantinga <slouken@libsdl.org>
 
