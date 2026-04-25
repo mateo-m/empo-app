@@ -154,6 +154,7 @@ struct GameListRow: View {
                 cornerRadius: Radius.sm,
                 importing: game.status.phase == .importing
             )
+            .cardShadow()
             .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) { config in
                 config
                     .background(.black)

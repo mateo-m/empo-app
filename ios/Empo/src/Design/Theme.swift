@@ -102,8 +102,26 @@ extension View {
         shadow(color: .black.opacity(0.15), radius: 4, y: 2)
     }
 
+    /// Drop-shadow alternative for text overlaid on game artwork.
+    ///
+    /// Default `.shadow` paints a flat black halo regardless of the
+    /// backdrop, which reads muddy over busy artwork (the halo
+    /// shows up just as opaque on a bright sky as on a dark cave
+    /// wall). This modifier layers a black-tinted blurred copy of
+    /// the same content beneath the original with
+    /// `blendMode(.overlay)`, so the shadow ties to the backdrop's
+    /// luminance instead of stamping over it: the copy darkens
+    /// where the artwork is bright (improving title contrast) and
+    /// fades where the artwork is already dark (no over-stacked
+    /// halo). The original text renders on top unmodified.
+    ///
+    /// Only works correctly when the modified content respects
+    /// `foregroundStyle` - i.e. for Text views and SF Symbols.
+    /// The audit confirms this is the only call-site shape today
+    /// (GameCard title/subtitle, GameHeroCard title); Image-with-
+    /// asset surfaces should use `.shadow` directly.
     func textShadow() -> some View {
-        shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
+        modifier(TextShadowModifier())
     }
 
     func iconShadow() -> some View {
@@ -120,12 +138,54 @@ extension View {
         shadow(radius: 4)
     }
 
+    // (TextShadowModifier is defined below extension View {} since
+    //  ViewModifier conformance can't live inside an extension on
+    //  a protocol.)
+
+    /// Width cap + truncation discipline for the principal-toolbar
+    /// VStack on every custom-titled sheet. Without this, long titles
+    /// (e.g. an interpolated game name in a confirmation sheet)
+    /// expand the principal slot horizontally and SwiftUI shoves the
+    /// VStack off-center to make room for the trailing toolbar
+    /// button. The hard 250pt cap matches GameInfoView's existing
+    /// limit, the lineLimit + minimumScaleFactor combo lets text
+    /// scale before truncating so most titles stay legible.
+    ///
+    /// Apply to the outer VStack, NOT individual Text rows: any Text
+    /// inside the capped VStack inherits the layout container, and
+    /// per-row lineLimit/minimumScaleFactor inside still works.
+    func sheetTitle(maxWidth: CGFloat = 250) -> some View {
+        self.frame(maxWidth: maxWidth)
+    }
+
     /// Pin the Liquid Glass material to its dark variant. Used on
     /// player controls (toolbar, D-pad, action buttons, debug
     /// overlay) so the glass tone stays consistent regardless of
     /// system color scheme or backdrop brightness.
     func darkGlass() -> some View {
         environment(\.colorScheme, .dark)
+    }
+}
+
+
+/// Backing modifier for `.textShadow()`. See the doc-comment on
+/// the modifier extension for design rationale.
+private struct TextShadowModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        ZStack {
+            // Black-tinted blurred copy: tracks the text's silhouette,
+            // blended via `.overlay` so its visibility responds to
+            // backdrop luminance instead of stamping a flat halo.
+            // Slight downward offset gives the natural drop-shadow
+            // direction without a heavy radius.
+            content
+                .foregroundStyle(.black)
+                .opacity(0.7)
+                .blur(radius: 3)
+                .blendMode(.overlay)
+                .offset(y: 1)
+            content
+        }
     }
 }
 

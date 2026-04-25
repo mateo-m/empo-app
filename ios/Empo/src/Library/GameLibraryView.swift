@@ -44,6 +44,21 @@ struct GameLibraryView: View {
     /// so the exit animation lands on the same spot the user tapped.
     @State private var tappedSource: [String: GameTapSource] = [:]
 
+    // Multi-select state.
+    //
+    // Selection mode is entered via the "Select Multiple" item in
+    // the per-game context menu (long-press -> menu -> Select).
+    // Going through the existing context menu sidesteps the gesture
+    // conflict that would arise if a raw long-press handler tried
+    // to coexist with the system long-press that opens the context
+    // menu itself. Once in selection mode the tap action on a card
+    // toggles its membership in `selectedIDs`; tapping `Done` (in
+    // the library header) or hitting the bulk-delete confirmation
+    // exits.
+    @State private var selectionMode: Bool = false
+    @State private var selectedIDs: Set<String> = []
+    @State private var showBulkDeleteConfirm: Bool = false
+
     // Derived filter/sort pipeline. A previous attempt cached this in
     // @State and re-derived via .onChange, but passing library.games
     // through a ViewModifier broke the Observation dependency so stale
@@ -162,22 +177,35 @@ struct GameLibraryView: View {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                ImportButton(
-                    showEmpty: showEmpty,
-                    showImporter: $showImporter,
-                    splashDismissed: splashDismissed,
-                    entranceDelay: entranceDelay,
-                    headerHeight: headerHeight,
-                    emptyStateHeight: emptyStateHeight,
-                    emptyStateOffset: -AppSize.emptyStateOffset,
-                    // Only the empty-state Import button shows a
-                    // validating label. When the library already has
-                    // games, pre-flight feedback lives on the grid/list
-                    // cards instead (see pendingValidationEntries).
-                    isValidating: showEmpty && !library.pendingImports.isEmpty,
-                    onRequestCancelValidation: { showCancelValidationAlert = true }
-                )
+                if !selectionMode {
+                    ImportButton(
+                        showEmpty: showEmpty,
+                        showImporter: $showImporter,
+                        splashDismissed: splashDismissed,
+                        entranceDelay: entranceDelay,
+                        headerHeight: headerHeight,
+                        emptyStateHeight: emptyStateHeight,
+                        emptyStateOffset: -AppSize.emptyStateOffset,
+                        // Only the empty-state Import button shows a
+                        // validating label. When the library already has
+                        // games, pre-flight feedback lives on the grid/list
+                        // cards instead (see pendingValidationEntries).
+                        isValidating: showEmpty && !library.pendingImports.isEmpty,
+                        onRequestCancelValidation: { showCancelValidationAlert = true }
+                    )
+                }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if selectionMode {
+                    bottomSelectionBar
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .modifier(BulkDeleteAlert(
+                isPresented: $showBulkDeleteConfirm,
+                count: selectedIDs.count,
+                onConfirm: confirmBulkDelete
+            ))
             .toolbarVisibility(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
                 SettingsView()
@@ -301,18 +329,34 @@ struct GameLibraryView: View {
 
     private var libraryHeader: some View {
         HStack {
-            IconButton("gearshape", style: .outline) { showSettings = true }
-                .accessibilityLabel("Settings")
-            Spacer()
-            Text("Library")
-                .font(.title)
-                .fontWeight(.bold)
-            Spacer()
-            Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
-                .accessibilityHidden(true)
+            if selectionMode {
+                Button("Done") { exitSelectionMode() }
+                    .font(.body.weight(.semibold))
+                    .tint(.brand)
+                Spacer()
+                Text(selectedIDs.isEmpty
+                     ? "Select Games"
+                     : "\(selectedIDs.count) Selected")
+                    .font(.headline)
+                Spacer()
+                // Symmetry placeholder so the title stays centered.
+                Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
+                    .accessibilityHidden(true)
+            } else {
+                IconButton("gearshape", style: .outline) { showSettings = true }
+                    .accessibilityLabel("Settings")
+                Spacer()
+                Text("Library")
+                    .font(.title)
+                    .fontWeight(.bold)
+                Spacer()
+                Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.horizontal)
         .frame(height: headerHeight)
+        .animation(Motion.standard, value: selectionMode)
     }
 
 
@@ -438,11 +482,7 @@ struct GameLibraryView: View {
             ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
                 let isPaused = pauseManager.pausedGame?.id == game.id
                 Button {
-                    switch game.status {
-                    case .ready: handleGameTap(game, from: .item)
-                    case .invalid: showInvalidAlert = true
-                    case .importing: break
-                    }
+                    handleCardTap(for: game)
                 } label: {
                     GameListRow(
                         game: game,
@@ -453,9 +493,31 @@ struct GameLibraryView: View {
                             showDeleteConfirm = true
                         } : nil
                     )
+                    // Anchor on .topLeading so the badge floats over
+                    // the artwork's top-left corner instead of fighting
+                    // with the trailing GameStatusIndicator (which lives
+                    // on the row's trailing edge). Slight inset matches
+                    // the artwork's padding so the badge sits inside
+                    // the artwork rectangle.
+                    .overlay(alignment: .topLeading) {
+                        if selectionMode && game.status == .ready {
+                            selectionBadge(for: game.id)
+                                .padding(.leading, Spacing.xs)
+                                .padding(.top, Spacing.xs)
+                        }
+                    }
                 }
                 .buttonStyle(ListRowPressStyle())
-                .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game, from: .item) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                .gameContextMenu(
+                    game: game,
+                    appState: appState,
+                    onPlay: { handleGameTap(game, from: .item) },
+                    gameToDelete: $gameToDelete,
+                    showDeleteConfirm: $showDeleteConfirm,
+                    gameForSettings: $gameForSettings,
+                    gameForInfo: $gameForInfo,
+                    onEnterMultiSelect: { enterSelectionMode(seedingWith: game.id) }
+                )
                 .transition(.cardAppear)
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
@@ -494,24 +556,40 @@ struct GameLibraryView: View {
                     .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .invalid:
-                Button { showInvalidAlert = true } label: {
+                Button { handleCardTap(for: game) } label: {
                     GameCard(game: game)
                 }
                     .id("\(game.id)-invalid")
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
-                    .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game, from: .item) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                    .gameContextMenu(
+                        game: game,
+                        appState: appState,
+                        onPlay: { handleGameTap(game, from: .item) },
+                        gameToDelete: $gameToDelete,
+                        showDeleteConfirm: $showDeleteConfirm,
+                        gameForSettings: $gameForSettings,
+                        gameForInfo: $gameForInfo
+                        // No multi-select for .invalid - their state isn't safely
+                        // bulk-deletable through the same path as ready games.
+                    )
                     .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .ready:
                 let isPaused = pauseManager.pausedGame?.id == game.id
-                Button { handleGameTap(game, from: .item) } label: {
+                Button { handleCardTap(for: game) } label: {
                     GameCard(game: game, isPaused: isPaused)
                         .matchedTransitionSource(id: GameTapSource.item.transitionID(for: game.id),
                                                  in: heroNamespace) { config in
                             config
                                 .background(.black)
                                 .clipShape(.rect(cornerRadius: Radius.md))
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            if selectionMode {
+                                selectionBadge(for: game.id)
+                                    .padding(Spacing.sm)
+                            }
                         }
                 }
                     // NOTE: no .id("...-\(isPaused)") here on purpose.
@@ -524,12 +602,126 @@ struct GameLibraryView: View {
                     // so no remount is needed.
                     .buttonStyle(CardPressStyle())
                     .transition(.cardAppear)
-                .gameContextMenu(game: game, appState: appState, onPlay: { handleGameTap(game, from: .item) }, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
+                .gameContextMenu(
+                    game: game,
+                    appState: appState,
+                    onPlay: { handleGameTap(game, from: .item) },
+                    gameToDelete: $gameToDelete,
+                    showDeleteConfirm: $showDeleteConfirm,
+                    gameForSettings: $gameForSettings,
+                    gameForInfo: $gameForInfo,
+                    onEnterMultiSelect: { enterSelectionMode(seedingWith: game.id) }
+                )
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
             }
         }
     }
 
+
+    /// Tap entrypoint for grid cards / list rows. Branches on
+    /// selection mode: when active, taps toggle membership in
+    /// `selectedIDs` (and only on .ready games - importing /
+    /// invalid cards aren't legal multi-select targets); otherwise
+    /// dispatches to the existing per-status flow.
+    private func handleCardTap(for game: GameEntry) {
+        if selectionMode {
+            guard game.status == .ready else { return }
+            toggleSelection(game.id)
+            return
+        }
+        switch game.status {
+        case .ready:     handleGameTap(game, from: .item)
+        case .invalid:   showInvalidAlert = true
+        case .importing: break
+        }
+    }
+
+    private func enterSelectionMode(seedingWith gameId: String) {
+        Haptics.impact()
+        withAnimation(Motion.standard) {
+            selectionMode = true
+            selectedIDs = [gameId]
+        }
+    }
+
+    private func exitSelectionMode() {
+        withAnimation(Motion.standard) {
+            selectionMode = false
+            selectedIDs = []
+        }
+    }
+
+    private func toggleSelection(_ gameId: String) {
+        withAnimation(Motion.gentle) {
+            if selectedIDs.contains(gameId) {
+                selectedIDs.remove(gameId)
+            } else {
+                selectedIDs.insert(gameId)
+            }
+        }
+    }
+
+    private func confirmBulkDelete() {
+        // Capture the snapshot so the loop survives state mutation
+        // from `library.deleteGame`'s reload chain.
+        let ids = selectedIDs
+        let games = library.games.filter { ids.contains($0.id) }
+        for game in games {
+            library.deleteGame(game) { error in
+                errorTitle = "Couldn't delete \"\(game.title)\""
+                errorMessage = error
+                showErrorAlert = true
+            }
+        }
+        exitSelectionMode()
+    }
+
+    /// Circular checkmark glyph rendered on each card/row while in
+    /// selection mode. Filled brand circle when selected, hollow
+    /// white-stroked circle otherwise. Sized to read at both grid
+    /// (3-up portrait, larger cards) and list (48pt artwork) scales.
+    @ViewBuilder
+    private func selectionBadge(for gameId: String) -> some View {
+        let selected = selectedIDs.contains(gameId)
+        ZStack {
+            Circle()
+                .fill(selected ? Color.brand : Color.black.opacity(0.4))
+                .frame(width: 24, height: 24)
+            if selected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+            } else {
+                Circle()
+                    .stroke(Color.white.opacity(0.9), lineWidth: 1.5)
+                    .frame(width: 24, height: 24)
+            }
+        }
+        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+        .accessibilityLabel(selected ? "Selected" : "Not selected")
+    }
+
+    /// Bottom action bar shown when in selection mode. Hosts
+    /// the bulk-delete CTA. Pinned via `.safeAreaInset(.bottom)`
+    /// so it overlays the scroll content without affecting the
+    /// scroll view's own bottom inset more than its own height.
+    private var bottomSelectionBar: some View {
+        HStack {
+            Spacer()
+            Button(role: .destructive) {
+                showBulkDeleteConfirm = true
+            } label: {
+                Label("Delete (\(selectedIDs.count))", systemImage: "trash")
+                    .font(.body.weight(.semibold))
+            }
+            .disabled(selectedIDs.isEmpty)
+            .tint(.red)
+            Spacer()
+        }
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.md)
+        .background(.regularMaterial)
+    }
 
     private func handleGameTap(_ game: GameEntry, from source: GameTapSource = .item) {
         tappedSource[game.id] = source
@@ -579,6 +771,32 @@ struct GameLibraryView: View {
 
     private var sortSheet: some View {
         LibrarySortSheet(isPresented: $showSortSheet)
+    }
+}
+
+
+/// Alert wrapper for the bulk-delete confirmation. Inlining the
+/// alert directly into `GameLibraryView.body` pushes the body
+/// builder over SwiftUI's type-checker budget (every additional
+/// modifier on the same `.NavigationStack { ZStack { ... } ... }`
+/// chain widens the inferred type by one envelope, and the body
+/// is already thick with sheets / alerts / overlays). Extracting
+/// to a ViewModifier keeps `body` lean.
+private struct BulkDeleteAlert: ViewModifier {
+    @Binding var isPresented: Bool
+    let count: Int
+    let onConfirm: () -> Void
+
+    func body(content: Content) -> some View {
+        content.alert("Delete \(count) Games?", isPresented: $isPresented) {
+            Button("Delete", role: .destructive) {
+                onConfirm()
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will remove all files for the selected games. You can always re-import them later.")
+        }
     }
 }
 
