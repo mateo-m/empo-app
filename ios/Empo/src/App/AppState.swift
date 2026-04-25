@@ -48,8 +48,31 @@ class AppState {
         phase = .loading
 
         let gameDir = URL(fileURLWithPath: game.path)
-        let settings = GameSettings.load(from: gameDir)
-        settings.applyToConfig(in: gameDir)
+
+        // Per-game managed config (mkxp.json, patches.json,
+        // game_settings.json, configuration.json) lives in
+        // `Documents/EmpoState/<id>/` so the imported game folder
+        // stays a faithful mirror of what the user dropped in.
+        // If a previous Empo build left those files inside the
+        // game folder, migrate them out lazily on this launch.
+        EmpoState.migrateLegacyConfig(forGameId: game.id, gameDirectory: gameDir)
+        let stateDir = EmpoState.directory(forGameId: game.id)
+
+        // Tell the engine where to find managed config. The engine's
+        // Config::read and Patcher constructor check this directory
+        // first for mkxp.json and patches.json before falling back
+        // to cwd (= game folder).
+        mkxp_setManagedConfigDir(stateDir.path)
+
+        let settings = GameSettings.load(from: stateDir)
+        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: gameDir)
+
+        // Apply Empo's curated patches.json (auto-discovered by the
+        // engine's Patcher from the managed config dir). Resolves
+        // canonical id from either the JGP manifest (preferred) or
+        // Game.ini Title. No-op if the game isn't in our registry
+        // and no _global rules apply.
+        PatcherDistribution.applyToGame(at: stateDir, gameDirectory: gameDir, gameId: game.id)
 
         // These settings go through the bridge, not mkxp.json
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment

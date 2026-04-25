@@ -1,0 +1,12 @@
+// Global Empo patches - applied to EVERY imported game regardless of
+// canonical id. Reserve this for fixes that are toolkit-wide or
+// engine-wide (Pokemon Essentials common idioms, RGSS quirks, etc.).
+//
+// Format: JoiPlay-compatible. See `_global/README.md` for schema notes
+// once we add one. Top-level "rpgm" array of {key, value} objects.
+// Keys prefixed with "[regex]" use std::regex_replace ECMAScript syntax.
+//
+// Currently empty. Add cross-game patches here as we discover them.
+{
+  "rpgm": []
+}
