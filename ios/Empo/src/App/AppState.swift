@@ -53,9 +53,6 @@ class AppState {
         // game_settings.json, configuration.json) lives in
         // `Documents/EmpoState/<id>/` so the imported game folder
         // stays a faithful mirror of what the user dropped in.
-        // If a previous Empo build left those files inside the
-        // game folder, migrate them out lazily on this launch.
-        EmpoState.migrateLegacyConfig(forGameId: game.id, gameDirectory: gameDir)
         let stateDir = EmpoState.directory(forGameId: game.id)
 
         // Tell the engine where to find managed config. The engine's
