@@ -208,26 +208,52 @@ private struct SplashView: View {
 private struct PixelDitherPattern: View {
     let color: Color
 
-    private let cellSize: CGFloat = 14
-    private let scale: CGFloat = 5
+    // Tile geometry: 16x16 SVG icons in a 3-col x 2-row grid with
+    // a 4pt gutter on every edge and between cells. Total tile
+    // dimensions follow `cells*size + (cells+1)*gutter`.
+    private static let iconSize: CGFloat = 16
+    private static let iconCols = 3
+    private static let iconRows = 2
+    private static let iconGutter: CGFloat = 4
+    private static let scale: CGFloat = 5
 
-    private var tileWidth: CGFloat { cellSize * 3 }
-    private var tileHeight: CGFloat { cellSize * 2 }
+    private static let tileWidth: CGFloat =
+        iconSize * CGFloat(iconCols) + iconGutter * CGFloat(iconCols + 1)
+    private static let tileHeight: CGFloat =
+        iconSize * CGFloat(iconRows) + iconGutter * CGFloat(iconRows + 1)
 
+    /// Tile rasterized lazily on first splash render: pick six
+    /// random icons from the curated 16x16 SVG pack
+    /// (`Assets.bundle/SplashIcons/`), parse each via the
+    /// in-process `SplashIcons.path(for:)` parser, and stamp them
+    /// into the tile in row-major order. Background stays
+    /// transparent so the splash's `Color.brand` shows through;
+    /// the fill color is white-with-low-alpha to match the prior
+    /// "subtle pattern over the brand color" visual. Tile content
+    /// changes between launches (icons are picked anew on each
+    /// process start) but stays static within a session - the
+    /// panning Canvas reuses this single image.
     nonisolated(unsafe) private static let cachedTileImage: UIImage = {
-        let tileW: CGFloat = 14 * 3
-        let tileH: CGFloat = 14 * 2
+        let size = CGSize(width: tileWidth, height: tileHeight)
         let uiColor = UIColor.white.withAlphaComponent(0.08)
-        let size = CGSize(width: tileW, height: tileH)
+        let names = SplashIcons.randomNames(count: iconCols * iconRows)
         let renderer = UIGraphicsImageRenderer(size: size)
         return renderer.image { ctx in
             uiColor.setFill()
-            drawCircle(ctx, ox: 2, oy: 2)
-            drawCross(ctx, ox: 16, oy: 2)
-            drawDiamond(ctx, ox: 30, oy: 2)
-            drawDiamond(ctx, ox: 2, oy: 16)
-            drawCircle(ctx, ox: 16, oy: 16)
-            drawCross(ctx, ox: 30, oy: 16)
+            var iter = names.makeIterator()
+            for row in 0..<iconRows {
+                for col in 0..<iconCols {
+                    guard let name = iter.next(),
+                          let path = SplashIcons.path(for: name)
+                    else { continue }
+                    let x = iconGutter + CGFloat(col) * (iconSize + iconGutter)
+                    let y = iconGutter + CGFloat(row) * (iconSize + iconGutter)
+                    ctx.cgContext.saveGState()
+                    ctx.cgContext.translateBy(x: x, y: y)
+                    path.fill()
+                    ctx.cgContext.restoreGState()
+                }
+            }
         }
     }()
 
@@ -240,8 +266,8 @@ private struct PixelDitherPattern: View {
             Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
                 guard let cg = ctx.resolveSymbol(id: 0) else { return }
 
-                let scaledTileW = tileWidth * scale
-                let scaledTileH = tileHeight * scale
+                let scaledTileW = Self.tileWidth * Self.scale
+                let scaledTileH = Self.tileHeight * Self.scale
                 let dx = CGFloat(phase.truncatingRemainder(dividingBy: 1.0)) * scaledTileW
 
                 ctx.translateBy(x: size.width / 2, y: size.height / 2)
@@ -264,50 +290,10 @@ private struct PixelDitherPattern: View {
                 Image(uiImage: Self.cachedTileImage)
                     .interpolation(.none)
                     .resizable()
-                    .frame(width: tileWidth * scale, height: tileHeight * scale)
+                    .frame(width: Self.tileWidth * Self.scale,
+                           height: Self.tileHeight * Self.scale)
                     .tag(0)
             }
-        }
-    }
-
-    // 10px circle - smooth pixel art rounding
-    private static func drawCircle(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
-        let rows: [(x: CGFloat, w: CGFloat)] = [
-            (3, 4), (2, 6), (1, 8), (1, 8), (0, 10),
-            (0, 10), (1, 8), (1, 8), (2, 6), (3, 4),
-        ]
-        for (i, row) in rows.enumerated() {
-            ctx.fill(CGRect(x: ox + row.x, y: oy + CGFloat(i), width: row.w, height: 1))
-        }
-    }
-
-    // 10px bold X - 3px-wide strokes, rounded single-pixel tips
-    private static func drawCross(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
-        let rects: [(x: CGFloat, y: CGFloat, w: CGFloat)] = [
-            (1, 0, 1), (8, 0, 1),
-            (0, 1, 3), (7, 1, 3),
-            (1, 2, 3), (6, 2, 3),
-            (2, 3, 3), (5, 3, 3),
-            (3, 4, 4),
-            (3, 5, 4),
-            (2, 6, 3), (5, 6, 3),
-            (1, 7, 3), (6, 7, 3),
-            (0, 8, 3), (7, 8, 3),
-            (1, 9, 1), (8, 9, 1),
-        ]
-        for r in rects {
-            ctx.fill(CGRect(x: ox + r.x, y: oy + r.y, width: r.w, height: 1))
-        }
-    }
-
-    // 10px diamond - pointed rhombus
-    private static func drawDiamond(_ ctx: UIGraphicsImageRendererContext, ox: CGFloat, oy: CGFloat) {
-        let rows: [(x: CGFloat, w: CGFloat)] = [
-            (4, 2), (3, 4), (2, 6), (1, 8), (0, 10),
-            (0, 10), (1, 8), (2, 6), (3, 4), (4, 2),
-        ]
-        for (i, row) in rows.enumerated() {
-            ctx.fill(CGRect(x: ox + row.x, y: oy + CGFloat(i), width: row.w, height: 1))
         }
     }
 }
