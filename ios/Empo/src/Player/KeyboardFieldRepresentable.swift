@@ -56,6 +56,34 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                 return false
             }
 
+            // SDL text-input bridge for soft-keyboard input.
+            //
+            // When the engine has SDL_StartTextInput active (game
+            // requested text via `Input.text_input = true`) we route
+            // the typed UTF-8 string through `mkxp_pushTextInput`
+            // which fabricates an `SDL_TEXTINPUT` event. EventThread
+            // appends it to `textInputBuffer`, which Ruby reads via
+            // `Input.gets`. This is the path Pokemon Reborn /
+            // Essentials / Infinite Fusion's name-entry scenes need.
+            //
+            // We deliberately do NOT short-circuit the per-character
+            // scancode injection below: games can do BOTH
+            // `Input.gets` (text path) AND
+            // `Input.triggerex?(:KEY_A)` (scancode path) in the same
+            // scene. Reborn's pbFreeText listens for KEY_RETURN /
+            // KEY_BACKSPACE / KEY_ESCAPE via triggerex while it
+            // consumes typed characters via gets. Both paths must
+            // see the input.
+            //
+            // When text mode is OFF (user-toggled hardware-keyboard
+            // mode for a non-text scene), `mkxp_isTextInputActive`
+            // returns 0 and we skip pushing text events to avoid
+            // silently filling the engine's text buffer with bytes
+            // nobody reads.
+            if mkxp_isTextInputActive() != 0 {
+                string.withCString { mkxp_pushTextInput($0) }
+            }
+
             for char in string {
                 let c = char.utf16.first ?? 0
                 let isUpper = (c >= UInt16(Character("A").asciiValue!) &&

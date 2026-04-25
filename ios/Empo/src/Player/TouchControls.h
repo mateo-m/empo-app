@@ -25,7 +25,14 @@ UIView *TCCreateKeyboardAccessoryView(void);
 
 extern NSString *const TCKeyEventNotification;
 
+// Posted from the engine bridge when SDL text-input mode flips
+// (game called `Input.text_input = true` or `false`). userInfo
+// has `@"active"` -> NSNumber<BOOL>. PlayerView listens and
+// auto-shows / hides the soft keyboard.
+extern NSString *const TCTextInputModeNotification;
+
 void TCInstallKeyEventWatcher(void);
+void TCInstallTextInputModeWatcher(void);
 
 #ifdef __cplusplus
 }

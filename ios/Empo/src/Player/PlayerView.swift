@@ -148,8 +148,27 @@ struct PlayerView: View {
             }
         }
         .ignoresSafeArea()
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name(rawValue: "TCTextInputMode"))) { note in
+            // Engine fired SDL_StartTextInput / SDL_StopTextInput
+            // because the game asked for text input via
+            // `Input.text_input = true/false`. Auto-flip the
+            // keyboard mode so the soft keyboard appears (or
+            // dismisses) without user action.
+            //
+            // No-op if the user already has the keyboard open via
+            // the toolbar toggle - the keyboardMode state is just
+            // re-set to the same value.
+            let active = (note.userInfo?["active"] as? Bool) ?? false
+            if active != keyboardMode {
+                keyboardMode = active
+                if active {
+                    AppWindow.setAllowKeyWindow(true)
+                }
+            }
+        }
         .onAppear {
             TCInstallKeyEventWatcher()
+            TCInstallTextInputModeWatcher()
 
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
