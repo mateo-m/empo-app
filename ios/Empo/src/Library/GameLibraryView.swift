@@ -195,9 +195,10 @@ struct GameLibraryView: View {
                     )
                 }
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            .overlay(alignment: .bottom) {
                 if selectionMode {
-                    bottomSelectionBar
+                    bulkDeleteButton
+                        .padding(.bottom, Spacing._2xl)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
@@ -330,18 +331,19 @@ struct GameLibraryView: View {
     private var libraryHeader: some View {
         HStack {
             if selectionMode {
-                Button("Done") { exitSelectionMode() }
-                    .font(.body.weight(.semibold))
-                    .tint(.brand)
+                // Symmetry placeholder on the left so the title
+                // stays optically centered when "Done" sits trailing.
+                Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
+                    .accessibilityHidden(true)
                 Spacer()
                 Text(selectedIDs.isEmpty
                      ? "Select Games"
                      : "\(selectedIDs.count) Selected")
                     .font(.headline)
                 Spacer()
-                // Symmetry placeholder so the title stays centered.
-                Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
-                    .accessibilityHidden(true)
+                Button("Done") { exitSelectionMode() }
+                    .font(.body.weight(.semibold))
+                    .tint(.brand)
             } else {
                 IconButton("gearshape", style: .outline) { showSettings = true }
                     .accessibilityLabel("Settings")
@@ -350,8 +352,20 @@ struct GameLibraryView: View {
                     .font(.title)
                     .fontWeight(.bold)
                 Spacer()
-                Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
-                    .accessibilityHidden(true)
+                // Selection-mode entry point. Tapping enters
+                // selection mode without pre-selecting anything;
+                // the user picks which games to act on next. Hidden
+                // when the library is empty since multi-select on
+                // zero games has no targets.
+                if !showEmpty {
+                    IconButton("checkmark.circle", style: .outline) {
+                        enterSelectionMode()
+                    }
+                    .accessibilityLabel("Select multiple games")
+                } else {
+                    Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
+                        .accessibilityHidden(true)
+                }
             }
         }
         .padding(.horizontal)
@@ -515,8 +529,7 @@ struct GameLibraryView: View {
                     gameToDelete: $gameToDelete,
                     showDeleteConfirm: $showDeleteConfirm,
                     gameForSettings: $gameForSettings,
-                    gameForInfo: $gameForInfo,
-                    onEnterMultiSelect: { enterSelectionMode(seedingWith: game.id) }
+                    gameForInfo: $gameForInfo
                 )
                 .transition(.cardAppear)
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
@@ -570,8 +583,6 @@ struct GameLibraryView: View {
                         showDeleteConfirm: $showDeleteConfirm,
                         gameForSettings: $gameForSettings,
                         gameForInfo: $gameForInfo
-                        // No multi-select for .invalid - their state isn't safely
-                        // bulk-deletable through the same path as ready games.
                     )
                     .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
@@ -609,8 +620,7 @@ struct GameLibraryView: View {
                     gameToDelete: $gameToDelete,
                     showDeleteConfirm: $showDeleteConfirm,
                     gameForSettings: $gameForSettings,
-                    gameForInfo: $gameForInfo,
-                    onEnterMultiSelect: { enterSelectionMode(seedingWith: game.id) }
+                    gameForInfo: $gameForInfo
                 )
                 .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
             }
@@ -636,11 +646,15 @@ struct GameLibraryView: View {
         }
     }
 
-    private func enterSelectionMode(seedingWith gameId: String) {
+    /// Enter selection mode. When `gameId` is non-nil the game is
+    /// pre-selected (used when entering from a per-card affordance);
+    /// when nil the user starts with an empty selection (used by
+    /// the library-header Select icon).
+    private func enterSelectionMode(seedingWith gameId: String? = nil) {
         Haptics.impact()
         withAnimation(Motion.standard) {
             selectionMode = true
-            selectedIDs = [gameId]
+            selectedIDs = gameId.map { [$0] } ?? []
         }
     }
 
@@ -701,26 +715,19 @@ struct GameLibraryView: View {
         .accessibilityLabel(selected ? "Selected" : "Not selected")
     }
 
-    /// Bottom action bar shown when in selection mode. Hosts
-    /// the bulk-delete CTA. Pinned via `.safeAreaInset(.bottom)`
-    /// so it overlays the scroll content without affecting the
-    /// scroll view's own bottom inset more than its own height.
-    private var bottomSelectionBar: some View {
-        HStack {
-            Spacer()
-            Button(role: .destructive) {
-                showBulkDeleteConfirm = true
-            } label: {
-                Label("Delete (\(selectedIDs.count))", systemImage: "trash")
-                    .font(.body.weight(.semibold))
-            }
-            .disabled(selectedIDs.isEmpty)
-            .tint(.red)
-            Spacer()
+    /// Floating bulk-delete CTA shown over the library content
+    /// when in selection mode. Routed through the design system's
+    /// `.primary` glass-capsule style with a red tint so it reads
+    /// as the same family of action as the rest of the app's
+    /// primary buttons - not an iOS toolbar bar.
+    private var bulkDeleteButton: some View {
+        Button(role: .destructive) {
+            showBulkDeleteConfirm = true
+        } label: {
+            Label("Delete (\(selectedIDs.count))", systemImage: "trash")
         }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.vertical, Spacing.md)
-        .background(.regularMaterial)
+        .buttonStyle(.primary(tint: .red))
+        .disabled(selectedIDs.isEmpty)
     }
 
     private func handleGameTap(_ game: GameEntry, from source: GameTapSource = .item) {
