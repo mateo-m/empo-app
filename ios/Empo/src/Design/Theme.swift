@@ -102,28 +102,6 @@ extension View {
         shadow(color: .black.opacity(0.15), radius: 4, y: 2)
     }
 
-    /// Drop-shadow alternative for text overlaid on game artwork.
-    ///
-    /// Default `.shadow` paints a flat black halo regardless of the
-    /// backdrop, which reads muddy over busy artwork (the halo
-    /// shows up just as opaque on a bright sky as on a dark cave
-    /// wall). This modifier layers a black-tinted blurred copy of
-    /// the same content beneath the original with
-    /// `blendMode(.overlay)`, so the shadow ties to the backdrop's
-    /// luminance instead of stamping over it: the copy darkens
-    /// where the artwork is bright (improving title contrast) and
-    /// fades where the artwork is already dark (no over-stacked
-    /// halo). The original text renders on top unmodified.
-    ///
-    /// Only works correctly when the modified content respects
-    /// `foregroundStyle` - i.e. for Text views and SF Symbols.
-    /// The audit confirms this is the only call-site shape today
-    /// (GameCard title/subtitle, GameHeroCard title); Image-with-
-    /// asset surfaces should use `.shadow` directly.
-    func textShadow() -> some View {
-        modifier(TextShadowModifier())
-    }
-
     func iconShadow() -> some View {
         shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 1)
     }
@@ -132,10 +110,29 @@ extension View {
         shadow(color: .black.opacity(0.25), radius: 8, y: 4)
     }
 
-    /// Drop shadow used on hero title text overlaid on game artwork,
-    /// both on the splash and inside game-loading screens.
+    /// Hero title halo for large wordmarks overlaid on artwork
+    /// (splash "Empo", GameLoadingView title). Renders a blurred
+    /// copy of the content underneath with `blendMode(.screen)` so
+    /// the surrounding pixels lighten toward the title's color,
+    /// producing an aura/glow effect that lets bold text pop on
+    /// busy artwork without stamping a flat dark halo. Original
+    /// text renders on top unmodified.
     func heroTitleShadow() -> some View {
-        shadow(radius: 4)
+        modifier(HeroTitleHaloModifier())
+    }
+
+    /// Drop shadow for smaller text overlaid on artwork (card
+    /// titles, hero card title, list-row subtitles). A clean
+    /// SwiftUI `.shadow` is plenty here - the previous attempt at
+    /// an overlay-blended duplicate copy produced a white-glow
+    /// look on dark artwork, which read as mistaken styling
+    /// rather than a shadow. `.compositingGroup` keeps the shadow
+    /// tied to the actual rendered text silhouette so it doesn't
+    /// double-stamp through child views.
+    func textShadow() -> some View {
+        self
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.6), radius: 2.5, x: 0, y: 1)
     }
 
     // (TextShadowModifier is defined below extension View {} since
@@ -168,22 +165,21 @@ extension View {
 }
 
 
-/// Backing modifier for `.textShadow()`. See the doc-comment on
-/// the modifier extension for design rationale.
-private struct TextShadowModifier: ViewModifier {
+/// Backing modifier for `.heroTitleShadow()`. Renders the content
+/// twice in a ZStack: a blurred + screen-blended copy beneath that
+/// lightens nearby pixels (the "halo"), and the original above.
+/// Screen-blend means the halo lightens dark backdrops (where bold
+/// titles need help to pop) and barely affects light backdrops
+/// (where the halo would otherwise blow out). Works well for the
+/// splash wordmark + game-loading-screen title against gradients
+/// and game artwork respectively.
+private struct HeroTitleHaloModifier: ViewModifier {
     func body(content: Content) -> some View {
         ZStack {
-            // Black-tinted blurred copy: tracks the text's silhouette,
-            // blended via `.overlay` so its visibility responds to
-            // backdrop luminance instead of stamping a flat halo.
-            // Slight downward offset gives the natural drop-shadow
-            // direction without a heavy radius.
             content
-                .foregroundStyle(.black)
-                .opacity(0.7)
-                .blur(radius: 3)
-                .blendMode(.overlay)
-                .offset(y: 1)
+                .blur(radius: 6)
+                .opacity(0.5)
+                .blendMode(.screen)
             content
         }
     }
