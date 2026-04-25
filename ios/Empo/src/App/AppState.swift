@@ -92,6 +92,7 @@ class AppState {
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
         let postload = settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
         mkxp_applyPerGameSettings(alignment.bridgeValue, postload)
+        mkxp_setUseOnScreenKeyboard(settings.useOnScreenKeyboard ?? false)
 
         crashTracker.writeMarker()
         sessionLogger.beginSession(for: game, debugLogsEnabled: AppSettings.shared.debugLogs)

@@ -4,7 +4,32 @@
 
 std::string systemImpl::getSystemLanguage() {
     @autoreleasepool {
-        return std::string(NSLocale.currentLocale.localeIdentifier.UTF8String);
+        // Return the ISO 639-1 language code only ("en", "fr",
+        // "ja"), NOT the full locale identifier ("en_US"). Game
+        // scripts that branch on language (Insurgence's
+        // `getRegion`, Reborn's localization shim, etc.) only care
+        // about the language; including the country code splits
+        // "en_US" / "en_GB" / "en_AU" into different cohorts which
+        // is rarely what those scripts want. NSLocale.languageCode
+        // gives us the language code straight from the user's iOS
+        // language preference (Settings > General > Language &
+        // Region), with `preferredLanguages.firstObject` as a
+        // fallback for the rare case where currentLocale's
+        // languageCode is nil.
+        NSString *lang = NSLocale.currentLocale.languageCode;
+        if (lang.length == 0) {
+            lang = NSLocale.preferredLanguages.firstObject;
+            // preferredLanguages entries can include a region tag
+            // (e.g. "en-US" or "zh-Hans-CN") - take only the first
+            // component to keep the contract identical.
+            if (lang.length != 0) {
+                NSRange dash = [lang rangeOfString:@"-"];
+                if (dash.location != NSNotFound) {
+                    lang = [lang substringToIndex:dash.location];
+                }
+            }
+        }
+        return std::string(lang.length != 0 ? lang.UTF8String : "en");
     }
 }
 
