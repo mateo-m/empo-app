@@ -657,10 +657,7 @@ class GameLibrary {
         destURL: URL,
         bundle: Jgp.Bundle
     ) {
-        // Seed engine settings from the bundled configuration. The
-        // cheats flag is a separate sidecar (configuration.json in
-        // our GameSettings namespace) because it outlives the
-        // mkxp.json regeneration on settings-reset.
+        // Seed engine settings from the bundled configuration.
         var settings = bundle.configuration?.toGameSettings() ?? GameSettings()
 
         // Ruby-syntax detection. JoiPlay's "mkxp-z" runtime
@@ -676,16 +673,13 @@ class GameLibrary {
             settings.useModernRuby = true
         }
 
-        // Persist managed config (mkxp.json, game_settings.json,
-        // configuration.json) into the per-game state directory
+        // Persist managed config (mkxp.json, game_settings.json)
+        // into the per-game state directory
         // (Documents/EmpoState/<id>/), NOT the imported game folder
         // - see EmpoState.swift for the rationale.
         let stateDir = EmpoState.directory(forGameId: importID)
         settings.applyToConfig(stateDirectory: stateDir, gameDirectory: destURL)
         settings.save(to: stateDir)
-        if let cheats = bundle.configuration?.cheats {
-            GameSettings.saveCheats(cheats, to: stateDir)
-        }
 
         // Seed the per-game control layout from the JGP gamepad
         // hints. Users can still re-arrange in the player toolbar

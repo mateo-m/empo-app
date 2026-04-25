@@ -92,7 +92,6 @@ struct GameSettings: Codable, Equatable {
     private static let settingsFilename = "game_settings.json"
     private static let originalConfigFilename = "mkxp.original.json"
     private static let configFilename = "mkxp.json"
-    private static let cheatsFilename = "configuration.json"
 
 
     /// Read the game's settings sidecar.
@@ -117,29 +116,6 @@ struct GameSettings: Codable, Equatable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let data = try? encoder.encode(self) {
-            try? data.write(to: url, options: .atomic)
-        }
-    }
-
-
-    static func loadCheats(from stateDirectory: URL) -> Bool {
-        let url = stateDirectory.appendingPathComponent(cheatsFilename)
-        guard let data = try? Data(contentsOf: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return false
-        }
-        return json["cheats"] as? Bool ?? false
-    }
-
-    static func saveCheats(_ value: Bool, to stateDirectory: URL) {
-        let url = stateDirectory.appendingPathComponent(cheatsFilename)
-        var json: [String: Any] = [:]
-        if let data = try? Data(contentsOf: url),
-           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            json = existing
-        }
-        json["cheats"] = value
-        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]) {
             try? data.write(to: url, options: .atomic)
         }
     }

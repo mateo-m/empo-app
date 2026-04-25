@@ -5,9 +5,8 @@ import Foundation
 /// `Documents/Games/<id>/` holds the game files exactly as they
 /// were imported - we never write into it. `Documents/EmpoState/<id>/`
 /// holds everything Empo generates per-game (mkxp.json,
-/// patches.json, game_settings.json, configuration.json), so the
-/// imported game folder stays a faithful mirror of the source
-/// archive.
+/// patches.json, game_settings.json), so the imported game folder
+/// stays a faithful mirror of the source archive.
 ///
 /// At launch the engine is told about this directory via
 /// `mkxp_setManagedConfigDir`, and its config / patcher loaders
