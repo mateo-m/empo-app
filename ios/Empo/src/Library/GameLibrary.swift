@@ -21,14 +21,14 @@ struct PendingImport: Identifiable, Hashable {
     let sourceName: String
 
     /// Placeholder `GameEntry` used when rendering the pending
-    /// import inside the existing grid/list. Path is empty because
-    /// nothing is on disk yet; `progress: 0` renders as the
-    /// indeterminate spinner inside `GameStatusIndicator`, which is
-    /// the right visual read for the pre-flight validation phase.
+    /// import inside the existing grid/list. Container is nil
+    /// because nothing is on disk yet; `progress: 0` renders as
+    /// the indeterminate spinner inside `GameStatusIndicator`,
+    /// which is the right visual read for the pre-flight phase.
     var syntheticEntry: GameEntry {
         GameEntry(
             id: id,
-            path: "",
+            container: nil,
             title: sourceName,
             artworkPath: nil,
             status: .importing(progress: 0)
@@ -47,9 +47,7 @@ class GameLibrary {
     private let fm = FileManager.default
     private let cancelledImports = Mutex(Set<String>())
 
-    nonisolated static let gamesDirectory: URL = FileManager.default
-        .urls(for: .documentDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Games", isDirectory: true)
+    nonisolated static var gamesDirectory: URL { GameContainer.rootURL }
 
     private init() {
         ensureGamesDirectory()
@@ -65,7 +63,7 @@ class GameLibrary {
             ? UserDefaults.standard.bool(forKey: DefaultsKey.cleanupInvalidGames)
             : false
         Task.detached {
-            let scanned = GameLibrary.scanGames(in: GameLibrary.gamesDirectory, cleanupInvalid: cleanupInvalid)
+            let scanned = GameLibrary.scanGames(cleanupInvalid: cleanupInvalid)
             let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
 
             await MainActor.run {
@@ -88,49 +86,48 @@ class GameLibrary {
                         lib.games.append(entry)
                     }
                 }
-                if initialLoad {
-                    lib.syncMetadata()
-                }
             }
         }
     }
 
-    /// Scans the games directory. If `cleanupInvalid` is true,
-    /// invalid folders are removed instead of kept as entries.
+    /// Scan `Documents/Games/`. Each subfolder that parses as a
+    /// `GameContainer` becomes a candidate; folders whose name
+    /// doesn't begin with a parseable UUID are ignored entirely
+    /// (defends against orphan files / dev-era leftovers).
+    ///
+    /// `cleanupInvalid: true` removes containers that fail
+    /// validation; otherwise they're surfaced as `.invalid` cards
+    /// so the user can choose to delete them.
     nonisolated private static func scanGames(
-        in gamesDir: URL,
         fm: FileManager = .default,
         cleanupInvalid: Bool
     ) -> [GameEntry] {
         var entries: [GameEntry] = []
-        guard let contents = try? fm.contentsOfDirectory(
-            at: gamesDir,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
 
-        for url in contents {
-            guard (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else {
-                continue
-            }
-
-            let isValid = (try? GameImportValidator.validate(url)) != nil
+        for container in GameContainer.discover() {
+            // The Game/ subdir must exist for the import to be
+            // meaningful. If it doesn't, the container is either
+            // half-imported or layout-incompatible (e.g. a folder
+            // from a build before this layout existed).
+            let gameDirExists = fm.fileExists(atPath: container.gameURL.path)
+            let isValid = gameDirExists
+                && (try? GameImportValidator.validate(container.gameURL)) != nil
 
             if !isValid {
                 if cleanupInvalid {
-                    NSLog("[GameLibrary] Removing invalid game folder: %@", url.lastPathComponent)
-                    try? fm.removeItem(at: url)
+                    NSLog("[GameLibrary] Removing invalid game container: %@",
+                          container.folderName)
+                    try? container.deleteAll()
                     continue
                 }
-                // Include as invalid entry so the user can see it
-                if var entry = buildGameEntry(from: url, fm: fm) {
+                if var entry = buildGameEntry(from: container, fm: fm) {
                     entry.status = .invalid
                     entries.append(entry)
                 }
                 continue
             }
 
-            if let entry = buildGameEntry(from: url, fm: fm) {
+            if let entry = buildGameEntry(from: container, fm: fm) {
                 entries.append(entry)
             }
         }
@@ -139,17 +136,14 @@ class GameLibrary {
         return entries
     }
 
-    nonisolated private static func buildGameEntry(from url: URL, fm: FileManager = .default) -> GameEntry? {
+    nonisolated private static func buildGameEntry(
+        from container: GameContainer,
+        fm: FileManager = .default
+    ) -> GameEntry? {
+        let iniTitle = GameEntry.parseINITitle(at: container.gameURL) ?? "Unknown Game"
+        let defaultArtwork = findArtwork(in: container)
 
-        let folderName = url.lastPathComponent
-        let iniTitle = GameEntry.parseINITitle(at: url) ?? "Unknown Game"
-        let defaultArtwork = findArtwork(at: url)
-
-        // Import writes the UUID as the first 36 chars of the folder
-        // name. The game's id is just that UUID.
-        let id = String(folderName.prefix(36))
-
-        let metadata = GameMetadata.load(for: id)
+        let metadata = GameMetadata.load(from: container)
         // Title priority: user's customTitle > import-time baseTitle
         // (JGP manifest name) > Game.ini title. The `engineTitle`
         // subtitle on the library card only surfaces when the user
@@ -162,15 +156,15 @@ class GameLibrary {
         // the card with a near-duplicate.
         let baseTitle = metadata.baseTitle ?? iniTitle
         let title = metadata.customTitle ?? baseTitle
-        let artworkPath = metadata.customArtworkPath(for: id) ?? defaultArtwork
+        let artworkPath = metadata.customArtworkPath(in: container) ?? defaultArtwork
         let engineTitle: String? = {
             guard metadata.customTitle != nil else { return nil }
             return title != iniTitle ? iniTitle : nil
         }()
 
         return GameEntry(
-            id: id,
-            path: url.path,
+            id: container.id,
+            container: container,
             title: title,
             artworkPath: artworkPath,
             engineTitle: engineTitle,
@@ -195,9 +189,9 @@ class GameLibrary {
 
 
     func refreshGameEntry(id: String) {
-        guard let idx = games.firstIndex(where: { $0.id == id }) else { return }
-        let url = URL(fileURLWithPath: games[idx].path)
-        guard var entry = Self.buildGameEntry(from: url) else { return }
+        guard let idx = games.firstIndex(where: { $0.id == id }),
+              let container = games[idx].container else { return }
+        guard var entry = Self.buildGameEntry(from: container) else { return }
         entry.status = games[idx].status  // preserve current status
         withAnimation { games[idx] = entry }
     }
@@ -303,14 +297,19 @@ class GameLibrary {
     /// matching pending entry. Called from the import pipeline once
     /// pre-flight validation passes - from this point on the user
     /// can see and cancel the import from the card itself.
-    nonisolated private func commitPendingToCard(_ importID: String, title: String, artworkPath: String?) {
+    nonisolated private func commitPendingToCard(
+        _ importID: String,
+        container: GameContainer,
+        title: String,
+        artworkPath: String?
+    ) {
         Task { @MainActor in
             let lib = GameLibrary.shared
             withAnimation {
                 _ = lib.pendingImports.removeValue(forKey: importID)
                 lib.games.append(GameEntry(
                     id: importID,
-                    path: "",
+                    container: container,
                     title: title,
                     artworkPath: artworkPath,
                     status: .importing(progress: 0)
@@ -320,15 +319,15 @@ class GameLibrary {
     }
 
     /// Swap in the card's artwork mid-extract, once the archive
-    /// has yielded a `Graphics/Titles/*` image. Called more than
-    /// once per import: each time the extractor finds an
-    /// alphabetically-smaller candidate the card updates to
-    /// match, mirroring the rule used by `findArtwork` after the
-    /// full extract completes so the card doesn't flicker to a
-    /// different artwork when the import finishes. Rebuilding the
-    /// entry (rather than mutating `artworkPath` on the existing
-    /// one) goes through SwiftUI's normal diffing so the card
-    /// cross-fades the placeholder to the real artwork.
+    /// has yielded a `Graphics/Titles/*` image or `.exe` icon.
+    /// Called more than once per import: each time the extractor
+    /// finds an alphabetically-smaller candidate the card updates
+    /// to match, mirroring the rule used by `findArtwork` after
+    /// the full extract completes so the card doesn't flicker to
+    /// a different artwork when the import finishes. Rebuilding
+    /// the entry (rather than mutating `artworkPath` on the
+    /// existing one) goes through SwiftUI's normal diffing so the
+    /// card cross-fades the placeholder to the real artwork.
     nonisolated private func updateCardArtwork(_ importID: String, artworkPath: String) {
         Task { @MainActor in
             let lib = GameLibrary.shared
@@ -337,7 +336,7 @@ class GameLibrary {
             withAnimation {
                 lib.games[idx] = GameEntry(
                     id: importID,
-                    path: lib.games[idx].path,
+                    container: lib.games[idx].container,
                     title: lib.games[idx].title,
                     artworkPath: artworkPath,
                     engineTitle: lib.games[idx].engineTitle,
@@ -357,12 +356,6 @@ class GameLibrary {
             guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
             lib.games[idx].status = .importing(progress: progress)
         }
-    }
-
-    nonisolated private func destinationURL(for importID: String, title: String?) -> URL {
-        let slug = title.map { GameLibrary.slugify($0) } ?? ""
-        let folderName = slug.isEmpty ? importID : "\(importID)-\(slug)"
-        return Self.gamesDirectory.appendingPathComponent(folderName)
     }
 
     nonisolated private func importFolder(from sourceURL: URL, importID: String, sourceName: String) throws {
@@ -387,14 +380,25 @@ class GameLibrary {
         // Pre-flight passed - commit the progress card so the rest
         // of the import has a visible home for progress/cancel UI.
         let title = GameEntry.parseINITitle(at: tmpDest) ?? sourceName
-        let artworkPath = Self.findArtwork(at: tmpDest)
+        let container = GameContainer(id: importID, slug: GameContainer.slugify(title))
+
+        // Lazy: write the exe-icon sidecar into Metadata/ from the
+        // tmp tree before the move, so the committed card has
+        // something to display. ExecutableIconExtractor's static
+        // helper is keyed off a game-folder URL; pass the tmp
+        // location, then re-target the resulting sidecar path
+        // afterwards. (For folder imports, sidecars are uncommon
+        // because folder imports are usually pre-extracted RGSS
+        // trees with `Graphics/Titles/` already present.)
+        let artworkPath = Self.findFolderImportArtwork(at: tmpDest)
         if let path = artworkPath {
             // Warm the decode cache before `tmpDest`'s defer-backed
             // cleanup kicks in so the card keeps rendering the
             // artwork across the move-then-reload window.
             _ = ImageCache.shared.image(for: path)
         }
-        commitPendingToCard(importID, title: title, artworkPath: artworkPath)
+        commitPendingToCard(importID, container: container,
+                            title: title, artworkPath: artworkPath)
 
         // Folder imports don't have a meaningful extraction-progress
         // phase (the heavy copy already happened in the pre-flight).
@@ -403,24 +407,31 @@ class GameLibrary {
         // path below cleans up.
         updateCardProgress(importID, 1.0)
 
-        let destURL = destinationURL(for: importID, title: title)
-        try fm.moveItem(at: tmpDest, to: destURL)
+        try fm.createDirectory(at: container.url, withIntermediateDirectories: true)
+        try fm.moveItem(at: tmpDest, to: container.gameURL)
 
         var committed = false
         defer {
             if !committed {
-                try? fm.removeItem(at: destURL)
+                try? container.deleteAll()
             }
         }
 
         if isImportCancelled(importID) { throw ImportCancelled() }
+
         // Snapshot developer's mkxp.json BEFORE
         // detectAndPersistModernRuby runs (which may write our own
         // mkxp.json via applyToConfig). The launch path also calls
         // this snapshot helper as a backstop.
-        EmpoState.snapshotOriginalConfig(forGameId: importID, gameDirectory: destURL)
-        Self.detectAndPersistModernRuby(in: destURL)
-        GameLibrary.createMetadata(for: importID)
+        container.snapshotOriginalConfigIfNeeded()
+        Self.detectAndPersistModernRuby(in: container)
+
+        // Lazy: extract the exe-icon sidecar from the now-final
+        // location, writing into Metadata/. Idempotent (skipped if
+        // already present), so repeat imports are cheap.
+        _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
+
+        Self.createMetadata(in: container)
         committed = true
     }
 
@@ -451,7 +462,9 @@ class GameLibrary {
         // rest of the archive extracts in the background. Artwork
         // fills in mid-extract via the extract() callback below.
         let title = GameEntry.parseINITitle(at: preflightRoot) ?? sourceName
-        commitPendingToCard(importID, title: title, artworkPath: nil)
+        let container = GameContainer(id: importID, slug: GameContainer.slugify(title))
+        commitPendingToCard(importID, container: container,
+                            title: title, artworkPath: nil)
 
         // Full extraction now runs visibly - progress feeds the
         // committed card's `.importing(progress:)` status.
@@ -469,17 +482,17 @@ class GameLibrary {
         //      binary and wins outright when present; other
         //      qualifying `.exe`s set a tentative sidecar that
         //      `Game.exe` can still overwrite if it arrives
-        //      later in archive order.
+        //      later in archive order. The sidecar is written
+        //      directly into `<container>/Metadata/exe-icon.png`
+        //      (NOT inside the tmp tree, NOT inside Game/) so
+        //      the imported game folder stays untouched and the
+        //      sidecar survives the tmp -> destination move.
         //   2. Alphabetically-smallest `Graphics/Titles/*` image
         //      (fallback). Only used when no qualifying
         //      executable has landed yet - once one does,
         //      subsequent Titles updates are ignored because the
         //      card would flicker when post-reload `findArtwork`
         //      picks the exe sidecar over the title image.
-        //
-        // Both hooks rebuild the committed `GameEntry` through
-        // `updateCardArtwork`, so the card cross-fades as the
-        // better source lands.
         let exeArtworkLocked = Mutex(false)
         let hasTentativeExeArtwork = Mutex(false)
         let bestTitlesFilename = Mutex<String?>(nil)
@@ -531,8 +544,8 @@ class GameLibrary {
                             return
                         }
 
-                        let parent = diskURL.deletingLastPathComponent()
-                        let sidecarURL = parent.appendingPathComponent(ExecutableIconExtractor.sidecarFilename)
+                        container.ensureMetadataDirectory()
+                        let sidecarURL = container.exeIconSidecarURL
                         do {
                             try png.write(to: sidecarURL)
                         } catch {
@@ -573,8 +586,8 @@ class GameLibrary {
                     // cached UIImage even after the file moves
                     // (the NSCache entry survives; the subsequent
                     // reload() points the card at the permanent
-                    // `destURL/Graphics/Titles/*` and reads fresh
-                    // from there).
+                    // `<container>/Game/Graphics/Titles/*` and
+                    // reads fresh from there).
                     _ = ImageCache.shared.image(for: diskURL.path)
                     self.updateCardArtwork(importID, artworkPath: diskURL.path)
                 }
@@ -597,25 +610,28 @@ class GameLibrary {
             ? try Self.preprocessJgp(at: gameRoot)
             : nil
 
-        let destURL = destinationURL(for: importID, title: title)
-        try fm.moveItem(at: gameRoot, to: destURL)
+        // Move the extracted tree into <container>/Game/. The
+        // exe-icon sidecar (if written above) already lives at
+        // <container>/Metadata/exe-icon.png and survives this move
+        // unchanged because Metadata/ is a sibling of Game/.
+        try fm.createDirectory(at: container.url, withIntermediateDirectories: true)
+        try fm.moveItem(at: gameRoot, to: container.gameURL)
 
         var committed = false
         defer {
             if !committed {
-                try? fm.removeItem(at: destURL)
+                try? container.deleteAll()
             }
         }
 
         if isImportCancelled(importID) { throw ImportCancelled() }
         if let bundle = jgpBundle {
             Self.finalizeJgpImport(
-                importID: importID,
-                destURL: destURL,
+                container: container,
                 bundle: bundle
             )
         } else {
-            GameLibrary.createMetadata(for: importID)
+            Self.createMetadata(in: container)
         }
         committed = true
     }
@@ -658,8 +674,7 @@ class GameLibrary {
     /// side-effect paths (game_settings.json, mkxp.json, metadata
     /// sidecar, UserDefaults layout key) use the final locations.
     nonisolated private static func finalizeJgpImport(
-        importID: String,
-        destURL: URL,
+        container: GameContainer,
         bundle: Jgp.Bundle
     ) {
         // Seed engine settings from the bundled configuration.
@@ -674,14 +689,12 @@ class GameLibrary {
         // to the modern Essentials codebase.
         if bundle.manifest.type == .mkxpZ {
             settings.useModernRuby = true
-        } else if GameSettings.detectModernRubyScripts(in: destURL) {
+        } else if GameSettings.detectModernRubyScripts(in: container.gameURL) {
             settings.useModernRuby = true
         }
 
         // Persist managed config (mkxp.json, game_settings.json)
-        // into the per-game state directory
-        // (Documents/EmpoState/<id>/), NOT the imported game folder
-        // - see EmpoState.swift for the rationale.
+        // into <container>/EmpoState/.
         //
         // Snapshot the developer's shipped mkxp.json (if any) into
         // mkxp.original.json BEFORE applyToConfig runs so the
@@ -693,9 +706,9 @@ class GameLibrary {
         // (idempotent), so this is belt-and-braces for the import
         // codepath where applyToConfig fires before the first
         // launch.
-        let stateDir = EmpoState.directory(forGameId: importID)
-        EmpoState.snapshotOriginalConfig(forGameId: importID, gameDirectory: destURL)
-        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: destURL)
+        let stateDir = container.ensureEmpoStateDirectory()
+        container.snapshotOriginalConfigIfNeeded()
+        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: container.gameURL)
         settings.save(to: stateDir)
 
         // Seed the per-game control layout from the JGP gamepad
@@ -704,7 +717,7 @@ class GameLibrary {
         if let gamepad = bundle.gamepad {
             let seed = gamepad.toSeedLayout()
             ControlsLayout.writeInitialPerGameLayout(
-                gameID: importID,
+                gameID: container.id,
                 dpadCenter: seed.dpadCenter,
                 dpadSize: seed.dpadSize,
                 buttons: seed.buttons
@@ -729,17 +742,17 @@ class GameLibrary {
 
         if let iconData = bundle.iconData,
            let image = UIImage(data: iconData),
-           let filename = GameMetadata.saveImage(image, as: "artwork", for: importID) {
+           let filename = GameMetadata.saveImage(image, as: "artwork", in: container) {
             metadata.customArtworkFilename = filename
         }
 
-        metadata.save(for: importID)
+        metadata.save(to: container)
     }
 
-    nonisolated private static func createMetadata(for gameId: String) {
+    nonisolated private static func createMetadata(in container: GameContainer) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
-        metadata.save(for: gameId)
+        metadata.save(to: container)
     }
 
     /// Scans the freshly-extracted game folder for Ruby 3 syntax
@@ -751,16 +764,12 @@ class GameLibrary {
     /// have their own detection path in `finalizeJgpImport` that
     /// also honors the manifest's runtime hint; this helper covers
     /// the plain .zip / folder import path.
-    nonisolated private static func detectAndPersistModernRuby(in gameDirectory: URL) {
-        guard GameSettings.detectModernRubyScripts(in: gameDirectory) else { return }
-        // Game folder layout is `Documents/Games/<id>/`; the per-game
-        // state directory is named by the same id under
-        // `Documents/EmpoState/`.
-        let gameId = gameDirectory.lastPathComponent
-        let stateDir = EmpoState.directory(forGameId: gameId)
+    nonisolated private static func detectAndPersistModernRuby(in container: GameContainer) {
+        guard GameSettings.detectModernRubyScripts(in: container.gameURL) else { return }
+        let stateDir = container.ensureEmpoStateDirectory()
         var settings = GameSettings.load(from: stateDir)
         settings.useModernRuby = true
-        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: gameDirectory)
+        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: container.gameURL)
         settings.save(to: stateDir)
     }
 
@@ -772,29 +781,32 @@ class GameLibrary {
             ImageCache.shared.evict(path: artworkPath)
         }
 
-        GameMetadata.delete(for: entry.id)
-
-        // Tear down the per-game state directory along with the
-        // game folder. Otherwise stale mkxp.json / patches.json /
-        // game_settings.json would linger if the user re-imported
-        // the same game id later.
-        EmpoState.remove(forGameId: entry.id)
-
         withAnimation {
             games.removeAll { $0.id == entry.id }
         }
 
         if wasImporting {
             cancelImport(entry.id)
+            // In-flight imports may have partially-created container
+            // dirs; clean them up if present (no-op when nothing
+            // landed on disk yet).
+            if let container = entry.container {
+                Task.detached(priority: .userInitiated) {
+                    try? container.deleteAll()
+                }
+            }
             return
         }
 
-        let pathToDelete = entry.path
+        guard let container = entry.container else { return }
         Task.detached(priority: .userInitiated) {
-            let fm = FileManager.default
             do {
-                guard fm.fileExists(atPath: pathToDelete) else { return }
-                try fm.removeItem(atPath: pathToDelete)
+                guard FileManager.default.fileExists(atPath: container.url.path) else { return }
+                // One rm -rf nukes Game/, EmpoState/, Logs/, and
+                // Metadata/ together - per-game saves, settings,
+                // logs, custom artwork, and crash markers all go
+                // in a single call.
+                try container.deleteAll()
             } catch {
                 NSLog("[GameLibrary] Delete error: %@", "\(error)")
                 await MainActor.run {
@@ -806,25 +818,41 @@ class GameLibrary {
     }
 
 
-    nonisolated private static func findArtwork(at url: URL) -> String? {
+    nonisolated private static func findArtwork(in container: GameContainer) -> String? {
         let fm = FileManager.default
 
         // Prefer the pre-extracted `.exe` icon when available. The
-        // sidecar is written once at import time (or lazily
+        // sidecar lives in `<container>/Metadata/exe-icon.png`
+        // (kept out of `Game/` so the imported tree stays
+        // untouched). It's written once at import time (or lazily
         // on-demand below) and carries the "official" game icon
         // the developer shipped inside the executable. Only fall
-        // through to `Graphics/Titles/` when no icon could be produced
-        // from the `.exe` (or no `.exe` exists).
-        let sidecar = url.appendingPathComponent(ExecutableIconExtractor.sidecarFilename)
+        // through to `Graphics/Titles/` when no icon could be
+        // produced.
+        let sidecar = container.exeIconSidecarURL
         if fm.fileExists(atPath: sidecar.path) {
             return sidecar.path
         }
-        if let sidecarPath = ExecutableIconExtractor.writeSidecarIfPossible(in: url) {
+        if let sidecarPath = ExecutableIconExtractor.writeSidecarIfPossible(in: container) {
             return sidecarPath
         }
 
-        let titlesDir = url.appendingPathComponent("Graphics/Titles")
-        guard let items = try? fm.contentsOfDirectory(atPath: titlesDir.path) else { return nil }
+        return findTitlesArtwork(in: container.gameURL)
+    }
+
+    /// Pre-import folder-tree variant of `findArtwork` that looks
+    /// inside a tmp directory (not yet inside a container).
+    /// Mirrors the post-import rule for the Graphics/Titles
+    /// fallback only - exe-icon sidecars are produced after the
+    /// move into the container.
+    nonisolated private static func findFolderImportArtwork(at url: URL) -> String? {
+        return findTitlesArtwork(in: url)
+    }
+
+    nonisolated private static func findTitlesArtwork(in gameURL: URL) -> String? {
+        let titlesDir = gameURL.appendingPathComponent("Graphics/Titles")
+        guard let items = try? FileManager.default
+            .contentsOfDirectory(atPath: titlesDir.path) else { return nil }
 
         let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "bmp"]
         for item in items.sorted() {
@@ -836,19 +864,6 @@ class GameLibrary {
         return nil
     }
 
-
-    nonisolated private static func slugify(_ string: String) -> String {
-        let allowed = CharacterSet.alphanumerics
-        let slug = string
-            .lowercased()
-            .unicodeScalars
-            .map { allowed.contains($0) ? String($0) : "-" }
-            .joined()
-        return slug
-            .components(separatedBy: "-")
-            .filter { !$0.isEmpty }
-            .joined(separator: "-")
-    }
 
     nonisolated private static func findGameRoot(in dir: URL) throws -> URL {
         let fm = FileManager.default
@@ -867,32 +882,8 @@ class GameLibrary {
     }
 
     private func ensureGamesDirectory() {
-        if !fm.fileExists(atPath: Self.gamesDirectory.path) {
-            try? fm.createDirectory(at: Self.gamesDirectory, withIntermediateDirectories: true)
-        }
-    }
-
-    /// Removes orphaned metadata that no longer corresponds to a game on disk.
-    private func syncMetadata() {
-        let metadataDir = FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Metadata", isDirectory: true)
-
-        guard fm.fileExists(atPath: metadataDir.path),
-              let contents = try? fm.contentsOfDirectory(
-                  at: metadataDir,
-                  includingPropertiesForKeys: nil,
-                  options: [.skipsHiddenFiles]
-              ) else { return }
-
-        let gameIDs = Set(games.map(\.id))
-
-        for url in contents {
-            let name = url.deletingPathExtension().lastPathComponent
-            if !gameIDs.contains(name) {
-                NSLog("[GameLibrary] Removing orphaned metadata: %@", url.lastPathComponent)
-                try? fm.removeItem(at: url)
-            }
+        if !fm.fileExists(atPath: GameContainer.rootURL.path) {
+            try? fm.createDirectory(at: GameContainer.rootURL, withIntermediateDirectories: true)
         }
     }
 }

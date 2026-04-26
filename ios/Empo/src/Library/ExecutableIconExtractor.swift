@@ -23,10 +23,12 @@ import UIKit
 /// its existing artwork-resolution rules.
 enum ExecutableIconExtractor {
 
-    /// Sidecar filename written next to a game's files so the
-    /// library scan picks up the already-decoded PE icon without
-    /// re-parsing the `.exe` on every reload.
-    static let sidecarFilename = ".empo-artwork.png"
+    /// Sidecar filename written into a game's `Metadata/` directory
+    /// so the library scan picks up the already-decoded PE icon
+    /// without re-parsing the `.exe` on every reload. The actual
+    /// path is `<container>/Metadata/<sidecarFilename>`; lives
+    /// outside `Game/` so the imported game tree stays untouched.
+    static let sidecarFilename = GameContainer.exeIconSidecarFilename
 
 
     /// Substrings commonly found in bundled helper binaries
@@ -78,9 +80,9 @@ enum ExecutableIconExtractor {
     }
 
 
-    /// Scans the root of `gameDir` for a suitable `.exe`,
-    /// extracts its icon, and writes it as a PNG sidecar
-    /// (`.empo-artwork.png`) in the same folder.
+    /// Scans `<container>/Game/` for a suitable `.exe`, extracts
+    /// its icon, and writes it as a PNG sidecar at
+    /// `<container>/Metadata/exe-icon.png`.
     ///
     /// Selection rule:
     ///   1. `Game.exe` (case-insensitive) wins when present.
@@ -102,13 +104,14 @@ enum ExecutableIconExtractor {
     /// `Graphics/Titles/`). Swallows errors to fit into the
     /// caller's fall-back chain.
     @discardableResult
-    static func writeSidecarIfPossible(in gameDir: URL) -> String? {
+    static func writeSidecarIfPossible(in container: GameContainer) -> String? {
         let fm = FileManager.default
-        let sidecar = gameDir.appendingPathComponent(sidecarFilename)
+        let sidecar = container.exeIconSidecarURL
         if fm.fileExists(atPath: sidecar.path) {
             return sidecar.path
         }
 
+        let gameDir = container.gameURL
         guard let items = try? fm.contentsOfDirectory(atPath: gameDir.path) else {
             return nil
         }
@@ -138,6 +141,7 @@ enum ExecutableIconExtractor {
             }
 
             do {
+                container.ensureMetadataDirectory()
                 try png.write(to: sidecar)
                 return sidecar.path
             } catch {

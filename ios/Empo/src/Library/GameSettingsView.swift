@@ -36,13 +36,15 @@ struct GameSettingsView: View {
 
     init(game: GameEntry) {
         self.game = game
-        let dir = URL(fileURLWithPath: game.path)
-        self.gameDirectory = dir
         // Per-game managed config (mkxp.json, game_settings.json)
-        // lives outside the game folder so the imported game
-        // directory stays untouched. See
-        // `EmpoState.directory(forGameId:)`.
-        let stateDir = EmpoState.directory(forGameId: game.id)
+        // lives at `<container>/EmpoState/`, alongside the imported
+        // `Game/` subdir. Both paths come from the same
+        // `GameContainer`. Settings UI assumes a non-synthetic
+        // entry (one with a real container on disk).
+        let container = game.container!
+        let dir = container.gameURL
+        self.gameDirectory = dir
+        let stateDir = container.empoStateURL
         self.stateDirectory = stateDir
 
         let s = GameSettings.load(from: stateDir)
