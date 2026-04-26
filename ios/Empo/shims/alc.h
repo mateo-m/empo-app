@@ -1,2 +1,2 @@
-/* Shim to redirect <alc.h> to iOS system OpenAL */
-#include <OpenAL/alc.h>
+/* Shim: redirect <alc.h> to OpenAL-Soft's installed header layout. */
+#include <AL/alc.h>

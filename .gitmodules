@@ -37,3 +37,6 @@
 	path = mkxp-z-apple-mobile
 	url = git@github.com:mateo-m/mkxp-z-apple-mobile
 	branch = dev
+[submodule "ios/Dependencies/sources/openal-soft"]
+	path = ios/Dependencies/sources/openal-soft
+	url = https://github.com/kcat/openal-soft.git
