@@ -1,19 +1,28 @@
 import SwiftUI
 
 /// Shared circular progress ring used during game imports. Handles both
-/// the determinate case (`progress > 0` → radial fill) and the
-/// indeterminate case (progress == 0 → spinning 30%-arc).
+/// the determinate case (`progress > 0` -> radial fill) and the
+/// indeterminate case (progress == 0 -> spinning 30%-arc).
 ///
 /// Both of those flavors used to live hand-written in `GameCard.swift`
 /// (one on the card face, one in the list-row status indicator), with
 /// identical trim/stroke/rotation configurations modulo a couple of
 /// `frame` and `Color.primary` vs `.white` tweaks. This view unifies
 /// them so tweaks land in a single place.
+///
+/// `tint` is `AnyShapeStyle` so callers can pass a `Color` for fixed
+/// branding (e.g. the import button uses `.white` against its tinted
+/// background) or a `Material` (e.g. `.regularMaterial`) for
+/// adaptive contrast against arbitrary artwork. Materials sample the
+/// backdrop and produce the right luminance automatically, so a
+/// progress card sitting on a bright Pokemon title screen and one
+/// sitting on a dark cinematic both end up with a clearly visible
+/// ring without the indicator needing to know what's behind it.
 struct SpinnerRing: View {
     let progress: Double
     var size: CGFloat = 36
     var lineWidth: CGFloat? = nil
-    var tint: Color = .white
+    var tint: AnyShapeStyle = AnyShapeStyle(Color.white)
     /// Opacity applied to the background track. The callers used
     /// slightly different track values (0.3 vs 0.2); 0.3 is the more
     /// common case, callers that need 0.2 override it here.
@@ -30,7 +39,8 @@ struct SpinnerRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(tint.opacity(trackOpacity), lineWidth: resolvedLineWidth)
+                .stroke(tint, lineWidth: resolvedLineWidth)
+                .opacity(trackOpacity)
                 .frame(width: size, height: size)
 
             if isDeterminate {
