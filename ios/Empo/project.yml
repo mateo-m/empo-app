@@ -50,7 +50,10 @@ settings:
       - $(PROJECT_DIR)/../Dependencies/ANGLE/$(PLATFORM_NAME)/lib
     GCC_PREPROCESSOR_DEFINITIONS:
       - MKXPZ_BUILD_XCODE
-      - MKXPZ_ALCDEVICE=ALCdevice_struct
+      # Forward-decl helper for ALCdevice. Apple's <OpenAL/alc.h>
+      # named the struct `ALCdevice_struct`; OpenAL-Soft's
+      # <AL/alc.h> names it just `ALCdevice`. We're on OpenAL-Soft.
+      - MKXPZ_ALCDEVICE=ALCdevice
       - 'MKXPZ_VERSION="\"1.0.0\""'
       - 'MKXPZ_GIT_HASH="\"ios\""'
       - 'MKXPZ_RUBY_VERSION="\"3.1\""'
@@ -349,6 +352,10 @@ targets:
           - -lbz2
           - -liconv
           - -larchive
+          # OpenAL-Soft static lib (replaces Apple's deprecated
+          # `-framework OpenAL`). Must precede system libs so the
+          # static archive is searched before any system fallback.
+          - -lopenal
           - -ldl
           - -lpthread
           - -framework Foundation
@@ -360,7 +367,6 @@ targets:
           - -framework AudioToolbox
           - -framework AVFoundation
           - -framework Metal
-          - -framework OpenAL
           - -framework QuartzCore
           - -framework GameController
           - -framework CoreMotion

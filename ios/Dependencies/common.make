@@ -247,6 +247,54 @@ $(SOURCES)/sdl2_ttf/Makefile: $(SOURCES)/sdl2_ttf/configure
 $(SOURCES)/sdl2_ttf/configure: $(SOURCES)/sdl2_ttf/autogen.sh
 	cd $(SOURCES)/sdl2_ttf; ./autogen.sh
 
+# OpenAL-Soft (submodule: sources/openal-soft)
+#
+# Replaces Apple's deprecated `-framework OpenAL` (frozen at the
+# circa-2005 fork point, known buffer-management quirks on iOS that
+# manifest as the Pokemon Infinite Fusion BGM-loop bug). OpenAL-Soft
+# is the de-facto reference OpenAL 1.1 implementation, owns its
+# own mixer ring (so `alSourceStop` actually drops samples instead
+# of letting CoreAudio drain them), and is what JoiPlay ships on
+# Android without exhibiting the loop.
+#
+# Static-lib build: every other dep here ships static, App Store
+# accepts it, dyld doesn't pay an extra load. CoreAudio backend
+# is the only one we need on iOS; everything else is forced off
+# so the lib stays small. ALSOFT_REQUIRE_COREAUDIO=ON makes the
+# CMake configure fail loudly if the backend isn't detected,
+# rather than silently producing a no-output lib.
+openal: init_dirs $(LIBDIR)/libopenal.a
+
+$(LIBDIR)/libopenal.a: $(SOURCES)/openal-soft/cmakebuild/Makefile
+	cd $(SOURCES)/openal-soft/cmakebuild; \
+	make -j$(NPROC); make install
+
+$(SOURCES)/openal-soft/cmakebuild/Makefile: $(SOURCES)/openal-soft/CMakeLists.txt
+	cd $(SOURCES)/openal-soft; \
+	mkdir -p cmakebuild; cd cmakebuild; \
+	$(CMAKE) \
+	-DLIBTYPE=STATIC \
+	-DALSOFT_UTILS=OFF \
+	-DALSOFT_EXAMPLES=OFF \
+	-DALSOFT_TESTS=OFF \
+	-DALSOFT_INSTALL_EXAMPLES=OFF \
+	-DALSOFT_INSTALL_UTILS=OFF \
+	-DALSOFT_INSTALL_AMBDEC_PRESETS=OFF \
+	-DALSOFT_INSTALL_HRTF_DATA=OFF \
+	-DALSOFT_BACKEND_COREAUDIO=ON \
+	-DALSOFT_REQUIRE_COREAUDIO=ON \
+	-DALSOFT_BACKEND_PIPEWIRE=OFF \
+	-DALSOFT_BACKEND_PULSEAUDIO=OFF \
+	-DALSOFT_BACKEND_ALSA=OFF \
+	-DALSOFT_BACKEND_OSS=OFF \
+	-DALSOFT_BACKEND_SOLARIS=OFF \
+	-DALSOFT_BACKEND_SNDIO=OFF \
+	-DALSOFT_BACKEND_PORTAUDIO=OFF \
+	-DALSOFT_BACKEND_JACK=OFF \
+	-DALSOFT_BACKEND_OPENSL=OFF \
+	-DALSOFT_BACKEND_WAVE=OFF
+
+
 # Freetype (submodule: sources/freetype)
 freetype: init_dirs $(LIBDIR)/libfreetype.a
 
@@ -399,7 +447,7 @@ clean-compiled:
 
 # Clean build artifacts from submodule source trees (configure outputs, object files, etc.)
 clean-sources:
-	@for dir in sdl2 sdl2_image sdl2_ttf sdl_sound freetype ruby; do \
+	@for dir in sdl2 sdl2_image sdl2_ttf sdl_sound freetype ruby openal-soft; do \
 		rm -rf $(SOURCES)/$$dir/cmakebuild 2>/dev/null; \
 	done
 	cd $(SOURCES)/sdl2_ttf && git checkout -- . 2>/dev/null || true
@@ -407,5 +455,5 @@ clean-sources:
 	cd $(SOURCES)/ruby && git checkout -- . 2>/dev/null || true
 	cd $(SOURCES)/ruby18 && git checkout -- . 2>/dev/null || true
 
-deps-core: libtheora libvorbis pixman libpng physfs uchardet sdl2 sdl2image sdlsound sdl2ttf freetype
+deps-core: libtheora libvorbis pixman libpng physfs uchardet sdl2 sdl2image sdlsound sdl2ttf freetype openal
 everything: deps-core ruby ruby18
