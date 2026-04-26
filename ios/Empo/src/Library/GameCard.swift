@@ -246,12 +246,13 @@ struct GameStatusIndicator: View {
     }
 
     var body: some View {
-        // Shared glass chrome across ready / paused / invalid states.
-        // Importing hides it because the SpinnerRing already provides
-        // its own ring-as-container; stacking two rims looks muddled.
-        // Uses the same `.glassEffect(.regular, in: .circle)` styling
-        // as IconButton so the indicator reads as a sibling to toolbar
-        // icons rather than a bespoke material blob.
+        // Glass chrome on every state EXCEPT importing. During
+        // import the ring stands on its own, but its stroke uses
+        // `.regularMaterial` so it adapts to the artwork behind
+        // it - bright on dark scenes, dark on bright scenes -
+        // without needing a glass disc behind it. `.primary` was
+        // failing here: a 0.2-opacity black donut on a sunlit
+        // Pokemon title screen is nearly invisible.
         indicatorBody
             .frame(width: size, height: size)
             .animation(Motion.gentle, value: kind)
@@ -259,16 +260,17 @@ struct GameStatusIndicator: View {
 
     @ViewBuilder
     private var indicatorBody: some View {
+        let isImporting = { if case .importing = kind { true } else { false } }()
         let core = ZStack {
             SpinnerRing(
                 progress: progress,
                 size: ringSize,
                 lineWidth: lineWidth,
-                tint: .primary,
-                trackOpacity: 0.2
+                tint: AnyShapeStyle(.regularMaterial),
+                trackOpacity: 0.35
             )
-            .opacity({ if case .importing = kind { true } else { false } }() ? 1 : 0)
-            .scaleEffect({ if case .importing = kind { true } else { false } }() ? 1 : 0.5)
+            .opacity(isImporting ? 1 : 0)
+            .scaleEffect(isImporting ? 1 : 0.5)
 
             innerIcon
                 .transition(.blurReplace)
@@ -291,8 +293,11 @@ struct GameStatusIndicator: View {
         switch kind {
         case .importing:
             Button(action: { onStopImport?() }) {
+                // Same `.regularMaterial` adaptive contrast as the
+                // ring around it, so stop-square and ring both
+                // read clearly against whatever artwork is behind.
                 RoundedRectangle(cornerRadius: 2.5)
-                    .fill(Color.primary)
+                    .fill(.regularMaterial)
                     .frame(width: stopSize, height: stopSize)
             }
             .buttonStyle(.plain)

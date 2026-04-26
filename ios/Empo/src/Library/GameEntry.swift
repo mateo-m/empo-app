@@ -89,7 +89,18 @@ struct GameEntry: Identifiable, Hashable {
     }
 
     static func parseINIValue(in iniURL: URL, section: String, key: String) -> String? {
-        guard let data = try? String(contentsOf: iniURL, encoding: .utf8) else {
+        // Game.ini is typically Windows-1252 / Latin-1 (RPG Maker's
+        // default save encoding). Try UTF-8 first - it's a strict
+        // superset of ASCII so the common case Just Works - and
+        // fall back to ISO Latin-1 when UTF-8 decode fails (any
+        // file with a non-ASCII byte like the `é` in
+        // "Title=Pokémon ..." trips this). Without the fallback,
+        // titles with accented characters silently return nil and
+        // surface as "Unknown Game" in the library.
+        guard let raw = try? Data(contentsOf: iniURL) else { return nil }
+        guard let data = String(data: raw, encoding: .utf8)
+            ?? String(data: raw, encoding: .isoLatin1)
+        else {
             return nil
         }
 
