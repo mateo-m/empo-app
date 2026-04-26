@@ -23,10 +23,6 @@ class AppState {
 
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
 
-    /// Preserved as a namespaced alias so call sites outside AppState
-    /// don't reach into SessionLogger directly.
-    static var logsDirectory: URL { SessionLogger.logsDirectory }
-
     private init() {
         registerBridgeCallbacks()
     }
@@ -40,6 +36,7 @@ class AppState {
         }
 
         guard phase == nil, pauseManager.pausedGame == nil else { return }
+        guard let container = game.container else { return }
         selectedGame = game
         // Bind the controls layout to this game so edits during play
         // persist to this game's per-game slot (not a global one).
@@ -47,24 +44,26 @@ class AppState {
         PauseManager.shared.reset()
         phase = .loading
 
-        let gameDir = URL(fileURLWithPath: game.path)
-
-        // Per-game managed config (mkxp.json, patches.json,
-        // game_settings.json) lives in `Documents/EmpoState/<id>/`
-        // so the imported game folder stays a faithful mirror of
-        // what the user dropped in.
-        let stateDir = EmpoState.directory(forGameId: game.id)
+        // Everything related to this game lives inside
+        // `<container>/`. `Game/` holds the imported files (engine
+        // cwd target). `EmpoState/` holds Empo-managed config
+        // (mkxp.json, patches.json, game_settings.json,
+        // .session-active, etc.). `Logs/` and `Metadata/` round
+        // out the per-game tree.
+        try? container.ensureSubdirs()
+        let gameDir = container.gameURL
+        let stateDir = container.empoStateURL
 
         // Snapshot the developer's shipped mkxp.json (if any) into
         // `<stateDir>/mkxp.original.json` so applyToConfig can use
         // it as a merge base. Idempotent: only copies on first
         // launch (or when the snapshot hasn't been backfilled yet).
-        EmpoState.snapshotOriginalConfig(forGameId: game.id, gameDirectory: gameDir)
+        container.snapshotOriginalConfigIfNeeded()
 
         // Tell the engine where to find managed config. The engine's
         // Config::read and Patcher constructor check this directory
         // first for mkxp.json and patches.json before falling back
-        // to cwd (= game folder).
+        // to cwd (= the Game/ subdir).
         mkxp_setManagedConfigDir(stateDir.path)
 
         let settings = GameSettings.load(from: stateDir)
@@ -86,14 +85,18 @@ class AppState {
         // canonical id from either the JGP manifest (preferred) or
         // Game.ini Title. No-op if the game isn't in our registry
         // and no _global rules apply.
-        PatcherDistribution.applyToGame(at: stateDir, gameDirectory: gameDir, gameId: game.id)
+        PatcherDistribution.applyToGame(container: container)
 
         // sessionLogger has to open the per-session log file before
         // any bridge call that writes to `mkxp_debugLog` - otherwise
         // those early lines are silently dropped because the file
         // isn't open yet.
-        crashTracker.writeMarker()
-        sessionLogger.beginSession(for: game, debugLogsEnabled: AppSettings.shared.debugLogs)
+        crashTracker.writeMarker(for: container)
+        sessionLogger.beginSession(
+            for: game,
+            container: container,
+            debugLogsEnabled: AppSettings.shared.debugLogs
+        )
 
         // These settings go through the bridge, not mkxp.json
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
@@ -150,14 +153,18 @@ class AppState {
     }
 
     func dismissCrashRecovery() {
-        crashTracker.removeMarker()
+        // No-op: stale markers were already cleaned up at app
+        // launch by CrashTracker.init. The recovery flag is just
+        // an in-memory bool that consumeRecovery flips.
         errorMessage = nil
     }
 
     func returnToLibrary() {
         terminationExpected = true
         recordSessionPlayTime()
-        crashTracker.removeMarker()
+        if let container = selectedGame?.container {
+            crashTracker.removeMarker(for: container)
+        }
 
         // Only talk to the engine if it's still running. After a crash
         // the terminated callback has already fired and re-arming the
@@ -255,11 +262,13 @@ class AppState {
     /// Re-creates it when the app returns to foreground so a subsequent
     /// crash after resume is still detected.
     func clearCrashMarkerForBackground() {
-        crashTracker.removeMarker()
+        guard let container = selectedGame?.container else { return }
+        crashTracker.removeMarker(for: container)
     }
 
     func restoreCrashMarkerForForeground() {
-        crashTracker.writeMarker()
+        guard let container = selectedGame?.container else { return }
+        crashTracker.writeMarker(for: container)
     }
 
     private func registerBridgeCallbacks() {
@@ -284,7 +293,9 @@ class AppState {
                 // and wake selectGame awaiters.
                 state.termination.handleEngineTerminatedAck()
                 state.recordSessionPlayTime()
-                state.crashTracker.removeMarker()
+                if let container = state.selectedGame?.container {
+                    state.crashTracker.removeMarker(for: container)
+                }
                 GameLibrary.shared.reload()
 
                 if !state.terminationExpected && state.phase != nil {

@@ -105,10 +105,10 @@ struct GameSettings: Codable, Equatable {
 
     /// Read the game's settings sidecar.
     ///
-    /// `stateDirectory` is the per-game `EmpoState/<id>/` directory
-    /// (see `EmpoState.directory(forGameId:)`), NOT the imported
-    /// game folder - settings live outside the game folder so the
-    /// imported game directory stays pristine.
+    /// `stateDirectory` is the per-game `<container>/EmpoState/`
+    /// directory (typically obtained via `container.empoStateURL`),
+    /// NOT the imported `Game/` subdir - settings live outside the
+    /// game files so the imported tree stays pristine.
     static func load(from stateDirectory: URL) -> GameSettings {
         let url = stateDirectory.appendingPathComponent(settingsFilename)
         guard let data = try? Data(contentsOf: url),
@@ -118,8 +118,8 @@ struct GameSettings: Codable, Equatable {
         return settings
     }
 
-    /// Write the game's settings sidecar to its `EmpoState/<id>/`
-    /// directory.
+    /// Write the game's settings sidecar to
+    /// `<container>/EmpoState/`.
     func save(to stateDirectory: URL) {
         let url = stateDirectory.appendingPathComponent(Self.settingsFilename)
         let encoder = JSONEncoder()
@@ -348,9 +348,9 @@ struct GameSettings: Codable, Equatable {
 
     /// Reads the game's mkxp.json defaults. Prefers the original backup
     /// over merged config so the developer's intended values always show.
-    /// `stateDirectory` is the per-game `EmpoState/<id>/` directory
-    /// where managed config files live (mkxp.json,
-    /// mkxp.original.json) - NOT the imported game folder.
+    /// `stateDirectory` is the per-game `<container>/EmpoState/`
+    /// where managed config files live (mkxp.json, mkxp.original.json)
+    /// - NOT the imported `Game/` subdir.
     static func readGameDefaults(from stateDirectory: URL) -> GameConfigDefaults {
         let originalURL = stateDirectory.appendingPathComponent(originalConfigFilename)
         let configURL = stateDirectory.appendingPathComponent(configFilename)
@@ -388,17 +388,17 @@ struct GameSettings: Codable, Equatable {
         )
     }
 
-    /// Merges these settings into the game's mkxp.json (in the
-    /// `EmpoState/<id>/` directory, not the imported game folder).
+    /// Merges these settings into the game's mkxp.json (in
+    /// `<container>/EmpoState/`, not the imported `Game/` subdir).
     ///
     /// `stateDirectory` is the per-game state directory where
     /// mkxp.json + mkxp.original.json live; `gameDirectory` is the
-    /// imported game folder, used only by the launch-time
-    /// modern-Ruby detector that scans `.rb` script files.
+    /// imported game folder (`<container>/Game/`), used only by the
+    /// launch-time modern-Ruby detector that scans `.rb` script files.
     ///
     /// `mkxp.original.json` (the developer's shipped config, if any)
-    /// is captured by `EmpoState.snapshotOriginalConfig` at launch
-    /// time before `applyToConfig` runs - NOT here. An earlier
+    /// is captured by `GameContainer.snapshotOriginalConfigIfNeeded`
+    /// at launch time before `applyToConfig` runs - NOT here. An earlier
     /// version of this method had a lazy "copy current mkxp.json
     /// to mkxp.original.json on second launch if no .original.json
     /// existed" branch, which is structurally broken: by the second

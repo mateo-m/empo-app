@@ -5,7 +5,7 @@ enum GameStatus: Hashable {
     case importing(progress: Double) // 0.0 to 1.0
     case invalid
 
-    /// Strips associated values — useful as an animation trigger.
+    /// Strips associated values - useful as an animation trigger.
     enum Phase: Hashable { case ready, importing, invalid }
     var phase: Phase {
         switch self {
@@ -17,10 +17,19 @@ enum GameStatus: Hashable {
 }
 
 struct GameEntry: Identifiable, Hashable {
-    let id: String           // UUID used as folder name
-    let path: String         // full path to game folder
+    /// Bare UUID (matches `container?.id`). Stable across renames
+    /// of the on-disk folder. Synthetic entries (in-flight imports
+    /// without a committed folder yet) keep their id but have no
+    /// `container`.
+    let id: String
+
+    /// `Documents/Games/<uuid>-<slug>/` for ready entries.
+    /// nil during pre-flight validation when nothing is on disk
+    /// yet (the synthetic placeholder entry shown in the grid).
+    let container: GameContainer?
+
     let title: String        // display title (custom override or base)
-    let artworkPath: String? // first image in Graphics/Titles/, if any
+    let artworkPath: String? // resolved artwork path
     // The engine's own title for the game (parsed from Game.ini),
     // surfaced on the library card alongside `title` when they
     // differ. Non-nil only when the display title has been
@@ -31,6 +40,15 @@ struct GameEntry: Identifiable, Hashable {
     var engineTitle: String? = nil
     var lastPlayed: Date? = nil      // from metadata, cached at scan time
     var status: GameStatus = .ready
+
+    /// Where the game's own files live. `<container>/Game/`. Empty
+    /// string for synthetic in-flight imports without a committed
+    /// folder. Use this when you need to point the engine cwd at
+    /// the game (`mkxp_setGamePath`), parse `Game.ini`, scan for
+    /// title artwork, etc.
+    var path: String {
+        container?.gameURL.path ?? ""
+    }
 
     var isImporting: Bool {
         if case .importing = status { return true }
@@ -44,7 +62,9 @@ struct GameEntry: Identifiable, Hashable {
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: GameEntry, rhs: GameEntry) -> Bool {
-        lhs.id == rhs.id && lhs.status == rhs.status && lhs.title == rhs.title && lhs.path == rhs.path && lhs.artworkPath == rhs.artworkPath && lhs.engineTitle == rhs.engineTitle && lhs.lastPlayed == rhs.lastPlayed
+        lhs.id == rhs.id && lhs.status == rhs.status && lhs.title == rhs.title
+            && lhs.container == rhs.container && lhs.artworkPath == rhs.artworkPath
+            && lhs.engineTitle == rhs.engineTitle && lhs.lastPlayed == rhs.lastPlayed
     }
 
 

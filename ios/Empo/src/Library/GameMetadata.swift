@@ -1,14 +1,21 @@
 import Foundation
 import UIKit
 
-/// Per-game metadata stored in `Documents/Metadata/`, survives game directory clearing.
+/// Per-game metadata stored at `<container>/Metadata/metadata.json`,
+/// with custom artwork/banner images alongside it as
+/// `<container>/Metadata/<filename>.jpg`.
+///
+/// All path math goes through `GameContainer`; this type is just the
+/// codable struct + load/save/image helpers. Survives game directory
+/// clearing only insofar as the container survives - on game delete
+/// the entire container is rm'd, metadata included.
 struct GameMetadata: Codable {
     var dateAdded: Date?
     var lastPlayed: Date?
     var totalPlayTime: TimeInterval?   // wall-clock seconds (unaffected by fast forward)
     var customTitle: String?
-    var customArtworkFilename: String?  // e.g. "artwork.jpg", stored in Metadata/{id}/
-    var customBannerFilename: String?   // e.g. "banner.jpg", stored in Metadata/{id}/
+    var customArtworkFilename: String?  // e.g. "artwork.jpg", relative to <container>/Metadata/
+    var customBannerFilename: String?   // e.g. "banner.jpg", relative to <container>/Metadata/
 
     // Title sourced from the import, not from a user edit. For JGP
     // imports this comes from the manifest's `name` field, which
@@ -28,23 +35,8 @@ struct GameMetadata: Codable {
     var manifestDescription: String?
 
 
-    private static var metadataDirectory: URL {
-        FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Metadata", isDirectory: true)
-    }
-
-    static func mediaDirectory(for gameId: String) -> URL {
-        metadataDirectory.appendingPathComponent(gameId, isDirectory: true)
-    }
-
-    private static func metadataURL(for gameId: String) -> URL {
-        metadataDirectory.appendingPathComponent("\(gameId).json")
-    }
-
-
-    static func load(for gameId: String) -> GameMetadata {
-        let url = metadataURL(for: gameId)
+    static func load(from container: GameContainer) -> GameMetadata {
+        let url = container.metadataJSONURL
         guard let data = try? Data(contentsOf: url) else { return GameMetadata() }
 
         let decoder = JSONDecoder()
@@ -76,54 +68,37 @@ struct GameMetadata: Codable {
         !name.isEmpty && !name.contains("/") && !name.contains("\\") && name != "." && name != ".."
     }
 
-    func save(for gameId: String) {
-        let fm = FileManager.default
-        let dir = Self.metadataDirectory
-        if !fm.fileExists(atPath: dir.path) {
-            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
+    func save(to container: GameContainer) {
+        container.ensureMetadataDirectory()
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(self) {
-            try? data.write(to: Self.metadataURL(for: gameId), options: .atomic)
-        }
-    }
-
-    static func delete(for gameId: String) {
-        let fm = FileManager.default
-        try? fm.removeItem(at: metadataURL(for: gameId))
-        let mediaDir = mediaDirectory(for: gameId)
-        if fm.fileExists(atPath: mediaDir.path) {
-            try? fm.removeItem(at: mediaDir)
+            try? data.write(to: container.metadataJSONURL, options: .atomic)
         }
     }
 
 
-    private func customMediaPath(filename: String?, for gameId: String) -> String? {
+    private func customMediaPath(filename: String?, in container: GameContainer) -> String? {
         guard let filename else { return nil }
-        let path = Self.mediaDirectory(for: gameId)
+        let path = container.metadataURL
             .appendingPathComponent(filename).path
         return FileManager.default.fileExists(atPath: path) ? path : nil
     }
 
-    func customArtworkPath(for gameId: String) -> String? {
-        customMediaPath(filename: customArtworkFilename, for: gameId)
+    func customArtworkPath(in container: GameContainer) -> String? {
+        customMediaPath(filename: customArtworkFilename, in: container)
     }
 
-    func customBannerPath(for gameId: String) -> String? {
-        customMediaPath(filename: customBannerFilename, for: gameId)
+    func customBannerPath(in container: GameContainer) -> String? {
+        customMediaPath(filename: customBannerFilename, in: container)
     }
 
 
     @discardableResult
-    static func saveImage(_ image: UIImage, as name: String, for gameId: String) -> String? {
-        let fm = FileManager.default
-        let dir = mediaDirectory(for: gameId)
-        if !fm.fileExists(atPath: dir.path) {
-            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        }
+    static func saveImage(_ image: UIImage, as name: String, in container: GameContainer) -> String? {
+        let dir = container.ensureMetadataDirectory()
 
         // Resize to reasonable dimensions to save disk space
         let maxDimension: CGFloat = name.contains("banner") ? 1200 : 512
@@ -142,28 +117,20 @@ struct GameMetadata: Codable {
         }
     }
 
-    static func removeImage(named filename: String, for gameId: String) {
-        let url = mediaDirectory(for: gameId).appendingPathComponent(filename)
+    static func removeImage(named filename: String, in container: GameContainer) {
+        let url = container.metadataURL.appendingPathComponent(filename)
         try? FileManager.default.removeItem(at: url)
     }
 
 
-    /// Returns any game IDs whose metadata has the given JGP manifest id.
-    /// Used to detect when a user imports the same JGP archive twice so
-    /// the import flow can offer to replace the existing entry or add a
-    /// second copy.
-    static func gameIDs(withManifestId manifestId: String) -> [String] {
-        let fm = FileManager.default
-        let dir = metadataDirectory
-        guard let entries = try? fm.contentsOfDirectory(atPath: dir.path) else {
-            return []
-        }
-        return entries.compactMap { name -> String? in
-            guard name.hasSuffix(".json") else { return nil }
-            let gameId = String(name.dropLast(".json".count))
-            let metadata = load(for: gameId)
-            guard metadata.manifestId == manifestId else { return nil }
-            return gameId
+    /// Returns containers whose metadata has the given JGP manifest
+    /// id. Used to detect when a user imports the same JGP archive
+    /// twice so the import flow can offer to replace the existing
+    /// entry or add a second copy.
+    static func containers(withManifestId manifestId: String) -> [GameContainer] {
+        return GameContainer.discover().filter { container in
+            let metadata = load(from: container)
+            return metadata.manifestId == manifestId
         }
     }
 

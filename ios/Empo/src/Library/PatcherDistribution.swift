@@ -9,11 +9,12 @@ import Foundation
 ///      field (raw zip / 7z / rar / folder imports).
 ///   2. Concatenate `Patches/_global/patches.json` (always-applied
 ///      toolkit-wide rules) with `Patches/<canonical-id>/patches.json`
-///      (per-game rules) into a single JSON file written to the game
-///      folder as `patches.json`.
-///   3. The engine's `Patcher` constructor auto-discovers
-///      `patches.json` in cwd (the game folder) and applies the rules
-///      to every script section before Ruby evaluates it.
+///      (per-game rules) into a single JSON file written to
+///      `<container>/EmpoState/patches.json`.
+///   3. The engine's `Patcher` constructor reads `patches.json`
+///      from the managed config dir (`<container>/EmpoState/`) and
+///      applies the rules to every script section before Ruby
+///      evaluates it.
 ///
 /// User customization (Phase 2): users will be able to drop a
 /// `user-patches.json` alongside this file; the engine will honor
@@ -32,21 +33,12 @@ enum PatcherDistribution {
     // MARK: - Entry point
 
     /// Resolve canonical id, merge applicable patches, write
-    /// `patches.json` to the per-game state directory. No-op (and
+    /// `patches.json` into `<container>/EmpoState/`. No-op (and
     /// clears any stale generated file) if no patches apply.
-    ///
-    /// `stateDirectory` is `Documents/EmpoState/<id>/` (where the
-    /// generated `patches.json` is written and where the engine's
-    /// Patcher auto-discovery looks for it).
-    /// `gameDirectory` is `Documents/Games/<id>/` (the imported
-    /// game folder, source of `Game.ini` for title-based canonical
-    /// id resolution).
-    static func applyToGame(at stateDirectory: URL,
-                            gameDirectory: URL,
-                            gameId: String) {
-        let outURL = stateDirectory.appendingPathComponent(patchesFilename)
+    static func applyToGame(container: GameContainer) {
+        let outURL = container.patchesURL
 
-        let canonicalId = resolveCanonicalId(gameDirectory: gameDirectory, gameId: gameId)
+        let canonicalId = resolveCanonicalId(container: container)
 
         // Read all applicable patch sources. Order matters: global
         // first so per-game rules can override (last-writer-wins
@@ -71,6 +63,7 @@ enum PatcherDistribution {
             return
         }
 
+        container.ensureEmpoStateDirectory()
         let payload: [String: Any] = ["rpgm": rules]
         if let data = try? JSONSerialization.data(
             withJSONObject: payload,
@@ -85,14 +78,16 @@ enum PatcherDistribution {
     /// Walk the gameRegistry matchers in order:
     ///   manifestId (cheapest) -> iniTitle -> fingerprint (lazy)
     /// First matching game wins.
-    private static func resolveCanonicalId(gameDirectory: URL, gameId: String) -> String? {
+    private static func resolveCanonicalId(container: GameContainer) -> String? {
         guard let registry = loadRegistry() else {
             NSLog("[patcher-dist] registry load failed")
             return nil
         }
 
+        let gameId = container.id
+
         // 1. JGP manifest id (only games imported via .jgp have one).
-        let metadata = GameMetadata.load(for: gameId)
+        let metadata = GameMetadata.load(from: container)
         if let mid = metadata.manifestId, !mid.isEmpty {
             for game in registry.games {
                 for matcher in game.matchers where matcher.type == "manifestId" {
@@ -106,7 +101,7 @@ enum PatcherDistribution {
 
         // 2. Game.ini Title (case-insensitive substring) - works for
         //    every import path including raw zip/rar/folder.
-        if let title = readIniTitle(gameDirectory: gameDirectory) {
+        if let title = readIniTitle(gameURL: container.gameURL) {
             let normalized = title.lowercased()
             for game in registry.games {
                 for matcher in game.matchers where matcher.type == "iniTitle" {
@@ -197,8 +192,8 @@ enum PatcherDistribution {
 
     /// Parse `[Game]\nTitle=...` from the game's `Game.ini`.
     /// Returns nil if the file is missing or has no Title.
-    private static func readIniTitle(gameDirectory: URL) -> String? {
-        let iniURL = gameDirectory.appendingPathComponent("Game.ini")
+    private static func readIniTitle(gameURL: URL) -> String? {
+        let iniURL = gameURL.appendingPathComponent("Game.ini")
         // Game.ini is typically Windows-1252 / Latin-1; fall back
         // to UTF-8 then ISO Latin 1 if the first decode fails.
         guard let data = try? Data(contentsOf: iniURL) else { return nil }

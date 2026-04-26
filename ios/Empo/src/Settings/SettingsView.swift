@@ -142,13 +142,13 @@ struct SettingsView: View {
                     SettingsToggle(
                         title: "Debug logs",
                         isOn: $settings.debugLogs,
-                        description: "Saves engine logs for each session. Find them in Files → \(AppInfo.name) → Logs."
+                        description: "Saves engine logs for each session. Find them in Files → \(AppInfo.name) → Games → <game> → Logs."
                     )
 
                     if settings.debugLogs {
                         VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Stepper("Keep last \(settings.maxLogFiles) logs", value: $settings.maxLogFiles, in: 5...100, step: 5)
-                            Text("Older logs get cleaned up automatically on launch.")
+                            Stepper("Keep last \(settings.maxLogFiles) logs per game", value: $settings.maxLogFiles, in: 5...100, step: 5)
+                            Text("Older logs get cleaned up automatically when a session starts.")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
