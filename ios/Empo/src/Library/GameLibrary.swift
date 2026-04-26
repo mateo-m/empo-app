@@ -47,6 +47,16 @@ class GameLibrary {
     private let fm = FileManager.default
     private let cancelledImports = Mutex(Set<String>())
 
+    /// IDs of imports currently extracting / moving on a detached
+    /// task. The library scan skips these so a concurrent reload
+    /// (triggered by another import finishing) doesn't see a
+    /// half-imported container - i.e. one where the destination
+    /// folder exists but the inner `Game/` subdir hasn't landed
+    /// yet - and surface it as an `.invalid` "Unknown Game" entry,
+    /// clobbering the in-memory progress card via the
+    /// scan/merge replace step in `reload()`.
+    private let inFlightImports = Mutex(Set<String>())
+
     nonisolated static var gamesDirectory: URL { GameContainer.rootURL }
 
     private init() {
@@ -62,8 +72,12 @@ class GameLibrary {
         let cleanupInvalid = initialLoad
             ? UserDefaults.standard.bool(forKey: DefaultsKey.cleanupInvalidGames)
             : false
+        let skipIDs = inFlightImports.withLock { Set($0) }
         Task.detached {
-            let scanned = GameLibrary.scanGames(cleanupInvalid: cleanupInvalid)
+            let scanned = GameLibrary.scanGames(
+                cleanupInvalid: cleanupInvalid,
+                skipIDs: skipIDs
+            )
             let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
 
             await MainActor.run {
@@ -100,11 +114,20 @@ class GameLibrary {
     /// so the user can choose to delete them.
     nonisolated private static func scanGames(
         fm: FileManager = .default,
-        cleanupInvalid: Bool
+        cleanupInvalid: Bool,
+        skipIDs: Set<String> = []
     ) -> [GameEntry] {
         var entries: [GameEntry] = []
 
         for container in GameContainer.discover() {
+            // Skip containers whose import is still in-flight on
+            // another task. Without this guard a concurrent reload
+            // - triggered by a sibling import finishing - would see
+            // the partially-populated folder, decide it's invalid,
+            // and produce an "Unknown Game" card that clobbers the
+            // in-memory progress card during the merge step.
+            if skipIDs.contains(container.id) { continue }
+
             // The Game/ subdir must exist for the import to be
             // meaningful. If it doesn't, the container is either
             // half-imported or layout-incompatible (e.g. a folder
@@ -262,26 +285,44 @@ class GameLibrary {
         // pre-flight passes a progress card is committed to `games` and
         // extraction/finalisation runs with the card visible.
         pendingImports[importID] = PendingImport(id: importID, sourceName: sourceName)
+        // Mark the import as in-flight so concurrent library scans
+        // (triggered by sibling imports finishing) skip this
+        // container until the move is committed and metadata is
+        // written. Removed in the detached task's defer.
+        inFlightImports.withLock { _ = $0.insert(importID) }
 
         Task.detached(priority: .userInitiated) {
             defer { self.clearCancellation(importID) }
+            // Drop from in-flight set BEFORE queuing the reload
+            // call so the post-completion scan sees this container
+            // as a normal candidate (not skipped). Doing this in a
+            // `defer` would push it past the `await MainActor.run`
+            // closure and reload's scan would still treat the
+            // just-finished import as in-flight, leaving the card
+            // stuck on `.importing` forever.
+            let markNotInFlight = {
+                self.inFlightImports.withLock { _ = $0.remove(importID) }
+            }
             do {
                 if archiveFormat != nil {
                     try self.importArchive(from: sourceURL, importID: importID, sourceName: sourceName)
                 } else {
                     try self.importFolder(from: sourceURL, importID: importID, sourceName: sourceName)
                 }
+                markNotInFlight()
                 await MainActor.run {
                     GameLibrary.shared.reload()
                     completion(nil)
                 }
             } catch is ImportCancelled {
+                markNotInFlight()
                 NSLog("[GameLibrary] Import cancelled: %@", importID)
                 await MainActor.run {
                     _ = GameLibrary.shared.pendingImports.removeValue(forKey: importID)
                     GameLibrary.shared.games.removeAll { $0.id == importID }
                 }
             } catch {
+                markNotInFlight()
                 NSLog("[GameLibrary] Import error: %@", "\(error)")
                 let surfaced: Error = Self.isOutOfSpace(error) ? ImportError.outOfSpace : error
                 await MainActor.run {
@@ -332,7 +373,21 @@ class GameLibrary {
         Task { @MainActor in
             let lib = GameLibrary.shared
             guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
-            guard lib.games[idx].artworkPath != artworkPath else { return }
+            // No early-return on same path. The mid-extract sidecar
+            // is at a fixed location (`<container>/Metadata/exe-icon.png`)
+            // and gets overwritten on disk when a later .exe in the
+            // archive supersedes the earlier pick (e.g. Reborn1950
+            // ships [Patcher.exe (skipped), Reborn.exe, Game.exe] -
+            // Reborn writes first, Game.exe overwrites). The path
+            // string is unchanged across those writes so a guard
+            // here would skip the SwiftUI re-render and the card
+            // would keep showing the first icon decoded into the
+            // ImageCache - until reload-time view rebuild swaps it
+            // for the latest disk content, producing a visible
+            // mid-import-vs-final mismatch. Always rebuilding the
+            // entry forces the body re-eval, which re-reads cache
+            // (already evicted at write time), so the displayed
+            // icon tracks disk state.
             withAnimation {
                 lib.games[idx] = GameEntry(
                     id: importID,
@@ -472,30 +527,38 @@ class GameLibrary {
         try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: tmpDir) }
 
-        // Mid-extract artwork surfacing. Two sources are mirrored
-        // against the post-reload `findArtwork` rule:
-        //   1. The `.exe` icon (preferred). Only executables that
-        //      import `rgss*.dll` qualify - patchers, updaters,
-        //      and installer binaries sitting next to the game
-        //      (e.g. Pokemon Uranium's `Patcher.exe`) get skipped
-        //      wholesale. `Game.exe` is the canonical RPG Maker
-        //      binary and wins outright when present; other
-        //      qualifying `.exe`s set a tentative sidecar that
-        //      `Game.exe` can still overwrite if it arrives
-        //      later in archive order. The sidecar is written
-        //      directly into `<container>/Metadata/exe-icon.png`
-        //      (NOT inside the tmp tree, NOT inside Game/) so
-        //      the imported game folder stays untouched and the
-        //      sidecar survives the tmp -> destination move.
-        //   2. Alphabetically-smallest `Graphics/Titles/*` image
-        //      (fallback). Only used when no qualifying
-        //      executable has landed yet - once one does,
-        //      subsequent Titles updates are ignored because the
-        //      card would flicker when post-reload `findArtwork`
-        //      picks the exe sidecar over the title image.
+        // Mid-extract artwork surfacing - .exe icon ONLY.
+        //
+        // Earlier this also surfaced `Graphics/Titles/*` images as
+        // a fallback when no `.exe` had landed yet. That produced
+        // a visible artwork flash for games whose archive ordering
+        // happened to put title images before the executable
+        // (Reborn1950.zip is one such): mid-import would show the
+        // title screen, then late-extract or post-import reload
+        // would replace it with the `.exe` icon that
+        // `findArtwork` actually picks. The two-stage surface
+        // never matched what the user would see post-import, so
+        // we just don't surface the titles fallback during
+        // extract anymore. Games without a usable `.exe` keep
+        // the placeholder during import and transition once at
+        // reload (placeholder -> title screen). Games with an
+        // `.exe` still surface the icon as soon as the `.exe`
+        // entry is processed, and that surface matches what the
+        // post-import scan picks - one transition, no flash.
+        //
+        // `Game.exe` is the canonical RPG Maker default and wins
+        // outright when present; other qualifying `.exe`s set a
+        // tentative sidecar that `Game.exe` can still overwrite
+        // if it arrives later in archive order. Utility binaries
+        // (patchers, launchers, unins000.exe, etc.) are skipped
+        // wholesale via the keyword blocklist.
+        //
+        // Sidecar lives at `<container>/Metadata/exe-icon.png`,
+        // not inside `Game/`, so the imported game tree stays
+        // untouched and the file survives the tmp->destination
+        // move unchanged.
         let exeArtworkLocked = Mutex(false)
         let hasTentativeExeArtwork = Mutex(false)
-        let bestTitlesFilename = Mutex<String?>(nil)
         do {
             try ArchiveExtractor.extract(
                 archive: sourceURL,
@@ -508,88 +571,49 @@ class GameLibrary {
                     let lower = relative.lowercased()
                     let filename = (relative as NSString).lastPathComponent
 
-                    // `.exe` branch - only consider root-level
-                    // executables (depth 0 or 1, matching the
-                    // archive's optional wrapper folder).
-                    if lower.hasSuffix(".exe") {
-                        let components = lower.split(separator: "/", omittingEmptySubsequences: false)
-                        let depth = components.count - 1
-                        guard depth <= 1 else { return }
-                        if exeArtworkLocked.withLock({ $0 }) { return }
+                    // Only react to root-level executables (depth
+                    // 0 or 1, matching the archive's optional
+                    // wrapper folder).
+                    guard lower.hasSuffix(".exe") else { return }
+                    let components = lower.split(separator: "/", omittingEmptySubsequences: false)
+                    let depth = components.count - 1
+                    guard depth <= 1 else { return }
+                    if exeArtworkLocked.withLock({ $0 }) { return }
 
-                        let isGameExe = filename.lowercased() == "game.exe"
-                        // Skip utility binaries (patchers,
-                        // updaters, launchers, etc.) outright.
-                        // `Game.exe` bypasses this check because
-                        // it's the canonical RPG Maker default.
-                        if !isGameExe, ExecutableIconExtractor.isUtilityExecutable(filename: filename) {
-                            return
-                        }
-                        // Non-canonical binaries defer to any
-                        // previously-written tentative sidecar:
-                        // only `Game.exe` can still overwrite
-                        // because it's the rule winner at
-                        // post-reload scan time. Accepting a
-                        // second non-`Game.exe` here would cause
-                        // a flicker when the library rescan
-                        // later picks a different one.
-                        if !isGameExe, hasTentativeExeArtwork.withLock({ $0 }) { return }
+                    let isGameExe = filename.lowercased() == "game.exe"
+                    if !isGameExe, ExecutableIconExtractor.isUtilityExecutable(filename: filename) {
+                        return
+                    }
+                    // Non-canonical binaries defer to any
+                    // previously-written tentative sidecar; only
+                    // `Game.exe` overwrites.
+                    if !isGameExe, hasTentativeExeArtwork.withLock({ $0 }) { return }
 
-                        guard let data = try? Data(contentsOf: diskURL, options: .mappedIfSafe) else {
-                            return
-                        }
-                        guard let pe = PEImage(data: data),
-                              let image = pe.extractIcon(),
-                              let png = image.pngData() else {
-                            return
-                        }
-
-                        container.ensureMetadataDirectory()
-                        let sidecarURL = container.exeIconSidecarURL
-                        do {
-                            try png.write(to: sidecarURL)
-                        } catch {
-                            NSLog("[GameLibrary] Sidecar write failed: %@", "\(error)")
-                            return
-                        }
-                        ImageCache.shared.evict(path: sidecarURL.path)
-                        _ = ImageCache.shared.image(for: sidecarURL.path)
-
-                        hasTentativeExeArtwork.withLock { $0 = true }
-                        if isGameExe {
-                            exeArtworkLocked.withLock { $0 = true }
-                        }
-                        self.updateCardArtwork(importID, artworkPath: sidecarURL.path)
+                    guard let data = try? Data(contentsOf: diskURL, options: .mappedIfSafe) else {
+                        return
+                    }
+                    guard let pe = PEImage(data: data),
+                          let image = pe.extractIcon(),
+                          let png = image.pngData() else {
                         return
                     }
 
-                    // Titles fallback - skip once an RGSS exe
-                    // icon has landed (the card would flicker
-                    // when post-reload findArtwork picks the exe
-                    // sidecar over the title image).
-                    guard !hasTentativeExeArtwork.withLock({ $0 }) else { return }
-                    guard lower.contains("graphics/titles/") else { return }
-                    let ext = (relative as NSString).pathExtension.lowercased()
-                    guard ["png", "jpg", "jpeg", "bmp"].contains(ext) else { return }
-
-                    let shouldUpdate = bestTitlesFilename.withLock { best -> Bool in
-                        if let current = best, current <= filename { return false }
-                        best = filename
-                        return true
+                    container.ensureMetadataDirectory()
+                    let sidecarURL = container.exeIconSidecarURL
+                    do {
+                        try png.write(to: sidecarURL)
+                    } catch {
+                        NSLog("[GameLibrary] Sidecar write failed: %@", "\(error)")
+                        return
                     }
-                    guard shouldUpdate else { return }
+                    ImageCache.shared.evict(path: sidecarURL.path)
+                    _ = ImageCache.shared.image(for: sidecarURL.path)
 
-                    // The file is at `diskURL` right now, but
-                    // `tmpDir` will be swept after the full
-                    // extract+move completes. Warm the decode
-                    // cache at that path so the card renders the
-                    // cached UIImage even after the file moves
-                    // (the NSCache entry survives; the subsequent
-                    // reload() points the card at the permanent
-                    // `<container>/Game/Graphics/Titles/*` and
-                    // reads fresh from there).
-                    _ = ImageCache.shared.image(for: diskURL.path)
-                    self.updateCardArtwork(importID, artworkPath: diskURL.path)
+                    hasTentativeExeArtwork.withLock { $0 = true }
+                    if isGameExe {
+                        exeArtworkLocked.withLock { $0 = true }
+                    }
+                    self.updateCardArtwork(importID, artworkPath: sidecarURL.path)
                 }
             )
         } catch ArchiveExtractor.Error.cancelled {
