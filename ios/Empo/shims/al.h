@@ -1,2 +1,7 @@
-/* Shim to redirect <al.h> to iOS system OpenAL */
-#include <OpenAL/al.h>
+/* Shim: redirect <al.h> to OpenAL-Soft's installed header layout.
+ *
+ * Engine sources include <al.h>, OpenAL-Soft installs into
+ * <AL/al.h>. Mapping happens here so we don't have to patch
+ * every engine include site.
+ */
+#include <AL/al.h>
