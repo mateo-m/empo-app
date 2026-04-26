@@ -27,6 +27,7 @@ enum GameSorting {
     }
 
     static func playTime(for game: GameEntry) -> TimeInterval? {
-        GameMetadata.load(for: game.id).totalPlayTime
+        guard let container = game.container else { return nil }
+        return GameMetadata.load(from: container).totalPlayTime
     }
 }

@@ -773,7 +773,10 @@ struct GameLibraryView: View {
             var sizes: [String: Int64] = [:]
             for game in library.games {
                 guard !Task.isCancelled else { return }
-                sizes[game.id] = await GameMetadata.diskSize(for: URL(fileURLWithPath: game.path))
+                guard let container = game.container else { continue }
+                // Whole container size (Game/ + EmpoState/ + Logs/
+                // + Metadata/) - dominated by Game/ in practice.
+                sizes[game.id] = await GameMetadata.diskSize(for: container.url)
             }
             guard !Task.isCancelled else { return }
             gameSizes = sizes
