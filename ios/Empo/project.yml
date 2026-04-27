@@ -115,14 +115,29 @@ targets:
                   TMP=$(mktemp -d)
                   cat > "$TMP/stub.cpp" <<STUBEOF
           // Auto-generated stub for missing mkxp${VER}-merged.o.
-          // Returns nullptr so getActiveScriptBinding falls back
-          // to the legacy scriptBinding path. Real merged .o
-          // (from ios/Dependencies/common.make's mkxp-merged
-          // target) replaces this when built.
+          // mkxp_get_script_binding_${VER} returns nullptr so
+          // getActiveScriptBinding falls through to the other
+          // version's merged.o. Real merged .o (from
+          // ios/Dependencies/common.make's mkxp-merged target)
+          // replaces this stub when built.
           struct ScriptBinding;
           extern "C" ScriptBinding *mkxp_get_script_binding_${VER}(void) {
               return nullptr;
           }
+          // The 3.1 build of libruby ships syntax-transform patches
+          // that define these globals (parse.y/prelude.c). main.cpp
+          // (Xcode-compiled) sets them every selectGame. Stub them
+          // out at zero so the device link succeeds when mkxp31-merged.o
+          // is missing; the syntax-transform code path is dead until
+          // mkxp31-merged.o is built for this SDK anyway. Only emit
+          // for the 3.1 version since 3.0 doesn't ship those symbols.
+          #if ${VER} == 31
+          extern "C" {
+              unsigned int mkxp_syntax_transform_target_ruby_version_major = -1;
+              unsigned int mkxp_syntax_transform_target_ruby_version_minor = -1;
+              unsigned int mkxp_syntax_transform_target_ruby_version_teeny = -1;
+          }
+          #endif
           STUBEOF
                   CC=$(xcrun --sdk "$PLATFORM_NAME" -f clang++)
                   SDK=$(xcrun --sdk "$PLATFORM_NAME" --show-sdk-path)
@@ -327,39 +342,13 @@ targets:
       - path: ../../mkxp-z-apple-mobile/src/display/libnsgif/libnsgif.c
       - path: ../../mkxp-z-apple-mobile/src/display/libnsgif/lzw.c
       - path: ../../mkxp-z-apple-mobile/src/theoraplay/theoraplay.c
-      - path: ../../mkxp-z-apple-mobile/binding/binding-mri.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/binding-util.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/bitmap-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/table-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/etc-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/font-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/sprite-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/viewport-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/plane-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/window-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/windowvx-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/tilemap-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/tilemapvx-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/input-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/audio-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/graphics-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/filesystem-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/http-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/module_rpg.cpp
-      # H-Mode7 native renderer binding.
-      - path: ../../mkxp-z-apple-mobile/binding/hmode7-binding.cpp
-      # H-Mode7 port sources. Each .cpp is a single function from the
-      # original MGC_Hmode7_1_4_4.cpp, ported to top-down SDL surfaces
-      # and Ruby 3.1 MRI. See //hmode7-apple-mobile/docs/HMODE7_PORT_DESIGN.md.
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_bindings.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_apply_opacity.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_apply_zoom.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_apply_lighting.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_compute_m7.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_draw_heightmap.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_draw_textureset.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_draw_map_tileset.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_render.cpp
+      # mkxp-z's binding/*.cpp + hmode7/*.cpp (all Ruby-API users)
+      # are NOT compiled here. Multi-Ruby Phase D (MULTI_RUBY_PLAN.md)
+      # compiles them per-Ruby-version inside ios/Dependencies/common.make's
+      # mkxp30-merged / mkxp31-merged targets. Each version's libruby +
+      # binding code merges into a single relocatable .o via `ld -r`
+      # with Ruby symbols hidden via the unexport list. The merged
+      # .o files are linked below in OTHER_LDFLAGS.
       - path: ../../mkxp-z-apple-mobile/src/app_bridge.cpp
       - path: ../../mkxp-z-apple-mobile/src/angle_native_layer.mm
       - path: src
@@ -394,8 +383,11 @@ targets:
           - -lSDL2_image
           - -lSDL2_sound
           - -lSDL2_ttf
-          - -lruby.3.1-static
-          - -lruby.3.1-ext
+          # Ruby static libs (3.0 + 3.1) are now linked indirectly
+          # via the per-version mkxpNN-merged.o files below in
+          # OTHER_LDFLAGS. Their symbols are private-extern inside
+          # those merged .o's, so neither version's `_rb_*` clashes
+          # with the other.
           - -lfreetype
           - -lpixman-1
           - -lpng16

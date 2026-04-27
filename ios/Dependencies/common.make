@@ -568,7 +568,7 @@ $(LIBDIR)/mkxp30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
                           ${PWD}/multiruby/wrapper.cpp
 	@echo "[mkxp30] Compiling binding/*.cpp against Ruby 3.0..."
 	@mkdir -p $(BINDING_OBJDIR_30)
-	@for src in $(ENGINE)/binding/*.cpp; do \
+	@for src in $(ENGINE)/binding/*.cpp $(ENGINE)/hmode7/src/*.cpp; do \
 	    obj=$(BINDING_OBJDIR_30)/$$(basename $$src .cpp).o; \
 	    echo "  -> $$(basename $$obj)"; \
 	    $(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
@@ -662,9 +662,9 @@ MKXPZ_DEFINES_31 := \
 $(LIBDIR)/mkxp31-merged.o: $(LIBDIR)/libruby.3.1-static.a \
                           $(LIBDIR)/libruby.3.1-ext.a \
                           ${PWD}/multiruby/wrapper.cpp
-	@echo "[mkxp31] Compiling binding/*.cpp against Ruby 3.1..."
+	@echo "[mkxp31] Compiling binding/*.cpp + hmode7/*.cpp against Ruby 3.1..."
 	@mkdir -p $(BINDING_OBJDIR_31)
-	@for src in $(ENGINE)/binding/*.cpp; do \
+	@for src in $(ENGINE)/binding/*.cpp $(ENGINE)/hmode7/src/*.cpp; do \
 	    obj=$(BINDING_OBJDIR_31)/$$(basename $$src .cpp).o; \
 	    echo "  -> $$(basename $$obj)"; \
 	    $(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
