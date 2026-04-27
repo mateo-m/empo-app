@@ -538,6 +538,8 @@ MKXPZ_DEFINES_30 := \
     -DMKXPZ_VERSION='"1.0.0"' \
     -DMKXPZ_GIT_HASH='"ios"' \
     -DMKXPZ_RUBY_VERSION='"3.0"' \
+    -DMKXPZ_RUBY_VERSION_MAJOR=3 \
+    -DMKXPZ_RUBY_VERSION_MINOR=0 \
     -DGLES2_HEADER \
     -DMKXPZ_HAS_ANGLE \
     -DHAVE_CONFIG_H \
@@ -553,7 +555,9 @@ MKXPZ_WARNFLAGS := \
 
 mkxp30-merged: init_dirs ruby30 $(LIBDIR)/mkxp30-merged.o
 mkxp31-merged: init_dirs ruby     $(LIBDIR)/mkxp31-merged.o
-mkxp-merged: mkxp30-merged mkxp31-merged
+mkxp19-merged: init_dirs ruby19   $(LIBDIR)/mkxp19-merged.o
+mkxp18-merged: init_dirs ruby18   $(LIBDIR)/mkxp18-merged.o
+mkxp-merged: mkxp18-merged mkxp19-merged mkxp30-merged mkxp31-merged
 
 # 1. Compile every mkxp-z binding/*.cpp against Ruby 3.0 headers.
 # 2. ld -r merges them with libruby.3.0-static.a + libruby.3.0-ext.a.
@@ -653,6 +657,8 @@ MKXPZ_DEFINES_31 := \
     -DMKXPZ_VERSION='"1.0.0"' \
     -DMKXPZ_GIT_HASH='"ios"' \
     -DMKXPZ_RUBY_VERSION='"3.1"' \
+    -DMKXPZ_RUBY_VERSION_MAJOR=3 \
+    -DMKXPZ_RUBY_VERSION_MINOR=1 \
     -DMKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES \
     -DGLES2_HEADER \
     -DMKXPZ_HAS_ANGLE \
@@ -714,6 +720,175 @@ $(LIBDIR)/mkxp31-merged.o: $(LIBDIR)/libruby.3.1-static.a \
 	@TGLOBALS=$$(nm $(LIBDIR)/mkxp31-merged.o | awk '$$2 == "T"' | sort -u | wc -l | tr -d ' '); \
 	echo "  global T symbols (should be 1: _mkxp_get_script_binding_31): $$TGLOBALS"
 	@nm $(LIBDIR)/mkxp31-merged.o | awk '$$2 == "T"' | head -3
+
+# Ruby 1.9 + 1.8 mkxp merged.o targets — same shape as 3.0/3.1 above.
+# RAPI macros in binding-util.h gate the C-API differences; we hand
+# each Ruby version its own header dir + matching MKXPZ_RUBY_VERSION
+# define.
+BINDING_OBJDIR_19 := $(BUILD_PREFIX)/binding19
+BINDING_OBJDIR_18 := $(BUILD_PREFIX)/binding18
+
+MKXPZ_INCLUDES_19 := \
+    -I$(INCLUDEDIR)/ruby19 \
+    -I$(ENGINE) \
+    -I$(ENGINE)/src \
+    -I$(ENGINE)/src/audio \
+    -I$(ENGINE)/src/crypto \
+    -I$(ENGINE)/src/display \
+    -I$(ENGINE)/src/display/gl \
+    -I$(ENGINE)/src/display/libnsgif \
+    -I$(ENGINE)/src/etc \
+    -I$(ENGINE)/src/filesystem \
+    -I$(ENGINE)/src/input \
+    -I$(ENGINE)/src/net \
+    -I$(ENGINE)/src/system \
+    -I$(ENGINE)/src/theoraplay \
+    -I$(ENGINE)/src/util \
+    -I$(ENGINE)/binding \
+    -I$(ENGINE)/shader \
+    -I$(ENGINE)/hmode7/src \
+    -I$(INCLUDEDIR)/SDL2 \
+    -I$(INCLUDEDIR)/pixman-1 \
+    -I$(INCLUDEDIR)/uchardet \
+    -I$(INCLUDEDIR)/freetype2 \
+    -I$(INCLUDEDIR) \
+    -I${PWD}/ANGLE/$(SDK)/include
+
+MKXPZ_DEFINES_19 := \
+    -DMKXPZ_BUILD_XCODE \
+    -DMKXPZ_ALCDEVICE=ALCdevice \
+    -DMKXPZ_VERSION='"1.0.0"' \
+    -DMKXPZ_GIT_HASH='"ios"' \
+    -DMKXPZ_RUBY_VERSION='"1.9"' \
+    -DMKXPZ_RUBY_VERSION_MAJOR=1 \
+    -DMKXPZ_RUBY_VERSION_MINOR=9 \
+    -DGLES2_HEADER \
+    -DMKXPZ_HAS_ANGLE \
+    -DHAVE_CONFIG_H \
+    -DHM7_HAVE_MKXP_BITMAP
+
+MKXPZ_INCLUDES_18 := \
+    -I$(ENGINE) \
+    -I$(ENGINE)/src \
+    -I$(ENGINE)/src/audio \
+    -I$(ENGINE)/src/crypto \
+    -I$(ENGINE)/src/display \
+    -I$(ENGINE)/src/display/gl \
+    -I$(ENGINE)/src/display/libnsgif \
+    -I$(ENGINE)/src/etc \
+    -I$(ENGINE)/src/filesystem \
+    -I$(ENGINE)/src/input \
+    -I$(ENGINE)/src/net \
+    -I$(ENGINE)/src/system \
+    -I$(ENGINE)/src/theoraplay \
+    -I$(ENGINE)/src/util \
+    -I$(ENGINE)/binding \
+    -I$(ENGINE)/shader \
+    -I$(ENGINE)/hmode7/src \
+    -I$(INCLUDEDIR)/SDL2 \
+    -I$(INCLUDEDIR)/pixman-1 \
+    -I$(INCLUDEDIR)/uchardet \
+    -I$(INCLUDEDIR)/freetype2 \
+    -I$(INCLUDEDIR) \
+    -I${PWD}/ANGLE/$(SDK)/include \
+    -I$(INCLUDEDIR)/ruby18
+
+MKXPZ_DEFINES_18 := \
+    -DMKXPZ_BUILD_XCODE \
+    -DMKXPZ_ALCDEVICE=ALCdevice \
+    -DMKXPZ_VERSION='"1.0.0"' \
+    -DMKXPZ_GIT_HASH='"ios"' \
+    -DMKXPZ_RUBY_VERSION='"1.8"' \
+    -DMKXPZ_RUBY_VERSION_MAJOR=1 \
+    -DMKXPZ_RUBY_VERSION_MINOR=8 \
+    -DGLES2_HEADER \
+    -DMKXPZ_HAS_ANGLE \
+    -DHAVE_CONFIG_H \
+    -DHM7_HAVE_MKXP_BITMAP
+
+$(LIBDIR)/mkxp19-merged.o: $(LIBDIR)/libruby19-static.a \
+                          ${PWD}/multiruby/wrapper.cpp
+	@echo "[mkxp19] Compiling binding/*.cpp + hmode7/*.cpp against Ruby 1.9..."
+	@mkdir -p $(BINDING_OBJDIR_19)
+	@for src in $(ENGINE)/binding/*.cpp $(ENGINE)/hmode7/src/*.cpp; do \
+	    obj=$(BINDING_OBJDIR_19)/$$(basename $$src .cpp).o; \
+	    echo "  -> $$(basename $$obj)"; \
+	    $(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
+	        -std=c++14 -fdeclspec -fobjc-arc -O3 \
+	        $(MKXPZ_INCLUDES_19) $(MKXPZ_DEFINES_19) $(MKXPZ_WARNFLAGS) \
+	        -c $$src -o $$obj || exit 1; \
+	done
+	@echo "[mkxp19] Compiling per-version wrapper..."
+	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
+	    -std=c++14 -fdeclspec -O3 \
+	    -DMULTIRUBY_SUFFIX=_19 \
+	    $(MKXPZ_INCLUDES_19) \
+	    -c ${PWD}/multiruby/wrapper.cpp \
+	    -o $(BINDING_OBJDIR_19)/_multiruby_wrapper.o
+	@echo "[mkxp19] Generating unexport list..."
+	${PWD}/tools/generate-ruby-unexports.sh \
+	    $(LIBDIR)/libruby19-static.a \
+	    > $(BUILD_PREFIX)/ruby19-unexports.txt
+	@nm -gU $(BINDING_OBJDIR_19)/*.o 2>/dev/null \
+	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
+	    | sort -u \
+	    | grep -v '^_mkxp_get_script_binding_19$$' \
+	    >> $(BUILD_PREFIX)/ruby19-unexports.txt
+	@echo "[mkxp19] Merging via ld -r..."
+	@LD=$$(xcrun --sdk $(SDK) -f ld); \
+	"$$LD" -r -arch $(ARCH) \
+	    $(LD_PLATFORM_VERSION) \
+	    -syslibroot $(SYSROOT) \
+	    -unexported_symbols_list $(BUILD_PREFIX)/ruby19-unexports.txt \
+	    $(LIBDIR)/libruby19-static.a \
+	    $(BINDING_OBJDIR_19)/*.o \
+	    -o $(LIBDIR)/mkxp19-merged.o
+	@echo "[mkxp19] Verifying merged .o..."
+	@TGLOBALS=$$(nm $(LIBDIR)/mkxp19-merged.o | awk '$$2 == "T"' | sort -u | wc -l | tr -d ' '); \
+	echo "  global T symbols (should be 1: _mkxp_get_script_binding_19): $$TGLOBALS"
+	@nm $(LIBDIR)/mkxp19-merged.o | awk '$$2 == "T"' | head -3
+
+$(LIBDIR)/mkxp18-merged.o: $(LIBDIR)/libruby18-static.a \
+                          ${PWD}/multiruby/wrapper.cpp
+	@echo "[mkxp18] Compiling binding/*.cpp + hmode7/*.cpp against Ruby 1.8..."
+	@mkdir -p $(BINDING_OBJDIR_18)
+	@for src in $(ENGINE)/binding/*.cpp $(ENGINE)/hmode7/src/*.cpp; do \
+	    obj=$(BINDING_OBJDIR_18)/$$(basename $$src .cpp).o; \
+	    echo "  -> $$(basename $$obj)"; \
+	    $(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
+	        -std=c++14 -fdeclspec -fobjc-arc -O3 \
+	        $(MKXPZ_INCLUDES_18) $(MKXPZ_DEFINES_18) $(MKXPZ_WARNFLAGS) \
+	        -c $$src -o $$obj || exit 1; \
+	done
+	@echo "[mkxp18] Compiling per-version wrapper..."
+	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
+	    -std=c++14 -fdeclspec -O3 \
+	    -DMULTIRUBY_SUFFIX=_18 \
+	    $(MKXPZ_INCLUDES_18) \
+	    -c ${PWD}/multiruby/wrapper.cpp \
+	    -o $(BINDING_OBJDIR_18)/_multiruby_wrapper.o
+	@echo "[mkxp18] Generating unexport list..."
+	${PWD}/tools/generate-ruby-unexports.sh \
+	    $(LIBDIR)/libruby18-static.a \
+	    > $(BUILD_PREFIX)/ruby18-unexports.txt
+	@nm -gU $(BINDING_OBJDIR_18)/*.o 2>/dev/null \
+	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
+	    | sort -u \
+	    | grep -v '^_mkxp_get_script_binding_18$$' \
+	    >> $(BUILD_PREFIX)/ruby18-unexports.txt
+	@echo "[mkxp18] Merging via ld -r..."
+	@LD=$$(xcrun --sdk $(SDK) -f ld); \
+	"$$LD" -r -arch $(ARCH) \
+	    $(LD_PLATFORM_VERSION) \
+	    -syslibroot $(SYSROOT) \
+	    -unexported_symbols_list $(BUILD_PREFIX)/ruby18-unexports.txt \
+	    $(LIBDIR)/libruby18-static.a \
+	    $(BINDING_OBJDIR_18)/*.o \
+	    -o $(LIBDIR)/mkxp18-merged.o
+	@echo "[mkxp18] Verifying merged .o..."
+	@TGLOBALS=$$(nm $(LIBDIR)/mkxp18-merged.o | awk '$$2 == "T"' | sort -u | wc -l | tr -d ' '); \
+	echo "  global T symbols (should be 1: _mkxp_get_script_binding_18): $$TGLOBALS"
+	@nm $(LIBDIR)/mkxp18-merged.o | awk '$$2 == "T"' | head -3
 
 # Ruby 1.8 (submodule: sources/ruby18)
 ruby18: init_dirs $(LIBDIR)/libruby18-static.a
