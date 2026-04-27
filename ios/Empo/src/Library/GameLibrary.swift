@@ -909,5 +909,23 @@ class GameLibrary {
         if !fm.fileExists(atPath: GameContainer.rootURL.path) {
             try? fm.createDirectory(at: GameContainer.rootURL, withIntermediateDirectories: true)
         }
+        // Belt-and-suspenders: even though every container also
+        // gets its own `isExcludedFromBackup` flag, marking the
+        // root directory ensures iOS skips it entirely if it scans
+        // top-down before reaching the children. iOS treats the
+        // attribute as inheriting to contents per the URL resource
+        // docs, so this single set covers anything inside Games/.
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var rootURL = GameContainer.rootURL
+        try? rootURL.setResourceValues(values)
+
+        // Sweep existing containers in case they predate this
+        // exclusion (or were created before `ensureSubdirs()` set
+        // the flag). One-shot per app launch; cheap because the
+        // setter is a no-op when the flag is already set.
+        for container in GameContainer.discover() {
+            container.excludeFromBackup()
+        }
     }
 }

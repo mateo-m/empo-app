@@ -199,6 +199,39 @@ struct GameContainer: Equatable, Hashable {
         try fm.createDirectory(at: empoStateURL, withIntermediateDirectories: true)
         try fm.createDirectory(at: logsURL, withIntermediateDirectories: true)
         try fm.createDirectory(at: metadataURL, withIntermediateDirectories: true)
+        excludeFromBackup()
+    }
+
+    /// Set `NSURLIsExcludedFromBackupKey` on the container so iCloud
+    /// + iTunes backups skip the entire game tree (including Game/,
+    /// EmpoState/, Logs/, Metadata/ — iOS propagates the flag to a
+    /// directory's contents).
+    ///
+    /// Why we exclude everything for now: the per-game id is a
+    /// fresh `UUID()` minted at import time, so a backup of one
+    /// device's `Documents/Games/<id>/EmpoState/` won't match any
+    /// container on a different device (or even the same device
+    /// after a re-import) - the saves and metadata would orphan
+    /// silently. Until we have a content-based fingerprint that
+    /// produces a stable id across imports, backing up per-game
+    /// state can only mislead users about what's recoverable.
+    /// Game/ is also re-importable from the source archive at zero
+    /// data cost, so excluding the entire tree is strictly the
+    /// right call.
+    ///
+    /// Idempotent: setting the flag on an already-excluded URL is
+    /// a no-op (and silently swallowed if the URL is missing - a
+    /// container that hasn't been created yet just won't have the
+    /// attribute, which is fine).
+    func excludeFromBackup() {
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        // Mutating an immutable URL's resource values is the
+        // standard pattern: assign a writable copy, call
+        // `setResourceValues`, drop the copy. The actual change
+        // lives on the filesystem inode, not the URL value.
+        var mutableURL = url
+        try? mutableURL.setResourceValues(values)
     }
 
     @discardableResult
