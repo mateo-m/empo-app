@@ -718,6 +718,75 @@ $(LIBDIR)/mkxp31-merged.o: $(LIBDIR)/libruby.3.1-static.a \
 # Ruby 1.8 (submodule: sources/ruby18)
 ruby18: init_dirs $(LIBDIR)/libruby18-static.a
 
+# Ruby 1.9 (submodule: sources/ruby19)
+#
+# 1.9.3-p551 builds for iOS arm64 with a small, surgical patch:
+#   - aarch64-darwin-fake.rb: cross-compile fake config so the host
+#     ruby (which we run as MINIRUBY in cross mode) reports as the
+#     1.9.3 target instead of itself, otherwise tool/mkconfig.rb
+#     refuses with "ruby lib version doesn't match executable
+#     version". Same approach as Ruby 1.8.
+#   - tool/config.{sub,guess}: replaced with modern savannah versions
+#     so aarch64-apple-darwin canonicalizes correctly. The shipped
+#     1.9 versions are too old to recognize aarch64.
+#   - process.c: gate system() behind TARGET_OS_IPHONE (unavailable
+#     on iOS, same as 3.0/3.1's ios.patch).
+#
+# The MINIRUBY override below uses --disable=gems so the host ruby
+# doesn't try to load its own rbconfig before our fake.rb runs
+# (rubygems' gem_prelude.rb requires rbconfig at startup, which then
+# triggers the version mismatch check).
+#
+# We use --host=aarch64-unknown-darwin (3-tuple with explicit unknown
+# vendor) instead of aarch64-apple-darwin because 1.9's autoconf
+# 2.59-era target_cpu extraction empties the cpu field for the apple
+# vendor case.
+ruby19: init_dirs $(LIBDIR)/libruby19-static.a
+
+RUBY19_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
+	-Wno-implicit-function-declaration \
+	-Wno-implicit-int \
+	-Wno-incompatible-pointer-types \
+	-Wno-int-conversion \
+	-Wno-deprecated-non-prototype \
+	-Wno-incompatible-function-pointer-types \
+	-Wno-compound-token-split-by-macro
+
+$(LIBDIR)/libruby19-static.a: $(SOURCES)/ruby19/Makefile
+	cd $(SOURCES)/ruby19; \
+	$(CONFIGURE_ENV) make -j$(NPROC) libruby-static.a; \
+	cp libruby-static.a $(LIBDIR)/libruby19-static.a; \
+	mkdir -p $(INCLUDEDIR)/ruby19; \
+	cp -R include/* $(INCLUDEDIR)/ruby19/; \
+	cp .ext/include/aarch64-darwin/ruby/config.h $(INCLUDEDIR)/ruby19/ruby/config.h 2>/dev/null || true
+
+$(SOURCES)/ruby19/Makefile: $(SOURCES)/ruby19/configure
+	cd $(SOURCES)/ruby19; \
+	export $(CONFIGURE_ENV); \
+	export CFLAGS="$(RUBY19_CFLAGS) $$CFLAGS"; \
+	export LDFLAGS="$$LDFLAGS"; \
+	./configure \
+		--host=aarch64-unknown-darwin \
+		--build=aarch64-unknown-darwin \
+		--target=aarch64-unknown-darwin \
+		--prefix="$(BUILD_PREFIX)" \
+		--disable-shared \
+		--with-static-linked-ext \
+		--disable-rubygems \
+		--disable-install-doc \
+		cross_compiling=yes \
+		ac_cv_func_fork=no; \
+	sed -i '' 's|^BASERUBY = ruby$$|BASERUBY = ruby --disable=gems|' Makefile; \
+	sed -i '' 's|^MINIRUBY = ruby |MINIRUBY = ruby --disable=gems |' Makefile
+
+$(SOURCES)/ruby19/configure: $(SOURCES)/ruby19/configure.in
+	cd $(SOURCES)/ruby19; \
+	git checkout -- . 2>/dev/null; \
+	git clean -fdxq 2>/dev/null; \
+	rm -f aarch64-darwin-fake.rb arm64-darwin-fake.rb; \
+	git apply $(PATCHES)/ruby19/ios.patch; \
+	autoconf
+
 RUBY18_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
 	-Wno-implicit-function-declaration \
 	-Wno-implicit-int \
