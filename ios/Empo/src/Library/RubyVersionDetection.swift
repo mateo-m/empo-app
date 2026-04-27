@@ -52,48 +52,48 @@ enum RubyVersionDetection {
     /// Returns the Ruby version raw value (18 / 19 / 30 / 31) for
     /// `gameDirectory`. Mirrors `MKXPRubyVersion`'s enum integer
     /// values from `app_bridge.h`.
+    ///
+    /// **Conservative-by-default policy:** only tag a game with
+    /// 3.0 / 1.9 / 1.8 when the dispatch target's binding code
+    /// actually exists and has been verified to work for that game
+    /// class. Everything else lands on the legacy 3.1 +
+    /// syntax-transform path, which is the proven-good code path
+    /// today.
+    ///
+    /// 1.8 / 1.9 native binding compiles don't exist yet (see
+    /// MULTI_RUBY_PLAN.md — the per-version binding-mri.cpp compile
+    /// against vintage Ruby C APIs is substantial work that hasn't
+    /// landed on this branch). The dispatcher falls through to
+    /// legacy for those values, so even if we tagged a game as 1.8,
+    /// it'd actually run on 3.1+syntax-transform — fine, but the
+    /// log line would be misleading. Better to tag honestly.
+    ///
+    /// Modern PE (Reborn 19.5+, PE v20+) games HAVE been running
+    /// on 3.1+syntax-transform with `useModernRuby=true` flipping
+    /// off the LEGACY parser path. Tagging them as 30 would route
+    /// to mkxp30-merged.o which has NO syntax-transform — risky if
+    /// the game has any legacy-grammar fragments left. Keep them
+    /// on 31 for now.
     static func detect(gameDirectory: URL) -> Int {
         let fm = FileManager.default
 
-        // 1. PSDK → 3.0.
+        // PSDK → 3.0. PSDK pins to Ruby 3.0.x and ships .yarb
+        // bytecode that's strictly minor-version-locked. No other
+        // value works.
         if isPSDKGame(at: gameDirectory, fm: fm) {
             return 30
         }
 
-        // 2/3. Modern Ruby (JGP modern hint or detected modern syntax).
-        //      `detectModernRubyScripts` is the existing implementation
-        //      from `GameSettings`; reuse rather than duplicate.
-        if GameSettings.detectModernRubyScripts(in: gameDirectory) {
-            return 30
-        }
-
-        // 4. RGSS archive presence.
-        if let items = try? fm.contentsOfDirectory(atPath: gameDirectory.path) {
-            let lower = items.map { $0.lowercased() }
-            if lower.contains(where: { $0.hasSuffix(".rgssad") })  { return 18 }
-            if lower.contains(where: { $0.hasSuffix(".rgss2a") })  { return 19 }
-            if lower.contains(where: { $0.hasSuffix(".rgss3a") })  { return 19 }
-        }
-
-        // 5. Game.ini's Library= field.
-        if let items = try? fm.contentsOfDirectory(atPath: gameDirectory.path) {
-            for item in items where item.lowercased().hasSuffix(".ini") {
-                let iniURL = gameDirectory.appendingPathComponent(item)
-                if let lib = GameEntry.parseINIValue(in: iniURL,
-                                                    section: "game",
-                                                    key: "library") {
-                    let lower = lib.lowercased()
-                    if lower.contains("rgss104")            { return 18 }
-                    if lower.contains("rgss2") || lower.contains("rgss20") { return 19 }
-                    if lower.contains("rgss3")              { return 19 }
-                }
-            }
-        }
-
-        // 6. Unknown → engine default. The dispatcher's UNSET path
-        //    falls through to the legacy direct-link 3.1 binding,
-        //    so 31 is the right value to return for "I don't know,
-        //    use whatever the legacy build did."
+        // Default: 3.1 (legacy direct-link path). Includes:
+        //   - vintage RGSS1/RGSS2/RGSS3 games (1.8/1.9 grammar)
+        //   - modern mkxp-z JGPs (Reborn 19.5+, PE v20+)
+        //   - anything we don't have a confirmed-working native
+        //     binding for.
+        //
+        // Once 1.8/1.9 native builds land + per-version binding
+        // compiles work, extend this to dispatch by RGSS archive
+        // type + Library= field (see git history of this file for
+        // the eager-detection variant).
         return 31
     }
 
