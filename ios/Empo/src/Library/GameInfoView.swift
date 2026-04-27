@@ -345,16 +345,20 @@ struct GameInfoView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(height: bannerHeight)
-        } else if let artwork = artworkImage {
-            Image(uiImage: artwork)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(height: bannerHeight)
         } else {
-            LinearGradient(
-                colors: [.brand.opacity(0.3), .surface],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+            // No banner: fall through to the unified placeholder
+            // (gradient + gamecontroller glyph). The artwork path
+            // used to back-fill here, but the design rule is that
+            // banner == loading-view backdrop, just larger / not
+            // blurred, so the two surfaces stay visually
+            // consistent. Banner-less games show the placeholder
+            // here AND on the loading view (where it gets blurred
+            // and darkened); using artwork here would produce two
+            // different visuals for the same game.
+            GameArtworkView(
+                artworkPath: nil,
+                placeholderIconSize: 64,
+                shimmer: false
             )
             .frame(height: bannerHeight)
         }

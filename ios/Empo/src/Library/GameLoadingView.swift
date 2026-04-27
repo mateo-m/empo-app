@@ -27,6 +27,18 @@ struct GameLoadingView: View {
     @State private var cancelVisible = false
     private static let cancelAppearDelay: Duration = .seconds(2)
 
+    /// Looked up at body-time so the loading view shares the same
+    /// source image as the Game Info sheet's banner. By design
+    /// banner == loading-view backdrop (just darker + blurred), so
+    /// banner-less games show the placeholder on both surfaces and
+    /// banner-having games see their banner in both places.
+    private var bannerImage: UIImage? {
+        guard let container = game.container,
+              let path = GameMetadata.load(from: container)
+                .customBannerPath(in: container) else { return nil }
+        return ImageCache.shared.image(for: path)
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -44,7 +56,7 @@ struct GameLoadingView: View {
 
     private var loadingContent: some View {
         ZStack {
-            artworkBackground
+            bannerBackground
 
             VStack(spacing: Spacing.xl) {
                 Text(game.title)
@@ -142,11 +154,18 @@ struct GameLoadingView: View {
 
 
     @ViewBuilder
-    private var artworkBackground: some View {
-        if let path = game.artworkPath, let uiImage = ImageCache.shared.image(for: path) {
+    private var bannerBackground: some View {
+        if let banner = bannerImage {
             let kenBurnsScale: CGFloat = kenBurns ? 1.15 : 1.05
             let finalScale = kenBurnsScale * (readyZoom ? Self.readyZoomScale : 1)
-            Image(uiImage: uiImage)
+            // No explicit `.frame` here: `.aspectRatio(.fill)` on a
+            // resizable image inside a ZStack already proposes the
+            // parent's full size. `.clipped()` would tame overflow
+            // but would also create a separate raster that breaks
+            // the subsequent `.blur` (the blur kernel sees a hard
+            // edge instead of the overflowing pixels and visibly
+            // desaturates).
+            Image(uiImage: banner)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .scaleEffect(finalScale)
@@ -155,12 +174,14 @@ struct GameLoadingView: View {
                 .blur(radius: 20)
                 .overlay(Color.black.opacity(Scrim.medium))
         } else {
-            // No artwork: fall through to the unified placeholder
-            // (gradient + gamecontroller glyph) used everywhere else
-            // in the library. Skip the Ken Burns / blur path - those
-            // are tuned for photographic artwork and would muddy the
-            // already-soft gradient. A scrim still goes on top so the
-            // foreground title text retains contrast.
+            // No banner: fall through to the unified placeholder
+            // (gradient + gamecontroller glyph). The Game Info
+            // sheet's banner uses the same fallback so the two
+            // surfaces match - this view just blurs + darkens the
+            // result. Skip the Ken Burns / blur path here because
+            // the placeholder gradient is already soft and a blur
+            // would just muddy it. A scrim still goes on top so
+            // the foreground title text retains contrast.
             ZStack {
                 GameArtworkView(
                     artworkPath: nil,
