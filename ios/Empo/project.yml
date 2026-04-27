@@ -108,7 +108,7 @@ targets:
           set -e
           DEPS_LIB="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib"
           mkdir -p "$DEPS_LIB"
-          for VER in 30 31; do
+          for VER in 18 19 30 31; do
               OBJ="$DEPS_LIB/mkxp${VER}-merged.o"
               if [ ! -f "$OBJ" ]; then
                   echo "info: $OBJ missing, stubbing for link" >&2
