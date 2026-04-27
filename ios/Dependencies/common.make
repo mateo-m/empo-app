@@ -376,6 +376,87 @@ $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 	done; \
 	autoreconf -i
 
+# Ruby 3.0 (submodule: sources/ruby30)
+#
+# Builds alongside the existing Ruby 3.1 install. Two reasons for
+# vendoring 3.0 separately rather than swapping the 3.1 submodule:
+#
+#   - JoiPlay's RPG Maker plugin ships exactly Ruby 1.8 + 1.9 + 3.0
+#     (verified by inspecting the .apk's lib/arm64-v8a/ contents on
+#     2026-04-27). PSDK requires 3.0 specifically. mkxp-z's upstream
+#     pins to 3.0. Our 3.1 pin is unique to us; matching JoiPlay's
+#     validated set is the right anchor.
+#   - Symbol-namespacing all three Ruby versions for in-binary
+#     coexistence is its own piece of work (see MULTI_RUBY_PLAN.md).
+#     Until that lands, building 3.0 alongside 3.1 lets us prove the
+#     compile + iOS-patch chain works in isolation before we attempt
+#     in-binary dispatch.
+#
+# Critical: 3.0 SKIPS the syntax-transform patches. The whole point
+# of multi-Ruby is running games on their actual native Ruby parser.
+# Modern mkxp-z and PSDK games written for Ruby 3.0+ don't need
+# rewriting; vintage 1.8/1.9-grammar games will run on libruby18 /
+# libruby19 (Phase B/C) instead.
+ruby30: init_dirs $(LIBDIR)/libruby.3.0-static.a $(LIBDIR)/libruby.3.0-ext.a
+
+$(LIBDIR)/libruby.3.0-static.a: $(SOURCES)/ruby30/Makefile
+	cd $(SOURCES)/ruby30; \
+	$(CONFIGURE_ENV) make -j$(NPROC) libruby.3.0-static.a; \
+	cp libruby.3.0-static.a $(LIBDIR)/; \
+	mkdir -p $(INCLUDEDIR)/ruby30; \
+	cp -R include/* $(INCLUDEDIR)/ruby30/; \
+	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby30/ruby/config.h 2>/dev/null || true
+
+# Same ext-archive recipe as 3.1's, retargeted at the 3.0 source tree.
+$(LIBDIR)/libruby.3.0-ext.a: $(LIBDIR)/libruby.3.0-static.a
+	cd $(SOURCES)/ruby30; \
+	$(CONFIGURE_ENV) make -j$(NPROC) exts encs || true
+	@TMPDIR=$$(mktemp -d); \
+	cd $$TMPDIR; \
+	for a in $$(find $(SOURCES)/ruby30/ext -name "*.a" -not -path "*/test/*") \
+	         $(SOURCES)/ruby30/enc/libenc.a $(SOURCES)/ruby30/enc/libtrans.a; do \
+		[ -f "$$a" ] || continue; \
+		sub=$$(basename $$a .a); \
+		mkdir -p "$$sub"; \
+		(cd "$$sub" && $(AR) x "$$a"); \
+	done; \
+	cp $(SOURCES)/ruby30/ext/extinit.o .; \
+	cp $(SOURCES)/ruby30/enc/encinit.o .; \
+	$(AR) rcs $(LIBDIR)/libruby.3.0-ext.a extinit.o encinit.o */*.o; \
+	$(RANLIB) $(LIBDIR)/libruby.3.0-ext.a; \
+	rm -rf $$TMPDIR
+	@# Strip dmyext.o and dmyenc.o from the core static lib so the real
+	@# Init_ext and Init_enc in libruby.3.0-ext.a win at link time.
+	$(AR) d $(LIBDIR)/libruby.3.0-static.a dmyext.o dmyenc.o || true
+	$(RANLIB) $(LIBDIR)/libruby.3.0-static.a
+
+$(SOURCES)/ruby30/Makefile: $(SOURCES)/ruby30/configure
+	cd $(SOURCES)/ruby30; \
+	export $(CONFIGURE_ENV); \
+	export CFLAGS="-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__ $$CFLAGS"; \
+	export LDFLAGS="$$LDFLAGS"; \
+	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) \
+	ac_cv_func_setpgrp_void=yes \
+	ac_cv_func_fork=no \
+	ac_cv_func_dup3=no \
+	ac_cv_func_pipe2=no \
+	ac_cv_func_getentropy=no \
+	ac_cv_func_posix_spawn=no \
+	ac_cv_func_posix_spawnp=no \
+	ac_cv_func_fdatasync=no \
+	ac_cv_func_preadv=no \
+	ac_cv_func_pwritev=no \
+	ac_cv_func_copy_file_range=no \
+	ac_cv_func_close_range=no \
+	cross_compiling=yes; \
+	sed -i '' 's|^ASFLAGS.*=.*|ASFLAGS = $$(ARCH_FLAG) $$(INCFLAGS) $(TARGETFLAGS)|' Makefile
+
+$(SOURCES)/ruby30/configure: $(SOURCES)/ruby30/configure.ac
+	cd $(SOURCES)/ruby30; \
+	git checkout -- . 2>/dev/null; \
+	git apply $(PATCHES)/ruby30/ios.patch; \
+	autoreconf -i
+
 # Ruby 1.8 (submodule: sources/ruby18)
 ruby18: init_dirs $(LIBDIR)/libruby18-static.a
 
