@@ -763,6 +763,14 @@ class GameLibrary {
         metadata.manifestId = bundle.manifest.id
         metadata.manifestVersion = bundle.manifest.version
         metadata.manifestDescription = bundle.manifest.description
+        // Multi-Ruby: same detection path as the non-JGP import.
+        // JGP manifests' `runtime` field is consumed indirectly by
+        // RubyVersionDetection (which checks for modern-Ruby
+        // markers including the `useModernRuby` decision the JGP
+        // settings make on its behalf).
+        metadata.rubyVersion = RubyVersionDetection.detect(
+            gameDirectory: container.gameURL
+        )
 
         if let iconData = bundle.iconData,
            let image = UIImage(data: iconData),
@@ -776,6 +784,15 @@ class GameLibrary {
     nonisolated private static func createMetadata(in container: GameContainer) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
+        // Multi-Ruby (Phase D, MULTI_RUBY_PLAN.md): pick the Ruby
+        // interpreter version this game expects so AppState.selectGame
+        // can route through the right per-version binding via
+        // `mkxp_setActiveRubyVersion`. Detection looks at PSDK markers,
+        // RGSS archive type, Game.ini's Library= field, and modern-
+        // Ruby script syntax.
+        metadata.rubyVersion = RubyVersionDetection.detect(
+            gameDirectory: container.gameURL
+        )
         metadata.save(to: container)
     }
 

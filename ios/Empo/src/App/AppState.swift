@@ -78,6 +78,26 @@ class AppState {
             settings.resolveSyntaxTransformMode(gameDirectory: gameDir)
         )
 
+        // Multi-Ruby (Phase D, MULTI_RUBY_PLAN.md) per-game dispatch.
+        // The metadata.rubyVersion field is set at import time by
+        // RubyVersionDetection; here we just hand it to the engine
+        // bridge so getActiveScriptBinding() routes to the right
+        // per-version `_mkxp_get_script_binding_NN()` entry point.
+        // Falls back to MKXP_RUBY_UNSET (legacy direct-link 3.1
+        // path) for games imported before this field landed in
+        // metadata, or for unknown raw values.
+        let metadata = GameMetadata.load(from: container)
+        let rubyVer: MKXPRubyVersion = {
+            switch metadata.rubyVersion {
+            case 18: return MKXP_RUBY_18
+            case 19: return MKXP_RUBY_19
+            case 30: return MKXP_RUBY_30
+            case 31: return MKXP_RUBY_31
+            default: return MKXP_RUBY_UNSET
+            }
+        }()
+        mkxp_setActiveRubyVersion(rubyVer)
+
         settings.applyToConfig(stateDirectory: stateDir, gameDirectory: gameDir)
 
         // Apply Empo's curated patches.json (auto-discovered by the
