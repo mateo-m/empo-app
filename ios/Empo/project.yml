@@ -200,7 +200,7 @@ targets:
           # fail the build (offline dev still works), but mismatch
           # with the locally-known remote does.
           git fetch --quiet origin "$BRANCH" 2>/dev/null || true
-          REMOTE="$(git rev-parse "origin/${BRANCH}" 2>/dev/null || echo "")"
+          REMOTE="$(git rev-parse --verify --quiet "origin/${BRANCH}" 2>/dev/null || echo "")"
           if [ -n "$REMOTE" ] && [ "$CURRENT" != "$REMOTE" ]; then
               echo "error: hmode7 submodule is out of sync with origin/${BRANCH}" >&2
               echo "  submodule HEAD: $CURRENT" >&2
