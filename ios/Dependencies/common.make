@@ -545,6 +545,8 @@ MKXPZ_WARNFLAGS := \
     -Wno-deprecated-literal-operator -Wno-unused-function
 
 mkxp30-merged: init_dirs ruby30 $(LIBDIR)/mkxp30-merged.o
+mkxp31-merged: init_dirs ruby     $(LIBDIR)/mkxp31-merged.o
+mkxp-merged: mkxp30-merged mkxp31-merged
 
 # 1. Compile every mkxp-z binding/*.cpp against Ruby 3.0 headers.
 # 2. ld -r merges them with libruby.3.0-static.a + libruby.3.0-ext.a.
@@ -601,6 +603,97 @@ $(LIBDIR)/mkxp30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	@TGLOBALS=$$(nm $(LIBDIR)/mkxp30-merged.o | awk '$$2 == "T"' | sort -u | wc -l | tr -d ' '); \
 	echo "  global T symbols (should be 1: _mkxp_get_script_binding_30): $$TGLOBALS"
 	@nm $(LIBDIR)/mkxp30-merged.o | awk '$$2 == "T"' | head -3
+
+# Ruby 3.1 — same shape as the 3.0 recipe above. Includes are
+# anchored at the global $(INCLUDEDIR) (3.1's traditional install
+# location) rather than $(INCLUDEDIR)/ruby31, since the existing
+# `ruby` make target installs there. Once 3.1 is migrated to a
+# per-version subdir like 3.0, the include line gets updated.
+#
+# Defines mirror project.yml: includes MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES
+# (still needed for the 3.1 build until syntax-transform/ is removed).
+BINDING_OBJDIR_31 := $(BUILD_PREFIX)/binding31
+
+MKXPZ_INCLUDES_31 := \
+    -I$(INCLUDEDIR) \
+    -I$(ENGINE) \
+    -I$(ENGINE)/src \
+    -I$(ENGINE)/src/audio \
+    -I$(ENGINE)/src/crypto \
+    -I$(ENGINE)/src/display \
+    -I$(ENGINE)/src/display/gl \
+    -I$(ENGINE)/src/display/libnsgif \
+    -I$(ENGINE)/src/etc \
+    -I$(ENGINE)/src/filesystem \
+    -I$(ENGINE)/src/input \
+    -I$(ENGINE)/src/net \
+    -I$(ENGINE)/src/system \
+    -I$(ENGINE)/src/theoraplay \
+    -I$(ENGINE)/src/util \
+    -I$(ENGINE)/binding \
+    -I$(ENGINE)/shader \
+    -I$(ENGINE)/hmode7/src \
+    -I$(INCLUDEDIR)/SDL2 \
+    -I$(INCLUDEDIR)/pixman-1 \
+    -I$(INCLUDEDIR)/uchardet \
+    -I$(INCLUDEDIR)/freetype2 \
+    -I${PWD}/ANGLE/$(SDK)/include
+
+MKXPZ_DEFINES_31 := \
+    -DMKXPZ_BUILD_XCODE \
+    -DMKXPZ_ALCDEVICE=ALCdevice \
+    -DMKXPZ_VERSION='"1.0.0"' \
+    -DMKXPZ_GIT_HASH='"ios"' \
+    -DMKXPZ_RUBY_VERSION='"3.1"' \
+    -DMKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES \
+    -DGLES2_HEADER \
+    -DMKXPZ_HAS_ANGLE \
+    -DHAVE_CONFIG_H \
+    -DHM7_HAVE_MKXP_BITMAP
+
+$(LIBDIR)/mkxp31-merged.o: $(LIBDIR)/libruby.3.1-static.a \
+                          $(LIBDIR)/libruby.3.1-ext.a \
+                          ${PWD}/multiruby/wrapper.cpp
+	@echo "[mkxp31] Compiling binding/*.cpp against Ruby 3.1..."
+	@mkdir -p $(BINDING_OBJDIR_31)
+	@for src in $(ENGINE)/binding/*.cpp; do \
+	    obj=$(BINDING_OBJDIR_31)/$$(basename $$src .cpp).o; \
+	    echo "  -> $$(basename $$obj)"; \
+	    $(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
+	        -std=c++14 -fdeclspec -fobjc-arc -O3 \
+	        $(MKXPZ_INCLUDES_31) $(MKXPZ_DEFINES_31) $(MKXPZ_WARNFLAGS) \
+	        -c $$src -o $$obj || exit 1; \
+	done
+	@echo "[mkxp31] Compiling per-version wrapper..."
+	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
+	    -std=c++14 -fdeclspec -O3 \
+	    -DMULTIRUBY_SUFFIX=_31 \
+	    $(MKXPZ_INCLUDES_31) \
+	    -c ${PWD}/multiruby/wrapper.cpp \
+	    -o $(BINDING_OBJDIR_31)/_multiruby_wrapper.o
+	@echo "[mkxp31] Generating unexport list..."
+	${PWD}/tools/generate-ruby-unexports.sh \
+	    $(LIBDIR)/libruby.3.1-static.a $(LIBDIR)/libruby.3.1-ext.a \
+	    > $(BUILD_PREFIX)/ruby31-unexports.txt
+	@nm -gU $(BINDING_OBJDIR_31)/*.o 2>/dev/null \
+	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
+	    | sort -u \
+	    | grep -v '^_mkxp_get_script_binding_31$$' \
+	    >> $(BUILD_PREFIX)/ruby31-unexports.txt
+	@echo "[mkxp31] Merging via ld -r..."
+	@LD=$$(xcrun --sdk $(SDK) -f ld); \
+	"$$LD" -r -arch $(ARCH) \
+	    $(LD_PLATFORM_VERSION) \
+	    -syslibroot $(SYSROOT) \
+	    -unexported_symbols_list $(BUILD_PREFIX)/ruby31-unexports.txt \
+	    $(LIBDIR)/libruby.3.1-static.a \
+	    $(LIBDIR)/libruby.3.1-ext.a \
+	    $(BINDING_OBJDIR_31)/*.o \
+	    -o $(LIBDIR)/mkxp31-merged.o
+	@echo "[mkxp31] Verifying merged .o..."
+	@TGLOBALS=$$(nm $(LIBDIR)/mkxp31-merged.o | awk '$$2 == "T"' | sort -u | wc -l | tr -d ' '); \
+	echo "  global T symbols (should be 1: _mkxp_get_script_binding_31): $$TGLOBALS"
+	@nm $(LIBDIR)/mkxp31-merged.o | awk '$$2 == "T"' | head -3
 
 # Ruby 1.8 (submodule: sources/ruby18)
 ruby18: init_dirs $(LIBDIR)/libruby18-static.a

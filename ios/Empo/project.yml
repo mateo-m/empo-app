@@ -361,9 +361,15 @@ targets:
           # `_mkxp_get_script_binding_<NN>()` entry; everything else
           # (libruby's `_rb_*` + binding internals) is private-extern
           # so multiple versions coexist without clashes. The 3.1
-          # path remains the active code path until host dispatch
-          # lands; mkxp30-merged.o sits dormant for now.
+          # legacy direct link below is still the default code path
+          # (via `getActiveScriptBinding()` in binding.h falling
+          # through to the global `scriptBinding` when the host
+          # leaves `mkxp_setActiveRubyVersion()` unset). The merged
+          # .o files are linked-but-dormant: their entry points are
+          # only invoked when the host explicitly sets
+          # MKXP_RUBY_30 / MKXP_RUBY_31 via the bridge.
           - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp30-merged.o
+          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp31-merged.o
           - -ldl
           - -lpthread
           - -framework Foundation
