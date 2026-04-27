@@ -84,17 +84,111 @@ enum RubyVersionDetection {
             return 30
         }
 
-        // Default: 3.1 (legacy direct-link path). Includes:
-        //   - vintage RGSS1/RGSS2/RGSS3 games (1.8/1.9 grammar)
-        //   - modern mkxp-z JGPs (Reborn 19.5+, PE v20+)
-        //   - anything we don't have a confirmed-working native
-        //     binding for.
+        // RGSS archive type. Authoritative when present: the file
+        // extension encodes which RGSS engine was used to pack the
+        // game, which in turn pins the Ruby version.
         //
-        // Once 1.8/1.9 native builds land + per-version binding
-        // compiles work, extend this to dispatch by RGSS archive
-        // type + Library= field (see git history of this file for
-        // the eager-detection variant).
+        //   .rgssad  → RGSS1 / RPG Maker XP   → Ruby 1.8.1
+        //   .rgss2a  → RGSS2 / RPG Maker VX   → Ruby 1.9.2
+        //   .rgss3a  → RGSS3 / RPG Maker VX Ace → Ruby 1.9.2
+        //
+        // We sniff the directory's top level; we don't recurse,
+        // because the archive sits next to Game.ini at the project
+        // root. Loose-script projects (no archive) fall through to
+        // the next heuristic.
+        if let archiveExt = topLevelRgssArchiveExtension(at: gameDirectory, fm: fm) {
+            switch archiveExt {
+            case "rgssad":  return 18
+            case "rgss2a":  return 19
+            case "rgss3a":  return 19
+            default:        break
+            }
+        }
+
+        // Game.ini Library= field. RPG Maker stamps the RGSS DLL
+        // name into Game.ini; that name encodes the engine version
+        // in its three-digit suffix. Ranges:
+        //   RGSS1xx → RGSS1 → 1.8
+        //   RGSS2xx → RGSS2 → 1.9
+        //   RGSS3xx → RGSS3 → 1.9
+        // Loose-script Reborn / PE forks frequently strip Game.ini
+        // entirely, so this only fires for vanilla-layout projects
+        // that didn't get caught by the archive sniff above.
+        if let libraryRGSS = rgssLibraryMajor(at: gameDirectory, fm: fm) {
+            switch libraryRGSS {
+            case 1: return 18
+            case 2, 3: return 19
+            default: break
+            }
+        }
+
+        // Default: 3.1 (legacy direct-link path with
+        // syntax-transform). Includes anything that didn't match
+        // PSDK / RGSS archive / Game.ini — typically loose-script
+        // modern PE forks (Reborn 19.5+, PE v20+) running on
+        // mkxp-z's modernised binding.
         return 31
+    }
+
+    /// Scans the top level of `gameDirectory` for a single RGSS
+    /// archive file. Returns its extension (lowercased, no dot)
+    /// or nil if none found. If multiple archives are present
+    /// (some games ship both .rgssad and .rgss2a for compat) the
+    /// **highest** version wins, since the engine that opens the
+    /// project decides based on Game.ini/Library= which one to
+    /// actually load.
+    private static func topLevelRgssArchiveExtension(at gameDirectory: URL,
+                                                     fm: FileManager) -> String? {
+        guard let entries = try? fm.contentsOfDirectory(at: gameDirectory,
+                                                        includingPropertiesForKeys: nil) else {
+            return nil
+        }
+        var best: String?
+        var bestRank = 0
+        for url in entries {
+            let ext = url.pathExtension.lowercased()
+            let rank: Int
+            switch ext {
+            case "rgssad":  rank = 1
+            case "rgss2a":  rank = 2
+            case "rgss3a":  rank = 3
+            default:        continue
+            }
+            if rank > bestRank {
+                bestRank = rank
+                best = ext
+            }
+        }
+        return best
+    }
+
+    /// Reads `Game.ini` and extracts the major version digit from
+    /// the `Library=RGSSxxx.dll` entry. Returns 1 / 2 / 3 / nil.
+    /// Case-insensitive on the `Library` key per the original
+    /// RPG Maker convention.
+    private static func rgssLibraryMajor(at gameDirectory: URL,
+                                         fm: FileManager) -> Int? {
+        let iniURL = gameDirectory.appendingPathComponent("Game.ini")
+        guard let data = try? Data(contentsOf: iniURL),
+              let text = String(data: data, encoding: .isoLatin1)
+                       ?? String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        // Find a line that starts with "Library" (after trimming).
+        for rawLine in text.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard line.lowercased().hasPrefix("library") else { continue }
+            // Match RGSS<digit><...>.dll, case-insensitive.
+            // The digit immediately after "RGSS" is the major
+            // version we care about.
+            let upper = line.uppercased()
+            guard let range = upper.range(of: "RGSS") else { continue }
+            let after = upper[range.upperBound...]
+            if let firstDigit = after.first, let major = firstDigit.hexDigitValue {
+                return major
+            }
+        }
+        return nil
     }
 
 
