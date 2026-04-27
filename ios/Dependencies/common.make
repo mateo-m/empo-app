@@ -1,5 +1,16 @@
 SYSROOT := $(shell xcrun --sdk $(SDK) --show-sdk-path)
+SDK_VERSION := $(shell xcrun --sdk $(SDK) --show-sdk-version)
 TARGETFLAGS := -isysroot $(SYSROOT) $(TARGET_FLAG) -arch $(ARCH)
+
+# `ld -platform_version <platform> <min> <sdk>` — needed for ld -r
+# linking on modern Apple toolchains. Platform name differs between
+# device (`ios`) and simulator (`ios-simulator`); we infer from $(SDK).
+ifeq ($(SDK),iphonesimulator)
+LD_PLATFORM := ios-simulator
+else
+LD_PLATFORM := ios
+endif
+LD_PLATFORM_VERSION := -platform_version $(LD_PLATFORM) $(MINIMUM_REQUIRED) $(SDK_VERSION)
 BUILD_PREFIX := ${PWD}/build-$(SDK)-$(ARCH)
 LIBDIR := $(BUILD_PREFIX)/lib
 INCLUDEDIR := $(BUILD_PREFIX)/include
@@ -456,6 +467,122 @@ $(SOURCES)/ruby30/configure: $(SOURCES)/ruby30/configure.ac
 	git checkout -- . 2>/dev/null; \
 	git apply $(PATCHES)/ruby30/ios.patch; \
 	autoreconf -i
+
+# Per-Ruby-version mkxp-z binding compile + libruby merge.
+#
+# Phase D of MULTI_RUBY_PLAN.md (gitignored): ship multiple Ruby
+# versions in one binary by compiling mkxp-z's binding code N times
+# (once against each Ruby's headers), merging each compile +
+# corresponding libruby into a single .o with `ld -r`, and demoting
+# every Ruby-defined symbol (`_rb_*`, `_ruby_*`, etc.) to local via
+# `-unexported_symbols_list`. Hidden Ruby symbols don't clash across
+# versions; each merged .o exposes only its own `Init_mkxpNN`-style
+# entry points to the host.
+#
+# This target builds the Ruby 3.0 slice. Sister targets (mkxp31-merged,
+# mkxp19-merged, mkxp18-merged) follow once the binding compile shape
+# is verified for 3.0.
+
+# Where the binding-source-against-Ruby-3.0 .o files land. Versioned
+# subdir under build-$(SDK)-$(ARCH) so the sister versions don't
+# collide.
+BINDING_OBJDIR_30 := $(BUILD_PREFIX)/binding30
+
+# Mkxp-z's full -I list, mirroring project.yml's HEADER_SEARCH_PATHS.
+# Includes both the engine source tree (so the binding can reach
+# `audio/audio.h` etc. by short path) and the per-Ruby header dir
+# placed AHEAD of the global $(INCLUDEDIR) to win against any 3.1
+# header pollution.
+MKXPZ_INCLUDES_30 := \
+    -I$(INCLUDEDIR)/ruby30 \
+    -I$(ENGINE) \
+    -I$(ENGINE)/src \
+    -I$(ENGINE)/src/audio \
+    -I$(ENGINE)/src/crypto \
+    -I$(ENGINE)/src/display \
+    -I$(ENGINE)/src/display/gl \
+    -I$(ENGINE)/src/display/libnsgif \
+    -I$(ENGINE)/src/etc \
+    -I$(ENGINE)/src/filesystem \
+    -I$(ENGINE)/src/input \
+    -I$(ENGINE)/src/net \
+    -I$(ENGINE)/src/system \
+    -I$(ENGINE)/src/theoraplay \
+    -I$(ENGINE)/src/util \
+    -I$(ENGINE)/binding \
+    -I$(ENGINE)/shader \
+    -I$(ENGINE)/hmode7/src \
+    -I$(INCLUDEDIR)/SDL2 \
+    -I$(INCLUDEDIR)/pixman-1 \
+    -I$(INCLUDEDIR)/uchardet \
+    -I$(INCLUDEDIR)/freetype2 \
+    -I$(INCLUDEDIR) \
+    -I${PWD}/ANGLE/$(SDK)/include
+
+# Same preprocessor defines project.yml hands Xcode for the binding
+# compile, EXCEPT MKXPZ_RUBY_VERSION (per-version) and
+# MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES (3.1-only). Quoting note:
+# project.yml escapes the string-literal defines for YAML; here we
+# pass them through the shell, so the inner quotes need to survive
+# both make's and the shell's expansion.
+MKXPZ_DEFINES_30 := \
+    -DMKXPZ_BUILD_XCODE \
+    -DMKXPZ_ALCDEVICE=ALCdevice \
+    -DMKXPZ_VERSION='"1.0.0"' \
+    -DMKXPZ_GIT_HASH='"ios"' \
+    -DMKXPZ_RUBY_VERSION='"3.0"' \
+    -DGLES2_HEADER \
+    -DMKXPZ_HAS_ANGLE \
+    -DHAVE_CONFIG_H \
+    -DHM7_HAVE_MKXP_BITMAP
+
+# Suppress the same warnings project.yml suppresses, so the per-Ruby
+# binding compile is no noisier than the in-Xcode build.
+MKXPZ_WARNFLAGS := \
+    -Wno-documentation -Wno-shorten-64-to-32 -Wno-deprecated-declarations \
+    -Wno-uninitialized -Wno-conditional-uninitialized -Wno-undefined-var-template \
+    -Wno-comma -Wno-switch -Wno-unused-const-variable \
+    -Wno-deprecated-literal-operator -Wno-unused-function
+
+mkxp30-merged: init_dirs ruby30 $(LIBDIR)/mkxp30-merged.o
+
+# 1. Compile every mkxp-z binding/*.cpp against Ruby 3.0 headers.
+# 2. ld -r merges them with libruby.3.0-static.a + libruby.3.0-ext.a.
+# 3. Unexport list demotes every Ruby-defined symbol to local.
+#
+# Output: a single relocatable .o file. The host links it like any
+# other object; the symbols inside are private-extern so a sister
+# mkxp31-merged.o (or mkxp19, mkxp18) can sit alongside without
+# conflict.
+$(LIBDIR)/mkxp30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
+                          $(LIBDIR)/libruby.3.0-ext.a
+	@echo "[mkxp30] Compiling binding/*.cpp against Ruby 3.0..."
+	@mkdir -p $(BINDING_OBJDIR_30)
+	@for src in $(ENGINE)/binding/*.cpp; do \
+	    obj=$(BINDING_OBJDIR_30)/$$(basename $$src .cpp).o; \
+	    echo "  -> $$(basename $$obj)"; \
+	    $(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
+	        -std=c++14 -fdeclspec -fobjc-arc -O3 \
+	        $(MKXPZ_INCLUDES_30) $(MKXPZ_DEFINES_30) $(MKXPZ_WARNFLAGS) \
+	        -c $$src -o $$obj || exit 1; \
+	done
+	@echo "[mkxp30] Generating unexport list..."
+	${PWD}/tools/generate-ruby-unexports.sh \
+	    $(LIBDIR)/libruby.3.0-static.a $(LIBDIR)/libruby.3.0-ext.a \
+	    > $(BUILD_PREFIX)/ruby30-unexports.txt
+	@echo "[mkxp30] Merging via ld -r..."
+	@LD=$$(xcrun --sdk $(SDK) -f ld); \
+	"$$LD" -r -arch $(ARCH) \
+	    $(LD_PLATFORM_VERSION) \
+	    -syslibroot $(SYSROOT) \
+	    -unexported_symbols_list $(BUILD_PREFIX)/ruby30-unexports.txt \
+	    $(LIBDIR)/libruby.3.0-static.a \
+	    $(LIBDIR)/libruby.3.0-ext.a \
+	    $(BINDING_OBJDIR_30)/*.o \
+	    -o $(LIBDIR)/mkxp30-merged.o
+	@echo "[mkxp30] Verifying merged .o..."
+	@TGLOBALS=$$(nm $(LIBDIR)/mkxp30-merged.o | awk '$$2 == "T"' | wc -l | tr -d ' '); \
+	echo "  global text symbols (should be the binding's entry points only): $$TGLOBALS"
 
 # Ruby 1.8 (submodule: sources/ruby18)
 ruby18: init_dirs $(LIBDIR)/libruby18-static.a
