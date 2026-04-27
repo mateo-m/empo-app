@@ -77,6 +77,55 @@ targets:
     type: application
     platform: iOS
     preBuildScripts:
+      - name: Stub multi-Ruby merged objects if missing
+        # Multi-Ruby Phase D (MULTI_RUBY_PLAN.md) links per-Ruby
+        # merged .o files that are built by `ios/Dependencies/common.make`.
+        # Until that build is run for a given SDK (sim or device),
+        # the merged.o files don't exist and the linker fails.
+        # This pre-build phase creates a stub .o for any missing
+        # merged.o that defines `mkxp_get_script_binding_NN()`
+        # returning nullptr, so the linker is satisfied and the
+        # host's `getActiveScriptBinding()` dispatcher's NULL check
+        # falls back to the legacy `scriptBinding` for that version.
+        #
+        # On clean checkouts:  stubs created, app links + runs against
+        #                      the legacy 3.1 path only (3.0/3.1 dispatch
+        #                      paths fall through to legacy via NULL).
+        # After `make mkxp-merged`: real merged.o's exist, multi-Ruby
+        #                      dispatch works for whichever versions
+        #                      were built.
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          DEPS_LIB="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib"
+          mkdir -p "$DEPS_LIB"
+          for VER in 30 31; do
+              OBJ="$DEPS_LIB/mkxp${VER}-merged.o"
+              if [ ! -f "$OBJ" ]; then
+                  echo "info: $OBJ missing, stubbing for link" >&2
+                  TMP=$(mktemp -d)
+                  cat > "$TMP/stub.cpp" <<STUBEOF
+          // Auto-generated stub for missing mkxp${VER}-merged.o.
+          // Returns nullptr so getActiveScriptBinding falls back
+          // to the legacy scriptBinding path. Real merged .o
+          // (from ios/Dependencies/common.make's mkxp-merged
+          // target) replaces this when built.
+          struct ScriptBinding;
+          extern "C" ScriptBinding *mkxp_get_script_binding_${VER}(void) {
+              return nullptr;
+          }
+          STUBEOF
+                  CC=$(xcrun --sdk "$PLATFORM_NAME" -f clang++)
+                  SDK=$(xcrun --sdk "$PLATFORM_NAME" --show-sdk-path)
+                  case "$PLATFORM_NAME" in
+                    iphonesimulator) TARGET="-target arm64-apple-ios26.0-simulator -mios-simulator-version-min=26.0" ;;
+                    iphoneos)        TARGET="-target arm64-apple-ios26.0 -miphoneos-version-min=26.0" ;;
+                  esac
+                  "$CC" -arch arm64 -isysroot "$SDK" $TARGET -std=c++14 -c "$TMP/stub.cpp" -o "$OBJ"
+                  rm -rf "$TMP"
+              fi
+          done
+
       - name: Verify hmode7 submodule is up to date
         # Guard against a stale h-mode7 port submodule. The port is
         # maintained in a sibling repo (//hmode7-apple-mobile) and
