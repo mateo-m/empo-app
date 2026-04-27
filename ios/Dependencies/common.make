@@ -674,12 +674,24 @@ $(LIBDIR)/mkxp31-merged.o: $(LIBDIR)/libruby.3.1-static.a \
 	@echo "[mkxp31] Generating unexport list..."
 	${PWD}/tools/generate-ruby-unexports.sh \
 	    $(LIBDIR)/libruby.3.1-static.a $(LIBDIR)/libruby.3.1-ext.a \
-	    > $(BUILD_PREFIX)/ruby31-unexports.txt
+	    > $(BUILD_PREFIX)/ruby31-unexports.txt.raw
 	@nm -gU $(BINDING_OBJDIR_31)/*.o 2>/dev/null \
 	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
 	    | sort -u \
 	    | grep -v '^_mkxp_get_script_binding_31$$' \
-	    >> $(BUILD_PREFIX)/ruby31-unexports.txt
+	    >> $(BUILD_PREFIX)/ruby31-unexports.txt.raw
+	@# Carve out symbols that need to remain externally visible:
+	@# main.cpp (Xcode-compiled) sets the syntax-transform target
+	@# version variables defined in libruby.3.1's parse.y patch.
+	@# Leaving them hidden inside mkxp31-merged.o is fine for the
+	@# binding's local use but breaks main.cpp's link. These exist
+	@# only in 3.1 (3.0 doesn't have the syntax-transform patches),
+	@# so there's no risk of duplicate-symbol clashes when both
+	@# merged.o files are linked together.
+	@grep -vE '^_mkxp_syntax_transform_target_ruby_version_(major|minor|teeny)$$' \
+	    $(BUILD_PREFIX)/ruby31-unexports.txt.raw \
+	    > $(BUILD_PREFIX)/ruby31-unexports.txt
+	@rm -f $(BUILD_PREFIX)/ruby31-unexports.txt.raw
 	@echo "[mkxp31] Merging via ld -r..."
 	@LD=$$(xcrun --sdk $(SDK) -f ld); \
 	"$$LD" -r -arch $(ARCH) \
