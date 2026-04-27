@@ -327,8 +327,15 @@ $(LIBDIR)/libruby.3.1-static.a: $(SOURCES)/ruby/Makefile
 	cd $(SOURCES)/ruby; \
 	$(CONFIGURE_ENV) make -j$(NPROC) libruby.3.1-static.a; \
 	cp libruby.3.1-static.a $(LIBDIR)/; \
-	cp -R include/* $(INCLUDEDIR)/; \
-	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby/config.h 2>/dev/null || true
+	mkdir -p $(INCLUDEDIR)/ruby31; \
+	cp -R include/* $(INCLUDEDIR)/ruby31/; \
+	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby31/ruby/config.h 2>/dev/null || true
+	@# Header isolation: 3.1 lives under $(INCLUDEDIR)/ruby31/,
+	@# 3.0 under $(INCLUDEDIR)/ruby30/. Consumers (project.yml's
+	@# HEADER_SEARCH_PATHS, the per-version mkxp{N}-merged make
+	@# targets) must point at the right subdir for the version
+	@# they want. No global $(INCLUDEDIR)/ruby.h fallback so 3.0
+	@# builds don't accidentally see 3.1's headers and vice versa.
 
 # Build Ruby 3.1 extensions (zlib, stringio, strscan, digest, etc.) plus
 # encoding libs into libruby.3.1-ext.a. Mirrors the Ruby 1.8 pattern (see
@@ -615,7 +622,7 @@ $(LIBDIR)/mkxp30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 BINDING_OBJDIR_31 := $(BUILD_PREFIX)/binding31
 
 MKXPZ_INCLUDES_31 := \
-    -I$(INCLUDEDIR) \
+    -I$(INCLUDEDIR)/ruby31 \
     -I$(ENGINE) \
     -I$(ENGINE)/src \
     -I$(ENGINE)/src/audio \
@@ -637,6 +644,7 @@ MKXPZ_INCLUDES_31 := \
     -I$(INCLUDEDIR)/pixman-1 \
     -I$(INCLUDEDIR)/uchardet \
     -I$(INCLUDEDIR)/freetype2 \
+    -I$(INCLUDEDIR) \
     -I${PWD}/ANGLE/$(SDK)/include
 
 MKXPZ_DEFINES_31 := \

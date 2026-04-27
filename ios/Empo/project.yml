@@ -37,6 +37,15 @@ settings:
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/hmode7/src
       - $(PROJECT_DIR)/shims
       - $(PROJECT_DIR)/shims/libarchive
+      # Ruby 3.1 headers live under /include/ruby31/ now (Phase D
+      # header isolation, MULTI_RUBY_PLAN.md). Keep this AHEAD of
+      # the global $(DEPENDENCY_SEARCH_PATH)/include in
+      # SYSTEM_HEADER_SEARCH_PATHS below so Ruby resolves to 3.1
+      # for the legacy direct-link path. Once the legacy path is
+      # dropped (Phase F), this line and the SYSTEM_HEADER_SEARCH_PATHS
+      # entry both go away — only the per-Ruby merged.o targets
+      # need Ruby headers.
+      - $(DEPENDENCY_SEARCH_PATH)/include/ruby31
       - $(DEPENDENCY_SEARCH_PATH)/include/SDL2
       - $(DEPENDENCY_SEARCH_PATH)/include/pixman-1
       - $(DEPENDENCY_SEARCH_PATH)/include/uchardet
