@@ -555,7 +555,8 @@ mkxp30-merged: init_dirs ruby30 $(LIBDIR)/mkxp30-merged.o
 # mkxp31-merged.o (or mkxp19, mkxp18) can sit alongside without
 # conflict.
 $(LIBDIR)/mkxp30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
-                          $(LIBDIR)/libruby.3.0-ext.a
+                          $(LIBDIR)/libruby.3.0-ext.a \
+                          ${PWD}/multiruby/wrapper.cpp
 	@echo "[mkxp30] Compiling binding/*.cpp against Ruby 3.0..."
 	@mkdir -p $(BINDING_OBJDIR_30)
 	@for src in $(ENGINE)/binding/*.cpp; do \
@@ -566,10 +567,26 @@ $(LIBDIR)/mkxp30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	        $(MKXPZ_INCLUDES_30) $(MKXPZ_DEFINES_30) $(MKXPZ_WARNFLAGS) \
 	        -c $$src -o $$obj || exit 1; \
 	done
+	@echo "[mkxp30] Compiling per-version wrapper..."
+	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
+	    -std=c++14 -fdeclspec -O3 \
+	    -DMULTIRUBY_SUFFIX=_30 \
+	    $(MKXPZ_INCLUDES_30) \
+	    -c ${PWD}/multiruby/wrapper.cpp \
+	    -o $(BINDING_OBJDIR_30)/_multiruby_wrapper.o
 	@echo "[mkxp30] Generating unexport list..."
+	@# Unexport: every libruby symbol + every binding-internal symbol
+	@# EXCEPT the wrapper's single versioned entry point. We get the
+	@# binding-internals by nm-ing the per-version binding objects;
+	@# the wrapper's `_mkxp_get_script_binding_30` is filtered out.
 	${PWD}/tools/generate-ruby-unexports.sh \
 	    $(LIBDIR)/libruby.3.0-static.a $(LIBDIR)/libruby.3.0-ext.a \
 	    > $(BUILD_PREFIX)/ruby30-unexports.txt
+	@nm -gU $(BINDING_OBJDIR_30)/*.o 2>/dev/null \
+	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
+	    | sort -u \
+	    | grep -v '^_mkxp_get_script_binding_30$$' \
+	    >> $(BUILD_PREFIX)/ruby30-unexports.txt
 	@echo "[mkxp30] Merging via ld -r..."
 	@LD=$$(xcrun --sdk $(SDK) -f ld); \
 	"$$LD" -r -arch $(ARCH) \
@@ -581,8 +598,9 @@ $(LIBDIR)/mkxp30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	    $(BINDING_OBJDIR_30)/*.o \
 	    -o $(LIBDIR)/mkxp30-merged.o
 	@echo "[mkxp30] Verifying merged .o..."
-	@TGLOBALS=$$(nm $(LIBDIR)/mkxp30-merged.o | awk '$$2 == "T"' | wc -l | tr -d ' '); \
-	echo "  global text symbols (should be the binding's entry points only): $$TGLOBALS"
+	@TGLOBALS=$$(nm $(LIBDIR)/mkxp30-merged.o | awk '$$2 == "T"' | sort -u | wc -l | tr -d ' '); \
+	echo "  global T symbols (should be 1: _mkxp_get_script_binding_30): $$TGLOBALS"
+	@nm $(LIBDIR)/mkxp30-merged.o | awk '$$2 == "T"' | head -3
 
 # Ruby 1.8 (submodule: sources/ruby18)
 ruby18: init_dirs $(LIBDIR)/libruby18-static.a
