@@ -166,7 +166,18 @@ class GameLibrary {
         let iniTitle = GameEntry.parseINITitle(at: container.gameURL) ?? "Unknown Game"
         let defaultArtwork = findArtwork(in: container)
 
-        let metadata = GameMetadata.load(from: container)
+        var metadata = GameMetadata.load(from: container)
+        // Backfill rubyVersion for games imported before the field
+        // existed in GameMetadata. Detection is idempotent and cheap
+        // (file-system sniff); on first library load after this
+        // build ships, legacy entries get tagged. New imports
+        // already have the field populated by the import path.
+        if metadata.rubyVersion == nil {
+            metadata.rubyVersion = RubyVersionDetection.detect(
+                gameDirectory: container.gameURL
+            )
+            metadata.save(to: container)
+        }
         // Title priority: user's customTitle > import-time baseTitle
         // (JGP manifest name) > Game.ini title. The `engineTitle`
         // subtitle on the library card only surfaces when the user
