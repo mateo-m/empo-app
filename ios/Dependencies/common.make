@@ -807,6 +807,7 @@ MKXPZ_DEFINES_18 := \
     -DHM7_HAVE_MKXP_BITMAP
 
 $(LIBDIR)/mkxp19-merged.o: $(LIBDIR)/libruby19-static.a \
+                          $(LIBDIR)/libruby19-ext.a \
                           ${PWD}/multiruby/wrapper.cpp
 	@echo "[mkxp19] Compiling binding/*.cpp + hmode7/*.cpp against Ruby 1.9..."
 	@mkdir -p $(BINDING_OBJDIR_19)
@@ -829,6 +830,11 @@ $(LIBDIR)/mkxp19-merged.o: $(LIBDIR)/libruby19-static.a \
 	${PWD}/tools/generate-ruby-unexports.sh \
 	    $(LIBDIR)/libruby19-static.a \
 	    > $(BUILD_PREFIX)/ruby19-unexports.txt
+	@# Also include ext.a's exports (Init_zlib etc.) so they don't
+	@# leak across merged.o boundaries.
+	${PWD}/tools/generate-ruby-unexports.sh \
+	    $(LIBDIR)/libruby19-ext.a \
+	    >> $(BUILD_PREFIX)/ruby19-unexports.txt
 	@nm -gU $(BINDING_OBJDIR_19)/*.o 2>/dev/null \
 	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
 	    | sort -u \
@@ -841,6 +847,7 @@ $(LIBDIR)/mkxp19-merged.o: $(LIBDIR)/libruby19-static.a \
 	    -syslibroot $(SYSROOT) \
 	    -unexported_symbols_list $(BUILD_PREFIX)/ruby19-unexports.txt \
 	    $(LIBDIR)/libruby19-static.a \
+	    $(LIBDIR)/libruby19-ext.a \
 	    $(BINDING_OBJDIR_19)/*.o \
 	    -o $(LIBDIR)/mkxp19-merged.o
 	@echo "[mkxp19] Verifying merged .o..."
@@ -849,6 +856,7 @@ $(LIBDIR)/mkxp19-merged.o: $(LIBDIR)/libruby19-static.a \
 	@nm $(LIBDIR)/mkxp19-merged.o | awk '$$2 == "T"' | head -3
 
 $(LIBDIR)/mkxp18-merged.o: $(LIBDIR)/libruby18-static.a \
+                          $(LIBDIR)/libruby18-ext.a \
                           ${PWD}/multiruby/wrapper.cpp
 	@echo "[mkxp18] Compiling binding/*.cpp + hmode7/*.cpp against Ruby 1.8..."
 	@mkdir -p $(BINDING_OBJDIR_18)
@@ -871,6 +879,11 @@ $(LIBDIR)/mkxp18-merged.o: $(LIBDIR)/libruby18-static.a \
 	${PWD}/tools/generate-ruby-unexports.sh \
 	    $(LIBDIR)/libruby18-static.a \
 	    > $(BUILD_PREFIX)/ruby18-unexports.txt
+	@# Also include ext.a's exports (Init_zlib etc.) in the
+	@# unexport list so they don't leak across merged.o boundaries.
+	${PWD}/tools/generate-ruby-unexports.sh \
+	    $(LIBDIR)/libruby18-ext.a \
+	    >> $(BUILD_PREFIX)/ruby18-unexports.txt
 	@nm -gU $(BINDING_OBJDIR_18)/*.o 2>/dev/null \
 	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
 	    | sort -u \
@@ -883,6 +896,7 @@ $(LIBDIR)/mkxp18-merged.o: $(LIBDIR)/libruby18-static.a \
 	    -syslibroot $(SYSROOT) \
 	    -unexported_symbols_list $(BUILD_PREFIX)/ruby18-unexports.txt \
 	    $(LIBDIR)/libruby18-static.a \
+	    $(LIBDIR)/libruby18-ext.a \
 	    $(BINDING_OBJDIR_18)/*.o \
 	    -o $(LIBDIR)/mkxp18-merged.o
 	@echo "[mkxp18] Verifying merged .o..."
@@ -927,6 +941,11 @@ RUBY19_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
 	-Wno-incompatible-function-pointer-types \
 	-Wno-compound-token-split-by-macro
 
+# Mirrors RUBY18_EXTS. Note: `thread` is NOT a separate ext in 1.9
+# (folded into core); pathname is added because Pokemon Essentials
+# uses it.
+RUBY19_EXTS = zlib stringio strscan digest fcntl pathname
+
 $(LIBDIR)/libruby19-static.a: $(SOURCES)/ruby19/Makefile
 	cd $(SOURCES)/ruby19; \
 	$(CONFIGURE_ENV) make -j$(NPROC) libruby-static.a; \
@@ -934,6 +953,28 @@ $(LIBDIR)/libruby19-static.a: $(SOURCES)/ruby19/Makefile
 	mkdir -p $(INCLUDEDIR)/ruby19; \
 	cp -R include/* $(INCLUDEDIR)/ruby19/; \
 	cp .ext/include/aarch64-darwin/ruby/config.h $(INCLUDEDIR)/ruby19/ruby/config.h 2>/dev/null || true
+	@# Build extensions (mirrors the Ruby 1.8 pattern; see
+	@# libruby18-static.a recipe). Adds our hand-rolled extinit.c
+	@# which provides the real Init_ext() calling each Init_X.
+	@EXTCFLAGS="$(RUBY19_CFLAGS) -I$(SOURCES)/ruby19 -I$(SOURCES)/ruby19/include -I$(SOURCES)/ruby19/.ext/include/aarch64-darwin -I$(INCLUDEDIR)/ruby19"; \
+	OBJ_FILES=""; \
+	for ext in $(RUBY19_EXTS); do \
+		for src in $(SOURCES)/ruby19/ext/$$ext/*.c; do \
+			obj=$${src%.c}.o; \
+			$(CC) $$EXTCFLAGS -c $$src -o $$obj; \
+			OBJ_FILES="$$OBJ_FILES $$obj"; \
+		done; \
+	done; \
+	$(CC) $$EXTCFLAGS \
+		-c ${PWD}/ruby19/extinit.c \
+		-o $(SOURCES)/ruby19/extinit.o; \
+	OBJ_FILES="$(SOURCES)/ruby19/extinit.o $$OBJ_FILES"; \
+	$(AR) rcs $(LIBDIR)/libruby19-ext.a $$OBJ_FILES; \
+	$(RANLIB) $(LIBDIR)/libruby19-ext.a
+	@# Strip dmyext.o from libruby19-static.a so libruby19-ext.a's
+	@# Init_ext wins at link time.
+	$(AR) d $(LIBDIR)/libruby19-static.a dmyext.o || true
+	$(RANLIB) $(LIBDIR)/libruby19-static.a
 
 $(SOURCES)/ruby19/Makefile: $(SOURCES)/ruby19/configure
 	cd $(SOURCES)/ruby19; \
@@ -979,6 +1020,9 @@ $(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/Makefile
 	mkdir -p $(INCLUDEDIR)/ruby18; \
 	cp *.h $(INCLUDEDIR)/ruby18/
 	@# Build extensions (use Ruby 1.8 headers only, not $(INCLUDEDIR) which has Ruby 3.1)
+	@# Builds per-ext .o files, plus our hand-rolled extinit.c (which
+	@# replaces dmyext.o's empty Init_ext at link time so Init_zlib /
+	@# Init_stringio / etc. fire at Ruby startup; iOS can't dlopen).
 	@EXTCFLAGS="$(RUBY18_CFLAGS) -I$(SOURCES)/ruby18 -I$(SOURCES)/ruby18/include -I$(INCLUDEDIR)"; \
 	OBJ_FILES=""; \
 	for ext in $(RUBY18_EXTS); do \
@@ -988,8 +1032,17 @@ $(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/Makefile
 			OBJ_FILES="$$OBJ_FILES $$obj"; \
 		done; \
 	done; \
+	$(CC) $$EXTCFLAGS \
+		-c ${PWD}/ruby18/extinit.c \
+		-o $(SOURCES)/ruby18/extinit.o; \
+	OBJ_FILES="$(SOURCES)/ruby18/extinit.o $$OBJ_FILES"; \
 	$(AR) rcs $(LIBDIR)/libruby18-ext.a $$OBJ_FILES; \
 	$(RANLIB) $(LIBDIR)/libruby18-ext.a
+	@# Strip dmyext.o from libruby18-static.a so the real Init_ext
+	@# from libruby18-ext.a wins at link time (mirrors the 3.0/3.1
+	@# recipe's `$(AR) d ... dmyext.o` trick).
+	$(AR) d $(LIBDIR)/libruby18-static.a dmyext.o || true
+	$(RANLIB) $(LIBDIR)/libruby18-static.a
 
 $(SOURCES)/ruby18/Makefile: $(SOURCES)/ruby18/configure
 	cd $(SOURCES)/ruby18; \
