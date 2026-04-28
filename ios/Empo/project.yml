@@ -421,6 +421,8 @@ targets:
           # behaviour before multi-Ruby. Adding 1.9 / 1.8 is a
           # mechanical extension — drop the new merged.o here, add
           # the case in `getActiveScriptBinding()`.
+          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp18-merged.o
+          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp19-merged.o
           - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp30-merged.o
           - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp31-merged.o
           - -ldl
