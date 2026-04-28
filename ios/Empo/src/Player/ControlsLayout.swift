@@ -141,10 +141,10 @@ class ControlsLayout {
     static let defaultDPadCenter = CGPoint(x: 0.13, y: 0.72)
     static let defaultDPadSize: CGFloat = 140
     static let defaultButtons: [ButtonModel] = [
-        ButtonModel(label: "A",     scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.85, y: 0.78), size: 60),
-        ButtonModel(label: "B",     scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.72, y: 0.70), size: 56),
-        ButtonModel(label: "Shift", scancode: Int32(MKXP_SCANCODE_LSHIFT), relativeCenter: CGPoint(x: 0.62, y: 0.82), size: 50),
-        ButtonModel(label: "Esc",   scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.92, y: 0.62), size: 44),
+        ButtonModel(label: "Enter",  scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.70, y: 0.67), size: 56),
+        ButtonModel(label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.88, y: 0.67), size: 56),
+        ButtonModel(label: "Z",      scancode: Int32(MKXP_SCANCODE_Z),      relativeCenter: CGPoint(x: 0.70, y: 0.76), size: 56),
+        ButtonModel(label: "B",      scancode: Int32(MKXP_SCANCODE_B),      relativeCenter: CGPoint(x: 0.88, y: 0.76), size: 56),
     ]
 
     func resetToDefaults() {
