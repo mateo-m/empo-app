@@ -53,27 +53,41 @@ enum RubyVersionDetection {
     /// `gameDirectory`. Mirrors `MKXPRubyVersion`'s enum integer
     /// values from `app_bridge.h`.
     ///
-    /// **Conservative-by-default policy:** only tag a game with
-    /// 3.0 / 1.9 / 1.8 when the dispatch target's binding code
-    /// actually exists and has been verified to work for that game
-    /// class. Everything else lands on the legacy 3.1 +
-    /// syntax-transform path, which is the proven-good code path
-    /// today.
+    /// **Decision tree** (first decisive signal wins):
     ///
-    /// 1.8 / 1.9 native binding compiles don't exist yet (see
-    /// MULTI_RUBY_PLAN.md — the per-version binding-mri.cpp compile
-    /// against vintage Ruby C APIs is substantial work that hasn't
-    /// landed on this branch). The dispatcher falls through to
-    /// legacy for those values, so even if we tagged a game as 1.8,
-    /// it'd actually run on 3.1+syntax-transform — fine, but the
-    /// log line would be misleading. Better to tag honestly.
+    ///   1. PSDK markers → **30** (definitive, `.yarb` is
+    ///      strictly minor-version-locked).
     ///
-    /// Modern PE (Reborn 19.5+, PE v20+) games HAVE been running
-    /// on 3.1+syntax-transform with `useModernRuby=true` flipping
-    /// off the LEGACY parser path. Tagging them as 30 would route
-    /// to mkxp30-merged.o which has NO syntax-transform — risky if
-    /// the game has any legacy-grammar fragments left. Keep them
-    /// on 31 for now.
+    ///   2. Script grammar sniff via `RubyScriptGrammarSniffer`:
+    ///        - modern Ruby tokens found → **31**
+    ///        - only legacy tokens found → use script-file
+    ///          extension as prior:
+    ///             `.rxdata`  → **18**
+    ///             `.rvdata`  → **19**
+    ///             `.rvdata2` → **19**
+    ///        - inconclusive → fall through to step 3
+    ///
+    ///   3. Encrypted RGSS archive at project root (Scripts file
+    ///      sits inside the archive, so the sniffer couldn't read
+    ///      it):
+    ///        `.rgssad`  → **18**, `.rgss2a` → **19**, `.rgss3a` → **19**
+    ///
+    ///   4. `Game.ini` Library= field: `RGSS1xx` → 18, `RGSS2xx`
+    ///      / `RGSS3xx` → 19.
+    ///
+    ///   5. Default → **31** (best guess for modern fork that
+    ///      shipped no archive, no Game.ini, and no readable
+    ///      Scripts).
+    ///
+    /// **Why grammar sniff overrides extension**: forks like
+    /// Pokemon Reborn 19.5+ keep the `.rxdata` data layout (RGSS1
+    /// origin) but rewrote their Scripts in modern Ruby grammar.
+    /// The extension is a vestigial pin to the original engine,
+    /// not to the script grammar. Reading the actual script source
+    /// is the only truth-test.
+    ///
+    /// User can override the result via
+    /// `GameSettings.rubyVersionOverride` if detection misses.
     static func detect(gameDirectory: URL) -> Int {
         let fm = FileManager.default
 
@@ -84,18 +98,37 @@ enum RubyVersionDetection {
             return 30
         }
 
-        // RGSS archive type. Authoritative when present: the file
-        // extension encodes which RGSS engine was used to pack the
-        // game, which in turn pins the Ruby version.
-        //
-        //   .rgssad  → RGSS1 / RPG Maker XP   → Ruby 1.8.1
-        //   .rgss2a  → RGSS2 / RPG Maker VX   → Ruby 1.9.2
-        //   .rgss3a  → RGSS3 / RPG Maker VX Ace → Ruby 1.9.2
-        //
-        // We sniff the directory's top level; we don't recurse,
-        // because the archive sits next to Game.ini at the project
-        // root. Loose-script projects (no archive) fall through to
-        // the next heuristic.
+        // Script grammar sniff. Decodes Scripts.{rxdata,rvdata,
+        // rvdata2} (Marshal + Zlib) and looks for tokens that only
+        // parse on Ruby 3.x.
+        switch RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory) {
+        case .modern:
+            // Definitive: modern grammar can't run on 1.8/1.9.
+            return 31
+
+        case .legacy:
+            // Successfully read source, no modern tokens. Use the
+            // data file extension as the prior to choose 18 vs 19.
+            if let scriptVer = rubyVersionFromScriptExtension(
+                at: gameDirectory, fm: fm
+            ) {
+                return scriptVer
+            }
+            // Scripts file existed (sniffer found one) but
+            // extension lookup failed (shouldn't happen). Fall
+            // through to archive sniff.
+            break
+
+        case .inconclusive:
+            // Couldn't read scripts (encrypted archive, missing
+            // file, parse error). Continue to archive/INI signals.
+            break
+        }
+
+        // Encrypted RGSS archive at project root. Scripts live
+        // inside the archive; sniffer can't read them without
+        // decrypting first. Trust the extension as the engine
+        // version.
         if let archiveExt = topLevelRgssArchiveExtension(at: gameDirectory, fm: fm) {
             switch archiveExt {
             case "rgssad":  return 18
@@ -107,27 +140,50 @@ enum RubyVersionDetection {
 
         // Game.ini Library= field. RPG Maker stamps the RGSS DLL
         // name into Game.ini; that name encodes the engine version
-        // in its three-digit suffix. Ranges:
-        //   RGSS1xx → RGSS1 → 1.8
-        //   RGSS2xx → RGSS2 → 1.9
-        //   RGSS3xx → RGSS3 → 1.9
-        // Loose-script Reborn / PE forks frequently strip Game.ini
-        // entirely, so this only fires for vanilla-layout projects
-        // that didn't get caught by the archive sniff above.
+        // in its three-digit suffix.
         if let libraryRGSS = rgssLibraryMajor(at: gameDirectory, fm: fm) {
             switch libraryRGSS {
-            case 1: return 18
+            case 1:    return 18
             case 2, 3: return 19
-            default: break
+            default:   break
             }
         }
 
-        // Default: 3.1 (legacy direct-link path with
-        // syntax-transform). Includes anything that didn't match
-        // PSDK / RGSS archive / Game.ini — typically loose-script
-        // modern PE forks (Reborn 19.5+, PE v20+) running on
-        // mkxp-z's modernised binding.
+        // Nothing detectable. Best-guess modern: most projects
+        // with no readable scripts, no archive, and no Game.ini
+        // are loose-script modern forks that shipped only Maps
+        // and Items.
         return 31
+    }
+
+    /// Returns the Ruby version implied by the `Scripts.*` file
+    /// extension found at the project root or under `Data/`.
+    /// `.rxdata` → 18, `.rvdata` / `.rvdata2` → 19. nil if no
+    /// Scripts file present.
+    ///
+    /// Used by the grammar sniff path: when `.legacy` is returned
+    /// (source readable, no modern tokens), we trust the original
+    /// engine extension to pick between 1.8 and 1.9.
+    private static func rubyVersionFromScriptExtension(
+        at gameDirectory: URL,
+        fm: FileManager
+    ) -> Int? {
+        let candidates = [
+            gameDirectory,
+            gameDirectory.appendingPathComponent("Data"),
+        ]
+        for dir in candidates {
+            if fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rxdata").path) {
+                return 18
+            }
+            if fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rvdata").path) {
+                return 19
+            }
+            if fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rvdata2").path) {
+                return 19
+            }
+        }
+        return nil
     }
 
     /// Scans the top level of `gameDirectory` for a single RGSS
