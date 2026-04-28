@@ -39,13 +39,32 @@ enum RubyScriptGrammarSniffer {
         case inconclusive
     }
 
-    /// Sniff a game directory. Looks for the most-recent
-    /// `Scripts.{rxdata,rvdata,rvdata2}` at the project root or
-    /// under `Data/`, decodes Marshal+Zlib, and runs the grammar
+    /// Sniff a game directory. Reads loose `.rb` files first
+    /// (mkxp-z runtime loads those on top of the compiled
+    /// Scripts.rxdata, so they're the authoritative source for
+    /// forks that ship both), then falls back to the compiled
+    /// `Scripts.{rxdata,rvdata,rvdata2}` file. Runs the grammar
     /// classifier on the concatenated source.
     static func sniff(gameDirectory: URL) -> Result {
         let fm = FileManager.default
-        guard let url = locateScriptsFile(in: gameDirectory, fm: fm) else {
+
+        // Loose .rb files take priority. Forks like Pokemon Reborn
+        // 19.5+ ship ONLY loose scripts (no compiled file).
+        // Forks like Pokemon Infinite Fusion ship loose scripts
+        // alongside a stale compiled Scripts.rxdata; the loose
+        // files are the live runtime, the .rxdata is vestigial.
+        let looseURLs = locateLooseScripts(in: gameDirectory, fm: fm)
+        if !looseURLs.isEmpty {
+            let source = readLooseScripts(urls: looseURLs)
+            if !source.isEmpty {
+                return classify(source: source)
+            }
+        }
+
+        // Compiled Scripts file. Used by vanilla RPG Maker XP /
+        // VX / VX Ace projects and by forks that haven't extracted
+        // their scripts.
+        guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm) else {
             return .inconclusive
         }
         guard let source = decodeScripts(at: url) else {
@@ -62,8 +81,13 @@ enum RubyScriptGrammarSniffer {
         "Scripts.rvdata2",
     ]
 
-    private static func locateScriptsFile(in gameDirectory: URL,
-                                          fm: FileManager) -> URL? {
+    private static let looseScriptDirs = [
+        "Scripts",
+        "Data/Scripts",
+    ]
+
+    private static func locateCompiledScriptsFile(in gameDirectory: URL,
+                                                  fm: FileManager) -> URL? {
         let candidates = [
             gameDirectory,
             gameDirectory.appendingPathComponent("Data"),
@@ -77,6 +101,56 @@ enum RubyScriptGrammarSniffer {
             }
         }
         return nil
+    }
+
+    /// Walk `Scripts/` and `Data/Scripts/` looking for `.rb`
+    /// files. Caps at `maxLooseFiles` so a pathological project
+    /// with thousands of scripts can't make sniffing slow.
+    private static let maxLooseFiles = 200
+
+    private static func locateLooseScripts(in gameDirectory: URL,
+                                           fm: FileManager) -> [URL] {
+        var found: [URL] = []
+        for relPath in looseScriptDirs {
+            let dir = gameDirectory.appendingPathComponent(relPath)
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: dir.path, isDirectory: &isDir),
+                  isDir.boolValue else {
+                continue
+            }
+            // Recursive enumerator picks up nested per-feature
+            // folders that some forks use (e.g. Plugins layout).
+            guard let enumerator = fm.enumerator(
+                at: dir,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+            for case let url as URL in enumerator {
+                if url.pathExtension.lowercased() == "rb" {
+                    found.append(url)
+                    if found.count >= maxLooseFiles { return found }
+                }
+            }
+        }
+        return found
+    }
+
+    /// Read up to `maxLooseFiles` `.rb` files and concatenate.
+    /// Cap at 4 MB combined so a single huge generated file can't
+    /// blow memory.
+    private static func readLooseScripts(urls: [URL]) -> String {
+        var combined = ""
+        let cap = 4_000_000
+        for url in urls {
+            guard let data = try? Data(contentsOf: url) else { continue }
+            let str = String(data: data, encoding: .utf8)
+                   ?? String(data: data, encoding: .isoLatin1)
+                   ?? ""
+            combined.append(str)
+            combined.append("\n")
+            if combined.count > cap { break }
+        }
+        return combined
     }
 
     // MARK: - Marshal + Zlib decode
