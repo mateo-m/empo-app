@@ -77,13 +77,20 @@ struct RootView: View {
                 dismissSplash()
             }
         }
-        .alert("Something went wrong", isPresented: showErrorAlert) {
+        .alert(
+            engineHung ? "Restart Empo" : "Something went wrong",
+            isPresented: showErrorAlert
+        ) {
             Button("OK") {
-                if mkxp_isEngineHung() != 0 {
+                if engineHung {
                     // RGSS thread is still running inside a script that
-                    // never yielded to checkShutdown(). The process must
-                    // be killed because Ruby can't be respawned in-place.
-                    exit(0)
+                    // never yielded to checkShutdown(). The Ruby VM
+                    // cannot be respawned in-place, but per App Store
+                    // guideline 2.5.1 we don't quit programmatically.
+                    // Dismiss the alert; the user closes Empo from the
+                    // app switcher and reopens it.
+                    appState.errorMessage = nil
+                    return
                 }
                 if appState.phase != nil {
                     appState.returnToLibrary()
@@ -92,7 +99,11 @@ struct RootView: View {
                 }
             }
         } message: {
-            Text(appState.errorMessage ?? "")
+            if engineHung {
+                Text("The game stopped responding. Close Empo and reopen it.")
+            } else {
+                Text(appState.errorMessage ?? "")
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
             if appState.phase == .playing {
@@ -122,6 +133,15 @@ struct RootView: View {
             get: { appState.errorMessage != nil },
             set: { if !$0 { appState.errorMessage = nil } }
         )
+    }
+
+    /// True when the RGSS thread didn't ack a termination request in
+    /// time, leaving Ruby in an unrecoverable state. The single-thread
+    /// engine architecture can't respawn the VM in-place, so the only
+    /// way out is for the user to close + reopen the app manually
+    /// (we don't call `exit()` per App Store guideline 2.5.1).
+    private var engineHung: Bool {
+        mkxp_isEngineHung() != 0
     }
 
     /// Normal splash exit: fade background + logo + any disclaimer that
