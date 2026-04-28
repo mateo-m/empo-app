@@ -79,16 +79,20 @@ class AppState {
         )
 
         // Multi-Ruby (Phase D, MULTI_RUBY_PLAN.md) per-game dispatch.
-        // The metadata.rubyVersion field is set at import time by
-        // RubyVersionDetection; here we just hand it to the engine
-        // bridge so getActiveScriptBinding() routes to the right
-        // per-version `_mkxp_get_script_binding_NN()` entry point.
-        // Falls back to MKXP_RUBY_UNSET (legacy direct-link 3.1
-        // path) for games imported before this field landed in
-        // metadata, or for unknown raw values.
+        // Precedence:
+        //   1. settings.rubyVersionOverride (manual user pick in
+        //      GameSettingsView's Ruby version picker)
+        //   2. metadata.rubyVersion (auto-detected at import time
+        //      by RubyVersionDetection)
+        //   3. MKXP_RUBY_UNSET → engine falls through to its
+        //      legacy direct-link 3.1 path. Hit when neither
+        //      override nor detection has tagged a value, e.g.
+        //      games imported before this field existed if the
+        //      backfill hasn't run yet.
         let metadata = GameMetadata.load(from: container)
+        let rubyVersionRaw = settings.rubyVersionOverride ?? metadata.rubyVersion
         let rubyVer: MKXPRubyVersion = {
-            switch metadata.rubyVersion {
+            switch rubyVersionRaw {
             case 18: return MKXP_RUBY_18
             case 19: return MKXP_RUBY_19
             case 30: return MKXP_RUBY_30
