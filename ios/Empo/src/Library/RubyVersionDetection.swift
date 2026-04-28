@@ -130,24 +130,12 @@ enum RubyVersionDetection {
         // decrypting first. Trust the extension as the engine
         // version.
         //
-        // **XP / RGSS1 → 1.9, not 1.8.** Mirrors JoiPlay's mapping
-        // (verified 2026-04-28 by inspecting RPGMPlugin's
-        // MainActivity.smali sparse-switch on Game.type). Ruby 1.8
-        // ships pre-pthread green-thread implementation in eval.c
-        // that uses setjmp/longjmp to manually swap stacks; the
-        // code never got ported to arm64 and crashes (SEGV in
-        // rb_thread_s_new) the moment any script does Thread.new
-        // - which Pokemon Essentials scripts do routinely.
-        // Ruby 1.9 has native pthread-backed threading and runs
-        // 1.8-grammar XP scripts fine via backwards-compat shims
-        // in binding-util.h.
-        //
-        // mkxp18-merged.o is still shipped for users who flip
-        // GameSettings.rubyVersionOverride to 18 manually (matches
-        // JoiPlay's `useRuby18` opt-in).
+        // .rgssad → 1.8 (RGSS1 / RPG Maker XP / Ruby 1.8.1)
+        // .rgss2a → 1.9 (RGSS2 / RPG Maker VX / Ruby 1.9.2)
+        // .rgss3a → 1.9 (RGSS3 / RPG Maker VX Ace / Ruby 1.9.2)
         if let archiveExt = topLevelRgssArchiveExtension(at: gameDirectory, fm: fm) {
             switch archiveExt {
-            case "rgssad":  return 19
+            case "rgssad":  return 18
             case "rgss2a":  return 19
             case "rgss3a":  return 19
             default:        break
@@ -156,11 +144,10 @@ enum RubyVersionDetection {
 
         // Game.ini Library= field. RPG Maker stamps the RGSS DLL
         // name into Game.ini; that name encodes the engine version
-        // in its three-digit suffix. RGSS1 (XP) → 1.9 here for the
-        // same reason as the archive sniff above.
+        // in its three-digit suffix.
         if let libraryRGSS = rgssLibraryMajor(at: gameDirectory, fm: fm) {
             switch libraryRGSS {
-            case 1:    return 19
+            case 1:    return 18
             case 2, 3: return 19
             default:   break
             }
@@ -174,16 +161,13 @@ enum RubyVersionDetection {
     }
 
     /// Returns the Ruby version implied by the `Scripts.*` file
-    /// extension found at the project root or under `Data/`. All
-    /// pre-3.x extensions map to **1.9**, matching JoiPlay's
-    /// mapping. Ruby 1.8's broken arm64 threading makes it
-    /// unsuitable as a default; users can opt in via
-    /// GameSettings.rubyVersionOverride. nil if no Scripts file
-    /// present.
+    /// extension found at the project root or under `Data/`.
+    /// `.rxdata` → 18, `.rvdata` / `.rvdata2` → 19. nil if no
+    /// Scripts file present.
     ///
     /// Used by the grammar sniff path: when `.legacy` is returned
-    /// (source readable, no modern tokens), we use this to confirm
-    /// it's pre-3.x grammar.
+    /// (source readable, no modern tokens), we trust the original
+    /// engine extension to pick between 1.8 and 1.9.
     private static func rubyVersionFromScriptExtension(
         at gameDirectory: URL,
         fm: FileManager
@@ -194,7 +178,7 @@ enum RubyVersionDetection {
         ]
         for dir in candidates {
             if fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rxdata").path) {
-                return 19
+                return 18
             }
             if fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rvdata").path) {
                 return 19
