@@ -86,7 +86,27 @@ struct GameSettings: Codable, Equatable {
     // runtime. Detected automatically during JGP import by scanning
     // .rb scripts for Ruby-3-only syntax, but users can also flip
     // this manually per game if the heuristic misses.
+    //
+    // Superseded by `rubyVersionOverride` in the multi-Ruby world
+    // (Phase D in MULTI_RUBY_PLAN.md). Field retained for
+    // backward-compatible decoding of older `game_settings.json`
+    // files; the multi-Ruby UI no longer surfaces it. Will go
+    // away once syntax-transform is dropped from mkxp31-merged.
     var useModernRuby: Bool?
+
+    // Manual override for the per-game Ruby interpreter version.
+    // nil  = use auto-detection (RubyVersionDetection.detect, run
+    //        at import time and persisted on metadata.rubyVersion).
+    // 18 / 19 / 30 / 31 = force that interpreter, ignoring detection.
+    //
+    // Surfaced as the "Ruby version" picker in GameSettingsView.
+    // Read by AppState.selectGame which calls
+    // `mkxp_setActiveRubyVersion()` before the engine boots; the
+    // override takes precedence over `metadata.rubyVersion`.
+    //
+    // Stored as Int so unknown values from a future Empo build
+    // don't break decoding of older settings.
+    var rubyVersionOverride: Int?
 
     // Force the Pokemon Essentials in-game keyboard scene for text
     // entry instead of the iOS soft keyboard. Default false (use
