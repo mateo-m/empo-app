@@ -1,9 +1,9 @@
 import SwiftUI
 
 
-struct TipBanner: View {
-    let tip: Tip
-    @Environment(\.tipStore) private var store
+struct HintBanner: View {
+    let hint: Hint
+    @Environment(\.hintStore) private var store
 
     @State private var showDetail = false
 
@@ -13,21 +13,21 @@ struct TipBanner: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.brand)
 
-            Text(tip.excerpt)
+            Text(hint.excerpt)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.brand)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if tip.hasDetail {
+            if hint.hasDetail {
                 Button("More") { showDetail = true }
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.brand)
             }
 
-            if tip.isDismissable {
+            if hint.isDismissable {
                 Button {
                     withAnimation(Motion.standard) {
-                        store.dismiss(tip)
+                        store.dismiss(hint)
                     }
                 } label: {
                     Image(systemName: "xmark")
@@ -37,7 +37,7 @@ struct TipBanner: View {
                         .frame(minWidth: 44, minHeight: 44)
                         .contentShape(Rectangle())
                 }
-                .accessibilityLabel("Dismiss tip")
+                .accessibilityLabel("Dismiss hint")
             }
         }
         .padding(.horizontal, Spacing.xl)
@@ -45,15 +45,15 @@ struct TipBanner: View {
         .background(Color.brand.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: Radius.md))
         .sheet(isPresented: $showDetail) {
-            if let description = tip.description {
-                TipDetailSheet(excerpt: tip.excerpt, description: description)
+            if let description = hint.description {
+                HintDetailSheet(excerpt: hint.excerpt, description: description)
             }
         }
     }
 }
 
 
-private struct TipDetailSheet: View {
+private struct HintDetailSheet: View {
     let excerpt: String
     let description: String
     @Environment(\.dismiss) private var dismiss
@@ -74,7 +74,7 @@ private struct TipDetailSheet: View {
                 .padding(.horizontal, Spacing._2xl)
                 .padding(.top, Spacing.xl)
             }
-            .navigationTitle("Tip")
+            .navigationTitle("Hint")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

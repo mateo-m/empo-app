@@ -2,14 +2,20 @@ import Foundation
 import Observation
 
 
-struct Tip: Identifiable {
+/// In-app discoverability hint shown via `HintBanner`. Examples: a
+/// one-time pointer to a UI affordance the user might miss
+/// otherwise (e.g. "tap the artwork to customize").
+///
+/// Not related to App Store / StoreKit "tipping" or donations -
+/// this is purely a UI hint system, persisted via UserDefaults.
+struct Hint: Identifiable {
     let id: String
     let excerpt: String
     let description: String?
     let dismissal: DismissalPolicy
 
     enum DismissalPolicy: Equatable {
-        /// Tip cannot be dismissed by the user.
+        /// Hint cannot be dismissed by the user.
         case none
         /// Once dismissed, never shown again.
         case permanent
@@ -22,10 +28,10 @@ struct Tip: Identifiable {
 }
 
 
-// MARK: - Tip definitions
+// MARK: - Hint definitions
 
-extension Tip {
-    static let gameInfoCustomization = Tip(
+extension Hint {
+    static let gameInfoCustomization = Hint(
         id: "gameInfo.customization",
         excerpt: "Tap the artwork, banner, or title to customize them.",
         description: nil,
@@ -38,8 +44,8 @@ extension Tip {
 
 @MainActor
 @Observable
-final class TipStore {
-    static let shared = TipStore()
+final class HintStore {
+    static let shared = HintStore()
 
     private var dismissedAt: [String: Date]
 
@@ -47,19 +53,19 @@ final class TipStore {
         var loaded: [String: Date] = [:]
         let defaults = UserDefaults.standard
         let allKeys = defaults.dictionaryRepresentation().keys
-        let prefix = DefaultsKey.tipDismissedPrefix
+        let prefix = DefaultsKey.hintDismissedPrefix
         for key in allKeys where key.hasPrefix(prefix) {
-            let tipID = String(key.dropFirst(prefix.count))
+            let hintID = String(key.dropFirst(prefix.count))
             if let timestamp = defaults.object(forKey: key) as? Double {
-                loaded[tipID] = Date(timeIntervalSince1970: timestamp)
+                loaded[hintID] = Date(timeIntervalSince1970: timestamp)
             }
         }
         self.dismissedAt = loaded
     }
 
-    func isVisible(_ tip: Tip) -> Bool {
-        guard let date = dismissedAt[tip.id] else { return true }
-        switch tip.dismissal {
+    func isVisible(_ hint: Hint) -> Bool {
+        guard let date = dismissedAt[hint.id] else { return true }
+        switch hint.dismissal {
         case .none:
             return true
         case .permanent:
@@ -69,13 +75,13 @@ final class TipStore {
         }
     }
 
-    func dismiss(_ tip: Tip) {
-        guard tip.isDismissable else { return }
+    func dismiss(_ hint: Hint) {
+        guard hint.isDismissable else { return }
         let now = Date()
-        dismissedAt[tip.id] = now
+        dismissedAt[hint.id] = now
         UserDefaults.standard.set(
             now.timeIntervalSince1970,
-            forKey: DefaultsKey.tipDismissed(tipID: tip.id)
+            forKey: DefaultsKey.hintDismissed(hintID: hint.id)
         )
     }
 }
