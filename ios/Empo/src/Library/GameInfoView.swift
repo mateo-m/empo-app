@@ -3,7 +3,7 @@ import SwiftUI
 struct GameInfoView: View {
     let game: GameEntry
     @Environment(\.gameLibrary) private var library
-    @Environment(\.tipStore) private var tipStore
+    @Environment(\.hintStore) private var hintStore
     @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
 
@@ -87,11 +87,11 @@ struct GameInfoView: View {
                             .padding(.leading, -geo.safeAreaInsets.leading)
                             .padding(.trailing, -geo.safeAreaInsets.trailing)
 
-                    if tipStore.isVisible(.gameInfoCustomization) {
-                        TipBanner(tip: .gameInfoCustomization)
+                    if hintStore.isVisible(.gameInfoCustomization) {
+                        HintBanner(hint: .gameInfoCustomization)
                             .padding(.horizontal, Spacing._2xl)
                             .padding(.top, Spacing.xl)
-                            .transition(.tipBanner)
+                            .transition(.hintBanner)
                     }
 
                     GroupedSection("Details") {

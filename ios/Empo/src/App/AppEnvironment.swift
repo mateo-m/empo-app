@@ -34,8 +34,8 @@ private struct ControlsLayoutKey: EnvironmentKey {
     @MainActor static let defaultValue: ControlsLayout = .shared
 }
 
-private struct TipStoreKey: EnvironmentKey {
-    @MainActor static let defaultValue: TipStore = .shared
+private struct HintStoreKey: EnvironmentKey {
+    @MainActor static let defaultValue: HintStore = .shared
 }
 
 extension EnvironmentValues {
@@ -69,8 +69,8 @@ extension EnvironmentValues {
         set { self[ControlsLayoutKey.self] = newValue }
     }
 
-    var tipStore: TipStore {
-        get { self[TipStoreKey.self] }
-        set { self[TipStoreKey.self] = newValue }
+    var hintStore: HintStore {
+        get { self[HintStoreKey.self] }
+        set { self[HintStoreKey.self] = newValue }
     }
 }
