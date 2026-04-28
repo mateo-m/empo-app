@@ -1029,6 +1029,17 @@ $(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/Makefile
 	cp libruby-static.a $(LIBDIR)/libruby18-static.a; \
 	mkdir -p $(INCLUDEDIR)/ruby18; \
 	cp *.h $(INCLUDEDIR)/ruby18/
+	@# Compile our PAC-free arm64 setjmp/longjmp replacement and
+	@# inject it into libruby18-static.a. Apple's _setjmp signs LR
+	@# with PACIBSP using SP as the modifier; Ruby 1.8's green
+	@# threading longjmps onto a different stack, so PAC verify
+	@# fails. The asm replacement saves/restores LR raw - no PAC.
+	@# config.h is patched (in ios.patch) to point RUBY_SETJMP /
+	@# RUBY_LONGJMP at our symbols.
+	$(CC) $(TARGETFLAGS) -c ${PWD}/ruby18/mkxp_setjmp_arm64.S \
+		-o $(SOURCES)/ruby18/mkxp_setjmp_arm64.o
+	$(AR) rcs $(LIBDIR)/libruby18-static.a $(SOURCES)/ruby18/mkxp_setjmp_arm64.o
+	$(RANLIB) $(LIBDIR)/libruby18-static.a
 	@# Build extensions (use Ruby 1.8 headers only, not $(INCLUDEDIR) which has Ruby 3.1)
 	@# Builds per-ext .o files, plus our hand-rolled extinit.c (which
 	@# replaces dmyext.o's empty Init_ext at link time so Init_zlib /
@@ -1065,6 +1076,26 @@ $(SOURCES)/ruby18/Makefile: $(SOURCES)/ruby18/configure
 		--enable-static \
 		--with-static-linked-ext; \
 	touch prelude.c
+	@# Override config.h's RUBY_SETJMP / RUBY_LONGJMP to point at
+	@# our PAC-free arm64 setjmp variant (see mkxp_setjmp_arm64.S).
+	@# Configure picks `_setjmp` based on HAVE__SETJMP detection;
+	@# Apple's `_setjmp` signs LR with PAC, breaking Ruby 1.8's
+	@# stack-swapping green threading. Our replacement uses raw LR
+	@# save/restore.
+	sed -i '' \
+		-e 's|^#define RUBY_SETJMP(env) _setjmp(env)$$|#define RUBY_SETJMP(env) mkxp_ruby18_setjmp(env)|' \
+		-e 's|^#define RUBY_LONGJMP(env,val) _longjmp(env,val)$$|#define RUBY_LONGJMP(env,val) mkxp_ruby18_longjmp(env,val)|' \
+		$(SOURCES)/ruby18/config.h
+	@# Inject prototypes; eval.c relies on the system header for
+	@# _setjmp prototypes which won't match our names.
+	@# CRITICAL: returns_twice attribute tells the compiler this is
+	@# a setjmp-like function. Without it, locals live across the
+	@# call may stay in registers and not be reloaded after longjmp,
+	@# producing corrupted state on the second return. Apple's
+	@# `_setjmp` is special-cased by clang automatically; ours isn't.
+	echo '' >> $(SOURCES)/ruby18/config.h
+	echo 'extern int  mkxp_ruby18_setjmp(void *env) __attribute__((returns_twice));' >> $(SOURCES)/ruby18/config.h
+	echo 'extern void mkxp_ruby18_longjmp(void *env, int val) __attribute__((noreturn));' >> $(SOURCES)/ruby18/config.h
 
 $(SOURCES)/ruby18/configure: $(SOURCES)/ruby18/configure.in
 	cd $(SOURCES)/ruby18; \
