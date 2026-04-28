@@ -1004,6 +1004,9 @@ $(SOURCES)/ruby19/configure: $(SOURCES)/ruby19/configure.in
 	autoconf
 
 RUBY18_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
+	-fno-stack-protector \
+	-fno-strict-aliasing \
+	-fwrapv \
 	-Wno-implicit-function-declaration \
 	-Wno-implicit-int \
 	-Wno-incompatible-pointer-types \
