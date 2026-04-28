@@ -1011,7 +1011,14 @@ RUBY18_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
 	-Wno-deprecated-non-prototype \
 	-Wno-incompatible-function-pointer-types
 
-RUBY18_EXTS = zlib stringio strscan thread digest fcntl
+# Ruby 1.8 stdlib extensions to bundle into mkxp18-merged.o.
+#
+# `thread` was previously here but caused EXC_BAD_ACCESS in
+# rb_thread_s_new (NULL deref at 0x15) when our hand-rolled
+# Init_ext() force-initialized it on top of Ruby 1.8's already-built-in
+# threading core. Removed; the core Thread class still works without
+# it.
+RUBY18_EXTS = zlib stringio strscan digest fcntl
 
 $(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/Makefile
 	cd $(SOURCES)/ruby18; \

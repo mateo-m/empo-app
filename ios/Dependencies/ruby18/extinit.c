@@ -26,7 +26,6 @@ void ruby_init_ext(const char *name, void (*init)(void));
 void Init_zlib(void);
 void Init_stringio(void);
 void Init_strscan(void);
-void Init_thread(void);
 void Init_digest(void);
 void Init_fcntl(void);
 
@@ -35,7 +34,6 @@ void Init_ext(void)
     ruby_init_ext("zlib.so", Init_zlib);
     ruby_init_ext("stringio.so", Init_stringio);
     ruby_init_ext("strscan.so", Init_strscan);
-    ruby_init_ext("thread.so", Init_thread);
     ruby_init_ext("digest.so", Init_digest);
     ruby_init_ext("fcntl.so", Init_fcntl);
 }
