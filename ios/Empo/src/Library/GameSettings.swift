@@ -372,26 +372,97 @@ struct GameSettings: Codable, Equatable {
     /// without the Ruby 1.8 compat transform for games that ship
     /// modern Ruby source (Reborn 19.5+, PE v20+, mkxp-z JGPs).
     ///
-    /// Heuristic-only: looks for keyword-arg shorthand
-    /// (`id: -1,`, `foo: "bar",`) anywhere inside `.rb` files at
-    /// the game root or `Scripts/` subfolder. The 1.8-era syntax
-    /// for the same idea is `:id => -1`, so the `key: value,`
-    /// form is a strong Ruby-3 signal. False positives on comments
-    /// or strings containing that pattern are possible but rare
-    /// and have no ill effect - disabling the transform on a 1.8
-    /// game still runs it as Ruby 3, which works for everything
-    /// except legacy constructs the transform would have rewritten
-    /// (and we can flip the setting manually afterwards).
+    /// Detection runs three checks, in order, ANY-of:
+    ///
+    /// 1. Bundled Ruby 3.x runtime, detected by binary content
+    ///    scan rather than filename. Modern custom engines ship
+    ///    their own Ruby (Pokemon Flux's `x64-msvcrt-ruby310.dll`,
+    ///    macOS bundles' `libruby.3.x.dylib`) because the original
+    ///    RGSS player can't run their scripts. We open every
+    ///    `.dll`/`.dylib`/`.so` in the game folder and look for
+    ///    Ruby's embedded `RUBY_DESCRIPTION` byte pattern (e.g.,
+    ///    `"ruby 3.1.4"`). This is robust against rename: a
+    ///    developer can call the file `bundled.dll` and we still
+    ///    detect it. Ruby 1.8/1.9 binaries embed `"ruby 1.8."` /
+    ///    `"ruby 1.9."` instead, which the scan ignores; vanilla
+    ///    RPG Maker XP/VX/Ace games therefore don't false-positive.
+    ///    RGSS-version and Ruby-version are independent (RGSS1/2/3
+    ///    is a graphics API choice, not a parser choice), so this
+    ///    correctly handles RGSS1 games shipped with a modern Ruby.
+    ///
+    /// 2. `.fpk` packaging next to `Scripts.rxdata`. .fpk is a 7z
+    ///    archive used by post-2020 custom engines (Pokemon Flux
+    ///    ships scripts inside `Data/Data_0.fpk`, mounted at
+    ///    runtime via `System.mount`). Vanilla RPG Maker doesn't
+    ///    use .fpk; presence of one means a custom modern engine.
+    ///    Complements signal 1 in case the bundled Ruby is
+    ///    statically linked into a game .exe whose path we don't
+    ///    walk.
+    ///
+    /// 3. Loose `.rb` files containing keyword-arg shorthand
+    ///    (`id: -1,`, `foo: "bar",`). False positives on comments
+    ///    or strings are possible but rare; disabling the transform
+    ///    on a 1.8 game still runs it as Ruby 3, which works for
+    ///    everything except legacy constructs the transform would
+    ///    have rewritten (and the user can flip the setting back
+    ///    manually).
+    ///
+    /// Signals 1 and 2 catch games that ship their entire script
+    /// surface inside encrypted/packaged archives (Pokemon Flux,
+    /// modern fan engines). Signal 3 catches games that ship loose
+    /// .rb (Reborn 19+, Infinite Fusion, PE v20+).
     static func detectModernRubyScripts(in gameDirectory: URL) -> Bool {
         let fm = FileManager.default
 
+        // Signal 1: scan native binaries for an embedded Ruby 3.x
+        // version string. Robust to filename changes: the
+        // `RUBY_DESCRIPTION` literal lives inside the binary at
+        // a fixed offset relative to Ruby's `Init_*` machinery, so
+        // searching for the byte pattern `"ruby 3."` in the file
+        // contents is reliable even if the developer renames the
+        // DLL/dylib.
+        //
+        // Capped at 64 MB per file as a safety bound. Real Ruby
+        // DLLs are 5-15 MB; anything larger is unlikely to be
+        // Ruby and not worth the IO cost.
+        let binaryExtensions: Set<String> = ["dll", "dylib", "so"]
+        let modernRubyMarker = Data("ruby 3.".utf8)
+        let scanBudget = 64 * 1024 * 1024
+        if let entries = try? fm.contentsOfDirectory(atPath: gameDirectory.path) {
+            for entry in entries {
+                let ext = (entry as NSString).pathExtension.lowercased()
+                guard binaryExtensions.contains(ext) else { continue }
+                let url = gameDirectory.appendingPathComponent(entry)
+                guard let attrs = try? fm.attributesOfItem(atPath: url.path),
+                      let size = attrs[.size] as? Int,
+                      size <= scanBudget,
+                      let data = try? Data(contentsOf: url, options: .alwaysMapped)
+                else { continue }
+                if data.range(of: modernRubyMarker) != nil { return true }
+            }
+        }
+
+        // Signal 2: .fpk packaging. The format is a 7z archive
+        // containing scripts, mounted at runtime by the game's Main
+        // bootstrapper via mkxp-z's `System.mount`. Only modern
+        // custom engines use it, so its mere presence in `Data/`
+        // is enough.
+        let dataDir = gameDirectory.appendingPathComponent("Data")
+        if let dataEntries = try? fm.contentsOfDirectory(atPath: dataDir.path) {
+            for entry in dataEntries
+            where entry.lowercased().hasSuffix(".fpk") {
+                return true
+            }
+        }
+
+        // Signal 3: loose .rb files with Ruby-3 keyword args.
         // Search depth is capped by the enumerator's defaults.
         // Stop at the first positive match to keep big fangames
         // from scanning thousands of files on import.
         let candidates = [
             gameDirectory,
             gameDirectory.appendingPathComponent("Scripts"),
-            gameDirectory.appendingPathComponent("Data"),
+            dataDir,
         ]
 
         // Ruby-3 keyword-arg shorthand. A name followed by `:` and a
