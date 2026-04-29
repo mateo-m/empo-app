@@ -68,7 +68,7 @@ struct GameSettings: Codable, Equatable {
 
     // Performance
     var frameSkip: Bool?               // skip rendering frames when behind
-    var speedMultiplier: Int?          // game speed multiplier (1-9, nil = 1x normal)
+    var speedMultiplier: Int?          // fast-forward multiplier (2-9, nil = disabled). Runtime-only, applied via PlayerMoreSheet's Fast forward toggle.
     var vsync: Bool?                   // vertical sync
     var pathCache: Bool?               // index files with lowercase paths
 
@@ -459,12 +459,11 @@ struct GameSettings: Codable, Equatable {
             config["solidFonts"] = v ? ["*"] : [] as [String]
         }
 
-        // Speed multiplier: compute fixedFramerate = 60 * multiplier.
-        // Most games (especially Pokemon fan games) run at 60 FPS regardless
-        // of RGSS version, since game scripts typically override the default.
-        if let speed = speedMultiplier, speed > 1 {
-            config["fixedFramerate"] = 60 * speed
-        }
+        // Speed multiplier moved from launch-time fixedFramerate to a
+        // runtime fast-forward toggle (see PlayerMoreSheet +
+        // mkxp_setFastForwardMultiplier). At game start the engine
+        // paces normally; the user opts in via the in-game menu.
+        // Nothing to write here.
 
         if let data = try? JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys]),
            let jsonString = String(data: data, encoding: .utf8) {

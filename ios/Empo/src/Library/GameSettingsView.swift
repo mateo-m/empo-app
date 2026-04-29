@@ -68,8 +68,18 @@ struct GameSettingsView: View {
     private var effectiveFrameSkip: Bool {
         settings.frameSkip ?? defaults.frameSkip ?? GameConfigDefaults.engineFrameSkip
     }
+    /// Fast-forward is enabled when the user has set a multiplier.
+    /// nil ↔ disabled. Toggling the switch ON seeds a sensible
+    /// default (4x); the slider then ranges 2-9.
+    private var fastForwardEnabled: Bool {
+        settings.speedMultiplier != nil && (settings.speedMultiplier ?? 0) >= 2
+    }
+    /// Multiplier shown by the slider when fast-forward is enabled.
+    /// Falls back to 4x while disabled (so flipping the toggle on
+    /// lands on a useful default rather than 1x or nil).
     private var effectiveSpeedMultiplier: Int {
-        settings.speedMultiplier ?? 1
+        let v = settings.speedMultiplier ?? 4
+        return max(2, min(9, v))
     }
     private var effectiveFontScale: Double {
         settings.fontScale ?? defaults.fontScale ?? GameConfigDefaults.engineFontScale
@@ -329,21 +339,26 @@ struct GameSettingsView: View {
     private var gameplaySection: some View {
         Section {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack {
-                    Text("Fast forward")
-                    Spacer()
-                    Text("\(effectiveSpeedMultiplier)x")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-                Slider(
-                    value: speedBinding,
-                    in: 1...9,
-                    step: 1
+                SettingsToggle(
+                    title: "Fast forward",
+                    isOn: fastForwardEnabledBinding,
+                    description: "Adds a Fast forward toggle to the in-game menu. While on, the game runs at the speed below."
                 )
-                Text("Run the game at a faster speed. 1x is normal.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+
+                if fastForwardEnabled {
+                    HStack {
+                        Text("Speed")
+                        Spacer()
+                        Text("\(effectiveSpeedMultiplier)x")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(
+                        value: speedBinding,
+                        in: 2...9,
+                        step: 1
+                    )
+                }
             }
             .padding(.vertical, Spacing.xxs)
         } header: {
@@ -378,10 +393,32 @@ struct GameSettingsView: View {
         )
     }
 
+    private var fastForwardEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { fastForwardEnabled },
+            set: { newValue in
+                // Enabling: seed default 4x if no value yet (or if
+                // a stale 1x lingers from the old single-slider UI).
+                // Disabling: clear the multiplier so applyToConfig
+                // and the toolbar sheet both treat the game as
+                // fast-forward-free.
+                if newValue {
+                    if (settings.speedMultiplier ?? 0) < 2 {
+                        settings.speedMultiplier = 4
+                    }
+                } else {
+                    settings.speedMultiplier = nil
+                }
+            }
+        )
+    }
+
+    /// Slider binding; only meaningful when fast-forward is enabled.
+    /// Range 2-9 (1x is "off" and lives on the toggle now).
     private var speedBinding: Binding<Double> {
         Binding(
             get: { Double(effectiveSpeedMultiplier) },
-            set: { settings.speedMultiplier = Int($0) == 1 ? nil : Int($0) }
+            set: { settings.speedMultiplier = Int($0) }
         )
     }
 

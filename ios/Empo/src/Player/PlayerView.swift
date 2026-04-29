@@ -40,9 +40,15 @@ struct PlayerView: View {
     /// itself stays trimmed to keyboard / edit / hide / more.
     @State private var showMoreSheet = false
     /// Live fast-forward state. Mirrored into the engine via
-    /// `mkxp_setFastForwardActive` so the FPS limiter scales the
-    /// frame pacing 4x while the toggle is on.
+    /// `mkxp_setFastForwardMultiplier` so the FPS limiter scales the
+    /// frame pacing while the toggle is on. The actual multiplier
+    /// comes from `fastForwardMultiplier` (per-game setting).
     @State private var fastForwardActive = false
+    /// Per-game fast-forward multiplier loaded from GameSettings on
+    /// player appear. nil = disabled (toolbar sheet hides the row).
+    /// Can't change mid-game (the user would have to back out to the
+    /// library to edit Game Settings), so loading once is enough.
+    @State private var fastForwardMultiplier: Int?
 
     var body: some View {
         GeometryReader { geo in
@@ -182,6 +188,16 @@ struct PlayerView: View {
             TCInstallKeyEventWatcher()
             TCInstallTextInputModeWatcher()
 
+            // Load the per-game fast-forward multiplier so the
+            // toolbar Menu sheet knows whether to show the toggle
+            // (and what speed to engage when it does). Game settings
+            // can't change while the player is open, so a single
+            // load on appear is sufficient.
+            if let container = appState.selectedGame?.container {
+                let s = GameSettings.load(from: container.empoStateURL)
+                fastForwardMultiplier = s.speedMultiplier
+            }
+
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
             //
@@ -218,13 +234,17 @@ struct PlayerView: View {
             PlayerMoreSheet(
                 showDebugOverlay: $showDebugOverlay,
                 fastForwardActive: $fastForwardActive,
+                fastForwardMultiplier: fastForwardMultiplier,
                 onPause: { appState.requestPause() },
                 onCheats: { toggleCheats() },
                 onQuit: { showQuitConfirm = true }
             )
         }
         .onChange(of: fastForwardActive) { _, active in
-            mkxp_setFastForwardActive(active ? 1 : 0)
+            // Active = use the per-game configured multiplier; not
+            // active = 1 (no scaling). Engine clamps to >= 1.
+            let mult = active ? (fastForwardMultiplier ?? 1) : 1
+            mkxp_setFastForwardMultiplier(Int32(mult))
         }
         .tint(nil)
         .controlsEditDialogs(
