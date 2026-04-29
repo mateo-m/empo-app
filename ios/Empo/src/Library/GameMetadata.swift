@@ -147,8 +147,13 @@ struct GameMetadata: Codable {
                 return Int64(0)
             }
 
+            // NSEnumerator's `for case let x in enumerator` form
+            // calls `makeIterator()`, which Swift 6 treats as
+            // unavailable from async contexts. Manual `nextObject()`
+            // loop sidesteps that and still walks the whole tree.
             var total: Int64 = 0
-            for case let fileURL as URL in enumerator {
+            while let next = enumerator.nextObject() {
+                guard let fileURL = next as? URL else { continue }
                 if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
                     total += Int64(size)
                 }
