@@ -10,6 +10,9 @@ struct GameInfoView: View {
     @State private var metadata: GameMetadata
     @State private var editingTitle: String
     @State private var diskSize: Int64?
+    @State private var rgssVersion: Int?
+    @State private var rubyVersion: String?
+    @State private var runtimeProbeFinished = false
     @State private var showArtworkPicker = false
     @State private var showBannerPicker = false
     @State private var isEditingTitle = false
@@ -143,6 +146,70 @@ struct GameInfoView: View {
                         }
                     }
 
+                    // Runtime diagnostics. Surfaces the engine
+                    // graphics-API version and the bundled-Ruby
+                    // version (when present) so an advanced user
+                    // can confirm what compatibility surface a
+                    // game ships with - useful for debugging
+                    // syntax-transform misdetections (a custom
+                    // engine shipping RGSS1 graphics + Ruby 3.x
+                    // vs vanilla XP shipping RGSS1 + Ruby 1.8).
+                    // Gated on debugLogs because casual users
+                    // shouldn't see internal API version numbers.
+                    if settings.debugLogs {
+                        GroupedSection("Runtime") {
+                            DetailRow("RGSS version") {
+                                if let v = rgssVersion {
+                                    Text("RGSS\(v)")
+                                } else if runtimeProbeFinished {
+                                    Text("Unknown")
+                                } else {
+                                    ProgressView()
+                                }
+                            }
+
+                            Divider().padding(.leading, Spacing.xl)
+
+                            // Ruby (bundled): only shown when the
+                            // game ships its own Ruby DLL/dylib
+                            // (Pokemon Flux's x64-msvcrt-ruby310.dll
+                            // and similar). This is the version the
+                            // developer authored *against*; on iOS
+                            // it isn't the version that actually
+                            // runs (we always execute on the
+                            // statically-linked engine Ruby below)
+                            // but it tells the user what target the
+                            // game's scripts were written for.
+                            if let v = rubyVersion {
+                                DetailRow("Ruby (bundled)") {
+                                    Text(v).monospaced()
+                                }
+
+                                Divider().padding(.leading, Spacing.xl)
+                            }
+
+                            // Ruby (runtime): always shown. This is
+                            // the version that's *actually* parsing
+                            // and executing the game's scripts on
+                            // iOS, scanned from Empo's own binary.
+                            // For vanilla XP/VX/Ace games (no bundled
+                            // DLL) this is the only Ruby row; for
+                            // games with a bundled runtime, this row
+                            // makes the gap explicit (e.g., "3.1.0p0
+                            // bundled vs 3.1.3p185 runtime").
+                            DetailRow("Ruby (runtime)") {
+                                if !runtimeProbeFinished {
+                                    ProgressView()
+                                } else if let engine = GameMetadata.engineRubyVersion() {
+                                    Text(engine).monospaced()
+                                } else {
+                                    Text("Unknown")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+
                     GroupedSection {
                         Button { openInFiles() } label: {
                             Label("Browse game files", systemImage: "folder")
@@ -230,6 +297,27 @@ struct GameInfoView: View {
                     // (tens of MB to GB) so the rest is rounding.
                     diskSize = await GameMetadata.diskSize(for: container.url)
                 }
+            }
+            .task {
+                // Runtime probe: scan game folder for RGSS version
+                // and bundled Ruby version. Off-main-thread because
+                // the Ruby scan opens DLLs (5-15 MB each, a few in
+                // a typical PE-derived game) and runs an
+                // NSRegularExpression over the ASCII-decoded bytes.
+                guard let container, settings.debugLogs else {
+                    runtimeProbeFinished = true
+                    return
+                }
+                let gameURL = container.gameURL
+                let result: (Int?, String?) = await Task.detached(priority: .utility) {
+                    (
+                        GameMetadata.detectRGSSVersion(in: gameURL),
+                        GameMetadata.detectBundledRubyVersion(in: gameURL)
+                    )
+                }.value
+                rgssVersion = result.0
+                rubyVersion = result.1
+                runtimeProbeFinished = true
             }
             .onDisappear {
                 if needsLibraryRefresh {
