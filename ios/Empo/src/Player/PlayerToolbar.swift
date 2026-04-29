@@ -34,7 +34,7 @@ struct PlayerToolbar: View {
             // ellipsis.circle is the iOS-idiomatic "more options" cue;
             // opens PlayerMoreSheet for pause / cheats / fast-forward /
             // debug-overlay / quit.
-            ToolbarEntry(icon: "ellipsis.circle", label: "More", tint: .white, action: onShowMore),
+            ToolbarEntry(icon: "ellipsis.circle", label: "Menu", tint: .white, action: onShowMore),
         ]
 
         let toolbarPosition = ControlsZone.toolbarOrigin(safeArea: safeArea, geoSize: geoSize, btnSize: btnSize, gap: gap, count: CGFloat(buttons.count))
