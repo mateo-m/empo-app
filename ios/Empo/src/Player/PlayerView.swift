@@ -267,22 +267,42 @@ struct PlayerView: View {
     }
 
     /// Re-read the per-game fast-forward multiplier from disk and
-    /// reconcile both the UI state and the live engine. Called on
-    /// PlayerView appear (initial launch + resume) and whenever the
-    /// Menu sheet opens, since the user can edit Game Settings while
-    /// paused via pause -> library -> Game Settings -> resume. If the
-    /// toggle is currently active and the stored multiplier changed
-    /// value, the new value is pushed to the engine; if the user
-    /// cleared the multiplier entirely, the toggle is force-disabled
-    /// so the engine returns to 1x next frame.
+    /// reconcile the UI toggle with the engine's actual state.
+    /// Called on PlayerView appear (initial launch + resume) and
+    /// whenever the Menu sheet opens.
+    ///
+    /// SwiftUI can recycle `PlayerView` when the user pauses to the
+    /// library and resumes, which resets `@State fastForwardActive`
+    /// back to its default `false`. The engine's host-bridge
+    /// multiplier is process-static and survives that recycle, so
+    /// the only reliable "is fast-forward currently on?" signal is
+    /// the bridge itself - reading it here lets the toolbar toggle
+    /// reflect the engine's truth instead of stale local state.
+    ///
+    /// Reconciliation rules (engine state vs. configured value):
+    ///   - engine fast-forwarding AND settings still allow it ->
+    ///     toggle on; .onChange pushes the configured value back to
+    ///     the bridge so an in-pause settings edit (e.g. 4x -> 2x)
+    ///     takes effect on resume.
+    ///   - engine fast-forwarding BUT settings cleared the
+    ///     multiplier -> toggle off; .onChange pushes 1 to the
+    ///     bridge so the engine stops speeding next frame.
+    ///   - engine at 1x -> toggle off regardless of settings.
     private func syncFastForwardFromSettings() {
         guard let container = appState.selectedGame?.container else { return }
         let s = GameSettings.load(from: container.empoStateURL)
         fastForwardMultiplier = s.speedMultiplier
-        if fastForwardActive {
-            let mult = s.speedMultiplier ?? 1
-            mkxp_setFastForwardMultiplier(Int32(mult))
-            if mult < 2 { fastForwardActive = false }
+
+        let engineMult = Int(mkxp_getFastForwardMultiplier())
+        let configuredMult = s.speedMultiplier ?? 1
+        let shouldBeActive = engineMult > 1 && configuredMult >= 2
+
+        if fastForwardActive != shouldBeActive {
+            // Setting fastForwardActive triggers `.onChange` which
+            // writes the bridge to the right value (configured
+            // multiplier when active, 1 when not), so we don't
+            // call mkxp_setFastForwardMultiplier directly here.
+            fastForwardActive = shouldBeActive
         }
     }
 
