@@ -14,6 +14,12 @@ enum RubyCompatMode: String, CaseIterable, Hashable {
 struct GameSettingsView: View {
     let game: GameEntry
     @Environment(\.dismiss) private var dismiss
+    /// Read to detect whether the engine is currently mid-session
+    /// for this game (paused to library, then user opened Game
+    /// Settings). When that's the case we surface a "restart
+    /// required" hint after edits, since launch-time config fields
+    /// won't take effect on resume.
+    @Environment(\.pauseManager) private var pauseManager
 
     @State private var settings: GameSettings
     @State private var defaults: GameConfigDefaults
@@ -48,7 +54,7 @@ struct GameSettingsView: View {
         self.stateDirectory = stateDir
 
         let s = GameSettings.load(from: stateDir)
-        let defs = GameSettings.readGameDefaults(from: stateDir)
+        let defs = GameSettings.readGameDefaults(from: dir)
 
         _settings = State(initialValue: s)
         _defaults = State(initialValue: defs)
@@ -99,8 +105,8 @@ struct GameSettingsView: View {
     private var effectiveVerticalAlignment: VerticalAlignment {
         settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
     }
-    private var effectiveResolution: ResolutionPreset? {
-        settings.resolution ?? defaults.resolution
+    private var effectiveRenderScale: RenderScale {
+        settings.renderScale ?? defaults.renderScale ?? GameConfigDefaults.engineRenderScale
     }
 
     /// Human-readable label for the "Auto-detect" picker row that
@@ -117,9 +123,32 @@ struct GameSettingsView: View {
         }
     }
 
+    /// True when this game's session is currently active (paused to
+    /// the library) AND the user has changed at least one
+    /// restart-required field since opening the sheet. Drives the
+    /// banner at the top of the form so the user knows their edits
+    /// won't apply until the next full launch.
+    private var showRestartHint: Bool {
+        pauseManager.pausedGame?.id == game.id
+            && settings.differsInRestartRequiredFields(from: initialSettings)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if showRestartHint {
+                    Section {
+                        Label {
+                            Text("Restart this game for changes to take effect.")
+                                .font(.footnote)
+                        } icon: {
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                        .listRowBackground(Color.orange.opacity(0.12))
+                    }
+                }
+
                 gameplaySection
                 displaySection
                 verticalAlignmentSection
@@ -131,7 +160,7 @@ struct GameSettingsView: View {
                         Button("Reset to Defaults", role: .destructive) {
                             withAnimation {
                                 settings = GameSettings()
-                                defaults = GameSettings.readGameDefaults(from: stateDirectory)
+                                defaults = GameSettings.readGameDefaults(from: gameDirectory)
                             }
                         }
                     } footer: {
@@ -201,31 +230,17 @@ struct GameSettingsView: View {
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Picker("Resolution", selection: resolutionBinding) {
-                    Text("Default")
-                        .tag(nil as ResolutionPreset?)
-
-                    ForEach(ResolutionPreset.presets) { preset in
-                        HStack {
-                            Text(preset.label)
-                            Spacer()
-                            Text(preset.aspectRatio)
-                                .foregroundStyle(.secondary)
-                        }
-                        .tag(preset as ResolutionPreset?)
+                Picker("Render scale", selection: renderScaleBinding) {
+                    ForEach(RenderScale.allCases, id: \.self) { scale in
+                        Text(scale.label).tag(scale)
                     }
                 }
                 .pickerStyle(.navigationLink)
 
-                if let res = effectiveResolution {
-                    Text("Currently \(res.label) (\(res.aspectRatio)). Some games may override this in their scripts.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Override the game's internal resolution. Some games may override this in their scripts.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+                Text(effectiveRenderScale.description
+                    + " The game's aspect ratio and on-screen layout are unchanged - this only sharpens the rendering on high-DPI screens.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, Spacing.xxs)
 
@@ -256,7 +271,7 @@ struct GameSettingsView: View {
         } header: {
             Text("Display")
         } footer: {
-            Text("Control how the game looks on screen. Changes take effect on next launch.")
+            Text("Control how the game looks on screen.")
         }
     }
 
@@ -494,16 +509,23 @@ struct GameSettingsView: View {
         )
     }
 
-    private var resolutionBinding: Binding<ResolutionPreset?> {
+    private var renderScaleBinding: Binding<RenderScale> {
         Binding(
-            get: { settings.resolution },
-            set: { settings.resolution = $0 }
+            get: { effectiveRenderScale },
+            set: { settings.renderScale = $0 }
         )
     }
 
 
     private func save() {
         settings.save(to: stateDirectory)
+        // Regenerate the merged mkxp.json so the engine actually
+        // sees the new values on next launch. Without this, edits
+        // here only land in game_settings.json (the host-side
+        // record) and the engine keeps reading the stale config it
+        // was launched with - making toggles like Smooth Scaling,
+        // Vsync, and Resolution appear to do nothing.
+        settings.applyToConfig(stateDirectory: stateDirectory, gameDirectory: gameDirectory)
     }
 }
 
