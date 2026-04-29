@@ -10,44 +10,32 @@ struct PlayerToolbar: View {
     let geoSize: CGSize
     let controlsHidden: Bool
     let toolbarOpacity: Double
-    @Binding var showQuitConfirm: Bool
-    @Binding var showDebugOverlay: Bool
     let onToggleKeyboard: () -> Void
     let onToggleEditMode: () -> Void
     let onToggleHideControls: () -> Void
-    let onRequestPause: () -> Void
-    let onToggleCheats: () -> Void
+    let onShowMore: () -> Void
     let onResetIdleTimer: () -> Void
-    @Environment(\.appSettings) private var settings
 
     var body: some View {
         let btnSize = IconButtonSize.sm.points
         let gap: CGFloat = isPortrait ? Spacing.sm : Spacing.md
 
-        let buttons: [ToolbarEntry] = {
-            var list: [ToolbarEntry] = []
-            if settings.isEnabled(.gamePause) {
-                list.append(ToolbarEntry(icon: "pause.fill", label: "Pause game", tint: .white, action: onRequestPause))
-            }
-            if settings.isEnabled(.cheats) {
-                list.append(ToolbarEntry(icon: "wand.and.stars", label: "Cheats menu", tint: .white, action: onToggleCheats))
-            }
-            list.append(ToolbarEntry(icon: "keyboard", label: "Toggle keyboard", tint: .white, action: onToggleKeyboard))
-            if settings.debugMode {
-                list.append(ToolbarEntry(icon: "chart.line.uptrend.xyaxis", label: "Debug overlay", tint: .white, action: { showDebugOverlay.toggle() }))
-            }
-            list.append(ToolbarEntry(icon: "gearshape.fill", label: "Edit controls", tint: .white, action: onToggleEditMode))
-            list.append(ToolbarEntry(
+        let buttons: [ToolbarEntry] = [
+            ToolbarEntry(icon: "keyboard", label: "Toggle keyboard", tint: .white, action: onToggleKeyboard),
+            // square.and.pencil reads as "edit this region" which fits
+            // the controls-edit mode better than a generic gear/settings.
+            ToolbarEntry(icon: "square.and.pencil", label: "Edit controls", tint: .white, action: onToggleEditMode),
+            ToolbarEntry(
                 icon: controlsHidden ? "eye.slash.fill" : "eye.fill",
                 label: controlsHidden ? "Show controls" : "Hide controls",
                 tint: .white,
                 action: onToggleHideControls
-            ))
-            if settings.isEnabled(.gameQuit) {
-                list.append(ToolbarEntry(icon: "xmark.circle.fill", label: "Quit game", tint: .destructive, action: { showQuitConfirm = true }))
-            }
-            return list
-        }()
+            ),
+            // ellipsis.circle is the iOS-idiomatic "more options" cue;
+            // opens PlayerMoreSheet for pause / cheats / fast-forward /
+            // debug-overlay / quit.
+            ToolbarEntry(icon: "ellipsis.circle", label: "More", tint: .white, action: onShowMore),
+        ]
 
         let toolbarPosition = ControlsZone.toolbarOrigin(safeArea: safeArea, geoSize: geoSize, btnSize: btnSize, gap: gap, count: CGFloat(buttons.count))
 

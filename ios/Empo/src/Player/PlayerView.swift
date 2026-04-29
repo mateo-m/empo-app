@@ -35,6 +35,15 @@ struct PlayerView: View {
     @State private var draggingDPad = false
     @State private var draggingButtonID: UUID?
 
+    /// More-menu sheet (toolbar -> ellipsis button). Houses pause /
+    /// cheats / fast-forward / debug-overlay / quit so the toolbar
+    /// itself stays trimmed to keyboard / edit / hide / more.
+    @State private var showMoreSheet = false
+    /// Live fast-forward state. Mirrored into the engine via
+    /// `mkxp_setFastForwardActive` so the FPS limiter scales the
+    /// frame pacing 4x while the toggle is on.
+    @State private var fastForwardActive = false
+
     var body: some View {
         GeometryReader { geo in
             let isPortrait = geo.size.height > geo.size.width
@@ -85,13 +94,10 @@ struct PlayerView: View {
                         geoSize: geo.size,
                         controlsHidden: controlsHidden,
                         toolbarOpacity: toolbarOpacity,
-                        showQuitConfirm: $showQuitConfirm,
-                        showDebugOverlay: $showDebugOverlay,
                         onToggleKeyboard: { toggleKeyboard() },
                         onToggleEditMode: { toggleEditMode() },
                         onToggleHideControls: { toggleHideControls() },
-                        onRequestPause: { appState.requestPause() },
-                        onToggleCheats: { toggleCheats() },
+                        onShowMore: { showMoreSheet = true },
                         onResetIdleTimer: { resetToolbarIdleTimer() }
                     )
                     .opacity(editMode ? 0 : 1)
@@ -207,6 +213,18 @@ struct PlayerView: View {
             .keyboardShortcut(.defaultAction)
         } message: {
             Text("Are you sure you want to quit the current game?")
+        }
+        .sheet(isPresented: $showMoreSheet) {
+            PlayerMoreSheet(
+                showDebugOverlay: $showDebugOverlay,
+                fastForwardActive: $fastForwardActive,
+                onPause: { appState.requestPause() },
+                onCheats: { toggleCheats() },
+                onQuit: { showQuitConfirm = true }
+            )
+        }
+        .onChange(of: fastForwardActive) { _, active in
+            mkxp_setFastForwardActive(active ? 1 : 0)
         }
         .tint(nil)
         .controlsEditDialogs(
