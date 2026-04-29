@@ -123,32 +123,31 @@ struct GameSettingsView: View {
         }
     }
 
-    /// True when this game's session is currently active (paused to
-    /// the library) AND the user has changed at least one
-    /// restart-required field since opening the sheet. Drives the
-    /// banner at the top of the form so the user knows their edits
-    /// won't apply until the next full launch.
-    private var showRestartHint: Bool {
-        pauseManager.pausedGame?.id == game.id
-            && settings.differsInRestartRequiredFields(from: initialSettings)
+    /// Hint to render at the top of the form when a session for
+    /// this game is currently paused AND the user has changed at
+    /// least one launch-time field since opening the sheet. The
+    /// excerpt names the specific settings pending a relaunch so
+    /// the user can see "Restart this game to apply: Smooth
+    /// scaling and Render scale." instead of a generic notice.
+    /// `nil` when no relaunch is needed - the parent view binds
+    /// that to a conditional render so the pill animates in/out.
+    private var restartHint: Hint? {
+        guard pauseManager.pausedGame?.id == game.id else { return nil }
+        let changed = settings.restartRequiredFieldsChanged(from: initialSettings)
+        guard !changed.isEmpty else { return nil }
+        let list = changed.formatted(.list(type: .and, width: .standard))
+        return Hint(
+            id: "gameSettings.restartRequired",
+            excerpt: "Restart this game to apply: \(list).",
+            description: nil,
+            dismissal: .none,
+            icon: "arrow.clockwise.circle.fill"
+        )
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                if showRestartHint {
-                    Section {
-                        Label {
-                            Text("Restart this game for changes to take effect.")
-                                .font(.footnote)
-                        } icon: {
-                            Image(systemName: "arrow.clockwise.circle.fill")
-                                .foregroundStyle(.orange)
-                        }
-                        .listRowBackground(Color.orange.opacity(0.12))
-                    }
-                }
-
                 gameplaySection
                 displaySection
                 verticalAlignmentSection
@@ -168,6 +167,44 @@ struct GameSettingsView: View {
                     }
                 }
             }
+            // Pin the restart-required pill above the form via a
+            // top safe-area inset. The inset gives the pill a
+            // z-order above the scrolling rows for free; we don't
+            // try to paint a wide backdrop in the inset's
+            // surrounding area because that just produces a
+            // visible white/gray panel in light mode (regardless
+            // of whether we use material, color, or a blend of
+            // both).
+            //
+            // The pill itself gets a `.regularMaterial` fill
+            // clipped to the same rounded shape `HintBanner`
+            // already uses internally - translucent so form rows
+            // scrolling past show through with a blur, while
+            // staying opaque enough that hint text doesn't visibly
+            // collide with row labels underneath. The pill's own
+            // brand-tinted layer (`.brand.opacity(0.1)` from
+            // `HintBanner`) renders on top of the material, giving
+            // the floating pill its brand cast.
+            //
+            // Slide+blur transition matches `.hintBanner` (same
+            // one used by GameInfoView's customization hint). We
+            // animate on the boolean (not the excerpt) so adding
+            // or removing individual fields updates the text in
+            // place without re-running the slide-in transition -
+            // only true appear/disappear cycles trigger movement.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let hint = restartHint {
+                    HintBanner(hint: hint)
+                        .background(
+                            .regularMaterial,
+                            in: RoundedRectangle(cornerRadius: Radius.md)
+                        )
+                        .padding(.horizontal, Spacing._2xl)
+                        .padding(.vertical, Spacing.md)
+                        .transition(.hintBanner)
+                }
+            }
+            .animation(.smooth(duration: 0.25), value: restartHint != nil)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
