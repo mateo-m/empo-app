@@ -110,6 +110,15 @@ class AppState {
         )
         mkxp_setUseInGameKeyboard(settings.useInGameKeyboard ?? inGameKeyboardDefault)
 
+        // Reset per-session bridge state in one shot. Engine-side
+        // `mkxp_resetSessionState` is the canonical list of
+        // "process-static state that's intrinsically per-game and
+        // would otherwise leak across launches" - the engine
+        // author of a new bridge adds their reset there alongside
+        // the static declaration, so the host doesn't have to
+        // track each bridge individually.
+        mkxp_resetSessionState()
+
         // Wait for the RGSS thread to actually finish tearing down any
         // previous session before feeding it the new path. If
         // mkxp_setGamePath is called too early, the engine's own
