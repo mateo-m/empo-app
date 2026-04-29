@@ -253,7 +253,7 @@ private struct PixelDitherPattern: View {
     /// changes between launches (icons are picked anew on each
     /// process start) but stays static within a session - the
     /// panning Canvas reuses this single image.
-    nonisolated(unsafe) private static let cachedTileImage: UIImage = {
+    nonisolated private static let cachedTileImage: UIImage = {
         let size = CGSize(width: tileWidth, height: tileHeight)
         let uiColor = UIColor.white.withAlphaComponent(0.08)
         let names = SplashIcons.randomNames(count: iconCols * iconRows)

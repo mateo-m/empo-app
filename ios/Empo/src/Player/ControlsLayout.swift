@@ -229,19 +229,25 @@ class ControlsLayout {
 
 
     // MARK: - Defaults
+    //
+    // Default constants are `nonisolated` so the `nonisolated`
+    // `writeInitialPerGameLayout` (called from background import
+    // tasks) and the JGP import pipeline can read them without
+    // hopping to the main actor. They're plain Swift `let`s of
+    // value types — safe to read from any thread.
 
-    static let defaultDPadCenterPortrait = CGPoint(x: 0.13, y: 0.72)
-    static let defaultDPadCenterLandscape = CGPoint(x: 0.10, y: 0.65)
-    static let defaultDPadSize: CGFloat = 140
+    nonisolated static let defaultDPadCenterPortrait = CGPoint(x: 0.13, y: 0.72)
+    nonisolated static let defaultDPadCenterLandscape = CGPoint(x: 0.10, y: 0.65)
+    nonisolated static let defaultDPadSize: CGFloat = 140
 
     /// Legacy alias. Some imports / migration paths still reference
     /// `defaultDPadCenter` (singular); keep it pointing at the
     /// portrait default so callers without orientation context get
     /// the more common case.
-    static let defaultDPadCenter = defaultDPadCenterPortrait
+    nonisolated static let defaultDPadCenter = defaultDPadCenterPortrait
 
     /// 2x2 button grid in the bottom-right of a portrait viewport.
-    static let defaultButtonsPortrait: [ButtonModel] = [
+    nonisolated static let defaultButtonsPortrait: [ButtonModel] = [
         ButtonModel(label: "Enter",  scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.70, y: 0.67), size: 56),
         ButtonModel(label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.88, y: 0.67), size: 56),
         ButtonModel(label: "Z",      scancode: Int32(MKXP_SCANCODE_Z),      relativeCenter: CGPoint(x: 0.70, y: 0.76), size: 56),
@@ -252,7 +258,7 @@ class ControlsLayout {
     /// Shorter screen height + wider screen width means the grid
     /// can sit higher and more spread out without overlapping the
     /// game viewport's center.
-    static let defaultButtonsLandscape: [ButtonModel] = [
+    nonisolated static let defaultButtonsLandscape: [ButtonModel] = [
         ButtonModel(label: "Enter",  scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.80, y: 0.59), size: 56),
         ButtonModel(label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.88, y: 0.59), size: 56),
         ButtonModel(label: "Z",      scancode: Int32(MKXP_SCANCODE_Z),      relativeCenter: CGPoint(x: 0.80, y: 0.75), size: 56),
@@ -261,7 +267,7 @@ class ControlsLayout {
 
     /// Legacy alias for callers that grab "the" defaults without
     /// orientation. Returns the portrait set.
-    static var defaultButtons: [ButtonModel] { defaultButtonsPortrait }
+    nonisolated static var defaultButtons: [ButtonModel] { defaultButtonsPortrait }
 
 
     // MARK: - Reset
