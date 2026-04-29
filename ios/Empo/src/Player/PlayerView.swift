@@ -51,7 +51,6 @@ struct PlayerView: View {
                 if editMode {
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
                 }
-
                 // Invisible tap layer that dismisses the keyboard when
                 // it's open. Placed below controls + toolbar so those
                 // stay tappable, but above the SDL game view so any
@@ -145,6 +144,13 @@ struct PlayerView: View {
                         opacity: snapshotOpacity
                     )
                 }
+            }
+            // Push device orientation into ControlsLayout so it can
+            // swap active/inactive per-orientation snapshots.
+            // `initial: true` ensures the layout knows the orientation
+            // as soon as PlayerView appears, not just on rotation.
+            .onChange(of: isPortrait, initial: true) { _, nowPortrait in
+                layout.setOrientation(nowPortrait ? .portrait : .landscape)
             }
         }
         .ignoresSafeArea()
