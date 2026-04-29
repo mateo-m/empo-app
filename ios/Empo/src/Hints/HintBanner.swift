@@ -9,7 +9,7 @@ struct HintBanner: View {
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: "lightbulb.fill")
+            Image(systemName: hint.icon)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.brand)
 
