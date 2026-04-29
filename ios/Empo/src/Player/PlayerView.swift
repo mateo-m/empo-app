@@ -44,10 +44,11 @@ struct PlayerView: View {
     /// frame pacing while the toggle is on. The actual multiplier
     /// comes from `fastForwardMultiplier` (per-game setting).
     @State private var fastForwardActive = false
-    /// Per-game fast-forward multiplier loaded from GameSettings on
-    /// player appear. nil = disabled (toolbar sheet hides the row).
-    /// Can't change mid-game (the user would have to back out to the
-    /// library to edit Game Settings), so loading once is enough.
+    /// Per-game fast-forward multiplier loaded from GameSettings.
+    /// nil = disabled (the toolbar sheet hides the row). Refreshed
+    /// every time the Menu sheet opens, since the user can pause →
+    /// library → edit Game Settings → resume and change this value
+    /// mid-session.
     @State private var fastForwardMultiplier: Int?
 
     var body: some View {
@@ -188,15 +189,13 @@ struct PlayerView: View {
             TCInstallKeyEventWatcher()
             TCInstallTextInputModeWatcher()
 
-            // Load the per-game fast-forward multiplier so the
-            // toolbar Menu sheet knows whether to show the toggle
-            // (and what speed to engage when it does). Game settings
-            // can't change while the player is open, so a single
-            // load on appear is sufficient.
-            if let container = appState.selectedGame?.container {
-                let s = GameSettings.load(from: container.empoStateURL)
-                fastForwardMultiplier = s.speedMultiplier
-            }
+            // Load the per-game fast-forward multiplier (and re-push
+            // to the engine if the toggle was already on). Fires on
+            // first launch AND on resume from pause -> library ->
+            // resume, so the in-game state always tracks the latest
+            // Game Settings value the user might have edited while
+            // paused.
+            syncFastForwardFromSettings()
 
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
@@ -232,6 +231,7 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showMoreSheet) {
             PlayerMoreSheet(
+                gameTitle: appState.selectedGame?.title ?? "Game",
                 showDebugOverlay: $showDebugOverlay,
                 fastForwardActive: $fastForwardActive,
                 fastForwardMultiplier: fastForwardMultiplier,
@@ -239,6 +239,16 @@ struct PlayerView: View {
                 onCheats: { toggleCheats() },
                 onQuit: { showQuitConfirm = true }
             )
+        }
+        .onChange(of: showMoreSheet) { _, opened in
+            // The user can pause -> library -> Game Settings ->
+            // resume mid-session, so refresh the per-game multiplier
+            // every time the Menu sheet opens. If they bumped fast
+            // forward from 2x to 4x while paused, the toggle should
+            // pick that up; if they disabled it entirely, the row
+            // should disappear.
+            guard opened else { return }
+            syncFastForwardFromSettings()
         }
         .onChange(of: fastForwardActive) { _, active in
             // Active = use the per-game configured multiplier; not
@@ -254,6 +264,26 @@ struct PlayerView: View {
             editingButton: $editingButton,
             editingDPad: $editingDPad
         )
+    }
+
+    /// Re-read the per-game fast-forward multiplier from disk and
+    /// reconcile both the UI state and the live engine. Called on
+    /// PlayerView appear (initial launch + resume) and whenever the
+    /// Menu sheet opens, since the user can edit Game Settings while
+    /// paused via pause -> library -> Game Settings -> resume. If the
+    /// toggle is currently active and the stored multiplier changed
+    /// value, the new value is pushed to the engine; if the user
+    /// cleared the multiplier entirely, the toggle is force-disabled
+    /// so the engine returns to 1x next frame.
+    private func syncFastForwardFromSettings() {
+        guard let container = appState.selectedGame?.container else { return }
+        let s = GameSettings.load(from: container.empoStateURL)
+        fastForwardMultiplier = s.speedMultiplier
+        if fastForwardActive {
+            let mult = s.speedMultiplier ?? 1
+            mkxp_setFastForwardMultiplier(Int32(mult))
+            if mult < 2 { fastForwardActive = false }
+        }
     }
 
 
