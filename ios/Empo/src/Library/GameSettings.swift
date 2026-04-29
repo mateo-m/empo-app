@@ -1,36 +1,58 @@
 import Foundation
 
 
-struct ResolutionPreset: Identifiable, Hashable, Codable {
-    let width: Int
-    let height: Int
-
-    var id: String { "\(width)x\(height)" }
+/// Render-resolution multiplier applied via mkxp-z's `enableHires`
+/// + `framebufferScalingFactor`. RGSS games render to a buffer
+/// whose dimensions are baked into the developer's scripts (544x416
+/// for RGSS3, 640x480 for RGSS1), and that buffer's aspect ratio is
+/// non-negotiable without breaking the game's own UI layout. What
+/// the host CAN do is render that buffer at a higher pixel count
+/// before downscaling to the iOS screen, which sharpens lines and
+/// text on retina displays.
+///
+/// Earlier iterations exposed an absolute-dimension picker
+/// ("1920x1080", "1280x720", etc.) that wrote `defScreenW` and
+/// `defScreenH` to mkxp.json. Those keys only sized the SDL window
+/// (irrelevant on iOS - always fullscreen), not the rendering
+/// buffer, so the picker was misleading: users selecting "1920x1080"
+/// got identical pixels to "Default". `RenderScale` is the honest
+/// replacement.
+enum RenderScale: String, Codable, CaseIterable, Hashable {
+    case x1
+    case x2
+    case x4
 
     var label: String {
-        "\(width) x \(height)"
+        switch self {
+        case .x1: "Default"
+        case .x2: "High (2x)"
+        case .x4: "Very high (4x)"
+        }
     }
 
-    var aspectRatio: String {
-        let g = gcd(width, height)
-        return "\(width / g):\(height / g)"
+    var description: String {
+        switch self {
+        case .x1: "Native game resolution."
+        case .x2: "Render at 2x the native size for sharper visuals on high-DPI screens."
+        case .x4: "Render at 4x the native size. Sharpest, but uses more GPU."
+        }
     }
 
-    private func gcd(_ a: Int, _ b: Int) -> Int {
-        b == 0 ? a : gcd(b, a % b)
+    /// Multiplier written to mkxp.json as `framebufferScalingFactor`.
+    /// `x1` returns 1.0 but the host strips both `enableHires` and
+    /// `framebufferScalingFactor` for that case so the engine falls
+    /// back to its native-resolution path.
+    var framebufferScalingFactor: Double {
+        switch self {
+        case .x1: 1.0
+        case .x2: 2.0
+        case .x4: 4.0
+        }
     }
 
-    static let presets: [ResolutionPreset] = [
-        .init(width: 512,  height: 384),
-        .init(width: 512,  height: 768),
-        .init(width: 544,  height: 416),
-        .init(width: 640,  height: 480),
-        .init(width: 800,  height: 600),
-        .init(width: 1024, height: 768),
-        .init(width: 1280, height: 720),
-        .init(width: 1280, height: 960),
-        .init(width: 1920, height: 1080),
-    ]
+    var enableHires: Bool {
+        self != .x1
+    }
 }
 
 
@@ -57,49 +79,172 @@ enum VerticalAlignment: String, Codable, CaseIterable {
 }
 
 
+// MARK: - Setting metadata wrappers
+//
+// Each `GameSettings` field carries a "does changing this require a
+// game relaunch?" flag inline with its declaration via
+// `@Setting<T, RestartFlag>` or `@Setting<T, RuntimeFlag>`. The
+// dirty-check at the bottom of `GameSettings` walks fields via
+// Mirror reflection and consults each wrapper's flag, so adding a
+// new field forces the author to pick a category at the
+// declaration site - no separate descriptor list to keep in sync.
+
+
+/// Phantom-type tag indicating whether a wrapped field is
+/// mid-session re-applicable (runtime) or only honored at next
+/// engine launch (restart).
+protocol SettingFlag {
+    static var requiresRestart: Bool { get }
+}
+
+/// Field is parsed by the engine from `mkxp.json` once at RGSS
+/// thread startup. Mid-session edits land in the JSON but the
+/// running engine keeps its launch-time copy until the next quit.
+enum RestartFlag: SettingFlag {
+    static let requiresRestart = true
+}
+
+/// Field flows through a host bridge or is pure host-side
+/// rendering, so edits apply on resume without a relaunch.
+enum RuntimeFlag: SettingFlag {
+    static let requiresRestart = false
+}
+
+
+/// Type-erased view of a `@Setting`-wrapped property. Used by the
+/// dirty-check to ask each property whether it requires a restart -
+/// and whether its value differs from another instance's - without
+/// knowing the property's value type at compile time.
+private protocol AnySetting {
+    var requiresRestart: Bool { get }
+    func anyEquals(_ other: Any) -> Bool
+}
+
+
+/// Property wrapper carrying per-field metadata. The `Flag` generic
+/// parameter is a phantom type that encodes the restart-required
+/// nature of the field at compile time, so no per-instance state is
+/// stored beyond the value itself and the JSON shape stays
+/// identical to the un-wrapped form (single value per key, no
+/// metadata serialized).
+@propertyWrapper
+struct Setting<Value: Codable & Equatable, Flag: SettingFlag>: Codable, Equatable {
+    var wrappedValue: Value
+
+    init(wrappedValue: Value) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.wrappedValue = try container.decode(Value.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(wrappedValue)
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.wrappedValue == rhs.wrappedValue
+    }
+}
+
+extension Setting: AnySetting {
+    var requiresRestart: Bool { Flag.requiresRestart }
+    func anyEquals(_ other: Any) -> Bool {
+        guard let other = other as? Self else { return false }
+        return self == other
+    }
+}
+
+
+/// Allow a `GameSettings` JSON file to omit a wrapped optional
+/// field entirely. Swift's auto-synthesized `init(from:)` only
+/// applies the "missing key -> nil" rule to bare `Optional`
+/// properties, not wrapper-typed ones, so without this overload
+/// missing keys would throw "key not found" the first time a user
+/// upgrades to a build that adds a new field.
+extension KeyedDecodingContainer {
+    func decode<V, F>(_ type: Setting<V?, F>.Type, forKey key: Key) throws -> Setting<V?, F>
+    where V: Codable & Equatable, F: SettingFlag {
+        if let value = try decodeIfPresent(type, forKey: key) {
+            return value
+        }
+        return Setting(wrappedValue: nil)
+    }
+}
+
+
 /// Per-game settings stored as `game_settings.json` in each game directory.
 /// All fields are optional - nil means "use game/engine default".
+///
+/// Each field is annotated with `@Setting<..., RestartFlag>` or
+/// `@Setting<..., RuntimeFlag>` so the dirty-check below can
+/// surface a "restart required" hint in the UI when the user edits
+/// a launch-time field while an engine session is active. When
+/// adding a new field, pick the flag that matches how the value
+/// reaches the engine (raw mkxp.json read at launch -> Restart;
+/// host bridge or rendering -> Runtime).
 struct GameSettings: Codable, Equatable {
     // Display
-    var smoothScaling: Bool?           // true = bilinear (1), false = pixel-perfect (0)
-    var fixedAspectRatio: Bool?        // true = letterbox, false = stretch-to-fill
-    var resolution: ResolutionPreset?  // custom defScreenW/defScreenH
-    var verticalAlignment: VerticalAlignment? // portrait screen alignment
+    /// true = bilinear (1), false = pixel-perfect (0)
+    @Setting<Bool?, RestartFlag> var smoothScaling: Bool? = nil
+    /// true = letterbox, false = stretch-to-fill
+    @Setting<Bool?, RestartFlag> var fixedAspectRatio: Bool? = nil
+    /// Render-buffer multiplier (1x / 2x / 4x). Maps to
+    /// `enableHires` + `framebufferScalingFactor` in mkxp.json.
+    /// Replaces the dead `resolution` field that wrote
+    /// `defScreenW`/`defScreenH` (which only sized the SDL window
+    /// and had no effect on iOS, since the window is always
+    /// fullscreen).
+    @Setting<RenderScale?, RestartFlag> var renderScale: RenderScale? = nil
+    /// portrait screen alignment - host-side rendering, no engine input
+    @Setting<VerticalAlignment?, RuntimeFlag> var verticalAlignment: VerticalAlignment? = nil
 
     // Performance
-    var frameSkip: Bool?               // skip rendering frames when behind
-    var speedMultiplier: Int?          // fast-forward multiplier (2-9, nil = disabled). Runtime-only, applied via PlayerMoreSheet's Fast forward toggle.
-    var vsync: Bool?                   // vertical sync
-    var pathCache: Bool?               // index files with lowercase paths
+    /// skip rendering frames when behind
+    @Setting<Bool?, RestartFlag> var frameSkip: Bool? = nil
+    /// fast-forward multiplier (2-9, nil = disabled). Runtime-only,
+    /// applied via PlayerMoreSheet's Fast forward toggle through
+    /// `mkxp_setFastForwardMultiplier`.
+    @Setting<Int?, RuntimeFlag> var speedMultiplier: Int? = nil
+    /// vertical sync (written as `syncToRefreshrate` in the merged
+    /// mkxp.json - the engine ignores the legacy `vsync` key)
+    @Setting<Bool?, RestartFlag> var vsync: Bool? = nil
+    /// index files with lowercase paths
+    @Setting<Bool?, RestartFlag> var pathCache: Bool? = nil
 
     // Text
-    var fontScale: Double?             // global font size multiplier (1.0 = default)
-    var solidFonts: Bool?              // don't use alpha blending for text
+    /// global font size multiplier (1.0 = default)
+    @Setting<Double?, RestartFlag> var fontScale: Double? = nil
+    /// don't use alpha blending for text
+    @Setting<Bool?, RestartFlag> var solidFonts: Bool? = nil
 
     // Engine
-    var postloadScripts: Bool?         // execute postload scripts for common fixes
-    // Nil = default (Ruby 1.8 compat for max PE fangame compatibility).
-    // True = disable syntaxTransform so the engine runs pure Ruby 3.
-    // Needed for games that ship Ruby-3-era scripts (keyword-arg
-    // hash shorthand, numbered block params, etc.) - notably Pokemon
-    // Reborn 19.5+, PE v20+, and any game packaged for the mkxp-z
-    // runtime. Detected automatically during JGP import by scanning
-    // .rb scripts for Ruby-3-only syntax, but users can also flip
-    // this manually per game if the heuristic misses.
-    var useModernRuby: Bool?
+    /// execute postload scripts for common fixes
+    @Setting<Bool?, RestartFlag> var postloadScripts: Bool? = nil
+    /// Nil = default (Ruby 1.8 compat for max PE fangame compatibility).
+    /// True = disable syntaxTransform so the engine runs pure Ruby 3.
+    /// Needed for games that ship Ruby-3-era scripts (keyword-arg
+    /// hash shorthand, numbered block params, etc.) - notably Pokemon
+    /// Reborn 19.5+, PE v20+, and any game packaged for the mkxp-z
+    /// runtime. Detected automatically during JGP import by scanning
+    /// .rb scripts for Ruby-3-only syntax, but users can also flip
+    /// this manually per game if the heuristic misses.
+    @Setting<Bool?, RestartFlag> var useModernRuby: Bool? = nil
 
-    // Force the Pokemon Essentials in-game keyboard scene for text
-    // entry instead of the iOS soft keyboard. Default false (use
-    // the soft keyboard, which works for IF / Reborn / Insurgence).
-    // Flip on for games whose keyboard scene adds custom keys or
-    // layouts that the iOS soft keyboard can't drive. Routes
-    // through the `mkxp_setUseInGameKeyboard` bridge to
-    // `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
-    var useInGameKeyboard: Bool?
+    /// Force the Pokemon Essentials in-game keyboard scene for text
+    /// entry instead of the iOS soft keyboard. Default false (use
+    /// the soft keyboard, which works for IF / Reborn / Insurgence).
+    /// Flip on for games whose keyboard scene adds custom keys or
+    /// layouts that the iOS soft keyboard can't drive. Routes
+    /// through the `mkxp_setUseInGameKeyboard` bridge to
+    /// `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
+    @Setting<Bool?, RuntimeFlag> var useInGameKeyboard: Bool? = nil
 
 
     private static let settingsFilename = "game_settings.json"
-    private static let originalConfigFilename = "mkxp.original.json"
     private static let configFilename = "mkxp.json"
 
 
@@ -117,6 +262,44 @@ struct GameSettings: Codable, Equatable {
         }
         return settings
     }
+
+    /// True if any `RestartFlag`-tagged field differs between
+    /// `self` and `other`. The engine reads its config once on RGSS
+    /// thread startup and never re-reads, so launch-time fields
+    /// need a full quit + relaunch to take effect; runtime fields
+    /// (`RuntimeFlag`) flow through bridges and apply on resume.
+    ///
+    /// Walks the struct's properties via Mirror reflection - each
+    /// `@Setting`-wrapped field exposes `requiresRestart` through
+    /// the private `AnySetting` protocol, so this check stays
+    /// accurate as new fields are added without any list to
+    /// maintain. The author of a new field picks
+    /// `@Setting<..., RestartFlag>` vs `RuntimeFlag` at the
+    /// declaration site and the dirty-check follows automatically.
+    func differsInRestartRequiredFields(from other: GameSettings) -> Bool {
+        let lhsChildren = Mirror(reflecting: self).children
+        let rhsChildren = Mirror(reflecting: other).children
+        for (lhs, rhs) in zip(lhsChildren, rhsChildren) {
+            guard let lhsSetting = lhs.value as? AnySetting,
+                  let rhsSetting = rhs.value as? AnySetting
+            else {
+                // Unwrapped properties bypass the dirty-check
+                // silently in release builds; surface the omission
+                // loudly in debug so the author of a new field gets
+                // a clear nudge to add `@Setting<..., Flag>`.
+                assertionFailure(
+                    "GameSettings.\(lhs.label ?? "<unknown>") missing @Setting wrapper - "
+                    + "the restart-hint logic can't see this field"
+                )
+                continue
+            }
+            if lhsSetting.requiresRestart, !lhsSetting.anyEquals(rhsSetting) {
+                return true
+            }
+        }
+        return false
+    }
+
 
     /// Write the game's settings sidecar to
     /// `<container>/EmpoState/`.
@@ -346,28 +529,39 @@ struct GameSettings: Codable, Equatable {
     }
 
 
-    /// Reads the game's mkxp.json defaults. Prefers the original backup
-    /// over merged config so the developer's intended values always show.
-    /// `stateDirectory` is the per-game `<container>/EmpoState/`
-    /// where managed config files live (mkxp.json, mkxp.original.json)
-    /// - NOT the imported `Game/` subdir.
-    static func readGameDefaults(from stateDirectory: URL) -> GameConfigDefaults {
-        let originalURL = stateDirectory.appendingPathComponent(originalConfigFilename)
-        let configURL = stateDirectory.appendingPathComponent(configFilename)
-
-        let sourceURL = FileManager.default.fileExists(atPath: originalURL.path)
-            ? originalURL : configURL
+    /// Reads the game's mkxp.json defaults straight from the
+    /// imported game folder. `gameDirectory` is the per-game
+    /// `<container>/Game/` directory which is treated as immutable
+    /// after import — Empo's managed config (`EmpoState/mkxp.json`)
+    /// is generated from this source plus user overrides, never
+    /// merged back. That makes `Game/mkxp.json` the developer's
+    /// source-of-truth for the per-game-defaults UI.
+    static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
+        let sourceURL = gameDirectory.appendingPathComponent(configFilename)
 
         guard let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
               let config = parseJSONWithComments(raw) else {
             return GameConfigDefaults()
         }
 
-        // Read resolution from defScreenW/defScreenH
-        let resW = config["defScreenW"] as? Int
-        let resH = config["defScreenH"] as? Int
-        let resolution: ResolutionPreset? = if let w = resW, let h = resH, w > 0, h > 0 {
-            ResolutionPreset(width: w, height: h)
+        // Read render scale from enableHires + framebufferScalingFactor.
+        // The legacy `defScreenW`/`defScreenH` keys are intentionally
+        // ignored: they only sized the SDL window (irrelevant on
+        // iOS) and never controlled the rendering buffer.
+        let enableHires = config["enableHires"] as? Bool ?? false
+        let scalingFactor = (config["framebufferScalingFactor"] as? Double)
+            ?? (config["framebufferScalingFactor"] as? Int).map(Double.init)
+            ?? 1.0
+        let renderScale: RenderScale? = if enableHires {
+            // Snap to the nearest supported step. Engine accepts
+            // arbitrary doubles, but the UI only exposes 1/2/4 - so
+            // a developer-shipped 3.0 reads back as "High (2x)" in
+            // the defaults row.
+            switch scalingFactor {
+            case ..<1.5:  RenderScale.x1
+            case ..<3.0:  RenderScale.x2
+            default:      RenderScale.x4
+            }
         } else {
             nil
         }
@@ -379,78 +573,84 @@ struct GameSettings: Codable, Equatable {
         return GameConfigDefaults(
             smoothScaling: (config["smoothScaling"] as? Int).map { $0 != 0 },
             fixedAspectRatio: config["fixedAspectRatio"] as? Bool,
-            resolution: resolution,
+            renderScale: renderScale,
             frameSkip: config["frameSkip"] as? Bool,
-            vsync: config["vsync"] as? Bool,
+            // The mkxp-z engine actually controls vsync via
+            // `syncToRefreshrate`. The legacy `vsync` field exists in
+            // the parsed Config struct but is read by no rendering
+            // code, so writing it has no effect. Read both for
+            // backward-compat with hand-authored configs that used
+            // the old key, but prefer `syncToRefreshrate`.
+            vsync: (config["syncToRefreshrate"] as? Bool)
+                ?? (config["vsync"] as? Bool),
             pathCache: config["pathCache"] as? Bool,
             fontScale: config["fontScale"] as? Double,
             solidFonts: solidFontsEnabled
         )
     }
 
-    /// Merges these settings into the game's mkxp.json (in
-    /// `<container>/EmpoState/`, not the imported `Game/` subdir).
+    /// Generate the game's managed mkxp.json (in
+    /// `<container>/EmpoState/`) by merging the developer's
+    /// untouched `Game/mkxp.json` (if present) with these settings.
     ///
-    /// `stateDirectory` is the per-game state directory where
-    /// mkxp.json + mkxp.original.json live; `gameDirectory` is the
-    /// imported game folder (`<container>/Game/`), used only by the
-    /// launch-time modern-Ruby detector that scans `.rb` script files.
-    ///
-    /// `mkxp.original.json` (the developer's shipped config, if any)
-    /// is captured by `GameContainer.snapshotOriginalConfigIfNeeded`
-    /// at launch time before `applyToConfig` runs - NOT here. An earlier
-    /// version of this method had a lazy "copy current mkxp.json
-    /// to mkxp.original.json on second launch if no .original.json
-    /// existed" branch, which is structurally broken: by the second
-    /// launch the state-dir mkxp.json is our own generated file,
-    /// not the developer's, so the snapshot was a copy of our
-    /// output rather than the developer's intent. The current flow
-    /// snapshots from the game folder at launch and is idempotent
-    /// (only copies when `<stateDir>/mkxp.original.json` doesn't
-    /// already exist), which preserves the developer's values
-    /// regardless of how many times we regenerate the state-dir
-    /// mkxp.json from settings.
+    /// `stateDirectory` is the per-game state directory (where the
+    /// merged mkxp.json is written). `gameDirectory` is the
+    /// imported `<container>/Game/` folder, which Empo treats as
+    /// immutable after import — so reading the developer's source
+    /// directly from `gameDirectory/mkxp.json` is safe and removes
+    /// the need for the historic `mkxp.original.json` snapshot.
     func applyToConfig(stateDirectory: URL, gameDirectory: URL) {
         let configURL = stateDirectory.appendingPathComponent(Self.configFilename)
-        let originalURL = stateDirectory.appendingPathComponent(Self.originalConfigFilename)
-
-        // Preserves game developer's values for keys that aren't overridden
-        let sourceURL = FileManager.default.fileExists(atPath: originalURL.path)
-            ? originalURL : configURL
+        let sourceURL = gameDirectory.appendingPathComponent(Self.configFilename)
 
         var config: [String: Any] = [:]
-        if let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
+        if FileManager.default.fileExists(atPath: sourceURL.path),
+           let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
            let parsed = Self.parseJSONWithComments(raw) {
             config = parsed
         }
 
-        // syntaxTransform USED to be written here. It now travels via
-        // the engine bridge (`mkxp_setSyntaxTransformMode`, called
-        // from `AppState.selectGame` via
-        // `resolveSyntaxTransformMode(gameDirectory:)`). Keeping
-        // mkxp.json free of host-managed keys means
-        // `mkxp.original.json` snapshots and the per-game-defaults
-        // UI mirror the developer's intent only.
-        //
-        // Strip any stale syntaxTransform key carried over from
-        // older Empo builds (or from a developer's mkxp.original.json
-        // that happened to have one) so the merged config is clean.
-        // The bridge value wins regardless, but cleaning the file
-        // also keeps mkxp.json readable as documentation of what
-        // the user/developer chose.
+        // Host-managed keys travel via engine bridges, NOT through
+        // mkxp.json:
+        //   - syntaxTransform: mkxp_setSyntaxTransformMode
+        //   - fast-forward: mkxp_setFastForwardMultiplier
+        // Strip any leftovers in the developer's source so the
+        // merged config stays a clean mirror of host overrides on
+        // top of developer intent.
         config.removeValue(forKey: "syntaxTransform")
 
         if let v = smoothScaling { config["smoothScaling"] = v ? 1 : 0 }
         if let v = fixedAspectRatio { config["fixedAspectRatio"] = v }
         if let v = frameSkip { config["frameSkip"] = v }
         if let v = fontScale { config["fontScale"] = v }
-        if let v = vsync { config["vsync"] = v }
+        // mkxp-z's vsync is gated by `syncToRefreshrate`, not the
+        // dead `vsync` field. Strip the legacy key so the merged
+        // config doesn't carry unused state.
+        config.removeValue(forKey: "vsync")
+        if let v = vsync { config["syncToRefreshrate"] = v }
         if let v = pathCache { config["pathCache"] = v }
 
-        // Resolution
-        if let res = resolution {
-            config["defScreenW"] = res.width
-            config["defScreenH"] = res.height
+        // Render scale: mapped to mkxp-z's `enableHires` +
+        // `framebufferScalingFactor`. The legacy `defScreenW`/
+        // `defScreenH` keys are stripped from the merged config so
+        // existing imports lose the dead state on next save - those
+        // only sized the SDL window (irrelevant on iOS, which is
+        // always fullscreen) and never controlled the rendering
+        // buffer.
+        config.removeValue(forKey: "defScreenW")
+        config.removeValue(forKey: "defScreenH")
+        if let scale = renderScale {
+            if scale.enableHires {
+                config["enableHires"] = true
+                config["framebufferScalingFactor"] = scale.framebufferScalingFactor
+            } else {
+                // x1 - explicitly disable hires so a developer's
+                // `enableHires=true` from Game/mkxp.json doesn't
+                // leak into the merged config when the user picks
+                // "Default".
+                config["enableHires"] = false
+                config.removeValue(forKey: "framebufferScalingFactor")
+            }
         }
 
         // Solid fonts: mkxp.json expects an array of font names.
@@ -459,11 +659,10 @@ struct GameSettings: Codable, Equatable {
             config["solidFonts"] = v ? ["*"] : [] as [String]
         }
 
-        // Speed multiplier moved from launch-time fixedFramerate to a
-        // runtime fast-forward toggle (see PlayerMoreSheet +
-        // mkxp_setFastForwardMultiplier). At game start the engine
-        // paces normally; the user opts in via the in-game menu.
-        // Nothing to write here.
+        // speedMultiplier is now runtime-only (PlayerMoreSheet's
+        // Fast forward toggle calls mkxp_setFastForwardMultiplier).
+        // Game launches at default speed; the user opts in via the
+        // in-game menu. Nothing to write here.
 
         if let data = try? JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys]),
            let jsonString = String(data: data, encoding: .utf8) {
@@ -540,7 +739,7 @@ struct GameSettings: Codable, Equatable {
 struct GameConfigDefaults {
     var smoothScaling: Bool?
     var fixedAspectRatio: Bool?
-    var resolution: ResolutionPreset?
+    var renderScale: RenderScale?
     var frameSkip: Bool?
     var vsync: Bool?
     var pathCache: Bool?
@@ -555,5 +754,6 @@ struct GameConfigDefaults {
     static let engineFontScale = 1.0
     static let engineSolidFonts = false
     static let enginePostloadScripts = true
+    static let engineRenderScale = RenderScale.x1
     static let engineVerticalAlignment = VerticalAlignment.topCenter
 }

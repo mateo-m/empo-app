@@ -234,12 +234,17 @@ extension JgpConfiguration {
         if let speedStr = speedUp, let speed = Int(speedStr), speed > 1 {
             s.speedMultiplier = speed
         }
-        if let size = windowSize {
-            let parts = size.lowercased().split(separator: "x").compactMap { Int($0) }
-            if parts.count == 2, parts[0] > 0, parts[1] > 0 {
-                s.resolution = ResolutionPreset(width: parts[0], height: parts[1])
-            }
-        }
+        // The legacy `windowSize` JGP field encodes a target SDL
+        // window size (e.g. "1920x1080"). On iOS the window is
+        // always fullscreen, so this value can't be honored as
+        // dimensions; and the host doesn't expose an aspect-ratio
+        // override (RGSS games hardcode their layout to the
+        // developer-chosen `scRes`, so feeding an arbitrary buffer
+        // size would just clip / leave gutters in the rendered
+        // scene). We skip JGP `windowSize` entirely - the
+        // user-facing Render scale picker is the supported way to
+        // bump pixel density.
+        _ = windowSize
         return s
     }
 }
