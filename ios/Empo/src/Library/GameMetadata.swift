@@ -180,7 +180,178 @@ struct GameMetadata: Codable {
     static func formatDiskSize(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
+
+
+    /// Detect the game's RGSS API version (1 = XP, 2 = VX,
+    /// 3 = VX Ace). Returns nil when no signal is found.
+    ///
+    /// RGSS version is the *graphics API* version (Sprite/Bitmap/
+    /// Window/Tilemap conventions), not the Ruby parser version.
+    /// A modern custom engine can ship RGSS1 graphics with Ruby 3.x
+    /// (Pokemon Flux), so this is independent of the bundled Ruby.
+    ///
+    /// Priority of signals (each catches games the next misses):
+    ///   1. `mkxp.json` `rgssVersion` integer (developer-declared,
+    ///      highest authority).
+    ///   2. `Game.ini` `Scripts=` path extension. `.rxdata` = 1,
+    ///      `.rvdata` = 2, `.rvdata2` = 3. Vanilla RPG Maker writes
+    ///      this; PE forks and most fan engines preserve it.
+    ///   3. Archive presence: `.rgssad` = 1, `.rgss2a` = 2,
+    ///      `.rgss3a` = 3. Encrypted-script games often only ship
+    ///      these and a stub Game.ini.
+    ///   4. Loose `Data/` files: prefer the highest-numbered family
+    ///      present (`.rvdata2` > `.rvdata` > `.rxdata`) since
+    ///      newer-format files coexist with older ones in some
+    ///      hybrid games.
+    static func detectRGSSVersion(in gameDirectory: URL) -> Int? {
+        let fm = FileManager.default
+
+        // Signal 1: mkxp.json
+        let mkxpURL = gameDirectory.appendingPathComponent("mkxp.json")
+        if let data = try? Data(contentsOf: mkxpURL),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let v = json["rgssVersion"] as? Int,
+           (1...3).contains(v) {
+            return v
+        }
+
+        // Signal 2: Game.ini Scripts= extension
+        let iniURL = gameDirectory.appendingPathComponent("Game.ini")
+        if let scripts = GameEntry.parseINIValue(in: iniURL, section: "game", key: "scripts") {
+            let lower = scripts.lowercased()
+            if lower.hasSuffix(".rvdata2") { return 3 }
+            if lower.hasSuffix(".rvdata")  { return 2 }
+            if lower.hasSuffix(".rxdata")  { return 1 }
+        }
+
+        // Signal 3: archives at game root or in Data/
+        let archiveCandidates = [gameDirectory, gameDirectory.appendingPathComponent("Data")]
+        for dir in archiveCandidates {
+            guard let entries = try? fm.contentsOfDirectory(atPath: dir.path) else { continue }
+            for entry in entries {
+                let lower = entry.lowercased()
+                if lower.hasSuffix(".rgss3a") { return 3 }
+                if lower.hasSuffix(".rgss2a") { return 2 }
+                if lower.hasSuffix(".rgssad") { return 1 }
+            }
+        }
+
+        // Signal 4: loose Data/* files
+        let dataDir = gameDirectory.appendingPathComponent("Data")
+        if let entries = try? fm.contentsOfDirectory(atPath: dataDir.path) {
+            var sawRxdata = false
+            var sawRvdata = false
+            var sawRvdata2 = false
+            for entry in entries {
+                let lower = entry.lowercased()
+                if lower.hasSuffix(".rvdata2") { sawRvdata2 = true }
+                else if lower.hasSuffix(".rvdata") { sawRvdata = true }
+                else if lower.hasSuffix(".rxdata") { sawRxdata = true }
+            }
+            if sawRvdata2 { return 3 }
+            if sawRvdata  { return 2 }
+            if sawRxdata  { return 1 }
+        }
+
+        return nil
+    }
+
+
+    /// Detect the bundled Ruby version a game ships, if any.
+    /// Returns the version string (e.g., `"3.1.0p0"`) or nil when
+    /// no bundled runtime is found (game runs against the engine's
+    /// own Ruby).
+    ///
+    /// Robust to filename: scans the byte contents of every
+    /// `.dll`/`.dylib`/`.so` in the game folder for Ruby's embedded
+    /// `RUBY_DESCRIPTION` literal (`"ruby X.Y.ZpN"`). A developer
+    /// can rename the DLL to `bundled.dll` and we still find it.
+    /// Files larger than 64 MB are skipped as a safety bound -
+    /// real Ruby DLLs are 5-15 MB.
+    static func detectBundledRubyVersion(in gameDirectory: URL) -> String? {
+        let fm = FileManager.default
+        let binaryExtensions: Set<String> = ["dll", "dylib", "so"]
+        let scanBudget = 64 * 1024 * 1024
+
+        guard let entries = try? fm.contentsOfDirectory(atPath: gameDirectory.path) else { return nil }
+        for entry in entries {
+            let ext = (entry as NSString).pathExtension.lowercased()
+            guard binaryExtensions.contains(ext) else { continue }
+
+            let url = gameDirectory.appendingPathComponent(entry)
+            guard let attrs = try? fm.attributesOfItem(atPath: url.path),
+                  let size = attrs[.size] as? Int,
+                  size <= scanBudget,
+                  let data = try? Data(contentsOf: url, options: .alwaysMapped)
+            else { continue }
+
+            if let v = scanRubyDescription(in: data) { return v }
+        }
+
+        return nil
+    }
+
+
+    /// Read the host engine's Ruby version by scanning the app's
+    /// own executable for the same `RUBY_DESCRIPTION` literal we
+    /// look for in bundled DLLs. Cached on first call: the
+    /// binary doesn't change between calls so the scan is wasted
+    /// after the first hit.
+    ///
+    /// Returns nil only on the (unexpected) case where the scan
+    /// can't find a version string in our own binary - which
+    /// would mean Ruby was dynamically linked with the version
+    /// stripped, neither of which we currently do.
+    static func engineRubyVersion() -> String? {
+        if let cached = _engineRubyVersionCache.value { return cached }
+        guard let url = Bundle.main.executableURL,
+              let data = try? Data(contentsOf: url, options: .alwaysMapped),
+              let v = scanRubyDescription(in: data)
+        else { return nil }
+        _engineRubyVersionCache.value = v
+        return v
+    }
+
+
+    /// Search a binary blob for Ruby's embedded `RUBY_DESCRIPTION`
+    /// literal (`"ruby X.Y.ZpN"`) and return the version capture.
+    /// Decodes the bytes as Latin-1 (each byte maps 1:1 to U+0000
+    /// through U+00FF) so binary data round-trips losslessly into
+    /// a Swift String for `NSRegularExpression` to scan. ASCII
+    /// decoding would return nil here because real binaries
+    /// contain bytes 128-255.
+    private static func scanRubyDescription(in data: Data) -> String? {
+        guard let regex = _rubyVersionRegex else { return nil }
+        // Latin-1 decode is lossless for any byte sequence; the
+        // resulting String has the same length in Unicode scalars
+        // as the input has in bytes, so regex offsets are stable.
+        let asciiString = String(data: data, encoding: .isoLatin1) ?? ""
+        let range = NSRange(asciiString.startIndex..., in: asciiString)
+        guard let match = regex.firstMatch(in: asciiString, options: [], range: range),
+              match.numberOfRanges >= 2,
+              let versionRange = Range(match.range(at: 1), in: asciiString)
+        else { return nil }
+        return String(asciiString[versionRange])
+    }
+
+    // Cached, lazily-built regex. Pattern matches "ruby 1.8.7",
+    // "ruby 2.6.10", "ruby 3.1.0p0", "ruby 3.4.0p1234" - tolerant
+    // of patch suffix. Anchors on the literal "ruby " prefix so
+    // unrelated version strings inside the binary don't match.
+    private static let _rubyVersionRegex = try? NSRegularExpression(
+        pattern: #"ruby (\d+\.\d+\.\d+(?:p\d+)?)"#
+    )
 }
+
+/// Single-shot cache wrapper for `engineRubyVersion()`. Swift
+/// doesn't let us easily mutate a `static var` from inside a
+/// `static func` without `nonisolated(unsafe)` ceremony; a
+/// reference-typed holder is the cleanest workaround that keeps
+/// the value type semantics clean elsewhere.
+private final class _EngineRubyVersionCache: @unchecked Sendable {
+    var value: String?
+}
+private let _engineRubyVersionCache = _EngineRubyVersionCache()
 
 
 private extension UIImage {
