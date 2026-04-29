@@ -277,8 +277,22 @@ struct GameSettings: Codable, Equatable {
     /// `@Setting<..., RestartFlag>` vs `RuntimeFlag` at the
     /// declaration site and the dirty-check follows automatically.
     func differsInRestartRequiredFields(from other: GameSettings) -> Bool {
+        !restartRequiredFieldsChanged(from: other).isEmpty
+    }
+
+
+    /// User-facing labels of restart-required fields whose values
+    /// differ between `self` and `other`. The UI feeds this into
+    /// the restart-hint pill so the user sees which specific
+    /// settings are pending a relaunch (e.g. "Smooth scaling and
+    /// Render scale") instead of a generic "something changed".
+    /// Order is the declaration order of the property wrappers,
+    /// which keeps the rendered list visually stable as the user
+    /// toggles fields back and forth.
+    func restartRequiredFieldsChanged(from other: GameSettings) -> [String] {
         let lhsChildren = Mirror(reflecting: self).children
         let rhsChildren = Mirror(reflecting: other).children
+        var changed: [String] = []
         for (lhs, rhs) in zip(lhsChildren, rhsChildren) {
             guard let lhsSetting = lhs.value as? AnySetting,
                   let rhsSetting = rhs.value as? AnySetting
@@ -293,11 +307,50 @@ struct GameSettings: Codable, Equatable {
                 )
                 continue
             }
-            if lhsSetting.requiresRestart, !lhsSetting.anyEquals(rhsSetting) {
-                return true
-            }
+            guard lhsSetting.requiresRestart,
+                  !lhsSetting.anyEquals(rhsSetting),
+                  let label = lhs.label
+            else { continue }
+            changed.append(Self.displayLabel(forFieldLabel: label))
         }
-        return false
+        return changed
+    }
+
+
+    /// Maps a Mirror property label (which the property-wrapper
+    /// machinery renders with a leading underscore, e.g.
+    /// `_smoothScaling`) to a user-facing label suitable for the
+    /// restart-hint pill. Centralized switch instead of camelCase
+    /// auto-formatting because the UI strings need real copy
+    /// review (acronyms like "VSync", multi-word phrases, etc.)
+    /// and silent string drift on rename would be worse than the
+    /// modest maintenance cost of one entry per restart-required
+    /// field.
+    private static func displayLabel(forFieldLabel mirrorLabel: String) -> String {
+        // The property-wrapper machinery prefixes Mirror labels
+        // with an underscore. Normalize to the bare property name
+        // so the switch reads naturally.
+        let key = mirrorLabel.hasPrefix("_")
+            ? String(mirrorLabel.dropFirst())
+            : mirrorLabel
+        switch key {
+        case "smoothScaling":     return "Smooth scaling"
+        case "fixedAspectRatio":  return "Fixed aspect ratio"
+        case "renderScale":       return "Render scale"
+        case "frameSkip":         return "Frame skip"
+        case "vsync":             return "VSync"
+        case "pathCache":         return "Path cache"
+        case "fontScale":         return "Font scale"
+        case "solidFonts":        return "Solid fonts"
+        case "postloadScripts":   return "Postload scripts"
+        case "useModernRuby":     return "Ruby compatibility mode"
+        default:
+            // Fallback for fields added without an entry here -
+            // surface the raw camelCase name so the bug is
+            // visible in the UI rather than silently dropped.
+            assertionFailure("Missing displayLabel mapping for GameSettings.\(key)")
+            return key
+        }
     }
 
 
