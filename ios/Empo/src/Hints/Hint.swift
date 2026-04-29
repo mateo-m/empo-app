@@ -13,6 +13,26 @@ struct Hint: Identifiable {
     let excerpt: String
     let description: String?
     let dismissal: DismissalPolicy
+    /// SF Symbol shown in the leading slot of `HintBanner`. Defaults
+    /// to the design-system "tip" icon (a filled lightbulb); hints
+    /// signaling action needed (e.g. "restart this game") can opt
+    /// into a more directional symbol while keeping the same brand
+    /// colored pill visual.
+    let icon: String
+
+    init(
+        id: String,
+        excerpt: String,
+        description: String? = nil,
+        dismissal: DismissalPolicy,
+        icon: String = "lightbulb.fill"
+    ) {
+        self.id = id
+        self.excerpt = excerpt
+        self.description = description
+        self.dismissal = dismissal
+        self.icon = icon
+    }
 
     enum DismissalPolicy: Equatable {
         /// Hint cannot be dismissed by the user.
