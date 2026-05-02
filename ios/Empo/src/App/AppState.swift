@@ -204,9 +204,9 @@ class AppState {
         phase = nil
     }
 
-    func armLoadingEscapeForceQuit() {
-        termination.armLoadingEscapeForceQuit()
-    }
+    // armLoadingEscapeForceQuit() wrapper removed 2026-05-02 along
+    // with the underlying coordinator helper. See
+    // QUIT_PATHS_DISABLED.md.
 
 
     // MARK: - Pause lifecycle

@@ -78,7 +78,7 @@ struct RootView: View {
             }
         }
         .alert(
-            engineHung ? "Restart Empo" : "Something went wrong",
+            (engineHung || appState.phase != nil) ? "Restart Empo" : "Something went wrong",
             isPresented: showErrorAlert
         ) {
             Button("OK") {
@@ -93,14 +93,25 @@ struct RootView: View {
                     return
                 }
                 if appState.phase != nil {
-                    appState.returnToLibrary()
-                } else {
-                    appState.dismissCrashRecovery()
+                    // A game is running and an error surfaced.
+                    // Previously called returnToLibrary() which would
+                    // trigger cross-session Ruby state cleanup — that
+                    // path is no longer trusted (see
+                    // MRUBY_POSTMORTEM.md). Dismiss the alert; the
+                    // engine state may be partially corrupt, so the
+                    // message asks the user to close Empo from the
+                    // app switcher (same iOS-sanctioned escape we use
+                    // for engineHung).
+                    appState.errorMessage = nil
+                    return
                 }
+                appState.dismissCrashRecovery()
             }
         } message: {
             if engineHung {
                 Text("The game stopped responding. Close Empo and reopen it.")
+            } else if appState.phase != nil {
+                Text("\(appState.errorMessage ?? "An error occurred.") Close Empo from the app switcher and reopen it to continue.")
             } else {
                 Text(appState.errorMessage ?? "")
             }

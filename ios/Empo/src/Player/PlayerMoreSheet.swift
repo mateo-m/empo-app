@@ -83,7 +83,10 @@ struct PlayerMoreSheet: View {
                 // the running game so there's no ambiguity about
                 // which session is affected.
                 let pauseEnabled = settings.isEnabled(.gamePause)
-                let quitEnabled = settings.isEnabled(.gameQuit)
+                // gameQuit disabled — see ExperimentalFeature comment
+                // in AppSettings.swift. Forced false so the in-game
+                // Quit toolbar button stays hidden.
+                let quitEnabled = false
                 if pauseEnabled || quitEnabled {
                     VStack(spacing: 0) {
                         InterleavedRows(separator: { rowSeparator }) {
