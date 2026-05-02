@@ -351,6 +351,7 @@ $(SOURCES)/ruby/Makefile: $(SOURCES)/ruby/configure
 	export CFLAGS="-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__ $$CFLAGS"; \
 	export LDFLAGS="$$LDFLAGS"; \
 	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) \
+	--with-baseruby=/usr/bin/ruby \
 	ac_cv_func_setpgrp_void=yes \
 	ac_cv_func_fork=no \
 	ac_cv_func_dup3=no \
