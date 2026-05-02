@@ -35,6 +35,22 @@ struct PlayerView: View {
     @State private var draggingDPad = false
     @State private var draggingButtonID: UUID?
 
+    /// More-menu sheet (toolbar -> ellipsis button). Houses pause /
+    /// cheats / fast-forward / debug-overlay / quit so the toolbar
+    /// itself stays trimmed to keyboard / edit / hide / more.
+    @State private var showMoreSheet = false
+    /// Live fast-forward state. Mirrored into the engine via
+    /// `mkxp_setFastForwardMultiplier` so the FPS limiter scales the
+    /// frame pacing while the toggle is on. The actual multiplier
+    /// comes from `fastForwardMultiplier` (per-game setting).
+    @State private var fastForwardActive = false
+    /// Per-game fast-forward multiplier loaded from GameSettings.
+    /// nil = disabled (the toolbar sheet hides the row). Refreshed
+    /// every time the Menu sheet opens, since the user can pause →
+    /// library → edit Game Settings → resume and change this value
+    /// mid-session.
+    @State private var fastForwardMultiplier: Int?
+
     var body: some View {
         GeometryReader { geo in
             let isPortrait = geo.size.height > geo.size.width
@@ -51,7 +67,6 @@ struct PlayerView: View {
                 if editMode {
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
                 }
-
                 // Invisible tap layer that dismisses the keyboard when
                 // it's open. Placed below controls + toolbar so those
                 // stay tappable, but above the SDL game view so any
@@ -86,13 +101,10 @@ struct PlayerView: View {
                         geoSize: geo.size,
                         controlsHidden: controlsHidden,
                         toolbarOpacity: toolbarOpacity,
-                        showQuitConfirm: $showQuitConfirm,
-                        showDebugOverlay: $showDebugOverlay,
                         onToggleKeyboard: { toggleKeyboard() },
                         onToggleEditMode: { toggleEditMode() },
                         onToggleHideControls: { toggleHideControls() },
-                        onRequestPause: { appState.requestPause() },
-                        onToggleCheats: { toggleCheats() },
+                        onShowMore: { showMoreSheet = true },
                         onResetIdleTimer: { resetToolbarIdleTimer() }
                     )
                     .opacity(editMode ? 0 : 1)
@@ -146,6 +158,13 @@ struct PlayerView: View {
                     )
                 }
             }
+            // Push device orientation into ControlsLayout so it can
+            // swap active/inactive per-orientation snapshots.
+            // `initial: true` ensures the layout knows the orientation
+            // as soon as PlayerView appears, not just on rotation.
+            .onChange(of: isPortrait, initial: true) { _, nowPortrait in
+                layout.setOrientation(nowPortrait ? .portrait : .landscape)
+            }
         }
         .ignoresSafeArea()
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name(rawValue: "TCTextInputMode"))) { note in
@@ -169,6 +188,14 @@ struct PlayerView: View {
         .onAppear {
             TCInstallKeyEventWatcher()
             TCInstallTextInputModeWatcher()
+
+            // Load the per-game fast-forward multiplier (and re-push
+            // to the engine if the toggle was already on). Fires on
+            // first launch AND on resume from pause -> library ->
+            // resume, so the in-game state always tracks the latest
+            // Game Settings value the user might have edited while
+            // paused.
+            syncFastForwardFromSettings()
 
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
@@ -202,6 +229,33 @@ struct PlayerView: View {
         } message: {
             Text("Are you sure you want to quit the current game?")
         }
+        .sheet(isPresented: $showMoreSheet) {
+            PlayerMoreSheet(
+                gameTitle: appState.selectedGame?.title ?? "Game",
+                showDebugOverlay: $showDebugOverlay,
+                fastForwardActive: $fastForwardActive,
+                fastForwardMultiplier: fastForwardMultiplier,
+                onPause: { appState.requestPause() },
+                onCheats: { toggleCheats() },
+                onQuit: { showQuitConfirm = true }
+            )
+        }
+        .onChange(of: showMoreSheet) { _, opened in
+            // The user can pause -> library -> Game Settings ->
+            // resume mid-session, so refresh the per-game multiplier
+            // every time the Menu sheet opens. If they bumped fast
+            // forward from 2x to 4x while paused, the toggle should
+            // pick that up; if they disabled it entirely, the row
+            // should disappear.
+            guard opened else { return }
+            syncFastForwardFromSettings()
+        }
+        .onChange(of: fastForwardActive) { _, active in
+            // Active = use the per-game configured multiplier; not
+            // active = 1 (no scaling). Engine clamps to >= 1.
+            let mult = active ? (fastForwardMultiplier ?? 1) : 1
+            mkxp_setFastForwardMultiplier(Int32(mult))
+        }
         .tint(nil)
         .controlsEditDialogs(
             layout: layout,
@@ -210,6 +264,46 @@ struct PlayerView: View {
             editingButton: $editingButton,
             editingDPad: $editingDPad
         )
+    }
+
+    /// Re-read the per-game fast-forward multiplier from disk and
+    /// reconcile the UI toggle with the engine's actual state.
+    /// Called on PlayerView appear (initial launch + resume) and
+    /// whenever the Menu sheet opens.
+    ///
+    /// SwiftUI can recycle `PlayerView` when the user pauses to the
+    /// library and resumes, which resets `@State fastForwardActive`
+    /// back to its default `false`. The engine's host-bridge
+    /// multiplier is process-static and survives that recycle, so
+    /// the only reliable "is fast-forward currently on?" signal is
+    /// the bridge itself - reading it here lets the toolbar toggle
+    /// reflect the engine's truth instead of stale local state.
+    ///
+    /// Reconciliation rules (engine state vs. configured value):
+    ///   - engine fast-forwarding AND settings still allow it ->
+    ///     toggle on; .onChange pushes the configured value back to
+    ///     the bridge so an in-pause settings edit (e.g. 4x -> 2x)
+    ///     takes effect on resume.
+    ///   - engine fast-forwarding BUT settings cleared the
+    ///     multiplier -> toggle off; .onChange pushes 1 to the
+    ///     bridge so the engine stops speeding next frame.
+    ///   - engine at 1x -> toggle off regardless of settings.
+    private func syncFastForwardFromSettings() {
+        guard let container = appState.selectedGame?.container else { return }
+        let s = GameSettings.load(from: container.empoStateURL)
+        fastForwardMultiplier = s.speedMultiplier
+
+        let engineMult = Int(mkxp_getFastForwardMultiplier())
+        let configuredMult = s.speedMultiplier ?? 1
+        let shouldBeActive = engineMult > 1 && configuredMult >= 2
+
+        if fastForwardActive != shouldBeActive {
+            // Setting fastForwardActive triggers `.onChange` which
+            // writes the bridge to the right value (configured
+            // multiplier when active, 1 when not), so we don't
+            // call mkxp_setFastForwardMultiplier directly here.
+            fastForwardActive = shouldBeActive
+        }
     }
 
 

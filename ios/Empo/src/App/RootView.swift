@@ -77,22 +77,44 @@ struct RootView: View {
                 dismissSplash()
             }
         }
-        .alert("Something went wrong", isPresented: showErrorAlert) {
+        .alert(
+            (engineHung || appState.phase != nil) ? "Restart Empo" : "Something went wrong",
+            isPresented: showErrorAlert
+        ) {
             Button("OK") {
-                if mkxp_isEngineHung() != 0 {
+                if engineHung {
                     // RGSS thread is still running inside a script that
-                    // never yielded to checkShutdown(). The process must
-                    // be killed because Ruby can't be respawned in-place.
-                    exit(0)
+                    // never yielded to checkShutdown(). The Ruby VM
+                    // cannot be respawned in-place, but per App Store
+                    // guideline 2.5.1 we don't quit programmatically.
+                    // Dismiss the alert; the user closes Empo from the
+                    // app switcher and reopens it.
+                    appState.errorMessage = nil
+                    return
                 }
                 if appState.phase != nil {
-                    appState.returnToLibrary()
-                } else {
-                    appState.dismissCrashRecovery()
+                    // A game is running and an error surfaced.
+                    // Previously called returnToLibrary() which would
+                    // trigger cross-session Ruby state cleanup — that
+                    // path is no longer trusted (see
+                    // MRUBY_POSTMORTEM.md). Dismiss the alert; the
+                    // engine state may be partially corrupt, so the
+                    // message asks the user to close Empo from the
+                    // app switcher (same iOS-sanctioned escape we use
+                    // for engineHung).
+                    appState.errorMessage = nil
+                    return
                 }
+                appState.dismissCrashRecovery()
             }
         } message: {
-            Text(appState.errorMessage ?? "")
+            if engineHung {
+                Text("The game stopped responding. Close Empo and reopen it.")
+            } else if appState.phase != nil {
+                Text("\(appState.errorMessage ?? "An error occurred.") Close Empo from the app switcher and reopen it to continue.")
+            } else {
+                Text(appState.errorMessage ?? "")
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
             if appState.phase == .playing {
@@ -122,6 +144,15 @@ struct RootView: View {
             get: { appState.errorMessage != nil },
             set: { if !$0 { appState.errorMessage = nil } }
         )
+    }
+
+    /// True when the RGSS thread didn't ack a termination request in
+    /// time, leaving Ruby in an unrecoverable state. The single-thread
+    /// engine architecture can't respawn the VM in-place, so the only
+    /// way out is for the user to close + reopen the app manually
+    /// (we don't call `exit()` per App Store guideline 2.5.1).
+    private var engineHung: Bool {
+        mkxp_isEngineHung() != 0
     }
 
     /// Normal splash exit: fade background + logo + any disclaimer that
@@ -233,7 +264,7 @@ private struct PixelDitherPattern: View {
     /// changes between launches (icons are picked anew on each
     /// process start) but stays static within a session - the
     /// panning Canvas reuses this single image.
-    nonisolated(unsafe) private static let cachedTileImage: UIImage = {
+    nonisolated private static let cachedTileImage: UIImage = {
         let size = CGSize(width: tileWidth, height: tileHeight)
         let uiColor = UIColor.white.withAlphaComponent(0.08)
         let names = SplashIcons.randomNames(count: iconCols * iconRows)

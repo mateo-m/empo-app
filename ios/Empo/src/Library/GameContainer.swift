@@ -10,9 +10,8 @@ import Foundation
 ///   ├── Game/              Imported game files. NEVER written by Empo
 ///   │                      after import - we treat it as read-only.
 ///   ├── EmpoState/         Empo-managed state:
-///   │                        - mkxp.json (generated config)
-///   │                        - mkxp.original.json (snapshot of the
-///   │                          developer's shipped mkxp.json, if any)
+///   │                        - mkxp.json (generated config; merged
+///   │                          from Game/mkxp.json + per-game settings)
 ///   │                        - patches.json (merged curated patches)
 ///   │                        - game_settings.json (per-game UI prefs)
 ///   │                        - .pokemon_essentials_detected (runtime
@@ -80,10 +79,6 @@ struct GameContainer: Equatable, Hashable {
 
     var mkxpConfigURL: URL {
         empoStateURL.appendingPathComponent("mkxp.json")
-    }
-
-    var mkxpOriginalConfigURL: URL {
-        empoStateURL.appendingPathComponent("mkxp.original.json")
     }
 
     var gameSettingsURL: URL {
@@ -239,6 +234,15 @@ struct GameContainer: Equatable, Hashable {
         try? FileManager.default.createDirectory(
             at: empoStateURL, withIntermediateDirectories: true
         )
+        // Migration: older Empo builds wrote a snapshot of the
+        // developer's mkxp.json here as `mkxp.original.json` and
+        // used it as a merge base. Now we read directly from
+        // `Game/mkxp.json` (the imported folder is treated as
+        // immutable), so the snapshot is dead state. Clean it up
+        // opportunistically so EmpoState/ stays a tidy mirror of
+        // what the host actually manages.
+        let staleSnapshot = empoStateURL.appendingPathComponent("mkxp.original.json")
+        try? FileManager.default.removeItem(at: staleSnapshot)
         return empoStateURL
     }
 
@@ -264,40 +268,6 @@ struct GameContainer: Equatable, Hashable {
     /// crash markers - in a single call.
     func deleteAll() throws {
         try FileManager.default.removeItem(at: url)
-    }
-
-
-    // MARK: - mkxp.json snapshot
-
-    /// Snapshot the developer-shipped `mkxp.json` (if any) from
-    /// `Game/` into `EmpoState/mkxp.original.json`.
-    ///
-    /// `mkxp.original.json` is consumed by
-    /// `GameSettings.readGameDefaults` (to populate the "default"
-    /// rows in the Game Settings sheet with the developer's
-    /// intended values) and by `GameSettings.applyToConfig` as the
-    /// merge base, so values the developer specified that we
-    /// haven't overridden in our settings UI (e.g. `customScript`,
-    /// font lists, audio rates) survive every regeneration of the
-    /// state-dir mkxp.json.
-    ///
-    /// Idempotent: only copies when the destination doesn't exist.
-    /// Run at every launch (cheap I/O when there's nothing to do)
-    /// so an existing import without a snapshot - either from a
-    /// build before this hook landed, or from a JGP whose state
-    /// dir was created before the developer mkxp.json was present
-    /// - gets backfilled lazily without a forced upgrade pass. If
-    /// `Game/mkxp.json` doesn't exist the snapshot is simply
-    /// absent and downstream code falls through to the engine
-    /// defaults.
-    func snapshotOriginalConfigIfNeeded() {
-        let fm = FileManager.default
-        let dest = mkxpOriginalConfigURL
-        guard !fm.fileExists(atPath: dest.path) else { return }
-        let source = gameURL.appendingPathComponent("mkxp.json")
-        guard fm.fileExists(atPath: source.path) else { return }
-        ensureEmpoStateDirectory()
-        try? fm.copyItem(at: source, to: dest)
     }
 
 

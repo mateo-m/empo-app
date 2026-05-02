@@ -149,7 +149,7 @@ extension AnyTransition {
         )
     }
 
-    static var tipBanner: AnyTransition {
+    static var hintBanner: AnyTransition {
         let blurIn = AnyTransition.modifier(
             active: BlurModifier(radius: 8),
             identity: BlurModifier(radius: 0)

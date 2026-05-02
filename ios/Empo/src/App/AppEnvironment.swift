@@ -9,33 +9,39 @@ import SwiftUI
 /// Non-UI code (C bridge callbacks, AppWindow statics, Haptics) still
 /// uses `.shared` because SwiftUI environment isn't reachable from
 /// those contexts.
+///
+/// `EnvironmentKey.defaultValue` must be nonisolated, but our service
+/// singletons are `@MainActor`-isolated. SwiftUI always queries
+/// EnvironmentValues on the main actor, so `MainActor.assumeIsolated`
+/// is sound here: it documents that runtime invariant and traps loudly
+/// if anyone ever calls us from a non-main thread.
 
 private struct AppStateKey: EnvironmentKey {
-    @MainActor static let defaultValue: AppState = .shared
+    static let defaultValue: AppState = MainActor.assumeIsolated { .shared }
 }
 
 private struct AppSettingsKey: EnvironmentKey {
-    @MainActor static let defaultValue: AppSettings = .shared
+    static let defaultValue: AppSettings = MainActor.assumeIsolated { .shared }
 }
 
 private struct EngineStateKey: EnvironmentKey {
-    @MainActor static let defaultValue: EngineState = .shared
+    static let defaultValue: EngineState = MainActor.assumeIsolated { .shared }
 }
 
 private struct PauseManagerKey: EnvironmentKey {
-    @MainActor static let defaultValue: PauseManager = .shared
+    static let defaultValue: PauseManager = MainActor.assumeIsolated { .shared }
 }
 
 private struct GameLibraryKey: EnvironmentKey {
-    @MainActor static let defaultValue: GameLibrary = .shared
+    static let defaultValue: GameLibrary = MainActor.assumeIsolated { .shared }
 }
 
 private struct ControlsLayoutKey: EnvironmentKey {
-    @MainActor static let defaultValue: ControlsLayout = .shared
+    static let defaultValue: ControlsLayout = MainActor.assumeIsolated { .shared }
 }
 
-private struct TipStoreKey: EnvironmentKey {
-    @MainActor static let defaultValue: TipStore = .shared
+private struct HintStoreKey: EnvironmentKey {
+    static let defaultValue: HintStore = MainActor.assumeIsolated { .shared }
 }
 
 extension EnvironmentValues {
@@ -69,8 +75,8 @@ extension EnvironmentValues {
         set { self[ControlsLayoutKey.self] = newValue }
     }
 
-    var tipStore: TipStore {
-        get { self[TipStoreKey.self] }
-        set { self[TipStoreKey.self] = newValue }
+    var hintStore: HintStore {
+        get { self[HintStoreKey.self] }
+        set { self[HintStoreKey.self] = newValue }
     }
 }

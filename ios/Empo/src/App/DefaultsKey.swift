@@ -52,11 +52,12 @@ enum DefaultsKey {
         controlsLayoutPrefix + gameID
     }
 
-    // MARK: - Tips (parameterized family)
+    // MARK: - Hints (parameterized family)
 
-    /// A tip's dismissed-at timestamp. `tip.dismissed.<tipID>` -> Double.
-    static let tipDismissedPrefix = "tip.dismissed."
-    static func tipDismissed(tipID: String) -> String {
-        tipDismissedPrefix + tipID
+    /// A hint's dismissed-at timestamp. `hint.dismissed.<hintID>` -> Double.
+    /// (UI hint persistence; not StoreKit / IAP / donations.)
+    static let hintDismissedPrefix = "hint.dismissed."
+    static func hintDismissed(hintID: String) -> String {
+        hintDismissedPrefix + hintID
     }
 }

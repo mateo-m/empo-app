@@ -54,12 +54,6 @@ class AppState {
         let gameDir = container.gameURL
         let stateDir = container.empoStateURL
 
-        // Snapshot the developer's shipped mkxp.json (if any) into
-        // `<stateDir>/mkxp.original.json` so applyToConfig can use
-        // it as a merge base. Idempotent: only copies on first
-        // launch (or when the snapshot hasn't been backfilled yet).
-        container.snapshotOriginalConfigIfNeeded()
-
         // Tell the engine where to find managed config. The engine's
         // Config::read and Patcher constructor check this directory
         // first for mkxp.json and patches.json before falling back
@@ -139,6 +133,15 @@ class AppState {
             in: gameDir, stateDirectory: stateDir
         )
         mkxp_setUseInGameKeyboard(settings.useInGameKeyboard ?? inGameKeyboardDefault)
+
+        // Reset per-session bridge state in one shot. Engine-side
+        // `mkxp_resetSessionState` is the canonical list of
+        // "process-static state that's intrinsically per-game and
+        // would otherwise leak across launches" - the engine
+        // author of a new bridge adds their reset there alongside
+        // the static declaration, so the host doesn't have to
+        // track each bridge individually.
+        mkxp_resetSessionState()
 
         // Wait for the RGSS thread to actually finish tearing down any
         // previous session before feeding it the new path. If
@@ -225,9 +228,9 @@ class AppState {
         phase = nil
     }
 
-    func armLoadingEscapeForceQuit() {
-        termination.armLoadingEscapeForceQuit()
-    }
+    // armLoadingEscapeForceQuit() wrapper removed 2026-05-02 along
+    // with the underlying coordinator helper. See
+    // QUIT_PATHS_DISABLED.md.
 
 
     // MARK: - Pause lifecycle

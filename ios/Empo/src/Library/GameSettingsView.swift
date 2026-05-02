@@ -48,6 +48,12 @@ enum RubyVersionPick: String, CaseIterable, Hashable {
 struct GameSettingsView: View {
     let game: GameEntry
     @Environment(\.dismiss) private var dismiss
+    /// Read to detect whether the engine is currently mid-session
+    /// for this game (paused to library, then user opened Game
+    /// Settings). When that's the case we surface a "restart
+    /// required" hint after edits, since launch-time config fields
+    /// won't take effect on resume.
+    @Environment(\.pauseManager) private var pauseManager
 
     @State private var settings: GameSettings
     @State private var defaults: GameConfigDefaults
@@ -82,7 +88,7 @@ struct GameSettingsView: View {
         self.stateDirectory = stateDir
 
         let s = GameSettings.load(from: stateDir)
-        let defs = GameSettings.readGameDefaults(from: stateDir)
+        let defs = GameSettings.readGameDefaults(from: dir)
 
         _settings = State(initialValue: s)
         _defaults = State(initialValue: defs)
@@ -102,8 +108,18 @@ struct GameSettingsView: View {
     private var effectiveFrameSkip: Bool {
         settings.frameSkip ?? defaults.frameSkip ?? GameConfigDefaults.engineFrameSkip
     }
+    /// Fast-forward is enabled when the user has set a multiplier.
+    /// nil ↔ disabled. Toggling the switch ON seeds a sensible
+    /// default (4x); the slider then ranges 2-9.
+    private var fastForwardEnabled: Bool {
+        settings.speedMultiplier != nil && (settings.speedMultiplier ?? 0) >= 2
+    }
+    /// Multiplier shown by the slider when fast-forward is enabled.
+    /// Falls back to 4x while disabled (so flipping the toggle on
+    /// lands on a useful default rather than 1x or nil).
     private var effectiveSpeedMultiplier: Int {
-        settings.speedMultiplier ?? 1
+        let v = settings.speedMultiplier ?? 4
+        return max(2, min(9, v))
     }
     private var effectiveFontScale: Double {
         settings.fontScale ?? defaults.fontScale ?? GameConfigDefaults.engineFontScale
@@ -123,8 +139,8 @@ struct GameSettingsView: View {
     private var effectiveVerticalAlignment: VerticalAlignment {
         settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
     }
-    private var effectiveResolution: ResolutionPreset? {
-        settings.resolution ?? defaults.resolution
+    private var effectiveRenderScale: RenderScale {
+        settings.renderScale ?? defaults.renderScale ?? GameConfigDefaults.engineRenderScale
     }
 
     /// Human-readable label for the "Auto-detect" picker row that
@@ -146,6 +162,28 @@ struct GameSettingsView: View {
         return "Auto-detect (\(pretty))"
     }
 
+    /// Hint to render at the top of the form when a session for
+    /// this game is currently paused AND the user has changed at
+    /// least one launch-time field since opening the sheet. The
+    /// excerpt names the specific settings pending a relaunch so
+    /// the user can see "Restart this game to apply: Smooth
+    /// scaling and Render scale." instead of a generic notice.
+    /// `nil` when no relaunch is needed - the parent view binds
+    /// that to a conditional render so the pill animates in/out.
+    private var restartHint: Hint? {
+        guard pauseManager.pausedGame?.id == game.id else { return nil }
+        let changed = settings.restartRequiredFieldsChanged(from: initialSettings)
+        guard !changed.isEmpty else { return nil }
+        let list = changed.formatted(.list(type: .and, width: .standard))
+        return Hint(
+            id: "gameSettings.restartRequired",
+            excerpt: "Restart this game to apply: \(list).",
+            description: nil,
+            dismissal: .none,
+            icon: "arrow.clockwise.circle.fill"
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -160,7 +198,7 @@ struct GameSettingsView: View {
                         Button("Reset to Defaults", role: .destructive) {
                             withAnimation {
                                 settings = GameSettings()
-                                defaults = GameSettings.readGameDefaults(from: stateDirectory)
+                                defaults = GameSettings.readGameDefaults(from: gameDirectory)
                             }
                         }
                     } footer: {
@@ -168,6 +206,44 @@ struct GameSettingsView: View {
                     }
                 }
             }
+            // Pin the restart-required pill above the form via a
+            // top safe-area inset. The inset gives the pill a
+            // z-order above the scrolling rows for free; we don't
+            // try to paint a wide backdrop in the inset's
+            // surrounding area because that just produces a
+            // visible white/gray panel in light mode (regardless
+            // of whether we use material, color, or a blend of
+            // both).
+            //
+            // The pill itself gets a `.regularMaterial` fill
+            // clipped to the same rounded shape `HintBanner`
+            // already uses internally - translucent so form rows
+            // scrolling past show through with a blur, while
+            // staying opaque enough that hint text doesn't visibly
+            // collide with row labels underneath. The pill's own
+            // brand-tinted layer (`.brand.opacity(0.1)` from
+            // `HintBanner`) renders on top of the material, giving
+            // the floating pill its brand cast.
+            //
+            // Slide+blur transition matches `.hintBanner` (same
+            // one used by GameInfoView's customization hint). We
+            // animate on the boolean (not the excerpt) so adding
+            // or removing individual fields updates the text in
+            // place without re-running the slide-in transition -
+            // only true appear/disappear cycles trigger movement.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let hint = restartHint {
+                    HintBanner(hint: hint)
+                        .background(
+                            .regularMaterial,
+                            in: RoundedRectangle(cornerRadius: Radius.md)
+                        )
+                        .padding(.horizontal, Spacing._2xl)
+                        .padding(.vertical, Spacing.md)
+                        .transition(.hintBanner)
+                }
+            }
+            .animation(.smooth(duration: 0.25), value: restartHint != nil)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -227,31 +303,17 @@ struct GameSettingsView: View {
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Picker("Resolution", selection: resolutionBinding) {
-                    Text("Default")
-                        .tag(nil as ResolutionPreset?)
-
-                    ForEach(ResolutionPreset.presets) { preset in
-                        HStack {
-                            Text(preset.label)
-                            Spacer()
-                            Text(preset.aspectRatio)
-                                .foregroundStyle(.secondary)
-                        }
-                        .tag(preset as ResolutionPreset?)
+                Picker("Render scale", selection: renderScaleBinding) {
+                    ForEach(RenderScale.allCases, id: \.self) { scale in
+                        Text(scale.label).tag(scale)
                     }
                 }
                 .pickerStyle(.navigationLink)
 
-                if let res = effectiveResolution {
-                    Text("Currently \(res.label) (\(res.aspectRatio)). Some games may override this in their scripts.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Override the game's internal resolution. Some games may override this in their scripts.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+                Text(effectiveRenderScale.description
+                    + " The game's aspect ratio and on-screen layout are unchanged - this only sharpens the rendering on high-DPI screens.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, Spacing.xxs)
 
@@ -282,7 +344,7 @@ struct GameSettingsView: View {
         } header: {
             Text("Display")
         } footer: {
-            Text("Control how the game looks on screen. Changes take effect on next launch.")
+            Text("Control how the game looks on screen.")
         }
     }
 
@@ -367,21 +429,26 @@ struct GameSettingsView: View {
     private var gameplaySection: some View {
         Section {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack {
-                    Text("Fast forward")
-                    Spacer()
-                    Text("\(effectiveSpeedMultiplier)x")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-                Slider(
-                    value: speedBinding,
-                    in: 1...9,
-                    step: 1
+                SettingsToggle(
+                    title: "Fast forward",
+                    isOn: fastForwardEnabledBinding,
+                    description: "Adds a Fast forward toggle to the in-game menu. While on, the game runs at the speed below."
                 )
-                Text("Run the game at a faster speed. 1x is normal.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+
+                if fastForwardEnabled {
+                    HStack {
+                        Text("Speed")
+                        Spacer()
+                        Text("\(effectiveSpeedMultiplier)x")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(
+                        value: speedBinding,
+                        in: 2...9,
+                        step: 1
+                    )
+                }
             }
             .padding(.vertical, Spacing.xxs)
         } header: {
@@ -416,10 +483,32 @@ struct GameSettingsView: View {
         )
     }
 
+    private var fastForwardEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { fastForwardEnabled },
+            set: { newValue in
+                // Enabling: seed default 4x if no value yet (or if
+                // a stale 1x lingers from the old single-slider UI).
+                // Disabling: clear the multiplier so applyToConfig
+                // and the toolbar sheet both treat the game as
+                // fast-forward-free.
+                if newValue {
+                    if (settings.speedMultiplier ?? 0) < 2 {
+                        settings.speedMultiplier = 4
+                    }
+                } else {
+                    settings.speedMultiplier = nil
+                }
+            }
+        )
+    }
+
+    /// Slider binding; only meaningful when fast-forward is enabled.
+    /// Range 2-9 (1x is "off" and lives on the toggle now).
     private var speedBinding: Binding<Double> {
         Binding(
             get: { Double(effectiveSpeedMultiplier) },
-            set: { settings.speedMultiplier = Int($0) == 1 ? nil : Int($0) }
+            set: { settings.speedMultiplier = Int($0) }
         )
     }
 
@@ -484,16 +573,23 @@ struct GameSettingsView: View {
         )
     }
 
-    private var resolutionBinding: Binding<ResolutionPreset?> {
+    private var renderScaleBinding: Binding<RenderScale> {
         Binding(
-            get: { settings.resolution },
-            set: { settings.resolution = $0 }
+            get: { effectiveRenderScale },
+            set: { settings.renderScale = $0 }
         )
     }
 
 
     private func save() {
         settings.save(to: stateDirectory)
+        // Regenerate the merged mkxp.json so the engine actually
+        // sees the new values on next launch. Without this, edits
+        // here only land in game_settings.json (the host-side
+        // record) and the engine keeps reading the stale config it
+        // was launched with - making toggles like Smooth Scaling,
+        // Vsync, and Resolution appear to do nothing.
+        settings.applyToConfig(stateDirectory: stateDirectory, gameDirectory: gameDirectory)
     }
 }
 

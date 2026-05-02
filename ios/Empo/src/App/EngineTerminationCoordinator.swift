@@ -73,28 +73,11 @@ final class EngineTerminationCoordinator {
         }
     }
 
-    /// Hard-deadline force-quit used by the loading-view escape hatch.
-    ///
-    /// The regular hang watchdog shows an alert and waits for the user
-    /// to tap OK before calling exit(0). When the user tapped "Quit to
-    /// library" during loading, they're already stuck and signaling
-    /// urgency — making them read and dismiss an alert before the app
-    /// finally closes is bad UX. This helper skips the alert entirely
-    /// and exit(0)s directly after the deadline, while still giving the
-    /// engine a generous window to terminate cleanly if it can.
-    ///
-    /// The normal engine-terminated callback path is expected to clear
-    /// `pendingToken` before the deadline in the happy case, which
-    /// cancels this helper.
-    func armLoadingEscapeForceQuit() {
-        let token = pendingToken
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(5))
-            guard let self,
-                  self.pendingToken == token,
-                  token != nil else { return }
-            mkxp_setEngineHung()
-            exit(0)
-        }
-    }
+    // armLoadingEscapeForceQuit removed 2026-05-02. It used to
+    // programmatically terminate the process after a 5s deadline
+    // as a hard escape from a hung loading screen. App Store
+    // guideline 2.5.1 forbids self-termination, and the
+    // loading-view button that armed this was replaced with a
+    // static "close from app switcher" label as part of disabling
+    // all cross-session quit paths (see QUIT_PATHS_DISABLED.md).
 }
