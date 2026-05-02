@@ -141,6 +141,11 @@ class AppState {
         // author of a new bridge adds their reset there alongside
         // the static declaration, so the host doesn't have to
         // track each bridge individually.
+        //
+        // Effectively a no-op on feat/multi-ruby-v2 since cross-
+        // session play is disabled (QUIT_PATHS_DISABLED.md), but
+        // calling it costs nothing and keeps the iOS code in sync
+        // with main's expected bridge surface.
         mkxp_resetSessionState()
 
         // Wait for the RGSS thread to actually finish tearing down any
