@@ -178,6 +178,17 @@ class AppState {
     private static let crashMessage = "It looks like the game didn't exit cleanly last time. "
         + "Your save data should be fine."
 
+    /// Body text shown when the engine signals a clean exit
+    /// (Ruby `SystemExit` / `Reset`) mid-session: game's built-in
+    /// "Exit to desktop" menu, or postload scripts raising Reset
+    /// after compiling data files. With cross-session Ruby state
+    /// cleanup disabled, we can't safely launch another game in
+    /// the same process — the user has to force-close + reopen.
+    /// RootView appends "Close Empo from the app switcher and
+    /// reopen it to continue." so the body reads as a single
+    /// natural sentence.
+    private static let cleanExitMessage = "The game has ended or requested a restart."
+
     func consumeCrashRecovery() {
         guard crashTracker.pendingCrashRecovery else { return }
         crashTracker.consumeRecovery()
@@ -332,27 +343,39 @@ class AppState {
 
                 if !state.terminationExpected && state.phase != nil {
                     let cleanExit = mkxp_didEngineExitCleanly() != 0
+                    // Both clean and crash exits surface an alert that
+                    // routes through RootView's dismiss-only branch
+                    // (phase != nil). With cross-session Ruby cleanup
+                    // disabled (QUIT_PATHS_DISABLED.md, MRUBY_POSTMORTEM.md)
+                    // we can't safely return to the library and launch
+                    // another game in the same process — the only way
+                    // to play again is force-close from the app switcher.
+                    //
+                    // Intentionally do NOT set phase = nil here: setting
+                    // phase = nil while an error alert is already
+                    // presenting causes SwiftUI to swallow the
+                    // NavigationStack pop. Leaving phase non-nil means
+                    // the alert OK button sees phase != nil and routes
+                    // through the dismiss-only handler.
                     if cleanExit {
-                        // Ruby raised SystemExit (e.g. the game's own
-                        // "Exit to desktop" menu): drop back to the
-                        // library silently through the shared teardown.
-                        state.tearDownSessionState()
+                        // SystemExit / Reset (e.g. game's own
+                        // "Exit to desktop" menu, or a postload script
+                        // raising Reset after compiling data).
+                        if state.errorMessage == nil {
+                            state.errorMessage = AppState.cleanExitMessage
+                        }
                     } else {
-                        // Preserve a Ruby/engine error message if the error callback
-                        // already set one; otherwise fall back to the generic crash text.
-                        // Intentionally do NOT set phase = nil here: setting phase = nil
-                        // while an error alert is already presenting, SwiftUI swallows the
-                        // NavigationStack pop. Leaving phase non-nil means the alert OK
-                        // button sees phase != nil, calls returnToLibrary(), and the pop
-                        // happens cleanly after the alert is dismissed.
+                        // Preserve a Ruby/engine error message if the
+                        // error callback already set one; otherwise
+                        // fall back to the generic crash text.
                         if state.errorMessage == nil {
                             state.errorMessage = AppState.crashMessage
                         }
-                        state.selectedGame = nil
-                        ControlsLayout.shared.switchGame(id: nil)
-                        state.engineReady = false
-                        PauseManager.shared.reset()
                     }
+                    state.selectedGame = nil
+                    ControlsLayout.shared.switchGame(id: nil)
+                    state.engineReady = false
+                    PauseManager.shared.reset()
                 }
                 state.terminationExpected = false
             }

@@ -18,14 +18,24 @@ import Foundation
 ///
 /// Detection priority order (first match wins):
 ///
-///   1. PSDK markers (`Data/PSDK/`, `Data/Studio/`, `psdk/version.txt`,
-///      `project.studio`, `pokemonsdk/`) → **3.0**.
-///      PSDK is hard-pinned to Ruby 3.0.x; its precompiled `Game.yarb`
-///      bytecode is strictly minor-version-locked.
-///
-///   2. JGP manifest declaring `runtime: "mkxp-z"` or `useModernRuby`
-///      → **3.0** (matches mkxp-z upstream's pin and JoiPlay's
-///      modern tier).
+    ///   1. PSDK markers (`Data/PSDK/`, `Data/Studio/`, `psdk/version.txt`,
+    ///      `project.studio`, `pokemonsdk/`) → **3.0**.
+    ///      PSDK is hard-pinned to Ruby 3.0.x; its precompiled `Game.yarb`
+    ///      bytecode is strictly minor-version-locked.
+    ///
+    ///   2. Bundled `x64-msvcrt-rubyXXX.dll` / `msvcrt-rubyXXX.dll` /
+    ///      `rubyXXX.dll` shipped alongside the game's executable. The
+    ///      three-digit suffix encodes the Ruby version the developer
+    ///      built and tested against. This is the strongest practical
+    ///      signal for "modern PE forks built on mkxp-z" (Pokemon
+    ///      Flux, Vanguard, Reborn, Infinite Fusion etc): they leave
+    ///      `Game.ini`'s `Library=` field at the vestigial
+    ///      `RGSS104E.dll` but the actual runtime is the bundled
+    ///      modern Ruby DLL → **18 / 19 / 30 / 31** per filename.
+    ///
+    ///   3. JGP manifest declaring `runtime: "mkxp-z"` or `useModernRuby`
+    ///      → **3.0** (matches mkxp-z upstream's pin and JoiPlay's
+    ///      modern tier).
 ///
 ///   3. Modern-Ruby script syntax detected (Reborn 19.5+, PE v20+,
 ///      anything authored against modern Essentials) → **3.0**.
@@ -49,6 +59,21 @@ import Foundation
 ///      default goes away.
 enum RubyVersionDetection {
 
+    /// Bump when adding signals that would re-classify already
+    /// imported games. `GameLibrary.buildGameEntry` re-runs
+    /// detection when the stored `rubyVersionDetectedSchema` is
+    /// older than this value (or missing).
+    ///
+    /// History:
+    ///   - 1: initial multi-Ruby detection (PSDK + grammar sniff +
+    ///        RGSS archive ext + Game.ini Library=).
+    ///   - 2: add bundled `*-rubyXXX.dll` filename signal.
+    ///        Re-classifies modern PE forks (Pokemon Flux,
+    ///        Vanguard, Reborn, Inf Fusion) that ship a tiny
+    ///        bootloader Scripts.rxdata + Data_0.fpk archive that
+    ///        the grammar sniffer couldn't read.
+    static let schema: Int = 2
+
     /// Returns the Ruby version raw value (18 / 19 / 30 / 31) for
     /// `gameDirectory`. Mirrors `MKXPRubyVersion`'s enum integer
     /// values from `app_bridge.h`.
@@ -58,7 +83,15 @@ enum RubyVersionDetection {
     ///   1. PSDK markers → **30** (definitive, `.yarb` is
     ///      strictly minor-version-locked).
     ///
-    ///   2. Script grammar sniff via `RubyScriptGrammarSniffer`:
+    ///   2. Bundled `*-rubyXXX.dll` (`x64-msvcrt-ruby310.dll` etc):
+    ///      first digit + second digit of suffix decode to:
+    ///        18, 19          → **18** / **19**
+    ///        2X (Ruby 2.x)   → **31** (closest available; 2.x is
+    ///                                  syntactically Ruby-3-shaped)
+    ///        30              → **30**
+    ///        31, 32, 33, ...  → **31**
+    ///
+    ///   3. Script grammar sniff via `RubyScriptGrammarSniffer`:
     ///        - modern Ruby tokens found → **31**
     ///        - only legacy tokens found → use script-file
     ///          extension as prior:
@@ -96,6 +129,25 @@ enum RubyVersionDetection {
         // value works.
         if isPSDKGame(at: gameDirectory, fm: fm) {
             return 30
+        }
+
+        // Bundled modern Ruby DLL. Modern PE forks (Pokemon Flux,
+        // Vanguard, Reborn, Infinite Fusion) ship the mkxp-z
+        // runtime, which links against `x64-msvcrt-rubyXXX.dll`.
+        // The DLL filename's three-digit suffix is the most
+        // reliable runtime marker because:
+        //
+        //   - Game.ini Library= stays at vestigial `RGSS104E.dll`
+        //     for these forks (mkxp-z ignores it),
+        //   - The compiled `Scripts.rxdata` may be a tiny
+        //     bootloader that defers real script load to a custom
+        //     archive (`Data_0.fpk`, etc.), so the grammar sniffer
+        //     gets only the bootloader's stub and misses the
+        //     modern signal,
+        //   - The DLL is what the developer linked against on
+        //     desktop, so its version is the runtime they tested.
+        if let bundledRuby = bundledRubyDLLVersion(at: gameDirectory, fm: fm) {
+            return bundledRuby
         }
 
         // Script grammar sniff. Decodes Scripts.{rxdata,rvdata,
@@ -251,6 +303,80 @@ enum RubyVersionDetection {
         return nil
     }
 
+
+    /// Scan the game directory for a bundled CRuby DLL whose
+    /// filename encodes the Ruby version. Modern mkxp-z-based
+    /// forks ship one of:
+    ///
+    ///   - `x64-msvcrt-rubyXYZ.dll`   (most common, Ruby 2.4+)
+    ///   - `msvcrt-rubyXYZ.dll`        (older 32-bit builds)
+    ///   - `rubyXYZ.dll`               (some legacy bundles)
+    ///
+    /// where `XYZ` is `<major><minor>0` for 1.x (e.g. 187 = 1.8.7,
+    /// 192 = 1.9.2) or `<major><minor>0` for 2.x/3.x (e.g. 270 =
+    /// 2.7, 300 = 3.0, 310 = 3.1).
+    ///
+    /// Returns nil if no matching file found, otherwise our four
+    /// supported buckets:
+    ///
+    ///   - `18X` / `1.8.X`  → 18
+    ///   - `19X` / `1.9.X`  → 19
+    ///   - `2XX` / `2.X.Y`  → 31  (Ruby 2.x is syntactically
+    ///                              closer to 3.x; map to 31)
+    ///   - `30X` / `3.0.X`  → 30
+    ///   - `3YX` (Y>=1)     → 31
+    private static func bundledRubyDLLVersion(at gameDirectory: URL,
+                                              fm: FileManager) -> Int? {
+        guard let entries = try? fm.contentsOfDirectory(at: gameDirectory,
+                                                        includingPropertiesForKeys: nil) else {
+            return nil
+        }
+        // Match `<anything>ruby<digits>.dll` (case-insensitive),
+        // where the digit run is exactly 3 chars (Ruby's stable
+        // DLL naming since 1.8.7).
+        let pattern = #"(?i)(?:^|-|_)ruby(\d{3})\.dll$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+        var bestMajor = -1
+        var bestMinor = -1
+        for url in entries {
+            let name = url.lastPathComponent
+            let nsName = name as NSString
+            let range = NSRange(location: 0, length: nsName.length)
+            guard let m = regex.firstMatch(in: name, options: [], range: range),
+                  m.numberOfRanges >= 2 else { continue }
+            let digits = nsName.substring(with: m.range(at: 1))
+            guard digits.count == 3,
+                  let major = Int(String(digits.first!)),
+                  let minor = Int(String(digits[digits.index(after: digits.startIndex)])) else {
+                continue
+            }
+            // If the game ships multiple Ruby DLLs (Inf Fusion
+            // ships both 300 and 310), the highest version wins,
+            // since that's the one mkxp-z's loader picks.
+            if major > bestMajor || (major == bestMajor && minor > bestMinor) {
+                bestMajor = major
+                bestMinor = minor
+            }
+        }
+        guard bestMajor >= 0 else { return nil }
+        switch bestMajor {
+        case 1:
+            return bestMinor <= 8 ? 18 : 19
+        case 2:
+            // No native Ruby 2.x in our dispatch; 2.x source is
+            // generally 3-compatible (no removed methods between
+            // 2.7 and 3.0 except minor edges), so 31 is safer
+            // than 19 for forks bundling Ruby 2.5/2.6/2.7.
+            return 31
+        case 3:
+            return bestMinor == 0 ? 30 : 31
+        default:
+            // Future Ruby (4.x) - best effort.
+            return 31
+        }
+    }
 
     /// Lightweight PSDK detection. Mirrors what the cores branch's
     /// `PSDKDetection` does; duplicated here so this branch's

@@ -167,15 +167,26 @@ class GameLibrary {
         let defaultArtwork = findArtwork(in: container)
 
         var metadata = GameMetadata.load(from: container)
-        // Backfill rubyVersion for games imported before the field
-        // existed in GameMetadata. Detection is idempotent and cheap
-        // (file-system sniff); on first library load after this
-        // build ships, legacy entries get tagged. New imports
-        // already have the field populated by the import path.
-        if metadata.rubyVersion == nil {
+        // Backfill / refresh rubyVersion. Detection is idempotent
+        // and cheap (file-system sniff); we re-run when:
+        //
+        //   - rubyVersion is nil (legacy import predating the
+        //     field), OR
+        //   - rubyVersionDetectedSchema is missing or older than
+        //     the current detection schema (we taught detection
+        //     a new signal that may re-classify this game).
+        //
+        // The user's manual `rubyVersionOverride` setting takes
+        // precedence at engine-launch time, so re-detection here
+        // never trumps a deliberate user choice.
+        let needsDetect =
+            metadata.rubyVersion == nil
+            || (metadata.rubyVersionDetectedSchema ?? 0) < RubyVersionDetection.schema
+        if needsDetect {
             metadata.rubyVersion = RubyVersionDetection.detect(
                 gameDirectory: container.gameURL
             )
+            metadata.rubyVersionDetectedSchema = RubyVersionDetection.schema
             metadata.save(to: container)
         }
         // Title priority: user's customTitle > import-time baseTitle
@@ -768,6 +779,7 @@ class GameLibrary {
         metadata.rubyVersion = RubyVersionDetection.detect(
             gameDirectory: container.gameURL
         )
+        metadata.rubyVersionDetectedSchema = RubyVersionDetection.schema
 
         if let iconData = bundle.iconData,
            let image = UIImage(data: iconData),
@@ -790,6 +802,7 @@ class GameLibrary {
         metadata.rubyVersion = RubyVersionDetection.detect(
             gameDirectory: container.gameURL
         )
+        metadata.rubyVersionDetectedSchema = RubyVersionDetection.schema
         metadata.save(to: container)
     }
 

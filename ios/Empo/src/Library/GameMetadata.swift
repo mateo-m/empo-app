@@ -49,6 +49,17 @@ struct GameMetadata: Codable {
     // coreKind String pattern; same idea, different type).
     var rubyVersion: Int?
 
+    // Schema/heuristic version of the detection logic that
+    // produced `rubyVersion`. We bump this constant whenever we
+    // teach `RubyVersionDetection` a new signal that would
+    // re-classify already-imported games. Library load compares
+    // the stored value against `RubyVersionDetection.schema`; if
+    // it's older (or missing) we re-run detection and overwrite.
+    //
+    // The `rubyVersionOverride` user setting still wins; this only
+    // affects the auto-detected default.
+    var rubyVersionDetectedSchema: Int?
+
 
     static func load(from container: GameContainer) -> GameMetadata {
         let url = container.metadataJSONURL
