@@ -1,46 +1,53 @@
-# Ruby 3.1 + syntax transform experiment
+# Ruby 3.1 + syntax transform
 
-Live branch: `experiment/ruby31-syntax-transform` in both repos.
-Goal: replace Ruby 1.8 with Ruby 3.1 + white-axe's syntax transform (mkxp-z PR #304), validate against Pokemon Z and Uranium, decide whether to keep.
+## Status
 
-If it doesn't work with those two games, we abandon the branch and go back to 1.8 on `main`.
+Shipped. Ruby 3.1 is one of four interpreters Empo now ships in the same binary, alongside 1.8 / 1.9 / 3.0. The syntax-transform PR304 patches landed and stayed - they're applied to the Ruby 3.1 build only, gated per-game via `mkxp_setSyntaxTransformMode()`.
 
-## Approach
+For the architecture, see `multi-ruby.md`.
 
-Clean slate. All Ruby-1.8-specific code comes out. PR #304 goes in verbatim. No dual-runtime, no toggle, no fallback in the binary itself. The fallback is "revert the branch."
+## What this doc records
 
-## What gets ripped out
+The original experiment was "replace Ruby 1.8 with Ruby 3.1 + syntax-transform across the board." That hypothesis was tested, and it didn't survive contact with real games. The findings:
 
-- `libruby18-static.a`, `libruby18-ext.a`, `ios/Dependencies/sources/ruby18`
-- `MKXPZ_LEGACY_RUBY` define + every `#if` that depends on it
-- `RAPI_FULL` clamping to 187
-- `rb_gc_stack_start` force-update in session setup
-- 4 MB thread stack for RGSS (Ruby 3.1's GC is precise, 512 KB is fine)
-- VM-persistence hack (Ruby 3.1 supports `ruby_cleanup()`/`ruby_init()`)
-- `scripts/preload/ruby_classic_wrap.rb` (replaced by PR #304 C-level shims)
-- `scripts/preload/win32_wrap.rb` — may need revisiting on 3.1
+1. **Ruby 1.8 native still has a job.** Pokemon Z, Insurgence, Uranium and other vintage XP forks run cleanly on actual 1.8.7 and don't benefit from running through transformed 3.1. Native parses faster, fewer surprises, smaller binaries (libruby18-static.a is 1.7 MB vs Ruby 3.1's 17 MB).
 
-## What comes in from PR #304
+2. **Ruby 3.1 native (without transform) doesn't cover legacy-grammar games.** Vinemon Sauce Edition mixes Ruby 1.8 syntax (`when X:`, `break` from proc-closure) with Ruby 1.9+ runtime methods (`force_encoding`). It can't run on 1.8 native (no `force_encoding`) or vanilla 3.1 (parser rejects `when X:`). Patched 3.1 with the transform in LEGACY mode is the only working path.
 
-- 29 Ruby source patches in `syntax-transform/3.1/` applied at build time
-- Engine-side: `mkxp_syntax_transform_next_eval`, `mkxp_ec_is_syntax_transform_active`, `mkxp_str_new`/`mkxp_str_new_cstr`, legacy bindings (`Array#choice`, `Hash#index`, `Object#id`, etc.)
-- Config: `syntaxTransform` (0/1/2), `syntaxTransformCustomVersion{Major,Minor,Teeny}` in mkxp.json
-- `initSyntaxTransform()` in `main.cpp` wires it to RGSS version
+3. **Multi-Ruby beats one-Ruby for both code size and correctness.** Each game runs on the closest native parser; the transform is only on the 3.1 build, only activated for games that demonstrably need it.
 
-## Phases
+4. **Transform stripping is a trap.** When the multi-Ruby work seemed mature, we tried removing the syntax-transform patches under the assumption they were dead code. They aren't - mixed-grammar PE forks rely on them. The strip experiment was reverted.
 
-1. Scout + branches (done)
-2. Engine merge + Ruby 3.1 build with patches
-3. App wiring, compile, link
-4. Multi-session cleanup rewrite for Ruby 3.1
-5. Test with Pokemon Z + Uranium
-6. Decide: merge to main, or revert branch
+## Detection
 
-Hard bail: if Ruby 3.1 + patches won't build in 2 hrs, we stop.
+Runs at game import time, persisted on `GameMetadata.rubyVersion`:
 
-## Known risks
+| Marker | Routes to |
+|---|---|
+| PSDK directories (`Data/PSDK/`, `project.studio`) | Ruby 3.0 |
+| Bundled `x64-msvcrt-rubyXYZ.dll` | Ruby per filename suffix |
+| Modern grammar tokens (`&.`, pattern match, endless def) in script | Ruby 3.1 |
+| `.rgssad` archive | Ruby 1.8 |
+| `.rgss2a` / `.rgss3a` archive | Ruby 1.9 |
+| `Game.ini` `Library=RGSS1*` | Ruby 1.8 |
+| `Game.ini` `Library=RGSS2*` / `RGSS3*` | Ruby 1.9 |
+| Default | Ruby 3.1 |
 
-- Ruby 3.1 is ~4x larger than 1.8. IPA will grow significantly.
-- 29 patches to `parse.y` / `compile.c` / `vm_*.c` — any single one failing to apply is a blocker.
-- Multi-session on 3.1 is untested territory. The Pokemon games may hit Ruby state that doesn't cleanly reset even with `ruby_cleanup()`.
-- `pokemon_compat.rb` / `pokemon_input.rb` still needed — they patch game-level quirks, not Ruby-level.
+User can override via the Ruby Version picker in the per-game Settings sheet. See `multi-ruby.md` for the full decision tree and schema-versioning logic.
+
+## What the syntax transform does on Ruby 3.1
+
+Each game routed to Ruby 3.1 picks one of two transform modes via `mkxp_setSyntaxTransformMode`:
+
+- **DISABLED** (modern PE forks) - vanilla Ruby 3.1 parsing. `useModernRuby = true` auto-detected when the game ships a modern Ruby DLL, an `.fpk` script archive, or loose `.rb` files containing kwarg shorthand.
+- **LEGACY** (mixed-grammar PE forks like Vinemon) - 33 parser patches activate, accepting Ruby 1.8 syntax (`when X:`, character literals as Integer, `Object#id`, `Symbol#to_i`, etc.) on top of the Ruby 3.1 runtime.
+
+The `MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES` define is the build-side switch; it's set for the 3.1 binding compile only. Without it, the patches and gates are no-ops and Ruby 3.1 behaves as upstream.
+
+## Files
+
+- `mkxp-z-apple-mobile/syntax-transform/3.1/0000-prelude.patch` ... `0032-toplevel-def-visibility.patch` - the 33 patches.
+- `mkxp-z-apple-mobile/binding/binding-mri.cpp` - `legacy_*` C method shims (Array#choice, Hash#index, Object#id, etc.) gated on `MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES` + `mkxp_ec_is_syntax_transform_active`.
+- `mkxp-z-apple-mobile/src/main.cpp` - `initSyntaxTransform()` reads the bridge mode, sets the `mkxp_syntax_transform_target_ruby_version_*` globals.
+- `mkxp-z-apple-mobile/src/app_bridge.{h,cpp}` - `MKXPSyntaxTransformMode` enum + setter/getter.
+- `ios/Empo/src/Library/GameSettings.swift` - `useModernRuby` field, `resolveSyntaxTransformMode()`, `detectModernRubyScripts()` heuristic.

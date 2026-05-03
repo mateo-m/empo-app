@@ -7,28 +7,29 @@ It's a port of [mkxp-z](https://github.com/mkxp-z/mkxp-z) wrapped in a SwiftUI l
 
 Pre-release.
 Not on the App Store.
-Works end-to-end but there are rough edges (e.g. multi-gamesessions lifecycle, see `docs/multi-session.md`).
+Works end-to-end across RGSS1/2/3 and modern mkxp-z-based forks.
 
 ## What works
 
 - Importing games (folders, zip, 7z, rar).
 - Browsing them in a library.
 - Playing them with a customizable on-screen D-pad and buttons.
-- Pause, resume, switch games (see `docs/multi-session.md`).
+- Multi-Ruby native dispatch: vintage XP games run on Ruby 1.8.7, VX/VX Ace on 1.9.2, PSDK on 3.0, modern mkxp-z forks on 3.1. See `docs/multi-ruby.md`.
+- Pause, resume (`docs/pause-resume.md`).
 
 ## What doesn't
 
-- Only RGSS1 (XP) and RGSS2 (VX). RGSS3 (VX Ace) is gated because we still link Ruby 1.8; MV/MZ are JavaScript and out of scope.
+- Switching between different games in one session (cross-session play). After a clean game exit the user is asked to close + reopen Empo from the app switcher; Ruby state cleanup across different scripts is parked behind a feature flag.
 - Only Ogg/Theora movies. MP4 etc. are skipped.
-- Games that lean hard on native Windows DLLs beyond what `win32_wrap.rb` emulates (e.g. Vinemon).
-- Rotating the iOS Simulator during gameplay crashes inside Apple's GL emulation layer. Not reproducible on real devices. See `docs/rotation-crash.md`.
+- Games that lean hard on native Windows DLLs beyond what `win32_wrap.rb` emulates.
+- Rotating the iOS Simulator during gameplay crashes inside Apple's GL emulation layer. Not reproducible on real devices.
 
 ## Architecture
 
 ```
 mkxp-z-apple-mobile/   engine fork, git submodule, pure C++
 ios/Empo/              the app (SwiftUI + a bit of UIKit for touch controls)
-ios/Dependencies/      cross-compiled static libs (SDL, Ruby 1.8, OpenAL, etc.)
+ios/Dependencies/      cross-compiled static libs (SDL, four Ruby versions, OpenAL, etc.)
 docs/                  deep dives on the trickier bits
 ```
 
@@ -37,10 +38,11 @@ If you're adding a feature that needs to cross that boundary, add a bridge funct
 
 ## Quirks & hacks
 
-**One process, many games.** iOS doesn't let apps terminate and relaunch themselves between games, so SDL, the GL context, OpenAL, and the Ruby VM are created once and reused. Between sessions we manually evict game-defined Ruby constants, detach RGSS disposables, and re-run our preload patches. See `docs/multi-session.md` and `docs/sdl-ruby-workarounds.md`.
+**One process, many Rubys.** Empo links four Ruby interpreters (1.8.7, 1.9.2, 3.0, 3.1) into one binary as per-version merged `.o` files with hidden symbol islanding via `ld -r --unexported_symbols_list`. At launch time the host detects which Ruby a game wants and dispatches through `mkxp_get_script_binding_NN`. See `docs/multi-ruby.md`.
 
-**Ruby 1.8, not 3.1.** Most XP games break on Ruby 3 syntax. We cross-compile 1.8 from [JoiPlay's fork](https://github.com/joiplay/ruby).
-Moving to 3.1 might be possible with the `syntaxTransform` flag that [this PR](https://github.com/mkxp-z/mkxp-z/pull/304) might introduce to upstream [mkxp-z](https://github.com/mkxp-z/mkxp-z), if it gets merged.
+**Persistent SDL + Ruby VM.** iOS doesn't let apps terminate and relaunch themselves between games, so SDL, the GL context, OpenAL, and the active Ruby VM are created once and reused for the process lifetime. Cross-session play (switching to a different game without force-closing) is currently disabled - the active Ruby's loaded constants leak across game scripts and cause superclass-mismatch chaos. See `docs/sdl-ruby-workarounds.md`.
+
+**Syntax transform for Ruby 3.1 only.** Some Pokemon Essentials forks (Vinemon, etc.) mix Ruby 1.8 syntax with Ruby 1.9+ runtime methods - they can't run on 1.8 native (no `force_encoding`) or vanilla 3.1 (parser rejects `when X:`). The 3.1 binding ships [PR #304's syntax-transform patches](https://github.com/mkxp-z/mkxp-z/pull/304) that teach Ruby 3.1's parser to accept legacy grammar; activated per-game via the bridge. See `docs/ruby31-experiment.md`.
 
 **Win32 emulation is mostly `.rb` files.** `win32_wrap.rb` (CC0, by Ancurio and Splendide Imaginarius) plus our `platform_compat.rb` stub out the Windows APIs games expect, neutralize `system`/`fork`/`spawn` so games can't launch new processes, and silently swallow load errors from encrypted archives. They live under `mkxp-z-apple-mobile/scripts/`.
 
@@ -87,4 +89,5 @@ Full dependency and font licenses are surfaced in the app at Settings → Open-s
 
 - [Ancurio](https://github.com/Ancurio) for the original [mkxp](https://github.com/Ancurio/mkxp).
 - The [mkxp-z contributors](https://github.com/mkxp-z/mkxp-z/graphs/contributors) for keeping it alive.
-- [JoiPlay](https://github.com/joiplay) for [the Ruby 1.8 cross-compilation work](https://github.com/joiplay/ruby).
+- [JoiPlay](https://github.com/joiplay) for [the Ruby 1.8 cross-compilation work](https://github.com/joiplay/ruby) and the multi-Ruby dispatch model their RPG Maker plugin uses.
+- [white-axe](https://github.com/white-axe) for [PR #304](https://github.com/mkxp-z/mkxp-z/pull/304) (the Ruby 3.1 syntax-transform patches).
