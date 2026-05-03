@@ -308,40 +308,83 @@ struct GameMetadata: Codable {
 
 
     /// Read the host engine's Ruby version by scanning the app's
-    /// own executable for the same `RUBY_DESCRIPTION` literal we
-    /// look for in bundled DLLs. Cached on first call: the
-    /// binary doesn't change between calls so the scan is wasted
-    /// after the first hit.
+    /// own executable for `RUBY_DESCRIPTION` string literals.
     ///
-    /// Returns nil only on the (unexpected) case where the scan
-    /// can't find a version string in our own binary - which
-    /// would mean Ruby was dynamically linked with the version
-    /// stripped, neither of which we currently do.
-    static func engineRubyVersion() -> String? {
-        if let cached = _engineRubyVersionCache.value { return cached }
-        guard let url = Bundle.main.executableURL,
-              let data = try? Data(contentsOf: url, options: .alwaysMapped),
-              let v = scanRubyDescription(in: data)
-        else { return nil }
-        _engineRubyVersionCache.value = v
-        return v
+    /// In Debug builds Xcode splits the binary in two: a thin
+    /// loader stub at `Bundle.main.executableURL` that contains
+    /// no Ruby code, and the actual implementation at
+    /// `<bundle>/Empo.debug.dylib`. Release builds put everything
+    /// in the executable. We try the dylib first if it exists,
+    /// then fall back to the executable.
+    ///
+    /// With multi-Ruby (`feat/multi-ruby-v2`), the binary contains
+    /// up to four `RUBY_DESCRIPTION` literals (one per merged.o:
+    /// 1.8 / 1.9 / 3.0 / 3.1). Pass `forMajorMinor: "1.9"` (or
+    /// "1.8" / "3.0" / "3.1") to pick the one that matches the
+    /// game's detected Ruby version. Pass nil for the legacy
+    /// "first match wins" behaviour.
+    ///
+    /// Cached on (filter, found-version) pairs so multi-Ruby
+    /// callers don't re-scan the binary on every Game Info refresh.
+    static func engineRubyVersion(forMajorMinor majorMinor: String? = nil) -> String? {
+        let key = majorMinor ?? ""
+        if let cached = _engineRubyVersionCache.lookup(key) { return cached }
+
+        // Candidate paths to scan, dylib first since Debug builds
+        // are split. Maps to executable in Release.
+        var candidates: [URL] = []
+        let bundleURL = Bundle.main.bundleURL
+        let dylib = bundleURL.appendingPathComponent("Empo.debug.dylib")
+        if FileManager.default.fileExists(atPath: dylib.path) {
+            candidates.append(dylib)
+        }
+        if let exe = Bundle.main.executableURL {
+            candidates.append(exe)
+        }
+
+        for url in candidates {
+            guard let data = try? Data(contentsOf: url, options: .alwaysMapped)
+            else { continue }
+            if let v = scanRubyDescription(in: data, matchingMajorMinor: majorMinor) {
+                _engineRubyVersionCache.store(key, value: v)
+                return v
+            }
+        }
+        return nil
     }
 
 
     /// Search a binary blob for Ruby's embedded `RUBY_DESCRIPTION`
-    /// literal (`"ruby X.Y.ZpN"`) and return the version capture.
+    /// literal (`"ruby X.Y.ZpN ..."`) and return the version capture.
     /// Decodes the bytes as Latin-1 (each byte maps 1:1 to U+0000
     /// through U+00FF) so binary data round-trips losslessly into
-    /// a Swift String for `NSRegularExpression` to scan. ASCII
-    /// decoding would return nil here because real binaries
-    /// contain bytes 128-255.
-    private static func scanRubyDescription(in data: Data) -> String? {
+    /// a Swift String for `NSRegularExpression` to scan.
+    ///
+    /// When `majorMinor` is non-nil (e.g. "1.9"), iterates all
+    /// matches and returns the first one whose version starts
+    /// with that prefix. Necessary in the multi-Ruby binary which
+    /// contains up to four `RUBY_DESCRIPTION` literals back-to-back.
+    private static func scanRubyDescription(
+        in data: Data,
+        matchingMajorMinor majorMinor: String? = nil
+    ) -> String? {
         guard let regex = _rubyVersionRegex else { return nil }
-        // Latin-1 decode is lossless for any byte sequence; the
-        // resulting String has the same length in Unicode scalars
-        // as the input has in bytes, so regex offsets are stable.
         let asciiString = String(data: data, encoding: .isoLatin1) ?? ""
         let range = NSRange(asciiString.startIndex..., in: asciiString)
+
+        if let majorMinor {
+            let prefix = majorMinor + "."  // "1.9" -> "1.9." anchor
+            let matches = regex.matches(in: asciiString, options: [], range: range)
+            for match in matches where match.numberOfRanges >= 2 {
+                guard let versionRange = Range(match.range(at: 1), in: asciiString)
+                else { continue }
+                let v = String(asciiString[versionRange])
+                if v.hasPrefix(prefix) { return v }
+            }
+            return nil
+        }
+
+        // Legacy first-match-wins path.
         guard let match = regex.firstMatch(in: asciiString, options: [], range: range),
               match.numberOfRanges >= 2,
               let versionRange = Range(match.range(at: 1), in: asciiString)
@@ -358,13 +401,23 @@ struct GameMetadata: Codable {
     )
 }
 
-/// Single-shot cache wrapper for `engineRubyVersion()`. Swift
+/// Per-filter cache for `engineRubyVersion(forMajorMinor:)`. Swift
 /// doesn't let us easily mutate a `static var` from inside a
 /// `static func` without `nonisolated(unsafe)` ceremony; a
-/// reference-typed holder is the cleanest workaround that keeps
-/// the value type semantics clean elsewhere.
+/// reference-typed holder is the cleanest workaround.
 private final class _EngineRubyVersionCache: @unchecked Sendable {
-    var value: String?
+    private var values: [String: String] = [:]
+    private let lock = NSLock()
+
+    func lookup(_ key: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return values[key]
+    }
+
+    func store(_ key: String, value: String) {
+        lock.lock(); defer { lock.unlock() }
+        values[key] = value
+    }
 }
 private let _engineRubyVersionCache = _EngineRubyVersionCache()
 
