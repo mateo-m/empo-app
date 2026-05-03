@@ -47,8 +47,23 @@ final class CrashTracker {
 
     /// Marks the pending recovery as handled. Call once the UI has
     /// surfaced the alert so subsequent reads see false.
+    ///
+    /// Also deletes every current-install marker on disk so the
+    /// next launch doesn't re-trigger the same alert. Without this
+    /// step, force-quitting after dismissing the alert would
+    /// re-show the alert on every subsequent launch (the marker
+    /// outlives the in-memory flag because no clean game exit ran
+    /// to remove it).
     func consumeRecovery() {
         pendingCrashRecovery = false
+        let fm = FileManager.default
+        for container in GameContainer.discover() {
+            let url = container.sessionActiveMarkerURL
+            guard fm.fileExists(atPath: url.path) else { continue }
+            if Self.isMarkerFromCurrentInstall(at: url) {
+                try? fm.removeItem(at: url)
+            }
+        }
     }
 
     func writeMarker(for container: GameContainer) {

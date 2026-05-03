@@ -68,6 +68,13 @@ class AppState {
         // reaches `initSyntaxTransform` (during the RGSS-thread
         // bootstrap kicked off by mkxp_setGamePath later in this
         // method) - selectGame is the right place for it.
+        //
+        // Important even on multi-Ruby: games that route to Ruby
+        // 3.1 (the only Ruby version with the patches applied)
+        // still need the LEGACY mode for legacy-grammar PE forks
+        // (Vinemon, etc.) whose scripts mix 1.8 syntax with 1.9+
+        // runtime methods. Games on 1.8/1.9/3.0 native ignore
+        // this setting (no patches in those builds).
         mkxp_setSyntaxTransformMode(
             settings.resolveSyntaxTransformMode(gameDirectory: gameDir)
         )
@@ -181,12 +188,13 @@ class AppState {
     /// Body text shown when the engine signals a clean exit
     /// (Ruby `SystemExit` / `Reset`) mid-session: game's built-in
     /// "Exit to desktop" menu, or postload scripts raising Reset
-    /// after compiling data files. With cross-session Ruby state
-    /// cleanup disabled, we can't safely launch another game in
-    /// the same process — the user has to force-close + reopen.
-    /// RootView appends "Close Empo from the app switcher and
-    /// reopen it to continue." so the body reads as a single
-    /// natural sentence.
+    /// after compiling data files. With cross-session play
+    /// disabled (QUIT_PATHS_DISABLED.md) we can't safely return
+    /// to the library and launch another game in the same
+    /// process — the user has to force-close + reopen. RootView
+    /// appends "Close Empo from the app switcher and reopen it
+    /// to continue." so the body reads as a single natural
+    /// sentence.
     private static let cleanExitMessage = "The game has ended or requested a restart."
 
     func consumeCrashRecovery() {
@@ -230,8 +238,8 @@ class AppState {
     /// Resets per-session UI state without touching the engine or
     /// crash marker. Shared by the explicit `returnToLibrary` path
     /// and the engine-initiated clean-exit path (game's own
-    /// "Exit to desktop" menu) so both drop back to the library
-    /// through the same transition.
+    /// "Exit to desktop" menu, font-install restart, etc.) so both
+    /// drop back to the library through the same transition.
     private func tearDownSessionState() {
         selectedGame = nil
         // Unbind the controls layout so any library-screen UI that
@@ -343,34 +351,26 @@ class AppState {
 
                 if !state.terminationExpected && state.phase != nil {
                     let cleanExit = mkxp_didEngineExitCleanly() != 0
-                    // Both clean and crash exits surface an alert that
-                    // routes through RootView's dismiss-only branch
-                    // (phase != nil). With cross-session Ruby cleanup
-                    // disabled (QUIT_PATHS_DISABLED.md, MRUBY_POSTMORTEM.md)
-                    // we can't safely return to the library and launch
-                    // another game in the same process — the only way
-                    // to play again is force-close from the app switcher.
+                    // Both clean and crash exits surface an alert
+                    // that routes through RootView's dismiss-only
+                    // branch (phase != nil). With cross-session
+                    // play disabled (QUIT_PATHS_DISABLED.md,
+                    // MRUBY_POSTMORTEM.md) we can't safely return
+                    // to the library and launch another game in
+                    // the same process — the only way to play
+                    // again is to force-close from the app switcher.
                     //
-                    // Intentionally do NOT set phase = nil here: setting
-                    // phase = nil while an error alert is already
-                    // presenting causes SwiftUI to swallow the
-                    // NavigationStack pop. Leaving phase non-nil means
-                    // the alert OK button sees phase != nil and routes
-                    // through the dismiss-only handler.
-                    if cleanExit {
-                        // SystemExit / Reset (e.g. game's own
-                        // "Exit to desktop" menu, or a postload script
-                        // raising Reset after compiling data).
-                        if state.errorMessage == nil {
-                            state.errorMessage = AppState.cleanExitMessage
-                        }
-                    } else {
-                        // Preserve a Ruby/engine error message if the
-                        // error callback already set one; otherwise
-                        // fall back to the generic crash text.
-                        if state.errorMessage == nil {
-                            state.errorMessage = AppState.crashMessage
-                        }
+                    // Intentionally do NOT set phase = nil here:
+                    // setting phase = nil while an error alert is
+                    // already presenting causes SwiftUI to swallow
+                    // the NavigationStack pop. Leaving phase
+                    // non-nil means the alert OK button sees
+                    // phase != nil and routes through the dismiss-
+                    // only handler.
+                    if state.errorMessage == nil {
+                        state.errorMessage = cleanExit
+                            ? AppState.cleanExitMessage
+                            : AppState.crashMessage
                     }
                     state.selectedGame = nil
                     ControlsLayout.shared.switchGame(id: nil)
