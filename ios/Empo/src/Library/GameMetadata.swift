@@ -49,16 +49,50 @@ struct GameMetadata: Codable {
     // coreKind String pattern; same idea, different type).
     var rubyVersion: Int?
 
-    // Schema/heuristic version of the detection logic that
-    // produced `rubyVersion`. We bump this constant whenever we
-    // teach `RubyVersionDetection` a new signal that would
-    // re-classify already-imported games. Library load compares
-    // the stored value against `RubyVersionDetection.schema`; if
-    // it's older (or missing) we re-run detection and overwrite.
+    // Identifier (raw value of `RubyVersionDetection.Schema`) for
+    // the heuristic set this entry's `rubyVersion` was produced
+    // by. Library load compares the stored string against
+    // `RubyVersionDetection.currentSchema.rawValue`; if it differs
+    // (or is missing) we re-run detection and overwrite.
+    //
+    // Stored as String, not the enum directly, so an older Empo
+    // build reading metadata written by a newer one with an
+    // unknown case doesn't crash — it just sees a non-matching
+    // string and re-detects with its own (older) heuristics.
     //
     // The `rubyVersionOverride` user setting still wins; this only
     // affects the auto-detected default.
-    var rubyVersionDetectedSchema: Int?
+    var rubyVersionDetectedSchema: String?
+
+    init() {}
+
+    /// Field-by-field decode. The synthesized `Codable.init(from:)`
+    /// throws on the FIRST type mismatch and the whole struct
+    /// fails to decode, which then trips `load()`'s `?? GameMetadata()`
+    /// fallback and silently overwrites every legitimate value
+    /// (dateAdded, totalPlayTime, etc.) on the next save. We hit
+    /// exactly that bug while migrating `rubyVersionDetectedSchema`
+    /// from Int (schema 1/2) to String (named cases), losing a few
+    /// `dateAdded` timestamps in the process.
+    ///
+    /// Decoding each field with `try?` keeps unrelated values intact
+    /// when one field's type changes between Empo builds. Future
+    /// schema migrations on any field automatically benefit.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dateAdded = (try? c.decodeIfPresent(Date.self, forKey: .dateAdded)) ?? nil
+        lastPlayed = (try? c.decodeIfPresent(Date.self, forKey: .lastPlayed)) ?? nil
+        totalPlayTime = (try? c.decodeIfPresent(TimeInterval.self, forKey: .totalPlayTime)) ?? nil
+        customTitle = (try? c.decodeIfPresent(String.self, forKey: .customTitle)) ?? nil
+        customArtworkFilename = (try? c.decodeIfPresent(String.self, forKey: .customArtworkFilename)) ?? nil
+        customBannerFilename = (try? c.decodeIfPresent(String.self, forKey: .customBannerFilename)) ?? nil
+        baseTitle = (try? c.decodeIfPresent(String.self, forKey: .baseTitle)) ?? nil
+        manifestId = (try? c.decodeIfPresent(String.self, forKey: .manifestId)) ?? nil
+        manifestVersion = (try? c.decodeIfPresent(String.self, forKey: .manifestVersion)) ?? nil
+        manifestDescription = (try? c.decodeIfPresent(String.self, forKey: .manifestDescription)) ?? nil
+        rubyVersion = (try? c.decodeIfPresent(Int.self, forKey: .rubyVersion)) ?? nil
+        rubyVersionDetectedSchema = (try? c.decodeIfPresent(String.self, forKey: .rubyVersionDetectedSchema)) ?? nil
+    }
 
 
     static func load(from container: GameContainer) -> GameMetadata {

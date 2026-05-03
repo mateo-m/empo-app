@@ -59,20 +59,38 @@ import Foundation
 ///      default goes away.
 enum RubyVersionDetection {
 
-    /// Bump when adding signals that would re-classify already
-    /// imported games. `GameLibrary.buildGameEntry` re-runs
-    /// detection when the stored `rubyVersionDetectedSchema` is
-    /// older than this value (or missing).
+    /// Identifies the heuristic set this build uses. Each new
+    /// case is a strict superset of the previous one — adding a
+    /// signal that re-classifies some already-imported games.
+    /// `GameLibrary.buildGameEntry` re-runs detection whenever
+    /// the stored `rubyVersionDetectedSchema` differs from
+    /// `currentSchema.rawValue`, so users on an old install get
+    /// upgraded the next time they open Empo.
     ///
-    /// History:
-    ///   - 1: initial multi-Ruby detection (PSDK + grammar sniff +
-    ///        RGSS archive ext + Game.ini Library=).
-    ///   - 2: add bundled `*-rubyXXX.dll` filename signal.
-    ///        Re-classifies modern PE forks (Pokemon Flux,
-    ///        Vanguard, Reborn, Inf Fusion) that ship a tiny
-    ///        bootloader Scripts.rxdata + Data_0.fpk archive that
-    ///        the grammar sniffer couldn't read.
-    static let schema: Int = 2
+    /// Stored on disk as a String (via `metadata.rubyVersion
+    /// DetectedSchema`) instead of an enum directly. That keeps
+    /// older Empo builds from crashing when reading metadata
+    /// written by a newer build that introduced a case the old
+    /// build doesn't know about — the unknown string just doesn't
+    /// match any case, the old detector re-runs with its own
+    /// heuristics, and life continues.
+    enum Schema: String {
+        /// Initial multi-Ruby detection (PSDK markers + grammar
+        /// sniff + RGSS archive extension + Game.ini Library=).
+        case initial = "initial"
+
+        /// Adds the bundled `*-rubyXXX.dll` filename signal.
+        /// Re-classifies modern PE forks (Pokemon Flux, Vanguard,
+        /// Reborn, Inf Fusion) that ship a tiny bootloader
+        /// `Scripts.rxdata` + custom archive (`Data_0.fpk`,
+        /// etc.) where the grammar sniffer has nothing to read.
+        case bundledRubyDLL = "bundled-ruby-dll"
+    }
+
+    /// The schema this build's `detect()` implementation
+    /// corresponds to. Bump alongside any code change that
+    /// re-classifies some games.
+    static let currentSchema: Schema = .bundledRubyDLL
 
     /// Returns the Ruby version raw value (18 / 19 / 30 / 31) for
     /// `gameDirectory`. Mirrors `MKXPRubyVersion`'s enum integer

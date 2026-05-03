@@ -172,21 +172,25 @@ class GameLibrary {
         //
         //   - rubyVersion is nil (legacy import predating the
         //     field), OR
-        //   - rubyVersionDetectedSchema is missing or older than
-        //     the current detection schema (we taught detection
-        //     a new signal that may re-classify this game).
+        //   - rubyVersionDetectedSchema doesn't match the current
+        //     schema (we taught detection a new signal that may
+        //     re-classify this game, OR an unknown schema string
+        //     is present from a future Empo build that the user
+        //     has since downgraded from — in which case re-running
+        //     with the current heuristics is the safe default).
         //
         // The user's manual `rubyVersionOverride` setting takes
         // precedence at engine-launch time, so re-detection here
         // never trumps a deliberate user choice.
+        let currentSchema = RubyVersionDetection.currentSchema.rawValue
         let needsDetect =
             metadata.rubyVersion == nil
-            || (metadata.rubyVersionDetectedSchema ?? 0) < RubyVersionDetection.schema
+            || metadata.rubyVersionDetectedSchema != currentSchema
         if needsDetect {
             metadata.rubyVersion = RubyVersionDetection.detect(
                 gameDirectory: container.gameURL
             )
-            metadata.rubyVersionDetectedSchema = RubyVersionDetection.schema
+            metadata.rubyVersionDetectedSchema = currentSchema
             metadata.save(to: container)
         }
         // Title priority: user's customTitle > import-time baseTitle
@@ -779,7 +783,7 @@ class GameLibrary {
         metadata.rubyVersion = RubyVersionDetection.detect(
             gameDirectory: container.gameURL
         )
-        metadata.rubyVersionDetectedSchema = RubyVersionDetection.schema
+        metadata.rubyVersionDetectedSchema = RubyVersionDetection.currentSchema.rawValue
 
         if let iconData = bundle.iconData,
            let image = UIImage(data: iconData),
@@ -802,7 +806,7 @@ class GameLibrary {
         metadata.rubyVersion = RubyVersionDetection.detect(
             gameDirectory: container.gameURL
         )
-        metadata.rubyVersionDetectedSchema = RubyVersionDetection.schema
+        metadata.rubyVersionDetectedSchema = RubyVersionDetection.currentSchema.rawValue
         metadata.save(to: container)
     }
 
