@@ -15,11 +15,12 @@ extension Color {
 
     /// Dark: warm dark surface with a hint of amber.
     /// Light: warm off-white with a hint of peach.
-    static let surface = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.16, green: 0.13, blue: 0.10, alpha: 1.0)
-            : UIColor(red: 1.00, green: 0.97, blue: 0.93, alpha: 1.0)
-    })
+    static let surface = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.16, green: 0.13, blue: 0.10, alpha: 1.0)
+                : UIColor(red: 1.00, green: 0.97, blue: 0.93, alpha: 1.0)
+        })
 }
 
 extension ShapeStyle where Self == Color {
@@ -30,25 +31,27 @@ extension ShapeStyle where Self == Color {
     static var warning: Color { .warning }
 }
 
-
 extension Color {
-    static let destructive = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 1.00, green: 0.38, blue: 0.35, alpha: 1.0)
-            : UIColor(red: 0.90, green: 0.24, blue: 0.20, alpha: 1.0)
-    })
+    static let destructive = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 1.00, green: 0.38, blue: 0.35, alpha: 1.0)
+                : UIColor(red: 0.90, green: 0.24, blue: 0.20, alpha: 1.0)
+        })
 
-    static let success = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.35, green: 0.90, blue: 0.50, alpha: 1.0)
-            : UIColor(red: 0.20, green: 0.72, blue: 0.35, alpha: 1.0)
-    })
+    static let success = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.35, green: 0.90, blue: 0.50, alpha: 1.0)
+                : UIColor(red: 0.20, green: 0.72, blue: 0.35, alpha: 1.0)
+        })
 
-    static let warning = Color(uiColor: UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 1.00, green: 0.82, blue: 0.35, alpha: 1.0)
-            : UIColor(red: 0.90, green: 0.70, blue: 0.10, alpha: 1.0)
-    })
+    static let warning = Color(
+        uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 1.00, green: 0.82, blue: 0.35, alpha: 1.0)
+                : UIColor(red: 0.90, green: 0.70, blue: 0.10, alpha: 1.0)
+        })
 }
 
 //
@@ -75,7 +78,6 @@ enum Spacing {
     static let _4xl: CGFloat = 40
 }
 
-
 enum Radius {
     /// 4pt; small chips, inline badges
     static let xs: CGFloat = 4
@@ -90,7 +92,6 @@ enum Radius {
     /// 56pt; modal sheets and large rounded panels
     static let sheet: CGFloat = 56
 }
-
 
 extension View {
     /// Two-layer shadow used on library artwork tiles and hero
@@ -142,10 +143,6 @@ extension View {
         environment(\.colorScheme, .dark)
     }
 }
-
-
-
-
 
 /// Typography tokens for sites that don't fit a SwiftUI semantic
 /// text style. Prefer `.body` / `.headline` first; reach for these
@@ -244,7 +241,6 @@ enum Motion {
     static let durationSlow: TimeInterval = 0.5
 }
 
-
 /// Press-scale values used when a button-like surface reacts to
 /// touch. Kept as one canonical number so action buttons, cards, and
 /// the D-pad press identically.
@@ -252,7 +248,6 @@ enum PressScale {
     /// The standard press-down scale.
     static let standard: CGFloat = 0.95
 }
-
 
 enum AppSize {
     static let toolbarButton: CGFloat = 38
@@ -280,7 +275,6 @@ enum AppSize {
     static let sliderValueLabel: CGFloat = 48
 }
 
-
 /// SF Symbol and small-icon sizing. Use instead of inline
 /// `.font(.system(size: N))` on `Image(systemName:)` so icons stay
 /// consistent across the app.
@@ -292,7 +286,6 @@ enum IconSize {
     /// Hero icon inside an empty-state illustration.
     static let emptyState: CGFloat = 48
 }
-
 
 /// Layered opacity tokens. Semantics:
 ///
@@ -308,7 +301,6 @@ enum Scrim {
     /// Heavy scrim - full darken (e.g. disclaimer backdrop).
     static let heavy: Double = 0.6
 }
-
 
 enum Alpha {
     /// Muted foreground - secondary text/icons over images.
@@ -333,7 +325,6 @@ enum Alpha {
     static let toolbarDim: Double = 0.3
 }
 
-
 /// Time-based design tokens. Use for idle timers and other
 /// user-perceivable durations that aren't animation curves (those
 /// live on `Motion`).
@@ -342,7 +333,6 @@ enum Timing {
     /// last touch before dimming back to `Alpha.toolbarDim`.
     static let toolbarIdleDelay: TimeInterval = 3.0
 }
-
 
 /// Default scrim tint baked into `Chip` so small glyph badges get a
 /// consistent dim behind them without every site passing a literal.

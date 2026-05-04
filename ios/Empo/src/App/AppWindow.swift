@@ -1,5 +1,5 @@
-import UIKit
 import SwiftUI
+import UIKit
 
 private class AppRootViewController: UIViewController {
 
@@ -31,7 +31,6 @@ private class AppRootViewController: UIViewController {
         hostingController.didMove(toParent: self)
     }
 
-
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         .allButUpsideDown
     }
@@ -40,17 +39,18 @@ private class AppRootViewController: UIViewController {
         let phase = AppState.shared.phase
         guard phase == .playing else { return false }
         let size = view.bounds.size
-        return size.width > size.height // hide only in landscape gameplay
+        return size.width > size.height  // hide only in landscape gameplay
     }
 
-    override func viewWillTransition(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
+    override func viewWillTransition(
+        to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator
+    ) {
         super.viewWillTransition(to: size, with: coordinator)
         setNeedsStatusBarAppearanceUpdate()
     }
 
     override var childForStatusBarHidden: UIViewController? { nil }
 }
-
 
 /// Single UIWindow that floats above SDL's window and hosts all app UI.
 /// In library/loading mode: opaque, covers SDL.
@@ -63,7 +63,7 @@ class AppWindow: UIWindow {
     override init(windowScene: UIWindowScene) {
         super.init(windowScene: windowScene)
         backgroundColor = .clear
-        windowLevel = .normal + 1 // above SDL window
+        windowLevel = .normal + 1  // above SDL window
         isOpaque = false
     }
 
@@ -84,7 +84,6 @@ class AppWindow: UIWindow {
     // via the bridge. Background touches are harmlessly absorbed; RGSS games
     // use keyboard input, not mouse/touch.
 
-
     /// In library/loading: this window must be key for SwiftUI.
     /// In player: SDL needs key; unless keyboard mode is active.
     override var canBecomeKey: Bool {
@@ -96,7 +95,8 @@ class AppWindow: UIWindow {
     static var currentSafeArea: EdgeInsets {
         guard let window = instance else { return .init() }
         let insets = window.safeAreaInsets
-        return EdgeInsets(top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
+        return EdgeInsets(
+            top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
     }
 
     @objc static func setAllowKeyWindow(_ allow: Bool) {
@@ -107,7 +107,6 @@ class AppWindow: UIWindow {
         }
     }
 
-
     /// Called once at app startup (from AppLoader.m via +load).
     /// Checks for an active scene first, otherwise waits for one.
     /// During crash recovery, accepts any connected scene so the
@@ -117,7 +116,8 @@ class AppWindow: UIWindow {
 
         for scene in UIApplication.shared.connectedScenes {
             if let windowScene = scene as? UIWindowScene,
-               recovering || scene.activationState == .foregroundActive {
+                recovering || scene.activationState == .foregroundActive
+            {
                 createWindow(in: windowScene)
                 return
             }
@@ -129,7 +129,8 @@ class AppWindow: UIWindow {
             queue: .main
         ) { note in
             guard instance == nil,
-                  let scene = note.object as? UIWindowScene else { return }
+                let scene = note.object as? UIWindowScene
+            else { return }
             createWindow(in: scene)
         }
     }

@@ -36,8 +36,9 @@ final class SessionLogger {
     /// Safe to call when no session is active (no-op).
     func recordSessionPlayTime(for game: GameEntry?) {
         guard let game,
-              let container = game.container,
-              let startTime = sessionStartTime else { return }
+            let container = game.container,
+            let startTime = sessionStartTime
+        else { return }
         let elapsed = Date().timeIntervalSince(startTime)
         sessionStartTime = nil
         guard elapsed > 1 else { return }
@@ -69,10 +70,13 @@ final class SessionLogger {
         let filename = "\(timestamp).log"
         let logPath = logsDir.appendingPathComponent(filename).path
 
-        let header = Self.logHeader(title: "\(AppInfo.name) debug log", extras: [
-            "game: \(game.title) [\(game.id)]",
-            "session: \(timestamp)",
-        ]) + "\n"
+        let header =
+            Self.logHeader(
+                title: "\(AppInfo.name) debug log",
+                extras: [
+                    "game: \(game.title) [\(game.id)]",
+                    "session: \(timestamp)",
+                ]) + "\n"
         try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
 
         mkxp_setDebugLogPath(logPath)
@@ -99,7 +103,8 @@ final class SessionLogger {
         }
 
         if let data = entry.data(using: .utf8),
-           let fh = FileHandle(forWritingAtPath: path) {
+            let fh = FileHandle(forWritingAtPath: path)
+        {
             defer { try? fh.close() }
             _ = try? fh.seekToEnd()
             _ = try? fh.write(contentsOf: data)
@@ -108,7 +113,10 @@ final class SessionLogger {
 
     private func pruneOldLogs(in logsDir: URL) {
         let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(at: logsDir, includingPropertiesForKeys: [.creationDateKey]) else { return }
+        guard
+            let files = try? fm.contentsOfDirectory(
+                at: logsDir, includingPropertiesForKeys: [.creationDateKey])
+        else { return }
 
         // Only prune debug logs (<iso8601>.log); leave
         // session-history.log alone.

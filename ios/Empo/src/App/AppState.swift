@@ -1,6 +1,6 @@
 import Foundation
-import SwiftUI
 import Observation
+import SwiftUI
 
 enum GamePhase: Equatable {
     case loading
@@ -26,7 +26,6 @@ class AppState {
     private init() {
         registerBridgeCallbacks()
     }
-
 
     func selectGame(_ game: GameEntry) {
         let pauseManager = PauseManager.shared
@@ -182,7 +181,8 @@ class AppState {
         sessionLogger.recordSessionPlayTime(for: selectedGame)
     }
 
-    private static let crashMessage = "It looks like the game didn't exit cleanly last time. "
+    private static let crashMessage =
+        "It looks like the game didn't exit cleanly last time. "
         + "Your save data should be fine."
 
     /// Body text shown when the engine signals a clean exit
@@ -256,7 +256,6 @@ class AppState {
     // with the underlying coordinator helper. See
     // QUIT_PATHS_DISABLED.md.
 
-
     // MARK: - Pause lifecycle
 
     func requestPause() {
@@ -309,7 +308,6 @@ class AppState {
         }
     }
 
-
     /// Remove the crash marker when backgrounding a healthy session.
     /// Re-creates it when the app returns to foreground so a subsequent
     /// crash after resume is still detected.
@@ -326,110 +324,118 @@ class AppState {
     private func registerBridgeCallbacks() {
         // First frame rendered; fresh start transitions to .playing,
         // resume signals the snapshot can fade.
-        mkxp_setFrameRenderedCallback({ _ in
-            Task { @MainActor in
-                let state = AppState.shared
-                if state.phase == .loading, !state.engineReady {
-                    Haptics.success()
-                    state.engineReady = true
-                } else if state.phase == .playing {
-                    PauseManager.shared.snapshotCanFade = true
-                }
-            }
-        }, nil)
-
-        mkxp_setEngineTerminatedCallback({ _ in
-            Task { @MainActor in
-                let state = AppState.shared
-                // Engine ack'd termination: cancel the hang watchdog
-                // and wake selectGame awaiters.
-                state.termination.handleEngineTerminatedAck()
-                state.recordSessionPlayTime()
-                if let container = state.selectedGame?.container {
-                    state.crashTracker.removeMarker(for: container)
-                }
-                GameLibrary.shared.reload()
-
-                if !state.terminationExpected && state.phase != nil {
-                    let cleanExit = mkxp_didEngineExitCleanly() != 0
-                    // Both clean and crash exits surface an alert
-                    // that routes through RootView's dismiss-only
-                    // branch (phase != nil). With cross-session
-                    // play disabled (QUIT_PATHS_DISABLED.md,
-                    // MRUBY_POSTMORTEM.md) we can't safely return
-                    // to the library and launch another game in
-                    // the same process; the only way to play
-                    // again is to force-close from the app switcher.
-                    //
-                    // Intentionally do NOT set phase = nil here:
-                    // setting phase = nil while an error alert is
-                    // already presenting causes SwiftUI to swallow
-                    // the NavigationStack pop. Leaving phase
-                    // non-nil means the alert OK button sees
-                    // phase != nil and routes through the dismiss-
-                    // only handler.
-                    if state.errorMessage == nil {
-                        state.errorMessage = cleanExit
-                            ? AppState.cleanExitMessage
-                            : AppState.crashMessage
+        mkxp_setFrameRenderedCallback(
+            { _ in
+                Task { @MainActor in
+                    let state = AppState.shared
+                    if state.phase == .loading, !state.engineReady {
+                        Haptics.success()
+                        state.engineReady = true
+                    } else if state.phase == .playing {
+                        PauseManager.shared.snapshotCanFade = true
                     }
-                    state.selectedGame = nil
-                    ControlsLayout.shared.switchGame(id: nil)
-                    state.engineReady = false
-                    PauseManager.shared.reset()
                 }
-                state.terminationExpected = false
-            }
-        }, nil)
+            }, nil)
 
-        mkxp_setGameRectChangedCallback({ x, y, w, h, _ in
-            let newRect = CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h))
-            Task { @MainActor in
-                let engineState = EngineState.shared
-                if engineState.gameRect != newRect {
-                    engineState.gameRect = newRect
+        mkxp_setEngineTerminatedCallback(
+            { _ in
+                Task { @MainActor in
+                    let state = AppState.shared
+                    // Engine ack'd termination: cancel the hang watchdog
+                    // and wake selectGame awaiters.
+                    state.termination.handleEngineTerminatedAck()
+                    state.recordSessionPlayTime()
+                    if let container = state.selectedGame?.container {
+                        state.crashTracker.removeMarker(for: container)
+                    }
+                    GameLibrary.shared.reload()
+
+                    if !state.terminationExpected && state.phase != nil {
+                        let cleanExit = mkxp_didEngineExitCleanly() != 0
+                        // Both clean and crash exits surface an alert
+                        // that routes through RootView's dismiss-only
+                        // branch (phase != nil). With cross-session
+                        // play disabled (QUIT_PATHS_DISABLED.md,
+                        // MRUBY_POSTMORTEM.md) we can't safely return
+                        // to the library and launch another game in
+                        // the same process; the only way to play
+                        // again is to force-close from the app switcher.
+                        //
+                        // Intentionally do NOT set phase = nil here:
+                        // setting phase = nil while an error alert is
+                        // already presenting causes SwiftUI to swallow
+                        // the NavigationStack pop. Leaving phase
+                        // non-nil means the alert OK button sees
+                        // phase != nil and routes through the dismiss-
+                        // only handler.
+                        if state.errorMessage == nil {
+                            state.errorMessage =
+                                cleanExit
+                                ? AppState.cleanExitMessage
+                                : AppState.crashMessage
+                        }
+                        state.selectedGame = nil
+                        ControlsLayout.shared.switchGame(id: nil)
+                        state.engineReady = false
+                        PauseManager.shared.reset()
+                    }
+                    state.terminationExpected = false
                 }
-            }
-        }, nil)
+            }, nil)
 
-        mkxp_setErrorMessageCallback({ msg, _ in
-            guard let msg else { return }
-            let message = String(cString: msg)
-            Task { @MainActor in
-                AppState.shared.errorMessage = message
-            }
-        }, nil)
+        mkxp_setGameRectChangedCallback(
+            { x, y, w, h, _ in
+                let newRect = CGRect(x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h))
+                Task { @MainActor in
+                    let engineState = EngineState.shared
+                    if engineState.gameRect != newRect {
+                        engineState.gameRect = newRect
+                    }
+                }
+            }, nil)
+
+        mkxp_setErrorMessageCallback(
+            { msg, _ in
+                guard let msg else { return }
+                let message = String(cString: msg)
+                Task { @MainActor in
+                    AppState.shared.errorMessage = message
+                }
+            }, nil)
 
         // Engine paused; capture snapshot while lock is held.
-        mkxp_setPausedCallback({ _ in
-            var snapshotImage: UIImage?
-            var w: Int32 = 0
-            var h: Int32 = 0
-            if mkxp_getSnapshotSize(&w, &h), w > 0, h > 0 {
-                let totalBytes = Int(w) * Int(h) * 4
-                var buffer = [UInt8](repeating: 0, count: totalBytes)
-                if mkxp_copySnapshotRGBA(&buffer, Int32(totalBytes), &w, &h) {
-                    let data = Data(buffer)
-                    let bytesPerRow = Int(w) * 4
-                    if let provider = CGDataProvider(data: data as CFData),
-                       let cgImage = CGImage(
-                           width: Int(w), height: Int(h),
-                           bitsPerComponent: 8, bitsPerPixel: 32,
-                           bytesPerRow: bytesPerRow,
-                           space: CGColorSpaceCreateDeviceRGB(),
-                           bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                           provider: provider,
-                           decode: nil, shouldInterpolate: true,
-                           intent: .defaultIntent) {
-                        snapshotImage = UIImage(cgImage: cgImage)
+        mkxp_setPausedCallback(
+            { _ in
+                var snapshotImage: UIImage?
+                var w: Int32 = 0
+                var h: Int32 = 0
+                if mkxp_getSnapshotSize(&w, &h), w > 0, h > 0 {
+                    let totalBytes = Int(w) * Int(h) * 4
+                    var buffer = [UInt8](repeating: 0, count: totalBytes)
+                    if mkxp_copySnapshotRGBA(&buffer, Int32(totalBytes), &w, &h) {
+                        let data = Data(buffer)
+                        let bytesPerRow = Int(w) * 4
+                        if let provider = CGDataProvider(data: data as CFData),
+                            let cgImage = CGImage(
+                                width: Int(w), height: Int(h),
+                                bitsPerComponent: 8, bitsPerPixel: 32,
+                                bytesPerRow: bytesPerRow,
+                                space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGBitmapInfo(
+                                    rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                                provider: provider,
+                                decode: nil, shouldInterpolate: true,
+                                intent: .defaultIntent)
+                        {
+                            snapshotImage = UIImage(cgImage: cgImage)
+                        }
                     }
                 }
-            }
 
-            Task { @MainActor in
-                AppState.shared.handlePause(snapshot: snapshotImage)
-            }
-        }, nil)
+                Task { @MainActor in
+                    AppState.shared.handlePause(snapshot: snapshotImage)
+                }
+            }, nil)
 
         mkxp_setResumedCallback({ _ in }, nil)
     }

@@ -19,7 +19,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         field.smartDashesType = UITextSmartDashesType.no
         field.returnKeyType = UIReturnKeyType.default
         field.inputAccessoryView = TCCreateKeyboardAccessoryView()
-        field.text = " " // keep a space so backspace works
+        field.text = " "  // keep a space so backspace works
         field.delegate = context.coordinator
         return field
     }
@@ -38,8 +38,10 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
     }
 
     class Coordinator: NSObject, UITextFieldDelegate {
-        func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange,
-                       replacementString string: String) -> Bool {
+        func textField(
+            _ textField: UITextField, shouldChangeCharactersIn range: NSRange,
+            replacementString string: String
+        ) -> Bool {
             // Backspace arrives here as an empty replacement string
             // over a non-zero range. UIKit's `deleteBackward` override
             // on TCKeyboardField doesn't fire when `text` is non-empty
@@ -86,8 +88,8 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
 
             for char in string {
                 let c = char.utf16.first ?? 0
-                let isUpper = (c >= UInt16(Character("A").asciiValue!) &&
-                               c <= UInt16(Character("Z").asciiValue!))
+                let isUpper =
+                    (c >= UInt16(Character("A").asciiValue!) && c <= UInt16(Character("Z").asciiValue!))
                 let sc = scancodeForSwiftCharacter(c)
                 if sc == MKXP_SCANCODE_UNKNOWN { continue }
 
@@ -131,22 +133,22 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                 return Int32(MKXP_SCANCODE_A) + Int32(c) - Int32(Character("A").asciiValue!)
             case "1"..."9":
                 return Int32(MKXP_SCANCODE_1) + Int32(c) - Int32(Character("1").asciiValue!)
-            case "0":  return Int32(MKXP_SCANCODE_0)
-            case " ":  return Int32(MKXP_SCANCODE_SPACE)
+            case "0": return Int32(MKXP_SCANCODE_0)
+            case " ": return Int32(MKXP_SCANCODE_SPACE)
             case "\n": return Int32(MKXP_SCANCODE_RETURN)
             case "\t": return Int32(MKXP_SCANCODE_TAB)
-            case "-":  return Int32(MKXP_SCANCODE_MINUS)
-            case "=":  return Int32(MKXP_SCANCODE_EQUALS)
-            case "[":  return Int32(MKXP_SCANCODE_LEFTBRACKET)
-            case "]":  return Int32(MKXP_SCANCODE_RIGHTBRACKET)
+            case "-": return Int32(MKXP_SCANCODE_MINUS)
+            case "=": return Int32(MKXP_SCANCODE_EQUALS)
+            case "[": return Int32(MKXP_SCANCODE_LEFTBRACKET)
+            case "]": return Int32(MKXP_SCANCODE_RIGHTBRACKET)
             case "\\": return Int32(MKXP_SCANCODE_BACKSLASH)
-            case ";":  return Int32(MKXP_SCANCODE_SEMICOLON)
-            case "'":  return Int32(MKXP_SCANCODE_APOSTROPHE)
-            case ",":  return Int32(MKXP_SCANCODE_COMMA)
-            case ".":  return Int32(MKXP_SCANCODE_PERIOD)
-            case "/":  return Int32(MKXP_SCANCODE_SLASH)
-            case "`":  return Int32(MKXP_SCANCODE_GRAVE)
-            default:   return Int32(MKXP_SCANCODE_UNKNOWN)
+            case ";": return Int32(MKXP_SCANCODE_SEMICOLON)
+            case "'": return Int32(MKXP_SCANCODE_APOSTROPHE)
+            case ",": return Int32(MKXP_SCANCODE_COMMA)
+            case ".": return Int32(MKXP_SCANCODE_PERIOD)
+            case "/": return Int32(MKXP_SCANCODE_SLASH)
+            case "`": return Int32(MKXP_SCANCODE_GRAVE)
+            default: return Int32(MKXP_SCANCODE_UNKNOWN)
             }
         }
     }

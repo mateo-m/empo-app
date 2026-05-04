@@ -1,6 +1,5 @@
 import SwiftUI
 
-
 struct AddButtonSheet: View {
     var layout: ControlsLayout
     @Environment(\.dismiss) private var dismiss
@@ -80,7 +79,6 @@ struct AddButtonSheet: View {
     }
 }
 
-
 struct ButtonEditSheet: View {
     var layout: ControlsLayout
     let buttonID: UUID
@@ -159,20 +157,23 @@ struct ButtonEditSheet: View {
                         }
                     }
 
-                Section {
-                    Button {
-                        dismiss()
-                        withAnimation(Motion.snappy) {
-                            layout.removeButton(id: buttonID)
+                    Section {
+                        Button {
+                            dismiss()
+                            withAnimation(Motion.snappy) {
+                                layout.removeButton(id: buttonID)
+                            }
+                        } label: {
+                            Text("Delete button")
                         }
-                    } label: {
-                        Text("Delete button")
+                        .buttonStyle(.secondary(tint: .destructive))
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(
+                            EdgeInsets(
+                                top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg
+                            ))
                     }
-                    .buttonStyle(.secondary(tint: .destructive))
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg))
-                }
                 }
                 .navigationTitle("Edit button")
                 .navigationBarTitleDisplayMode(.inline)
@@ -215,7 +216,6 @@ struct ButtonEditSheet: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 }
-
 
 /// Edit sheet specific to the D-pad. The D-pad isn't configurable
 /// the same way action buttons are (no label, no key assignment, no
@@ -284,7 +284,6 @@ struct DPadEditSheet: View {
     }
 }
 
-
 struct ControlsEditDialogs: ViewModifier {
     var layout: ControlsLayout
 
@@ -324,12 +323,13 @@ extension View {
         editingButton: Binding<ButtonModel?>,
         editingDPad: Binding<Bool>
     ) -> some View {
-        modifier(ControlsEditDialogs(
-            layout: layout,
-            showAddSheet: showAddSheet,
-            showResetConfirm: showResetConfirm,
-            editingButton: editingButton,
-            editingDPad: editingDPad
-        ))
+        modifier(
+            ControlsEditDialogs(
+                layout: layout,
+                showAddSheet: showAddSheet,
+                showResetConfirm: showResetConfirm,
+                editingButton: editingButton,
+                editingDPad: editingDPad
+            ))
     }
 }

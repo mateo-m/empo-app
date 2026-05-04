@@ -1,6 +1,5 @@
 import Foundation
 
-
 /// Extracts zip, 7z, and rar archives via libarchive (shipped with iOS).
 ///
 /// The archive is read in streaming mode: entries are decompressed one block
@@ -27,7 +26,6 @@ enum ArchiveExtractor {
         }
     }
 
-
     /// Supported archive container formats.
     enum Format {
         case zip
@@ -37,13 +35,12 @@ enum ArchiveExtractor {
         init?(extension ext: String) {
             switch ext.lowercased() {
             case "zip", "jgp": self = .zip
-            case "7z":         self = .sevenZip
-            case "rar":        self = .rar
-            default:           return nil
+            case "7z": self = .sevenZip
+            case "rar": self = .rar
+            default: return nil
             }
         }
     }
-
 
     /// Extract only entries matching `include` from `archiveURL` into
     /// `destDir`. Used by the import pre-flight to pull a small,
@@ -135,7 +132,6 @@ enum ArchiveExtractor {
         }
     }
 
-
     /// Extract an archive to `destDir`. Reports progress in [0, 1] via the
     /// optional callback. The callback runs on the caller's thread.
     ///
@@ -166,7 +162,8 @@ enum ArchiveExtractor {
         if is7z {
             totalBytes = 0
         } else {
-            totalBytes = (try? fm.attributesOfItem(atPath: archiveURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+            totalBytes =
+                (try? fm.attributesOfItem(atPath: archiveURL.path)[.size] as? NSNumber)?.int64Value ?? 0
         }
 
         guard let reader = archive_read_new() else {
@@ -232,7 +229,7 @@ enum ArchiveExtractor {
             let outURL = destDir.appendingPathComponent(relative)
 
             let fileType = archive_entry_filetype(entry)
-            let isDir = (fileType & 0o170000) == 0o040000 // S_IFDIR
+            let isDir = (fileType & 0o170000) == 0o040000  // S_IFDIR
             if isDir {
                 try? fm.createDirectory(at: outURL, withIntermediateDirectories: true)
                 continue
@@ -266,7 +263,6 @@ enum ArchiveExtractor {
         progress?("", 1.0)
     }
 
-
     private static func writeEntry(reader: OpaquePointer, to outURL: URL) throws {
         guard let stream = OutputStream(url: outURL, append: false) else {
             throw Error.writeFailed("Cannot open output: \(outURL.path)")
@@ -275,7 +271,7 @@ enum ArchiveExtractor {
         defer { stream.close() }
 
         while true {
-            var buffer: UnsafeRawPointer? = nil
+            var buffer: UnsafeRawPointer?
             var size: Int = 0
             var offset: Int64 = 0
             let status = archive_read_data_block(reader, &buffer, &size, &offset)
@@ -291,7 +287,6 @@ enum ArchiveExtractor {
             }
         }
     }
-
 
     private static func errorString(_ reader: OpaquePointer) -> String? {
         guard let cStr = archive_error_string(reader) else { return nil }

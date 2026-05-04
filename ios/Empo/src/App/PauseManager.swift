@@ -1,6 +1,6 @@
 import Foundation
-import SwiftUI
 import Observation
+import SwiftUI
 
 /// Pure data holder for pause state; no references to AppState.
 /// Lifecycle methods that coordinate phase transitions live in AppState.

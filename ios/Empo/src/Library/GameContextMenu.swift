@@ -1,6 +1,5 @@
 import SwiftUI
 
-
 struct GameContextMenuModifier: ViewModifier {
     let game: GameEntry
     var appState: AppState
@@ -73,23 +72,26 @@ struct GameContextMenuModifier: ViewModifier {
 }
 
 extension View {
-    func gameContextMenu(game: GameEntry,
-                         appState: AppState,
-                         onPlay: @escaping () -> Void,
-                         onSelect: (() -> Void)? = nil,
-                         gameToDelete: Binding<GameEntry?>,
-                         showDeleteConfirm: Binding<Bool>,
-                         gameForSettings: Binding<GameEntry?>,
-                         gameForInfo: Binding<GameEntry?>) -> some View {
-        modifier(GameContextMenuModifier(
-            game: game,
-            appState: appState,
-            onPlay: onPlay,
-            onSelect: onSelect,
-            gameToDelete: gameToDelete,
-            showDeleteConfirm: showDeleteConfirm,
-            gameForSettings: gameForSettings,
-            gameForInfo: gameForInfo
-        ))
+    func gameContextMenu(
+        game: GameEntry,
+        appState: AppState,
+        onPlay: @escaping () -> Void,
+        onSelect: (() -> Void)? = nil,
+        gameToDelete: Binding<GameEntry?>,
+        showDeleteConfirm: Binding<Bool>,
+        gameForSettings: Binding<GameEntry?>,
+        gameForInfo: Binding<GameEntry?>
+    ) -> some View {
+        modifier(
+            GameContextMenuModifier(
+                game: game,
+                appState: appState,
+                onPlay: onPlay,
+                onSelect: onSelect,
+                gameToDelete: gameToDelete,
+                showDeleteConfirm: showDeleteConfirm,
+                gameForSettings: gameForSettings,
+                gameForInfo: gameForInfo
+            ))
     }
 }

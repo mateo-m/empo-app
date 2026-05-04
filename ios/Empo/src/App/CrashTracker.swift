@@ -86,7 +86,8 @@ final class CrashTracker {
     private static func isMarkerFromCurrentInstall(at markerURL: URL) -> Bool {
         let fm = FileManager.default
         guard let markerAttrs = try? fm.attributesOfItem(atPath: markerURL.path),
-              let markerMtime = markerAttrs[.modificationDate] as? Date else {
+            let markerMtime = markerAttrs[.modificationDate] as? Date
+        else {
             // Couldn't stat the marker - assume current install so
             // this doesn't silently swallow a real crash.
             // Conservative default.
@@ -94,8 +95,9 @@ final class CrashTracker {
         }
 
         guard let execPath = Bundle.main.executablePath,
-              let bundleAttrs = try? fm.attributesOfItem(atPath: execPath),
-              let bundleMtime = bundleAttrs[.modificationDate] as? Date else {
+            let bundleAttrs = try? fm.attributesOfItem(atPath: execPath),
+            let bundleMtime = bundleAttrs[.modificationDate] as? Date
+        else {
             return true
         }
 

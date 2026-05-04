@@ -9,14 +9,18 @@ extension URL {
     ///
     /// Hidden files are skipped, matching the behavior we want
     /// for game folders (don't pick up `.DS_Store` etc.).
-    func directoryEntries(matchingExtensions extensions: Set<String>,
-                          fm: FileManager = .default) -> [URL] {
+    func directoryEntries(
+        matchingExtensions extensions: Set<String>,
+        fm: FileManager = .default
+    ) -> [URL] {
         let allowed = Set(extensions.map { $0.lowercased() })
-        guard let entries = try? fm.contentsOfDirectory(
-            at: self,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+        guard
+            let entries = try? fm.contentsOfDirectory(
+                at: self,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+        else { return [] }
         return entries.filter { allowed.contains($0.pathExtension.lowercased()) }
     }
 }

@@ -72,7 +72,8 @@ struct SettingsView: View {
                     SettingsToggle(
                         title: "Interface haptics",
                         isOn: $settings.interfaceHaptics,
-                        description: "Gentle taps when you press buttons, toggle switches, and navigate around."
+                        description:
+                            "Gentle taps when you press buttons, toggle switches, and navigate around."
                     )
 
                     SettingsToggle(
@@ -84,7 +85,8 @@ struct SettingsView: View {
                     SettingsToggle(
                         title: "Continue playing",
                         isOn: $settings.showContinuePlaying,
-                        description: "Show a card at the top of your library to quickly jump back into your last game."
+                        description:
+                            "Show a card at the top of your library to quickly jump back into your last game."
                     )
                 } header: {
                     Text("Look & Feel")
@@ -96,13 +98,15 @@ struct SettingsView: View {
                     SettingsToggle(
                         title: "Diagnostics overlay",
                         isOn: $settings.diagnosticsOverlay,
-                        description: "Adds a button to the in-game toolbar that toggles a draggable overlay showing the title, Ruby version, renderer, and FPS."
+                        description:
+                            "Adds a button to the in-game toolbar that toggles a draggable overlay showing the title, Ruby version, renderer, and FPS."
                     )
 
                     SettingsToggle(
                         title: "Show viewport bounds",
                         isOn: $settings.showViewportBounds,
-                        description: "Fills the framebuffer area outside the game viewport with a color of your choosing."
+                        description:
+                            "Fills the framebuffer area outside the game viewport with a color of your choosing."
                     )
 
                     if settings.showViewportBounds {
@@ -128,12 +132,15 @@ struct SettingsView: View {
                     SettingsToggle(
                         title: "Debug logs",
                         isOn: $settings.debugLogs,
-                        description: "Saves engine logs for each session. Find them in Files → \(AppInfo.name) → Games → <game> → Logs."
+                        description:
+                            "Saves engine logs for each session. Find them in Files → \(AppInfo.name) → Games → <game> → Logs."
                     )
 
                     if settings.debugLogs {
                         VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Stepper("Keep last \(settings.maxLogFiles) logs per game", value: $settings.maxLogFiles, in: 5...100, step: 5)
+                            Stepper(
+                                "Keep last \(settings.maxLogFiles) logs per game",
+                                value: $settings.maxLogFiles, in: 5...100, step: 5)
                             Text("Older logs get cleaned up automatically when a session starts.")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -153,7 +160,10 @@ struct SettingsView: View {
                         Label("Open-source licenses", systemImage: "doc.text")
                     }
 
-                    Link(destination: URL(string: "https://github.com/mateo-m/empo-app/wiki/privacy-policy") ?? URL.empoHomepage) {
+                    Link(
+                        destination: URL(string: "https://github.com/mateo-m/empo-app/wiki/privacy-policy")
+                            ?? URL.empoHomepage
+                    ) {
                         Label {
                             HStack {
                                 Text("Privacy Policy")
@@ -168,7 +178,10 @@ struct SettingsView: View {
                     }
                     .tint(.primary)
 
-                    Link(destination: URL(string: "https://github.com/mateo-m/empo-app/issues") ?? URL.empoHomepage) {
+                    Link(
+                        destination: URL(string: "https://github.com/mateo-m/empo-app/issues")
+                            ?? URL.empoHomepage
+                    ) {
                         Label {
                             HStack {
                                 Text("Report an issue")
@@ -203,7 +216,6 @@ struct SettingsView: View {
 
 }
 
-
 /// Presented as a sheet when the user taps the version label in the
 /// settings header. Shows build details as a grouped list styled to
 /// match GameInfoView. The branch row is only included when the
@@ -224,7 +236,7 @@ private struct BuildInfoSheet: View {
     private struct Row: Identifiable {
         let label: String
         let value: String
-        var annotation: String? = nil
+        var annotation: String?
         var id: String { label }
     }
 
@@ -232,11 +244,12 @@ private struct BuildInfoSheet: View {
         var r: [Row] = []
         r.append(Row(label: "Version", value: AppInfo.version))
         r.append(Row(label: "Build", value: AppInfo.build))
-        r.append(Row(
-            label: "Commit",
-            value: GitInfo.commit,
-            annotation: GitInfo.dirty ? "(dirty)" : nil
-        ))
+        r.append(
+            Row(
+                label: "Commit",
+                value: GitInfo.commit,
+                annotation: GitInfo.dirty ? "(dirty)" : nil
+            ))
         if !GitInfo.branch.isEmpty, GitInfo.branch != GitInfo.defaultBranch {
             r.append(Row(label: "Branch", value: GitInfo.branch))
         }
@@ -297,7 +310,6 @@ private struct BuildInfoSheet: View {
     }
 }
 
-
 private struct ViewportBoundsColorPicker: View {
     @Binding var color: Color
 
@@ -324,7 +336,6 @@ private struct ViewportBoundsColorPicker: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 }
-
 
 /// Miniature device mockup showing the game viewport and bounds color.
 private struct DevicePreview: View {
@@ -445,10 +456,11 @@ private struct DevicePreview: View {
     }
 }
 
-private extension URL {
+extension URL {
     /// Fallback for any URL literal that fails to parse. Empty string
     /// URL initialization is the only way to guarantee a non-nil URL
     /// at compile time without a force-unwrap, so the project homepage
     /// serves as a safe landing page.
-    static let empoHomepage = URL(string: "https://github.com/mateo-m/empo-app") ?? URL(fileURLWithPath: "/")
+    fileprivate static let empoHomepage =
+        URL(string: "https://github.com/mateo-m/empo-app") ?? URL(fileURLWithPath: "/")
 }

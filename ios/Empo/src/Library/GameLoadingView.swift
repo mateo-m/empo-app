@@ -34,8 +34,9 @@ struct GameLoadingView: View {
     /// banner-having games see their banner in both places.
     private var bannerImage: UIImage? {
         guard let container = game.container,
-              let path = GameMetadata.load(from: container)
-                .customBannerPath(in: container) else { return nil }
+            let path = GameMetadata.load(from: container)
+                .customBannerPath(in: container)
+        else { return nil }
         return ImageCache.shared.image(for: path)
     }
 
@@ -44,7 +45,7 @@ struct GameLoadingView: View {
             Color.black.ignoresSafeArea()
 
             switch mode {
-            case .loading:  loadingContent
+            case .loading: loadingContent
             case .resuming: resumeContent
             }
         }
@@ -52,7 +53,6 @@ struct GameLoadingView: View {
         .toolbar(.hidden, for: .navigationBar)
         .containerBackground(.black, for: .navigation)
     }
-
 
     private var loadingContent: some View {
         ZStack {
@@ -161,7 +161,6 @@ struct GameLoadingView: View {
                 .ignoresSafeArea()
         }
     }
-
 
     @ViewBuilder
     private var bannerBackground: some View {

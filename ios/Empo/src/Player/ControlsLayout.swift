@@ -49,7 +49,6 @@ struct ButtonModel: Identifiable, Equatable, Codable {
     }
 }
 
-
 /// Active orientation for the controls overlay. Each game stores
 /// independent layouts per orientation; buttons sized via fraction
 /// of viewport are unworkable across orientation flips because the
@@ -64,7 +63,6 @@ enum ControlsOrientation: String, Codable {
         size.height > size.width ? .portrait : .landscape
     }
 }
-
 
 private struct PersistedLayout: Codable {
     struct DPad: Codable {
@@ -91,7 +89,6 @@ private struct PersistedLayoutV1: Codable {
     var dpad: PersistedLayout.DPad
     var buttons: [ButtonModel]
 }
-
 
 @MainActor
 @Observable
@@ -187,7 +184,6 @@ class ControlsLayout {
         return DefaultsKey.controlsLayout(gameID: id)
     }
 
-
     /// Seed an initial layout for a game ID that isn't currently
     /// active. Used by the JGP import path so the game starts with
     /// the layout bundled in the archive rather than our defaults.
@@ -208,8 +204,9 @@ class ControlsLayout {
         buttons: [ButtonModel]
     ) {
         let portrait = PersistedLayout.Oriented(
-            dpad: .init(rx: dpadCenter.x, ry: dpadCenter.y,
-                        size: dpadSize, opacity: dpadOpacity),
+            dpad: .init(
+                rx: dpadCenter.x, ry: dpadCenter.y,
+                size: dpadSize, opacity: dpadOpacity),
             buttons: buttons
         )
         let landscape = PersistedLayout.Oriented(
@@ -223,10 +220,10 @@ class ControlsLayout {
         )
         let layout = PersistedLayout(portrait: portrait, landscape: landscape)
         guard let data = try? JSONEncoder().encode(layout) else { return }
-        UserDefaults.standard.set(data,
+        UserDefaults.standard.set(
+            data,
             forKey: DefaultsKey.controlsLayout(gameID: gameID))
     }
-
 
     // MARK: - Defaults
     //
@@ -248,10 +245,16 @@ class ControlsLayout {
 
     /// 2x2 button grid in the bottom-right of a portrait viewport.
     nonisolated static let defaultButtonsPortrait: [ButtonModel] = [
-        ButtonModel(label: "Enter",  scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.70, y: 0.67), size: 56),
-        ButtonModel(label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.88, y: 0.67), size: 56),
-        ButtonModel(label: "Z",      scancode: Int32(MKXP_SCANCODE_Z),      relativeCenter: CGPoint(x: 0.70, y: 0.76), size: 56),
-        ButtonModel(label: "B",      scancode: Int32(MKXP_SCANCODE_B),      relativeCenter: CGPoint(x: 0.88, y: 0.76), size: 56),
+        ButtonModel(
+            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.70, y: 0.67),
+            size: 56),
+        ButtonModel(
+            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.88, y: 0.67),
+            size: 56),
+        ButtonModel(
+            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.70, y: 0.76), size: 56),
+        ButtonModel(
+            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.76), size: 56),
     ]
 
     /// 2x2 button grid in the bottom-right of a landscape viewport.
@@ -259,16 +262,21 @@ class ControlsLayout {
     /// can sit higher and more spread out without overlapping the
     /// game viewport's center.
     nonisolated static let defaultButtonsLandscape: [ButtonModel] = [
-        ButtonModel(label: "Enter",  scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.80, y: 0.59), size: 56),
-        ButtonModel(label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.88, y: 0.59), size: 56),
-        ButtonModel(label: "Z",      scancode: Int32(MKXP_SCANCODE_Z),      relativeCenter: CGPoint(x: 0.80, y: 0.75), size: 56),
-        ButtonModel(label: "B",      scancode: Int32(MKXP_SCANCODE_B),      relativeCenter: CGPoint(x: 0.88, y: 0.75), size: 56),
+        ButtonModel(
+            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.80, y: 0.59),
+            size: 56),
+        ButtonModel(
+            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.88, y: 0.59),
+            size: 56),
+        ButtonModel(
+            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.80, y: 0.75), size: 56),
+        ButtonModel(
+            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.75), size: 56),
     ]
 
     /// Legacy alias for callers that grab "the" defaults without
     /// orientation. Returns the portrait set.
     nonisolated static var defaultButtons: [ButtonModel] { defaultButtonsPortrait }
-
 
     // MARK: - Reset
 
@@ -308,7 +316,8 @@ class ControlsLayout {
     }
 
     func resetWithStagger() {
-        let defaults = currentOrientation == .portrait
+        let defaults =
+            currentOrientation == .portrait
             ? Self.defaultButtonsPortrait
             : Self.defaultButtonsLandscape
         var matchedIDs = Set<UUID>()
@@ -317,15 +326,18 @@ class ControlsLayout {
         // Match current buttons to defaults by label + scancode
         var moves: [(id: UUID, center: CGPoint, size: CGFloat)] = []
         for (di, def) in defaults.enumerated() {
-            guard let current = buttons.first(where: {
-                $0.label == def.label && $0.scancode == def.scancode && !matchedIDs.contains($0.id)
-            }) else { continue }
+            guard
+                let current = buttons.first(where: {
+                    $0.label == def.label && $0.scancode == def.scancode && !matchedIDs.contains($0.id)
+                })
+            else { continue }
 
             matchedIDs.insert(current.id)
             matchedDefaults.insert(di)
 
-            let posChanged = abs(current.relativeCenter.x - def.relativeCenter.x) > 0.001
-                          || abs(current.relativeCenter.y - def.relativeCenter.y) > 0.001
+            let posChanged =
+                abs(current.relativeCenter.x - def.relativeCenter.x) > 0.001
+                || abs(current.relativeCenter.y - def.relativeCenter.y) > 0.001
             let sizeChanged = abs(current.size - def.size) > 0.5
             if posChanged || sizeChanged {
                 moves.append((current.id, def.relativeCenter, def.size))
@@ -334,7 +346,8 @@ class ControlsLayout {
 
         // Animate: remove extras, move displaced, reset D-pad
         // Controls already at default are untouched (no-op = no animation).
-        let defaultDpadCenter = currentOrientation == .portrait
+        let defaultDpadCenter =
+            currentOrientation == .portrait
             ? Self.defaultDPadCenterPortrait
             : Self.defaultDPadCenterLandscape
         withAnimation(Motion.standard) {
@@ -367,7 +380,6 @@ class ControlsLayout {
             }
         }
     }
-
 
     // MARK: - Persistence
 
@@ -419,7 +431,8 @@ class ControlsLayout {
     @discardableResult
     func loadLayout() -> Bool {
         guard let key = savedLayoutKey,
-              let data = UserDefaults.standard.data(forKey: key) else {
+            let data = UserDefaults.standard.data(forKey: key)
+        else {
             return false
         }
 
@@ -471,7 +484,6 @@ class ControlsLayout {
         inactiveButtons = inactive.buttons
     }
 
-
     // MARK: - Mutators
 
     func addButton(label: String, scancode: Int32) {
@@ -479,8 +491,9 @@ class ControlsLayout {
         if let range = label.range(of: " (") {
             displayLabel = String(label[..<range.lowerBound])
         }
-        let button = ButtonModel(label: displayLabel, scancode: scancode,
-                                 relativeCenter: CGPoint(x: 0.5, y: 0.5), size: 56)
+        let button = ButtonModel(
+            label: displayLabel, scancode: scancode,
+            relativeCenter: CGPoint(x: 0.5, y: 0.5), size: 56)
         withAnimation(Motion.gentle) {
             buttons.append(button)
         }
@@ -490,7 +503,10 @@ class ControlsLayout {
         buttons.removeAll { $0.id == id }
     }
 
-    func updateButton(id: UUID, label: String? = nil, scancode: Int32? = nil, size: CGFloat? = nil, relativeCenter: CGPoint? = nil, opacity: Double? = nil) {
+    func updateButton(
+        id: UUID, label: String? = nil, scancode: Int32? = nil, size: CGFloat? = nil,
+        relativeCenter: CGPoint? = nil, opacity: Double? = nil
+    ) {
         guard let index = buttons.firstIndex(where: { $0.id == id }) else { return }
         if let label { buttons[index].label = label }
         if let scancode { buttons[index].scancode = scancode }

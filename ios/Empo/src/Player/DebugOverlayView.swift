@@ -1,6 +1,5 @@
 import SwiftUI
 
-
 /// Preference key used by the overlay to report its measured height
 /// back to PlayerView, so the draggable clamp math matches whatever
 /// size the content settles at (long titles / wrapped lines
@@ -11,7 +10,6 @@ struct DebugOverlayHeightKey: PreferenceKey {
         value = nextValue()
     }
 }
-
 
 /// Observable state backing `DebugOverlayView`. Kept in the player
 /// view as a long-lived property so the overlay can be
@@ -36,7 +34,6 @@ final class DebugOverlayState {
     /// visually aligned.
     var memoryBuffer = FPSRingBuffer(capacity: 120)
 }
-
 
 struct DebugOverlayView: View {
     let state: DebugOverlayState
@@ -85,8 +82,11 @@ struct DebugOverlayView: View {
                         let x = CGFloat(i) / CGFloat(ringBuffer.capacity - 1) * size.width
                         let y = size.height - (sample / maxFPS) * size.height
                         let clamped = max(0, min(size.height, y))
-                        if i == 0 { path.move(to: CGPoint(x: x, y: clamped)) }
-                        else { path.addLine(to: CGPoint(x: x, y: clamped)) }
+                        if i == 0 {
+                            path.move(to: CGPoint(x: x, y: clamped))
+                        } else {
+                            path.addLine(to: CGPoint(x: x, y: clamped))
+                        }
                     }
                     context.stroke(path, with: .color(fpsColor), lineWidth: 1.5)
                 }
@@ -154,8 +154,11 @@ struct DebugOverlayView: View {
                     let x = CGFloat(i) / CGFloat(state.memoryBuffer.capacity - 1) * size.width
                     let y = size.height - ((sample - lo) / range) * size.height
                     let clamped = max(0, min(size.height, y))
-                    if i == 0 { path.move(to: CGPoint(x: x, y: clamped)) }
-                    else { path.addLine(to: CGPoint(x: x, y: clamped)) }
+                    if i == 0 {
+                        path.move(to: CGPoint(x: x, y: clamped))
+                    } else {
+                        path.addLine(to: CGPoint(x: x, y: clamped))
+                    }
                 }
                 context.stroke(path, with: .color(.white.opacity(Alpha.textMuted)), lineWidth: 1.5)
             }
@@ -258,7 +261,6 @@ struct DebugOverlayView: View {
         return device == "unknown" ? nil : device
     }
 }
-
 
 struct FPSRingBuffer {
     let capacity: Int

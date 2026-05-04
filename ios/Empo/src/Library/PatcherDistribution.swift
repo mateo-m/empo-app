@@ -51,7 +51,8 @@ enum PatcherDistribution {
         }
 
         if let cid = canonicalId,
-           let perGame = readPatchRules(canonicalId: cid) {
+            let perGame = readPatchRules(canonicalId: cid)
+        {
             rules.append(contentsOf: perGame)
         }
 
@@ -106,8 +107,9 @@ enum PatcherDistribution {
             for game in registry.games {
                 for matcher in game.matchers where matcher.type == "iniTitle" {
                     if normalized.contains(matcher.value.lowercased()) {
-                        NSLog("[patcher-dist] %@ -> %@ (iniTitle: %@)",
-                              gameId, game.id, title)
+                        NSLog(
+                            "[patcher-dist] %@ -> %@ (iniTitle: %@)",
+                            gameId, game.id, title)
                         return game.id
                     }
                 }
@@ -163,8 +165,9 @@ enum PatcherDistribution {
         guard let data = try? Data(contentsOf: url) else { return nil }
         let cleaned = stripLineComments(in: data) ?? data
         guard let json = try? JSONSerialization.jsonObject(with: cleaned),
-              let obj = json as? [String: Any],
-              let rpgm = obj["rpgm"] as? [[String: Any]] else {
+            let obj = json as? [String: Any],
+            let rpgm = obj["rpgm"] as? [[String: Any]]
+        else {
             return nil
         }
         return rpgm
@@ -175,13 +178,16 @@ enum PatcherDistribution {
     private static func bundleURL(forSubpath path: String) -> URL? {
         // Assets.bundle is registered in project.yml; the curated
         // patches mirror its layout under "Patches/".
-        guard let assetsBundleURL = Bundle.main.url(
-            forResource: "Assets", withExtension: "bundle"
-        ) else {
+        guard
+            let assetsBundleURL = Bundle.main.url(
+                forResource: "Assets", withExtension: "bundle"
+            )
+        else {
             NSLog("[patcher-dist] Bundle.main has no Assets.bundle resource")
             return nil
         }
-        let result = assetsBundleURL
+        let result =
+            assetsBundleURL
             .appendingPathComponent(bundleSubdir)
             .appendingPathComponent(path)
         guard FileManager.default.fileExists(atPath: result.path) else {

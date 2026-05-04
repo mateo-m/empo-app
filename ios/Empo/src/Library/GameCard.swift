@@ -3,7 +3,7 @@ import SwiftUI
 struct GameCard: View {
     let game: GameEntry
     var isPaused: Bool = false
-    var onStopImport: (() -> Void)? = nil
+    var onStopImport: (() -> Void)?
     @Environment(\.appSettings) private var settings
     @State private var titleHeight: CGFloat = 40
 
@@ -12,10 +12,9 @@ struct GameCard: View {
     var body: some View {
         switch titlePosition {
         case .inside: insideCard
-        case .under:  underCard
+        case .under: underCard
         }
     }
-
 
     private var insideCard: some View {
         Color.clear
@@ -77,7 +76,6 @@ struct GameCard: View {
         // transition source's clip doesn't crop the shadow.
     }
 
-
     private var underCard: some View {
         VStack(spacing: Spacing.sm) {
             Color.clear
@@ -106,7 +104,6 @@ struct GameCard: View {
         }
     }
 
-
     @ViewBuilder
     private var centerOverlay: some View {
         // Dim the artwork a little for non-ready states so the
@@ -130,12 +127,11 @@ struct GameCard: View {
     }
 }
 
-
 struct GameListRow: View {
     let game: GameEntry
     var isPaused: Bool = false
-    var heroNamespace: Namespace.ID? = nil
-    var onStopImport: (() -> Void)? = nil
+    var heroNamespace: Namespace.ID?
+    var onStopImport: (() -> Void)?
 
     // Without a stable namespace, SwiftUI creates separate structural
     // branches and destroys/recreates GameArtworkView on status change,
@@ -155,7 +151,8 @@ struct GameListRow: View {
                 cornerRadius: Radius.sm,
                 importing: game.status.phase == .importing
             )
-            .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) { config in
+            .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) {
+                config in
                 config
                     .background(.black)
                     .clipShape(.rect(cornerRadius: Radius.sm))
@@ -189,7 +186,6 @@ struct GameListRow: View {
     }
 }
 
-
 /// Unified status badge used by both the grid card centerOverlay and the
 /// list row trailing edge. Renders the circular glass background,
 /// determinate/indeterminate progress ring (for imports), and the inner
@@ -215,7 +211,7 @@ struct GameStatusIndicator: View {
     }
 
     let kind: Kind
-    var onStopImport: (() -> Void)? = nil
+    var onStopImport: (() -> Void)?
     /// Overall diameter. All inner metrics (ring, icon, stop square)
     /// scale from this single value so the list (34pt) and card (56pt)
     /// sites both look proportional.
@@ -223,9 +219,9 @@ struct GameStatusIndicator: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    private var ringSize: CGFloat    { size * 0.82 }
-    private var lineWidth: CGFloat   { size * 0.079 }
-    private var stopSize: CGFloat    { size * 0.28 }
+    private var ringSize: CGFloat { size * 0.82 }
+    private var lineWidth: CGFloat { size * 0.079 }
+    private var stopSize: CGFloat { size * 0.28 }
     private var iconFont: Font {
         size >= 44 ? .title3 : .caption
     }

@@ -1,5 +1,5 @@
-import Foundation
 import Compression
+import Foundation
 
 /// Decodes RPG Maker `Scripts.{rxdata,rvdata,rvdata2}` files (Ruby
 /// Marshal envelope around zlib-deflated source per script entry)
@@ -86,8 +86,10 @@ enum RubyScriptGrammarSniffer {
         "Data/Scripts",
     ]
 
-    private static func locateCompiledScriptsFile(in gameDirectory: URL,
-                                                  fm: FileManager) -> URL? {
+    private static func locateCompiledScriptsFile(
+        in gameDirectory: URL,
+        fm: FileManager
+    ) -> URL? {
         let candidates = [
             gameDirectory,
             gameDirectory.appendingPathComponent("Data"),
@@ -108,23 +110,28 @@ enum RubyScriptGrammarSniffer {
     /// with thousands of scripts can't make sniffing slow.
     private static let maxLooseFiles = 200
 
-    private static func locateLooseScripts(in gameDirectory: URL,
-                                           fm: FileManager) -> [URL] {
+    private static func locateLooseScripts(
+        in gameDirectory: URL,
+        fm: FileManager
+    ) -> [URL] {
         var found: [URL] = []
         for relPath in looseScriptDirs {
             let dir = gameDirectory.appendingPathComponent(relPath)
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: dir.path, isDirectory: &isDir),
-                  isDir.boolValue else {
+                isDir.boolValue
+            else {
                 continue
             }
             // Recursive enumerator picks up nested per-feature
             // folders that some forks use (e.g. Plugins layout).
-            guard let enumerator = fm.enumerator(
-                at: dir,
-                includingPropertiesForKeys: nil,
-                options: [.skipsHiddenFiles]
-            ) else { continue }
+            guard
+                let enumerator = fm.enumerator(
+                    at: dir,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles]
+                )
+            else { continue }
             for case let url as URL in enumerator {
                 if url.pathExtension.lowercased() == "rb" {
                     found.append(url)
@@ -182,7 +189,8 @@ enum RubyScriptGrammarSniffer {
             guard let deflated = reader.readStringBytes() else { return nil }
 
             if let inflated = inflate(deflated),
-               let source = inflated.decodeAsLooseText() {
+                let source = inflated.decodeAsLooseText()
+            {
                 combined.append(source)
                 combined.append("\n")
                 if combined.count > combinedCap { break }
@@ -266,7 +274,6 @@ enum RubyScriptGrammarSniffer {
     }
 }
 
-
 // MARK: - Marshal reader
 
 /// Minimal Ruby Marshal reader. Implements only what's needed for
@@ -343,8 +350,8 @@ private struct MarshalReader {
     /// case; the bytes are what we want.
     mutating func readStringBytes() -> Data? {
         guard let tag = readByte() else { return nil }
-        if tag == 0x49 { // 'I' = ivar wrapper
-            guard let inner = readByte(), inner == 0x22 else { return nil } // '"'
+        if tag == 0x49 {  // 'I' = ivar wrapper
+            guard let inner = readByte(), inner == 0x22 else { return nil }  // '"'
             guard let bytes = readRawString() else { return nil }
             // Skip ivars (encoding flag and friends). Each ivar is
             // [symbol, value] - skipValue handles both.
@@ -355,7 +362,7 @@ private struct MarshalReader {
             }
             return bytes
         }
-        if tag == 0x22 { // '"' = bare string (no ivars)
+        if tag == 0x22 {  // '"' = bare string (no ivars)
             return readRawString()
         }
         return nil

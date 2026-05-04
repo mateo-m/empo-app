@@ -68,7 +68,8 @@ struct GameLibraryView: View {
     // is cheap; .map(\.id) in `.animation(value:)` was the actual
     // hot-loop offender and was dropped.
     private var filteredGames: [GameEntry] {
-        let base = searchText.isEmpty
+        let base =
+            searchText.isEmpty
             ? library.games
             : library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
         return settings.librarySortOption.sort(base, sizes: gameSizes)
@@ -96,7 +97,8 @@ struct GameLibraryView: View {
         let readyGames = library.games.filter { $0.status == .ready }
         guard readyGames.count > 1 else { return nil }  // no hero if only 1 game
 
-        return readyGames
+        return
+            readyGames
             .filter { $0.lastPlayed != nil }
             .max(by: { ($0.lastPlayed ?? .distantPast) < ($1.lastPlayed ?? .distantPast) })
     }
@@ -208,11 +210,13 @@ struct GameLibraryView: View {
                         .transition(.cardAppear)
                 }
             }
-            .modifier(BulkDeleteAlert(
-                isPresented: $showBulkDeleteConfirm,
-                count: selectedIDs.count,
-                onConfirm: confirmBulkDelete
-            ))
+            .modifier(
+                BulkDeleteAlert(
+                    isPresented: $showBulkDeleteConfirm,
+                    count: selectedIDs.count,
+                    onConfirm: confirmBulkDelete
+                )
+            )
             .toolbarVisibility(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
                 SettingsView()
@@ -249,7 +253,9 @@ struct GameLibraryView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 if let game = gameToDelete {
-                    Text("This will remove all files for \"\(game.title)\". You can always re-import it later.")
+                    Text(
+                        "This will remove all files for \"\(game.title)\". You can always re-import it later."
+                    )
                 }
             }
             .alert("Invalid Game", isPresented: $showInvalidAlert) {
@@ -285,7 +291,9 @@ struct GameLibraryView: View {
                 // }
             } message: {
                 if let paused = pauseManager.pausedGame {
-                    Text("\"\(paused.title)\" is still running. Resume it from its card, or force-close the app to play a different game.")
+                    Text(
+                        "\"\(paused.title)\" is still running. Resume it from its card, or force-close the app to play a different game."
+                    )
                 }
             }
             .tint(nil)
@@ -297,8 +305,10 @@ struct GameLibraryView: View {
                 // always visible in the library.
                 let source = tappedSource[game.id] ?? .item
                 GameLoadingView(game: game)
-                    .navigationTransition(.zoom(sourceID: source.transitionID(for: game.id),
-                                                in: heroNamespace))
+                    .navigationTransition(
+                        .zoom(
+                            sourceID: source.transitionID(for: game.id),
+                            in: heroNamespace))
             }
             .onChange(of: appState.phase) { _, newPhase in
                 if newPhase == nil && !path.isEmpty {
@@ -322,7 +332,6 @@ struct GameLibraryView: View {
         }
     }
 
-
     private var emptyStateContent: some View {
         EmptyStateView(
             icon: "gamecontroller",
@@ -332,7 +341,6 @@ struct GameLibraryView: View {
             initialDelay: entranceDelay
         )
     }
-
 
     private let headerHeight: CGFloat = AppSize.libraryHeader
 
@@ -344,10 +352,12 @@ struct GameLibraryView: View {
                 Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
                     .accessibilityHidden(true)
                 Spacer()
-                Text(selectedIDs.isEmpty
-                     ? "Select Games"
-                     : "\(selectedIDs.count) Selected")
-                    .font(.headline)
+                Text(
+                    selectedIDs.isEmpty
+                        ? "Select Games"
+                        : "\(selectedIDs.count) Selected"
+                )
+                .font(.headline)
                 Spacer()
                 Button("Done") { exitSelectionMode() }
                     .font(.body.weight(.semibold))
@@ -375,7 +385,6 @@ struct GameLibraryView: View {
         .animation(Motion.standard, value: selectionMode)
     }
 
-
     private var searchBar: some View {
         LibrarySearchBar(
             searchText: $searchText,
@@ -390,7 +399,6 @@ struct GameLibraryView: View {
             }
         )
     }
-
 
     private var gameContent: some View {
         ScrollView {
@@ -427,7 +435,6 @@ struct GameLibraryView: View {
         .padding(.bottom)
         .animation(Motion.standard, value: filteredGames)
     }
-
 
     private func heroCard(for game: GameEntry) -> some View {
         let isPaused = pauseManager.pausedGame?.id == game.id
@@ -504,10 +511,11 @@ struct GameLibraryView: View {
                         game: game,
                         isPaused: isPaused,
                         heroNamespace: game.status == .ready ? heroNamespace : nil,
-                        onStopImport: game.status.phase == .importing ? {
-                            gameToDelete = game
-                            showDeleteConfirm = true
-                        } : nil
+                        onStopImport: game.status.phase == .importing
+                            ? {
+                                gameToDelete = game
+                                showDeleteConfirm = true
+                            } : nil
                     )
                     // Anchor on .topLeading so the badge floats over
                     // the artwork's top-left corner instead of fighting
@@ -564,40 +572,49 @@ struct GameLibraryView: View {
         ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
             switch game.status {
             case .importing:
-                GameCard(game: game, onStopImport: {
-                    gameToDelete = game
-                    showDeleteConfirm = true
-                })
-                    .cardShadow()
-                    .id("\(game.id)-importing")
-                    .transition(.cardAppear)
-                    .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
+                GameCard(
+                    game: game,
+                    onStopImport: {
+                        gameToDelete = game
+                        showDeleteConfirm = true
+                    }
+                )
+                .cardShadow()
+                .id("\(game.id)-importing")
+                .transition(.cardAppear)
+                .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .invalid:
-                Button { handleCardTap(for: game) } label: {
+                Button {
+                    handleCardTap(for: game)
+                } label: {
                     GameCard(game: game)
                         .cardShadow()
                 }
-                    .id("\(game.id)-invalid")
-                    .buttonStyle(CardPressStyle())
-                    .transition(.cardAppear)
-                    .gameContextMenu(
-                        game: game,
-                        appState: appState,
-                        onPlay: { handleGameTap(game, from: .item) },
-                        gameToDelete: $gameToDelete,
-                        showDeleteConfirm: $showDeleteConfirm,
-                        gameForSettings: $gameForSettings,
-                        gameForInfo: $gameForInfo
-                    )
-                    .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
+                .id("\(game.id)-invalid")
+                .buttonStyle(CardPressStyle())
+                .transition(.cardAppear)
+                .gameContextMenu(
+                    game: game,
+                    appState: appState,
+                    onPlay: { handleGameTap(game, from: .item) },
+                    gameToDelete: $gameToDelete,
+                    showDeleteConfirm: $showDeleteConfirm,
+                    gameForSettings: $gameForSettings,
+                    gameForInfo: $gameForInfo
+                )
+                .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
             case .ready:
                 let isPaused = pauseManager.pausedGame?.id == game.id
-                Button { handleCardTap(for: game) } label: {
+                Button {
+                    handleCardTap(for: game)
+                } label: {
                     GameCard(game: game, isPaused: isPaused)
-                        .matchedTransitionSource(id: GameTapSource.item.transitionID(for: game.id),
-                                                 in: heroNamespace) { config in
+                        .matchedTransitionSource(
+                            id: GameTapSource.item.transitionID(for: game.id),
+                            in: heroNamespace
+                        ) { config in
                             config
                                 .background(.black)
                                 .clipShape(.rect(cornerRadius: Radius.md))
@@ -610,16 +627,16 @@ struct GameLibraryView: View {
                             }
                         }
                 }
-                    // NOTE: no .id("...-\(isPaused)") here on purpose.
-                    // Forcing a remount on pause toggle destroys the
-                    // matchedTransitionSource mid-animation, which
-                    // makes the exit hero zoom snap to a fallback
-                    // frame at its end. GameCard already animates its
-                    // own pause overlay via GameStatusIndicator's
-                    // internal .animation(Motion.gentle, value: …),
-                    // so no remount is needed.
-                    .buttonStyle(CardPressStyle())
-                    .transition(.cardAppear)
+                // NOTE: no .id("...-\(isPaused)") here on purpose.
+                // Forcing a remount on pause toggle destroys the
+                // matchedTransitionSource mid-animation, which
+                // makes the exit hero zoom snap to a fallback
+                // frame at its end. GameCard already animates its
+                // own pause overlay via GameStatusIndicator's
+                // internal .animation(Motion.gentle, value: …),
+                // so no remount is needed.
+                .buttonStyle(CardPressStyle())
+                .transition(.cardAppear)
                 .gameContextMenu(
                     game: game,
                     appState: appState,
@@ -635,7 +652,6 @@ struct GameLibraryView: View {
         }
     }
 
-
     /// Tap entrypoint for grid cards / list rows. Branches on
     /// selection mode: when active, taps toggle membership in
     /// `selectedIDs` (and only on .ready games - importing /
@@ -648,8 +664,8 @@ struct GameLibraryView: View {
             return
         }
         switch game.status {
-        case .ready:     handleGameTap(game, from: .item)
-        case .invalid:   showInvalidAlert = true
+        case .ready: handleGameTap(game, from: .item)
+        case .invalid: showInvalidAlert = true
         case .importing: break
         }
     }
@@ -754,7 +770,6 @@ struct GameLibraryView: View {
         }
     }
 
-
     private func importGames(from urls: [URL]) {
         for url in urls {
             let accessing = url.startAccessingSecurityScopedResource()
@@ -794,7 +809,6 @@ struct GameLibraryView: View {
     }
 }
 
-
 /// Alert wrapper for the bulk-delete confirmation. Inlining the
 /// alert directly into `GameLibraryView.body` pushes the body
 /// builder over SwiftUI's type-checker budget (every additional
@@ -819,5 +833,3 @@ private struct BulkDeleteAlert: ViewModifier {
         }
     }
 }
-
-

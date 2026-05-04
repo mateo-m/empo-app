@@ -155,7 +155,6 @@ enum RubyVersionDetection {
         case .modern:
             // Definitive: modern grammar can't run on 1.8/1.9.
             return 31
-
         case .legacy:
             // Successfully read source, no modern tokens. Use the
             // data file extension as the prior to choose 18 vs 19.
@@ -164,10 +163,9 @@ enum RubyVersionDetection {
             ) {
                 return scriptVer
             }
-            // Scripts file existed (sniffer found one) but
-            // extension lookup failed (shouldn't happen). Fall
-            // through to archive sniff.
-            break
+        // Scripts file existed (sniffer found one) but
+        // extension lookup failed (shouldn't happen). Fall
+        // through to archive sniff.
 
         case .inconclusive:
             // Couldn't read scripts (encrypted archive, missing
@@ -185,10 +183,10 @@ enum RubyVersionDetection {
         // .rgss3a → 1.9 (RGSS3 / RPG Maker VX Ace / Ruby 1.9.2)
         if let archiveExt = topLevelRgssArchiveExtension(at: gameDirectory, fm: fm) {
             switch archiveExt {
-            case "rgssad":  return 18
-            case "rgss2a":  return 19
-            case "rgss3a":  return 19
-            default:        break
+            case "rgssad": return 18
+            case "rgss2a": return 19
+            case "rgss3a": return 19
+            default: break
             }
         }
 
@@ -197,9 +195,9 @@ enum RubyVersionDetection {
         // in its three-digit suffix.
         if let libraryRGSS = rgssLibraryMajor(at: gameDirectory, fm: fm) {
             switch libraryRGSS {
-            case 1:    return 18
+            case 1: return 18
             case 2, 3: return 19
-            default:   break
+            default: break
             }
         }
 
@@ -245,8 +243,10 @@ enum RubyVersionDetection {
     /// projects bundle both `.rgssad` and `.rgss2a` for compat),
     /// the highest version wins; that's the one Game.ini's
     /// `Library=` field tells the engine to load.
-    private static func topLevelRgssArchiveExtension(at gameDirectory: URL,
-                                                     fm: FileManager) -> String? {
+    private static func topLevelRgssArchiveExtension(
+        at gameDirectory: URL,
+        fm: FileManager
+    ) -> String? {
         let entries = gameDirectory.directoryEntries(
             matchingExtensions: ["rgssad", "rgss2a", "rgss3a"],
             fm: fm
@@ -257,10 +257,10 @@ enum RubyVersionDetection {
             let ext = url.pathExtension.lowercased()
             let rank: Int
             switch ext {
-            case "rgssad":  rank = 1
-            case "rgss2a":  rank = 2
-            case "rgss3a":  rank = 3
-            default:        continue
+            case "rgssad": rank = 1
+            case "rgss2a": rank = 2
+            case "rgss3a": rank = 3
+            default: continue
             }
             if rank > bestRank {
                 bestRank = rank
@@ -273,12 +273,17 @@ enum RubyVersionDetection {
     /// Reads `Game.ini`'s `Library=RGSSxxx.dll` and returns the
     /// digit immediately after `RGSS` (1 / 2 / 3), or nil if no
     /// match.
-    private static func rgssLibraryMajor(at gameDirectory: URL,
-                                         fm: FileManager) -> Int? {
+    private static func rgssLibraryMajor(
+        at gameDirectory: URL,
+        fm: FileManager
+    ) -> Int? {
         let iniURL = gameDirectory.appendingPathComponent("Game.ini")
-        guard let value = GameEntry.parseINIValue(in: iniURL,
-                                                   section: "game",
-                                                   key: "library") else {
+        guard
+            let value = GameEntry.parseINIValue(
+                in: iniURL,
+                section: "game",
+                key: "library")
+        else {
             return nil
         }
         let upper = value.uppercased()
@@ -287,7 +292,6 @@ enum RubyVersionDetection {
         guard let firstDigit = after.first else { return nil }
         return firstDigit.hexDigitValue
     }
-
 
     /// Scan the game directory for a bundled CRuby DLL whose
     /// filename encodes the Ruby version. Modern mkxp-z-based
@@ -310,8 +314,10 @@ enum RubyVersionDetection {
     ///                              closer to 3.x; map to 31)
     ///   - `30X` / `3.0.X`  → 30
     ///   - `3YX` (Y>=1)     → 31
-    private static func bundledRubyDLLVersion(at gameDirectory: URL,
-                                              fm: FileManager) -> Int? {
+    private static func bundledRubyDLLVersion(
+        at gameDirectory: URL,
+        fm: FileManager
+    ) -> Int? {
         let entries = gameDirectory.directoryEntries(
             matchingExtensions: ["dll"], fm: fm
         )
@@ -329,11 +335,13 @@ enum RubyVersionDetection {
             let nsName = name as NSString
             let range = NSRange(location: 0, length: nsName.length)
             guard let m = regex.firstMatch(in: name, options: [], range: range),
-                  m.numberOfRanges >= 2 else { continue }
+                m.numberOfRanges >= 2
+            else { continue }
             let digits = nsName.substring(with: m.range(at: 1))
             guard digits.count == 3,
-                  let major = Int(String(digits.first!)),
-                  let minor = Int(String(digits[digits.index(after: digits.startIndex)])) else {
+                let major = Int(String(digits.first!)),
+                let minor = Int(String(digits[digits.index(after: digits.startIndex)]))
+            else {
                 continue
             }
             // If the game ships multiple Ruby DLLs (Inf Fusion
