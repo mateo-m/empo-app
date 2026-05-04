@@ -18,6 +18,13 @@ jobs:
         with:
           submodules: false
 
+      - name: Cache Swift toolchain
+        id: cache-swift
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/swiftly
+          key: swiftly-${{ runner.os }}-6.2
+
       - name: Install Swift toolchain
         uses: vapor/swiftly-action@v0.2
         with:
