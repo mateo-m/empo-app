@@ -105,6 +105,10 @@ struct PlayerView: View {
                         onToggleEditMode: { toggleEditMode() },
                         onToggleHideControls: { toggleHideControls() },
                         onShowMore: { showMoreSheet = true },
+                        menuVisible: PlayerMoreSheet.hasContent(
+                            settings: settings,
+                            fastForwardMultiplier: fastForwardMultiplier
+                        ),
                         onResetIdleTimer: { resetToolbarIdleTimer() }
                     )
                     .opacity(editMode ? 0 : 1)

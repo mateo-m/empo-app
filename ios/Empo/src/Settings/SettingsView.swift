@@ -108,8 +108,8 @@ struct SettingsView: View {
                     }
 
                     SettingsToggle(
-                        title: "Game overlay",
-                        isOn: $settings.debugMode,
+                        title: "Diagnostics overlay",
+                        isOn: $settings.diagnosticsOverlay,
                         description: "Adds a button to the in-game toolbar that toggles a draggable overlay showing the title, Ruby version, renderer, and FPS."
                     )
 

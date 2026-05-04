@@ -129,8 +129,14 @@ class AppSettings {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: DefaultsKey.theme) }
     }
 
-    var debugMode: Bool {
-        didSet { UserDefaults.standard.set(debugMode, forKey: DefaultsKey.debugMode) }
+    /// Toggle for the in-game Diagnostics overlay (the floating
+    /// draggable panel showing title / Ruby version / renderer /
+    /// FPS). The persistence key stays at `DefaultsKey.debugMode`
+    /// for backward-compat with users who already toggled the
+    /// setting under its earlier name; the Swift property and the
+    /// user-facing label both moved to "diagnosticsOverlay".
+    var diagnosticsOverlay: Bool {
+        didSet { UserDefaults.standard.set(diagnosticsOverlay, forKey: DefaultsKey.debugMode) }
     }
 
     var showViewportBounds: Bool {
@@ -213,7 +219,7 @@ class AppSettings {
         let ud = UserDefaults.standard
         let themeRaw = ud.string(forKey: DefaultsKey.theme) ?? AppTheme.auto.rawValue
         self.theme = AppTheme(rawValue: themeRaw) ?? .auto
-        self.debugMode = ud.bool(forKey: DefaultsKey.debugMode)
+        self.diagnosticsOverlay = ud.bool(forKey: DefaultsKey.debugMode)
         self.showViewportBounds = ud.bool(forKey: DefaultsKey.showViewportBounds)
         self.viewportBoundsColor = Self.loadViewportBoundsColor()
         self.debugLogs = (ud.object(forKey: DefaultsKey.debugLogs) as? Bool) ?? true

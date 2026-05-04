@@ -39,6 +39,27 @@ struct PlayerMoreSheet: View {
         (fastForwardMultiplier ?? 0) >= 2
     }
 
+    /// Whether the sheet would render any actionable row given the
+    /// current settings + per-game state. Mirrors the row-gating
+    /// logic in `body` exactly.
+    ///
+    /// Used by `PlayerToolbar` to hide the Menu button when this
+    /// returns false - otherwise the toolbar offers a button that
+    /// opens an empty sheet, which has been confusing users who
+    /// disable all the experimental features in app settings.
+    static func hasContent(
+        settings: AppSettings,
+        fastForwardMultiplier: Int?
+    ) -> Bool {
+        let cheats   = settings.isEnabled(.cheats)
+        let fastFwd  = (fastForwardMultiplier ?? 0) >= 2
+        let diag     = settings.diagnosticsOverlay
+        let pause    = settings.isEnabled(.gamePause)
+        // gameQuit is currently forced off in `body`; if/when it
+        // returns, mirror its gate here.
+        return cheats || fastFwd || diag || pause
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: Spacing.lg) {
@@ -59,10 +80,10 @@ struct PlayerMoreSheet: View {
                                 isOn: $fastForwardActive
                             )
                         }
-                        if settings.debugMode {
+                        if settings.diagnosticsOverlay {
                             MenuToggleRow(
                                 icon: "ladybug.fill",
-                                label: "Debug overlay",
+                                label: "Diagnostics overlay",
                                 isOn: $showDebugOverlay
                             )
                         }
