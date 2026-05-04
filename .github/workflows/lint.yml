@@ -9,45 +9,28 @@ jobs:
   swift:
     name: Swift (swiftlint + swift-format)
     runs-on: ubuntu-latest
-    container: swift:6.2-noble
     steps:
-      - name: Install dependencies (pre-checkout)
-        run: |
-          # The swift:*-noble base image is minimal. actions/checkout
-          # falls back to a tarball download (no .git) when git is
-          # missing inside the container, which then breaks every
-          # `git`-driven step downstream. Install git BEFORE the
-          # checkout step so a real .git directory lands on disk.
-          apt-get update -qq
-          apt-get install -y --no-install-recommends git curl unzip ca-certificates
-
       - uses: actions/checkout@v6
         with:
           submodules: false
 
-      - name: Install SwiftLint
-        run: |
-          # SwiftLint ships per-arch Linux binaries as release assets.
-          ARCH=$(uname -m)
-          case "$ARCH" in
-            x86_64)  ASSET=swiftlint_linux_amd64.zip ;;
-            aarch64) ASSET=swiftlint_linux_arm64.zip ;;
-            *) echo "unsupported arch: $ARCH" >&2; exit 1 ;;
-          esac
-          curl -fsSL -o /tmp/swiftlint.zip \
-            "https://github.com/realm/SwiftLint/releases/download/0.63.2/$ASSET"
-          unzip -q /tmp/swiftlint.zip -d /usr/local/bin
-          chmod +x /usr/local/bin/swiftlint
-          swiftlint --version
+      - name: Install Swift toolchain
+        # Swiftly is Apple's official toolchain manager. Gives us
+        # swift-format on ubuntu-latest without a custom container.
+        uses: vapor/swiftly-action@v0.2
+        with:
+          toolchain: "6.2"
 
-      - name: swift-format check
-        run: |
-          # swift-format ships with the Swift toolchain (6.0+).
-          swift-format lint --strict --recursive ios/Empo/src
+      - name: swift-format lint
+        run: swift-format lint --strict --recursive ios/Empo/src
 
-      - name: swiftlint
-        run: |
-          swiftlint lint --strict
+      - name: SwiftLint
+        # cirruslabs action lets us pin the SwiftLint version so it
+        # matches what's been validated locally + in `.swiftlint.yml`.
+        uses: cirruslabs/swiftlint-action@v1
+        with:
+          version: 0.63.2
+          args: --strict
 
   objc-cpp:
     name: ObjC / C / C++ (clang-format)
@@ -57,23 +40,17 @@ jobs:
         with:
           submodules: false
 
-      - name: Install clang-format
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends clang-format
-
       - name: clang-format check
-        run: |
-          FILES=$(git ls-files \
-            'ios/Empo/src/*.m' \
-            'ios/Empo/src/*.mm' \
-            'ios/Empo/src/*.h' \
-            'ios/Empo/shims/*.h' \
-            'ios/Empo/shims/*.c' \
-            'ios/Empo/shims/*.cpp')
-          if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs clang-format --dry-run --Werror
-          fi
+        # DoozyX is the canonical clang-format CI action (used by
+        # google/benchmark, apache/doris, magma, sgl-project, etc.).
+        # Pinning clang-format version 18 to match what we run
+        # locally (Apple clang-format 21 is also fine; the .clang-format
+        # config we ship is style-stable across both).
+        uses: DoozyX/clang-format-lint-action@v0.20
+        with:
+          source: "ios/Empo/src ios/Empo/shims"
+          extensions: "h,m,mm,c,cpp"
+          clangFormatVersion: 18
 
   shell:
     name: Bash (shellcheck + shfmt)
