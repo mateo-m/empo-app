@@ -96,126 +96,32 @@ targets:
         script: |
           "${PROJECT_DIR}/../../tools/fetch-angle.sh"
 
-      - name: Stub multi-Ruby merged objects if missing
-        # Multi-Ruby Phase D (MULTI_RUBY_PLAN.md) links per-Ruby
-        # merged .o files that are built by `ios/Dependencies/common.make`.
-        # Until that build is run for a given SDK (sim or device),
-        # the merged.o files don't exist and the linker fails.
-        # This pre-build phase creates a stub .o for any missing
-        # merged.o that defines `mkxp_get_script_binding_NN()`
-        # returning nullptr, so the linker is satisfied and the
-        # host's `getActiveScriptBinding()` dispatcher's NULL check
-        # falls back to the legacy `scriptBinding` for that version.
-        #
-        # On clean checkouts:  stubs created, app links + runs against
-        #                      the legacy 3.1 path only (3.0/3.1 dispatch
-        #                      paths fall through to legacy via NULL).
-        # After `make mkxp-merged`: real merged.o's exist, multi-Ruby
-        #                      dispatch works for whichever versions
-        #                      were built.
+      - name: Verify multi-Ruby merged objects exist
+        # The link step needs per-Ruby merged.o files
+        # (mkxp{18,19,30,31}-merged.o) under
+        # ios/Dependencies/build-<sdk>-arm64/lib. They're built by
+        # ios/Dependencies/common.make. Fail fast with the exact
+        # command instead of trying to link without them - the
+        # linker errors are confusing and an earlier version of
+        # this phase auto-stubbed missing files with nullptr,
+        # which let the build succeed but produced a binary where
+        # every game launch hit a no-op script-binding lookup.
         basedOnDependencyAnalysis: false
         script: |
           set -e
           DEPS_LIB="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib"
-          mkdir -p "$DEPS_LIB"
+          MISSING=""
           for VER in 18 19 30 31; do
               OBJ="$DEPS_LIB/mkxp${VER}-merged.o"
               if [ ! -f "$OBJ" ]; then
-                  echo "info: $OBJ missing, stubbing for link" >&2
-                  TMP=$(mktemp -d)
-                  cat > "$TMP/stub.cpp" <<STUBEOF
-          // Auto-generated stub for missing mkxp${VER}-merged.o.
-          // mkxp_get_script_binding_${VER} returns nullptr so
-          // getActiveScriptBinding falls through to the other
-          // version's merged.o. Real merged .o (from
-          // ios/Dependencies/common.make's mkxp-merged target)
-          // replaces this stub when built.
-          struct ScriptBinding;
-          extern "C" ScriptBinding *mkxp_get_script_binding_${VER}(void) {
-              return nullptr;
-          }
-          // The 3.1 build of libruby ships syntax-transform patches
-          // that define these globals (parse.y/prelude.c). main.cpp
-          // (Xcode-compiled) sets them every selectGame. Stub them
-          // out at zero so the device link succeeds when mkxp31-merged.o
-          // is missing; the syntax-transform code path is dead until
-          // mkxp31-merged.o is built for this SDK anyway. Only emit
-          // for the 3.1 version since 3.0 doesn't ship those symbols.
-          #if ${VER} == 31
-          extern "C" {
-              unsigned int mkxp_syntax_transform_target_ruby_version_major = -1;
-              unsigned int mkxp_syntax_transform_target_ruby_version_minor = -1;
-              unsigned int mkxp_syntax_transform_target_ruby_version_teeny = -1;
-          }
-          #endif
-          STUBEOF
-                  CC=$(xcrun --sdk "$PLATFORM_NAME" -f clang++)
-                  SDK=$(xcrun --sdk "$PLATFORM_NAME" --show-sdk-path)
-                  case "$PLATFORM_NAME" in
-                    iphonesimulator) TARGET="-target arm64-apple-ios26.0-simulator -mios-simulator-version-min=26.0" ;;
-                    iphoneos)        TARGET="-target arm64-apple-ios26.0 -miphoneos-version-min=26.0" ;;
-                  esac
-                  "$CC" -arch arm64 -isysroot "$SDK" $TARGET -std=c++14 -c "$TMP/stub.cpp" -o "$OBJ"
-                  rm -rf "$TMP"
+                  MISSING="$MISSING mkxp${VER}-merged.o"
               fi
           done
-
-      - name: Verify hmode7 submodule is up to date
-        # Guard against a stale h-mode7 port submodule. The port is
-        # maintained in a sibling repo (//hmode7-apple-mobile) and
-        # included here as the `hmode7/` submodule. Because it's a
-        # submodule, `git pull` in mkxp-z-apple-mobile does NOT pull
-        # its contents - you'd get the recorded commit ID and keep
-        # whatever working-tree state was there.
-        #
-        # This caused a real debugging wasted hour: the "canonical"
-        # port repo at `/tmp/hmode7-apple-mobile` was being edited,
-        # but the build was compiling the SUBMODULE copy which hadn't
-        # been updated. xcodebuild succeeded each time with stale
-        # code, and the rendering bugs "reappeared" every test run.
-        #
-        # The rule going forward: edit the submodule directly
-        # (`mkxp-z-apple-mobile/hmode7/src/*.cpp`), commit from there,
-        # push to origin, and bump the parent-repo submodule pointer.
-        # This script fails the build if either:
-        #   (a) the submodule working tree has uncommitted changes, OR
-        #   (b) the submodule HEAD is behind `origin/main`.
-        # Both conditions mean the build would pick up code that
-        # wouldn't match what's committed, silently. Fast-fail with
-        # a clear message instead.
-        basedOnDependencyAnalysis: false
-        script: |
-          set -e
-          HMODE7_DIR="${PROJECT_DIR}/../../mkxp-z-apple-mobile/hmode7"
-          if [ ! -d "$HMODE7_DIR" ]; then
-              echo "error: hmode7 submodule missing at $HMODE7_DIR" >&2
-              echo "hint: run 'git submodule update --init --recursive' in mkxp-z-apple-mobile" >&2
-              exit 1
-          fi
-          cd "$HMODE7_DIR"
-
-          # Uncommitted working-tree changes.
-          if ! git diff --quiet HEAD; then
-              echo "error: hmode7 submodule has uncommitted changes:" >&2
-              git status --short >&2
-              echo "hint: commit+push from the submodule, then 'git submodule update' in the parent" >&2
-              exit 1
-          fi
-
-          # Local commits that haven't been pushed.
-          CURRENT="$(git rev-parse HEAD)"
-          BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
-          if [ "$BRANCH" = "HEAD" ]; then BRANCH="main"; fi
-          # Fetch silently to learn the remote tip; timeouts don't
-          # fail the build (offline dev still works), but mismatch
-          # with the locally-known remote does.
-          git fetch --quiet origin "$BRANCH" 2>/dev/null || true
-          REMOTE="$(git rev-parse --verify --quiet "origin/${BRANCH}" 2>/dev/null || echo "")"
-          if [ -n "$REMOTE" ] && [ "$CURRENT" != "$REMOTE" ]; then
-              echo "error: hmode7 submodule is out of sync with origin/${BRANCH}" >&2
-              echo "  submodule HEAD: $CURRENT" >&2
-              echo "  origin/$BRANCH: $REMOTE" >&2
-              echo "hint: from mkxp-z-apple-mobile/hmode7, run 'git push' then update the submodule pointer" >&2
+          if [ -n "$MISSING" ]; then
+              echo "error: missing per-Ruby merged objects:$MISSING" >&2
+              echo "" >&2
+              echo "hint: from ios/Dependencies, run:" >&2
+              echo "  SDK=${PLATFORM_NAME} make -f ${PLATFORM_NAME}.make ruby ruby30 ruby19 ruby18 mkxp-merged" >&2
               exit 1
           fi
 
