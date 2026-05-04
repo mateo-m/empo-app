@@ -27,7 +27,7 @@ Running each game on its actual native Ruby is the only honest fix.
 
 Each Ruby version's binding code + libruby + extensions are linked into a single relocatable object file with hidden symbol islanding:
 
-```
+```text
 ios/Dependencies/build-${SDK}/lib/
   mkxp18-merged.o   exports: _mkxp_get_script_binding_18
   mkxp19-merged.o   exports: _mkxp_get_script_binding_19

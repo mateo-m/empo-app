@@ -67,7 +67,7 @@ struct PlayerMoreSheet: View {
                 // debug overlay. These are passive in-game tools; the
                 // user can flip them and stay in the game.
                 VStack(spacing: 0) {
-                    InterleavedRows(separator: { rowSeparator }) {
+                    InterleavedRows {
                         // Cheats: graduated from experimental in
                         // May 2026, always enabled now.
                         MenuRow(icon: "wand.and.stars", label: "Cheats") {
@@ -88,6 +88,8 @@ struct PlayerMoreSheet: View {
                                 isOn: $showDebugOverlay
                             )
                         }
+                    } separator: {
+                        rowSeparator
                     }
                 }
                 // No card fill: stacking material on the sheet's own
@@ -113,7 +115,7 @@ struct PlayerMoreSheet: View {
                 let quitEnabled = false
                 if pauseEnabled || quitEnabled {
                     VStack(spacing: 0) {
-                        InterleavedRows(separator: { rowSeparator }) {
+                        InterleavedRows {
                             if pauseEnabled {
                                 MenuRow(
                                     icon: "pause.fill",
@@ -133,6 +135,8 @@ struct PlayerMoreSheet: View {
                                     onQuit()
                                 }
                             }
+                        } separator: {
+                            rowSeparator
                         }
                     }
                     .clipShape(.rect(cornerRadius: Radius.md))

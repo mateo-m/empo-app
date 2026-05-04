@@ -37,22 +37,16 @@ disabled_rules:
 
   # Whitespace + brace placement handled by swift-format. Disabling
   # in swiftlint avoids contradictions where swift-format adds a
-  # trailing comma or wraps a brace and swiftlint flags it.
+  # trailing comma, wraps a brace, or breaks a long signature
+  # over multiple lines and swiftlint flags it.
   - trailing_comma
   - opening_brace
+  - closure_parameter_position
 
   # Force casts / unwraps come up in iOS bridge code; rely on
   # code review instead of a blanket lint failure.
   - force_cast
   - force_try
-
-  # Style preferences. Re-enable individually after a focused
-  # cleanup pass if you want them enforced going forward.
-  - redundant_string_enum_value
-  - multiple_closures_with_trailing_closure
-  - for_where
-  - closure_parameter_position
-  - switch_case_alignment
 
 opt_in_rules:
   - empty_count
