@@ -17,17 +17,7 @@ struct ImageSourceSheet: View {
     let onPickFile: () -> Void
     let onRemove: (() -> Void)?
 
-    /// Content height reported via `.onGeometryChange`. Zero
-    /// before first layout, at which point the detent falls
-    /// back to `.medium` so the sheet never flashes collapsed.
-    /// Same pattern as `ExperimentalInfoSheet` and
-    /// `ExperimentalConfirmSheet`.
     @State private var measuredHeight: CGFloat = 0
-    /// Accounting for the nav bar + drag indicator above the
-    /// measured content. Matches the value used by the other
-    /// auto-sizing sheets so all of them settle at consistent
-    /// visible heights.
-    private let chromeAllowance: CGFloat = 64
 
     /// Hide the "Take Photo" row when the device can't actually
     /// launch the camera (iPad without a rear camera, Simulator).
@@ -90,15 +80,8 @@ struct ImageSourceSheet: View {
                     .clipShape(.rect(cornerRadius: Radius.md))
                 }
             }
-            .padding(.horizontal, Spacing.xl)
-            .padding(.vertical, Spacing.xl)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { newHeight in
-                measuredHeight = newHeight
-            }
+            .padding(Spacing.xl)
+            .intrinsicSheetContent(measuredHeight: $measuredHeight)
             .background(Color(.systemGroupedBackground))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -108,12 +91,7 @@ struct ImageSourceSheet: View {
                 }
             }
         }
-        .presentationDetents(
-            measuredHeight > 0
-                ? [.height(measuredHeight + chromeAllowance)]
-                : [.medium]
-        )
-        .presentationDragIndicator(.visible)
+        .intrinsicSheetDetent(measuredHeight: measuredHeight)
         .tint(.brand)
     }
 

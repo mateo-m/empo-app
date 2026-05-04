@@ -583,7 +583,7 @@ struct GameSettingsView: View {
 
     private func save() {
         settings.save(to: stateDirectory)
-        // Regenerate the merged mkxp.json so the engine actually
+        // Regenerate the merged mkxp.json so the engine
         // sees the new values on next launch. Without this, edits
         // here only land in game_settings.json (the host-side
         // record) and the engine keeps reading the stale config it

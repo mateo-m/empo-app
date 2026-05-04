@@ -142,10 +142,7 @@ enum RubyScriptGrammarSniffer {
         var combined = ""
         let cap = 4_000_000
         for url in urls {
-            guard let data = try? Data(contentsOf: url) else { continue }
-            let str = String(data: data, encoding: .utf8)
-                   ?? String(data: data, encoding: .isoLatin1)
-                   ?? ""
+            guard let str = try? Data(contentsOf: url).decodeAsLooseText() else { continue }
             combined.append(str)
             combined.append("\n")
             if combined.count > cap { break }
@@ -185,8 +182,7 @@ enum RubyScriptGrammarSniffer {
             guard let deflated = reader.readStringBytes() else { return nil }
 
             if let inflated = inflate(deflated),
-               let source = String(data: inflated, encoding: .utf8)
-                            ?? String(data: inflated, encoding: .isoLatin1) {
+               let source = inflated.decodeAsLooseText() {
                 combined.append(source)
                 combined.append("\n")
                 if combined.count > combinedCap { break }

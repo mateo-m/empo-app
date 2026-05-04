@@ -57,7 +57,7 @@ struct GameMetadata: Codable {
     //
     // Stored as String, not the enum directly, so an older Empo
     // build reading metadata written by a newer one with an
-    // unknown case doesn't crash — it just sees a non-matching
+    // unknown case doesn't crash; it just sees a non-matching
     // string and re-detects with its own (older) heuristics.
     //
     // The `rubyVersionOverride` user setting still wins; this only
@@ -285,33 +285,23 @@ struct GameMetadata: Codable {
         }
 
         // Signal 3: archives at game root or in Data/
-        let archiveCandidates = [gameDirectory, gameDirectory.appendingPathComponent("Data")]
-        for dir in archiveCandidates {
-            guard let entries = try? fm.contentsOfDirectory(atPath: dir.path) else { continue }
-            for entry in entries {
-                let lower = entry.lowercased()
-                if lower.hasSuffix(".rgss3a") { return 3 }
-                if lower.hasSuffix(".rgss2a") { return 2 }
-                if lower.hasSuffix(".rgssad") { return 1 }
-            }
+        for dir in [gameDirectory, gameDirectory.appendingPathComponent("Data")] {
+            let exts = Set(dir.directoryEntries(
+                matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm
+            ).map { $0.pathExtension.lowercased() })
+            if exts.contains("rgss3a") { return 3 }
+            if exts.contains("rgss2a") { return 2 }
+            if exts.contains("rgssad") { return 1 }
         }
 
         // Signal 4: loose Data/* files
         let dataDir = gameDirectory.appendingPathComponent("Data")
-        if let entries = try? fm.contentsOfDirectory(atPath: dataDir.path) {
-            var sawRxdata = false
-            var sawRvdata = false
-            var sawRvdata2 = false
-            for entry in entries {
-                let lower = entry.lowercased()
-                if lower.hasSuffix(".rvdata2") { sawRvdata2 = true }
-                else if lower.hasSuffix(".rvdata") { sawRvdata = true }
-                else if lower.hasSuffix(".rxdata") { sawRxdata = true }
-            }
-            if sawRvdata2 { return 3 }
-            if sawRvdata  { return 2 }
-            if sawRxdata  { return 1 }
-        }
+        let dataExts = Set(dataDir.directoryEntries(
+            matchingExtensions: ["rxdata", "rvdata", "rvdata2"], fm: fm
+        ).map { $0.pathExtension.lowercased() })
+        if dataExts.contains("rvdata2") { return 3 }
+        if dataExts.contains("rvdata")  { return 2 }
+        if dataExts.contains("rxdata")  { return 1 }
 
         return nil
     }
@@ -330,15 +320,9 @@ struct GameMetadata: Codable {
     /// real Ruby DLLs are 5-15 MB.
     static func detectBundledRubyVersion(in gameDirectory: URL) -> String? {
         let fm = FileManager.default
-        let binaryExtensions: Set<String> = ["dll", "dylib", "so"]
         let scanBudget = 64 * 1024 * 1024
 
-        guard let entries = try? fm.contentsOfDirectory(atPath: gameDirectory.path) else { return nil }
-        for entry in entries {
-            let ext = (entry as NSString).pathExtension.lowercased()
-            guard binaryExtensions.contains(ext) else { continue }
-
-            let url = gameDirectory.appendingPathComponent(entry)
+        for url in gameDirectory.directoryEntries(matchingExtensions: ["dll", "dylib", "so"], fm: fm) {
             guard let attrs = try? fm.attributesOfItem(atPath: url.path),
                   let size = attrs[.size] as? Int,
                   size <= scanBudget,

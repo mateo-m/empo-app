@@ -155,7 +155,7 @@ class AppState {
         // with main's expected bridge surface.
         mkxp_resetSessionState()
 
-        // Wait for the RGSS thread to actually finish tearing down any
+        // Wait for the RGSS thread to finish tearing down any
         // previous session before feeding it the new path. If
         // mkxp_setGamePath is called too early, the engine's own
         // mkxp_setEngineTerminated() runs afterwards and clears the path
@@ -178,7 +178,7 @@ class AppState {
         }
     }
 
-    func recordSessionPlayTime() {
+    private func recordSessionPlayTime() {
         sessionLogger.recordSessionPlayTime(for: selectedGame)
     }
 
@@ -191,7 +191,7 @@ class AppState {
     /// after compiling data files. With cross-session play
     /// disabled (QUIT_PATHS_DISABLED.md) we can't safely return
     /// to the library and launch another game in the same
-    /// process — the user has to force-close + reopen. RootView
+    /// process; the user has to force-close + reopen. RootView
     /// appends "Close Empo from the app switcher and reopen it
     /// to continue." so the body reads as a single natural
     /// sentence.
@@ -261,14 +261,14 @@ class AppState {
 
     func requestPause() {
         // Pause graduated from experimental in May 2026; always
-        // enabled. Only gate is "a game is actually playing."
+        // enabled. Only gate is "a game is playing."
         guard phase == .playing else { return }
         EngineState.shared.isBackgroundPause = false
         mkxp_requestPause()
     }
 
     /// Called on the main thread from the bridge's paused callback.
-    /// Background pauses are ignored — they stay silent with no UI transition.
+    /// Background pauses are ignored; they stay silent with no UI transition.
     func handlePause(snapshot: UIImage?) {
         guard phase == .playing else { return }
         if EngineState.shared.isBackgroundPause { return }
@@ -281,7 +281,7 @@ class AppState {
     }
 
     /// Phase change is delayed so the hero zoom animation plays while
-    /// the library is still visible. The snapshot stays alive — PlayerView
+    /// the library is still visible. The snapshot stays alive; PlayerView
     /// picks it up as a fade-out overlay so there's no flash at handoff.
     ///
     /// The `pm.pausedGame == nil` guard in the Task prevents a stray
@@ -324,7 +324,7 @@ class AppState {
     }
 
     private func registerBridgeCallbacks() {
-        // First frame rendered — fresh start transitions to .playing,
+        // First frame rendered; fresh start transitions to .playing,
         // resume signals the snapshot can fade.
         mkxp_setFrameRenderedCallback({ _ in
             Task { @MainActor in
@@ -358,7 +358,7 @@ class AppState {
                     // play disabled (QUIT_PATHS_DISABLED.md,
                     // MRUBY_POSTMORTEM.md) we can't safely return
                     // to the library and launch another game in
-                    // the same process — the only way to play
+                    // the same process; the only way to play
                     // again is to force-close from the app switcher.
                     //
                     // Intentionally do NOT set phase = nil here:
@@ -400,7 +400,7 @@ class AppState {
             }
         }, nil)
 
-        // Engine paused — capture snapshot while lock is held.
+        // Engine paused; capture snapshot while lock is held.
         mkxp_setPausedCallback({ _ in
             var snapshotImage: UIImage?
             var w: Int32 = 0

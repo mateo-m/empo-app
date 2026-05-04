@@ -199,7 +199,7 @@ struct GameContainer: Equatable, Hashable {
 
     /// Set `NSURLIsExcludedFromBackupKey` on the container so iCloud
     /// + iTunes backups skip the entire game tree (including Game/,
-    /// EmpoState/, Logs/, Metadata/ — iOS propagates the flag to a
+    /// EmpoState/, Logs/, Metadata/; iOS propagates the flag to a
     /// directory's contents).
     ///
     /// Why we exclude everything for now: the per-game id is a
@@ -229,18 +229,26 @@ struct GameContainer: Equatable, Hashable {
         try? mutableURL.setResourceValues(values)
     }
 
+    /// `mkdir -p` the URL, then return it. Best-effort: errors
+    /// during creation are swallowed because callers are about to
+    /// hit a real failure (write permission, disk full) on the
+    /// next operation anyway, with a clearer error site.
+    @discardableResult
+    private static func ensureDirectory(_ url: URL) -> URL {
+        try? FileManager.default.createDirectory(
+            at: url, withIntermediateDirectories: true
+        )
+        return url
+    }
+
     @discardableResult
     func ensureEmpoStateDirectory() -> URL {
-        try? FileManager.default.createDirectory(
-            at: empoStateURL, withIntermediateDirectories: true
-        )
-        // Migration: older Empo builds wrote a snapshot of the
-        // developer's mkxp.json here as `mkxp.original.json` and
-        // used it as a merge base. Now we read directly from
-        // `Game/mkxp.json` (the imported folder is treated as
-        // immutable), so the snapshot is dead state. Clean it up
-        // opportunistically so EmpoState/ stays a tidy mirror of
-        // what the host actually manages.
+        Self.ensureDirectory(empoStateURL)
+        // Older builds wrote a snapshot of the developer's
+        // mkxp.json as `mkxp.original.json` here and used it as a
+        // merge base. We now read directly from `Game/mkxp.json`
+        // (the imported folder is immutable after import), so the
+        // snapshot is dead state. Clean it up opportunistically.
         let staleSnapshot = empoStateURL.appendingPathComponent("mkxp.original.json")
         try? FileManager.default.removeItem(at: staleSnapshot)
         return empoStateURL
@@ -248,18 +256,12 @@ struct GameContainer: Equatable, Hashable {
 
     @discardableResult
     func ensureMetadataDirectory() -> URL {
-        try? FileManager.default.createDirectory(
-            at: metadataURL, withIntermediateDirectories: true
-        )
-        return metadataURL
+        Self.ensureDirectory(metadataURL)
     }
 
     @discardableResult
     func ensureLogsDirectory() -> URL {
-        try? FileManager.default.createDirectory(
-            at: logsURL, withIntermediateDirectories: true
-        )
-        return logsURL
+        Self.ensureDirectory(logsURL)
     }
 
     /// Recursively delete the entire container directory. One
@@ -287,5 +289,29 @@ struct GameContainer: Equatable, Hashable {
             .components(separatedBy: "-")
             .filter { !$0.isEmpty }
             .joined(separator: "-")
+    }
+
+    /// If `dir` contains exactly one directory entry (ignoring
+    /// macOS metadata and hidden files), returns that directory.
+    /// Otherwise returns `dir` itself.
+    ///
+    /// Archive imports often wrap the game in a single top-level
+    /// folder; raw folder imports usually drop the files at the
+    /// top level. This helper picks the right one.
+    static func findGameRoot(in dir: URL,
+                             fm: FileManager = .default) -> URL {
+        guard let items = try? fm.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return dir }
+
+        let meaningful = items.filter { $0.lastPathComponent != "__MACOSX" }
+        if meaningful.count == 1,
+           let single = meaningful.first,
+           (try? single.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+            return single
+        }
+        return dir
     }
 }

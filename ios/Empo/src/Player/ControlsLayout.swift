@@ -51,7 +51,7 @@ struct ButtonModel: Identifiable, Equatable, Codable {
 
 
 /// Active orientation for the controls overlay. Each game stores
-/// independent layouts per orientation — buttons sized via fraction
+/// independent layouts per orientation; buttons sized via fraction
 /// of viewport are unworkable across orientation flips because the
 /// aspect ratio inverts (portrait 0.09 vertical gap = 79pt, but the
 /// same fraction in landscape collapses to 37pt and overlaps the
@@ -100,7 +100,7 @@ class ControlsLayout {
 
     /// Stable identifier of the game these controls are currently
     /// bound to. `switchGame(id:)` updates this; mutators save to the
-    /// corresponding per-game key. `nil` means no game is active —
+    /// corresponding per-game key. `nil` means no game is active;
     /// mutations are kept in memory but not persisted.
     private(set) var currentGameID: String?
 
@@ -234,7 +234,7 @@ class ControlsLayout {
     // `writeInitialPerGameLayout` (called from background import
     // tasks) and the JGP import pipeline can read them without
     // hopping to the main actor. They're plain Swift `let`s of
-    // value types — safe to read from any thread.
+    // value types; safe to read from any thread.
 
     nonisolated static let defaultDPadCenterPortrait = CGPoint(x: 0.13, y: 0.72)
     nonisolated static let defaultDPadCenterLandscape = CGPoint(x: 0.10, y: 0.65)

@@ -71,7 +71,7 @@ struct GameLibraryView: View {
         let base = searchText.isEmpty
             ? library.games
             : library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-        return GameSorting.sort(base, option: settings.librarySortOption, sizes: gameSizes)
+        return settings.librarySortOption.sort(base, sizes: gameSizes)
     }
 
     /// Synthetic cards for pre-flight validations, pinned to the top

@@ -16,7 +16,7 @@ import SwiftUI
 /// adaptive contrast against arbitrary artwork. Materials sample the
 /// backdrop and produce the right luminance automatically, so a
 /// progress card sitting on a bright Pokemon title screen and one
-/// sitting on a dark cinematic both end up with a clearly visible
+/// sitting on a dark cinematic both end up with a visible
 /// ring without the indicator needing to know what's behind it.
 struct SpinnerRing: View {
     let progress: Double

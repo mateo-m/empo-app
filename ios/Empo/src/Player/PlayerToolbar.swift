@@ -34,7 +34,7 @@ struct PlayerToolbar: View {
                 IconButton(
                     entry.icon,
                     style: .outline,
-                    size: IconButtonSize.sm,
+                    size: .sm,
                     tint: entry.tint
                 ) {
                     onResetIdleTimer()

@@ -2,16 +2,15 @@ import SwiftUI
 
 /// Bottom sheet of secondary in-game actions reachable from the
 /// player toolbar's "Menu" button. Houses options that don't earn a
-/// permanent toolbar slot — pause, cheats, debug overlay, fast
+/// permanent toolbar slot; pause, cheats, debug overlay, fast
 /// forward, quit. Toggles update host state directly; tap actions
 /// dismiss the sheet via `dismiss()` so the user lands back in the
 /// game.
 ///
-/// Sheet height fits content (measured via `onGeometryChange`),
-/// matching the pattern used by `ImageSourceSheet` /
-/// `ExperimentalInfoSheet`. A SwiftUI `List` would always want to
-/// fill the sheet, so we render rows as styled `Button`s inside a
-/// VStack with `.fixedSize(horizontal: false, vertical: true)`.
+/// Sheet height fits content (measured via `onGeometryChange`).
+/// A SwiftUI `List` always wants to fill the sheet, so rows are
+/// styled `Button`s inside a VStack with
+/// `.fixedSize(horizontal: false, vertical: true)`.
 struct PlayerMoreSheet: View {
     /// Display title of the running game. Substituted into the
     /// destructive section's row labels ("Pause <title>" / "Quit
@@ -31,9 +30,6 @@ struct PlayerMoreSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var measuredHeight: CGFloat = 0
-    /// Nav bar + drag indicator + bottom safe-area padding above the
-    /// measured content. Matches the value used by `ImageSourceSheet`.
-    private let chromeAllowance: CGFloat = 64
 
     private var fastForwardEnabled: Bool {
         (fastForwardMultiplier ?? 0) >= 2
@@ -67,7 +63,7 @@ struct PlayerMoreSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: Spacing.lg) {
-                // Auxiliary toggles group — cheats, fast forward,
+                // Auxiliary toggles group; cheats, fast forward,
                 // debug overlay. These are passive in-game tools; the
                 // user can flip them and stay in the game.
                 VStack(spacing: 0) {
@@ -102,7 +98,7 @@ struct PlayerMoreSheet: View {
                 // below.
                 .clipShape(.rect(cornerRadius: Radius.md))
 
-                // Session-ending actions grouped together — pause
+                // Session-ending actions grouped together; pause
                 // takes the user back to the library (game stays
                 // suspended), quit tears the engine down. Both name
                 // the running game so there's no ambiguity about
@@ -110,7 +106,7 @@ struct PlayerMoreSheet: View {
                 // Pause: graduated from experimental in May 2026,
                 // always enabled now.
                 let pauseEnabled = true
-                // gameQuit disabled — see ExperimentalFeature comment
+                // gameQuit disabled; see ExperimentalFeature comment
                 // in AppSettings.swift. Forced false so the in-game
                 // Quit toolbar button stays hidden.
                 let quitEnabled = false
@@ -139,20 +135,12 @@ struct PlayerMoreSheet: View {
                     .clipShape(.rect(cornerRadius: Radius.md))
                 }
             }
-            .padding(.horizontal, Spacing.xl)
-            .padding(.vertical, Spacing.xl)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { newHeight in
-                measuredHeight = newHeight
-            }
-            // No outer background: the sheet's own translucent
-            // material shows through around the row-cards. Painting a
-            // solid `systemGroupedBackground` here looked like a flat
-            // white panel hovering over the game and clashed with the
-            // sheet chrome when extended past the measured height.
+            .padding(Spacing.xl)
+            .intrinsicSheetContent(measuredHeight: $measuredHeight)
+            // No outer background: the sheet's translucent material
+            // shows through around the row-cards. Painting a solid
+            // `systemGroupedBackground` here looked like a flat white
+            // panel hovering over the game.
             .navigationTitle("Menu")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -161,12 +149,7 @@ struct PlayerMoreSheet: View {
                 }
             }
         }
-        .presentationDetents(
-            measuredHeight > 0
-                ? [.height(measuredHeight + chromeAllowance)]
-                : [.medium]
-        )
-        .presentationDragIndicator(.visible)
+        .intrinsicSheetDetent(measuredHeight: measuredHeight)
     }
 
     /// Hairline separator between rows inside the action group.

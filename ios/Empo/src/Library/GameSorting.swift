@@ -1,12 +1,10 @@
 import Foundation
 
-/// Pure sorting helpers for the library view. Extracted so the sort
-/// logic can be reviewed + tested in isolation and kept out of
-/// GameLibraryView's body.
-
-enum GameSorting {
-    static func sort(_ games: [GameEntry], option: LibrarySortOption, sizes: [String: Int64]) -> [GameEntry] {
-        switch option {
+/// Sort logic for the library view. Lives on `LibrarySortOption` so adding
+/// a new case is a compile error until it's handled here.
+extension LibrarySortOption {
+    func sort(_ games: [GameEntry], sizes: [String: Int64]) -> [GameEntry] {
+        switch self {
         case .titleAZ:
             return games.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         case .titleZA:
@@ -20,13 +18,13 @@ enum GameSorting {
         case .smallestSize:
             return games.sorted { (sizes[$0.id] ?? 0) < (sizes[$1.id] ?? 0) }
         case .mostPlayed:
-            return games.sorted { (playTime(for: $0) ?? 0) > (playTime(for: $1) ?? 0) }
+            return games.sorted { (Self.playTime(for: $0) ?? 0) > (Self.playTime(for: $1) ?? 0) }
         case .leastPlayed:
-            return games.sorted { (playTime(for: $0) ?? 0) < (playTime(for: $1) ?? 0) }
+            return games.sorted { (Self.playTime(for: $0) ?? 0) < (Self.playTime(for: $1) ?? 0) }
         }
     }
 
-    static func playTime(for game: GameEntry) -> TimeInterval? {
+    private static func playTime(for game: GameEntry) -> TimeInterval? {
         guard let container = game.container else { return nil }
         return GameMetadata.load(from: container).totalPlayTime
     }
