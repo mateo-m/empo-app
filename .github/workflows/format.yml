@@ -13,33 +13,22 @@ jobs:
   swift:
     name: Swift (swift-format)
     runs-on: ubuntu-latest
-    container: swift:6.2-noble
     steps:
-      - name: Install git (pre-checkout)
-        run: |
-          # The swift:*-noble base image is minimal. actions/checkout
-          # falls back to a tarball download (no .git) when git is
-          # missing inside the container; install it first so the
-          # `git diff --exit-code` step downstream has a real repo.
-          apt-get update -qq
-          apt-get install -y --no-install-recommends git ca-certificates
-
       - uses: actions/checkout@v6
         with:
           submodules: false
 
-      - name: swift-format check (would-modify is failure)
-        run: |
-          # `swift-format format` exits 0 even if it changed files; we
-          # need to detect a no-op vs. a modification. Use --in-place
-          # against a clean tree, then `git diff` scoped to the swift
-          # paths so unrelated working-tree state (submodule pointer
-          # drift, etc.) doesn't trip the check.
-          swift-format format --in-place --recursive ios/Empo/src
-          if ! git diff --exit-code -- ios/Empo/src; then
-            echo "::error::swift-format would modify files. Run \`swift-format format --in-place --recursive ios/Empo/src\` locally and commit."
-            exit 1
-          fi
+      - name: Install Swift toolchain
+        uses: vapor/swiftly-action@v0.2
+        with:
+          toolchain: "6.2"
+
+      - name: swift-format check
+        # Use the same `lint --strict` path as the Lint workflow.
+        # swift-format's lint mode reports the same rule set the
+        # formatter would apply, so a clean lint means format
+        # would be a no-op; no separate check needed.
+        run: swift-format lint --strict --recursive ios/Empo/src
 
   objc-cpp:
     name: ObjC / C / C++ (clang-format)
@@ -49,27 +38,12 @@ jobs:
         with:
           submodules: false
 
-      - name: Install clang-format
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends clang-format
-
       - name: clang-format check
-        run: |
-          FILES=$(git ls-files \
-            'ios/Empo/src/*.m' \
-            'ios/Empo/src/*.mm' \
-            'ios/Empo/src/*.h' \
-            'ios/Empo/shims/*.h' \
-            'ios/Empo/shims/*.c' \
-            'ios/Empo/shims/*.cpp')
-          if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs clang-format -i
-            if ! git diff --exit-code -- $FILES; then
-              echo "::error::clang-format would modify files. Run \`clang-format -i <files>\` locally and commit."
-              exit 1
-            fi
-          fi
+        uses: DoozyX/clang-format-lint-action@v0.20
+        with:
+          source: "ios/Empo/src ios/Empo/shims"
+          extensions: "h,m,mm,c,cpp"
+          clangFormatVersion: 18
 
   shell:
     name: Bash (shfmt)
