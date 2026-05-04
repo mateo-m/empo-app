@@ -12,9 +12,10 @@ on:
 jobs:
   swift:
     name: Swift (swift-format)
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: false
 
@@ -22,20 +23,27 @@ jobs:
         run: |
           # `swift-format format` exits 0 even if it changed files; we
           # need to detect a no-op vs. a modification. Use --in-place
-          # against a clean tree, then `git diff --exit-code`.
-          xcrun swift-format format --in-place --recursive ios/Empo/src
-          if ! git diff --exit-code; then
+          # against a clean tree, then `git diff` scoped to the swift
+          # paths so unrelated working-tree state (submodule pointer
+          # drift, etc.) doesn't trip the check.
+          swift-format format --in-place --recursive ios/Empo/src
+          if ! git diff --exit-code -- ios/Empo/src; then
             echo "::error::swift-format would modify files. Run \`swift-format format --in-place --recursive ios/Empo/src\` locally and commit."
             exit 1
           fi
 
   objc-cpp:
     name: ObjC / C / C++ (clang-format)
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: false
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang-format
 
       - name: clang-format check
         run: |
@@ -47,9 +55,9 @@ jobs:
             'ios/Empo/shims/*.c' \
             'ios/Empo/shims/*.cpp')
           if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs xcrun clang-format -i
-            if ! git diff --exit-code; then
-              echo "::error::clang-format would modify files. Run \`xcrun clang-format -i <files>\` locally and commit."
+            echo "$FILES" | xargs clang-format -i
+            if ! git diff --exit-code -- $FILES; then
+              echo "::error::clang-format would modify files. Run \`clang-format -i <files>\` locally and commit."
               exit 1
             fi
           fi
@@ -58,7 +66,7 @@ jobs:
     name: Bash (shfmt)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install shfmt
         run: |
@@ -77,11 +85,11 @@ jobs:
     name: YAML / JSON (prettier)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install prettier
         run: npm install -g prettier@3
