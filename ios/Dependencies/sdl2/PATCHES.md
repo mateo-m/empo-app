@@ -17,7 +17,7 @@ Three custom commits on top of upstream SDL 2.28.1:
 The NEON patches prevent build/runtime issues on ARM platforms where the
 NEON intrinsics cause problems with the cross-compilation toolchain.
 
-## iOS Build Instructions
+## iOS build instructions
 
 Built with CMake (out-of-tree in `cmakebuild/`):
 

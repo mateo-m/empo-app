@@ -55,7 +55,7 @@ is stubbed:
 #endif
 ```
 
-## iOS Build Instructions
+## iOS build instructions
 
 Built with Autotools:
 
