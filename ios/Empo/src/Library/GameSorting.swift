@@ -9,6 +9,10 @@ extension LibrarySortOption {
             return games.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         case .titleZA:
             return games.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedDescending }
+        case .recentlyAdded:
+            return games.sorted { ($0.dateAdded ?? .distantPast) > ($1.dateAdded ?? .distantPast) }
+        case .leastRecentlyAdded:
+            return games.sorted { ($0.dateAdded ?? .distantPast) < ($1.dateAdded ?? .distantPast) }
         case .recentlyPlayed:
             return games.sorted { ($0.lastPlayed ?? .distantPast) > ($1.lastPlayed ?? .distantPast) }
         case .leastRecentlyPlayed:

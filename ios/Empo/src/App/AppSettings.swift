@@ -18,38 +18,57 @@ enum LibraryDisplayMode: String, CaseIterable {
 enum LibrarySortOption: String, CaseIterable {
     case titleAZ = "titleAZ"
     case titleZA = "titleZA"
+    case recentlyAdded = "recentlyAdded"
+    case leastRecentlyAdded = "leastRecentlyAdded"
     case recentlyPlayed = "recentlyPlayed"
     case leastRecentlyPlayed = "leastRecentlyPlayed"
-    case largestSize = "largestSize"
-    case smallestSize = "smallestSize"
     case mostPlayed = "mostPlayed"
     case leastPlayed = "leastPlayed"
+    case largestSize = "largestSize"
+    case smallestSize = "smallestSize"
 
     var label: String {
         switch self {
         case .titleAZ: "A → Z"
         case .titleZA: "Z → A"
+        case .recentlyAdded: "Recently added"
+        case .leastRecentlyAdded: "Least recently added"
         case .recentlyPlayed: "Recently played"
         case .leastRecentlyPlayed: "Least recently played"
-        case .largestSize: "Largest first"
-        case .smallestSize: "Smallest first"
         case .mostPlayed: "Most played"
         case .leastPlayed: "Least played"
+        case .largestSize: "Largest first"
+        case .smallestSize: "Smallest first"
         }
     }
 
     var icon: String {
         switch self {
-        case .titleAZ: "textformat.abc"
-        case .titleZA: "textformat.abc"
-        case .recentlyPlayed: "clock"
-        case .leastRecentlyPlayed: "clock"
-        case .largestSize: "externaldrive"
-        case .smallestSize: "externaldrive"
-        case .mostPlayed: "hourglass"
-        case .leastPlayed: "hourglass"
+        case .titleAZ, .titleZA: "textformat.abc"
+        case .recentlyAdded, .leastRecentlyAdded: "tray.and.arrow.down"
+        case .recentlyPlayed, .leastRecentlyPlayed: "clock"
+        case .mostPlayed, .leastPlayed: "hourglass"
+        case .largestSize, .smallestSize: "externaldrive"
         }
     }
+
+    /// Groups for the sort sheet. Order here drives section order in
+    /// the UI; each group's options also render in the listed order.
+    static let groups: [LibrarySortGroup] = [
+        LibrarySortGroup(title: "Title", options: [.titleAZ, .titleZA]),
+        LibrarySortGroup(title: "Date", options: [
+            .recentlyAdded, .leastRecentlyAdded,
+            .recentlyPlayed, .leastRecentlyPlayed,
+        ]),
+        LibrarySortGroup(title: "Playtime", options: [.mostPlayed, .leastPlayed]),
+        LibrarySortGroup(title: "Size", options: [.largestSize, .smallestSize]),
+    ]
+}
+
+struct LibrarySortGroup: Identifiable {
+    let title: String
+    let options: [LibrarySortOption]
+    var id: String { title }
 }
 
 enum TitlePosition: String, CaseIterable {

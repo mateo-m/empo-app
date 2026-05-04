@@ -72,7 +72,9 @@ struct GameCard: View {
             }
             .overlay { centerOverlay }
             .clipShape(.rect(cornerRadius: Radius.md))
-            .cardShadow()
+        // NOTE: cardShadow lives at the GameLibraryView callsite,
+        // not here. Applied AFTER matchedTransitionSource so the
+        // transition source's clip doesn't crop the shadow.
     }
 
 
@@ -83,7 +85,6 @@ struct GameCard: View {
                 .overlay { artworkView }
                 .overlay { centerOverlay }
                 .clipShape(.rect(cornerRadius: Radius.md))
-                .cardShadow()
 
             VStack(spacing: Spacing.xxs) {
                 Text(game.title)
@@ -154,12 +155,12 @@ struct GameListRow: View {
                 cornerRadius: Radius.sm,
                 importing: game.status.phase == .importing
             )
-            .cardShadow()
             .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) { config in
                 config
                     .background(.black)
                     .clipShape(.rect(cornerRadius: Radius.sm))
             }
+            .cardShadow()
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(game.title)
