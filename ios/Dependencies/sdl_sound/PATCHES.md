@@ -13,7 +13,7 @@ One custom commit on top of upstream:
 1. **`cfb2533`** (Struma): Build properly on macOS
    - Fixes a build issue specific to macOS/Darwin toolchains.
 
-## iOS Build Instructions
+## iOS build instructions
 
 Built with CMake (out-of-tree in `cmakebuild/`):
 

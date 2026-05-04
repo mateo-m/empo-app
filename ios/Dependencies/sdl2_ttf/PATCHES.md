@@ -15,7 +15,7 @@ Two custom commits on top of upstream:
 2. **`0d5909e`** (Roza): Disable NEON so it builds on ARM
    - Prevents NEON intrinsic issues during cross-compilation for ARM platforms.
 
-## iOS Build Instructions
+## iOS build instructions
 
 Built with Autotools:
 

@@ -40,7 +40,7 @@ required for Ruby 1.9 on iOS:
    engine calls it once and reuses the VM across game sessions for
    the lifetime of the app.
 
-## iOS Build Instructions
+## iOS build instructions
 
 ```bash
 cd ios/Dependencies

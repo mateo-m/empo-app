@@ -9,7 +9,7 @@
 
 No source modifications.
 
-## iOS Build Instructions
+## iOS build instructions
 
 Built with Autotools:
 

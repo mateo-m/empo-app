@@ -12,7 +12,7 @@ No mkxp-z specific source patches. The `mkxp-z` branch tracks a specific
 upstream release point (all 18 commits above `release-2.6.0` are standard
 upstream bug fixes and version bumps by Sam Lantinga).
 
-## iOS Build Instructions
+## iOS build instructions
 
 Built with CMake (out-of-tree in `cmakebuild/`):
 
