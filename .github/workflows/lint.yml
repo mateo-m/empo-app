@@ -23,20 +23,18 @@ jobs:
 
       - name: Locate sourcekitd for SwiftLint
         # SwiftLint on Linux loads `libsourcekitdInProc.so` from
-        # `LINUX_SOURCEKIT_LIB_PATH`. Swiftly's `bin/swift` is a
-        # wrapper into `toolchains/<version>/usr/bin/swift`; resolve
-        # the wrapper with `readlink -f` to land in the real toolchain
-        # so we can point SwiftLint at the matching `usr/lib`.
+        # `LINUX_SOURCEKIT_LIB_PATH`. The `swift` binary on PATH is
+        # actually swiftly's manager, not the toolchain's swift, so
+        # `which swift` doesn't help. Locate the lib directly under
+        # `$SWIFTLY_HOME_DIR/toolchains/<version>/usr/lib/`.
         run: |
-          SWIFT_REAL=$(readlink -f "$(which swift)")
-          SK_LIB=$(dirname "$SWIFT_REAL")/../lib
-          echo "Resolved Swift toolchain at $SWIFT_REAL"
-          echo "Looking for libsourcekitdInProc.so under $SK_LIB"
-          ls -la "$SK_LIB/libsourcekitdInProc.so" || {
-            echo "::error::libsourcekitdInProc.so not at expected path; dumping toolchain layout for debug"
-            find "$SWIFTLY_HOME_DIR" -name 'libsourcekitdInProc.so' 2>/dev/null | head
+          SK_LIB_FILE=$(find "$SWIFTLY_HOME_DIR/toolchains" -name 'libsourcekitdInProc.so' 2>/dev/null | head -1)
+          if [ -z "$SK_LIB_FILE" ]; then
+            echo "::error::libsourcekitdInProc.so not found under $SWIFTLY_HOME_DIR"
             exit 1
-          }
+          fi
+          SK_LIB=$(dirname "$SK_LIB_FILE")
+          echo "Found sourcekitd at $SK_LIB_FILE"
           echo "LINUX_SOURCEKIT_LIB_PATH=$SK_LIB" >> "$GITHUB_ENV"
 
       - name: swift-format lint
