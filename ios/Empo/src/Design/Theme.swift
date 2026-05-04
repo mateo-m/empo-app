@@ -93,8 +93,17 @@ enum Radius {
 
 
 extension View {
+    /// Two-layer shadow used on library artwork tiles and hero
+    /// cards. The tight first layer defines the edge against the
+    /// surface; the diffuse second layer gives ambient elevation.
+    /// MUST be applied after `matchedTransitionSource` in the
+    /// modifier chain - the transition source clips its subtree
+    /// to the configured snapshot bounds, which would crop a
+    /// shadow drawn earlier in the chain.
     func cardShadow() -> some View {
-        shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+        self
+            .shadow(color: .black.opacity(0.05), radius: 1, y: 1)
+            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
     }
 
     func iconShadow() -> some View {

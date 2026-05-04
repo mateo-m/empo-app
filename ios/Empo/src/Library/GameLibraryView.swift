@@ -387,9 +387,7 @@ struct GameLibraryView: View {
                 Task { @MainActor in
                     staggerTrigger = UUID()
                 }
-            },
-            onSelectMultiple: { enterSelectionMode() },
-            hideSelectMultiple: selectionMode
+            }
         )
     }
 
@@ -530,6 +528,7 @@ struct GameLibraryView: View {
                     game: game,
                     appState: appState,
                     onPlay: { handleGameTap(game, from: .item) },
+                    onSelect: selectionMode ? nil : { enterSelectionMode(seedingWith: game.id) },
                     gameToDelete: $gameToDelete,
                     showDeleteConfirm: $showDeleteConfirm,
                     gameForSettings: $gameForSettings,
@@ -557,6 +556,7 @@ struct GameLibraryView: View {
                 game: pending,
                 onStopImport: { showCancelValidationAlert = true }
             )
+            .cardShadow()
             .id("\(pending.id)-pending")
             .transition(.cardAppear)
         }
@@ -568,6 +568,7 @@ struct GameLibraryView: View {
                     gameToDelete = game
                     showDeleteConfirm = true
                 })
+                    .cardShadow()
                     .id("\(game.id)-importing")
                     .transition(.cardAppear)
                     .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
@@ -575,6 +576,7 @@ struct GameLibraryView: View {
             case .invalid:
                 Button { handleCardTap(for: game) } label: {
                     GameCard(game: game)
+                        .cardShadow()
                 }
                     .id("\(game.id)-invalid")
                     .buttonStyle(CardPressStyle())
@@ -600,6 +602,7 @@ struct GameLibraryView: View {
                                 .background(.black)
                                 .clipShape(.rect(cornerRadius: Radius.md))
                         }
+                        .cardShadow()
                         .overlay(alignment: .topTrailing) {
                             if selectionMode {
                                 selectionBadge(for: game.id)
@@ -621,6 +624,7 @@ struct GameLibraryView: View {
                     game: game,
                     appState: appState,
                     onPlay: { handleGameTap(game, from: .item) },
+                    onSelect: selectionMode ? nil : { enterSelectionMode(seedingWith: game.id) },
                     gameToDelete: $gameToDelete,
                     showDeleteConfirm: $showDeleteConfirm,
                     gameForSettings: $gameForSettings,

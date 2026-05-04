@@ -2,17 +2,12 @@ import SwiftUI
 
 /// Search bar + sort + grid/list toggle shown at the top of the library.
 /// Own state stays on GameLibraryView; this view just renders bindings.
+/// Multi-select entry now lives in each game's context menu instead.
 
 struct LibrarySearchBar: View {
     @Binding var searchText: String
     @Binding var showSortSheet: Bool
     let onDisplayModeToggle: () -> Void
-    let onSelectMultiple: () -> Void
-    /// Hide the Select-multiple icon while the library is already
-    /// in selection mode (the header's "Done" button is the exit
-    /// affordance). Search / sort / display-mode stay available so
-    /// users can find specific games to add to the selection.
-    var hideSelectMultiple: Bool = false
     @Environment(\.appSettings) private var settings
 
     private let searchBarHeight: CGFloat = 44
@@ -53,19 +48,6 @@ struct LibrarySearchBar: View {
                 onDisplayModeToggle()
             }
             .accessibilityLabel(settings.libraryDisplayMode == .grid ? "Switch to list" : "Switch to grid")
-
-            // Multi-select entry point. Sits in the same row as
-            // sort and grid/list because all three are "act on the
-            // library" actions. Top-right of the header is owned by
-            // the floating ImportButton, so this stays here even
-            // though it's the kind of action a user might also
-            // expect in the header chrome.
-            if !hideSelectMultiple {
-                IconButton("checkmark.circle", style: .outline) {
-                    onSelectMultiple()
-                }
-                .accessibilityLabel("Select multiple games")
-            }
         }
         .padding(.horizontal)
         .padding(.bottom, Spacing.xs)
