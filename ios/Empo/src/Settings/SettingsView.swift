@@ -3,17 +3,13 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
-    @State private var confirmation: ExperimentalConfirmation?
     @State private var showBuildInfo = false
 
-    private struct ExperimentalConfirmation: Identifiable {
-        let id = UUID()
-        let title: String
-        let message: String
-        let onConfirm: () -> Void
-    }
-
-
+    // ExperimentalConfirmation state + .sheet binding removed
+    // alongside the ExperimentalFeature toggles in May 2026 (see
+    // AppSettings.swift). ExperimentalConfirmSheet itself stays
+    // around in Settings/ExperimentalConfirmSheet.swift for re-use
+    // if a future experimental feature lands.
 
     var body: some View {
         @Bindable var settings = settings
@@ -98,18 +94,9 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    ForEach(ExperimentalFeature.allCases) { feature in
-                        SettingsToggle(
-                            title: feature.label,
-                            isOn: experimentalBinding(for: feature),
-                            description: feature.description,
-                            isExperimental: true
-                        )
-                    }
-
                     SettingsToggle(
-                        title: "Game overlay",
-                        isOn: $settings.debugMode,
+                        title: "Diagnostics overlay",
+                        isOn: $settings.diagnosticsOverlay,
                         description: "Adds a button to the in-game toolbar that toggles a draggable overlay showing the title, Ruby version, renderer, and FPS."
                     )
 
@@ -201,17 +188,6 @@ struct SettingsView: View {
                 }
 
             }
-            .sheet(item: $confirmation) { item in
-                ExperimentalConfirmSheet(
-                    title: item.title,
-                    message: item.message,
-                    onCancel: { confirmation = nil },
-                    onConfirm: {
-                        item.onConfirm()
-                        confirmation = nil
-                    }
-                )
-            }
             .sheet(isPresented: $showBuildInfo) {
                 BuildInfoSheet()
             }
@@ -226,22 +202,6 @@ struct SettingsView: View {
         .tint(.brand)
     }
 
-    private func experimentalBinding(for feature: ExperimentalFeature) -> Binding<Bool> {
-        Binding(
-            get: { settings.isEnabled(feature) },
-            set: { newValue in
-                if newValue {
-                    confirmation = .init(
-                        title: feature.label,
-                        message: feature.description,
-                        onConfirm: { settings.setEnabled(feature, true) }
-                    )
-                } else {
-                    settings.setEnabled(feature, false)
-                }
-            }
-        )
-    }
 }
 
 

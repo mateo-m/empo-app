@@ -268,22 +268,24 @@ struct GameLibraryView: View {
                 Text("The game is still being validated. Cancelling will stop the import.")
             }
             .alert("A game is paused", isPresented: $showPausedGameAlert) {
-                Button("Cancel", role: .cancel) {
+                Button("OK", role: .cancel) {
                     pendingGame = nil
                 }
-                Button("Quit and play") {
-                    guard let game = pendingGame else { return }
-                    pendingGame = nil
-                    appState.returnToLibrary()
-                    // selectGame now waits internally for the engine to
-                    // finish terminating before handing it the new path,
-                    // so this site no longer needs its own polling loop.
-                    appState.selectGame(game)
-                    path.append(game)
-                }
+                // "Quit and play" disabled until cross-session Ruby
+                // state cleanup is reliable. See ExperimentalFeature
+                // comment in AppSettings.swift. Users have to resume
+                // the paused game (tapping its card) or force-close
+                // the app to play a different one.
+                // Button("Quit and play") {
+                //     guard let game = pendingGame else { return }
+                //     pendingGame = nil
+                //     appState.returnToLibrary()
+                //     appState.selectGame(game)
+                //     path.append(game)
+                // }
             } message: {
                 if let paused = pauseManager.pausedGame {
-                    Text("\"\(paused.title)\" is still running. Quit it to play a different game?")
+                    Text("\"\(paused.title)\" is still running. Resume it from its card, or force-close the app to play a different game.")
                 }
             }
             .tint(nil)

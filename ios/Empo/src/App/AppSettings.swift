@@ -87,29 +87,24 @@ enum AppTheme: String, CaseIterable {
 }
 
 
-enum ExperimentalFeature: String, CaseIterable, Identifiable {
-    case gamePause = "experimental.gamePause"
-    case gameQuit = "experimental.gameQuit"
-    case cheats = "experimental.cheats"
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .gameQuit:  "Quit game"
-        case .gamePause: "Pause game"
-        case .cheats:    "Cheats"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .gameQuit:  "Adds a Quit button to the in-game toolbar that returns you to the library."
-        case .gamePause: "Adds a Pause button to the in-game toolbar that freezes the game so you can resume it later."
-        case .cheats:    "Adds a Cheats button to the in-game toolbar that opens a JoiPlay-compatible cheat menu. Works in most Pokemon Essentials and RPG Maker XP/VX/VX Ace games."
-        }
-    }
-}
+// `ExperimentalFeature` enum and its `isEnabled` / `setEnabled`
+// machinery were removed in May 2026 once `gamePause` and `cheats`
+// graduated to always-on, leaving no remaining experimental
+// toggles. `gameQuit` was also planned as an experimental feature
+// but never landed (cross-session Ruby state cleanup blocks it -
+// see MRUBY_POSTMORTEM.md / QUIT_PATHS_DISABLED.md).
+//
+// To bring back an opt-in experimental toggle later, restore:
+//   - this enum (cases + `label` + `description` + `id`)
+//   - `AppSettings.experimentalFlags`, `isEnabled`, `setEnabled`
+//   - the loop in `init` that loads the dictionary from defaults
+//   - the `experimentalBinding(for:)` helper in `SettingsView`
+//   - the `ForEach(ExperimentalFeature.allCases)` in `SettingsView`
+//   - per-feature gating sites in PlayerMoreSheet etc.
+//
+// The DefaultsKey strings should re-use the historical
+// `experimental.<name>` shape so users with the old toggle stored
+// pick it back up automatically.
 
 
 @MainActor
@@ -121,8 +116,14 @@ class AppSettings {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: DefaultsKey.theme) }
     }
 
-    var debugMode: Bool {
-        didSet { UserDefaults.standard.set(debugMode, forKey: DefaultsKey.debugMode) }
+    /// Toggle for the in-game Diagnostics overlay (the floating
+    /// draggable panel showing title / Ruby version / renderer /
+    /// FPS). The persistence key stays at `DefaultsKey.debugMode`
+    /// for backward-compat with users who already toggled the
+    /// setting under its earlier name; the Swift property and the
+    /// user-facing label both moved to "diagnosticsOverlay".
+    var diagnosticsOverlay: Bool {
+        didSet { UserDefaults.standard.set(diagnosticsOverlay, forKey: DefaultsKey.debugMode) }
     }
 
     var showViewportBounds: Bool {
@@ -193,19 +194,11 @@ class AppSettings {
         disclaimerAcknowledgedVersion = Self.currentDisclaimerVersion
     }
 
-    private var experimentalFlags: [String: Bool] {
-        didSet {
-            for (key, value) in experimentalFlags {
-                UserDefaults.standard.set(value, forKey: key)
-            }
-        }
-    }
-
     private init() {
         let ud = UserDefaults.standard
         let themeRaw = ud.string(forKey: DefaultsKey.theme) ?? AppTheme.auto.rawValue
         self.theme = AppTheme(rawValue: themeRaw) ?? .auto
-        self.debugMode = ud.bool(forKey: DefaultsKey.debugMode)
+        self.diagnosticsOverlay = ud.bool(forKey: DefaultsKey.debugMode)
         self.showViewportBounds = ud.bool(forKey: DefaultsKey.showViewportBounds)
         self.viewportBoundsColor = Self.loadViewportBoundsColor()
         self.debugLogs = (ud.object(forKey: DefaultsKey.debugLogs) as? Bool) ?? true
@@ -224,23 +217,8 @@ class AppSettings {
         self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
         self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
 
-        var flags: [String: Bool] = [:]
-        for feature in ExperimentalFeature.allCases {
-            flags[feature.rawValue] = ud.bool(forKey: feature.rawValue)
-        }
-        self.experimentalFlags = flags
-
         mkxp_setShowViewportBounds(showViewportBounds)
         pushViewportBoundsColor()
-    }
-
-
-    func isEnabled(_ feature: ExperimentalFeature) -> Bool {
-        experimentalFlags[feature.rawValue] ?? false
-    }
-
-    func setEnabled(_ feature: ExperimentalFeature, _ value: Bool) {
-        experimentalFlags[feature.rawValue] = value
     }
 
 

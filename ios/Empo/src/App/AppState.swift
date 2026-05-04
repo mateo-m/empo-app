@@ -68,9 +68,40 @@ class AppState {
         // reaches `initSyntaxTransform` (during the RGSS-thread
         // bootstrap kicked off by mkxp_setGamePath later in this
         // method) - selectGame is the right place for it.
+        //
+        // Important even on multi-Ruby: games that route to Ruby
+        // 3.1 (the only Ruby version with the patches applied)
+        // still need the LEGACY mode for legacy-grammar PE forks
+        // (Vinemon, etc.) whose scripts mix 1.8 syntax with 1.9+
+        // runtime methods. Games on 1.8/1.9/3.0 native ignore
+        // this setting (no patches in those builds).
         mkxp_setSyntaxTransformMode(
             settings.resolveSyntaxTransformMode(gameDirectory: gameDir)
         )
+
+        // Multi-Ruby (Phase D, MULTI_RUBY_PLAN.md) per-game dispatch.
+        // Precedence:
+        //   1. settings.rubyVersionOverride (manual user pick in
+        //      GameSettingsView's Ruby version picker)
+        //   2. metadata.rubyVersion (auto-detected at import time
+        //      by RubyVersionDetection)
+        //   3. MKXP_RUBY_UNSET → engine falls through to its
+        //      legacy direct-link 3.1 path. Hit when neither
+        //      override nor detection has tagged a value, e.g.
+        //      games imported before this field existed if the
+        //      backfill hasn't run yet.
+        let metadata = GameMetadata.load(from: container)
+        let rubyVersionRaw = settings.rubyVersionOverride ?? metadata.rubyVersion
+        let rubyVer: MKXPRubyVersion = {
+            switch rubyVersionRaw {
+            case 18: return MKXP_RUBY_18
+            case 19: return MKXP_RUBY_19
+            case 30: return MKXP_RUBY_30
+            case 31: return MKXP_RUBY_31
+            default: return MKXP_RUBY_UNSET
+            }
+        }()
+        mkxp_setActiveRubyVersion(rubyVer)
 
         settings.applyToConfig(stateDirectory: stateDir, gameDirectory: gameDir)
 
@@ -117,6 +148,11 @@ class AppState {
         // author of a new bridge adds their reset there alongside
         // the static declaration, so the host doesn't have to
         // track each bridge individually.
+        //
+        // Effectively a no-op on feat/multi-ruby-v2 since cross-
+        // session play is disabled (QUIT_PATHS_DISABLED.md), but
+        // calling it costs nothing and keeps the iOS code in sync
+        // with main's expected bridge surface.
         mkxp_resetSessionState()
 
         // Wait for the RGSS thread to actually finish tearing down any
@@ -148,6 +184,18 @@ class AppState {
 
     private static let crashMessage = "It looks like the game didn't exit cleanly last time. "
         + "Your save data should be fine."
+
+    /// Body text shown when the engine signals a clean exit
+    /// (Ruby `SystemExit` / `Reset`) mid-session: game's built-in
+    /// "Exit to desktop" menu, or postload scripts raising Reset
+    /// after compiling data files. With cross-session play
+    /// disabled (QUIT_PATHS_DISABLED.md) we can't safely return
+    /// to the library and launch another game in the same
+    /// process — the user has to force-close + reopen. RootView
+    /// appends "Close Empo from the app switcher and reopen it
+    /// to continue." so the body reads as a single natural
+    /// sentence.
+    private static let cleanExitMessage = "The game has ended or requested a restart."
 
     func consumeCrashRecovery() {
         guard crashTracker.pendingCrashRecovery else { return }
@@ -190,8 +238,8 @@ class AppState {
     /// Resets per-session UI state without touching the engine or
     /// crash marker. Shared by the explicit `returnToLibrary` path
     /// and the engine-initiated clean-exit path (game's own
-    /// "Exit to desktop" menu) so both drop back to the library
-    /// through the same transition.
+    /// "Exit to desktop" menu, font-install restart, etc.) so both
+    /// drop back to the library through the same transition.
     private func tearDownSessionState() {
         selectedGame = nil
         // Unbind the controls layout so any library-screen UI that
@@ -204,16 +252,17 @@ class AppState {
         phase = nil
     }
 
-    func armLoadingEscapeForceQuit() {
-        termination.armLoadingEscapeForceQuit()
-    }
+    // armLoadingEscapeForceQuit() wrapper removed 2026-05-02 along
+    // with the underlying coordinator helper. See
+    // QUIT_PATHS_DISABLED.md.
 
 
     // MARK: - Pause lifecycle
 
     func requestPause() {
-        guard AppSettings.shared.isEnabled(.gamePause),
-              phase == .playing else { return }
+        // Pause graduated from experimental in May 2026; always
+        // enabled. Only gate is "a game is actually playing."
+        guard phase == .playing else { return }
         EngineState.shared.isBackgroundPause = false
         mkxp_requestPause()
     }
@@ -303,27 +352,31 @@ class AppState {
 
                 if !state.terminationExpected && state.phase != nil {
                     let cleanExit = mkxp_didEngineExitCleanly() != 0
-                    if cleanExit {
-                        // Ruby raised SystemExit (e.g. the game's own
-                        // "Exit to desktop" menu): drop back to the
-                        // library silently through the shared teardown.
-                        state.tearDownSessionState()
-                    } else {
-                        // Preserve a Ruby/engine error message if the error callback
-                        // already set one; otherwise fall back to the generic crash text.
-                        // Intentionally do NOT set phase = nil here: setting phase = nil
-                        // while an error alert is already presenting, SwiftUI swallows the
-                        // NavigationStack pop. Leaving phase non-nil means the alert OK
-                        // button sees phase != nil, calls returnToLibrary(), and the pop
-                        // happens cleanly after the alert is dismissed.
-                        if state.errorMessage == nil {
-                            state.errorMessage = AppState.crashMessage
-                        }
-                        state.selectedGame = nil
-                        ControlsLayout.shared.switchGame(id: nil)
-                        state.engineReady = false
-                        PauseManager.shared.reset()
+                    // Both clean and crash exits surface an alert
+                    // that routes through RootView's dismiss-only
+                    // branch (phase != nil). With cross-session
+                    // play disabled (QUIT_PATHS_DISABLED.md,
+                    // MRUBY_POSTMORTEM.md) we can't safely return
+                    // to the library and launch another game in
+                    // the same process — the only way to play
+                    // again is to force-close from the app switcher.
+                    //
+                    // Intentionally do NOT set phase = nil here:
+                    // setting phase = nil while an error alert is
+                    // already presenting causes SwiftUI to swallow
+                    // the NavigationStack pop. Leaving phase
+                    // non-nil means the alert OK button sees
+                    // phase != nil and routes through the dismiss-
+                    // only handler.
+                    if state.errorMessage == nil {
+                        state.errorMessage = cleanExit
+                            ? AppState.cleanExitMessage
+                            : AppState.crashMessage
                     }
+                    state.selectedGame = nil
+                    ControlsLayout.shared.switchGame(id: nil)
+                    state.engineReady = false
+                    PauseManager.shared.reset()
                 }
                 state.terminationExpected = false
             }
