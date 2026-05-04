@@ -8,7 +8,7 @@
 
 Empo wraps the [mkxp-z](https://github.com/mkxp-z/mkxp-z) RPG Maker engine in a native SwiftUI library and a customizable touch-controls overlay. RPG Maker XP / VX / VX Ace games and modern Pokemon Essentials forks run on-device, no desktop emulator needed.
 
-The name's from *emporos*, ancient Greek for a traveler riding on someone else's ship. Empo's the ship.
+The name's from *emporos*, ancient Greek for a traveler riding on someone else's ship.
 
 ## Table of Contents
 
