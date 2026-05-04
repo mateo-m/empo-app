@@ -14,9 +14,18 @@ jobs:
         with:
           submodules: false
 
+      - name: Cache Swift toolchain
+        id: cache-swift
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/swiftly
+          key: swiftly-${{ runner.os }}-6.2
+
       - name: Install Swift toolchain
         # Swiftly is Apple's official toolchain manager. Gives us
         # swift-format on ubuntu-latest without a custom container.
+        # On cache hit the action detects the existing toolchain and
+        # short-circuits the slow download.
         uses: vapor/swiftly-action@v0.2
         with:
           toolchain: "6.2"
