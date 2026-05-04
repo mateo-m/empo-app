@@ -217,7 +217,8 @@ class GameLibrary {
             title: title,
             artworkPath: artworkPath,
             engineTitle: engineTitle,
-            lastPlayed: metadata.lastPlayed
+            lastPlayed: metadata.lastPlayed,
+            dateAdded: metadata.dateAdded
         )
     }
 
@@ -420,6 +421,7 @@ class GameLibrary {
                     artworkPath: artworkPath,
                     engineTitle: lib.games[idx].engineTitle,
                     lastPlayed: lib.games[idx].lastPlayed,
+                    dateAdded: lib.games[idx].dateAdded,
                     status: lib.games[idx].status
                 )
             }
