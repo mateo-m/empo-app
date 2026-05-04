@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Preference key used by the overlay to report its measured height
 /// back to PlayerView, so the draggable clamp math matches whatever
-/// size the content actually settles at (long titles / wrapped lines
+/// size the content settles at (long titles / wrapped lines
 /// make the overlay taller than the fixed-height guess).
 struct DebugOverlayHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0

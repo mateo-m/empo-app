@@ -81,12 +81,12 @@ class AppWindow: UIWindow {
     }
 
     // No hitTest override needed. Controls handle their own key injection
-    // via the bridge. Background touches are harmlessly absorbed — RGSS games
+    // via the bridge. Background touches are harmlessly absorbed; RGSS games
     // use keyboard input, not mouse/touch.
 
 
     /// In library/loading: this window must be key for SwiftUI.
-    /// In player: SDL needs key — unless keyboard mode is active.
+    /// In player: SDL needs key; unless keyboard mode is active.
     override var canBecomeKey: Bool {
         let phase = AppState.shared.phase
         if phase != .playing { return true }

@@ -9,7 +9,7 @@ class EngineState {
     var gameRect: CGRect = .zero
 
     /// Whether the current pause was triggered by app backgrounding
-    /// (silent — no UI transition to library).
+    /// (silent; no UI transition to library).
     var isBackgroundPause = false
 
     private init() {}

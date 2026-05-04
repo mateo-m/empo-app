@@ -88,35 +88,36 @@ struct GameEntry: Identifiable, Hashable {
         return parseINIValue(in: iniURL, section: section, key: key)
     }
 
+    /// Reads `[section] key=value` from a Game.ini file. Both
+    /// `section` and `key` are matched case-insensitively, so
+    /// `[Game]` and `[game]` both work, and `library=` /
+    /// `LIBRARY=` both match `key: "library"`.
+    ///
+    /// RPG Maker writes Game.ini in Windows-1252 / Latin-1, so we
+    /// try UTF-8 first (covers ASCII-only files) and fall back to
+    /// Latin-1 when UTF-8 decode fails. Without the fallback,
+    /// titles like "Pokémon Reborn" silently return nil.
     static func parseINIValue(in iniURL: URL, section: String, key: String) -> String? {
-        // Game.ini is typically Windows-1252 / Latin-1 (RPG Maker's
-        // default save encoding). Try UTF-8 first - it's a strict
-        // superset of ASCII so the common case Just Works - and
-        // fall back to ISO Latin-1 when UTF-8 decode fails (any
-        // file with a non-ASCII byte like the `é` in
-        // "Title=Pokémon ..." trips this). Without the fallback,
-        // titles with accented characters silently return nil and
-        // surface as "Unknown Game" in the library.
-        guard let raw = try? Data(contentsOf: iniURL) else { return nil }
-        guard let data = String(data: raw, encoding: .utf8)
-            ?? String(data: raw, encoding: .isoLatin1)
-        else {
+        guard let value = try? Data(contentsOf: iniURL).decodeAsLooseText() else {
             return nil
         }
 
-        let sectionLower = "[\(section)]"
+        let sectionLower = "[\(section.lowercased())]"
+        let keyPrefixLower = "\(key.lowercased())="
         var inSection = false
-        let keyPrefix = "\(key)="
-        for line in data.components(separatedBy: .newlines) {
+        for line in value.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("[") {
                 inSection = trimmed.lowercased().hasPrefix(sectionLower)
                 continue
             }
-            if inSection && trimmed.lowercased().hasPrefix(keyPrefix) {
-                let value = String(trimmed.dropFirst(keyPrefix.count))
-                    .trimmingCharacters(in: .whitespaces)
-                if !value.isEmpty { return value }
+            if inSection {
+                let lowered = trimmed.lowercased()
+                if lowered.hasPrefix(keyPrefixLower) {
+                    let v = String(trimmed.dropFirst(keyPrefixLower.count))
+                        .trimmingCharacters(in: .whitespaces)
+                    if !v.isEmpty { return v }
+                }
             }
         }
         return nil

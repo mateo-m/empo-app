@@ -38,7 +38,7 @@ struct GameCard: View {
                     .frame(height: titleHeight * 2.5)
                     .allowsHitTesting(false)
                     // Force dark scheme on the material so its tint
-                    // stays dark — ensures the white title stays
+                    // stays dark; ensures the white title stays
                     // readable against every artwork.  Scoped here so
                     // the artwork placeholder underneath keeps its
                     // actual-scheme color.
@@ -109,7 +109,7 @@ struct GameCard: View {
     @ViewBuilder
     private var centerOverlay: some View {
         // Dim the artwork a little for non-ready states so the
-        // indicator reads clearly against busy thumbnails.
+        // indicator stays readable on top of busy thumbnails.
         if game.status.phase != .ready {
             Color.black.opacity(Scrim.light)
         }
@@ -295,7 +295,7 @@ struct GameStatusIndicator: View {
             Button(action: { onStopImport?() }) {
                 // Same `.regularMaterial` adaptive contrast as the
                 // ring around it, so stop-square and ring both
-                // read clearly against whatever artwork is behind.
+                // stay readable on top of whatever artwork is behind.
                 RoundedRectangle(cornerRadius: 2.5)
                     .fill(.regularMaterial)
                     .frame(width: stopSize, height: stopSize)

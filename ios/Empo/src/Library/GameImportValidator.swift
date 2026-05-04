@@ -47,7 +47,7 @@ enum GameImportValidator {
 
         let lowercaseItems = items.map { $0.lowercased() }
 
-        // 1. Check for RGSS archive — definitive proof + version detection.
+        // 1. Check for RGSS archive; definitive proof + version detection.
         //    When an archive is present, scripts are packed inside it and
         //    scripts can't be validated without decrypting, so only the version is checked.
         if let version = rgssVersionFromArchive(lowercaseItems) {
@@ -65,7 +65,7 @@ enum GameImportValidator {
             }
         }
 
-        // 3. Check for mkxp.json — only valid if it has a customScript
+        // 3. Check for mkxp.json; only valid if it has a customScript
         //    (without customScript AND without a valid .ini, the engine
         //    won't know where to find scripts and will fail at runtime)
         if lowercaseItems.contains("mkxp.json") {
@@ -95,7 +95,7 @@ enum GameImportValidator {
     ///
     /// The single-walk strategy assumes RPG Maker games keep the
     /// scripts file at the default `Data/Scripts.{rxdata,rvdata,
-    /// rvdata2}` path (which is essentially all of them). If a
+    /// rvdata2}` path (which covers nearly all of them). If a
     /// game hard-codes a custom scripts path via Game.ini's
     /// `Scripts=` key falls through to a targeted second pass.
     ///
@@ -197,9 +197,9 @@ enum GameImportValidator {
         }
 
         // Determine where the game root landed inside scratchDir
-        // based on what actually got extracted (matches the
+        // based on what got extracted (matches the
         // post-extraction logic that the full import uses later).
-        let gameRoot = findGameRoot(in: scratchDir, fm: fm)
+        let gameRoot = GameContainer.findGameRoot(in: scratchDir, fm: fm)
 
         // Fast path: RGSS-archived games were identified by name
         // during the walk.
@@ -312,28 +312,6 @@ enum GameImportValidator {
     }
 
 
-    /// Determine the effective game root inside `scratchDir`. If
-    /// exactly one directory sits at the top (ignoring macOS
-    /// metadata), that directory is the wrapper; otherwise files
-    /// are flat inside `scratchDir` itself. Mirrors the logic used
-    /// by `GameLibrary.findGameRoot` after full extraction.
-    private static func findGameRoot(in scratchDir: URL, fm: FileManager) -> URL {
-        guard let items = try? fm.contentsOfDirectory(
-            at: scratchDir,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return scratchDir }
-
-        let meaningful = items.filter { $0.lastPathComponent != "__MACOSX" }
-        if meaningful.count == 1,
-           let single = meaningful.first,
-           (try? single.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
-            return single
-        }
-        return scratchDir
-    }
-
-
     /// Detected RGSS version: 1 = XP, 2 = VX, 3 = VX Ace
     private enum RGSSVersion: Int {
         case xp = 1, vx = 2, vxAce = 3
@@ -373,7 +351,7 @@ enum GameImportValidator {
 
     /// Validates that an RGSS scripts file (Marshal-dumped Array) exists and is valid.
     private static func validateRGSSScripts(at gameDir: URL, scriptsPath: String) throws {
-        // Game.ini uses backslashes (Windows paths) — convert to forward slashes
+        // Game.ini uses backslashes (Windows paths); convert to forward slashes
         let normalized = scriptsPath.replacingOccurrences(of: "\\", with: "/")
         let fileURL = gameDir.appendingPathComponent(normalized)
 
@@ -382,7 +360,7 @@ enum GameImportValidator {
         }
 
         // Ruby Marshal format: first 2 bytes are version (0x04, 0x08),
-        // third byte is the type tag — 0x5B means Array
+        // third byte is the type tag; 0x5B means Array
         guard let fh = FileHandle(forReadingAtPath: fileURL.path) else {
             throw ImportError.invalidScripts(normalized)
         }
