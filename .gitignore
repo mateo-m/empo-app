@@ -10,6 +10,20 @@ ios/Empo/Empo.xcodeproj/
 ios/Dependencies/downloads/
 ios/Dependencies/build-*/
 
+# ANGLE prebuilt - hydrated at build time by tools/fetch-angle.sh
+# from a tagged release on github.com/mateo-m/empo-deps. The binaries
+# are too large for git (~80 MB) and version-pinned via
+# ios/Dependencies/ANGLE/.version (which IS tracked).
+ios/Dependencies/ANGLE/iphoneos/include/
+ios/Dependencies/ANGLE/iphoneos/lib/
+ios/Dependencies/ANGLE/iphonesimulator/include/
+ios/Dependencies/ANGLE/iphonesimulator/lib/
+ios/Dependencies/ANGLE/.fetched-version
+
+# MetalANGLE.xcframework - unreferenced by the build, kept untracked
+# in case anything ever needs it. Currently not in the working tree.
+ios/Dependencies/Frameworks/
+
 # Xcode / DerivedData
 DerivedData/
 *.xcworkspace
