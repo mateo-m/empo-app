@@ -25,7 +25,7 @@ struct GameLoadingView: View {
     /// Cancel button is revealed so the user can bail if a game hangs during
     /// boot (common with broken Win32 DLL dependencies or bad scripts).
     @State private var cancelVisible = false
-    private static let cancelAppearDelay: Duration = .seconds(2)
+    private static let cancelAppearDelay: Duration = .seconds(7)
 
     /// Looked up at body-time so the loading view shares the same
     /// source image as the Game Info sheet's banner. By design

@@ -14,7 +14,7 @@ iOS apps can't kill themselves and respawn. Android emulators (JoiPlay) sidestep
 - Game B runs in the same VM. It defines `class Foo < Baz`. Ruby raises `TypeError: superclass mismatch for class Foo`.
 - The hierarchy of leaked classes / monkey-patches / aliases / disposed RGSS objects across two arbitrary games' scripts is unpredictable.
 
-A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method baseline, `MkxpNullMouse` shim for orphan globals, intrusive-list detachment for disposables, etc.) and it worked for Pokemon Z ↔ Pokemon Uranium. It didn't survive contact with broader game corpora - especially mixed-version sessions where the active Ruby's data structures differ between games.
+A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method baseline, `MkxpNullMouse` shim for orphan globals, intrusive-list detachment for disposables, etc.) and it worked for narrow same-version game pairs. It didn't survive contact with broader game corpora, especially mixed-version sessions where the active Ruby's data structures differ between games.
 
 The decision: rather than ship a half-working cross-session UX that breaks unpredictably, we surface a clean alert that asks the user to force-close. Future work could re-enable cross-session play either via process forking (separate PID per game) or by moving the engine's per-session VM state into a fully resettable container.
 
@@ -34,7 +34,7 @@ Even though the user can't switch to another game in the same process, the engin
 
 Two `scripts/preload/platform_compat.rb` shims keep this flow working when game scripts try to skip the engine's catch:
 
-- **`Kernel.exit!` / `Process.exit!` redirect to `Kernel.exit`** - Pokemon Essentials' `pbExit` (and forks like Vanguard) calls `exit!` to skip `at_exit` handlers. On desktop that's harmless; on iOS `exit!` calls C `_exit(status)` directly and the app vanishes before the engine knows. Redirecting to `exit` raises `SystemExit` instead, which the engine catches.
+- **`Kernel.exit!` / `Process.exit!` redirect to `Kernel.exit`** - Pokemon Essentials' `pbExit` and various forks of it call `exit!` to skip `at_exit` handlers. On desktop that's harmless; on iOS `exit!` calls C `_exit(status)` directly and the app vanishes before the engine knows. Redirecting to `exit` raises `SystemExit` instead, which the engine catches. App Store guideline 2.5.1 also forbids programmatic process termination, so the redirect serves both correctness and policy.
 - **`Thread.critical` / `Thread.critical=` no-ops on Ruby 1.9+** - Vintage RGSS code wraps `Marshal.load` and save-file I/O in `Thread.critical = true` blocks (a Ruby 1.8 cooperative-scheduling idiom; both methods removed in 1.9). Without the shim, Ruby 1.9+ raises `NoMethodError` mid-quit, the error escapes the script-eval loop, and `SharedState::finiInstance()` segfaults on iOS while tearing down graphics with a pending exception.
 
 See `docs/multi-ruby.md` for the broader picture.

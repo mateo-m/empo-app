@@ -1,4 +1,4 @@
-# Ruby 1.9 — Patches & Build Notes
+# Ruby 1.9: Patches & Build Notes
 
 ## Source
 
@@ -20,7 +20,7 @@ without falling back to Ruby 3.1's syntax-transform patches.
 All iOS patches are in `ios.patch` (applied automatically by the
 makefile via `git apply` before `autoconf`):
 
-### `config.guess` and `config.sub` — Updated for aarch64
+### `config.guess` and `config.sub`: Updated for aarch64
 
 The 2014-era autoconf helper scripts don't recognize modern platform
 triplets like `aarch64-apple-darwin`. Both files were replaced with
@@ -31,12 +31,12 @@ current GNU config versions so cross-compilation to iOS works.
 These are not patches to Ruby itself, but engine-side adaptations
 required for Ruby 1.9 on iOS:
 
-1. **4MB RGSS thread stack** — Ruby 1.9's GC scans the entire thread
+1. **4MB RGSS thread stack**: Ruby 1.9's GC scans the entire thread
    stack for object references. The default 512KB iOS pthread stack
    triggers SIGBUS when GC hits the guard page. Worked around by
    calling `SDL_CreateThreadWithStackSize` with 4MB.
 
-2. **VM persistence** — `ruby_init()` is one-shot per process; the
+2. **VM persistence**: `ruby_init()` is one-shot per process; the
    engine calls it once and reuses the VM across game sessions for
    the lifetime of the app.
 

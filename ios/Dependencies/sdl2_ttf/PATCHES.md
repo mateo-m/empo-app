@@ -1,4 +1,4 @@
-# SDL2_ttf — Patches & Build Notes
+# SDL2_ttf: Patches & Build Notes
 
 ## Source
 
@@ -10,9 +10,9 @@
 
 Two custom commits on top of upstream:
 
-1. **`20e405a`** (Roza) — Do not need test programs
+1. **`20e405a`** (Roza): Do not need test programs
    - Removes test program compilation from the build.
-2. **`0d5909e`** (Roza) — Disable NEON so it builds on ARM
+2. **`0d5909e`** (Roza): Disable NEON so it builds on ARM
    - Prevents NEON intrinsic issues during cross-compilation for ARM platforms.
 
 ## iOS Build Instructions

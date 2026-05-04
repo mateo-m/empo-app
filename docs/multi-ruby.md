@@ -2,7 +2,7 @@
 
 ## Overview
 
-Empo ships four Ruby interpreters in one binary - 1.8.8, 1.9.3, 3.0.7, 3.1.3 - and dispatches to the right one per-game at launch. A vintage RPG Maker XP game runs on actual Ruby 1.8's parser and VM. A Pokemon Reborn 19+ build runs on Ruby 3.1. Ruby 3.0 ships too and is available as a manual override via the per-game Ruby Version picker for runtimes built against 3.0 specifically.
+Empo ships four Ruby interpreters in one binary - 1.8.8, 1.9.3, 3.0.7, 3.1.3 - and dispatches to the right one per-game at launch. A vintage RPG Maker XP game runs on actual Ruby 1.8's parser and VM. A modern Pokemon Essentials fork built on the mkxp-z runtime routes to Ruby 3.1. Ruby 3.0 ships too and is available as a manual override via the per-game Ruby Version picker for runtimes built against 3.0 specifically.
 
 This replaces the older "everything on one Ruby" architecture (originally 1.8-only, briefly 3.1-only via the syntax-transform PR304 experiment).
 
@@ -12,10 +12,10 @@ Different RPG Maker generations target different Ruby versions:
 
 | Generation | Engine DLL | Ruby version | Typical games |
 |---|---|---|---|
-| RGSS1 (RPG Maker XP) | `RGSS104E.dll` | 1.8 | Vintage Pokemon Essentials forks (Pokemon Z, Insurgence, Uranium) |
+| RGSS1 (RPG Maker XP) | `RGSS104E.dll` | 1.8 | Vintage Pokemon Essentials forks |
 | RGSS2 (RPG Maker VX) | `RGSS200J.dll` | 1.9 | A handful of community projects |
-| RGSS3 (RPG Maker VX Ace) | `RGSS300.dll` | 1.9 | BTTheManor, traditional VX Ace games |
-| mkxp-z modern | bundled `x64-msvcrt-rubyXYZ.dll` | 3.0 / 3.1 | Modern PE forks (Reborn 19+, Vanguard, Flux, Inf Fusion) |
+| RGSS3 (RPG Maker VX Ace) | `RGSS300.dll` | 1.9 | Traditional VX Ace games |
+| mkxp-z modern | bundled `x64-msvcrt-rubyXYZ.dll` | 3.0 / 3.1 | Modern Pokemon Essentials forks shipping the mkxp-z runtime |
 
 A single Ruby version that tries to cover all of these is fragile. Ruby 1.8 can't parse modern code (keyword args, safe nav, pattern matching). Ruby 3.x can't parse a lot of vintage code (`when X:`, character literal arithmetic, removed `Object#id`). Source-rewrite hacks like the syntax-transform patches make 3.1 accept some 1.8 grammar but break in subtle ways for genuinely modern games (see "Syntax transform stays" below).
 
@@ -108,26 +108,55 @@ The same `binding/*.cpp` source compiles four times, with version-conditional co
 
 Includes are isolated under `$(INCLUDEDIR)/ruby${VER}/` so 3.0 doesn't accidentally see 3.1 headers and vice versa.
 
-## Syntax transform stays
+## Syntax transform
 
-The Ruby 3.1 build still applies the syntax-transform patches (see `mkxp-z-apple-mobile/syntax-transform/3.1/`). These rewrite Ruby 3.1's parser to also accept Ruby 1.8 grammar. Activated per-game via `mkxp_setSyntaxTransformMode()`:
+The Ruby 3.1 build applies a set of parser patches (33 files under `mkxp-z-apple-mobile/syntax-transform/3.1/`, originally [PR #304 by white-axe](https://github.com/mkxp-z/mkxp-z/pull/304)) that teach Ruby 3.1's parser to also accept Ruby 1.8 grammar. The 1.8 / 1.9 / 3.0 builds don't apply them; those interpreters parse their native grammar without modification.
 
-- **DISABLED** (modern PE forks: Reborn, Flux, Vanguard, Inf Fusion) - strict Ruby 3.1 parsing.
-- **LEGACY** (mixed-grammar PE forks: Vinemon, etc.) - 1.8 syntax accepted by parser.
+### Why it exists
 
-The 1.8 / 1.9 / 3.0 builds run vanilla Ruby - the patches don't apply there.
+Multi-Ruby native dispatch covers most of the compatibility space, but it doesn't cover one shape of game: mixed-grammar Pokemon Essentials forks that combine Ruby 1.8-era syntax with 1.9+ runtime methods.
 
-This is the safety net for one specific case: games that have 1.8-era syntax (`when X:`, `break` from proc, `?A` as integer) but use 1.9+ runtime methods (`force_encoding`, `String#encode`, modern Time API). They can't run on 1.8 native (no `force_encoding`) or 3.1 native strict (parser rejects `when X:`). Patched 3.1 with LEGACY mode is the only path.
+Concretely:
 
-`GameSettings.useModernRuby` (auto-detected via `detectModernRubyScripts`) picks DISABLED vs LEGACY at session start. Manual override via the per-game settings sheet.
+- **Ruby 1.8 syntax**: `when X:` (colon-terminated when clause), `break` from inside a `Proc.new` block, `?A` evaluated to an integer character code, `Object#id`, `Array#choice`, `Symbol#to_i`.
+- **Ruby 1.9+ runtime methods**: `String#force_encoding`, `String#encode`, modern `Time` API, `Encoding` constants.
 
-We tried stripping syntax-transform under the assumption that multi-Ruby native made it dead code. That assumption was wrong - Vinemon and similar mixed-grammar forks legitimately need the patched parser. The strip experiment was reverted.
+A single interpreter that accepts both doesn't exist:
+
+- Ruby 1.8 native parses the syntax fine but lacks the runtime methods (no `force_encoding`).
+- Ruby 3.1 native has all the runtime methods but its parser rejects `when X:` outright.
+
+Patched Ruby 3.1 with the syntax-transform parser patches is the only path that runs these games. The patches activate selectively at parse time, gated by a global; the runtime methods stay vanilla Ruby 3.1.
+
+### Why only on Ruby 3.1
+
+The 1.8 / 1.9 / 3.0 builds don't need the patches. Each of those interpreters runs games written in its own native grammar (via the multi-Ruby dispatcher), so there's no parser-mismatch problem to solve.
+
+The patches themselves target Ruby 3.1's parser internals (`parse.y`, `compile.c`, `vm_method.c`, etc.). Porting them to 3.0 or 1.9 would require re-deriving 33 patches against a different parser tree for no gain: a game that wants 1.9 grammar already gets 1.9 native, and a game that wants 3.0 already gets 3.0 native.
+
+### When it activates
+
+Per-session, set by the host before `mkxp_setGamePath()`:
+
+| Mode | When | Effect |
+|---|---|---|
+| `MKXP_SYNTAX_TRANSFORM_DISABLED` | Game routes to Ruby 3.1 and `useModernRuby = true` (auto-detected, or manually picked) | Vanilla Ruby 3.1 parsing. Modern grammar required. |
+| `MKXP_SYNTAX_TRANSFORM_LEGACY` | Game routes to Ruby 3.1 and `useModernRuby = false` (default for mixed-grammar PE forks) | Patches active. Parser accepts 1.8 grammar. |
+| `MKXP_SYNTAX_TRANSFORM_UNSET` | Default at startup; engine falls back to mkxp.json's value (legacy desktop path). | The iOS host always sets a real value, so UNSET stays as a guard for desktop / test-harness builds. |
+
+`GameSettings.useModernRuby` is the per-game switch. `GameSettings.detectModernRubyScripts` auto-sets it at import time based on heuristics (bundled DLL filename, presence of modern grammar tokens in loose `.rb` files, `.fpk` packaging). The user can override via the per-game settings sheet.
+
+The patches are no-ops at the engine level when `MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES` isn't defined (they're gated on the build define). The 1.8 / 1.9 / 3.0 builds don't define it; only the Ruby 3.1 build does.
+
+### History
+
+A previous iteration tried stripping the syntax-transform patches under the assumption that multi-Ruby native dispatch made them dead code. The assumption was wrong: mixed-grammar Pokemon Essentials forks legitimately need the patched parser. The strip experiment was reverted.
 
 ## Quit handling
 
 Ruby's `Kernel.exit!` and `Process.exit!` skip `at_exit` handlers AND bypass the engine's SystemExit catch entirely - they call C `_exit(status)` directly, terminating the iOS process before mkxp-z can save the engine log, fire the `mkxp_setEngineTerminated` callback, or do anything else.
 
-Pokemon Essentials' `pbExit` (and many forks - Vanguard, Reborn) commonly use `exit!` to skip a "press any key to confirm" splash. On desktop that's a fine UX choice; on iOS it makes the app vanish silently, status 1, no signal, no crash report.
+Pokemon Essentials' `pbExit` and various forks of it commonly use `exit!` to skip a "press any key to confirm" splash. On desktop that's a fine UX choice; on iOS it makes the app vanish silently, status 1, no signal, no crash report. Apple's App Store review guideline 2.5.1 also explicitly forbids programmatic process termination, so the `exit!` path needs to be intercepted regardless.
 
 `scripts/preload/platform_compat.rb` redirects `Kernel.exit!` and `Process.exit!` to `Kernel.exit` so the engine's SystemExit catch in `binding-mri.cpp`'s eval loop runs, sets `mkxp_setEngineExitedCleanly()`, and the iOS host's clean-exit alert ("close from app switcher") appears as designed.
 
