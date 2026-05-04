@@ -200,11 +200,23 @@ struct GameInfoView: View {
                             DetailRow("Ruby (runtime)") {
                                 if !runtimeProbeFinished {
                                     ProgressView()
-                                } else if let engine = GameMetadata.engineRubyVersion() {
-                                    Text(engine).monospaced()
                                 } else {
-                                    Text("Unknown")
-                                        .foregroundStyle(.secondary)
+                                    // Pass the game's detected RGSS-derived
+                                    // Ruby major.minor so multi-Ruby binaries
+                                    // (which contain up to 4 RUBY_DESCRIPTION
+                                    // strings, one per merged.o) report the
+                                    // version that'll actually run THIS game,
+                                    // not whichever string sits earliest in
+                                    // the .rodata section.
+                                    let majorMinor = rubyMajorMinorForGame()
+                                    if let engine = GameMetadata.engineRubyVersion(
+                                        forMajorMinor: majorMinor
+                                    ) {
+                                        Text(engine).monospaced()
+                                    } else {
+                                        Text("Unknown")
+                                            .foregroundStyle(.secondary)
+                                    }
                                 }
                             }
                         }
@@ -334,6 +346,47 @@ struct GameInfoView: View {
         }
         .tint(.brand)
     }
+
+    /// Map the game's detected/overridden Ruby version code
+    /// (18 / 19 / 30 / 31, persisted as `metadata.rubyVersion` or
+    /// `GameSettings.rubyVersionOverride`) to the corresponding
+    /// "<major>.<minor>" string the binary scanner expects. Falls
+    /// back to deriving from `rgssVersion` (RGSS1/2 → 1.8, RGSS3
+    /// → 1.9) when the explicit Ruby field hasn't been set yet
+    /// (e.g. games imported before multi-Ruby detection rolled
+    /// out, or before the library backfill task ran).
+    /// Returns nil when no signal is available; the caller falls
+    /// back to a no-filter scan.
+    private func rubyMajorMinorForGame() -> String? {
+        // Per-game override wins.
+        if let container = game.container {
+            let stateDir = container.empoStateURL
+            if let override = GameSettings.load(from: stateDir).rubyVersionOverride {
+                return rubyCodeToMajorMinor(override)
+            }
+        }
+        // Detector's persisted result.
+        if let v = metadata.rubyVersion {
+            return rubyCodeToMajorMinor(v)
+        }
+        // Fall back to RGSS-derived if the detector hasn't run yet.
+        switch rgssVersion {
+        case 1, 2: return "1.8"
+        case 3:    return "1.9"
+        default:   return nil
+        }
+    }
+
+    private func rubyCodeToMajorMinor(_ code: Int) -> String? {
+        switch code {
+        case 18: return "1.8"
+        case 19: return "1.9"
+        case 30: return "3.0"
+        case 31: return "3.1"
+        default: return nil
+        }
+    }
+
 
     private let bannerHeight: CGFloat = 260
 

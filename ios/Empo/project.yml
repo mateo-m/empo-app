@@ -37,6 +37,15 @@ settings:
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/hmode7/src
       - $(PROJECT_DIR)/shims
       - $(PROJECT_DIR)/shims/libarchive
+      # Ruby 3.1 headers live under /include/ruby31/ now (Phase D
+      # header isolation, MULTI_RUBY_PLAN.md). Keep this AHEAD of
+      # the global $(DEPENDENCY_SEARCH_PATH)/include in
+      # SYSTEM_HEADER_SEARCH_PATHS below so Ruby resolves to 3.1
+      # for the legacy direct-link path. Once the legacy path is
+      # dropped (Phase F), this line and the SYSTEM_HEADER_SEARCH_PATHS
+      # entry both go away — only the per-Ruby merged.o targets
+      # need Ruby headers.
+      - $(DEPENDENCY_SEARCH_PATH)/include/ruby31
       - $(DEPENDENCY_SEARCH_PATH)/include/SDL2
       - $(DEPENDENCY_SEARCH_PATH)/include/pixman-1
       - $(DEPENDENCY_SEARCH_PATH)/include/uchardet
@@ -77,6 +86,70 @@ targets:
     type: application
     platform: iOS
     preBuildScripts:
+      - name: Stub multi-Ruby merged objects if missing
+        # Multi-Ruby Phase D (MULTI_RUBY_PLAN.md) links per-Ruby
+        # merged .o files that are built by `ios/Dependencies/common.make`.
+        # Until that build is run for a given SDK (sim or device),
+        # the merged.o files don't exist and the linker fails.
+        # This pre-build phase creates a stub .o for any missing
+        # merged.o that defines `mkxp_get_script_binding_NN()`
+        # returning nullptr, so the linker is satisfied and the
+        # host's `getActiveScriptBinding()` dispatcher's NULL check
+        # falls back to the legacy `scriptBinding` for that version.
+        #
+        # On clean checkouts:  stubs created, app links + runs against
+        #                      the legacy 3.1 path only (3.0/3.1 dispatch
+        #                      paths fall through to legacy via NULL).
+        # After `make mkxp-merged`: real merged.o's exist, multi-Ruby
+        #                      dispatch works for whichever versions
+        #                      were built.
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          DEPS_LIB="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib"
+          mkdir -p "$DEPS_LIB"
+          for VER in 18 19 30 31; do
+              OBJ="$DEPS_LIB/mkxp${VER}-merged.o"
+              if [ ! -f "$OBJ" ]; then
+                  echo "info: $OBJ missing, stubbing for link" >&2
+                  TMP=$(mktemp -d)
+                  cat > "$TMP/stub.cpp" <<STUBEOF
+          // Auto-generated stub for missing mkxp${VER}-merged.o.
+          // mkxp_get_script_binding_${VER} returns nullptr so
+          // getActiveScriptBinding falls through to the other
+          // version's merged.o. Real merged .o (from
+          // ios/Dependencies/common.make's mkxp-merged target)
+          // replaces this stub when built.
+          struct ScriptBinding;
+          extern "C" ScriptBinding *mkxp_get_script_binding_${VER}(void) {
+              return nullptr;
+          }
+          // The 3.1 build of libruby ships syntax-transform patches
+          // that define these globals (parse.y/prelude.c). main.cpp
+          // (Xcode-compiled) sets them every selectGame. Stub them
+          // out at zero so the device link succeeds when mkxp31-merged.o
+          // is missing; the syntax-transform code path is dead until
+          // mkxp31-merged.o is built for this SDK anyway. Only emit
+          // for the 3.1 version since 3.0 doesn't ship those symbols.
+          #if ${VER} == 31
+          extern "C" {
+              unsigned int mkxp_syntax_transform_target_ruby_version_major = -1;
+              unsigned int mkxp_syntax_transform_target_ruby_version_minor = -1;
+              unsigned int mkxp_syntax_transform_target_ruby_version_teeny = -1;
+          }
+          #endif
+          STUBEOF
+                  CC=$(xcrun --sdk "$PLATFORM_NAME" -f clang++)
+                  SDK=$(xcrun --sdk "$PLATFORM_NAME" --show-sdk-path)
+                  case "$PLATFORM_NAME" in
+                    iphonesimulator) TARGET="-target arm64-apple-ios26.0-simulator -mios-simulator-version-min=26.0" ;;
+                    iphoneos)        TARGET="-target arm64-apple-ios26.0 -miphoneos-version-min=26.0" ;;
+                  esac
+                  "$CC" -arch arm64 -isysroot "$SDK" $TARGET -std=c++14 -c "$TMP/stub.cpp" -o "$OBJ"
+                  rm -rf "$TMP"
+              fi
+          done
+
       - name: Verify hmode7 submodule is up to date
         # Guard against a stale h-mode7 port submodule. The port is
         # maintained in a sibling repo (//hmode7-apple-mobile) and
@@ -127,7 +200,7 @@ targets:
           # fail the build (offline dev still works), but mismatch
           # with the locally-known remote does.
           git fetch --quiet origin "$BRANCH" 2>/dev/null || true
-          REMOTE="$(git rev-parse "origin/${BRANCH}" 2>/dev/null || echo "")"
+          REMOTE="$(git rev-parse --verify --quiet "origin/${BRANCH}" 2>/dev/null || echo "")"
           if [ -n "$REMOTE" ] && [ "$CURRENT" != "$REMOTE" ]; then
               echo "error: hmode7 submodule is out of sync with origin/${BRANCH}" >&2
               echo "  submodule HEAD: $CURRENT" >&2
@@ -269,39 +342,13 @@ targets:
       - path: ../../mkxp-z-apple-mobile/src/display/libnsgif/libnsgif.c
       - path: ../../mkxp-z-apple-mobile/src/display/libnsgif/lzw.c
       - path: ../../mkxp-z-apple-mobile/src/theoraplay/theoraplay.c
-      - path: ../../mkxp-z-apple-mobile/binding/binding-mri.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/binding-util.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/bitmap-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/table-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/etc-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/font-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/sprite-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/viewport-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/plane-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/window-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/windowvx-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/tilemap-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/tilemapvx-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/input-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/audio-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/graphics-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/filesystem-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/http-binding.cpp
-      - path: ../../mkxp-z-apple-mobile/binding/module_rpg.cpp
-      # H-Mode7 native renderer binding.
-      - path: ../../mkxp-z-apple-mobile/binding/hmode7-binding.cpp
-      # H-Mode7 port sources. Each .cpp is a single function from the
-      # original MGC_Hmode7_1_4_4.cpp, ported to top-down SDL surfaces
-      # and Ruby 3.1 MRI. See //hmode7-apple-mobile/docs/HMODE7_PORT_DESIGN.md.
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_bindings.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_apply_opacity.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_apply_zoom.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_apply_lighting.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_compute_m7.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_draw_heightmap.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_draw_textureset.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_draw_map_tileset.cpp
-      - path: ../../mkxp-z-apple-mobile/hmode7/src/hm7_render.cpp
+      # mkxp-z's binding/*.cpp + hmode7/*.cpp (all Ruby-API users)
+      # are NOT compiled here. Multi-Ruby Phase D (MULTI_RUBY_PLAN.md)
+      # compiles them per-Ruby-version inside ios/Dependencies/common.make's
+      # mkxp30-merged / mkxp31-merged targets. Each version's libruby +
+      # binding code merges into a single relocatable .o via `ld -r`
+      # with Ruby symbols hidden via the unexport list. The merged
+      # .o files are linked below in OTHER_LDFLAGS.
       - path: ../../mkxp-z-apple-mobile/src/app_bridge.cpp
       - path: ../../mkxp-z-apple-mobile/src/angle_native_layer.mm
       - path: src
@@ -336,8 +383,11 @@ targets:
           - -lSDL2_image
           - -lSDL2_sound
           - -lSDL2_ttf
-          - -lruby.3.1-static
-          - -lruby.3.1-ext
+          # Ruby static libs (3.0 + 3.1) are now linked indirectly
+          # via the per-version mkxpNN-merged.o files below in
+          # OTHER_LDFLAGS. Their symbols are private-extern inside
+          # those merged .o's, so neither version's `_rb_*` clashes
+          # with the other.
           - -lfreetype
           - -lpixman-1
           - -lpng16
@@ -356,6 +406,25 @@ targets:
           # `-framework OpenAL`). Must precede system libs so the
           # static archive is searched before any system fallback.
           - -lopenal
+          # Multi-Ruby Phase D: per-version binding+libruby merged
+          # objects, one per supported Ruby (3.0, 3.1; 1.9 + 1.8 to
+          # come). Each exposes a single
+          # `_mkxp_get_script_binding_<NN>()` entry; everything else
+          # (libruby's `_rb_*` + mkxp-z binding internals) is
+          # private-extern, hidden inside the merged .o so versions
+          # coexist without symbol clashes.
+          #
+          # `binding.h`'s `getActiveScriptBinding()` dispatches at
+          # runtime based on the host's `mkxp_setActiveRubyVersion()`
+          # setting (per-game detection in RubyVersionDetection.swift).
+          # Default + UNSET fall through to 3.1, matching the legacy
+          # behaviour before multi-Ruby. Adding 1.9 / 1.8 is a
+          # mechanical extension — drop the new merged.o here, add
+          # the case in `getActiveScriptBinding()`.
+          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp18-merged.o
+          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp19-merged.o
+          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp30-merged.o
+          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp31-merged.o
           - -ldl
           - -lpthread
           - -framework Foundation

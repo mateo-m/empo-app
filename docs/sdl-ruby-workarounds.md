@@ -2,12 +2,12 @@
 
 ## Why This Exists
 
-The iOS port of mkxp-z runs multiple game sessions within a single process. Two fundamental constraints make this non-trivial:
+The iOS port of mkxp-z keeps SDL, the GL context, OpenAL, and the active Ruby VM alive for the process lifetime. Two fundamental constraints drove the architecture:
 
 1. **SDL cannot be restarted** - `SDL_Init`/`SDL_Quit` and window creation are designed for a single process lifetime.
 2. **Ruby cannot be restarted** - `ruby_init()` and `ruby_cleanup()` are one-shot operations; calling `ruby_cleanup()` destroys the VM and a subsequent `ruby_init()` crashes because Ruby's `Init_*` functions stash VALUEs in file-scope statics that don't get reset.
 
-These constraints cascade into every layer of the architecture.
+These constraints cascade into every layer of the architecture. Cross-session play (running multiple games sequentially in one process) has been parked behind a feature flag - see `multi-session.md`. The persistent-resource architecture below still applies because the active Ruby + SDL stay alive even though we no longer try to swap games.
 
 ---
 
@@ -68,21 +68,16 @@ Between sessions:
 
 ## 3. Ruby VM Kept Alive Across Sessions
 
-**Problem (`binding-mri.cpp`):** Calling `ruby_cleanup()` destroys the VM struct but leaves dangling static C pointers in extension `Init_*` functions (e.g. `Init_String` stashes class VALUEs in file-scope statics). A subsequent `ruby_init()` crashes in `rb_call_inits`. This is a known upstream Ruby limitation (see `FUTURE.md`).
+**Problem (`binding-mri.cpp`):** Calling `ruby_cleanup()` destroys the VM struct but leaves dangling static C pointers in extension `Init_*` functions (e.g. `Init_String` stashes class VALUEs in file-scope statics). A subsequent `ruby_init()` crashes in `rb_call_inits`. This is a known upstream Ruby limitation.
 
-**Solution:** The Ruby VM is initialized **once** and kept alive for the lifetime of the process. `mriBindingExecute` is split into:
+**Solution:** The active Ruby VM is initialized **once** and kept alive for the lifetime of the process. `mriBindingExecute` is split into:
 
 - `InitOnce` - `ruby_init`, `topSelf` registration, runs once per process.
 - `PerSession` - `mriBindingInit`, script execution, runs every session to reinstall C methods on top of game-script redefinitions.
 
-Between sessions, `resetBetweenSessions()` scrubs user-level state:
+Multi-Ruby (`docs/multi-ruby.md`) means there are technically four Ruby builds in the binary, but only one is active per process - whichever the first selected game's detection picked. Switching to a different Ruby version mid-process isn't supported because the chosen version's `ruby_init` already ran.
 
-- Removes non-baseline constants from `Object`.
-- Clears class/instance variables on engine-owned classes (`Bitmap`, `Sprite`, `Window`, etc.).
-- Nils standard RGSS globals (`$game_*`, `$data_*`).
-- Removes non-baseline singleton methods from `Input` / `Graphics` / `Audio`.
-- Invokes Ruby-side `$__mkxp_reset_hooks`.
-- Forces a GC cycle.
+The historical `resetBetweenSessions()` cleanup (constant-baseline diffing, singleton-method scrubbing, `$mouse` shim, RGSS disposable detachment) is dormant - cross-session play is disabled. Same-session reset hooks (`$__mkxp_reset_hooks`, GC cycle, etc.) still fire if a game raises `Reset` mid-play, since the user is staying in the same game.
 
 ---
 

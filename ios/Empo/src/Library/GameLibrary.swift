@@ -166,7 +166,33 @@ class GameLibrary {
         let iniTitle = GameEntry.parseINITitle(at: container.gameURL) ?? "Unknown Game"
         let defaultArtwork = findArtwork(in: container)
 
-        let metadata = GameMetadata.load(from: container)
+        var metadata = GameMetadata.load(from: container)
+        // Backfill / refresh rubyVersion. Detection is idempotent
+        // and cheap (file-system sniff); we re-run when:
+        //
+        //   - rubyVersion is nil (legacy import predating the
+        //     field), OR
+        //   - rubyVersionDetectedSchema doesn't match the current
+        //     schema (we taught detection a new signal that may
+        //     re-classify this game, OR an unknown schema string
+        //     is present from a future Empo build that the user
+        //     has since downgraded from — in which case re-running
+        //     with the current heuristics is the safe default).
+        //
+        // The user's manual `rubyVersionOverride` setting takes
+        // precedence at engine-launch time, so re-detection here
+        // never trumps a deliberate user choice.
+        let currentSchema = RubyVersionDetection.currentSchema.rawValue
+        let needsDetect =
+            metadata.rubyVersion == nil
+            || metadata.rubyVersionDetectedSchema != currentSchema
+        if needsDetect {
+            metadata.rubyVersion = RubyVersionDetection.detect(
+                gameDirectory: container.gameURL
+            )
+            metadata.rubyVersionDetectedSchema = currentSchema
+            metadata.save(to: container)
+        }
         // Title priority: user's customTitle > import-time baseTitle
         // (JGP manifest name) > Game.ini title. The `engineTitle`
         // subtitle on the library card only surfaces when the user
@@ -749,6 +775,15 @@ class GameLibrary {
         metadata.manifestId = bundle.manifest.id
         metadata.manifestVersion = bundle.manifest.version
         metadata.manifestDescription = bundle.manifest.description
+        // Multi-Ruby: same detection path as the non-JGP import.
+        // JGP manifests' `runtime` field is consumed indirectly by
+        // RubyVersionDetection (which checks for modern-Ruby
+        // markers including the `useModernRuby` decision the JGP
+        // settings make on its behalf).
+        metadata.rubyVersion = RubyVersionDetection.detect(
+            gameDirectory: container.gameURL
+        )
+        metadata.rubyVersionDetectedSchema = RubyVersionDetection.currentSchema.rawValue
 
         if let iconData = bundle.iconData,
            let image = UIImage(data: iconData),
@@ -762,6 +797,16 @@ class GameLibrary {
     nonisolated private static func createMetadata(in container: GameContainer) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
+        // Multi-Ruby (Phase D, MULTI_RUBY_PLAN.md): pick the Ruby
+        // interpreter version this game expects so AppState.selectGame
+        // can route through the right per-version binding via
+        // `mkxp_setActiveRubyVersion`. Detection looks at PSDK markers,
+        // RGSS archive type, Game.ini's Library= field, and modern-
+        // Ruby script syntax.
+        metadata.rubyVersion = RubyVersionDetection.detect(
+            gameDirectory: container.gameURL
+        )
+        metadata.rubyVersionDetectedSchema = RubyVersionDetection.currentSchema.rawValue
         metadata.save(to: container)
     }
 

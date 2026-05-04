@@ -40,3 +40,11 @@
 [submodule "ios/Dependencies/sources/openal-soft"]
 	path = ios/Dependencies/sources/openal-soft
 	url = https://github.com/kcat/openal-soft.git
+[submodule "ios/Dependencies/sources/ruby30"]
+	path = ios/Dependencies/sources/ruby30
+	url = https://github.com/ruby/ruby.git
+	branch = ruby_3_0
+[submodule "ios/Dependencies/sources/ruby19"]
+	path = ios/Dependencies/sources/ruby19
+	url = https://github.com/ruby/ruby.git
+	branch = ruby_1_9_3
