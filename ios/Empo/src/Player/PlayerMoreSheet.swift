@@ -51,10 +51,14 @@ struct PlayerMoreSheet: View {
         settings: AppSettings,
         fastForwardMultiplier: Int?
     ) -> Bool {
-        let cheats   = settings.isEnabled(.cheats)
+        // Cheats and pause graduated from experimental in May 2026
+        // and are now always enabled. Diagnostics overlay and
+        // fast-forward remain user-gated (the former via app
+        // settings, the latter per-game).
+        let cheats   = true
         let fastFwd  = (fastForwardMultiplier ?? 0) >= 2
         let diag     = settings.diagnosticsOverlay
-        let pause    = settings.isEnabled(.gamePause)
+        let pause    = true
         // gameQuit is currently forced off in `body`; if/when it
         // returns, mirror its gate here.
         return cheats || fastFwd || diag || pause
@@ -68,10 +72,10 @@ struct PlayerMoreSheet: View {
                 // user can flip them and stay in the game.
                 VStack(spacing: 0) {
                     InterleavedRows(separator: { rowSeparator }) {
-                        if settings.isEnabled(.cheats) {
-                            MenuRow(icon: "wand.and.stars", label: "Cheats menu") {
-                                onCheats(); dismiss()
-                            }
+                        // Cheats: graduated from experimental in
+                        // May 2026, always enabled now.
+                        MenuRow(icon: "wand.and.stars", label: "Cheats") {
+                            onCheats(); dismiss()
                         }
                         if fastForwardEnabled {
                             MenuToggleRow(
@@ -103,7 +107,9 @@ struct PlayerMoreSheet: View {
                 // suspended), quit tears the engine down. Both name
                 // the running game so there's no ambiguity about
                 // which session is affected.
-                let pauseEnabled = settings.isEnabled(.gamePause)
+                // Pause: graduated from experimental in May 2026,
+                // always enabled now.
+                let pauseEnabled = true
                 // gameQuit disabled — see ExperimentalFeature comment
                 // in AppSettings.swift. Forced false so the in-game
                 // Quit toolbar button stays hidden.

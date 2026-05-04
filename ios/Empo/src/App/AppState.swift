@@ -260,8 +260,9 @@ class AppState {
     // MARK: - Pause lifecycle
 
     func requestPause() {
-        guard AppSettings.shared.isEnabled(.gamePause),
-              phase == .playing else { return }
+        // Pause graduated from experimental in May 2026; always
+        // enabled. Only gate is "a game is actually playing."
+        guard phase == .playing else { return }
         EngineState.shared.isBackgroundPause = false
         mkxp_requestPause()
     }

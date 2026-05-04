@@ -87,37 +87,24 @@ enum AppTheme: String, CaseIterable {
 }
 
 
-enum ExperimentalFeature: String, CaseIterable, Identifiable {
-    case gamePause = "experimental.gamePause"
-    // gameQuit disabled until cross-session Ruby state cleanup is
-    // reliable. Removing the user-facing toggle also removes the
-    // in-game Quit toolbar button, the library "Quit and play" alert
-    // option, and the context-menu Quit entry — all paths that exited
-    // the engine without killing the app. The mruby experiment was the
-    // attempt to make cross-session reset work; that's been parked
-    // (see MRUBY_POSTMORTEM.md). To re-enable: uncomment this case
-    // and the gating sites that became `false` literals.
-    // case gameQuit = "experimental.gameQuit"
-    case cheats = "experimental.cheats"
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        // case .gameQuit:  "Quit game"
-        case .gamePause: "Pause game"
-        case .cheats:    "Cheats"
-        }
-    }
-
-    var description: String {
-        switch self {
-        // case .gameQuit:  "Adds a Quit button to the in-game toolbar that returns you to the library."
-        case .gamePause: "Adds a Pause button to the in-game toolbar that freezes the game so you can resume it later."
-        case .cheats:    "Adds a Cheats button to the in-game toolbar that opens a JoiPlay-compatible cheat menu. Works in most Pokemon Essentials and RPG Maker XP/VX/VX Ace games."
-        }
-    }
-}
+// `ExperimentalFeature` enum and its `isEnabled` / `setEnabled`
+// machinery were removed in May 2026 once `gamePause` and `cheats`
+// graduated to always-on, leaving no remaining experimental
+// toggles. `gameQuit` was also planned as an experimental feature
+// but never landed (cross-session Ruby state cleanup blocks it -
+// see MRUBY_POSTMORTEM.md / QUIT_PATHS_DISABLED.md).
+//
+// To bring back an opt-in experimental toggle later, restore:
+//   - this enum (cases + `label` + `description` + `id`)
+//   - `AppSettings.experimentalFlags`, `isEnabled`, `setEnabled`
+//   - the loop in `init` that loads the dictionary from defaults
+//   - the `experimentalBinding(for:)` helper in `SettingsView`
+//   - the `ForEach(ExperimentalFeature.allCases)` in `SettingsView`
+//   - per-feature gating sites in PlayerMoreSheet etc.
+//
+// The DefaultsKey strings should re-use the historical
+// `experimental.<name>` shape so users with the old toggle stored
+// pick it back up automatically.
 
 
 @MainActor
@@ -207,14 +194,6 @@ class AppSettings {
         disclaimerAcknowledgedVersion = Self.currentDisclaimerVersion
     }
 
-    private var experimentalFlags: [String: Bool] {
-        didSet {
-            for (key, value) in experimentalFlags {
-                UserDefaults.standard.set(value, forKey: key)
-            }
-        }
-    }
-
     private init() {
         let ud = UserDefaults.standard
         let themeRaw = ud.string(forKey: DefaultsKey.theme) ?? AppTheme.auto.rawValue
@@ -238,23 +217,8 @@ class AppSettings {
         self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
         self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
 
-        var flags: [String: Bool] = [:]
-        for feature in ExperimentalFeature.allCases {
-            flags[feature.rawValue] = ud.bool(forKey: feature.rawValue)
-        }
-        self.experimentalFlags = flags
-
         mkxp_setShowViewportBounds(showViewportBounds)
         pushViewportBoundsColor()
-    }
-
-
-    func isEnabled(_ feature: ExperimentalFeature) -> Bool {
-        experimentalFlags[feature.rawValue] ?? false
-    }
-
-    func setEnabled(_ feature: ExperimentalFeature, _ value: Bool) {
-        experimentalFlags[feature.rawValue] = value
     }
 
 
