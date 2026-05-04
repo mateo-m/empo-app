@@ -13,14 +13,12 @@ struct ImportButton: View {
     /// for a "Validating" spinner and taps prompt a cancel
     /// confirmation instead of opening the picker.
     var isValidating: Bool = false
-    var onRequestCancelValidation: (() -> Void)? = nil
+    var onRequestCancelValidation: (() -> Void)?
 
     @State private var importShimmer: CGFloat = -1
     @State private var importMoveTrigger = 0
     @State private var buttonHeight: CGFloat = AppSize.minTapTarget
     @State private var revealed = false
-
-
 
     var body: some View {
         GeometryReader { geo in
@@ -37,7 +35,7 @@ struct ImportButton: View {
             // Arc: find center of rotation on perpendicular bisector
             let chordDX = collapsedX - expandedX
             let chordDY = collapsedY - expandedY
-            let curvature: CGFloat = -1.5 // larger = gentler/subtler arc
+            let curvature: CGFloat = -1.5  // larger = gentler/subtler arc
             let arcCenterX = (expandedX + collapsedX) / 2 + curvature * (-chordDY)
             let arcCenterY = (expandedY + collapsedY) / 2 + curvature * chordDX
 
@@ -69,7 +67,11 @@ struct ImportButton: View {
             .onChange(of: collapsed) { _, _ in
                 Haptics.tap()
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { buttonHeight = $0 }
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.height
+            } action: {
+                buttonHeight = $0
+            }
             .overlay {
                 Capsule()
                     .fill(
@@ -130,7 +132,8 @@ struct ImportButton: View {
             }
             .onChange(of: splashDismissed) { _, dismissed in
                 guard dismissed else { return }
-                let revealDelay = entranceDelay + EmptyStateView.staggerInterval * Double(EmptyStateView.elementCount)
+                let revealDelay =
+                    entranceDelay + EmptyStateView.staggerInterval * Double(EmptyStateView.elementCount)
                 withAnimation(Motion.standard.delay(revealDelay)) {
                     revealed = true
                 }
@@ -175,7 +178,6 @@ struct ImportButton: View {
         }
     }
 }
-
 
 private struct ImportButtonSquash {
     var scaleX: CGFloat = 1.0

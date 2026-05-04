@@ -11,8 +11,8 @@
 #include "app_bridge.h"
 
 static const CGFloat kAccessoryBarHeight = 80.0;
-static const CGFloat kAccessoryFontSize  = 13.0;
-static const CGFloat kKeyTapDuration     = 0.05; // seconds
+static const CGFloat kAccessoryFontSize = 13.0;
+static const CGFloat kKeyTapDuration = 0.05;  // seconds
 
 static void injectKey(int scancode, BOOL pressed) {
     mkxp_injectKeyEvent(scancode, pressed ? 1 : 0);
@@ -22,13 +22,12 @@ NSString *const TCKeyEventNotification = @"TCKeyEvent";
 
 static void keyEventBridgeCallback(int scancode, int pressed, void * /*userdata*/) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [[NSNotificationCenter defaultCenter]
-            postNotificationName:TCKeyEventNotification
-                          object:nil
-                        userInfo:@{
-                            @"scancode": @(scancode),
-                            @"pressed":  @(pressed),
-                        }];
+        [[NSNotificationCenter defaultCenter] postNotificationName:TCKeyEventNotification
+                                                            object:nil
+                                                          userInfo:@{
+                                                              @"scancode" : @(scancode),
+                                                              @"pressed" : @(pressed),
+                                                          }];
     });
 }
 
@@ -49,10 +48,11 @@ NSString *const TCTextInputModeNotification = @"TCTextInputMode";
 static void textInputModeBridgeCallback(int active, void * /*userdata*/) {
     BOOL on = active ? YES : NO;
     dispatch_async(dispatch_get_main_queue(), ^{
-        [[NSNotificationCenter defaultCenter]
-            postNotificationName:TCTextInputModeNotification
-                          object:nil
-                        userInfo:@{ @"active": @(on) }];
+        [[NSNotificationCenter defaultCenter] postNotificationName:TCTextInputModeNotification
+                                                            object:nil
+                                                          userInfo:@{
+                                                              @"active" : @(on)
+                                                          }];
     });
 }
 
@@ -67,26 +67,45 @@ void TCInstallTextInputModeWatcher(void) {
 // Character-to-scancode mapping (for system keyboard)
 
 static int scancodeForCharacter(unichar c) {
-    if (c >= 'a' && c <= 'z') return (MKXP_SCANCODE_A + (c - 'a'));
-    if (c >= 'A' && c <= 'Z') return (MKXP_SCANCODE_A + (c - 'A'));
-    if (c >= '1' && c <= '9') return (MKXP_SCANCODE_1 + (c - '1'));
-    if (c == '0') return MKXP_SCANCODE_0;
+    if (c >= 'a' && c <= 'z')
+        return (MKXP_SCANCODE_A + (c - 'a'));
+    if (c >= 'A' && c <= 'Z')
+        return (MKXP_SCANCODE_A + (c - 'A'));
+    if (c >= '1' && c <= '9')
+        return (MKXP_SCANCODE_1 + (c - '1'));
+    if (c == '0')
+        return MKXP_SCANCODE_0;
     switch (c) {
-        case ' ':  return MKXP_SCANCODE_SPACE;
-        case '\n': return MKXP_SCANCODE_RETURN;
-        case '\t': return MKXP_SCANCODE_TAB;
-        case '-':  return MKXP_SCANCODE_MINUS;
-        case '=':  return MKXP_SCANCODE_EQUALS;
-        case '[':  return MKXP_SCANCODE_LEFTBRACKET;
-        case ']':  return MKXP_SCANCODE_RIGHTBRACKET;
-        case '\\': return MKXP_SCANCODE_BACKSLASH;
-        case ';':  return MKXP_SCANCODE_SEMICOLON;
-        case '\'': return MKXP_SCANCODE_APOSTROPHE;
-        case ',':  return MKXP_SCANCODE_COMMA;
-        case '.':  return MKXP_SCANCODE_PERIOD;
-        case '/':  return MKXP_SCANCODE_SLASH;
-        case '`':  return MKXP_SCANCODE_GRAVE;
-        default:   return MKXP_SCANCODE_UNKNOWN;
+    case ' ':
+        return MKXP_SCANCODE_SPACE;
+    case '\n':
+        return MKXP_SCANCODE_RETURN;
+    case '\t':
+        return MKXP_SCANCODE_TAB;
+    case '-':
+        return MKXP_SCANCODE_MINUS;
+    case '=':
+        return MKXP_SCANCODE_EQUALS;
+    case '[':
+        return MKXP_SCANCODE_LEFTBRACKET;
+    case ']':
+        return MKXP_SCANCODE_RIGHTBRACKET;
+    case '\\':
+        return MKXP_SCANCODE_BACKSLASH;
+    case ';':
+        return MKXP_SCANCODE_SEMICOLON;
+    case '\'':
+        return MKXP_SCANCODE_APOSTROPHE;
+    case ',':
+        return MKXP_SCANCODE_COMMA;
+    case '.':
+        return MKXP_SCANCODE_PERIOD;
+    case '/':
+        return MKXP_SCANCODE_SLASH;
+    case '`':
+        return MKXP_SCANCODE_GRAVE;
+    default:
+        return MKXP_SCANCODE_UNKNOWN;
     }
 }
 
@@ -97,9 +116,7 @@ static int scancodeForCharacter(unichar c) {
 - (void)deleteBackward {
     injectKey(MKXP_SCANCODE_BACKSPACE, YES);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kKeyTapDuration * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        injectKey(MKXP_SCANCODE_BACKSPACE, NO);
-    });
+                   dispatch_get_main_queue(), ^{ injectKey(MKXP_SCANCODE_BACKSPACE, NO); });
 }
 
 - (CGRect)caretRectForPosition:(UITextPosition *)position {
@@ -135,11 +152,14 @@ UIView *TCCreateKeyboardAccessoryView(void) {
     fScroll.showsHorizontalScrollIndicator = NO;
     [bar addSubview:fScroll];
 
-    struct { const char *label; int sc; } fKeys[] = {
-        {"F1",MKXP_SCANCODE_F1},{"F2",MKXP_SCANCODE_F2},{"F3",MKXP_SCANCODE_F3},
-        {"F4",MKXP_SCANCODE_F4},{"F5",MKXP_SCANCODE_F5},{"F6",MKXP_SCANCODE_F6},
-        {"F7",MKXP_SCANCODE_F7},{"F8",MKXP_SCANCODE_F8},{"F9",MKXP_SCANCODE_F9},
-        {"F10",MKXP_SCANCODE_F10},{"F11",MKXP_SCANCODE_F11},{"F12",MKXP_SCANCODE_F12},
+    struct {
+        const char *label;
+        int sc;
+    } fKeys[] = {
+        {"F1", MKXP_SCANCODE_F1},   {"F2", MKXP_SCANCODE_F2},   {"F3", MKXP_SCANCODE_F3},
+        {"F4", MKXP_SCANCODE_F4},   {"F5", MKXP_SCANCODE_F5},   {"F6", MKXP_SCANCODE_F6},
+        {"F7", MKXP_SCANCODE_F7},   {"F8", MKXP_SCANCODE_F8},   {"F9", MKXP_SCANCODE_F9},
+        {"F10", MKXP_SCANCODE_F10}, {"F11", MKXP_SCANCODE_F11}, {"F12", MKXP_SCANCODE_F12},
     };
     CGFloat fX = 6;
     for (int i = 0; i < 12; i++) {
@@ -147,7 +167,8 @@ UIView *TCCreateKeyboardAccessoryView(void) {
         NSString *title = [NSString stringWithUTF8String:fKeys[i].label];
         [btn setTitle:title forState:UIControlStateNormal];
         [btn setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-        btn.titleLabel.font = [UIFont monospacedSystemFontOfSize:kAccessoryFontSize weight:UIFontWeightMedium];
+        btn.titleLabel.font = [UIFont monospacedSystemFontOfSize:kAccessoryFontSize
+                                                          weight:UIFontWeightMedium];
         btn.backgroundColor = [UIColor colorWithWhite:0.25 alpha:1.0];
         btn.layer.cornerRadius = 5;
         CGFloat w = (i >= 9) ? 40 : 34;
@@ -165,17 +186,16 @@ UIView *TCCreateKeyboardAccessoryView(void) {
     rScroll.showsHorizontalScrollIndicator = NO;
     [bar addSubview:rScroll];
 
-    struct { const char *label; int sc; BOOL holdable; } row2[] = {
-        {"Esc",  MKXP_SCANCODE_ESCAPE, NO},
-        {"Tab",  MKXP_SCANCODE_TAB,    NO},
-        {"Ctrl", MKXP_SCANCODE_LCTRL,  YES},
-        {"Shift",MKXP_SCANCODE_LSHIFT, YES},
-        {"Alt",  MKXP_SCANCODE_LALT,   YES},
-        {"\u2190",MKXP_SCANCODE_LEFT,  YES},
-        {"\u2191",MKXP_SCANCODE_UP,    YES},
-        {"\u2193",MKXP_SCANCODE_DOWN,  YES},
-        {"\u2192",MKXP_SCANCODE_RIGHT, YES},
-        {"Enter",MKXP_SCANCODE_RETURN, NO},
+    struct {
+        const char *label;
+        int sc;
+        BOOL holdable;
+    } row2[] = {
+        {"Esc", MKXP_SCANCODE_ESCAPE, NO},     {"Tab", MKXP_SCANCODE_TAB, NO},
+        {"Ctrl", MKXP_SCANCODE_LCTRL, YES},    {"Shift", MKXP_SCANCODE_LSHIFT, YES},
+        {"Alt", MKXP_SCANCODE_LALT, YES},      {"\u2190", MKXP_SCANCODE_LEFT, YES},
+        {"\u2191", MKXP_SCANCODE_UP, YES},     {"\u2193", MKXP_SCANCODE_DOWN, YES},
+        {"\u2192", MKXP_SCANCODE_RIGHT, YES},  {"Enter", MKXP_SCANCODE_RETURN, NO},
         {"Bksp", MKXP_SCANCODE_BACKSPACE, NO},
     };
     CGFloat rX = 6;
@@ -185,17 +205,22 @@ UIView *TCCreateKeyboardAccessoryView(void) {
         NSString *title = [NSString stringWithUTF8String:row2[i].label];
         [btn setTitle:title forState:UIControlStateNormal];
         [btn setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-        btn.titleLabel.font = [UIFont monospacedSystemFontOfSize:kAccessoryFontSize weight:UIFontWeightMedium];
+        btn.titleLabel.font = [UIFont monospacedSystemFontOfSize:kAccessoryFontSize
+                                                          weight:UIFontWeightMedium];
         btn.backgroundColor = [UIColor colorWithWhite:0.25 alpha:1.0];
         btn.layer.cornerRadius = 5;
         CGFloat w = 44;
-        if (strlen(row2[i].label) <= 3 && row2[i].label[0] != '\\') w = 36;
+        if (strlen(row2[i].label) <= 3 && row2[i].label[0] != '\\')
+            w = 36;
         btn.frame = CGRectMake(rX, 2, w, 34);
         btn.tag = row2[i].sc;
 
         if (row2[i].holdable) {
             [btn addTarget:bar action:@selector(accKeyDown:) forControlEvents:UIControlEventTouchDown];
-            [btn addTarget:bar action:@selector(accKeyUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+            [btn addTarget:bar
+                          action:@selector(accKeyUp:)
+                forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside |
+                                 UIControlEventTouchCancel];
         } else {
             [btn addTarget:bar action:@selector(accKeyTap:) forControlEvents:UIControlEventTouchUpInside];
         }
@@ -212,9 +237,7 @@ UIView *TCCreateKeyboardAccessoryView(void) {
     int sc = (int)sender.tag;
     injectKey(sc, YES);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kKeyTapDuration * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        injectKey(sc, NO);
-    });
+                   dispatch_get_main_queue(), ^{ injectKey(sc, NO); });
 }
 - (void)accKeyDown:(UIButton *)sender {
     injectKey((int)sender.tag, YES);

@@ -1,6 +1,5 @@
 import SwiftUI
 
-
 struct PlayerView: View {
     @Bindable var appState: AppState
     @Bindable var engineState: EngineState
@@ -61,7 +60,9 @@ struct PlayerView: View {
             // the toolbar was cramped in the zone below the game) no
             // longer applies.
             let toolbarBtnSize = IconButtonSize.sm.points
-            let controlsMinY = ControlsZone.toolbarBottomY(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize, geoHeight: geo.size.height)
+            let controlsMinY = ControlsZone.toolbarBottomY(
+                isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize,
+                geoHeight: geo.size.height)
 
             ZStack {
                 if editMode {
@@ -171,7 +172,9 @@ struct PlayerView: View {
             }
         }
         .ignoresSafeArea()
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name(rawValue: "TCTextInputMode"))) { note in
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSNotification.Name(rawValue: "TCTextInputMode"))
+        ) { note in
             // Engine fired SDL_StartTextInput / SDL_StopTextInput
             // because the game asked for text input via
             // `Input.text_input = true/false`. Auto-flip the
@@ -310,9 +313,9 @@ struct PlayerView: View {
         }
     }
 
-
     @ViewBuilder
-    private func editZoneBackground(controlsMinY: CGFloat, safeArea: EdgeInsets, geoSize: CGSize) -> some View {
+    private func editZoneBackground(controlsMinY: CGFloat, safeArea: EdgeInsets, geoSize: CGSize) -> some View
+    {
         let bounds = ControlsZone.bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
         let radii = ControlsZone.cornerRadii(safeArea: safeArea)
 
@@ -337,7 +340,6 @@ struct PlayerView: View {
         .allowsHitTesting(false)
         .transition(.opacity)
     }
-
 
     private func toggleEditMode() {
         withAnimation(Motion.snappy) {

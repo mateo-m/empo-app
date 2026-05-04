@@ -79,7 +79,6 @@ std::string getPlistValue(const char *key) {
     }
 }
 
-
 float mkxp_getScreenScale(void) {
     // Screen scale is a device constant (e.g. 3.0 on iPhone Pro) that
     // never changes at runtime.  Cache it to avoid dispatch_sync to the

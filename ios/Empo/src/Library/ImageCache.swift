@@ -37,6 +37,6 @@ final class ImageCache {
         let scale = image.scale
         let w = image.size.width * scale
         let h = image.size.height * scale
-        return Int(w * h * 4) // RGBA8
+        return Int(w * h * 4)  // RGBA8
     }
 }

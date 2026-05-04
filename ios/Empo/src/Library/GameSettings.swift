@@ -1,6 +1,5 @@
 import Foundation
 
-
 /// Render-resolution multiplier applied via mkxp-z's `enableHires`
 /// + `framebufferScalingFactor`. RGSS games render to a buffer with
 /// a fixed aspect ratio (544x416 for RGSS3, 640x480 for RGSS1) that
@@ -45,7 +44,6 @@ enum RenderScale: String, Codable, CaseIterable, Hashable {
     }
 }
 
-
 enum VerticalAlignment: String, Codable, CaseIterable {
     case top
     case topCenter
@@ -68,7 +66,6 @@ enum VerticalAlignment: String, Codable, CaseIterable {
     }
 }
 
-
 // MARK: - Setting metadata wrappers
 //
 // Each `GameSettings` field is wrapped with `@Setting<T, RestartFlag>`
@@ -76,7 +73,6 @@ enum VerticalAlignment: String, Codable, CaseIterable {
 // via Mirror reflection and consults each wrapper's flag, so adding
 // a field forces the author to pick a category at the declaration
 // site - no separate descriptor list to keep in sync.
-
 
 /// Phantom-type tag for whether a field can re-apply mid-session
 /// (runtime) or only at next launch (restart).
@@ -97,7 +93,6 @@ enum RuntimeFlag: SettingFlag {
     static let requiresRestart = false
 }
 
-
 /// Type-erased view of a `@Setting`-wrapped property. The dirty-check
 /// uses this to ask whether a property requires restart and whether
 /// its value differs from another instance's, without knowing the
@@ -106,7 +101,6 @@ private protocol AnySetting {
     var requiresRestart: Bool { get }
     func anyEquals(_ other: Any) -> Bool
 }
-
 
 /// Per-field metadata carrier. `Flag` is a phantom type that encodes
 /// the restart-required nature at compile time, so the JSON shape
@@ -143,7 +137,6 @@ extension Setting: AnySetting {
     }
 }
 
-
 /// Lets a `GameSettings` JSON file omit a wrapped optional field.
 /// Swift's auto-synthesized `init(from:)` only treats missing keys
 /// as nil for bare `Optional` properties, not wrapper-typed ones, so
@@ -159,7 +152,6 @@ extension KeyedDecodingContainer {
     }
 }
 
-
 /// Per-game settings stored as `game_settings.json` in each game
 /// directory. All fields are optional; nil means "use game/engine
 /// default".
@@ -174,42 +166,42 @@ extension KeyedDecodingContainer {
 struct GameSettings: Codable, Equatable {
     // Display
     /// true = bilinear (1), false = pixel-perfect (0)
-    @Setting<Bool?, RestartFlag> var smoothScaling: Bool? = nil
+    @Setting<Bool?, RestartFlag> var smoothScaling: Bool?
     /// true = letterbox, false = stretch-to-fill
-    @Setting<Bool?, RestartFlag> var fixedAspectRatio: Bool? = nil
+    @Setting<Bool?, RestartFlag> var fixedAspectRatio: Bool?
     /// Render-buffer multiplier (1x / 2x / 4x). Maps to `enableHires`
     /// + `framebufferScalingFactor` in mkxp.json.
-    @Setting<RenderScale?, RestartFlag> var renderScale: RenderScale? = nil
+    @Setting<RenderScale?, RestartFlag> var renderScale: RenderScale?
     /// portrait screen alignment - host-side rendering, no engine input
-    @Setting<VerticalAlignment?, RuntimeFlag> var verticalAlignment: VerticalAlignment? = nil
+    @Setting<VerticalAlignment?, RuntimeFlag> var verticalAlignment: VerticalAlignment?
 
     // Performance
     /// skip rendering frames when behind
-    @Setting<Bool?, RestartFlag> var frameSkip: Bool? = nil
+    @Setting<Bool?, RestartFlag> var frameSkip: Bool?
     /// fast-forward multiplier (2-9, nil = disabled). Runtime-only,
     /// applied via PlayerMoreSheet's Fast forward toggle through
     /// `mkxp_setFastForwardMultiplier`.
-    @Setting<Int?, RuntimeFlag> var speedMultiplier: Int? = nil
+    @Setting<Int?, RuntimeFlag> var speedMultiplier: Int?
     /// vertical sync (written as `syncToRefreshrate` in the merged
     /// mkxp.json - the engine ignores the legacy `vsync` key)
-    @Setting<Bool?, RestartFlag> var vsync: Bool? = nil
+    @Setting<Bool?, RestartFlag> var vsync: Bool?
     /// index files with lowercase paths
-    @Setting<Bool?, RestartFlag> var pathCache: Bool? = nil
+    @Setting<Bool?, RestartFlag> var pathCache: Bool?
 
     // Text
     /// global font size multiplier (1.0 = default)
-    @Setting<Double?, RestartFlag> var fontScale: Double? = nil
+    @Setting<Double?, RestartFlag> var fontScale: Double?
     /// don't use alpha blending for text
-    @Setting<Bool?, RestartFlag> var solidFonts: Bool? = nil
+    @Setting<Bool?, RestartFlag> var solidFonts: Bool?
 
     // Engine
     /// execute postload scripts for common fixes
-    @Setting<Bool?, RestartFlag> var postloadScripts: Bool? = nil
+    @Setting<Bool?, RestartFlag> var postloadScripts: Bool?
     /// Legacy "skip the Ruby 1.8 compat transform" toggle, superseded
     /// by `rubyVersionOverride`. Kept for backward-compatible decoding
     /// of older `game_settings.json` files; the UI no longer surfaces
     /// it. Will go away once syntax-transform is dropped.
-    @Setting<Bool?, RestartFlag> var useModernRuby: Bool? = nil
+    @Setting<Bool?, RestartFlag> var useModernRuby: Bool?
 
     /// Manual override for the per-game Ruby interpreter version.
     /// nil = use auto-detection from import; 18 / 19 / 30 / 31 forces
@@ -220,7 +212,7 @@ struct GameSettings: Codable, Equatable {
     /// Stored as Int so unknown values from a future Empo build don't
     /// break decoding. Restart-required because the active Ruby
     /// version is locked at app launch.
-    @Setting<Int?, RestartFlag> var rubyVersionOverride: Int? = nil
+    @Setting<Int?, RestartFlag> var rubyVersionOverride: Int?
 
     /// Force the Pokemon Essentials in-game keyboard scene for text
     /// entry instead of the iOS soft keyboard. Default false (the
@@ -228,12 +220,10 @@ struct GameSettings: Codable, Equatable {
     /// for games whose keyboard scene adds custom keys the soft
     /// keyboard can't drive. Routes through `mkxp_setUseInGameKeyboard`
     /// to `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
-    @Setting<Bool?, RuntimeFlag> var useInGameKeyboard: Bool? = nil
-
+    @Setting<Bool?, RuntimeFlag> var useInGameKeyboard: Bool?
 
     private static let settingsFilename = "game_settings.json"
     private static let configFilename = "mkxp.json"
-
 
     /// Read the game's settings sidecar from `<container>/EmpoState/`
     /// (NOT the imported `Game/` subdir; settings live outside the
@@ -241,7 +231,8 @@ struct GameSettings: Codable, Equatable {
     static func load(from stateDirectory: URL) -> GameSettings {
         let url = stateDirectory.appendingPathComponent(settingsFilename)
         guard let data = try? Data(contentsOf: url),
-              let settings = try? JSONDecoder().decode(GameSettings.self, from: data) else {
+            let settings = try? JSONDecoder().decode(GameSettings.self, from: data)
+        else {
             return GameSettings()
         }
         return settings
@@ -255,7 +246,6 @@ struct GameSettings: Codable, Equatable {
         !restartRequiredFieldsChanged(from: other).isEmpty
     }
 
-
     /// User-facing labels of restart-required fields whose values
     /// differ between `self` and `other`. Feeds the restart-hint pill
     /// (e.g. "Smooth scaling and Render scale") instead of a generic
@@ -267,26 +257,25 @@ struct GameSettings: Codable, Equatable {
         var changed: [String] = []
         for (lhs, rhs) in zip(lhsChildren, rhsChildren) {
             guard let lhsSetting = lhs.value as? AnySetting,
-                  let rhsSetting = rhs.value as? AnySetting
+                let rhsSetting = rhs.value as? AnySetting
             else {
                 // Bare properties bypass the dirty-check in release;
                 // crash debug builds so a new field author gets nudged
                 // to add `@Setting<..., Flag>`.
                 assertionFailure(
                     "GameSettings.\(lhs.label ?? "<unknown>") missing @Setting wrapper - "
-                    + "restart-hint logic can't see this field"
+                        + "restart-hint logic can't see this field"
                 )
                 continue
             }
             guard lhsSetting.requiresRestart,
-                  !lhsSetting.anyEquals(rhsSetting),
-                  let label = lhs.label
+                !lhsSetting.anyEquals(rhsSetting),
+                let label = lhs.label
             else { continue }
             changed.append(Self.displayLabel(forFieldLabel: label))
         }
         return changed
     }
-
 
     /// Maps a Mirror property label (rendered with a leading
     /// underscore by the property-wrapper machinery, e.g.
@@ -298,20 +287,21 @@ struct GameSettings: Codable, Equatable {
     private static func displayLabel(forFieldLabel mirrorLabel: String) -> String {
         // Strip the leading underscore the property-wrapper machinery
         // prefixes onto Mirror labels.
-        let key = mirrorLabel.hasPrefix("_")
+        let key =
+            mirrorLabel.hasPrefix("_")
             ? String(mirrorLabel.dropFirst())
             : mirrorLabel
         switch key {
-        case "smoothScaling":     return "Smooth scaling"
-        case "fixedAspectRatio":  return "Fixed aspect ratio"
-        case "renderScale":       return "Render scale"
-        case "frameSkip":         return "Frame skip"
-        case "vsync":             return "VSync"
-        case "pathCache":         return "Path cache"
-        case "fontScale":         return "Font scale"
-        case "solidFonts":        return "Solid fonts"
-        case "postloadScripts":   return "Postload scripts"
-        case "useModernRuby":     return "Ruby compatibility mode"
+        case "smoothScaling": return "Smooth scaling"
+        case "fixedAspectRatio": return "Fixed aspect ratio"
+        case "renderScale": return "Render scale"
+        case "frameSkip": return "Frame skip"
+        case "vsync": return "VSync"
+        case "pathCache": return "Path cache"
+        case "fontScale": return "Font scale"
+        case "solidFonts": return "Solid fonts"
+        case "postloadScripts": return "Postload scripts"
+        case "useModernRuby": return "Ruby compatibility mode"
         default:
             // Surface the raw camelCase name so the missing mapping
             // is visible in the UI rather than silently dropped.
@@ -319,7 +309,6 @@ struct GameSettings: Codable, Equatable {
             return key
         }
     }
-
 
     /// Write the game's settings sidecar to
     /// `<container>/EmpoState/`.
@@ -331,7 +320,6 @@ struct GameSettings: Codable, Equatable {
             try? data.write(to: url, options: .atomic)
         }
     }
-
 
     /// Returns true if a freshly-imported game folder looks like it
     /// runs on Ruby 3 (Reborn 19.5+, PE v20+, mkxp-z JGPs). Used
@@ -370,9 +358,9 @@ struct GameSettings: Codable, Equatable {
         let scanBudget = 64 * 1024 * 1024
         for url in gameDirectory.directoryEntries(matchingExtensions: ["dll", "dylib", "so"], fm: fm) {
             guard let attrs = try? fm.attributesOfItem(atPath: url.path),
-                  let size = attrs[.size] as? Int,
-                  size <= scanBudget,
-                  let data = try? Data(contentsOf: url, options: .alwaysMapped)
+                let size = attrs[.size] as? Int,
+                size <= scanBudget,
+                let data = try? Data(contentsOf: url, options: .alwaysMapped)
             else { continue }
             if data.range(of: modernRubyMarker) != nil { return true }
         }
@@ -414,7 +402,8 @@ struct GameSettings: Codable, Equatable {
         // The value side `(-?\d|...|[a-z])` admits a leading lowercase
         // identifier so `safe: safesave` (variable, not literal) hits.
         let modernRegex = try? NSRegularExpression(
-            pattern: "(?:^|(?<=[(,{]))\\s*[a-z_][a-zA-Z0-9_]*:\\s+(-?\\d|\"|'|\\[|\\{|true|false|nil|:[a-zA-Z_]|[a-z_])",
+            pattern:
+                "(?:^|(?<=[(,{]))\\s*[a-z_][a-zA-Z0-9_]*:\\s+(-?\\d|\"|'|\\[|\\{|true|false|nil|:[a-zA-Z_]|[a-z_])",
             options: [.anchorsMatchLines]
         )
         guard let regex = modernRegex else { return false }
@@ -430,9 +419,10 @@ struct GameSettings: Codable, Equatable {
 
         for root in candidates {
             guard fm.fileExists(atPath: root.path),
-                  let enumerator = fm.enumerator(at: root,
-                      includingPropertiesForKeys: nil,
-                      options: [.skipsHiddenFiles])
+                let enumerator = fm.enumerator(
+                    at: root,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles])
             else { continue }
 
             var filesScanned = 0
@@ -452,7 +442,6 @@ struct GameSettings: Codable, Equatable {
         }
         return false
     }
-
 
     /// Best-effort "is this a Pokemon Essentials fangame?" detector.
     /// Used to set the default for `useInGameKeyboard` so PE games
@@ -495,12 +484,15 @@ struct GameSettings: Codable, Equatable {
     ///      specific filenames. Catches newer PE forks where the
     ///      scripts file is a small ScriptLoader stub and the bulk
     ///      of code lives in external `Data/Scripts/*.rb`.
-    static func detectPokemonEssentials(in gameDirectory: URL,
-                                        stateDirectory: URL) -> Bool {
+    static func detectPokemonEssentials(
+        in gameDirectory: URL,
+        stateDirectory: URL
+    ) -> Bool {
         let fm = FileManager.default
 
         // Signal 1: runtime-detection marker from a prior launch.
-        let marker = stateDirectory
+        let marker =
+            stateDirectory
             .appendingPathComponent(".pokemon_essentials_detected")
         if fm.fileExists(atPath: marker.path) { return true }
 
@@ -540,7 +532,6 @@ struct GameSettings: Codable, Equatable {
         return false
     }
 
-
     /// Resolve the engine's `syntaxTransform` mode for this game.
     /// Honors an explicit `useModernRuby` setting; runs the .rb
     /// scanner when the setting is nil ("auto").
@@ -572,10 +563,10 @@ struct GameSettings: Codable, Equatable {
         } else {
             modern = Self.detectModernRubyScripts(in: gameDirectory)
         }
-        return modern ? MKXP_SYNTAX_TRANSFORM_DISABLED
-                      : MKXP_SYNTAX_TRANSFORM_LEGACY
+        return modern
+            ? MKXP_SYNTAX_TRANSFORM_DISABLED
+            : MKXP_SYNTAX_TRANSFORM_LEGACY
     }
-
 
     /// Reads the game's mkxp.json defaults straight from the
     /// imported game folder. `gameDirectory` is the per-game
@@ -588,7 +579,8 @@ struct GameSettings: Codable, Equatable {
         let sourceURL = gameDirectory.appendingPathComponent(configFilename)
 
         guard let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
-              let config = parseJSONWithComments(raw) else {
+            let config = parseJSONWithComments(raw)
+        else {
             return GameConfigDefaults()
         }
 
@@ -597,22 +589,24 @@ struct GameSettings: Codable, Equatable {
         // ignored: they only sized the SDL window (irrelevant on
         // iOS) and never controlled the rendering buffer.
         let enableHires = config["enableHires"] as? Bool ?? false
-        let scalingFactor = (config["framebufferScalingFactor"] as? Double)
+        let scalingFactor =
+            (config["framebufferScalingFactor"] as? Double)
             ?? (config["framebufferScalingFactor"] as? Int).map(Double.init)
             ?? 1.0
-        let renderScale: RenderScale? = if enableHires {
-            // Snap to the nearest supported step. Engine accepts
-            // arbitrary doubles, but the UI only exposes 1/2/4 - so
-            // a developer-shipped 3.0 reads back as "High (2x)" in
-            // the defaults row.
-            switch scalingFactor {
-            case ..<1.5:  RenderScale.x1
-            case ..<3.0:  RenderScale.x2
-            default:      RenderScale.x4
+        let renderScale: RenderScale? =
+            if enableHires {
+                // Snap to the nearest supported step. Engine accepts
+                // arbitrary doubles, but the UI only exposes 1/2/4 - so
+                // a developer-shipped 3.0 reads back as "High (2x)" in
+                // the defaults row.
+                switch scalingFactor {
+                case ..<1.5: RenderScale.x1
+                case ..<3.0: RenderScale.x2
+                default: RenderScale.x4
+                }
+            } else {
+                nil
             }
-        } else {
-            nil
-        }
 
         // solidFonts is an array of font names in mkxp.json; treat non-empty as "enabled"
         let solidFontsArray = config["solidFonts"] as? [String]
@@ -653,8 +647,9 @@ struct GameSettings: Codable, Equatable {
 
         var config: [String: Any] = [:]
         if FileManager.default.fileExists(atPath: sourceURL.path),
-           let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
-           let parsed = Self.parseJSONWithComments(raw) {
+            let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
+            let parsed = Self.parseJSONWithComments(raw)
+        {
             config = parsed
         }
 
@@ -712,8 +707,10 @@ struct GameSettings: Codable, Equatable {
         // Game launches at default speed; the user opts in via the
         // in-game menu. Nothing to write here.
 
-        if let data = try? JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys]),
-           let jsonString = String(data: data, encoding: .utf8) {
+        if let data = try? JSONSerialization.data(
+            withJSONObject: config, options: [.prettyPrinted, .sortedKeys]),
+            let jsonString = String(data: data, encoding: .utf8)
+        {
             try? jsonString.write(to: configURL, atomically: true, encoding: .utf8)
         }
     }
@@ -722,14 +719,12 @@ struct GameSettings: Codable, Equatable {
         self != GameSettings()
     }
 
-
     /// Parses mkxp.json (which can have `//` comments). Thin
     /// wrapper around `JSON5LiteParser` kept for call-site brevity.
     static func parseJSONWithComments(_ raw: String) -> [String: Any]? {
         JSON5LiteParser.parseObject(raw)
     }
 }
-
 
 /// Values from the game's mkxp.json; the developer's intended defaults.
 struct GameConfigDefaults {

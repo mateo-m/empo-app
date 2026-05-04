@@ -35,8 +35,10 @@ struct DraggableDebugOverlay: View {
                 offset = clampDelta(base: .zero, delta: offset)
             }
             .position(anchor)
-            .offset(x: offset.width + dragOffset.width,
-                    y: offset.height + dragOffset.height)
+            .offset(
+                x: offset.width + dragOffset.width,
+                y: offset.height + dragOffset.height
+            )
             .gesture(
                 DragGesture()
                     .onChanged { value in

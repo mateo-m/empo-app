@@ -1,7 +1,6 @@
-import SwiftUI
 import PhotosUI
+import SwiftUI
 import UniformTypeIdentifiers
-
 
 struct ImageSourcePickerModifier: ViewModifier {
     @Binding var isPresented: Bool
@@ -48,16 +47,16 @@ extension View {
         onImageSelected: @escaping (UIImage) -> Void,
         onRemove: (() -> Void)? = nil
     ) -> some View {
-        modifier(ImageSourcePickerModifier(
-            isPresented: isPresented,
-            title: title,
-            hasExisting: hasExisting,
-            onImageSelected: onImageSelected,
-            onRemove: onRemove
-        ))
+        modifier(
+            ImageSourcePickerModifier(
+                isPresented: isPresented,
+                title: title,
+                hasExisting: hasExisting,
+                onImageSelected: onImageSelected,
+                onRemove: onRemove
+            ))
     }
 }
-
 
 private struct PhotoLibraryPicker: UIViewControllerRepresentable {
     let onImageSelected: (UIImage) -> Void
@@ -82,7 +81,8 @@ private struct PhotoLibraryPicker: UIViewControllerRepresentable {
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             picker.dismiss(animated: true)
             guard let provider = results.first?.itemProvider,
-                  provider.canLoadObject(ofClass: UIImage.self) else { return }
+                provider.canLoadObject(ofClass: UIImage.self)
+            else { return }
 
             provider.loadObject(ofClass: UIImage.self) { image, _ in
                 if let image = image as? UIImage {
@@ -94,7 +94,6 @@ private struct PhotoLibraryPicker: UIViewControllerRepresentable {
         }
     }
 }
-
 
 private struct CameraPicker: UIViewControllerRepresentable {
     let onImageSelected: (UIImage) -> Void
@@ -114,8 +113,10 @@ private struct CameraPicker: UIViewControllerRepresentable {
         let parent: CameraPicker
         init(_ parent: CameraPicker) { self.parent = parent }
 
-        func imagePickerController(_ picker: UIImagePickerController,
-                                   didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
             picker.dismiss(animated: true)
             if let image = info[.originalImage] as? UIImage {
                 parent.onImageSelected(image)
@@ -127,7 +128,6 @@ private struct CameraPicker: UIViewControllerRepresentable {
         }
     }
 }
-
 
 private struct ImageDocumentPicker: UIViewControllerRepresentable {
     let onImageSelected: (UIImage) -> Void
@@ -146,14 +146,17 @@ private struct ImageDocumentPicker: UIViewControllerRepresentable {
         let parent: ImageDocumentPicker
         init(_ parent: ImageDocumentPicker) { self.parent = parent }
 
-        func documentPicker(_ controller: UIDocumentPickerViewController,
-                           didPickDocumentsAt urls: [URL]) {
+        func documentPicker(
+            _ controller: UIDocumentPickerViewController,
+            didPickDocumentsAt urls: [URL]
+        ) {
             guard let url = urls.first else { return }
             let accessing = url.startAccessingSecurityScopedResource()
             defer { if accessing { url.stopAccessingSecurityScopedResource() } }
 
             if let data = try? Data(contentsOf: url),
-               let image = UIImage(data: data) {
+                let image = UIImage(data: data)
+            {
                 parent.onImageSelected(image)
             }
         }

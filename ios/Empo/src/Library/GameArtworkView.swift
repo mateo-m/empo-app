@@ -6,7 +6,7 @@ struct GameArtworkView: View {
     let artworkPath: String?
     var placeholderIcon: String = "gamecontroller.fill"
     var placeholderIconSize: CGFloat = 36
-    var size: CGFloat? = nil
+    var size: CGFloat?
     var cornerRadius: CGFloat = 0
     var importing: Bool = false
     var shimmer: Bool = true

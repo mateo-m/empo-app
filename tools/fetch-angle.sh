@@ -32,7 +32,7 @@ if [ ! -f "$VERSION_FILE" ]; then
 fi
 
 # shellcheck disable=SC1090
-. "$VERSION_FILE"   # sets ANGLE_VERSION + ANGLE_SHA256
+. "$VERSION_FILE" # sets ANGLE_VERSION + ANGLE_SHA256
 
 if [ -z "$ANGLE_VERSION" ] || [ -z "$ANGLE_SHA256" ]; then
     echo "fetch-angle: $VERSION_FILE must define ANGLE_VERSION and ANGLE_SHA256" >&2
@@ -40,10 +40,10 @@ if [ -z "$ANGLE_VERSION" ] || [ -z "$ANGLE_SHA256" ]; then
 fi
 
 # Already hydrated and stamp matches the pinned version? nothing to do.
-if [ -f "$STAMP" ] \
-    && [ "$(cat "$STAMP" 2>/dev/null)" = "$ANGLE_VERSION" ] \
-    && [ -f "$ANGLE_DIR/iphoneos/lib/libANGLE_static.a" ] \
-    && [ -f "$ANGLE_DIR/iphonesimulator/lib/libANGLE_static.a" ]; then
+if [ -f "$STAMP" ] &&
+    [ "$(cat "$STAMP" 2>/dev/null)" = "$ANGLE_VERSION" ] &&
+    [ -f "$ANGLE_DIR/iphoneos/lib/libANGLE_static.a" ] &&
+    [ -f "$ANGLE_DIR/iphonesimulator/lib/libANGLE_static.a" ]; then
     exit 0
 fi
 
@@ -66,10 +66,10 @@ trap 'rm -rf "$TMPDIR"' EXIT
 echo "fetch-angle: hydrating $ANGLE_VERSION from $DEPS_REPO"
 
 if ! gh release download "$ANGLE_VERSION" \
-        --repo "$DEPS_REPO" \
-        --pattern "$ASSET_NAME" \
-        --dir "$TMPDIR" \
-        --skip-existing 2>&1; then
+    --repo "$DEPS_REPO" \
+    --pattern "$ASSET_NAME" \
+    --dir "$TMPDIR" \
+    --skip-existing 2>&1; then
     echo "fetch-angle: gh release download failed for $DEPS_REPO@$ANGLE_VERSION" >&2
     exit 1
 fi
@@ -88,5 +88,5 @@ fi
 mkdir -p "$ANGLE_DIR"
 tar -xzf "$TMPDIR/$ASSET_NAME" -C "$ANGLE_DIR"
 
-echo "$ANGLE_VERSION" > "$STAMP"
+echo "$ANGLE_VERSION" >"$STAMP"
 echo "fetch-angle: hydrated $ANGLE_VERSION ($ANGLE_SHA256)"

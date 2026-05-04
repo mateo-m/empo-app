@@ -8,7 +8,7 @@ enum IconButtonSize {
     var points: CGFloat {
         switch self {
         case .sm: 32
-        case .md: AppSize.toolbarButton   // 38, the default
+        case .md: AppSize.toolbarButton  // 38, the default
         case .lg: 44
         }
     }
@@ -82,7 +82,8 @@ private struct IconGlassModifier: ViewModifier {
         case .primary:
             content.glassEffect(.regular.tint(.brand).interactive(), in: .circle)
         case .secondary:
-            content.glassEffect(.regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .circle)
+            content.glassEffect(
+                .regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .circle)
         case .outline:
             content.glassEffect(hasAction ? .regular.interactive() : .regular, in: .circle)
         }

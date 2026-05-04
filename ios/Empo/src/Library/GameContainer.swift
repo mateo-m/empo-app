@@ -51,7 +51,6 @@ struct GameContainer: Equatable, Hashable {
     /// `Documents/Games/<folderName>/`.
     let url: URL
 
-
     // MARK: - Subdirectory URLs
 
     var gameURL: URL {
@@ -69,7 +68,6 @@ struct GameContainer: Equatable, Hashable {
     var metadataURL: URL {
         url.appendingPathComponent("Metadata", isDirectory: true)
     }
-
 
     // MARK: - Specific files
 
@@ -112,11 +110,9 @@ struct GameContainer: Equatable, Hashable {
         metadataURL.appendingPathComponent(GameContainer.exeIconSidecarFilename)
     }
 
-
     // MARK: - Constants
 
     static let exeIconSidecarFilename = "exe-icon.png"
-
 
     // MARK: - Initializers
 
@@ -151,14 +147,12 @@ struct GameContainer: Equatable, Hashable {
         self.init(folderName: url.lastPathComponent)
     }
 
-
     // MARK: - Roots
 
     /// Parent of all game containers. `Documents/Games/`.
     static let rootURL: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Games", isDirectory: true)
-
 
     // MARK: - Discovery
 
@@ -170,19 +164,21 @@ struct GameContainer: Equatable, Hashable {
     /// as invalid library cards rather than silently disappearing.
     static func discover() -> [GameContainer] {
         let fm = FileManager.default
-        guard let entries = try? fm.contentsOfDirectory(
-            at: rootURL,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+        guard
+            let entries = try? fm.contentsOfDirectory(
+                at: rootURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else { return [] }
         return entries.compactMap { url -> GameContainer? in
-            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?
+            let isDir =
+                (try? url.resourceValues(forKeys: [.isDirectoryKey]))?
                 .isDirectory == true
             guard isDir else { return nil }
             return GameContainer(url: url)
         }
     }
-
 
     // MARK: - Filesystem side effects
 
@@ -272,7 +268,6 @@ struct GameContainer: Equatable, Hashable {
         try FileManager.default.removeItem(at: url)
     }
 
-
     // MARK: - Slug helper
 
     /// Lowercase, alphanumerics + dashes, no leading/trailing
@@ -280,12 +275,14 @@ struct GameContainer: Equatable, Hashable {
     /// filesystem-safe folder-name suffix from the game's title.
     static func slugify(_ string: String) -> String {
         let allowed = CharacterSet.alphanumerics
-        let slug = string
+        let slug =
+            string
             .lowercased()
             .unicodeScalars
             .map { allowed.contains($0) ? String($0) : "-" }
             .joined()
-        return slug
+        return
+            slug
             .components(separatedBy: "-")
             .filter { !$0.isEmpty }
             .joined(separator: "-")
@@ -298,18 +295,23 @@ struct GameContainer: Equatable, Hashable {
     /// Archive imports often wrap the game in a single top-level
     /// folder; raw folder imports usually drop the files at the
     /// top level. This helper picks the right one.
-    static func findGameRoot(in dir: URL,
-                             fm: FileManager = .default) -> URL {
-        guard let items = try? fm.contentsOfDirectory(
-            at: dir,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return dir }
+    static func findGameRoot(
+        in dir: URL,
+        fm: FileManager = .default
+    ) -> URL {
+        guard
+            let items = try? fm.contentsOfDirectory(
+                at: dir,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        else { return dir }
 
         let meaningful = items.filter { $0.lastPathComponent != "__MACOSX" }
         if meaningful.count == 1,
-           let single = meaningful.first,
-           (try? single.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+            let single = meaningful.first,
+            (try? single.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+        {
             return single
         }
         return dir

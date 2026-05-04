@@ -60,10 +60,13 @@ enum SplashIcons {
     /// space (`0...16`); callers translate / scale via
     /// `CGAffineTransform` to draw at the desired pixel size.
     static func path(for name: String) -> UIBezierPath? {
-        guard let bundleURL = Bundle.main.url(
-            forResource: "Assets", withExtension: "bundle"
-        ) else { return nil }
-        let svgURL = bundleURL
+        guard
+            let bundleURL = Bundle.main.url(
+                forResource: "Assets", withExtension: "bundle"
+            )
+        else { return nil }
+        let svgURL =
+            bundleURL
             .appendingPathComponent("SplashIcons")
             .appendingPathComponent("\(name).svg")
         guard let text = try? String(contentsOf: svgURL, encoding: .utf8)
@@ -117,7 +120,8 @@ enum SplashIcons {
                 i = d.index(after: i)
                 let (nx, j1) = readNumber(d, from: i)
                 let (ny, j2) = readNumber(d, from: skipSeps(d, from: j1))
-                currentX = nx; currentY = ny
+                currentX = nx
+                currentY = ny
                 path.move(to: CGPoint(x: currentX, y: currentY))
                 i = j2
             case "H":
@@ -147,7 +151,9 @@ enum SplashIcons {
         return path
     }
 
-    private static func readNumber(_ s: String, from idx: String.Index)
+    private static func readNumber(
+        _ s: String, from idx: String.Index
+    )
         -> (CGFloat, String.Index)
     {
         var i = skipSeps(s, from: idx)
@@ -166,7 +172,9 @@ enum SplashIcons {
         return (num, i)
     }
 
-    private static func skipSeps(_ s: String, from idx: String.Index)
+    private static func skipSeps(
+        _ s: String, from idx: String.Index
+    )
         -> String.Index
     {
         var i = idx

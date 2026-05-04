@@ -21,7 +21,7 @@ import SwiftUI
 struct SpinnerRing: View {
     let progress: Double
     var size: CGFloat = 36
-    var lineWidth: CGFloat? = nil
+    var lineWidth: CGFloat?
     var tint: AnyShapeStyle = AnyShapeStyle(Color.white)
     /// Opacity applied to the background track. The callers used
     /// slightly different track values (0.3 vs 0.2); 0.3 is the more

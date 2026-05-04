@@ -102,9 +102,9 @@ The hero zoom from game card → GameLoadingView requires the library to be visi
 
 ### Stage 2: Handoff to PlayerView
 
-4. After 0.35s (matching the hero zoom duration), `resume()` sets `phase = .playing`.
-5. The library hides (opacity 0), and PlayerView appears. PlayerView picks up the same snapshot from `engineState.pauseSnapshot` and shows it at `engineState.gameRect` as an overlay - **with controls and toolbar visible alongside it**.
-6. The snapshot fades out over 0.35s, revealing the live SDL rendering underneath.
+1. After 0.35s (matching the hero zoom duration), `resume()` sets `phase = .playing`.
+2. The library hides (opacity 0), and PlayerView appears. PlayerView picks up the same snapshot from `engineState.pauseSnapshot` and shows it at `engineState.gameRect` as an overlay - **with controls and toolbar visible alongside it**.
+3. The snapshot fades out over 0.35s, revealing the live SDL rendering underneath.
 
 The snapshot sits at the same `engineState.gameRect` in both views, so the handoff from GameLoadingView to PlayerView lands without a visual jump. Controls render the moment PlayerView mounts.
 

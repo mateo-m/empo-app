@@ -53,7 +53,9 @@ struct PrimaryButtonStyle: ButtonStyle {
 extension ButtonStyle where Self == PrimaryButtonStyle {
     static var primary: PrimaryButtonStyle { PrimaryButtonStyle() }
     static func primary(size: ButtonSize) -> PrimaryButtonStyle { PrimaryButtonStyle(size: size) }
-    static func primary(size: ButtonSize = .lg, tint: Color) -> PrimaryButtonStyle { PrimaryButtonStyle(size: size, tint: tint) }
+    static func primary(size: ButtonSize = .lg, tint: Color) -> PrimaryButtonStyle {
+        PrimaryButtonStyle(size: size, tint: tint)
+    }
 }
 
 /// Lightly brand-tinted glass with brand-colored text; supporting actions.
@@ -80,7 +82,9 @@ struct SecondaryButtonStyle: ButtonStyle {
 extension ButtonStyle where Self == SecondaryButtonStyle {
     static var secondary: SecondaryButtonStyle { SecondaryButtonStyle() }
     static func secondary(size: ButtonSize) -> SecondaryButtonStyle { SecondaryButtonStyle(size: size) }
-    static func secondary(size: ButtonSize = .lg, tint: Color) -> SecondaryButtonStyle { SecondaryButtonStyle(size: size, tint: tint) }
+    static func secondary(size: ButtonSize = .lg, tint: Color) -> SecondaryButtonStyle {
+        SecondaryButtonStyle(size: size, tint: tint)
+    }
 }
 
 /// Scale-down press effect for tappable cards.
