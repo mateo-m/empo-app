@@ -1,10 +1,10 @@
-# SDL2_image — Patches & Build Notes
+# SDL2_image: Patches & Build Notes
 
 ## Source
 
 - **Upstream**: SDL_image ~2.6.3 (`release-2.6.0` tag + 18 upstream commits)
 - **Fork**: <https://github.com/mkxp-z/SDL_image> branch `mkxp-z`
-- **Top commit**: `d3c6d59` (Sam Lantinga — "Fixed Xcode DYLIB_CURRENT_VERSION")
+- **Top commit**: `d3c6d59` (Sam Lantinga: "Fixed Xcode DYLIB_CURRENT_VERSION")
 
 ## Patches
 
@@ -32,7 +32,7 @@ cmake .. \
 Key flags:
 
 - Static build with vendored sub-dependencies (libjpeg, etc.)
-- Apple ImageIO backend disabled — uses vendored decoders instead
+- Apple ImageIO backend disabled: uses vendored decoders instead
 - JPEG XL support disabled
 - After cloning, `./external/download.sh` is run to fetch vendored sources
 

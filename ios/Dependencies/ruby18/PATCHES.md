@@ -1,10 +1,10 @@
-# Ruby 1.8 — Patches & Build Notes
+# Ruby 1.8: Patches & Build Notes
 
 ## Source
 
-- **Upstream**: JoiPlay's `ruby_1_8` branch — <https://github.com/joiplay/ruby>
+- **Upstream**: JoiPlay's `ruby_1_8` branch: <https://github.com/joiplay/ruby>
 - **Branch**: `ruby_1_8` (submodule at `sources/ruby18`)
-- **Commit**: `50783b8` ("\* 2014-01-28") — git-svn mirror of the
+- **Commit**: `50783b8` ("\* 2014-01-28"): git-svn mirror of the
   official Ruby SVN repository (revision 44718)
 - **Reported version**: 1.8.8 (per `version.h`)
 - **Note**: Last maintenance snapshot of Ruby 1.8, frozen since 2014.
@@ -13,17 +13,16 @@
 
 Most RPG Maker XP games (RGSS1) were written against Ruby 1.8. Empo's
 multi-Ruby dispatcher routes detected RGSS1 games to this build (see
-`docs/multi-ruby.md`) so vintage Pokemon Essentials forks (Pokemon Z,
-Insurgence, Uranium, etc.) run on the parser they were authored
-against, instead of going through Ruby 3.1's syntax-transform
-patches.
+`docs/multi-ruby.md`) so vintage Pokemon Essentials forks run on the
+parser they were authored against, instead of going through Ruby 3.1's
+syntax-transform patches.
 
 ## Patches
 
 All iOS patches are in `ios.patch` (applied automatically by the makefile
 via `git apply` before `autoconf`):
 
-### `config.guess` and `config.sub` — Updated for aarch64
+### `config.guess` and `config.sub`: Updated for aarch64
 
 The original 2014-era autoconf helper scripts do not recognize modern
 platform triplets like `aarch64-apple-darwin`. Both files were replaced
@@ -37,24 +36,24 @@ These are the ONLY modifications to the JoiPlay Ruby 1.8 source.
 These are not patches to Ruby itself, but critical engine adaptations
 required to make Ruby 1.8 work on iOS:
 
-1. **4MB RGSS thread stack** — Ruby 1.8's GC (`mark_locations_array`)
+1. **4MB RGSS thread stack**: Ruby 1.8's GC (`mark_locations_array`)
    scans the entire thread stack for object references. The default 512KB
    iOS pthread stack causes SIGBUS when GC hits the guard page. Fixed by
    using `SDL_CreateThreadWithStackSize` with 4MB.
 
-2. **GC stack base update** — `rb_gc_stack_start` (global in `gc.c`)
+2. **GC stack base update**: `rb_gc_stack_start` (global in `gc.c`)
    records the stack base at `ruby_init()` time. Since `ruby_init()` is
    only called once (CRuby 1.8 cannot be restarted), subsequent RGSS
    threads have different stacks but GC still scans the old one, causing
    SIGSEGV. Fixed by force-updating `rb_gc_stack_start` at the start of
    each session via `extern VALUE *rb_gc_stack_start`.
 
-3. **VM persistence** — CRuby 1.8's VM cannot be restarted
+3. **VM persistence**: CRuby 1.8's VM cannot be restarted
    (`ruby_cleanup()` + `ruby_init()` causes SIGSEGV). The engine calls
    `ruby_init()` and `Init_*()` only once, and on subsequent game
    sessions clears leftover Ruby state with `rb_eval_string_protect`.
 
-4. **RAPI clamping** — `RAPI_FULL=188` is clamped to `187` so the engine
+4. **RAPI clamping**: `RAPI_FULL=188` is clamped to `187` so the engine
    selects the RGSS1 binding codepath.
 
 ## iOS Build Instructions
@@ -83,11 +82,11 @@ The makefile automatically:
 
 ### Key build flags
 
-- `-std=gnu89` — Required because Ruby 1.8 is K&R-style C code
-- `-Wno-implicit-function-declaration`, `-Wno-implicit-int`, etc. —
-  Suppress warnings-turned-errors for legacy C code
-- `--host=aarch64-apple-darwin --build=x86_64-apple-darwin` —
-  Cross-compilation triple
+- `-std=gnu89`: Required because Ruby 1.8 is K&R-style C code
+- `-Wno-implicit-function-declaration`, `-Wno-implicit-int`, etc.:
+  suppress warnings-turned-errors for legacy C code
+- `--host=aarch64-apple-darwin --build=x86_64-apple-darwin`:
+  cross-compilation triple
 
 ### Output
 
