@@ -83,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Cache apt: shellcheck
+      - name: "Cache apt: shellcheck"
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: shellcheck
@@ -115,17 +115,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          # Built-in npm cache keyed off package-lock.json. Saves
-          # ~5s per run after first warm-up.
-          cache: "npm"
+      - uses: oven-sh/setup-bun@v2
+        # Bun's CLI replaces Node + npm. Built-in install cache
+        # keyed off bun.lock. Faster install than npm ci.
 
-      - name: Install Node tools
-        run: npm ci
+      - name: Install JS tools
+        run: bun install --frozen-lockfile
 
-      - name: Cache apt: yamllint
+      - name: "Cache apt: yamllint"
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: yamllint
@@ -133,7 +130,7 @@ jobs:
 
       - name: prettier check (YAML + JSON)
         run: |
-          npx prettier --check 'ios/Empo/project.yml' 'ios/Empo/curated-patches/gameRegistry.json'
+          bun x prettier --check 'ios/Empo/project.yml' 'ios/Empo/curated-patches/gameRegistry.json'
 
       - name: yamllint
         run: |
@@ -151,13 +148,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          cache: "npm"
+      - uses: oven-sh/setup-bun@v2
 
       - name: Install markdownlint-cli
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: markdownlint
         run: |
@@ -166,5 +160,5 @@ jobs:
           # are skipped because they're already gitignored.
           FILES=$(git ls-files '*.md')
           if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs npx markdownlint -c .markdownlint.json
+            echo "$FILES" | xargs bun x markdownlint -c .markdownlint.json
           fi
