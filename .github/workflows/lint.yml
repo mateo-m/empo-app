@@ -8,18 +8,40 @@ on:
 jobs:
   swift:
     name: Swift (swiftlint + swift-format)
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
+    container: swift:6.2-noble
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: false
 
+      - name: Install dependencies
+        run: |
+          # The swift:*-noble base image is minimal; pull in curl +
+          # unzip + git for the checkout post-step and SwiftLint
+          # download.
+          apt-get update -qq
+          apt-get install -y --no-install-recommends curl unzip git ca-certificates
+
       - name: Install SwiftLint
-        run: brew install swiftlint
+        run: |
+          # SwiftLint ships per-arch Linux binaries as release assets.
+          ARCH=$(uname -m)
+          case "$ARCH" in
+            x86_64)  ASSET=swiftlint_linux_amd64.zip ;;
+            aarch64) ASSET=swiftlint_linux_arm64.zip ;;
+            *) echo "unsupported arch: $ARCH" >&2; exit 1 ;;
+          esac
+          curl -fsSL -o /tmp/swiftlint.zip \
+            "https://github.com/realm/SwiftLint/releases/download/0.63.2/$ASSET"
+          unzip -q /tmp/swiftlint.zip -d /usr/local/bin
+          chmod +x /usr/local/bin/swiftlint
+          swiftlint --version
 
       - name: swift-format check
         run: |
-          xcrun swift-format lint --strict --recursive ios/Empo/src
+          # swift-format ships with the Swift toolchain (6.0+).
+          swift-format lint --strict --recursive ios/Empo/src
 
       - name: swiftlint
         run: |
@@ -27,11 +49,16 @@ jobs:
 
   objc-cpp:
     name: ObjC / C / C++ (clang-format)
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: false
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang-format
 
       - name: clang-format check
         run: |
@@ -43,17 +70,22 @@ jobs:
             'ios/Empo/shims/*.c' \
             'ios/Empo/shims/*.cpp')
           if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs xcrun clang-format --dry-run --Werror
+            echo "$FILES" | xargs clang-format --dry-run --Werror
           fi
 
   shell:
     name: Bash (shellcheck + shfmt)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Install shfmt
+      - name: Install shfmt + shellcheck
         run: |
+          # shellcheck is pre-installed on GitHub-hosted ubuntu
+          # runners but not in many community runner images, so
+          # install it explicitly for portability.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends shellcheck
           curl -fsSL -o /usr/local/bin/shfmt \
             https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64
           chmod +x /usr/local/bin/shfmt
@@ -76,16 +108,19 @@ jobs:
     name: YAML (prettier + yamllint)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install tools
         run: |
           npm install -g prettier@3
-          pip install --user yamllint
+          # yamllint comes from apt to avoid PEP 668 (Ubuntu 24.04+
+          # blocks unmanaged pip installs into the system Python).
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends yamllint
 
       - name: prettier check (YAML + JSON)
         run: |
@@ -93,21 +128,23 @@ jobs:
 
       - name: yamllint
         run: |
-          ~/.local/bin/yamllint -c .yamllint.yml ios/Empo/project.yml || true
-          # yamllint warnings shouldn't fail CI; only structural errors should.
-          # Re-run with strict mode; treat warnings as soft.
-          ~/.local/bin/yamllint --strict -c .yamllint.yml ios/Empo/project.yml \
-            && exit 0 || echo "yamllint reported issues (warnings tolerated; failing only on errors)"
+          # yamllint warnings shouldn't fail CI; only structural
+          # errors should. --strict promotes warnings to failures,
+          # so we run twice: first to surface the issues, then
+          # `|| true` to keep the soft-warn behaviour.
+          yamllint -c .yamllint.yml ios/Empo/project.yml || true
+          yamllint --strict -c .yamllint.yml ios/Empo/project.yml \
+            || echo "yamllint reported issues (warnings tolerated; failing only on errors)"
 
   markdown:
     name: Markdown (markdownlint)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install markdownlint-cli
         run: npm install -g markdownlint-cli@0.48
