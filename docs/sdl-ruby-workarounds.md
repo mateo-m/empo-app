@@ -1,6 +1,6 @@
 # SDL & Ruby Lifecycle Workarounds
 
-## Why This Exists
+## Why this exists
 
 The iOS port of mkxp-z keeps SDL, the GL context, OpenAL, and the active Ruby VM alive for the process lifetime. Two fundamental constraints drove the architecture:
 
@@ -11,7 +11,7 @@ These constraints cascade into every layer of the architecture. Cross-session pl
 
 ---
 
-## 1. Persistent SDL Window, ANGLE EGL Context, and OpenAL Device
+## 1. Persistent SDL window, ANGLE EGL context, and OpenAL device
 
 **Problem:** SDL creates a window on `SDL_Init`. Destroying and recreating it between game sessions causes GL context issues on iOS.
 
@@ -33,7 +33,7 @@ alcMakeContextCurrent(NULL);
 eglMakeCurrent(s_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 ```
 
-### Screen FBO Capture
+### Screen FBO capture
 
 The screen FBO is captured once right after `initANGLE()` and reused forever. Under ANGLE/Metal it's typically 0, but we never re-query `GL_FRAMEBUFFER_BINDING` on subsequent sessions because `SharedState::finiInstance` deleted all game FBOs by then.
 
@@ -46,7 +46,7 @@ s_screenFBO = static_cast<GLuint>(fbo);
 
 ---
 
-## 2. The `while(true)` Game Session Loop
+## 2. The `while(true)` game session loop
 
 **Problem:** Since SDL and Ruby can't be torn down and rebuilt, we can't simply exit `main()` and re-enter it.
 
@@ -66,7 +66,7 @@ Between sessions:
 
 ---
 
-## 3. Ruby VM Kept Alive Across Sessions
+## 3. Ruby VM kept alive across sessions
 
 **Problem (`binding-mri.cpp`):** Calling `ruby_cleanup()` destroys the VM struct but leaves dangling static C pointers in extension `Init_*` functions (e.g. `Init_String` stashes class VALUEs in file-scope statics). A subsequent `ruby_init()` crashes in `rb_call_inits`. This is a known upstream Ruby limitation.
 
@@ -81,7 +81,7 @@ The historical `resetBetweenSessions()` cleanup (constant-baseline diffing, sing
 
 ---
 
-## 4. Run Loop Pumping While Waiting
+## 4. Run loop pumping while waiting
 
 **Problem (`app_bridge.cpp`):** `SDL_main` runs on the main thread on iOS. When the engine is waiting for the user to select a game from the Library UI, UIKit must still be able to render and handle events.
 
@@ -97,7 +97,7 @@ This keeps UIKit alive (rendering the SwiftUI Library) while the C++ engine bloc
 
 ---
 
-## 5. Callback-Based State Notification
+## 5. Callback-based state notification
 
 **Problem:** The SwiftUI Library UI and the C++ engine communicate through a C bridge (`app_bridge.h`). The UI needs to know when the engine changes state (first frame rendered, viewport rect changed, engine terminated).
 
@@ -125,7 +125,7 @@ The engine calls these callbacks at the appropriate points. The rect callback on
 
 ---
 
-## 6. Engine Termination via SDL_QUIT Injection
+## 6. Engine termination via SDL_QUIT injection
 
 **Problem:** There's no direct "kill engine" function. The engine runs its own event loop.
 
@@ -141,7 +141,7 @@ void mkxp_requestTerminate(void) {
 
 ---
 
-## 7. AppWindow Layering Above SDL
+## 7. AppWindow layering above SDL
 
 **Problem:** SDL creates its own `UIWindow` with an OpenGL view. The SwiftUI Library UI must appear above it, and the Player controls must overlay it while passing non-control touches through.
 

@@ -56,7 +56,7 @@ required to make Ruby 1.8 work on iOS:
 4. **RAPI clamping**: `RAPI_FULL=188` is clamped to `187` so the engine
    selects the RGSS1 binding codepath.
 
-## iOS Build Instructions
+## iOS build instructions
 
 Ruby 1.8 is now built as part of the standard makefile system:
 
