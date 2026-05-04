@@ -1,4 +1,4 @@
-# SDL_sound — Patches & Build Notes
+# SDL_sound: Patches & Build Notes
 
 ## Source
 
@@ -10,7 +10,7 @@
 
 One custom commit on top of upstream:
 
-1. **`cfb2533`** (Struma) — Build properly on macOS
+1. **`cfb2533`** (Struma): Build properly on macOS
    - Fixes a build issue specific to macOS/Darwin toolchains.
 
 ## iOS Build Instructions
@@ -27,7 +27,7 @@ cmake .. \
 
 Key flags:
 
-- CoreAudio decoder disabled — uses Vorbis/Ogg decoders instead
+- CoreAudio decoder disabled: uses Vorbis/Ogg decoders instead
 - Test programs disabled
 
 Depends on: SDL2, libogg, libvorbis

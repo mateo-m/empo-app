@@ -1,4 +1,4 @@
-# Ruby 3.0 — Patches & Build Notes
+# Ruby 3.0: Patches & Build Notes
 
 ## Source
 
@@ -21,13 +21,13 @@ All iOS patches are in `ios.patch` (applied automatically by the
 makefile via `git apply` before `autoreconf`). Same surface as the
 3.1 patch, since iOS makes the same things unavailable in both:
 
-### 1. `configure.ac` — Remove DYLD_INSERT_LIBRARIES
+### 1. `configure.ac`: Remove DYLD_INSERT_LIBRARIES
 
 The line `: ${PRELOADENV=DYLD_INSERT_LIBRARIES}` is deleted. iOS doesn't
 support `DYLD_INSERT_LIBRARIES`; referencing it causes configure
 warnings/failures.
 
-### 2. `dir.c` — sys/vnode.h iOS shim
+### 2. `dir.c`: sys/vnode.h iOS shim
 
 `<sys/vnode.h>` isn't part of the iOS SDK. Under `TARGET_OS_IPHONE`, the
 include is skipped and the required constants are hardcoded:
@@ -42,7 +42,7 @@ include is skipped and the required constants are hardcoded:
 
 macOS still uses the original `#include <sys/vnode.h>`.
 
-### 3. `process.c` — `system()` disabled on iOS
+### 3. `process.c`: `system()` disabled on iOS
 
 iOS sandboxing disallows `system()`. In `rb_spawn_process()`, the call
 is stubbed:
@@ -96,5 +96,5 @@ cross_compiling=yes
 
 ### Output
 
-- `libruby.3.0-static.a` — copied into `$(LIBDIR)`
+- `libruby.3.0-static.a`: copied into `$(LIBDIR)`
 - Headers installed to `$(INCLUDEDIR)/ruby-3.0.0/`

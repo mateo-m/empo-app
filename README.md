@@ -6,7 +6,7 @@
 [![Status](https://img.shields.io/badge/status-pre--release-yellow.svg)](#status)
 [![Platform](https://img.shields.io/badge/platform-iOS%2026%2B-lightgrey.svg)](#requirements)
 
-Empo wraps the [mkxp-z](https://github.com/mkxp-z/mkxp-z) RPG Maker engine in a native SwiftUI library and a customizable touch-controls overlay. Vintage RPG Maker XP / VX / VX Ace games and modern Pokemon Essentials forks all run on-device, no desktop emulator needed.
+Empo wraps the [mkxp-z](https://github.com/mkxp-z/mkxp-z) RPG Maker engine in a native SwiftUI library and a customizable touch-controls overlay. RPG Maker XP / VX / VX Ace games and modern Pokemon Essentials forks run on-device, no desktop emulator needed.
 
 ## Table of Contents
 
@@ -23,8 +23,8 @@ Empo wraps the [mkxp-z](https://github.com/mkxp-z/mkxp-z) RPG Maker engine in a 
 
 ## Highlights
 
-- Plays games made for RGSS1 (XP), RGSS2 (VX), RGSS3 (VX Ace), and the modern mkxp-z fork ecosystem (Reborn, Vanguard, Flux, Insurgence, Infinite Fusion, etc.).
-- **Multi-Ruby native dispatch.** Four Ruby interpreters (1.8, 1.9, 3.0, 3.1) share one binary; each game runs on the actual Ruby version it was authored against. See [`docs/multi-ruby.md`](docs/multi-ruby.md).
+- Plays games made for RGSS1 (XP), RGSS2 (VX), RGSS3 (VX Ace), and modern mkxp-z forks.
+- **Multi-Ruby native dispatch.** Four Ruby interpreters (1.8, 1.9, 3.0, 3.1) ship in one binary; each game runs on the actual Ruby version it was authored against. See [`docs/multi-ruby.md`](docs/multi-ruby.md).
 - Imports games from folders, `.zip`, `.7z`, `.rar`, and JoiPlay's `.jgp` format.
 - Customizable on-screen D-pad and action buttons, with per-game layouts.
 - Pause and resume from the library; a frozen-frame snapshot bridges SDL into the SwiftUI hero zoom transition.
@@ -41,7 +41,6 @@ End-to-end working across the RGSS1/2/3 and modern mkxp-z fork landscape. Compat
 - **Single game per session.** After exiting a game, force-close + reopen Empo from the app switcher to start a different one. Cross-session play is parked pending reliable Ruby state cleanup; see [`docs/multi-session.md`](docs/multi-session.md).
 - **Ogg/Theora movies only.** MP4 and other formats are skipped silently.
 - **Native Windows DLL dependencies.** Games leaning on Win32 APIs beyond what the engine's `win32_wrap.rb` emulates may fail to load some assets.
-- **Simulator rotation.** Rotating the iOS Simulator during gameplay crashes inside Apple's GL emulation layer. Real devices are fine.
 
 ## How it works
 
@@ -67,9 +66,9 @@ For deeper architectural context:
 
 A few load-bearing tricks worth flagging if you're poking around:
 
+- **Multi-Ruby in one binary.** Four Ruby versions (1.8, 1.9, 3.0, 3.1) compile separately, then each version's libruby + binding code merges into a single relocatable `.o` with hidden symbol islanding via `ld -r --unexported_symbols_list`. Each `.o` exports exactly one global, `_mkxp_get_script_binding_NN`. The host calls `mkxp_setActiveRubyVersion()` per game and the engine dispatches accordingly. See [`docs/multi-ruby.md`](docs/multi-ruby.md).
 - **Persistent SDL + Ruby VM.** SDL, the GL context, OpenAL, and the active Ruby interpreter are created once and reused for the process lifetime. iOS doesn't let apps relaunch themselves between games, and CRuby's `ruby_init()` is one-shot per process.
-- **Per-version merged `.o` for Ruby.** Each Ruby version's libruby + binding compile separately, then `ld -r --unexported_symbols_list` hides every Ruby internal so all four versions can coexist in one binary. Each `.o` exports exactly one global: `_mkxp_get_script_binding_NN`.
-- **Syntax transform on Ruby 3.1 only.** Mixed-grammar Pokemon Essentials forks (Vinemon, Sauce Edition, etc.) combine 1.8 syntax with 1.9+ runtime methods. They can't run on 1.8 native (no `force_encoding`) or vanilla 3.1 (parser rejects `when X:`). The 3.1 binding ships [PR #304's syntax-transform patches](https://github.com/mkxp-z/mkxp-z/pull/304); the host activates LEGACY mode per game.
+- **Syntax-transform patches on Ruby 3.1.** The Ruby 3.1 build also applies [PR #304's parser patches](https://github.com/mkxp-z/mkxp-z/pull/304) so mixed-grammar Pokemon Essentials forks (1.8 syntax + 1.9+ runtime methods) parse on Ruby 3.1's VM. The host activates LEGACY mode per game where needed; otherwise vanilla 3.1 parsing applies.
 - **Win32 emulation in Ruby.** [`win32_wrap.rb`](mkxp-z-apple-mobile/scripts/preload/win32_wrap.rb) (CC0, by Ancurio and Splendide Imaginarius) plus [`platform_compat.rb`](mkxp-z-apple-mobile/scripts/preload/platform_compat.rb) stub out the Windows APIs games expect, neutralize `system`/`fork`/`spawn` so games can't launch new processes, and swallow load errors from encrypted archives.
 - **Touch controls via SDL events.** The overlay calls `SDL_PushEvent` with synthetic key events, so the engine sees them exactly as if they came from a hardware keyboard. New buttons or layouts need no engine changes.
 
@@ -149,6 +148,6 @@ Issues, ideas, and PRs welcome.
 - [Ancurio](https://github.com/Ancurio) for the original [mkxp](https://github.com/Ancurio/mkxp) engine.
 - The [mkxp-z contributors](https://github.com/mkxp-z/mkxp-z/graphs/contributors) for keeping it alive on desktop.
 - [JoiPlay](https://github.com/joiplay) for the [Ruby 1.8 cross-compilation work](https://github.com/joiplay/ruby) and the multi-Ruby dispatch model their RPG Maker plugin uses.
-- [white-axe](https://github.com/white-axe) for [PR #304](https://github.com/mkxp-z/mkxp-z/pull/304), the Ruby 3.1 syntax-transform patches that keep mixed-grammar Pokemon Essentials forks running.
-- [MGC](https://www.save-point.org/thread-3151.html) for the original H-Mode7 RPG Maker XP plugin (the pseudo-3D renderer behind Pokemon Insurgence's flying intro). Our [native port](mkxp-z-apple-mobile/hmode7) re-implements it on mkxp-z's `Bitmap` and `Table` APIs.
+- [white-axe](https://github.com/white-axe) for [PR #304](https://github.com/mkxp-z/mkxp-z/pull/304), the Ruby 3.1 syntax-transform patches that mkxp-z-apple-mobile applies to its 3.1 build.
+- [MGC](https://www.save-point.org/thread-3151.html) for the original H-Mode7 RPG Maker XP plugin. The [native port](mkxp-z-apple-mobile/hmode7) re-implements it on mkxp-z's `Bitmap` and `Table` APIs.
 - [Splendide Imaginarius](https://github.com/Splendide-Imaginarius) for the `win32_wrap.rb` extensions that keep Windows-only RPG Maker games loading on non-Windows targets.
