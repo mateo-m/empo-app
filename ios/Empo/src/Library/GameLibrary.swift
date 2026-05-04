@@ -1,8 +1,8 @@
 import Foundation
-import UIKit
-import SwiftUI
 import Observation
+import SwiftUI
 import Synchronization
+import UIKit
 
 /// In-flight import that's still in its pre-flight validation phase.
 /// Once the pre-flight passes, the matching `GameEntry` is appended
@@ -36,7 +36,6 @@ struct PendingImport: Identifiable, Hashable {
     }
 }
 
-
 @MainActor @Observable
 class GameLibrary {
     static let shared = GameLibrary()
@@ -67,9 +66,9 @@ class GameLibrary {
         reload(initialLoad: true)
     }
 
-
     func reload(initialLoad: Bool = false) {
-        let cleanupInvalid = initialLoad
+        let cleanupInvalid =
+            initialLoad
             ? UserDefaults.standard.bool(forKey: DefaultsKey.cleanupInvalidGames)
             : false
         let skipIDs = inFlightImports.withLock { Set($0) }
@@ -133,13 +132,15 @@ class GameLibrary {
             // half-imported or layout-incompatible (e.g. a folder
             // from a build before this layout existed).
             let gameDirExists = fm.fileExists(atPath: container.gameURL.path)
-            let isValid = gameDirExists
+            let isValid =
+                gameDirExists
                 && (try? GameImportValidator.validate(container.gameURL)) != nil
 
             if !isValid {
                 if cleanupInvalid {
-                    NSLog("[GameLibrary] Removing invalid game container: %@",
-                          container.folderName)
+                    NSLog(
+                        "[GameLibrary] Removing invalid game container: %@",
+                        container.folderName)
                     try? container.deleteAll()
                     continue
                 }
@@ -229,21 +230,21 @@ class GameLibrary {
     nonisolated private static func titlesMeaningfullyDiffer(_ a: String, _ b: String) -> Bool {
         let folded: (String) -> String = { raw in
             raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                .folding(options: [.diacriticInsensitive, .caseInsensitive],
-                         locale: Locale(identifier: "en_US_POSIX"))
+                .folding(
+                    options: [.diacriticInsensitive, .caseInsensitive],
+                    locale: Locale(identifier: "en_US_POSIX"))
         }
         return folded(a) != folded(b)
     }
 
-
     func refreshGameEntry(id: String) {
         guard let idx = games.firstIndex(where: { $0.id == id }),
-              let container = games[idx].container else { return }
+            let container = games[idx].container
+        else { return }
         guard var entry = Self.buildGameEntry(from: container) else { return }
         entry.status = games[idx].status  // preserve current status
         withAnimation { games[idx] = entry }
     }
-
 
     private struct ImportCancelled: Error {}
 
@@ -301,7 +302,8 @@ class GameLibrary {
 
         let archiveFormat = ArchiveExtractor.Format(extension: sourceURL.pathExtension)
         let importID = UUID().uuidString
-        let sourceName = archiveFormat == nil
+        let sourceName =
+            archiveFormat == nil
             ? sourceURL.lastPathComponent
             : sourceURL.deletingPathExtension().lastPathComponent
 
@@ -373,13 +375,14 @@ class GameLibrary {
             let lib = GameLibrary.shared
             withAnimation {
                 _ = lib.pendingImports.removeValue(forKey: importID)
-                lib.games.append(GameEntry(
-                    id: importID,
-                    container: container,
-                    title: title,
-                    artworkPath: artworkPath,
-                    status: .importing(progress: 0)
-                ))
+                lib.games.append(
+                    GameEntry(
+                        id: importID,
+                        container: container,
+                        title: title,
+                        artworkPath: artworkPath,
+                        status: .importing(progress: 0)
+                    ))
             }
         }
     }
@@ -478,8 +481,9 @@ class GameLibrary {
             // artwork across the move-then-reload window.
             _ = ImageCache.shared.image(for: path)
         }
-        commitPendingToCard(importID, container: container,
-                            title: title, artworkPath: artworkPath)
+        commitPendingToCard(
+            importID, container: container,
+            title: title, artworkPath: artworkPath)
 
         // Folder imports don't have a meaningful extraction-progress
         // phase (the heavy copy already happened in the pre-flight).
@@ -539,8 +543,9 @@ class GameLibrary {
         // fills in mid-extract via the extract() callback below.
         let title = GameEntry.parseINITitle(at: preflightRoot) ?? sourceName
         let container = GameContainer(id: importID, slug: GameContainer.slugify(title))
-        commitPendingToCard(importID, container: container,
-                            title: title, artworkPath: nil)
+        commitPendingToCard(
+            importID, container: container,
+            title: title, artworkPath: nil)
 
         // Full extraction now runs visibly - progress feeds the
         // committed card's `.importing(progress:)` status.
@@ -614,8 +619,9 @@ class GameLibrary {
                         return
                     }
                     guard let pe = PEImage(data: data),
-                          let image = pe.extractIcon(),
-                          let png = image.pngData() else {
+                        let image = pe.extractIcon(),
+                        let png = image.pngData()
+                    else {
                         return
                     }
 
@@ -651,7 +657,8 @@ class GameLibrary {
         // keep a `JgpImport` bundle so we can seed metadata +
         // settings after the final move. Regular .zip imports skip
         // this branch entirely.
-        let jgpBundle: Jgp.Bundle? = sourceURL.pathExtension.lowercased() == "jgp"
+        let jgpBundle: Jgp.Bundle? =
+            sourceURL.pathExtension.lowercased() == "jgp"
             ? try Self.preprocessJgp(at: gameRoot)
             : nil
 
@@ -698,7 +705,7 @@ class GameLibrary {
         case .unsupported(let raw):
             throw GameImportValidator.ImportError.unsupportedRuntime(
                 "This JoiPlay archive uses '\(raw)' which isn't supported. "
-                + "Only RPG Maker XP, VX, VX Ace, and mkxp-z games are currently supported."
+                    + "Only RPG Maker XP, VX, VX Ace, and mkxp-z games are currently supported."
             )
         }
 
@@ -786,8 +793,9 @@ class GameLibrary {
         metadata.rubyVersionDetectedSchema = RubyVersionDetection.currentSchema.rawValue
 
         if let iconData = bundle.iconData,
-           let image = UIImage(data: iconData),
-           let filename = GameMetadata.saveImage(image, as: "artwork", in: container) {
+            let image = UIImage(data: iconData),
+            let filename = GameMetadata.saveImage(image, as: "artwork", in: container)
+        {
             metadata.customArtworkFilename = filename
         }
 
@@ -827,7 +835,6 @@ class GameLibrary {
         settings.applyToConfig(stateDirectory: stateDir, gameDirectory: container.gameURL)
         settings.save(to: stateDir)
     }
-
 
     func deleteGame(_ entry: GameEntry, onError: (@MainActor @Sendable (String) -> Void)? = nil) {
         let wasImporting = entry.isImporting
@@ -872,7 +879,6 @@ class GameLibrary {
         }
     }
 
-
     nonisolated private static func findArtwork(in container: GameContainer) -> String? {
         let fm = FileManager.default
 
@@ -906,8 +912,10 @@ class GameLibrary {
 
     nonisolated private static func findTitlesArtwork(in gameURL: URL) -> String? {
         let titlesDir = gameURL.appendingPathComponent("Graphics/Titles")
-        guard let items = try? FileManager.default
-            .contentsOfDirectory(atPath: titlesDir.path) else { return nil }
+        guard
+            let items = try? FileManager.default
+                .contentsOfDirectory(atPath: titlesDir.path)
+        else { return nil }
 
         let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "bmp"]
         for item in items.sorted() {
@@ -918,7 +926,6 @@ class GameLibrary {
         }
         return nil
     }
-
 
     private func ensureGamesDirectory() {
         if !fm.fileExists(atPath: GameContainer.rootURL.path) {

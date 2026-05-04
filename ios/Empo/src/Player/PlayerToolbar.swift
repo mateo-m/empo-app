@@ -27,7 +27,8 @@ struct PlayerToolbar: View {
         let gap: CGFloat = isPortrait ? Spacing.sm : Spacing.md
 
         let buttons = toolbarButtons()
-        let toolbarPosition = ControlsZone.toolbarOrigin(safeArea: safeArea, geoSize: geoSize, btnSize: btnSize, gap: gap, count: CGFloat(buttons.count))
+        let toolbarPosition = ControlsZone.toolbarOrigin(
+            safeArea: safeArea, geoSize: geoSize, btnSize: btnSize, gap: gap, count: CGFloat(buttons.count))
 
         HStack(spacing: gap) {
             ForEach(Array(buttons.enumerated()), id: \.offset) { _, entry in
@@ -62,7 +63,8 @@ struct PlayerToolbar: View {
             // square.and.pencil reads as "edit this region" which
             // fits the controls-edit mode better than a generic
             // gear/settings.
-            ToolbarEntry(icon: "square.and.pencil", label: "Edit controls", tint: .white, action: onToggleEditMode),
+            ToolbarEntry(
+                icon: "square.and.pencil", label: "Edit controls", tint: .white, action: onToggleEditMode),
             ToolbarEntry(
                 icon: controlsHidden ? "eye.slash.fill" : "eye.fill",
                 label: controlsHidden ? "Show controls" : "Hide controls",
@@ -75,7 +77,8 @@ struct PlayerToolbar: View {
             // cue; opens PlayerMoreSheet for cheats / fast-forward
             // / diagnostics-overlay / pause. Hidden when none of
             // those rows would render.
-            entries.append(ToolbarEntry(icon: "ellipsis.circle", label: "Menu", tint: .white, action: onShowMore))
+            entries.append(
+                ToolbarEntry(icon: "ellipsis.circle", label: "Menu", tint: .white, action: onShowMore))
         }
         return entries
     }
@@ -88,7 +91,6 @@ struct PlayerToolbar: View {
     }
 }
 
-
 struct PlayerEditToolbar: View {
     let isPortrait: Bool
     let gameRect: CGRect
@@ -99,10 +101,14 @@ struct PlayerEditToolbar: View {
     let onDone: () -> Void
 
     var body: some View {
-        let overlay = ControlsZone.useOverlayLayout(isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height)
-        let yPos: CGFloat = isPortrait && gameRect.height > 0 && !overlay
-            ? gameRect.origin.y + gameRect.height + ControlsZone.toolbarGap + ControlsZone.editToolbarHalfHeight
-            : max(safeArea.top, ControlsZone.minLandscapeInset) + ControlsZone.toolbarEdgePad + ControlsZone.editToolbarHalfHeight
+        let overlay = ControlsZone.useOverlayLayout(
+            isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height)
+        let yPos: CGFloat =
+            isPortrait && gameRect.height > 0 && !overlay
+            ? gameRect.origin.y + gameRect.height + ControlsZone.toolbarGap
+                + ControlsZone.editToolbarHalfHeight
+            : max(safeArea.top, ControlsZone.minLandscapeInset) + ControlsZone.toolbarEdgePad
+                + ControlsZone.editToolbarHalfHeight
 
         HStack(spacing: Spacing.xl) {
             Button("+ Add") { showAddSheet = true }

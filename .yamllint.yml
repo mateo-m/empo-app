@@ -1,0 +1,31 @@
+extends: default
+
+rules:
+  line-length:
+    max: 200
+    level: warning
+  comments:
+    require-starting-space: false
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  document-start: disable
+  truthy:
+    allowed-values: ["true", "false", "yes", "no"]
+    check-keys: false
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+  braces:
+    max-spaces-inside: 1
+    level: warning
+  empty-lines:
+    max: 2
+
+ignore: |
+  mkxp-z-apple-mobile/
+  ios/Empo/build/
+  ios/Empo/Empo.xcodeproj/
+  ios/Dependencies/sources/
+  ios/Dependencies/build-*/
+  ios/Dependencies/ANGLE/

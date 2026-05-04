@@ -1,0 +1,72 @@
+# SwiftLint config. Pairs with swift-format (which handles
+# whitespace + structural formatting). SwiftLint here covers
+# style + correctness rules that swift-format does not.
+
+included:
+  - ios/Empo/src
+
+excluded:
+  - ios/Empo/build
+  - ios/Empo/Empo.xcodeproj
+  - ios/Empo/src/App/GitInfo.generated.swift
+
+disabled_rules:
+  # Length rules disabled. Swift-format already enforces line
+  # length and our existing files have long but readable
+  # functions / types we don't want to chop arbitrarily.
+  - line_length
+  - file_length
+  - type_body_length
+  - function_body_length
+  - function_parameter_count
+  - large_tuple
+  - cyclomatic_complexity
+
+  # Naming rules disabled. We have legacy enum cases like
+  # `gameQuit` and bridge identifiers like `mkxp_*` that don't
+  # match Swift conventions but are intentional.
+  - identifier_name
+  - type_name
+
+  # `// TODO:` is fine; we already have a TODO.md.
+  - todo
+
+  # Trailing whitespace handled by swift-format.
+  - trailing_whitespace
+  - trailing_newline
+
+  # Whitespace + brace placement handled by swift-format. Disabling
+  # in swiftlint avoids contradictions where swift-format adds a
+  # trailing comma or wraps a brace and swiftlint flags it.
+  - trailing_comma
+  - opening_brace
+
+  # Force casts / unwraps come up in iOS bridge code; rely on
+  # code review instead of a blanket lint failure.
+  - force_cast
+  - force_try
+
+  # Style preferences. Re-enable individually after a focused
+  # cleanup pass if you want them enforced going forward.
+  - redundant_string_enum_value
+  - multiple_closures_with_trailing_closure
+  - for_where
+  - closure_parameter_position
+  - switch_case_alignment
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - first_where
+  - last_where
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - redundant_nil_coalescing
+  - toggle_bool
+
+# Suppress rules that report on existing code idioms we want to
+# keep. These can be re-enabled selectively after a focused
+# cleanup pass.
+analyzer_rules: []
+
+reporter: "github-actions-logging"

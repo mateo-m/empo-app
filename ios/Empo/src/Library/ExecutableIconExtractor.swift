@@ -1,7 +1,6 @@
 import Foundation
 import UIKit
 
-
 /// Extracts the embedded icon from a Windows PE executable
 /// (`Game.exe` and friends) and returns it as a `UIImage`. Used as
 /// the primary artwork source for imported RPG Maker games: the
@@ -30,7 +29,6 @@ enum ExecutableIconExtractor {
     /// outside `Game/` so the imported game tree stays untouched.
     static let sidecarFilename = GameContainer.exeIconSidecarFilename
 
-
     /// Substrings commonly found in bundled helper binaries
     /// (patchers, updaters, installers, launchers, RTP installers).
     /// An `.exe` whose filename contains any of these is treated
@@ -46,14 +44,13 @@ enum ExecutableIconExtractor {
         "patcher", "patch",
         "updater", "update",
         "installer", "install",
-        "unins",      // InnoSetup uninstallers (unins000.exe)
+        "unins",  // InnoSetup uninstallers (unins000.exe)
         "config", "configure",
         "setup",
         "editor",
         "rtp",
         "dxwebsetup", "vcredist",
     ]
-
 
     /// True when `filename` matches a known auxiliary-tool naming
     /// pattern. Used by both the import-time extractor and the
@@ -66,7 +63,6 @@ enum ExecutableIconExtractor {
         return false
     }
 
-
     /// Reads `url` and returns the largest icon found inside, as a
     /// `UIImage`. Returns nil when the file isn't a recognisable
     /// PE executable, has no icon resources, or fails any of the
@@ -78,7 +74,6 @@ enum ExecutableIconExtractor {
         }
         return PEImage(data: data)?.extractIcon()
     }
-
 
     /// Scans `<container>/Game/` for a suitable `.exe`, extracts
     /// its icon, and writes it as a PNG sidecar at
@@ -112,7 +107,8 @@ enum ExecutableIconExtractor {
         }
 
         let gameDir = container.gameURL
-        let exeItems = gameDir
+        let exeItems =
+            gameDir
             .directoryEntries(matchingExtensions: ["exe"], fm: fm)
             .map { $0.lastPathComponent }
         let ordered: [String]
@@ -132,9 +128,10 @@ enum ExecutableIconExtractor {
 
             let exeURL = gameDir.appendingPathComponent(item)
             guard let data = try? Data(contentsOf: exeURL, options: .mappedIfSafe),
-                  let pe = PEImage(data: data),
-                  let image = pe.extractIcon(),
-                  let png = image.pngData() else {
+                let pe = PEImage(data: data),
+                let image = pe.extractIcon(),
+                let png = image.pngData()
+            else {
                 continue
             }
 
@@ -150,7 +147,6 @@ enum ExecutableIconExtractor {
         return nil
     }
 }
-
 
 // MARK: - PEImage
 
@@ -172,14 +168,12 @@ struct PEImage {
     private let dataDirectoryBase: Int
     private let dataDirectoryCount: Int
 
-
     struct Section {
         let virtualAddress: UInt32
         let virtualSize: UInt32
         let rawOffset: Int
         let rawSize: Int
     }
-
 
     /// Offsets + record sizes inside the PE layout used below.
     /// See <https://learn.microsoft.com/en-us/windows/win32/debug/pe-format>.
@@ -216,7 +210,6 @@ struct PEImage {
         static let importDescriptorNameOffset: Int = 12
     }
 
-
     init?(data: Data) {
         let reader = ByteReader(data: data)
 
@@ -226,11 +219,12 @@ struct PEImage {
         let peBase = Int(peOffset)
 
         // PE signature: 'P','E',0,0.
-        guard reader.readUInt32(at: peBase) == 0x00004550 else { return nil }
+        guard reader.readUInt32(at: peBase) == 0x0000_4550 else { return nil }
 
         let coffBase = peBase + 4
         guard let numberOfSections = reader.readUInt16(at: coffBase + Layout.coffNumberOfSectionsOffset),
-              let sizeOfOptionalHeader = reader.readUInt16(at: coffBase + Layout.coffSizeOfOptionalHeaderOffset) else {
+            let sizeOfOptionalHeader = reader.readUInt16(at: coffBase + Layout.coffSizeOfOptionalHeaderOffset)
+        else {
             return nil
         }
 
@@ -257,22 +251,23 @@ struct PEImage {
         for i in 0..<Int(numberOfSections) {
             let base = sectionTableBase + i * Layout.sectionHeaderSize
             guard let virtualSize = reader.readUInt32(at: base + 8),
-                  let virtualAddress = reader.readUInt32(at: base + 12),
-                  let sizeOfRawData = reader.readUInt32(at: base + 16),
-                  let pointerToRawData = reader.readUInt32(at: base + 20) else {
+                let virtualAddress = reader.readUInt32(at: base + 12),
+                let sizeOfRawData = reader.readUInt32(at: base + 16),
+                let pointerToRawData = reader.readUInt32(at: base + 20)
+            else {
                 return nil
             }
-            parsedSections.append(Section(
-                virtualAddress: virtualAddress,
-                virtualSize: virtualSize,
-                rawOffset: Int(pointerToRawData),
-                rawSize: Int(sizeOfRawData)
-            ))
+            parsedSections.append(
+                Section(
+                    virtualAddress: virtualAddress,
+                    virtualSize: virtualSize,
+                    rawOffset: Int(pointerToRawData),
+                    rawSize: Int(sizeOfRawData)
+                ))
         }
         self.sections = parsedSections
         self.reader = reader
     }
-
 
     /// Walks each section looking for one whose virtual range
     /// contains `rva`, returning the file offset of that RVA.
@@ -294,7 +289,6 @@ struct PEImage {
         return nil
     }
 
-
     // MARK: - Imports
 
     /// Returns true when any of the executable's imported DLL
@@ -312,7 +306,6 @@ struct PEImage {
         return false
     }
 
-
     /// Iterates the import directory and yields each imported DLL
     /// name as a Swift string. Returns an empty array when the
     /// executable has no imports (rare for a real game) or the
@@ -322,11 +315,12 @@ struct PEImage {
 
         let dirBase = dataDirectoryBase + Layout.importDirectoryIndex * 8
         guard let importRVA = reader.readUInt32(at: dirBase),
-              let importSize = reader.readUInt32(at: dirBase + 4),
-              importRVA != 0, importSize != 0 else {
+            let importSize = reader.readUInt32(at: dirBase + 4),
+            importRVA != 0, importSize != 0
+        else {
             return []
         }
-        guard let tableOffset = rvaToFileOffset(importRVA) else { return []  }
+        guard let tableOffset = rvaToFileOffset(importRVA) else { return [] }
 
         var names: [String] = []
         var cursor = tableOffset
@@ -339,16 +333,16 @@ struct PEImage {
             guard let nameRVA = reader.readUInt32(at: cursor + Layout.importDescriptorNameOffset) else {
                 break
             }
-            if nameRVA == 0 { break } // terminator
+            if nameRVA == 0 { break }  // terminator
             if let fileOffset = rvaToFileOffset(nameRVA),
-               let name = reader.readNullTerminatedASCII(at: fileOffset) {
+                let name = reader.readNullTerminatedASCII(at: fileOffset)
+            {
                 names.append(name)
             }
             cursor += Layout.importDescriptorSize
         }
         return names
     }
-
 
     // MARK: - Icons
 
@@ -359,7 +353,6 @@ struct PEImage {
         case groupIcon = 14
     }
 
-
     /// Internal layout offsets inside IMAGE_RESOURCE_DIRECTORY
     /// and IMAGE_RESOURCE_DIRECTORY_ENTRY.
     private enum ResourceLayout {
@@ -368,7 +361,6 @@ struct PEImage {
         static let idEntryCountOffset: Int = 14
         static let directoryEntrySize: Int = 8
     }
-
 
     func extractIcon() -> UIImage? {
         guard let resourceSection = resourceSectionEntry() else { return nil }
@@ -416,7 +408,6 @@ struct PEImage {
         return UIImage(data: icoBlob)
     }
 
-
     /// Finds the named `.rsrc` section by parsing section names
     /// (rather than reading the resource entry in the data
     /// directory) since some PEs list `.rsrc` under a different
@@ -428,14 +419,16 @@ struct PEImage {
         let peBase = Int(peOffset)
         let coffBase = peBase + 4
         guard let numberOfSections = reader.readUInt16(at: coffBase + Layout.coffNumberOfSectionsOffset),
-              let sizeOfOptionalHeader = reader.readUInt16(at: coffBase + Layout.coffSizeOfOptionalHeaderOffset) else {
+            let sizeOfOptionalHeader = reader.readUInt16(at: coffBase + Layout.coffSizeOfOptionalHeaderOffset)
+        else {
             return nil
         }
         let sectionTableBase = peBase + Layout.peSignatureAndCoffHeader + Int(sizeOfOptionalHeader)
         for i in 0..<Int(numberOfSections) {
             let base = sectionTableBase + i * Layout.sectionHeaderSize
             guard let nameBytes = reader.readBytes(at: base, length: 8) else { continue }
-            let name = String(bytes: nameBytes, encoding: .ascii)?
+            let name =
+                String(bytes: nameBytes, encoding: .ascii)?
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\0")) ?? ""
             if name == ".rsrc" {
                 return sections[i]
@@ -443,7 +436,6 @@ struct PEImage {
         }
         return nil
     }
-
 
     private func walkResourceDirectory(
         sectionStart: Int,
@@ -456,7 +448,8 @@ struct PEImage {
         groups: inout [ParsedGroup]
     ) {
         guard let namedCount = reader.readUInt16(at: directoryOffset + ResourceLayout.namedEntryCountOffset),
-              let idCount = reader.readUInt16(at: directoryOffset + ResourceLayout.idEntryCountOffset) else {
+            let idCount = reader.readUInt16(at: directoryOffset + ResourceLayout.idEntryCountOffset)
+        else {
             return
         }
         let totalEntries = Int(namedCount) + Int(idCount)
@@ -465,7 +458,8 @@ struct PEImage {
         for i in 0..<totalEntries {
             let entryOffset = entriesBase + i * ResourceLayout.directoryEntrySize
             guard let nameOrId = reader.readUInt32(at: entryOffset),
-                  let offsetToData = reader.readUInt32(at: entryOffset + 4) else {
+                let offsetToData = reader.readUInt32(at: entryOffset + 4)
+            else {
                 continue
             }
 
@@ -473,14 +467,15 @@ struct PEImage {
             // that isn't an icon type so the walk doesn't recurse into
             // version info / strings / manifests.
             if level == 0 {
-                if nameOrId & 0x80000000 != 0 { continue }
-                guard nameOrId == ResourceType.icon.rawValue || nameOrId == ResourceType.groupIcon.rawValue else {
+                if nameOrId & 0x8000_0000 != 0 { continue }
+                guard nameOrId == ResourceType.icon.rawValue || nameOrId == ResourceType.groupIcon.rawValue
+                else {
                     continue
                 }
             }
 
-            let isDirectory = (offsetToData & 0x80000000) != 0
-            let subOffset = Int(offsetToData & 0x7FFFFFFF)
+            let isDirectory = (offsetToData & 0x8000_0000) != 0
+            let subOffset = Int(offsetToData & 0x7FFF_FFFF)
 
             if isDirectory {
                 let nextType = (level == 0) ? nameOrId : currentType
@@ -497,7 +492,8 @@ struct PEImage {
                 )
             } else {
                 guard let type = currentType,
-                      let resourceName = currentName else {
+                    let resourceName = currentName
+                else {
                     continue
                 }
                 processDataEntry(
@@ -513,7 +509,6 @@ struct PEImage {
         }
     }
 
-
     private func processDataEntry(
         dataEntryOffset: Int,
         sectionStart: Int,
@@ -524,7 +519,8 @@ struct PEImage {
         groups: inout [ParsedGroup]
     ) {
         guard let payloadRVA = reader.readUInt32(at: dataEntryOffset),
-              let payloadSize = reader.readUInt32(at: dataEntryOffset + 4) else {
+            let payloadSize = reader.readUInt32(at: dataEntryOffset + 4)
+        else {
             return
         }
         let payloadOffset = sectionStart + Int(payloadRVA) - Int(sectionVirtualAddress)
@@ -543,13 +539,11 @@ struct PEImage {
         }
     }
 
-
     // MARK: - GROUP_ICON parsing + ICO reassembly
 
     private struct ParsedGroup {
         let entries: [GroupIconEntry]
     }
-
 
     private struct GroupIconEntry {
         let rawWidth: UInt8
@@ -571,7 +565,6 @@ struct PEImage {
         }
     }
 
-
     private func parseGroupIcon(_ data: Data) -> ParsedGroup? {
         guard data.count >= 6 else { return nil }
         let reader = ByteReader(data: data)
@@ -584,27 +577,28 @@ struct PEImage {
         for i in 0..<Int(count) {
             let base = 6 + i * 14
             guard let rawWidth = reader.readUInt8(at: base),
-                  let rawHeight = reader.readUInt8(at: base + 1),
-                  let colorCount = reader.readUInt8(at: base + 2),
-                  let planes = reader.readUInt16(at: base + 4),
-                  let bitCount = reader.readUInt16(at: base + 6),
-                  let bytesInRes = reader.readUInt32(at: base + 8),
-                  let iconID = reader.readUInt16(at: base + 12) else {
+                let rawHeight = reader.readUInt8(at: base + 1),
+                let colorCount = reader.readUInt8(at: base + 2),
+                let planes = reader.readUInt16(at: base + 4),
+                let bitCount = reader.readUInt16(at: base + 6),
+                let bytesInRes = reader.readUInt32(at: base + 8),
+                let iconID = reader.readUInt16(at: base + 12)
+            else {
                 return nil
             }
-            entries.append(GroupIconEntry(
-                rawWidth: rawWidth,
-                rawHeight: rawHeight,
-                colorCount: colorCount,
-                planes: planes,
-                bitCount: bitCount,
-                bytesInRes: bytesInRes,
-                iconID: UInt32(iconID)
-            ))
+            entries.append(
+                GroupIconEntry(
+                    rawWidth: rawWidth,
+                    rawHeight: rawHeight,
+                    colorCount: colorCount,
+                    planes: planes,
+                    bitCount: bitCount,
+                    bytesInRes: bytesInRes,
+                    iconID: UInt32(iconID)
+                ))
         }
         return ParsedGroup(entries: entries)
     }
-
 
     private func buildICO(
         entries: [GroupIconEntry],
@@ -638,7 +632,6 @@ struct PEImage {
         return output
     }
 }
-
 
 // MARK: - ByteReader
 
@@ -696,17 +689,16 @@ private struct ByteReader {
     }
 }
 
-
-private extension Data {
+extension Data {
     /// Little-endian append for the two primitive integer widths
     /// used in the ICO format. PE is always little-endian on
     /// x86/x64, and .ico matches.
-    mutating func appendLE(_ value: UInt16) {
+    fileprivate mutating func appendLE(_ value: UInt16) {
         append(UInt8(value & 0xFF))
         append(UInt8((value >> 8) & 0xFF))
     }
 
-    mutating func appendLE(_ value: UInt32) {
+    fileprivate mutating func appendLE(_ value: UInt32) {
         append(UInt8(value & 0xFF))
         append(UInt8((value >> 8) & 0xFF))
         append(UInt8((value >> 16) & 0xFF))

@@ -56,10 +56,12 @@ enum LibrarySortOption: String, CaseIterable {
     /// the UI; each group's options also render in the listed order.
     static let groups: [LibrarySortGroup] = [
         LibrarySortGroup(title: "Title", options: [.titleAZ, .titleZA]),
-        LibrarySortGroup(title: "Date", options: [
-            .recentlyAdded, .leastRecentlyAdded,
-            .recentlyPlayed, .leastRecentlyPlayed,
-        ]),
+        LibrarySortGroup(
+            title: "Date",
+            options: [
+                .recentlyAdded, .leastRecentlyAdded,
+                .recentlyPlayed, .leastRecentlyPlayed,
+            ]),
         LibrarySortGroup(title: "Playtime", options: [.mostPlayed, .leastPlayed]),
         LibrarySortGroup(title: "Size", options: [.largestSize, .smallestSize]),
     ]
@@ -73,12 +75,12 @@ struct LibrarySortGroup: Identifiable {
 
 enum TitlePosition: String, CaseIterable {
     case inside = "inside"
-    case under  = "under"
+    case under = "under"
 
     var label: String {
         switch self {
         case .inside: "Inside card"
-        case .under:  "Under card"
+        case .under: "Under card"
         }
     }
 }
@@ -90,21 +92,20 @@ enum AppTheme: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .dark:  "Dark"
+        case .dark: "Dark"
         case .light: "Light"
-        case .auto:  "Auto"
+        case .auto: "Auto"
         }
     }
 
     var userInterfaceStyle: UIUserInterfaceStyle {
         switch self {
-        case .dark:  .dark
+        case .dark: .dark
         case .light: .light
-        case .auto:  .unspecified
+        case .auto: .unspecified
         }
     }
 }
-
 
 // `ExperimentalFeature` enum and its `isEnabled` / `setEnabled`
 // machinery were removed in May 2026 once `gamePause` and `cheats`
@@ -124,7 +125,6 @@ enum AppTheme: String, CaseIterable {
 // The DefaultsKey strings should re-use the historical
 // `experimental.<name>` shape so users with the old toggle stored
 // pick it back up automatically.
-
 
 @MainActor
 @Observable
@@ -184,7 +184,9 @@ class AppSettings {
     }
 
     var libraryDisplayMode: LibraryDisplayMode {
-        didSet { UserDefaults.standard.set(libraryDisplayMode.rawValue, forKey: DefaultsKey.libraryDisplayMode) }
+        didSet {
+            UserDefaults.standard.set(libraryDisplayMode.rawValue, forKey: DefaultsKey.libraryDisplayMode)
+        }
     }
 
     var showContinuePlaying: Bool {
@@ -192,7 +194,9 @@ class AppSettings {
     }
 
     var librarySortOption: LibrarySortOption {
-        didSet { UserDefaults.standard.set(librarySortOption.rawValue, forKey: DefaultsKey.librarySortOption) }
+        didSet {
+            UserDefaults.standard.set(librarySortOption.rawValue, forKey: DefaultsKey.librarySortOption)
+        }
     }
 
     // MARK: - Splash disclaimer acknowledgment
@@ -202,7 +206,10 @@ class AppSettings {
     static let currentDisclaimerVersion = 1
 
     var disclaimerAcknowledgedVersion: Int {
-        didSet { UserDefaults.standard.set(disclaimerAcknowledgedVersion, forKey: DefaultsKey.disclaimerAcknowledgedVersion) }
+        didSet {
+            UserDefaults.standard.set(
+                disclaimerAcknowledgedVersion, forKey: DefaultsKey.disclaimerAcknowledgedVersion)
+        }
     }
 
     var needsDisclaimer: Bool {
@@ -240,8 +247,8 @@ class AppSettings {
         pushViewportBoundsColor()
     }
 
-
-    private static let defaultViewportBoundsColor = Color(.sRGB, red: 1.0, green: 0.584, blue: 0.0, opacity: 0.5)
+    private static let defaultViewportBoundsColor = Color(
+        .sRGB, red: 1.0, green: 0.584, blue: 0.0, opacity: 0.5)
 
     private static func loadViewportBoundsColor() -> Color {
         let ud = UserDefaults.standard
@@ -257,7 +264,10 @@ class AppSettings {
 
     private func resolvedRGBA() -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
         let resolved = UIColor(viewportBoundsColor)
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        var a: CGFloat = 0
         resolved.getRed(&r, green: &g, blue: &b, alpha: &a)
         return (r, g, b, a)
     }

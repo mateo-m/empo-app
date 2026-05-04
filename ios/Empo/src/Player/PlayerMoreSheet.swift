@@ -51,10 +51,10 @@ struct PlayerMoreSheet: View {
         // and are now always enabled. Diagnostics overlay and
         // fast-forward remain user-gated (the former via app
         // settings, the latter per-game).
-        let cheats   = true
-        let fastFwd  = (fastForwardMultiplier ?? 0) >= 2
-        let diag     = settings.diagnosticsOverlay
-        let pause    = true
+        let cheats = true
+        let fastFwd = (fastForwardMultiplier ?? 0) >= 2
+        let diag = settings.diagnosticsOverlay
+        let pause = true
         // gameQuit is currently forced off in `body`; if/when it
         // returns, mirror its gate here.
         return cheats || fastFwd || diag || pause
@@ -71,7 +71,8 @@ struct PlayerMoreSheet: View {
                         // Cheats: graduated from experimental in
                         // May 2026, always enabled now.
                         MenuRow(icon: "wand.and.stars", label: "Cheats") {
-                            onCheats(); dismiss()
+                            onCheats()
+                            dismiss()
                         }
                         if fastForwardEnabled {
                             MenuToggleRow(
@@ -118,7 +119,8 @@ struct PlayerMoreSheet: View {
                                     icon: "pause.fill",
                                     label: "Pause \(gameTitle)"
                                 ) {
-                                    onPause(); dismiss()
+                                    onPause()
+                                    dismiss()
                                 }
                             }
                             if quitEnabled {
@@ -127,7 +129,8 @@ struct PlayerMoreSheet: View {
                                     label: "Quit \(gameTitle)",
                                     role: .destructive
                                 ) {
-                                    dismiss(); onQuit()
+                                    dismiss()
+                                    onQuit()
                                 }
                             }
                         }
@@ -160,7 +163,6 @@ struct PlayerMoreSheet: View {
             .padding(.leading, Spacing.lg + 24 + Spacing.lg)
     }
 }
-
 
 /// Helper that interleaves `separator` between each emitted row of
 /// the trailing `content` builder. Skips separators around
@@ -195,7 +197,6 @@ private struct InterleavedRows<Separator: View, Content: View>: View {
     }
 }
 
-
 /// Tappable row in `PlayerMoreSheet`. Layout matches
 /// `ImageSourceSheet`'s `ImageSourceRow` (icon + label, full-row
 /// hit target) but kept private to this file so the destructive
@@ -203,7 +204,7 @@ private struct InterleavedRows<Separator: View, Content: View>: View {
 private struct MenuRow: View {
     let icon: String
     let label: String
-    var role: ButtonRole? = nil
+    var role: ButtonRole?
     let action: () -> Void
 
     var body: some View {
@@ -222,7 +223,6 @@ private struct MenuRow: View {
         }
     }
 }
-
 
 /// Toggle row in `PlayerMoreSheet`. Icon color matches the label
 /// text rather than the system tint so it reads as one unit.

@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 
-
 /// In-app discoverability hint shown via `HintBanner`. Examples: a
 /// one-time pointer to a UI affordance the user might miss
 /// otherwise (e.g. "tap the artwork to customize").
@@ -47,7 +46,6 @@ struct Hint: Identifiable {
     var hasDetail: Bool { description != nil }
 }
 
-
 // MARK: - Hint definitions
 
 extension Hint {
@@ -58,7 +56,6 @@ extension Hint {
         dismissal: .permanent
     )
 }
-
 
 // MARK: - Persistence
 

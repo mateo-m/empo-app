@@ -1,6 +1,6 @@
 import Foundation
-import UIKit
 import Observation
+import UIKit
 
 @MainActor @Observable
 class EngineState {
@@ -13,7 +13,6 @@ class EngineState {
     var isBackgroundPause = false
 
     private init() {}
-
 
     /// Caller must guard `phase == .playing` before calling.
     func requestBackgroundPause() {

@@ -111,12 +111,15 @@ struct RootView: View {
             if engineHung {
                 Text("The game stopped responding. Close Empo and reopen it.")
             } else if appState.phase != nil {
-                Text("\(appState.errorMessage ?? "An error occurred.") Close Empo from the app switcher and reopen it to continue.")
+                Text(
+                    "\(appState.errorMessage ?? "An error occurred.") Close Empo from the app switcher and reopen it to continue."
+                )
             } else {
                 Text(appState.errorMessage ?? "")
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) {
+            _ in
             if appState.phase == .playing {
                 engineState.requestBackgroundPause()
                 // If the engine rendered at least one frame, this was a
@@ -129,7 +132,8 @@ struct RootView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) {
+            _ in
             if appState.phase == .playing {
                 engineState.resumeFromBackground()
                 // Re-create the crash marker so a crash after resume is
@@ -174,7 +178,6 @@ struct RootView: View {
         dismissSplash()
     }
 }
-
 
 private struct SplashView: View {
     /// True when the whole splash is animating out (fades background +
@@ -235,7 +238,6 @@ private struct SplashView: View {
     }
 }
 
-
 private struct PixelDitherPattern: View {
     let color: Color
 
@@ -275,7 +277,7 @@ private struct PixelDitherPattern: View {
             for row in 0..<iconRows {
                 for col in 0..<iconCols {
                     guard let name = iter.next(),
-                          let path = SplashIcons.path(for: name)
+                        let path = SplashIcons.path(for: name)
                     else { continue }
                     let x = iconGutter + CGFloat(col) * (iconSize + iconGutter)
                     let y = iconGutter + CGFloat(row) * (iconSize + iconGutter)
@@ -321,8 +323,10 @@ private struct PixelDitherPattern: View {
                 Image(uiImage: Self.cachedTileImage)
                     .interpolation(.none)
                     .resizable()
-                    .frame(width: Self.tileWidth * Self.scale,
-                           height: Self.tileHeight * Self.scale)
+                    .frame(
+                        width: Self.tileWidth * Self.scale,
+                        height: Self.tileHeight * Self.scale
+                    )
                     .tag(0)
             }
         }

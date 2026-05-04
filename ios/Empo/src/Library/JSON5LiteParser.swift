@@ -18,7 +18,7 @@ enum JSON5LiteParser {
     /// from a Windows editor.
     static func stripLineComments(_ raw: String) -> String {
         let normalized = raw.replacingOccurrences(of: "\r\n", with: "\n")
-                            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
 
         var out = ""
         out.reserveCapacity(normalized.count)
@@ -72,7 +72,8 @@ enum JSON5LiteParser {
     static func parseObject(_ raw: String) -> [String: Any]? {
         let cleaned = stripLineComments(raw)
         guard let data = cleaned.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
             return nil
         }
         return json

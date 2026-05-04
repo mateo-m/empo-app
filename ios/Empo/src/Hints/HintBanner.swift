@@ -1,6 +1,5 @@
 import SwiftUI
 
-
 struct HintBanner: View {
     let hint: Hint
     @Environment(\.hintStore) private var store
@@ -51,7 +50,6 @@ struct HintBanner: View {
         }
     }
 }
-
 
 private struct HintDetailSheet: View {
     let excerpt: String

@@ -2,7 +2,7 @@ import Foundation
 
 enum GameStatus: Hashable {
     case ready
-    case importing(progress: Double) // 0.0 to 1.0
+    case importing(progress: Double)  // 0.0 to 1.0
     case invalid
 
     /// Strips associated values - useful as an animation trigger.
@@ -28,8 +28,8 @@ struct GameEntry: Identifiable, Hashable {
     /// yet (the synthetic placeholder entry shown in the grid).
     let container: GameContainer?
 
-    let title: String        // display title (custom override or base)
-    let artworkPath: String? // resolved artwork path
+    let title: String  // display title (custom override or base)
+    let artworkPath: String?  // resolved artwork path
     // The engine's own title for the game (parsed from Game.ini),
     // surfaced on the library card alongside `title` when they
     // differ. Non-nil only when the display title has been
@@ -37,9 +37,9 @@ struct GameEntry: Identifiable, Hashable {
     // name - so users can still see what the game calls itself
     // inside the RGSS runtime. nil means `title` IS the engine
     // title and showing it twice would be redundant.
-    var engineTitle: String? = nil
-    var lastPlayed: Date? = nil      // from metadata, cached at scan time
-    var dateAdded: Date? = nil       // from metadata, cached at scan time
+    var engineTitle: String?
+    var lastPlayed: Date?  // from metadata, cached at scan time
+    var dateAdded: Date?  // from metadata, cached at scan time
     var status: GameStatus = .ready
 
     /// Where the game's own files live. `<container>/Game/`. Empty
@@ -68,7 +68,6 @@ struct GameEntry: Identifiable, Hashable {
             && lhs.engineTitle == rhs.engineTitle && lhs.lastPlayed == rhs.lastPlayed
             && lhs.dateAdded == rhs.dateAdded
     }
-
 
     static func parseINITitle(at gameDir: URL) -> String? {
         parseINIValue(at: gameDir, section: "game", key: "title")

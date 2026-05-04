@@ -1,0 +1,27 @@
+# clang-format config for empo-app C/C++/ObjC code (iOS shims +
+# touch-controls + audio-session). Aligns with the engine's
+# existing style: 4-space indent, brace on same line, 110-col.
+
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 110
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortBlocksOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AccessModifierOffset: -4
+NamespaceIndentation: None
+PointerAlignment: Right
+SortIncludes: false
+SortUsingDeclarations: false
+ObjCBlockIndentWidth: 4
+ObjCSpaceAfterProperty: true
+ObjCSpaceBeforeProtocolList: true
+SpacesBeforeTrailingComments: 2
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+IncludeBlocks: Preserve

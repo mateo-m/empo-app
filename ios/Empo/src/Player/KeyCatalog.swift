@@ -8,14 +8,14 @@ struct KeyEntry: Identifiable {
 
 let keyCatalog: [KeyEntry] = [
     // Common RPG Maker keys
-    KeyEntry(label: "Z (Confirm)",  scancode: Int32(MKXP_SCANCODE_Z)),
-    KeyEntry(label: "X (Cancel)",   scancode: Int32(MKXP_SCANCODE_X)),
+    KeyEntry(label: "Z (Confirm)", scancode: Int32(MKXP_SCANCODE_Z)),
+    KeyEntry(label: "X (Cancel)", scancode: Int32(MKXP_SCANCODE_X)),
     KeyEntry(label: "Shift (Dash)", scancode: Int32(MKXP_SCANCODE_LSHIFT)),
-    KeyEntry(label: "Ctrl (Skip)",  scancode: Int32(MKXP_SCANCODE_LCTRL)),
-    KeyEntry(label: "Space",        scancode: Int32(MKXP_SCANCODE_SPACE)),
-    KeyEntry(label: "Enter",        scancode: Int32(MKXP_SCANCODE_RETURN)),
-    KeyEntry(label: "Escape",       scancode: Int32(MKXP_SCANCODE_ESCAPE)),
-    KeyEntry(label: "Tab",          scancode: Int32(MKXP_SCANCODE_TAB)),
+    KeyEntry(label: "Ctrl (Skip)", scancode: Int32(MKXP_SCANCODE_LCTRL)),
+    KeyEntry(label: "Space", scancode: Int32(MKXP_SCANCODE_SPACE)),
+    KeyEntry(label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN)),
+    KeyEntry(label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE)),
+    KeyEntry(label: "Tab", scancode: Int32(MKXP_SCANCODE_TAB)),
     // Letters
     KeyEntry(label: "A", scancode: Int32(MKXP_SCANCODE_A)),
     KeyEntry(label: "B", scancode: Int32(MKXP_SCANCODE_B)),
@@ -53,20 +53,20 @@ let keyCatalog: [KeyEntry] = [
     KeyEntry(label: "8", scancode: Int32(MKXP_SCANCODE_8)),
     KeyEntry(label: "9", scancode: Int32(MKXP_SCANCODE_9)),
     // Function keys
-    KeyEntry(label: "F1",  scancode: Int32(MKXP_SCANCODE_F1)),
-    KeyEntry(label: "F2",  scancode: Int32(MKXP_SCANCODE_F2)),
-    KeyEntry(label: "F3",  scancode: Int32(MKXP_SCANCODE_F3)),
-    KeyEntry(label: "F4",  scancode: Int32(MKXP_SCANCODE_F4)),
-    KeyEntry(label: "F5",  scancode: Int32(MKXP_SCANCODE_F5)),
-    KeyEntry(label: "F6",  scancode: Int32(MKXP_SCANCODE_F6)),
-    KeyEntry(label: "F7",  scancode: Int32(MKXP_SCANCODE_F7)),
-    KeyEntry(label: "F8",  scancode: Int32(MKXP_SCANCODE_F8)),
-    KeyEntry(label: "F9",  scancode: Int32(MKXP_SCANCODE_F9)),
+    KeyEntry(label: "F1", scancode: Int32(MKXP_SCANCODE_F1)),
+    KeyEntry(label: "F2", scancode: Int32(MKXP_SCANCODE_F2)),
+    KeyEntry(label: "F3", scancode: Int32(MKXP_SCANCODE_F3)),
+    KeyEntry(label: "F4", scancode: Int32(MKXP_SCANCODE_F4)),
+    KeyEntry(label: "F5", scancode: Int32(MKXP_SCANCODE_F5)),
+    KeyEntry(label: "F6", scancode: Int32(MKXP_SCANCODE_F6)),
+    KeyEntry(label: "F7", scancode: Int32(MKXP_SCANCODE_F7)),
+    KeyEntry(label: "F8", scancode: Int32(MKXP_SCANCODE_F8)),
+    KeyEntry(label: "F9", scancode: Int32(MKXP_SCANCODE_F9)),
     KeyEntry(label: "F10", scancode: Int32(MKXP_SCANCODE_F10)),
     KeyEntry(label: "F11", scancode: Int32(MKXP_SCANCODE_F11)),
     KeyEntry(label: "F12", scancode: Int32(MKXP_SCANCODE_F12)),
     // Special
-    KeyEntry(label: "Alt",       scancode: Int32(MKXP_SCANCODE_LALT)),
+    KeyEntry(label: "Alt", scancode: Int32(MKXP_SCANCODE_LALT)),
     KeyEntry(label: "Backspace", scancode: Int32(MKXP_SCANCODE_BACKSPACE)),
 ]
 

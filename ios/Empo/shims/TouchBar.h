@@ -7,7 +7,8 @@
 class Config;
 
 static inline void initTouchBar(SDL_Window *win, Config &conf) {
-    (void)win; (void)conf;
+    (void)win;
+    (void)conf;
 }
 
 static inline void updateTouchBarFPSDisplay(uint32_t value) {

@@ -12,10 +12,10 @@ import UIKit
 struct GameMetadata: Codable {
     var dateAdded: Date?
     var lastPlayed: Date?
-    var totalPlayTime: TimeInterval?   // wall-clock seconds (unaffected by fast forward)
+    var totalPlayTime: TimeInterval?  // wall-clock seconds (unaffected by fast forward)
     var customTitle: String?
     var customArtworkFilename: String?  // e.g. "artwork.jpg", relative to <container>/Metadata/
-    var customBannerFilename: String?   // e.g. "banner.jpg", relative to <container>/Metadata/
+    var customBannerFilename: String?  // e.g. "banner.jpg", relative to <container>/Metadata/
 
     // Title sourced from the import, not from a user edit. For JGP
     // imports this comes from the manifest's `name` field, which
@@ -80,20 +80,20 @@ struct GameMetadata: Codable {
     /// schema migrations on any field automatically benefit.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        dateAdded = (try? c.decodeIfPresent(Date.self, forKey: .dateAdded)) ?? nil
-        lastPlayed = (try? c.decodeIfPresent(Date.self, forKey: .lastPlayed)) ?? nil
-        totalPlayTime = (try? c.decodeIfPresent(TimeInterval.self, forKey: .totalPlayTime)) ?? nil
-        customTitle = (try? c.decodeIfPresent(String.self, forKey: .customTitle)) ?? nil
-        customArtworkFilename = (try? c.decodeIfPresent(String.self, forKey: .customArtworkFilename)) ?? nil
-        customBannerFilename = (try? c.decodeIfPresent(String.self, forKey: .customBannerFilename)) ?? nil
-        baseTitle = (try? c.decodeIfPresent(String.self, forKey: .baseTitle)) ?? nil
-        manifestId = (try? c.decodeIfPresent(String.self, forKey: .manifestId)) ?? nil
-        manifestVersion = (try? c.decodeIfPresent(String.self, forKey: .manifestVersion)) ?? nil
-        manifestDescription = (try? c.decodeIfPresent(String.self, forKey: .manifestDescription)) ?? nil
-        rubyVersion = (try? c.decodeIfPresent(Int.self, forKey: .rubyVersion)) ?? nil
-        rubyVersionDetectedSchema = (try? c.decodeIfPresent(String.self, forKey: .rubyVersionDetectedSchema)) ?? nil
+        dateAdded = (try? c.decodeIfPresent(Date.self, forKey: .dateAdded))
+        lastPlayed = (try? c.decodeIfPresent(Date.self, forKey: .lastPlayed))
+        totalPlayTime = (try? c.decodeIfPresent(TimeInterval.self, forKey: .totalPlayTime))
+        customTitle = (try? c.decodeIfPresent(String.self, forKey: .customTitle))
+        customArtworkFilename = (try? c.decodeIfPresent(String.self, forKey: .customArtworkFilename))
+        customBannerFilename = (try? c.decodeIfPresent(String.self, forKey: .customBannerFilename))
+        baseTitle = (try? c.decodeIfPresent(String.self, forKey: .baseTitle))
+        manifestId = (try? c.decodeIfPresent(String.self, forKey: .manifestId))
+        manifestVersion = (try? c.decodeIfPresent(String.self, forKey: .manifestVersion))
+        manifestDescription = (try? c.decodeIfPresent(String.self, forKey: .manifestDescription))
+        rubyVersion = (try? c.decodeIfPresent(Int.self, forKey: .rubyVersion))
+        rubyVersionDetectedSchema =
+            (try? c.decodeIfPresent(String.self, forKey: .rubyVersionDetectedSchema))
     }
-
 
     static func load(from container: GameContainer) -> GameMetadata {
         let url = container.metadataJSONURL
@@ -105,7 +105,6 @@ struct GameMetadata: Codable {
         metadata.sanitize()
         return metadata
     }
-
 
     /// Cleans up values that could be corrupt from external edits.
     mutating func sanitize() {
@@ -139,7 +138,6 @@ struct GameMetadata: Codable {
         }
     }
 
-
     private func customMediaPath(filename: String?, in container: GameContainer) -> String? {
         guard let filename else { return nil }
         let path = container.metadataURL
@@ -154,7 +152,6 @@ struct GameMetadata: Codable {
     func customBannerPath(in container: GameContainer) -> String? {
         customMediaPath(filename: customBannerFilename, in: container)
     }
-
 
     @discardableResult
     static func saveImage(_ image: UIImage, as name: String, in container: GameContainer) -> String? {
@@ -182,7 +179,6 @@ struct GameMetadata: Codable {
         try? FileManager.default.removeItem(at: url)
     }
 
-
     /// Returns containers whose metadata has the given JGP manifest
     /// id. Used to detect when a user imports the same JGP archive
     /// twice so the import flow can offer to replace the existing
@@ -194,16 +190,17 @@ struct GameMetadata: Codable {
         }
     }
 
-
     static func diskSize(for directory: URL) async -> Int64 {
         let directory = directory
         return await Task.detached(priority: .utility) {
             let fm = FileManager.default
-            guard let enumerator = fm.enumerator(
-                at: directory,
-                includingPropertiesForKeys: [.fileSizeKey],
-                options: [.skipsHiddenFiles]
-            ) else {
+            guard
+                let enumerator = fm.enumerator(
+                    at: directory,
+                    includingPropertiesForKeys: [.fileSizeKey],
+                    options: [.skipsHiddenFiles]
+                )
+            else {
                 return Int64(0)
             }
 
@@ -222,7 +219,6 @@ struct GameMetadata: Codable {
         }.value
     }
 
-
     static func formatPlayTime(_ seconds: TimeInterval?) -> String {
         guard let seconds, seconds > 0 else { return "Not played yet" }
         let totalMinutes = Int(seconds) / 60
@@ -240,7 +236,6 @@ struct GameMetadata: Codable {
     static func formatDiskSize(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
-
 
     /// Detect the game's RGSS API version (1 = XP, 2 = VX,
     /// 3 = VX Ace). Returns nil when no signal is found.
@@ -269,9 +264,10 @@ struct GameMetadata: Codable {
         // Signal 1: mkxp.json
         let mkxpURL = gameDirectory.appendingPathComponent("mkxp.json")
         if let data = try? Data(contentsOf: mkxpURL),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let v = json["rgssVersion"] as? Int,
-           (1...3).contains(v) {
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let v = json["rgssVersion"] as? Int,
+            (1...3).contains(v)
+        {
             return v
         }
 
@@ -280,15 +276,16 @@ struct GameMetadata: Codable {
         if let scripts = GameEntry.parseINIValue(in: iniURL, section: "game", key: "scripts") {
             let lower = scripts.lowercased()
             if lower.hasSuffix(".rvdata2") { return 3 }
-            if lower.hasSuffix(".rvdata")  { return 2 }
-            if lower.hasSuffix(".rxdata")  { return 1 }
+            if lower.hasSuffix(".rvdata") { return 2 }
+            if lower.hasSuffix(".rxdata") { return 1 }
         }
 
         // Signal 3: archives at game root or in Data/
         for dir in [gameDirectory, gameDirectory.appendingPathComponent("Data")] {
-            let exts = Set(dir.directoryEntries(
-                matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm
-            ).map { $0.pathExtension.lowercased() })
+            let exts = Set(
+                dir.directoryEntries(
+                    matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm
+                ).map { $0.pathExtension.lowercased() })
             if exts.contains("rgss3a") { return 3 }
             if exts.contains("rgss2a") { return 2 }
             if exts.contains("rgssad") { return 1 }
@@ -296,16 +293,16 @@ struct GameMetadata: Codable {
 
         // Signal 4: loose Data/* files
         let dataDir = gameDirectory.appendingPathComponent("Data")
-        let dataExts = Set(dataDir.directoryEntries(
-            matchingExtensions: ["rxdata", "rvdata", "rvdata2"], fm: fm
-        ).map { $0.pathExtension.lowercased() })
+        let dataExts = Set(
+            dataDir.directoryEntries(
+                matchingExtensions: ["rxdata", "rvdata", "rvdata2"], fm: fm
+            ).map { $0.pathExtension.lowercased() })
         if dataExts.contains("rvdata2") { return 3 }
-        if dataExts.contains("rvdata")  { return 2 }
-        if dataExts.contains("rxdata")  { return 1 }
+        if dataExts.contains("rvdata") { return 2 }
+        if dataExts.contains("rxdata") { return 1 }
 
         return nil
     }
-
 
     /// Detect the bundled Ruby version a game ships, if any.
     /// Returns the version string (e.g., `"3.1.0p0"`) or nil when
@@ -324,9 +321,9 @@ struct GameMetadata: Codable {
 
         for url in gameDirectory.directoryEntries(matchingExtensions: ["dll", "dylib", "so"], fm: fm) {
             guard let attrs = try? fm.attributesOfItem(atPath: url.path),
-                  let size = attrs[.size] as? Int,
-                  size <= scanBudget,
-                  let data = try? Data(contentsOf: url, options: .alwaysMapped)
+                let size = attrs[.size] as? Int,
+                size <= scanBudget,
+                let data = try? Data(contentsOf: url, options: .alwaysMapped)
             else { continue }
 
             if let v = scanRubyDescription(in: data) { return v }
@@ -334,7 +331,6 @@ struct GameMetadata: Codable {
 
         return nil
     }
-
 
     /// Read the host engine's Ruby version by scanning the app's
     /// own executable for `RUBY_DESCRIPTION` string literals.
@@ -382,7 +378,6 @@ struct GameMetadata: Codable {
         return nil
     }
 
-
     /// Search a binary blob for Ruby's embedded `RUBY_DESCRIPTION`
     /// literal (`"ruby X.Y.ZpN ..."`) and return the version capture.
     /// Decodes the bytes as Latin-1 (each byte maps 1:1 to U+0000
@@ -415,8 +410,8 @@ struct GameMetadata: Codable {
 
         // Legacy first-match-wins path.
         guard let match = regex.firstMatch(in: asciiString, options: [], range: range),
-              match.numberOfRanges >= 2,
-              let versionRange = Range(match.range(at: 1), in: asciiString)
+            match.numberOfRanges >= 2,
+            let versionRange = Range(match.range(at: 1), in: asciiString)
         else { return nil }
         return String(asciiString[versionRange])
     }
@@ -439,20 +434,21 @@ private final class _EngineRubyVersionCache: @unchecked Sendable {
     private let lock = NSLock()
 
     func lookup(_ key: String) -> String? {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         return values[key]
     }
 
     func store(_ key: String, value: String) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
+        defer { lock.unlock() }
         values[key] = value
     }
 }
 private let _engineRubyVersionCache = _EngineRubyVersionCache()
 
-
-private extension UIImage {
-    func resizedToFit(maxDimension: CGFloat) -> UIImage {
+extension UIImage {
+    fileprivate func resizedToFit(maxDimension: CGFloat) -> UIImage {
         let maxSide = max(size.width, size.height)
         guard maxSide > maxDimension else { return self }
 

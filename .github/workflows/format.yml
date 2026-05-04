@@ -1,0 +1,91 @@
+name: Format
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Format job verifies that the formatters would not modify any
+# tracked file. If they would, the job fails with a clear diff
+# so the contributor knows exactly what to run locally.
+
+jobs:
+  swift:
+    name: Swift (swift-format)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: swift-format check (would-modify is failure)
+        run: |
+          # `swift-format format` exits 0 even if it changed files; we
+          # need to detect a no-op vs. a modification. Use --in-place
+          # against a clean tree, then `git diff --exit-code`.
+          xcrun swift-format format --in-place --recursive ios/Empo/src
+          if ! git diff --exit-code; then
+            echo "::error::swift-format would modify files. Run \`swift-format format --in-place --recursive ios/Empo/src\` locally and commit."
+            exit 1
+          fi
+
+  objc-cpp:
+    name: ObjC / C / C++ (clang-format)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: clang-format check
+        run: |
+          FILES=$(git ls-files \
+            'ios/Empo/src/*.m' \
+            'ios/Empo/src/*.mm' \
+            'ios/Empo/src/*.h' \
+            'ios/Empo/shims/*.h' \
+            'ios/Empo/shims/*.c' \
+            'ios/Empo/shims/*.cpp')
+          if [ -n "$FILES" ]; then
+            echo "$FILES" | xargs xcrun clang-format -i
+            if ! git diff --exit-code; then
+              echo "::error::clang-format would modify files. Run \`xcrun clang-format -i <files>\` locally and commit."
+              exit 1
+            fi
+          fi
+
+  shell:
+    name: Bash (shfmt)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shfmt
+        run: |
+          curl -fsSL -o /usr/local/bin/shfmt \
+            https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64
+          chmod +x /usr/local/bin/shfmt
+
+      - name: shfmt check
+        run: |
+          FILES=$(git ls-files 'tools/*.sh')
+          if [ -n "$FILES" ]; then
+            echo "$FILES" | xargs shfmt -d -i 4 -ci
+          fi
+
+  yaml-json:
+    name: YAML / JSON (prettier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install prettier
+        run: npm install -g prettier@3
+
+      - name: prettier check
+        run: |
+          prettier --check 'ios/Empo/project.yml' 'ios/Empo/curated-patches/gameRegistry.json'

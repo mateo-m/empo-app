@@ -1,20 +1,20 @@
 import SwiftUI
 
-/// On-screen action button and D-pad, rendered with SwiftUI + the
-/// Liquid Glass material.
-///
-/// Touch-dispatch semantics:
-///   - `mkxp_injectKeyEvent(scancode, 1)` on press-down,
-///     `mkxp_injectKeyEvent(scancode, 0)` on release.
-///   - Action button: slide-off does NOT release the key.
-///   - D-pad: 8-wedge angular mapping, bitwise diff across moves,
-///     inner 20% dead zone, slide-off at radius+30pt releases all
-///     directions without cancelling the gesture.
-///   - Edit mode blocks input entirely (the parent's drag gesture
-///     wins for repositioning).
-///   - Explicit release-all on disappear / edit-mode transition so
-///     keys never get stuck at the engine when SwiftUI reclaims the
-///     view or the user enters edit mode mid-press.
+// On-screen action button and D-pad, rendered with SwiftUI + the
+// Liquid Glass material.
+//
+// Touch-dispatch semantics:
+//   - `mkxp_injectKeyEvent(scancode, 1)` on press-down,
+//     `mkxp_injectKeyEvent(scancode, 0)` on release.
+//   - Action button: slide-off does NOT release the key.
+//   - D-pad: 8-wedge angular mapping, bitwise diff across moves,
+//     inner 20% dead zone, slide-off at radius+30pt releases all
+//     directions without cancelling the gesture.
+//   - Edit mode blocks input entirely (the parent's drag gesture
+//     wins for repositioning).
+//   - Explicit release-all on disappear / edit-mode transition so
+//     keys never get stuck at the engine when SwiftUI reclaims the
+//     view or the user enters edit mode mid-press.
 
 // MARK: - Action button
 
@@ -103,7 +103,6 @@ struct ActionButton: View {
         mkxp_injectKeyEvent(scancode, 0)
     }
 }
-
 
 // MARK: - D-pad
 
@@ -313,7 +312,7 @@ struct DPad: View {
         let toRelease = activeDirections.subtracting(newSet)
         let toPress = newSet.subtracting(activeDirections)
         toRelease.forEach { mkxp_injectKeyEvent($0.scancode, 0) }
-        toPress.forEach   { mkxp_injectKeyEvent($0.scancode, 1) }
+        toPress.forEach { mkxp_injectKeyEvent($0.scancode, 1) }
         if !toPress.isEmpty {
             Haptics.controllerTap()
         }
@@ -325,7 +324,6 @@ struct DPad: View {
         activeDirections = []
     }
 }
-
 
 // MARK: - D-pad supporting types
 
@@ -339,18 +337,18 @@ enum DPadDirection: CaseIterable, Hashable {
 
     var scancode: Int32 {
         switch self {
-        case .up:    Int32(MKXP_SCANCODE_UP)
-        case .down:  Int32(MKXP_SCANCODE_DOWN)
-        case .left:  Int32(MKXP_SCANCODE_LEFT)
+        case .up: Int32(MKXP_SCANCODE_UP)
+        case .down: Int32(MKXP_SCANCODE_DOWN)
+        case .left: Int32(MKXP_SCANCODE_LEFT)
         case .right: Int32(MKXP_SCANCODE_RIGHT)
         }
     }
 
     var symbolName: String {
         switch self {
-        case .up:    "chevron.up"
-        case .down:  "chevron.down"
-        case .left:  "chevron.left"
+        case .up: "chevron.up"
+        case .down: "chevron.down"
+        case .left: "chevron.left"
         case .right: "chevron.right"
         }
     }
@@ -365,9 +363,9 @@ enum DPadDirection: CaseIterable, Hashable {
     func glyphOffset(size: CGFloat, armFraction: CGFloat) -> CGSize {
         let d = (size + size * armFraction) / 4
         switch self {
-        case .up:    return CGSize(width: 0, height: -d)
-        case .down:  return CGSize(width: 0, height: d)
-        case .left:  return CGSize(width: -d, height: 0)
+        case .up: return CGSize(width: 0, height: -d)
+        case .down: return CGSize(width: 0, height: d)
+        case .left: return CGSize(width: -d, height: 0)
         case .right: return CGSize(width: d, height: 0)
         }
     }
@@ -391,19 +389,19 @@ enum DPadDirection: CaseIterable, Hashable {
     /// outer edge.
     var highlightGradientStart: UnitPoint {
         switch self {
-        case .up:    return UnitPoint(x: 0.5, y: 0)
-        case .down:  return UnitPoint(x: 0.5, y: 1)
-        case .left:  return UnitPoint(x: 0,   y: 0.5)
-        case .right: return UnitPoint(x: 1,   y: 0.5)
+        case .up: return UnitPoint(x: 0.5, y: 0)
+        case .down: return UnitPoint(x: 0.5, y: 1)
+        case .left: return UnitPoint(x: 0, y: 0.5)
+        case .right: return UnitPoint(x: 1, y: 0.5)
         }
     }
     func highlightGradientEnd(armFraction: CGFloat) -> UnitPoint {
         let armLenFrac = (1 - armFraction) / 2
         switch self {
-        case .up:    return UnitPoint(x: 0.5,             y: armLenFrac)
-        case .down:  return UnitPoint(x: 0.5,             y: 1 - armLenFrac)
-        case .left:  return UnitPoint(x: armLenFrac,      y: 0.5)
-        case .right: return UnitPoint(x: 1 - armLenFrac,  y: 0.5)
+        case .up: return UnitPoint(x: 0.5, y: armLenFrac)
+        case .down: return UnitPoint(x: 0.5, y: 1 - armLenFrac)
+        case .left: return UnitPoint(x: armLenFrac, y: 0.5)
+        case .right: return UnitPoint(x: 1 - armLenFrac, y: 0.5)
         }
     }
 }
@@ -414,9 +412,9 @@ enum DPadDirection: CaseIterable, Hashable {
 struct DPadDirectionSet: OptionSet {
     let rawValue: UInt8
 
-    static let up    = DPadDirectionSet(rawValue: 1 << 0)
-    static let down  = DPadDirectionSet(rawValue: 1 << 1)
-    static let left  = DPadDirectionSet(rawValue: 1 << 2)
+    static let up = DPadDirectionSet(rawValue: 1 << 0)
+    static let down = DPadDirectionSet(rawValue: 1 << 1)
+    static let left = DPadDirectionSet(rawValue: 1 << 2)
     static let right = DPadDirectionSet(rawValue: 1 << 3)
 
     init(rawValue: UInt8) { self.rawValue = rawValue }
@@ -432,15 +430,15 @@ struct DPadDirectionSet: OptionSet {
         // high edge keeps transitions deterministic at exactly pi/8.
         let s = Double.pi / 8
         switch a {
-        case (15 * s)..<(2 * .pi), 0..<s:       self = .right
-        case s..<(3 * s):                        self = [.right, .down]
-        case (3 * s)..<(5 * s):                  self = .down
-        case (5 * s)..<(7 * s):                  self = [.down, .left]
-        case (7 * s)..<(9 * s):                  self = .left
-        case (9 * s)..<(11 * s):                 self = [.left, .up]
-        case (11 * s)..<(13 * s):                self = .up
-        case (13 * s)..<(15 * s):                self = [.up, .right]
-        default:                                 self = []
+        case (15 * s)..<(2 * .pi), 0..<s: self = .right
+        case s..<(3 * s): self = [.right, .down]
+        case (3 * s)..<(5 * s): self = .down
+        case (5 * s)..<(7 * s): self = [.down, .left]
+        case (7 * s)..<(9 * s): self = .left
+        case (9 * s)..<(11 * s): self = [.left, .up]
+        case (11 * s)..<(13 * s): self = .up
+        case (13 * s)..<(15 * s): self = [.up, .right]
+        default: self = []
         }
     }
 
@@ -449,21 +447,20 @@ struct DPadDirectionSet: OptionSet {
     /// direction.
     func contains(_ direction: DPadDirection) -> Bool {
         switch direction {
-        case .up:    return rawValue & DPadDirectionSet.up.rawValue != 0
-        case .down:  return rawValue & DPadDirectionSet.down.rawValue != 0
-        case .left:  return rawValue & DPadDirectionSet.left.rawValue != 0
+        case .up: return rawValue & DPadDirectionSet.up.rawValue != 0
+        case .down: return rawValue & DPadDirectionSet.down.rawValue != 0
+        case .left: return rawValue & DPadDirectionSet.left.rawValue != 0
         case .right: return rawValue & DPadDirectionSet.right.rawValue != 0
         }
     }
 
     func forEach(_ body: (DPadDirection) -> Void) {
-        if contains(.up)    { body(.up) }
-        if contains(.down)  { body(.down) }
-        if contains(.left)  { body(.left) }
+        if contains(.up) { body(.up) }
+        if contains(.down) { body(.down) }
+        if contains(.left) { body(.left) }
         if contains(.right) { body(.right) }
     }
 }
-
 
 // MARK: - D-pad decorative shapes
 
@@ -488,7 +485,7 @@ private struct DPadPlusShape: Shape {
         let armH = rect.height * armFraction
         let cornerR = min(armW * cornerFraction, armW / 2, armH / 2)
         let hInset = (rect.height - armH) / 2  // y of horizontal bar top
-        let vInset = (rect.width - armW) / 2   // x of vertical bar left
+        let vInset = (rect.width - armW) / 2  // x of vertical bar left
         // The inner fillet must not exceed half the length of the
         // arm's inner side or half the vInset/hInset (distance from
         // center-square edge to the outer boundary).

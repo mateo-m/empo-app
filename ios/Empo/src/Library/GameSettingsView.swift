@@ -98,7 +98,6 @@ struct GameSettingsView: View {
         )
     }
 
-
     private var effectiveSmoothScaling: Bool {
         settings.smoothScaling ?? defaults.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
     }
@@ -281,7 +280,6 @@ struct GameSettingsView: View {
         .tint(.brand)
     }
 
-
     private var displaySection: some View {
         Section {
             SettingsToggle(
@@ -310,10 +308,12 @@ struct GameSettingsView: View {
                 }
                 .pickerStyle(.navigationLink)
 
-                Text(effectiveRenderScale.description
-                    + " The game's aspect ratio and on-screen layout are unchanged - this only sharpens the rendering on high-DPI screens.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                Text(
+                    effectiveRenderScale.description
+                        + " The game's aspect ratio and on-screen layout are unchanged - this only sharpens the rendering on high-DPI screens."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
             .padding(.vertical, Spacing.xxs)
 
@@ -374,7 +374,8 @@ struct GameSettingsView: View {
             SettingsToggle(
                 title: "Frame skip",
                 isOn: frameSkipBinding,
-                description: "Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness."
+                description:
+                    "Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness."
             )
         } header: {
             Text("Performance")
@@ -383,25 +384,27 @@ struct GameSettingsView: View {
         }
     }
 
-
     private var engineSection: some View {
         Section {
             SettingsToggle(
                 title: "Postload scripts",
                 isOn: postloadScriptsBinding,
-                description: "Run Empo's compatibility scripts after the game's own scripts have loaded. Includes generic RGSS shims (RGSS plugin stubs, cheat menu, nil-safe stubs) and Pokemon Essentials specific fixes (graphics, input, online stubs, session reset, tilemap, window skin)."
+                description:
+                    "Run Empo's compatibility scripts after the game's own scripts have loaded. Includes generic RGSS shims (RGSS plugin stubs, cheat menu, nil-safe stubs) and Pokemon Essentials specific fixes (graphics, input, online stubs, session reset, tilemap, window skin)."
             )
 
             SettingsToggle(
                 title: "Path cache",
                 isOn: pathCacheBinding,
-                description: "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
+                description:
+                    "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
             )
 
             SettingsToggle(
                 title: "In-game keyboard",
                 isOn: useInGameKeyboardBinding,
-                description: "Use the game's built-in keyboard scene for name entry instead of the iOS soft keyboard. Enable for Pokemon Essentials games whose keyboard layout has custom keys."
+                description:
+                    "Use the game's built-in keyboard scene for name entry instead of the iOS soft keyboard. Enable for Pokemon Essentials games whose keyboard layout has custom keys."
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -414,9 +417,11 @@ struct GameSettingsView: View {
                 }
                 .pickerStyle(.navigationLink)
 
-                Text("Auto-detect inspects the game's scripts and picks the matching Ruby interpreter. Override only if the game fails to launch with a script error or behaves incorrectly.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Auto-detect inspects the game's scripts and picks the matching Ruby interpreter. Override only if the game fails to launch with a script error or behaves incorrectly."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
             .padding(.vertical, Spacing.xxs)
         } header: {
@@ -432,7 +437,8 @@ struct GameSettingsView: View {
                 SettingsToggle(
                     title: "Fast forward",
                     isOn: fastForwardEnabledBinding,
-                    description: "Adds a Fast forward toggle to the in-game menu. While on, the game runs at the speed below."
+                    description:
+                        "Adds a Fast forward toggle to the in-game menu. While on, the game runs at the speed below."
                 )
 
                 if fastForwardEnabled {
@@ -460,7 +466,6 @@ struct GameSettingsView: View {
             Text("Options that change how you play the game.")
         }
     }
-
 
     private var smoothScalingBinding: Binding<Bool> {
         Binding(
@@ -580,7 +585,6 @@ struct GameSettingsView: View {
         )
     }
 
-
     private func save() {
         settings.save(to: stateDirectory)
         // Regenerate the merged mkxp.json so the engine
@@ -592,7 +596,6 @@ struct GameSettingsView: View {
         settings.applyToConfig(stateDirectory: stateDirectory, gameDirectory: gameDirectory)
     }
 }
-
 
 /// A tiny illustration showing where the game viewport sits on a phone silhouette.
 private struct VerticalAlignmentIllustration: View {
@@ -607,14 +610,15 @@ private struct VerticalAlignmentIllustration: View {
             let innerH = h - phoneInset * 2
             let gameH: CGFloat = innerH * 0.35
 
-            let gameY: CGFloat = switch alignment {
-            case .top:
-                phoneInset + 2
-            case .topCenter:
-                phoneInset + (innerH - gameH) * 0.25
-            case .center:
-                phoneInset + (innerH - gameH) / 2
-            }
+            let gameY: CGFloat =
+                switch alignment {
+                case .top:
+                    phoneInset + 2
+                case .topCenter:
+                    phoneInset + (innerH - gameH) * 0.25
+                case .center:
+                    phoneInset + (innerH - gameH) / 2
+                }
 
             ZStack {
                 // Phone outline

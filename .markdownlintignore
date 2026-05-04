@@ -1,0 +1,21 @@
+# markdownlint walks any glob it's given verbatim and doesn't read
+# .gitignore. To avoid scanning vendored upstream READMEs and
+# build outputs, the canonical invocation is:
+#
+#     markdownlint -c .markdownlint.json $(git ls-files '*.md')
+#
+# That way only TRACKED .md files get linted; vendored deps and
+# build outputs are skipped because they're already gitignored.
+# Working-tree scratchpads (TODO.md, FUTURE.md, etc., gitignored at
+# root via *.md) ARE linted locally because they live in your tree;
+# CI doesn't see them because CI runs against the index.
+#
+# This file stays as a fallback for tools that pass plain globs to
+# markdownlint (e.g. editor integrations).
+
+mkxp-z-apple-mobile/
+ios/Empo/build/
+ios/Empo/Empo.xcodeproj/
+ios/Dependencies/
+.cache/
+node_modules/

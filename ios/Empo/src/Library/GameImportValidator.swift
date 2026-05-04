@@ -2,7 +2,6 @@ import Foundation
 
 enum GameImportValidator {
 
-
     enum ImportError: LocalizedError {
         case unzipFailed
         case corruptZip(String)
@@ -20,7 +19,8 @@ enum GameImportValidator {
             case .corruptZip(let detail):
                 return "Corrupt zip file: \(detail)"
             case .notAnRPGMakerGame:
-                return "This doesn't appear to be an RPG Maker game. No recognised game configuration was found."
+                return
+                    "This doesn't appear to be an RPG Maker game. No recognised game configuration was found."
             case .unsupportedRuntime(let detail):
                 return detail
             case .missingScripts(let path):
@@ -32,7 +32,6 @@ enum GameImportValidator {
             }
         }
     }
-
 
     /// Throws ImportError on failure. Validates a folder already
     /// present on disk - used both for full extracted imports and
@@ -80,7 +79,6 @@ enum GameImportValidator {
 
         throw ImportError.notAnRPGMakerGame
     }
-
 
     /// Pre-flight check for archive imports. Walks the archive
     /// once (a second pass only runs when the game uses a
@@ -174,8 +172,9 @@ enum GameImportValidator {
                 if depth == 1 || depth == 2 {
                     let parent = components.count >= 2 ? components[components.count - 2].lowercased() : ""
                     if parent == "data",
-                       name.hasPrefix("scripts."),
-                       name.hasSuffix(".rxdata") || name.hasSuffix(".rvdata") || name.hasSuffix(".rvdata2") {
+                        name.hasPrefix("scripts."),
+                        name.hasSuffix(".rxdata") || name.hasSuffix(".rvdata") || name.hasSuffix(".rvdata2")
+                    {
                         sawScripts = true
                         return true
                     }
@@ -269,7 +268,6 @@ enum GameImportValidator {
         return gameRoot
     }
 
-
     /// Ensures `gameRoot/relativePath` exists on disk, running a
     /// targeted second archive walk only when the speculative
     /// first walk didn't pull the file. Handles both flat and
@@ -286,7 +284,8 @@ enum GameImportValidator {
         let expected = gameRoot.appendingPathComponent(relativePath)
         if fm.fileExists(atPath: expected.path) { return }
 
-        let wrapperPrefix: String? = gameRoot == scratchDir
+        let wrapperPrefix: String? =
+            gameRoot == scratchDir
             ? nil
             : gameRoot.lastPathComponent + "/"
 
@@ -311,7 +310,6 @@ enum GameImportValidator {
         }
     }
 
-
     /// Detected RGSS version: 1 = XP, 2 = VX, 3 = VX Ace
     private enum RGSSVersion: Int {
         case xp = 1, vx = 2, vxAce = 3
@@ -327,13 +325,13 @@ enum GameImportValidator {
     private static func rgssVersionFromMkxpJson(_ url: URL) -> RGSSVersion? {
         let jsonURL = url.appendingPathComponent("mkxp.json")
         guard let data = try? Data(contentsOf: jsonURL),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let ver = json["rgssVersion"] as? Int else {
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let ver = json["rgssVersion"] as? Int
+        else {
             return nil
         }
         return RGSSVersion(rawValue: ver)
     }
-
 
     /// Returns the detected RGSS version and the raw scripts path.
     private static func parseIniScripts(_ iniURL: URL) -> (RGSSVersion, String)? {
@@ -342,12 +340,15 @@ enum GameImportValidator {
         }
         let lower = value.lowercased()
         let version: RGSSVersion
-        if lower.hasSuffix(".rvdata2") { version = .vxAce }
-        else if lower.hasSuffix(".rvdata") { version = .vx }
-        else { version = .xp }
+        if lower.hasSuffix(".rvdata2") {
+            version = .vxAce
+        } else if lower.hasSuffix(".rvdata") {
+            version = .vx
+        } else {
+            version = .xp
+        }
         return (version, value)
     }
-
 
     /// Validates that an RGSS scripts file (Marshal-dumped Array) exists and is valid.
     private static func validateRGSSScripts(at gameDir: URL, scriptsPath: String) throws {
@@ -370,9 +371,10 @@ enum GameImportValidator {
             throw ImportError.invalidScripts(normalized)
         }
         guard header.count == 3,
-              header[0] == 0x04,
-              header[1] == 0x08,
-              header[2] == 0x5B else {
+            header[0] == 0x04,
+            header[1] == 0x08,
+            header[2] == 0x5B
+        else {
             throw ImportError.invalidScripts(normalized)
         }
     }
@@ -387,18 +389,17 @@ enum GameImportValidator {
         }
     }
 
-
     private static func customScriptPath(_ url: URL) -> String? {
         let jsonURL = url.appendingPathComponent("mkxp.json")
         guard let data = try? Data(contentsOf: jsonURL),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let script = json["customScript"] as? String,
-              !script.isEmpty else {
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let script = json["customScript"] as? String,
+            !script.isEmpty
+        else {
             return nil
         }
         return script
     }
-
 
     private static func checkRuntimeSupport(_ version: RGSSVersion) throws {
         // Ask the engine which RGSS versions this build supports. The mask
@@ -410,8 +411,8 @@ enum GameImportValidator {
 
         let label: String
         switch version {
-        case .xp:    label = "RPG Maker XP (RGSS1)"
-        case .vx:    label = "RPG Maker VX (RGSS2)"
+        case .xp: label = "RPG Maker XP (RGSS1)"
+        case .vx: label = "RPG Maker VX (RGSS2)"
         case .vxAce: label = "RPG Maker VX Ace (RGSS3)"
         }
         throw ImportError.unsupportedRuntime(

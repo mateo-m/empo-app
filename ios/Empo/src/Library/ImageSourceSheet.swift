@@ -1,6 +1,5 @@
 import SwiftUI
 
-
 /// Modal sheet offering the three image-source options (Photos /
 /// Camera / Files) plus an optional "Remove" action when the
 /// caller already has an image set. Replaces the previous
@@ -104,7 +103,6 @@ struct ImageSourceSheet: View {
     }
 }
 
-
 /// Single tappable row inside `ImageSourceSheet`. Kept private to
 /// the file because the layout (SF Symbol + label + chevron) is
 /// specific to this sheet - the library sort rows use a different
@@ -112,7 +110,7 @@ struct ImageSourceSheet: View {
 private struct ImageSourceRow: View {
     let icon: String
     let label: String
-    var role: ButtonRole? = nil
+    var role: ButtonRole?
     let action: () -> Void
 
     var body: some View {

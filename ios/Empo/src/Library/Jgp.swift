@@ -1,7 +1,6 @@
 import Foundation
 import UIKit
 
-
 /// JoiPlay archive runtime type. Any value outside the first-class
 /// cases is surfaced as `.unsupported(raw:)` so we can display a
 /// precise error. The supported set covers every RGSS version our
@@ -13,45 +12,44 @@ import UIKit
 /// Flash, and MZ/MV - we have no runtime for those and reject them
 /// with a per-type explanation during import.
 enum JgpRuntime: Codable, Equatable {
-    case rpgmxp                 // RPG Maker XP  (RGSS1)
-    case rpgmvx                 // RPG Maker VX  (RGSS2)
-    case rpgmvxace              // RPG Maker VX Ace (RGSS3)
-    case mkxpZ                  // Prebuilt for mkxp-z with Ruby 3
+    case rpgmxp  // RPG Maker XP  (RGSS1)
+    case rpgmvx  // RPG Maker VX  (RGSS2)
+    case rpgmvxace  // RPG Maker VX Ace (RGSS3)
+    case mkxpZ  // Prebuilt for mkxp-z with Ruby 3
     case unsupported(raw: String)
 
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         switch raw {
-        case "rpgmxp":    self = .rpgmxp
-        case "rpgmvx":    self = .rpgmvx
+        case "rpgmxp": self = .rpgmxp
+        case "rpgmvx": self = .rpgmvx
         case "rpgmvxace": self = .rpgmvxace
-        case "mkxp-z":    self = .mkxpZ
-        default:          self = .unsupported(raw: raw)
+        case "mkxp-z": self = .mkxpZ
+        default: self = .unsupported(raw: raw)
         }
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.singleValueContainer()
         switch self {
-        case .rpgmxp:    try c.encode("rpgmxp")
-        case .rpgmvx:    try c.encode("rpgmvx")
+        case .rpgmxp: try c.encode("rpgmxp")
+        case .rpgmvx: try c.encode("rpgmvx")
         case .rpgmvxace: try c.encode("rpgmvxace")
-        case .mkxpZ:     try c.encode("mkxp-z")
+        case .mkxpZ: try c.encode("mkxp-z")
         case .unsupported(let r): try c.encode(r)
         }
     }
 
     var displayName: String {
         switch self {
-        case .rpgmxp:    "RPG Maker XP"
-        case .rpgmvx:    "RPG Maker VX"
+        case .rpgmxp: "RPG Maker XP"
+        case .rpgmvx: "RPG Maker VX"
         case .rpgmvxace: "RPG Maker VX Ace"
-        case .mkxpZ:     "mkxp-z"
+        case .mkxpZ: "mkxp-z"
         case .unsupported(let r): r
         }
     }
 }
-
 
 /// `manifest.json` - identifies the game and its runtime.
 struct JgpManifest: Codable {
@@ -64,7 +62,6 @@ struct JgpManifest: Codable {
     let type: JgpRuntime
 }
 
-
 /// `configuration.json` - engine and renderer preferences bundled by the
 /// game developer. All fields are optional; anything unsupported on our
 /// platform is ignored.
@@ -73,9 +70,9 @@ struct JgpConfiguration: Codable {
     let cheats: Bool?
 
     // RPG Maker subset
-    let windowSize: String?      // "640x480"
-    let fontScale: String?       // stored as string in JGP; parsed to Double
-    let speedUp: String?         // "1", "2", "3" ...
+    let windowSize: String?  // "640x480"
+    let fontScale: String?  // stored as string in JGP; parsed to Double
+    let speedUp: String?  // "1", "2", "3" ...
     let smoothScaling: Bool?
     let vsync: Bool?
     let frameSkip: Bool?
@@ -84,7 +81,6 @@ struct JgpConfiguration: Codable {
     let enablePostloadScripts: Bool?
     let customFont: String?
 }
-
 
 /// `gamepad.json` - touch control layout hints. Values are Android key codes.
 struct JgpGamepad: Codable {
@@ -100,7 +96,6 @@ struct JgpGamepad: Codable {
     let rKeyCode: Int?
 }
 
-
 enum Jgp {
     /// Entry-point bundle of parsed JGP files.
     struct Bundle {
@@ -112,18 +107,19 @@ enum Jgp {
         let gameRoot: URL
     }
 
-
     /// Parse the three JSON files out of an already-extracted JGP directory
     /// and resolve the icon data. Returns nil if manifest.json is missing or
     /// unreadable. Other files are optional.
-    // Callers are responsible for removing the JGP-specific files
-    // (manifest.json, configuration.json, gamepad.json, icon) from the
-    // final game directory after import if they don't want them shipped
-    // alongside the engine files.
+    ///
+    /// Callers are responsible for removing the JGP-specific files
+    /// (manifest.json, configuration.json, gamepad.json, icon) from the
+    /// final game directory after import if they don't want them shipped
+    /// alongside the engine files.
     static func parseBundle(at root: URL) -> Bundle? {
         let manifestURL = root.appendingPathComponent("manifest.json")
         guard let manifestRaw = try? String(contentsOf: manifestURL, encoding: .utf8),
-              let manifest = decodeWithComments(JgpManifest.self, from: manifestRaw) else {
+            let manifest = decodeWithComments(JgpManifest.self, from: manifestRaw)
+        else {
             return nil
         }
 
@@ -154,7 +150,6 @@ enum Jgp {
         )
     }
 
-
     /// JGP uses the same `//` comment tolerance as mkxp.json. Strip comments
     /// before handing to `JSONDecoder`.
     private static func decodeWithComments<T: Decodable>(_ type: T.Type, from raw: String) -> T? {
@@ -162,9 +157,7 @@ enum Jgp {
     }
 }
 
-
 // MARK: - Configuration -> GameSettings mapping
-
 
 extension JgpConfiguration {
     /// Translate a JGP `configuration.json` into our per-game `GameSettings`.
@@ -207,9 +200,7 @@ extension JgpConfiguration {
     }
 }
 
-
 // MARK: - Gamepad mapping
-
 
 extension JgpGamepad {
     /// Installed-layout shape the import pipeline hands to
@@ -236,14 +227,18 @@ extension JgpGamepad {
         }
 
         let slots: [Slot] = [
-            Slot(key: aKeyCode, defaultScancode: Int32(MKXP_SCANCODE_RETURN),
-                 label: "A", relativeCenter: CGPoint(x: 0.85, y: 0.78), size: 60),
-            Slot(key: bKeyCode, defaultScancode: Int32(MKXP_SCANCODE_ESCAPE),
-                 label: "B", relativeCenter: CGPoint(x: 0.72, y: 0.70), size: 56),
-            Slot(key: xKeyCode, defaultScancode: Int32(MKXP_SCANCODE_LSHIFT),
-                 label: "X", relativeCenter: CGPoint(x: 0.62, y: 0.82), size: 50),
-            Slot(key: yKeyCode, defaultScancode: Int32(MKXP_SCANCODE_LCTRL),
-                 label: "Y", relativeCenter: CGPoint(x: 0.72, y: 0.62), size: 44),
+            Slot(
+                key: aKeyCode, defaultScancode: Int32(MKXP_SCANCODE_RETURN),
+                label: "A", relativeCenter: CGPoint(x: 0.85, y: 0.78), size: 60),
+            Slot(
+                key: bKeyCode, defaultScancode: Int32(MKXP_SCANCODE_ESCAPE),
+                label: "B", relativeCenter: CGPoint(x: 0.72, y: 0.70), size: 56),
+            Slot(
+                key: xKeyCode, defaultScancode: Int32(MKXP_SCANCODE_LSHIFT),
+                label: "X", relativeCenter: CGPoint(x: 0.62, y: 0.82), size: 50),
+            Slot(
+                key: yKeyCode, defaultScancode: Int32(MKXP_SCANCODE_LCTRL),
+                label: "Y", relativeCenter: CGPoint(x: 0.72, y: 0.62), size: 44),
         ]
 
         let buttons = slots.map { slot -> ButtonModel in
@@ -262,7 +257,6 @@ extension JgpGamepad {
             buttons: buttons
         )
     }
-
 
     /// Android `KeyEvent` constant -> mkxp scancode. Returns nil for key
     /// codes we don't have an equivalent for.
@@ -304,19 +298,19 @@ extension JgpGamepad {
         case 22: return Int32(MKXP_SCANCODE_RIGHT)
 
         // Common controls. mkxp-ios only models left-variants of modifiers.
-        case 59, 60: return Int32(MKXP_SCANCODE_LSHIFT)   // SHIFT_LEFT/RIGHT
-        case 66:     return Int32(MKXP_SCANCODE_RETURN)   // ENTER
-        case 111:    return Int32(MKXP_SCANCODE_ESCAPE)   // ESCAPE
-        case 62:     return Int32(MKXP_SCANCODE_SPACE)    // SPACE
+        case 59, 60: return Int32(MKXP_SCANCODE_LSHIFT)  // SHIFT_LEFT/RIGHT
+        case 66: return Int32(MKXP_SCANCODE_RETURN)  // ENTER
+        case 111: return Int32(MKXP_SCANCODE_ESCAPE)  // ESCAPE
+        case 62: return Int32(MKXP_SCANCODE_SPACE)  // SPACE
         case 113, 114: return Int32(MKXP_SCANCODE_LCTRL)  // CTRL_LEFT/RIGHT
-        case 57, 58:   return Int32(MKXP_SCANCODE_LALT)   // ALT_LEFT/RIGHT
+        case 57, 58: return Int32(MKXP_SCANCODE_LALT)  // ALT_LEFT/RIGHT
         case 61: return Int32(MKXP_SCANCODE_TAB)
         case 67: return Int32(MKXP_SCANCODE_BACKSPACE)
 
         // Digits 0-9 (top row)
-        case 7:  return Int32(MKXP_SCANCODE_0)
-        case 8:  return Int32(MKXP_SCANCODE_1)
-        case 9:  return Int32(MKXP_SCANCODE_2)
+        case 7: return Int32(MKXP_SCANCODE_0)
+        case 8: return Int32(MKXP_SCANCODE_1)
+        case 9: return Int32(MKXP_SCANCODE_2)
         case 10: return Int32(MKXP_SCANCODE_3)
         case 11: return Int32(MKXP_SCANCODE_4)
         case 12: return Int32(MKXP_SCANCODE_5)

@@ -39,7 +39,8 @@ struct GameInfoView: View {
         // both track this so resetting the custom title gives the
         // user back what the import originally showed, not the
         // raw Game.ini one which may be uglier.
-        self.originalTitle = meta.baseTitle
+        self.originalTitle =
+            meta.baseTitle
             ?? GameEntry.parseINITitle(at: container.gameURL)
             ?? "Unknown Game"
     }
@@ -48,7 +49,8 @@ struct GameInfoView: View {
 
     private var bannerImage: UIImage? {
         guard let container,
-              let path = metadata.customBannerPath(in: container) else { return nil }
+            let path = metadata.customBannerPath(in: container)
+        else { return nil }
         return ImageCache.shared.image(for: path)
     }
 
@@ -90,79 +92,47 @@ struct GameInfoView: View {
                             .padding(.leading, -geo.safeAreaInsets.leading)
                             .padding(.trailing, -geo.safeAreaInsets.trailing)
 
-                    if hintStore.isVisible(.gameInfoCustomization) {
-                        HintBanner(hint: .gameInfoCustomization)
-                            .padding(.horizontal, Spacing._2xl)
-                            .padding(.top, Spacing.xl)
-                            .transition(.hintBanner)
-                    }
-
-                    GroupedSection("Details") {
-                        DetailRow("Date added") {
-                            if let date = metadata.dateAdded {
-                                Text(Self.dateFormatter.string(from: date))
-                            } else {
-                                Text("Unknown")
-                            }
+                        if hintStore.isVisible(.gameInfoCustomization) {
+                            HintBanner(hint: .gameInfoCustomization)
+                                .padding(.horizontal, Spacing._2xl)
+                                .padding(.top, Spacing.xl)
+                                .transition(.hintBanner)
                         }
 
-                        Divider().padding(.leading, Spacing.xl)
-
-                        DetailRow("Last played") {
-                            if let date = metadata.lastPlayed {
-                                Text(Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date()))
-                            } else {
-                                Text("Never")
+                        GroupedSection("Details") {
+                            DetailRow("Date added") {
+                                if let date = metadata.dateAdded {
+                                    Text(Self.dateFormatter.string(from: date))
+                                } else {
+                                    Text("Unknown")
+                                }
                             }
-                        }
 
-                        if let time = metadata.totalPlayTime, time > 0 {
                             Divider().padding(.leading, Spacing.xl)
 
-                            DetailRow("Play time") {
-                                Text(GameMetadata.formatPlayTime(metadata.totalPlayTime))
+                            DetailRow("Last played") {
+                                if let date = metadata.lastPlayed {
+                                    Text(
+                                        Self.relativeDateFormatter.localizedString(
+                                            for: date, relativeTo: Date()))
+                                } else {
+                                    Text("Never")
+                                }
                             }
-                        }
 
-                        Divider().padding(.leading, Spacing.xl)
+                            if let time = metadata.totalPlayTime, time > 0 {
+                                Divider().padding(.leading, Spacing.xl)
 
-                        DetailRow("Size on disk") {
-                            if let size = diskSize {
-                                Text(GameMetadata.formatDiskSize(size))
-                            } else {
-                                ProgressView()
+                                DetailRow("Play time") {
+                                    Text(GameMetadata.formatPlayTime(metadata.totalPlayTime))
+                                }
                             }
-                        }
 
-                        Divider().padding(.leading, Spacing.xl)
+                            Divider().padding(.leading, Spacing.xl)
 
-                        DetailRow("Local ID") {
-                            Text(game.id)
-                                .monospaced()
-                                .font(.caption)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .textSelection(.enabled)
-                        }
-                    }
-
-                    // Runtime diagnostics. Surfaces the engine
-                    // graphics-API version and the bundled-Ruby
-                    // version (when present) so an advanced user
-                    // can confirm what compatibility surface a
-                    // game ships with - useful for debugging
-                    // syntax-transform misdetections (a custom
-                    // engine shipping RGSS1 graphics + Ruby 3.x
-                    // vs vanilla XP shipping RGSS1 + Ruby 1.8).
-                    // Gated on debugLogs because casual users
-                    // shouldn't see internal API version numbers.
-                    if settings.debugLogs {
-                        GroupedSection("Runtime") {
-                            DetailRow("RGSS version") {
-                                if let v = rgssVersion {
-                                    Text("RGSS\(v)")
-                                } else if runtimeProbeFinished {
-                                    Text("Unknown")
+                            DetailRow("Size on disk") {
+                                if let size = diskSize {
+                                    Text(GameMetadata.formatDiskSize(size))
                                 } else {
                                     ProgressView()
                                 }
@@ -170,72 +140,108 @@ struct GameInfoView: View {
 
                             Divider().padding(.leading, Spacing.xl)
 
-                            // Ruby (bundled): the version the game's
-                            // own DLL targets (e.g. Pokemon Flux's
-                            // x64-msvcrt-ruby310.dll). On iOS we
-                            // execute on the statically-linked engine
-                            // Ruby below; this row just says what the
-                            // scripts were written for.
-                            if let v = rubyVersion {
-                                DetailRow("Ruby (bundled)") {
-                                    Text(v).monospaced()
+                            DetailRow("Local ID") {
+                                Text(game.id)
+                                    .monospaced()
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .textSelection(.enabled)
+                            }
+                        }
+
+                        // Runtime diagnostics. Surfaces the engine
+                        // graphics-API version and the bundled-Ruby
+                        // version (when present) so an advanced user
+                        // can confirm what compatibility surface a
+                        // game ships with - useful for debugging
+                        // syntax-transform misdetections (a custom
+                        // engine shipping RGSS1 graphics + Ruby 3.x
+                        // vs vanilla XP shipping RGSS1 + Ruby 1.8).
+                        // Gated on debugLogs because casual users
+                        // shouldn't see internal API version numbers.
+                        if settings.debugLogs {
+                            GroupedSection("Runtime") {
+                                DetailRow("RGSS version") {
+                                    if let v = rgssVersion {
+                                        Text("RGSS\(v)")
+                                    } else if runtimeProbeFinished {
+                                        Text("Unknown")
+                                    } else {
+                                        ProgressView()
+                                    }
                                 }
 
                                 Divider().padding(.leading, Spacing.xl)
-                            }
 
-                            // Ruby (runtime): the version executing
-                            // the scripts on iOS, scanned from Empo's
-                            // binary. For games with a bundled DLL
-                            // this row makes the gap explicit
-                            // (e.g. "3.1.0p0 bundled vs 3.1.3p185
-                            // runtime").
-                            DetailRow("Ruby (runtime)") {
-                                if !runtimeProbeFinished {
-                                    ProgressView()
-                                } else {
-                                    // Pass the game's detected RGSS-derived
-                                    // Ruby major.minor so multi-Ruby binaries
-                                    // (which contain up to 4 RUBY_DESCRIPTION
-                                    // strings, one per merged.o) report the
-                                    // version that'll actually run THIS game,
-                                    // not whichever string sits earliest in
-                                    // the .rodata section.
-                                    let majorMinor = rubyMajorMinorForGame()
-                                    if let engine = GameMetadata.engineRubyVersion(
-                                        forMajorMinor: majorMinor
-                                    ) {
-                                        Text(engine).monospaced()
+                                // Ruby (bundled): the version the game's
+                                // own DLL targets (e.g. Pokemon Flux's
+                                // x64-msvcrt-ruby310.dll). On iOS we
+                                // execute on the statically-linked engine
+                                // Ruby below; this row just says what the
+                                // scripts were written for.
+                                if let v = rubyVersion {
+                                    DetailRow("Ruby (bundled)") {
+                                        Text(v).monospaced()
+                                    }
+
+                                    Divider().padding(.leading, Spacing.xl)
+                                }
+
+                                // Ruby (runtime): the version executing
+                                // the scripts on iOS, scanned from Empo's
+                                // binary. For games with a bundled DLL
+                                // this row makes the gap explicit
+                                // (e.g. "3.1.0p0 bundled vs 3.1.3p185
+                                // runtime").
+                                DetailRow("Ruby (runtime)") {
+                                    if !runtimeProbeFinished {
+                                        ProgressView()
                                     } else {
-                                        Text("Unknown")
-                                            .foregroundStyle(.secondary)
+                                        // Pass the game's detected RGSS-derived
+                                        // Ruby major.minor so multi-Ruby binaries
+                                        // (which contain up to 4 RUBY_DESCRIPTION
+                                        // strings, one per merged.o) report the
+                                        // version that'll actually run THIS game,
+                                        // not whichever string sits earliest in
+                                        // the .rodata section.
+                                        let majorMinor = rubyMajorMinorForGame()
+                                        if let engine = GameMetadata.engineRubyVersion(
+                                            forMajorMinor: majorMinor
+                                        ) {
+                                            Text(engine).monospaced()
+                                        } else {
+                                            Text("Unknown")
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    GroupedSection {
-                        Button { openInFiles() } label: {
-                            Label("Browse game files", systemImage: "folder")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, Spacing.xl)
-                                .padding(.vertical, Spacing.lg)
+                        GroupedSection {
+                            Button {
+                                openInFiles()
+                            } label: {
+                                Label("Browse game files", systemImage: "folder")
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, Spacing.xl)
+                                    .padding(.vertical, Spacing.lg)
+                            }
+
+                            if let logURL = sessionLogURL(), settings.debugLogs {
+                                Divider().padding(.leading, Spacing.xl)
+
+                                ShareLink(item: logURL) {
+                                    Label("Export logs", systemImage: "square.and.arrow.up")
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal, Spacing.xl)
+                                        .padding(.vertical, Spacing.lg)
+                                }
+                            }
                         }
-
-                    if let logURL = sessionLogURL(), settings.debugLogs {
-                        Divider().padding(.leading, Spacing.xl)
-
-                        ShareLink(item: logURL) {
-                            Label("Export logs", systemImage: "square.and.arrow.up")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, Spacing.xl)
-                                .padding(.vertical, Spacing.lg)
-                        }
-                    }
                     }
                 }
-            }
             }
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
@@ -365,8 +371,8 @@ struct GameInfoView: View {
         // Fall back to RGSS-derived if the detector hasn't run yet.
         switch rgssVersion {
         case 1, 2: return "1.8"
-        case 3:    return "1.9"
-        default:   return nil
+        case 3: return "1.9"
+        default: return nil
         }
     }
 
@@ -380,7 +386,6 @@ struct GameInfoView: View {
         }
     }
 
-
     private let bannerHeight: CGFloat = 260
 
     private func bannerHeader(insets: EdgeInsets) -> some View {
@@ -388,8 +393,7 @@ struct GameInfoView: View {
             bannerBackground
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if isEditingTitle { finishEditingTitle() }
-                    else { showBannerPicker = true }
+                    if isEditingTitle { finishEditingTitle() } else { showBannerPicker = true }
                 }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Change banner image")
@@ -398,7 +402,7 @@ struct GameInfoView: View {
                         stops: [
                             .init(color: .black, location: 0),
                             .init(color: .black, location: 0.4),
-                            .init(color: .clear, location: 1.0)
+                            .init(color: .clear, location: 1.0),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -410,8 +414,7 @@ struct GameInfoView: View {
                     .elevatedShadow()
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if isEditingTitle { finishEditingTitle() }
-                        else { showArtworkPicker = true }
+                        if isEditingTitle { finishEditingTitle() } else { showArtworkPicker = true }
                     }
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("Change game artwork")
@@ -536,9 +539,11 @@ struct GameInfoView: View {
         needsLibraryRefresh = true
     }
 
-    private func saveCustomImage(_ image: UIImage, kind: String,
-                                 pathGetter: (GameMetadata, GameContainer) -> String?,
-                                 filenameSetter: (inout GameMetadata, String?) -> Void) {
+    private func saveCustomImage(
+        _ image: UIImage, kind: String,
+        pathGetter: (GameMetadata, GameContainer) -> String?,
+        filenameSetter: (inout GameMetadata, String?) -> Void
+    ) {
         guard let container else { return }
         if let path = pathGetter(metadata, container) {
             ImageCache.shared.evict(path: path)
@@ -549,9 +554,11 @@ struct GameInfoView: View {
         needsLibraryRefresh = true
     }
 
-    private func removeCustomImage(pathGetter: (GameMetadata, GameContainer) -> String?,
-                                   filenameGetter: (GameMetadata) -> String?,
-                                   filenameSetter: (inout GameMetadata, String?) -> Void) {
+    private func removeCustomImage(
+        pathGetter: (GameMetadata, GameContainer) -> String?,
+        filenameGetter: (GameMetadata) -> String?,
+        filenameSetter: (inout GameMetadata, String?) -> Void
+    ) {
         guard let container else { return }
         if let path = pathGetter(metadata, container) {
             ImageCache.shared.evict(path: path)
@@ -565,27 +572,31 @@ struct GameInfoView: View {
     }
 
     private func saveArtwork(_ image: UIImage) {
-        saveCustomImage(image, kind: "artwork",
-                       pathGetter: { $0.customArtworkPath(in: $1) },
-                       filenameSetter: { $0.customArtworkFilename = $1 })
+        saveCustomImage(
+            image, kind: "artwork",
+            pathGetter: { $0.customArtworkPath(in: $1) },
+            filenameSetter: { $0.customArtworkFilename = $1 })
     }
 
     private func removeArtwork() {
-        removeCustomImage(pathGetter: { $0.customArtworkPath(in: $1) },
-                         filenameGetter: { $0.customArtworkFilename },
-                         filenameSetter: { $0.customArtworkFilename = $1 })
+        removeCustomImage(
+            pathGetter: { $0.customArtworkPath(in: $1) },
+            filenameGetter: { $0.customArtworkFilename },
+            filenameSetter: { $0.customArtworkFilename = $1 })
     }
 
     private func saveBanner(_ image: UIImage) {
-        saveCustomImage(image, kind: "banner",
-                       pathGetter: { $0.customBannerPath(in: $1) },
-                       filenameSetter: { $0.customBannerFilename = $1 })
+        saveCustomImage(
+            image, kind: "banner",
+            pathGetter: { $0.customBannerPath(in: $1) },
+            filenameSetter: { $0.customBannerFilename = $1 })
     }
 
     private func removeBanner() {
-        removeCustomImage(pathGetter: { $0.customBannerPath(in: $1) },
-                         filenameGetter: { $0.customBannerFilename },
-                         filenameSetter: { $0.customBannerFilename = $1 })
+        removeCustomImage(
+            pathGetter: { $0.customBannerPath(in: $1) },
+            filenameGetter: { $0.customBannerFilename },
+            filenameSetter: { $0.customBannerFilename = $1 })
     }
 
     private func openInFiles() {

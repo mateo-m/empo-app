@@ -18,9 +18,7 @@
     {
       "id": "pokemon-insurgence",
       "name": "Pokemon Insurgence",
-      "matchers": [
-        { "type": "iniTitle", "value": "pokemon insurgence" }
-      ]
+      "matchers": [{ "type": "iniTitle", "value": "pokemon insurgence" }]
     },
     {
       "id": "pokemon-infinite-fusion",
@@ -33,23 +31,17 @@
     {
       "id": "pokemon-reborn",
       "name": "Pokemon Reborn",
-      "matchers": [
-        { "type": "iniTitle", "value": "pokemon reborn" }
-      ]
+      "matchers": [{ "type": "iniTitle", "value": "pokemon reborn" }]
     },
     {
       "id": "pokemon-z",
       "name": "Pokemon Z",
-      "matchers": [
-        { "type": "iniTitle", "value": "pokemon z" }
-      ]
+      "matchers": [{ "type": "iniTitle", "value": "pokemon z" }]
     },
     {
       "id": "pokemon-uranium",
       "name": "Pokemon Uranium",
-      "matchers": [
-        { "type": "iniTitle", "value": "pokemon uranium" }
-      ]
+      "matchers": [{ "type": "iniTitle", "value": "pokemon uranium" }]
     }
   ]
 }
