@@ -21,6 +21,15 @@ jobs:
         with:
           toolchain: "6.2"
 
+      - name: Locate sourcekitd for SwiftLint
+        # SwiftLint on Linux loads `libsourcekitdInProc.so` from
+        # `LINUX_SOURCEKIT_LIB_PATH`. Swiftly installs the Swift
+        # toolchain under `$SWIFTLY_HOME_DIR/toolchains/...`; point
+        # SwiftLint at that lib dir.
+        run: |
+          SK_LIB=$(dirname "$(which swift)")/../lib
+          echo "LINUX_SOURCEKIT_LIB_PATH=$SK_LIB" >> "$GITHUB_ENV"
+
       - name: swift-format lint
         run: swift-format lint --strict --recursive ios/Empo/src
 
