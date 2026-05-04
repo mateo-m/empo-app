@@ -797,12 +797,12 @@ class GameLibrary {
     nonisolated private static func createMetadata(in container: GameContainer) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
-        // Multi-Ruby (Phase D, MULTI_RUBY_PLAN.md): pick the Ruby
-        // interpreter version this game expects so AppState.selectGame
-        // can route through the right per-version binding via
-        // `mkxp_setActiveRubyVersion`. Detection looks at PSDK markers,
-        // RGSS archive type, Game.ini's Library= field, and modern-
-        // Ruby script syntax.
+        // Multi-Ruby: pick the Ruby interpreter version this game
+        // expects so AppState.selectGame can route through the right
+        // per-version binding via `mkxp_setActiveRubyVersion`.
+        // Detection looks at the bundled Ruby DLL filename, RGSS
+        // archive type, Game.ini's Library= field, and modern-Ruby
+        // script syntax.
         metadata.rubyVersion = RubyVersionDetection.detect(
             gameDirectory: container.gameURL
         )

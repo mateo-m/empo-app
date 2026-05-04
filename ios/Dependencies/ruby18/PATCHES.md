@@ -4,16 +4,19 @@
 
 - **Upstream**: JoiPlay's `ruby_1_8` branch — <https://github.com/joiplay/ruby>
 - **Branch**: `ruby_1_8` (submodule at `sources/ruby18`)
-- **Commit**: `50783b8` ("\* 2014-01-28") — a git-svn mirror of the official Ruby SVN repository (revision 44718)
-- **Note**: This is the last maintenance snapshot of Ruby 1.8, frozen since 2014.
+- **Commit**: `50783b8` ("\* 2014-01-28") — git-svn mirror of the
+  official Ruby SVN repository (revision 44718)
+- **Reported version**: 1.8.8 (per `version.h`)
+- **Note**: Last maintenance snapshot of Ruby 1.8, frozen since 2014.
 
 ## Why Ruby 1.8?
 
-Most RPG Maker XP games (RGSS1) were written against Ruby 1.8. mkxp-z
-normally ships with Ruby 3.1, but many older games break on it due to
-syntax and API changes (e.g. `when` clause colon syntax, `Hash` ordering,
-removed `Fixnum`/`Bignum` classes, string encoding changes). Using the
-original Ruby 1.8 maximizes game compatibility.
+Most RPG Maker XP games (RGSS1) were written against Ruby 1.8. Empo's
+multi-Ruby dispatcher routes detected RGSS1 games to this build (see
+`docs/multi-ruby.md`) so vintage Pokemon Essentials forks (Pokemon Z,
+Insurgence, Uranium, etc.) run on the parser they were authored
+against, instead of going through Ruby 3.1's syntax-transform
+patches.
 
 ## Patches
 

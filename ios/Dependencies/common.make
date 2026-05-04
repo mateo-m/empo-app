@@ -397,25 +397,15 @@ $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 
 # Ruby 3.0 (submodule: sources/ruby30)
 #
-# Builds alongside the existing Ruby 3.1 install. Two reasons for
-# vendoring 3.0 separately rather than swapping the 3.1 submodule:
+# Builds alongside the Ruby 3.1 install. JoiPlay's RPG Maker plugin
+# ships exactly Ruby 1.8 + 1.9 + 3.0 (verified by inspecting the
+# .apk's lib/arm64-v8a/ contents on 2026-04-27); mkxp-z's upstream
+# pins to 3.0. Matching that validated set is the anchor.
 #
-#   - JoiPlay's RPG Maker plugin ships exactly Ruby 1.8 + 1.9 + 3.0
-#     (verified by inspecting the .apk's lib/arm64-v8a/ contents on
-#     2026-04-27). PSDK requires 3.0 specifically. mkxp-z's upstream
-#     pins to 3.0. Our 3.1 pin is unique to us; matching JoiPlay's
-#     validated set is the right anchor.
-#   - Symbol-namespacing all three Ruby versions for in-binary
-#     coexistence is its own piece of work (see MULTI_RUBY_PLAN.md).
-#     Until that lands, building 3.0 alongside 3.1 lets us prove the
-#     compile + iOS-patch chain works in isolation before we attempt
-#     in-binary dispatch.
-#
-# Critical: 3.0 SKIPS the syntax-transform patches. The whole point
-# of multi-Ruby is running games on their actual native Ruby parser.
-# Modern mkxp-z and PSDK games written for Ruby 3.0+ don't need
-# rewriting; vintage 1.8/1.9-grammar games will run on libruby18 /
-# libruby19 (Phase B/C) instead.
+# 3.0 SKIPS the syntax-transform patches. The point of multi-Ruby
+# is running games on their actual native Ruby parser. Modern games
+# written for Ruby 3.0+ don't need rewriting; vintage 1.8 / 1.9-
+# grammar games run on libruby18 / libruby19 instead.
 ruby30: init_dirs $(LIBDIR)/libruby.3.0-static.a $(LIBDIR)/libruby.3.0-ext.a
 
 $(LIBDIR)/libruby.3.0-static.a: $(SOURCES)/ruby30/Makefile
