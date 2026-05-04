@@ -39,6 +39,7 @@ struct GameEntry: Identifiable, Hashable {
     // title and showing it twice would be redundant.
     var engineTitle: String? = nil
     var lastPlayed: Date? = nil      // from metadata, cached at scan time
+    var dateAdded: Date? = nil       // from metadata, cached at scan time
     var status: GameStatus = .ready
 
     /// Where the game's own files live. `<container>/Game/`. Empty
@@ -65,6 +66,7 @@ struct GameEntry: Identifiable, Hashable {
         lhs.id == rhs.id && lhs.status == rhs.status && lhs.title == rhs.title
             && lhs.container == rhs.container && lhs.artworkPath == rhs.artworkPath
             && lhs.engineTitle == rhs.engineTitle && lhs.lastPlayed == rhs.lastPlayed
+            && lhs.dateAdded == rhs.dateAdded
     }
 
 

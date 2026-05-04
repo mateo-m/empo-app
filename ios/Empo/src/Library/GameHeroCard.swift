@@ -121,13 +121,13 @@ struct GameHeroCard: View {
                         .accessibilityHidden(true)
                 }
                 .clipShape(.rect(cornerRadius: Radius.lg))
-                .cardShadow()
                 .matchedTransitionSource(id: GameTapSource.hero.transitionID(for: game.id),
                                          in: heroNamespace) { config in
                     config
                         .background(.black)
                         .clipShape(.rect(cornerRadius: Radius.lg))
                 }
+                .cardShadow()
         }
         .buttonStyle(CardPressStyle())
         .gameContextMenu(game: game, appState: appState, onPlay: onTap, gameToDelete: $gameToDelete, showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings, gameForInfo: $gameForInfo)
