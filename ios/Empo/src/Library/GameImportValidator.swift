@@ -134,61 +134,64 @@ enum GameImportValidator {
                 shouldCancel: shouldCancel,
                 stopWhen: {
                     rgssArchiveVersion != nil || (sawMetadata && sawScripts)
-                }
-            ) { path in
-                let components = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
-                // `depth` counts how many folder hops away from the
-                // archive root the entry sits. Files are accepted at
-                // depth 0 (flat archive) and depth 1 (wrapper
-                // folder) for metadata; scripts files live one
-                // deeper because they're inside Data/.
-                let depth = components.count - 1
-                guard let name = components.last?.lowercased() else { return false }
+                },
+                include: { path in
+                    let components = path.split(separator: "/", omittingEmptySubsequences: false).map(
+                        String.init)
+                    // `depth` counts how many folder hops away from the
+                    // archive root the entry sits. Files are accepted at
+                    // depth 0 (flat archive) and depth 1 (wrapper
+                    // folder) for metadata; scripts files live one
+                    // deeper because they're inside Data/.
+                    let depth = components.count - 1
+                    guard let name = components.last?.lowercased() else { return false }
 
-                // Game root metadata files.
-                if depth <= 1 {
-                    if name.hasSuffix(".ini") || name == "mkxp.json" {
-                        sawMetadata = true
-                        return true
+                    // Game root metadata files.
+                    if depth <= 1 {
+                        if name.hasSuffix(".ini") || name == "mkxp.json" {
+                            sawMetadata = true
+                            return true
+                        }
+                        if name.hasSuffix(".rgssad") {
+                            rgssArchiveVersion = .xp
+                            return false
+                        }
+                        if name.hasSuffix(".rgss2a") {
+                            rgssArchiveVersion = .vx
+                            return false
+                        }
+                        if name.hasSuffix(".rgss3a") {
+                            rgssArchiveVersion = .vxAce
+                            return false
+                        }
                     }
-                    if name.hasSuffix(".rgssad") {
-                        rgssArchiveVersion = .xp
-                        return false
-                    }
-                    if name.hasSuffix(".rgss2a") {
-                        rgssArchiveVersion = .vx
-                        return false
-                    }
-                    if name.hasSuffix(".rgss3a") {
-                        rgssArchiveVersion = .vxAce
-                        return false
-                    }
-                }
 
-                // Speculative scripts extraction: catches the
-                // default `Data/Scripts.*` layout. Games with a
-                // custom Scripts= path fall through to the second
-                // pass below.
-                if depth == 1 || depth == 2 {
-                    let parent = components.count >= 2 ? components[components.count - 2].lowercased() : ""
-                    if parent == "data",
-                        name.hasPrefix("scripts."),
-                        name.hasSuffix(".rxdata") || name.hasSuffix(".rvdata") || name.hasSuffix(".rvdata2")
-                    {
-                        sawScripts = true
-                        return true
+                    // Speculative scripts extraction: catches the
+                    // default `Data/Scripts.*` layout. Games with a
+                    // custom Scripts= path fall through to the second
+                    // pass below.
+                    if depth == 1 || depth == 2 {
+                        let parent =
+                            components.count >= 2 ? components[components.count - 2].lowercased() : ""
+                        if parent == "data",
+                            name.hasPrefix("scripts."),
+                            name.hasSuffix(".rxdata") || name.hasSuffix(".rvdata")
+                                || name.hasSuffix(".rvdata2")
+                        {
+                            sawScripts = true
+                            return true
+                        }
                     }
-                }
 
-                // Artwork is deliberately NOT extracted here.
-                // Archives tend to be alphabetical, putting
-                // `Data/Scripts.*` before `Graphics/Titles/*`, so
-                // the walk's `stopWhen` predicate would fire before
-                // any artwork is reached. The full-extract pass
-                // later surfaces artwork via its per-file callback.
+                    // Artwork is deliberately NOT extracted here.
+                    // Archives tend to be alphabetical, putting
+                    // `Data/Scripts.*` before `Graphics/Titles/*`, so
+                    // the walk's `stopWhen` predicate would fire before
+                    // any artwork is reached. The full-extract pass
+                    // later surfaces artwork via its per-file callback.
 
-                return false
-            }
+                    return false
+                })
         } catch ArchiveExtractor.Error.cancelled {
             throw ArchiveExtractor.Error.cancelled
         } catch {
@@ -294,25 +297,28 @@ enum GameImportValidator {
             archive: archiveURL,
             to: scratchDir,
             shouldCancel: shouldCancel,
-            stopWhen: { extracted }
-        ) { rawPath in
-            let archivePath = rawPath.replacingOccurrences(of: "\\", with: "/")
-            let gameRelative: String
-            if let prefix = wrapperPrefix {
-                guard archivePath.hasPrefix(prefix) else { return false }
-                gameRelative = String(archivePath.dropFirst(prefix.count))
-            } else {
-                gameRelative = archivePath
+            stopWhen: { extracted },
+            include: { rawPath in
+                let archivePath = rawPath.replacingOccurrences(of: "\\", with: "/")
+                let gameRelative: String
+                if let prefix = wrapperPrefix {
+                    guard archivePath.hasPrefix(prefix) else { return false }
+                    gameRelative = String(archivePath.dropFirst(prefix.count))
+                } else {
+                    gameRelative = archivePath
+                }
+                let match = gameRelative.caseInsensitiveCompare(relativePath) == .orderedSame
+                if match { extracted = true }
+                return match
             }
-            let match = gameRelative.caseInsensitiveCompare(relativePath) == .orderedSame
-            if match { extracted = true }
-            return match
-        }
+        )
     }
 
     /// Detected RGSS version: 1 = XP, 2 = VX, 3 = VX Ace
     private enum RGSSVersion: Int {
-        case xp = 1, vx = 2, vxAce = 3
+        case xp = 1
+        case vx = 2
+        case vxAce = 3
     }
 
     private static func rgssVersionFromArchive(_ lowercaseItems: [String]) -> RGSSVersion? {

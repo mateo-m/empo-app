@@ -286,7 +286,9 @@ struct GameStatusIndicator: View {
     private var innerIcon: some View {
         switch kind {
         case .importing:
-            Button(action: { onStopImport?() }) {
+            Button {
+                onStopImport?()
+            } label: {
                 // White fill paired with the ring's `.blendMode(.difference)`
                 // wrap above. Inverts against whatever's behind.
                 RoundedRectangle(cornerRadius: 2.5)

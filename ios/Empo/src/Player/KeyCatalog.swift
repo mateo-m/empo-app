@@ -71,8 +71,8 @@ let keyCatalog: [KeyEntry] = [
 ]
 
 func scancodeDisplayName(_ sc: Int32) -> String {
-    for entry in keyCatalog {
-        if entry.scancode == sc { return entry.label }
+    for entry in keyCatalog where entry.scancode == sc {
+        return entry.label
     }
     return "Key \(sc)"
 }

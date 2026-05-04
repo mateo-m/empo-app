@@ -132,11 +132,9 @@ enum RubyScriptGrammarSniffer {
                     options: [.skipsHiddenFiles]
                 )
             else { continue }
-            for case let url as URL in enumerator {
-                if url.pathExtension.lowercased() == "rb" {
-                    found.append(url)
-                    if found.count >= maxLooseFiles { return found }
-                }
+            for case let url as URL in enumerator where url.pathExtension.lowercased() == "rb" {
+                found.append(url)
+                if found.count >= maxLooseFiles { return found }
             }
         }
         return found

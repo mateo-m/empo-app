@@ -512,8 +512,8 @@ struct GameSettings: Codable, Equatable {
             let url = gameDirectory.appendingPathComponent(relPath)
             guard let data = try? Data(contentsOf: url), data.count > 1024
             else { continue }
-            for sig in scriptSignatures {
-                if data.range(of: sig) != nil { return true }
+            for sig in scriptSignatures where data.range(of: sig) != nil {
+                return true
             }
         }
 

@@ -46,7 +46,7 @@ End-to-end working across RGSS1/2/3 games and modern mkxp-z forks. Per-game comp
 
 ## How it works
 
-```
+```text
 mkxp-z-apple-mobile/   Engine fork (git submodule, pure C++)
 ios/Empo/              The app (SwiftUI + UIKit for touch controls)
 ios/Dependencies/      Cross-compiled static libs (SDL, four Ruby versions, OpenAL, etc.)

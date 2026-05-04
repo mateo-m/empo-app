@@ -48,13 +48,13 @@ struct ImportButton: View {
             let endAngle = atan2(collapsedY - arcCenterY, collapsedX - arcCenterX)
             let arcDeg = (endAngle - startAngle) * 180 / .pi
 
-            Button(action: {
+            Button {
                 if isValidating {
                     onRequestCancelValidation?()
                 } else {
                     showImporter = true
                 }
-            }) {
+            } label: {
                 importButtonLabel(collapsed: collapsed)
             }
             .buttonStyle(.plain)

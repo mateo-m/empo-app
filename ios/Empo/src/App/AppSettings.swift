@@ -4,8 +4,8 @@ import SwiftUI
 import UIKit
 
 enum LibraryDisplayMode: String, CaseIterable {
-    case grid = "grid"
-    case list = "list"
+    case grid
+    case list
 
     var label: String {
         switch self {
@@ -16,16 +16,16 @@ enum LibraryDisplayMode: String, CaseIterable {
 }
 
 enum LibrarySortOption: String, CaseIterable {
-    case titleAZ = "titleAZ"
-    case titleZA = "titleZA"
-    case recentlyAdded = "recentlyAdded"
-    case leastRecentlyAdded = "leastRecentlyAdded"
-    case recentlyPlayed = "recentlyPlayed"
-    case leastRecentlyPlayed = "leastRecentlyPlayed"
-    case mostPlayed = "mostPlayed"
-    case leastPlayed = "leastPlayed"
-    case largestSize = "largestSize"
-    case smallestSize = "smallestSize"
+    case titleAZ
+    case titleZA
+    case recentlyAdded
+    case leastRecentlyAdded
+    case recentlyPlayed
+    case leastRecentlyPlayed
+    case mostPlayed
+    case leastPlayed
+    case largestSize
+    case smallestSize
 
     var label: String {
         switch self {
@@ -74,8 +74,8 @@ struct LibrarySortGroup: Identifiable {
 }
 
 enum TitlePosition: String, CaseIterable {
-    case inside = "inside"
-    case under = "under"
+    case inside
+    case under
 
     var label: String {
         switch self {
@@ -86,9 +86,9 @@ enum TitlePosition: String, CaseIterable {
 }
 
 enum AppTheme: String, CaseIterable {
-    case dark = "dark"
-    case light = "light"
-    case auto = "auto"
+    case dark
+    case light
+    case auto
 
     var label: String {
         switch self {

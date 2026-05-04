@@ -14,7 +14,7 @@ enum RubyVersionPick: String, CaseIterable, Hashable {
     case v30
     case v31
 
-    var rawValue_: Int? {
+    var rubyVersionInt: Int? {
         switch self {
         case .auto: return nil
         case .v18: return 18
@@ -566,7 +566,7 @@ struct GameSettingsView: View {
         Binding(
             get: { RubyVersionPick.from(settings.rubyVersionOverride) },
             set: { pick in
-                settings.rubyVersionOverride = pick.rawValue_
+                settings.rubyVersionOverride = pick.rubyVersionInt
             }
         )
     }

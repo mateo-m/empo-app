@@ -57,8 +57,8 @@ enum ExecutableIconExtractor {
     /// post-reload sidecar writer so their picks stay consistent.
     static func isUtilityExecutable(filename: String) -> Bool {
         let lower = filename.lowercased()
-        for keyword in utilityKeywords {
-            if lower.contains(keyword) { return true }
+        for keyword in utilityKeywords where lower.contains(keyword) {
+            return true
         }
         return false
     }
