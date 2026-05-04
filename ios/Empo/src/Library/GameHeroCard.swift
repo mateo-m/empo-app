@@ -4,7 +4,7 @@ import SwiftUI
 /// `matchedTransitionSource` when the same game is shown in multiple
 /// places at once (e.g. "Continue playing" hero card + the usual grid
 /// tile underneath). Each location registers a distinct source id so
-/// the exit zoom animation lands on whichever one the user actually
+/// the exit zoom animation lands on whichever one the user
 /// tapped.
 enum GameTapSource {
     case hero

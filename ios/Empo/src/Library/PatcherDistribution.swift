@@ -194,53 +194,10 @@ enum PatcherDistribution {
     /// Returns nil if the file is missing or has no Title.
     private static func readIniTitle(gameURL: URL) -> String? {
         let iniURL = gameURL.appendingPathComponent("Game.ini")
-        // Game.ini is typically Windows-1252 / Latin-1; fall back
-        // to UTF-8 then ISO Latin 1 if the first decode fails.
-        guard let data = try? Data(contentsOf: iniURL) else { return nil }
-        let text = String(data: data, encoding: .utf8)
-            ?? String(data: data, encoding: .isoLatin1)
-            ?? ""
-
-        // Swift treats `\r\n` as a single grapheme cluster, so a
-        // closure-based `split(whereSeparator:)` checking against
-        // "\n" or "\r" returns the whole CRLF-terminated text as a
-        // single "line". Use `components(separatedBy:)` with
-        // `CharacterSet.newlines` instead - it covers \r, \n, \r\n,
-        // \u2028 (line separator), \u2029 (paragraph separator),
-        // and treats any of those as a line break. This is the
-        // standard Foundation idiom for "split a textual file by
-        // line endings of any kind".
-        for rawLine in text.components(separatedBy: .newlines) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.lowercased().hasPrefix("title=") {
-                return String(line.dropFirst("title=".count))
-                    .trimmingCharacters(in: .whitespaces)
-            }
-        }
-        return nil
+        return GameEntry.parseINIValue(in: iniURL, section: "game", key: "title")
     }
 
-    /// Strip JSON5-style `//` line comments so Foundation's strict
-    /// JSON decoder accepts the file. NOT a full JSON5 parser - we
-    /// don't handle block comments, trailing commas, single quotes,
-    /// or strings containing `//` followed by `\n`. Curators should
-    /// keep `//` comments out of string values; if that ever
-    /// becomes a constraint, swap in a real JSON5 library.
     private static func stripLineComments(in data: Data) -> Data? {
-        guard let text = String(data: data, encoding: .utf8) else { return nil }
-        var out = ""
-        out.reserveCapacity(text.count)
-        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
-            // Naive: drop everything from the first `//` to end-of-line.
-            // Doesn't handle `//` inside string literals; acceptable
-            // because we control the curated content.
-            if let r = line.range(of: "//") {
-                out.append(contentsOf: line[..<r.lowerBound])
-            } else {
-                out.append(contentsOf: line)
-            }
-            out.append("\n")
-        }
-        return out.data(using: .utf8)
+        JSON5LiteParser.stripLineComments(in: data)
     }
 }

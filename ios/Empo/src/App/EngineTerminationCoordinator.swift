@@ -19,7 +19,7 @@ final class EngineTerminationCoordinator {
     // watchdog that fires after a few seconds. If the engine-terminated
     // callback clears this token by then, the RGSS thread ack'd cleanly
     // and there's nothing to do. Otherwise the RGSS thread is stuck and
-    // the hang alert surfaces immediately — without waiting for
+    // the hang alert surfaces immediately; without waiting for
     // main.cpp's 10s timeout, which would otherwise fire on the NEXT
     // session's Loading view and confuse the user.
     private var pendingToken: UUID?
@@ -27,7 +27,7 @@ final class EngineTerminationCoordinator {
     // Continuations waiting for the engine-terminated callback to fire,
     // used by selectGame() to wait for cross-session teardown before
     // handing the engine a new path. Drained in handleEngineTerminatedAck
-    // when the callback runs. No polling, no timeouts — the hang
+    // when the callback runs. No polling, no timeouts; the hang
     // watchdog above handles the truly-stuck case by force-quitting
     // the app, which also implicitly drains these (the process exits).
     private var waiters: [CheckedContinuation<Void, Never>] = []
@@ -35,9 +35,9 @@ final class EngineTerminationCoordinator {
     func awaitEngineTermination() async {
         // Fast path: engine is already terminated (previous session
         // finished its cross-session cleanup and is parked in
-        // waitForGamePath) — hand off immediately.
+        // waitForGamePath); hand off immediately.
         if mkxp_isEngineTerminated() != 0 { return }
-        // No termination is in flight — this is a cold boot, the RGSS
+        // No termination is in flight; this is a cold boot, the RGSS
         // thread is waiting for its FIRST game path. Hand off
         // immediately without parking.
         if pendingToken == nil { return }
