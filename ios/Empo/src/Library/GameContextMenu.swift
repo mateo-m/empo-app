@@ -5,6 +5,10 @@ struct GameContextMenuModifier: ViewModifier {
     let game: GameEntry
     var appState: AppState
     let onPlay: () -> Void
+    /// Optional "Select" action that pre-seeds selection mode with
+    /// this game. nil hides the row (e.g. while the library is
+    /// already in selection mode, where the entry would be a no-op).
+    let onSelect: (() -> Void)?
     @Binding var gameToDelete: GameEntry?
     @Binding var showDeleteConfirm: Bool
     @Binding var gameForSettings: GameEntry?
@@ -48,6 +52,13 @@ struct GameContextMenuModifier: ViewModifier {
                 }
             }
 
+            if let onSelect {
+                Divider()
+                Button(action: onSelect) {
+                    Label("Select", systemImage: "checklist")
+                }
+            }
+
             Divider()
 
             Button(role: .destructive) {
@@ -65,6 +76,7 @@ extension View {
     func gameContextMenu(game: GameEntry,
                          appState: AppState,
                          onPlay: @escaping () -> Void,
+                         onSelect: (() -> Void)? = nil,
                          gameToDelete: Binding<GameEntry?>,
                          showDeleteConfirm: Binding<Bool>,
                          gameForSettings: Binding<GameEntry?>,
@@ -73,6 +85,7 @@ extension View {
             game: game,
             appState: appState,
             onPlay: onPlay,
+            onSelect: onSelect,
             gameToDelete: gameToDelete,
             showDeleteConfirm: showDeleteConfirm,
             gameForSettings: gameForSettings,

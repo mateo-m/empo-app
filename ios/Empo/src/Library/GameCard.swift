@@ -72,7 +72,9 @@ struct GameCard: View {
             }
             .overlay { centerOverlay }
             .clipShape(.rect(cornerRadius: Radius.md))
-            .cardShadow()
+        // NOTE: cardShadow lives at the GameLibraryView callsite,
+        // not here. Applied AFTER matchedTransitionSource so the
+        // transition source's clip doesn't crop the shadow.
     }
 
 
@@ -83,7 +85,6 @@ struct GameCard: View {
                 .overlay { artworkView }
                 .overlay { centerOverlay }
                 .clipShape(.rect(cornerRadius: Radius.md))
-                .cardShadow()
 
             VStack(spacing: Spacing.xxs) {
                 Text(game.title)
@@ -154,12 +155,12 @@ struct GameListRow: View {
                 cornerRadius: Radius.sm,
                 importing: game.status.phase == .importing
             )
-            .cardShadow()
             .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) { config in
                 config
                     .background(.black)
                     .clipShape(.rect(cornerRadius: Radius.sm))
             }
+            .cardShadow()
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(game.title)
@@ -246,13 +247,6 @@ struct GameStatusIndicator: View {
     }
 
     var body: some View {
-        // Glass chrome on every state EXCEPT importing. During
-        // import the ring stands on its own, but its stroke uses
-        // `.regularMaterial` so it adapts to the artwork behind
-        // it - bright on dark scenes, dark on bright scenes -
-        // without needing a glass disc behind it. `.primary` was
-        // failing here: a 0.2-opacity black donut on a sunlit
-        // Pokemon title screen is nearly invisible.
         indicatorBody
             .frame(width: size, height: size)
             .animation(Motion.gentle, value: kind)
@@ -262,12 +256,16 @@ struct GameStatusIndicator: View {
     private var indicatorBody: some View {
         let isImporting = { if case .importing = kind { true } else { false } }()
         let core = ZStack {
+            // Ring + stop render white and blend with `.difference`
+            // so the indicator auto-inverts against whatever's behind
+            // it (library surface in list mode, artwork in grid mode).
+            // CSS `mix-blend-mode: difference` equivalent.
             SpinnerRing(
                 progress: progress,
                 size: ringSize,
                 lineWidth: lineWidth,
-                tint: AnyShapeStyle(.regularMaterial),
-                trackOpacity: 0.35
+                tint: AnyShapeStyle(Color.white),
+                trackOpacity: 0.2
             )
             .opacity(isImporting ? 1 : 0)
             .scaleEffect(isImporting ? 1 : 0.5)
@@ -278,7 +276,7 @@ struct GameStatusIndicator: View {
 
         switch kind {
         case .importing:
-            core
+            core.blendMode(.difference)
         case .paused:
             // Inverted scheme tint so the paused badge reads stronger
             // than the ambient ready state.
@@ -293,11 +291,10 @@ struct GameStatusIndicator: View {
         switch kind {
         case .importing:
             Button(action: { onStopImport?() }) {
-                // Same `.regularMaterial` adaptive contrast as the
-                // ring around it, so stop-square and ring both
-                // stay readable on top of whatever artwork is behind.
+                // White fill paired with the ring's `.blendMode(.difference)`
+                // wrap above. Inverts against whatever's behind.
                 RoundedRectangle(cornerRadius: 2.5)
-                    .fill(.regularMaterial)
+                    .fill(Color.white)
                     .frame(width: stopSize, height: stopSize)
             }
             .buttonStyle(.plain)
