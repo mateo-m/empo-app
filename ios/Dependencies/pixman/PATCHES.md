@@ -1,4 +1,4 @@
-# Pixman — Patches & Build Notes
+# Pixman: Patches & Build Notes
 
 ## Source
 
@@ -24,7 +24,7 @@ Built with Autotools:
 
 Key flags:
 
-- `--disable-arm-a64-neon` — Required to avoid NEON assembly issues when
+- `--disable-arm-a64-neon`: Required to avoid NEON assembly issues when
   cross-compiling for iOS ARM64. Without this flag, the build attempts to
   use A64 NEON intrinsics that cause compilation failures with the iOS
   toolchain.
