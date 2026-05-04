@@ -60,7 +60,7 @@ import Foundation
 enum RubyVersionDetection {
 
     /// Identifies the heuristic set this build uses. Each new
-    /// case is a strict superset of the previous one — adding a
+    /// case is a strict superset of the previous one; adding a
     /// signal that re-classifies some already-imported games.
     /// `GameLibrary.buildGameEntry` re-runs detection whenever
     /// the stored `rubyVersionDetectedSchema` differs from
@@ -71,7 +71,7 @@ enum RubyVersionDetection {
     /// DetectedSchema`) instead of an enum directly. That keeps
     /// older Empo builds from crashing when reading metadata
     /// written by a newer build that introduced a case the old
-    /// build doesn't know about — the unknown string just doesn't
+    /// build doesn't know about; the unknown string just doesn't
     /// match any case, the old detector re-runs with its own
     /// heuristics, and life continues.
     enum Schema: String {
@@ -260,19 +260,17 @@ enum RubyVersionDetection {
         return nil
     }
 
-    /// Scans the top level of `gameDirectory` for a single RGSS
-    /// archive file. Returns its extension (lowercased, no dot)
-    /// or nil if none found. If multiple archives are present
-    /// (some games ship both .rgssad and .rgss2a for compat) the
-    /// **highest** version wins, since the engine that opens the
-    /// project decides based on Game.ini/Library= which one to
-    /// actually load.
+    /// Top-level RGSS archive extension (lowercased, no dot), or
+    /// nil if none. When a game ships multiple (some legacy
+    /// projects bundle both `.rgssad` and `.rgss2a` for compat),
+    /// the highest version wins; that's the one Game.ini's
+    /// `Library=` field tells the engine to load.
     private static func topLevelRgssArchiveExtension(at gameDirectory: URL,
                                                      fm: FileManager) -> String? {
-        guard let entries = try? fm.contentsOfDirectory(at: gameDirectory,
-                                                        includingPropertiesForKeys: nil) else {
-            return nil
-        }
+        let entries = gameDirectory.directoryEntries(
+            matchingExtensions: ["rgssad", "rgss2a", "rgss3a"],
+            fm: fm
+        )
         var best: String?
         var bestRank = 0
         for url in entries {
@@ -292,33 +290,22 @@ enum RubyVersionDetection {
         return best
     }
 
-    /// Reads `Game.ini` and extracts the major version digit from
-    /// the `Library=RGSSxxx.dll` entry. Returns 1 / 2 / 3 / nil.
-    /// Case-insensitive on the `Library` key per the original
-    /// RPG Maker convention.
+    /// Reads `Game.ini`'s `Library=RGSSxxx.dll` and returns the
+    /// digit immediately after `RGSS` (1 / 2 / 3), or nil if no
+    /// match.
     private static func rgssLibraryMajor(at gameDirectory: URL,
                                          fm: FileManager) -> Int? {
         let iniURL = gameDirectory.appendingPathComponent("Game.ini")
-        guard let data = try? Data(contentsOf: iniURL),
-              let text = String(data: data, encoding: .isoLatin1)
-                       ?? String(data: data, encoding: .utf8) else {
+        guard let value = GameEntry.parseINIValue(in: iniURL,
+                                                   section: "game",
+                                                   key: "library") else {
             return nil
         }
-        // Find a line that starts with "Library" (after trimming).
-        for rawLine in text.split(whereSeparator: \.isNewline) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            guard line.lowercased().hasPrefix("library") else { continue }
-            // Match RGSS<digit><...>.dll, case-insensitive.
-            // The digit immediately after "RGSS" is the major
-            // version we care about.
-            let upper = line.uppercased()
-            guard let range = upper.range(of: "RGSS") else { continue }
-            let after = upper[range.upperBound...]
-            if let firstDigit = after.first, let major = firstDigit.hexDigitValue {
-                return major
-            }
-        }
-        return nil
+        let upper = value.uppercased()
+        guard let range = upper.range(of: "RGSS") else { return nil }
+        let after = upper[range.upperBound...]
+        guard let firstDigit = after.first else { return nil }
+        return firstDigit.hexDigitValue
     }
 
 
@@ -345,10 +332,9 @@ enum RubyVersionDetection {
     ///   - `3YX` (Y>=1)     → 31
     private static func bundledRubyDLLVersion(at gameDirectory: URL,
                                               fm: FileManager) -> Int? {
-        guard let entries = try? fm.contentsOfDirectory(at: gameDirectory,
-                                                        includingPropertiesForKeys: nil) else {
-            return nil
-        }
+        let entries = gameDirectory.directoryEntries(
+            matchingExtensions: ["dll"], fm: fm
+        )
         // Match `<anything>ruby<digits>.dll` (case-insensitive),
         // where the digit run is exactly 3 chars (Ruby's stable
         // DLL naming since 1.8.7).

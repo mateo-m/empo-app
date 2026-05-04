@@ -158,49 +158,7 @@ enum Jgp {
     /// JGP uses the same `//` comment tolerance as mkxp.json. Strip comments
     /// before handing to `JSONDecoder`.
     private static func decodeWithComments<T: Decodable>(_ type: T.Type, from raw: String) -> T? {
-        let cleaned = stripLineComments(raw)
-        guard let data = cleaned.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(T.self, from: data)
-    }
-
-    private static func stripLineComments(_ raw: String) -> String {
-        var out = ""
-        var inString = false
-        var escaped = false
-        var i = raw.startIndex
-        while i < raw.endIndex {
-            let c = raw[i]
-            if escaped {
-                out.append(c)
-                escaped = false
-                i = raw.index(after: i)
-                continue
-            }
-            if c == "\\" && inString {
-                out.append(c)
-                escaped = true
-                i = raw.index(after: i)
-                continue
-            }
-            if c == "\"" {
-                inString.toggle()
-                out.append(c)
-                i = raw.index(after: i)
-                continue
-            }
-            if !inString && c == "/" {
-                let next = raw.index(after: i)
-                if next < raw.endIndex && raw[next] == "/" {
-                    while i < raw.endIndex && raw[i] != "\n" {
-                        i = raw.index(after: i)
-                    }
-                    continue
-                }
-            }
-            out.append(c)
-            i = raw.index(after: i)
-        }
-        return out
+        JSON5LiteParser.decode(T.self, from: raw)
     }
 }
 

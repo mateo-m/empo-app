@@ -28,7 +28,7 @@ enum ButtonSize {
     }
 }
 
-/// Solid brand-filled glass capsule with white text — primary CTAs.
+/// Solid brand-filled glass capsule with white text; primary CTAs.
 /// Pair with `.secondary` on the supporting action.
 struct PrimaryButtonStyle: ButtonStyle {
     var size: ButtonSize = .lg
@@ -56,7 +56,7 @@ extension ButtonStyle where Self == PrimaryButtonStyle {
     static func primary(size: ButtonSize = .lg, tint: Color) -> PrimaryButtonStyle { PrimaryButtonStyle(size: size, tint: tint) }
 }
 
-/// Lightly brand-tinted glass with brand-colored text — supporting actions.
+/// Lightly brand-tinted glass with brand-colored text; supporting actions.
 struct SecondaryButtonStyle: ButtonStyle {
     var size: ButtonSize = .lg
     var tint: Color = .brand

@@ -170,16 +170,12 @@ struct GameInfoView: View {
 
                             Divider().padding(.leading, Spacing.xl)
 
-                            // Ruby (bundled): only shown when the
-                            // game ships its own Ruby DLL/dylib
-                            // (Pokemon Flux's x64-msvcrt-ruby310.dll
-                            // and similar). This is the version the
-                            // developer authored *against*; on iOS
-                            // it isn't the version that actually
-                            // runs (we always execute on the
-                            // statically-linked engine Ruby below)
-                            // but it tells the user what target the
-                            // game's scripts were written for.
+                            // Ruby (bundled): the version the game's
+                            // own DLL targets (e.g. Pokemon Flux's
+                            // x64-msvcrt-ruby310.dll). On iOS we
+                            // execute on the statically-linked engine
+                            // Ruby below; this row just says what the
+                            // scripts were written for.
                             if let v = rubyVersion {
                                 DetailRow("Ruby (bundled)") {
                                     Text(v).monospaced()
@@ -188,15 +184,12 @@ struct GameInfoView: View {
                                 Divider().padding(.leading, Spacing.xl)
                             }
 
-                            // Ruby (runtime): always shown. This is
-                            // the version that's *actually* parsing
-                            // and executing the game's scripts on
-                            // iOS, scanned from Empo's own binary.
-                            // For vanilla XP/VX/Ace games (no bundled
-                            // DLL) this is the only Ruby row; for
-                            // games with a bundled runtime, this row
-                            // makes the gap explicit (e.g., "3.1.0p0
-                            // bundled vs 3.1.3p185 runtime").
+                            // Ruby (runtime): the version executing
+                            // the scripts on iOS, scanned from Empo's
+                            // binary. For games with a bundled DLL
+                            // this row makes the gap explicit
+                            // (e.g. "3.1.0p0 bundled vs 3.1.3p185
+                            // runtime").
                             DetailRow("Ruby (runtime)") {
                                 if !runtimeProbeFinished {
                                     ProgressView()

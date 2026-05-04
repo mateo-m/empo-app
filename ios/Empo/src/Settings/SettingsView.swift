@@ -5,11 +5,10 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showBuildInfo = false
 
-    // ExperimentalConfirmation state + .sheet binding removed
-    // alongside the ExperimentalFeature toggles in May 2026 (see
-    // AppSettings.swift). ExperimentalConfirmSheet itself stays
-    // around in Settings/ExperimentalConfirmSheet.swift for re-use
-    // if a future experimental feature lands.
+    // ExperimentalFeature toggles + ConfirmSheet/InfoSheet were
+    // deleted alongside the gamePause/cheats graduation - see the
+    // ExperimentalFeature comment block in AppSettings.swift for
+    // how to bring opt-in toggles back.
 
     var body: some View {
         @Bindable var settings = settings
@@ -244,11 +243,6 @@ private struct BuildInfoSheet: View {
         return r
     }
 
-    /// Approximate navigation bar height. The inline nav bar is
-    /// ~44pt but sits above a small status bar drag area; 56 covers
-    /// both comfortably without visibly overshooting.
-    private let navBarAllowance: CGFloat = AppSize.libraryHeader
-
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -265,7 +259,7 @@ private struct BuildInfoSheet: View {
                             // any `.font(design: .monospaced)` set here via
                             // environment resolution. Override
                             // back to `.monospaced` explicitly so the
-                            // value's font actually reads as fixed-width.
+                            // value's font reads as fixed-width.
                             Text(row.value)
                                 .font(.system(size: 15))
                                 .fontDesign(.monospaced)
@@ -288,16 +282,7 @@ private struct BuildInfoSheet: View {
                 .padding(.horizontal, Spacing._2xl)
                 .padding(.vertical, Spacing._2xl)
             }
-            // Force intrinsic sizing so the geometry reader below
-            // measures the content's real height, not the proposed
-            // full-screen height.
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { newHeight in
-                measuredHeight = newHeight
-            }
+            .intrinsicSheetContent(measuredHeight: $measuredHeight)
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Build Info")
             .navigationBarTitleDisplayMode(.inline)
@@ -308,12 +293,7 @@ private struct BuildInfoSheet: View {
                 }
             }
         }
-        .presentationDetents(
-            measuredHeight > 0
-                ? [.height(measuredHeight + navBarAllowance)]
-                : [.medium]
-        )
-        .presentationDragIndicator(.visible)
+        .intrinsicSheetDetent(measuredHeight: measuredHeight, chromeAllowance: AppSize.libraryHeader)
     }
 }
 

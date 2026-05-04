@@ -32,7 +32,7 @@ struct RootView: View {
                 .opacity(appState.phase == .playing ? 0 : 1)
                 .allowsHitTesting(appState.phase != .playing)
 
-            // Playing — transparent controls overlay.
+            // Playing; transparent controls overlay.
             // .transition(.identity) prevents the default fade-in so
             // PlayerView appears at full opacity instantly, even when
             // the phase change is wrapped in withAnimation.  This lets
@@ -95,7 +95,7 @@ struct RootView: View {
                 if appState.phase != nil {
                     // A game is running and an error surfaced.
                     // Previously called returnToLibrary() which would
-                    // trigger cross-session Ruby state cleanup — that
+                    // trigger cross-session Ruby state cleanup; that
                     // path is no longer trusted (see
                     // MRUBY_POSTMORTEM.md). Dismiss the alert; the
                     // engine state may be partially corrupt, so the

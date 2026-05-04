@@ -176,7 +176,7 @@ class GameLibrary {
         //     schema (we taught detection a new signal that may
         //     re-classify this game, OR an unknown schema string
         //     is present from a future Empo build that the user
-        //     has since downgraded from — in which case re-running
+        //     has since downgraded from; in which case re-running
         //     with the current heuristics is the safe default).
         //
         // The user's manual `rubyVersionOverride` setting takes
@@ -208,7 +208,7 @@ class GameLibrary {
         let artworkPath = metadata.customArtworkPath(in: container) ?? defaultArtwork
         let engineTitle: String? = {
             guard metadata.customTitle != nil else { return nil }
-            return title != iniTitle ? iniTitle : nil
+            return titlesMeaningfullyDiffer(title, iniTitle) ? iniTitle : nil
         }()
 
         return GameEntry(
@@ -221,12 +221,10 @@ class GameLibrary {
         )
     }
 
-    /// Comparator used to decide whether to surface the engine's
-    /// Game.ini title on a library card. Strips diacritics and
-    /// case-folds so cosmetically-equivalent names ("Pokemon
-    /// Reborn" vs "Pokémon Reborn") don't produce a nearly-
-    /// duplicate subtitle. Trailing/leading whitespace is also
-    /// ignored so a stray newline in Game.ini doesn't trip it.
+    /// True when two titles differ in something other than
+    /// diacritics, case, or surrounding whitespace. Keeps
+    /// "Pokémon Reborn" vs "Pokemon Reborn" from looking like
+    /// distinct titles on the library card.
     nonisolated private static func titlesMeaningfullyDiffer(_ a: String, _ b: String) -> Bool {
         let folded: (String) -> String = { raw in
             raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -557,7 +555,7 @@ class GameLibrary {
         // (Reborn1950.zip is one such): mid-import would show the
         // title screen, then late-extract or post-import reload
         // would replace it with the `.exe` icon that
-        // `findArtwork` actually picks. The two-stage surface
+        // `findArtwork` picks. The two-stage surface
         // never matched what the user would see post-import, so
         // we just don't surface the titles fallback during
         // extract anymore. Games without a usable `.exe` keep
@@ -642,7 +640,7 @@ class GameLibrary {
         }
         guard !isImportCancelled(importID) else { throw ImportCancelled() }
 
-        let gameRoot = try GameLibrary.findGameRoot(in: tmpDir)
+        let gameRoot = GameContainer.findGameRoot(in: tmpDir)
 
         // JGP post-processing: if the archive was a JoiPlay .jgp,
         // parse manifest/configuration/gamepad, reject unsupported
@@ -919,22 +917,6 @@ class GameLibrary {
         return nil
     }
 
-
-    nonisolated private static func findGameRoot(in dir: URL) throws -> URL {
-        let fm = FileManager.default
-        let items = try fm.contentsOfDirectory(at: dir,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles])
-
-        let meaningful = items.filter { $0.lastPathComponent != "__MACOSX" }
-
-        if meaningful.count == 1,
-           let single = meaningful.first,
-           (try? single.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
-            return single
-        }
-        return dir
-    }
 
     private func ensureGamesDirectory() {
         if !fm.fileExists(atPath: GameContainer.rootURL.path) {

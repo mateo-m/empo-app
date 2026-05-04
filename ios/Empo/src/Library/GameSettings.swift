@@ -2,21 +2,11 @@ import Foundation
 
 
 /// Render-resolution multiplier applied via mkxp-z's `enableHires`
-/// + `framebufferScalingFactor`. RGSS games render to a buffer
-/// whose dimensions are baked into the developer's scripts (544x416
-/// for RGSS3, 640x480 for RGSS1), and that buffer's aspect ratio is
-/// non-negotiable without breaking the game's own UI layout. What
-/// the host CAN do is render that buffer at a higher pixel count
-/// before downscaling to the iOS screen, which sharpens lines and
-/// text on retina displays.
-///
-/// Earlier iterations exposed an absolute-dimension picker
-/// ("1920x1080", "1280x720", etc.) that wrote `defScreenW` and
-/// `defScreenH` to mkxp.json. Those keys only sized the SDL window
-/// (irrelevant on iOS - always fullscreen), not the rendering
-/// buffer, so the picker was misleading: users selecting "1920x1080"
-/// got identical pixels to "Default". `RenderScale` is the honest
-/// replacement.
+/// + `framebufferScalingFactor`. RGSS games render to a buffer with
+/// a fixed aspect ratio (544x416 for RGSS3, 640x480 for RGSS1) that
+/// can't change without breaking the game's UI layout. What we can
+/// do is render that buffer at a higher pixel count before
+/// downscaling to the screen, which sharpens lines and text.
 enum RenderScale: String, Codable, CaseIterable, Hashable {
     case x1
     case x2
@@ -81,52 +71,47 @@ enum VerticalAlignment: String, Codable, CaseIterable {
 
 // MARK: - Setting metadata wrappers
 //
-// Each `GameSettings` field carries a "does changing this require a
-// game relaunch?" flag inline with its declaration via
-// `@Setting<T, RestartFlag>` or `@Setting<T, RuntimeFlag>`. The
-// dirty-check at the bottom of `GameSettings` walks fields via
-// Mirror reflection and consults each wrapper's flag, so adding a
-// new field forces the author to pick a category at the
-// declaration site - no separate descriptor list to keep in sync.
+// Each `GameSettings` field is wrapped with `@Setting<T, RestartFlag>`
+// or `@Setting<T, RuntimeFlag>`. The dirty-check below walks fields
+// via Mirror reflection and consults each wrapper's flag, so adding
+// a field forces the author to pick a category at the declaration
+// site - no separate descriptor list to keep in sync.
 
 
-/// Phantom-type tag indicating whether a wrapped field is
-/// mid-session re-applicable (runtime) or only honored at next
-/// engine launch (restart).
+/// Phantom-type tag for whether a field can re-apply mid-session
+/// (runtime) or only at next launch (restart).
 protocol SettingFlag {
     static var requiresRestart: Bool { get }
 }
 
-/// Field is parsed by the engine from `mkxp.json` once at RGSS
-/// thread startup. Mid-session edits land in the JSON but the
-/// running engine keeps its launch-time copy until the next quit.
+/// Engine reads this from `mkxp.json` once at RGSS thread startup.
+/// Mid-session edits hit the JSON but the running engine keeps its
+/// launch-time copy until the next quit.
 enum RestartFlag: SettingFlag {
     static let requiresRestart = true
 }
 
-/// Field flows through a host bridge or is pure host-side
-/// rendering, so edits apply on resume without a relaunch.
+/// Field flows through a host bridge or is pure host-side rendering,
+/// so edits apply on resume without a relaunch.
 enum RuntimeFlag: SettingFlag {
     static let requiresRestart = false
 }
 
 
-/// Type-erased view of a `@Setting`-wrapped property. Used by the
-/// dirty-check to ask each property whether it requires a restart -
-/// and whether its value differs from another instance's - without
-/// knowing the property's value type at compile time.
+/// Type-erased view of a `@Setting`-wrapped property. The dirty-check
+/// uses this to ask whether a property requires restart and whether
+/// its value differs from another instance's, without knowing the
+/// concrete value type at compile time.
 private protocol AnySetting {
     var requiresRestart: Bool { get }
     func anyEquals(_ other: Any) -> Bool
 }
 
 
-/// Property wrapper carrying per-field metadata. The `Flag` generic
-/// parameter is a phantom type that encodes the restart-required
-/// nature of the field at compile time, so no per-instance state is
-/// stored beyond the value itself and the JSON shape stays
-/// identical to the un-wrapped form (single value per key, no
-/// metadata serialized).
+/// Per-field metadata carrier. `Flag` is a phantom type that encodes
+/// the restart-required nature at compile time, so the JSON shape
+/// stays identical to the un-wrapped form (one value per key, no
+/// metadata in the encoded output).
 @propertyWrapper
 struct Setting<Value: Codable & Equatable, Flag: SettingFlag>: Codable, Equatable {
     var wrappedValue: Value
@@ -159,12 +144,11 @@ extension Setting: AnySetting {
 }
 
 
-/// Allow a `GameSettings` JSON file to omit a wrapped optional
-/// field entirely. Swift's auto-synthesized `init(from:)` only
-/// applies the "missing key -> nil" rule to bare `Optional`
-/// properties, not wrapper-typed ones, so without this overload
-/// missing keys would throw "key not found" the first time a user
-/// upgrades to a build that adds a new field.
+/// Lets a `GameSettings` JSON file omit a wrapped optional field.
+/// Swift's auto-synthesized `init(from:)` only treats missing keys
+/// as nil for bare `Optional` properties, not wrapper-typed ones, so
+/// new fields would throw "key not found" on first upgrade without
+/// this.
 extension KeyedDecodingContainer {
     func decode<V, F>(_ type: Setting<V?, F>.Type, forKey key: Key) throws -> Setting<V?, F>
     where V: Codable & Equatable, F: SettingFlag {
@@ -176,28 +160,25 @@ extension KeyedDecodingContainer {
 }
 
 
-/// Per-game settings stored as `game_settings.json` in each game directory.
-/// All fields are optional - nil means "use game/engine default".
+/// Per-game settings stored as `game_settings.json` in each game
+/// directory. All fields are optional; nil means "use game/engine
+/// default".
 ///
-/// Each field is annotated with `@Setting<..., RestartFlag>` or
-/// `@Setting<..., RuntimeFlag>` so the dirty-check below can
-/// surface a "restart required" hint in the UI when the user edits
-/// a launch-time field while an engine session is active. When
-/// adding a new field, pick the flag that matches how the value
-/// reaches the engine (raw mkxp.json read at launch -> Restart;
-/// host bridge or rendering -> Runtime).
+/// Each field carries `@Setting<..., RestartFlag>` or
+/// `@Setting<..., RuntimeFlag>`. The dirty-check below uses the flag
+/// to surface a "restart required" hint when the user edits a
+/// launch-time field during an active session. When adding a field,
+/// pick the flag that matches how the value reaches the engine:
+/// `mkxp.json` at launch -> Restart; host bridge or rendering ->
+/// Runtime.
 struct GameSettings: Codable, Equatable {
     // Display
     /// true = bilinear (1), false = pixel-perfect (0)
     @Setting<Bool?, RestartFlag> var smoothScaling: Bool? = nil
     /// true = letterbox, false = stretch-to-fill
     @Setting<Bool?, RestartFlag> var fixedAspectRatio: Bool? = nil
-    /// Render-buffer multiplier (1x / 2x / 4x). Maps to
-    /// `enableHires` + `framebufferScalingFactor` in mkxp.json.
-    /// Replaces the dead `resolution` field that wrote
-    /// `defScreenW`/`defScreenH` (which only sized the SDL window
-    /// and had no effect on iOS, since the window is always
-    /// fullscreen).
+    /// Render-buffer multiplier (1x / 2x / 4x). Maps to `enableHires`
+    /// + `framebufferScalingFactor` in mkxp.json.
     @Setting<RenderScale?, RestartFlag> var renderScale: RenderScale? = nil
     /// portrait screen alignment - host-side rendering, no engine input
     @Setting<VerticalAlignment?, RuntimeFlag> var verticalAlignment: VerticalAlignment? = nil
@@ -224,46 +205,29 @@ struct GameSettings: Codable, Equatable {
     // Engine
     /// execute postload scripts for common fixes
     @Setting<Bool?, RestartFlag> var postloadScripts: Bool? = nil
-    /// Nil = default (Ruby 1.8 compat for max PE fangame compatibility).
-    /// True = disable syntaxTransform so the engine runs pure Ruby 3.
-    /// Needed for games that ship Ruby-3-era scripts (keyword-arg
-    /// hash shorthand, numbered block params, etc.) - notably Pokemon
-    /// Reborn 19.5+, PE v20+, and any game packaged for the mkxp-z
-    /// runtime. Detected automatically during JGP import by scanning
-    /// .rb scripts for Ruby-3-only syntax, but users can also flip
-    /// this manually per game if the heuristic misses.
-    ///
-    /// Superseded by `rubyVersionOverride` in the multi-Ruby world.
-    /// Field retained for backward-compatible decoding of older
-    /// `game_settings.json` files; the multi-Ruby UI no longer
-    /// surfaces it. Will go away once syntax-transform is dropped.
+    /// Legacy "skip the Ruby 1.8 compat transform" toggle, superseded
+    /// by `rubyVersionOverride`. Kept for backward-compatible decoding
+    /// of older `game_settings.json` files; the UI no longer surfaces
+    /// it. Will go away once syntax-transform is dropped.
     @Setting<Bool?, RestartFlag> var useModernRuby: Bool? = nil
 
     /// Manual override for the per-game Ruby interpreter version.
-    /// nil = use auto-detection (RubyVersionDetection.detect, run
-    /// at import time and persisted on metadata.rubyVersion).
-    /// 18 / 19 / 30 / 31 = force that interpreter, ignoring
-    /// detection.
+    /// nil = use auto-detection from import; 18 / 19 / 30 / 31 forces
+    /// that interpreter. Surfaced as the "Ruby version" picker in
+    /// GameSettingsView and read by `AppState.selectGame` (calls
+    /// `mkxp_setActiveRubyVersion()` before engine boot).
     ///
-    /// Surfaced as the "Ruby version" picker in GameSettingsView.
-    /// Read by AppState.selectGame which calls
-    /// `mkxp_setActiveRubyVersion()` before the engine boots; the
-    /// override takes precedence over `metadata.rubyVersion`.
-    ///
-    /// Stored as Int so unknown values from a future Empo build
-    /// don't break decoding of older settings. Restart-required
-    /// because the active Ruby version is locked at app launch
-    /// (cross-session quit paths are disabled — see
-    /// QUIT_PATHS_DISABLED.md).
+    /// Stored as Int so unknown values from a future Empo build don't
+    /// break decoding. Restart-required because the active Ruby
+    /// version is locked at app launch.
     @Setting<Int?, RestartFlag> var rubyVersionOverride: Int? = nil
 
     /// Force the Pokemon Essentials in-game keyboard scene for text
-    /// entry instead of the iOS soft keyboard. Default false (use
-    /// the soft keyboard, which works for IF / Reborn / Insurgence).
-    /// Flip on for games whose keyboard scene adds custom keys or
-    /// layouts that the iOS soft keyboard can't drive. Routes
-    /// through the `mkxp_setUseInGameKeyboard` bridge to
-    /// `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
+    /// entry instead of the iOS soft keyboard. Default false (the
+    /// soft keyboard works for IF / Reborn / Insurgence). Flip on
+    /// for games whose keyboard scene adds custom keys the soft
+    /// keyboard can't drive. Routes through `mkxp_setUseInGameKeyboard`
+    /// to `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
     @Setting<Bool?, RuntimeFlag> var useInGameKeyboard: Bool? = nil
 
 
@@ -271,12 +235,9 @@ struct GameSettings: Codable, Equatable {
     private static let configFilename = "mkxp.json"
 
 
-    /// Read the game's settings sidecar.
-    ///
-    /// `stateDirectory` is the per-game `<container>/EmpoState/`
-    /// directory (typically obtained via `container.empoStateURL`),
-    /// NOT the imported `Game/` subdir - settings live outside the
-    /// game files so the imported tree stays pristine.
+    /// Read the game's settings sidecar from `<container>/EmpoState/`
+    /// (NOT the imported `Game/` subdir; settings live outside the
+    /// game files so the imported tree stays pristine).
     static func load(from stateDirectory: URL) -> GameSettings {
         let url = stateDirectory.appendingPathComponent(settingsFilename)
         guard let data = try? Data(contentsOf: url),
@@ -286,32 +247,20 @@ struct GameSettings: Codable, Equatable {
         return settings
     }
 
-    /// True if any `RestartFlag`-tagged field differs between
-    /// `self` and `other`. The engine reads its config once on RGSS
-    /// thread startup and never re-reads, so launch-time fields
-    /// need a full quit + relaunch to take effect; runtime fields
-    /// (`RuntimeFlag`) flow through bridges and apply on resume.
-    ///
-    /// Walks the struct's properties via Mirror reflection - each
-    /// `@Setting`-wrapped field exposes `requiresRestart` through
-    /// the private `AnySetting` protocol, so this check stays
-    /// accurate as new fields are added without any list to
-    /// maintain. The author of a new field picks
-    /// `@Setting<..., RestartFlag>` vs `RuntimeFlag` at the
-    /// declaration site and the dirty-check follows automatically.
+    /// True if any `RestartFlag`-tagged field differs between `self`
+    /// and `other`. The engine reads its config once at RGSS thread
+    /// startup and never re-reads, so launch-time fields need a quit
+    /// + relaunch; runtime fields apply on resume.
     func differsInRestartRequiredFields(from other: GameSettings) -> Bool {
         !restartRequiredFieldsChanged(from: other).isEmpty
     }
 
 
     /// User-facing labels of restart-required fields whose values
-    /// differ between `self` and `other`. The UI feeds this into
-    /// the restart-hint pill so the user sees which specific
-    /// settings are pending a relaunch (e.g. "Smooth scaling and
-    /// Render scale") instead of a generic "something changed".
-    /// Order is the declaration order of the property wrappers,
-    /// which keeps the rendered list visually stable as the user
-    /// toggles fields back and forth.
+    /// differ between `self` and `other`. Feeds the restart-hint pill
+    /// (e.g. "Smooth scaling and Render scale") instead of a generic
+    /// "something changed". Order follows declaration order so the
+    /// rendered list stays stable as the user toggles fields.
     func restartRequiredFieldsChanged(from other: GameSettings) -> [String] {
         let lhsChildren = Mirror(reflecting: self).children
         let rhsChildren = Mirror(reflecting: other).children
@@ -320,13 +269,12 @@ struct GameSettings: Codable, Equatable {
             guard let lhsSetting = lhs.value as? AnySetting,
                   let rhsSetting = rhs.value as? AnySetting
             else {
-                // Unwrapped properties bypass the dirty-check
-                // silently in release builds; surface the omission
-                // loudly in debug so the author of a new field gets
-                // a clear nudge to add `@Setting<..., Flag>`.
+                // Bare properties bypass the dirty-check in release;
+                // crash debug builds so a new field author gets nudged
+                // to add `@Setting<..., Flag>`.
                 assertionFailure(
                     "GameSettings.\(lhs.label ?? "<unknown>") missing @Setting wrapper - "
-                    + "the restart-hint logic can't see this field"
+                    + "restart-hint logic can't see this field"
                 )
                 continue
             }
@@ -340,19 +288,16 @@ struct GameSettings: Codable, Equatable {
     }
 
 
-    /// Maps a Mirror property label (which the property-wrapper
-    /// machinery renders with a leading underscore, e.g.
-    /// `_smoothScaling`) to a user-facing label suitable for the
-    /// restart-hint pill. Centralized switch instead of camelCase
-    /// auto-formatting because the UI strings need real copy
-    /// review (acronyms like "VSync", multi-word phrases, etc.)
-    /// and silent string drift on rename would be worse than the
-    /// modest maintenance cost of one entry per restart-required
-    /// field.
+    /// Maps a Mirror property label (rendered with a leading
+    /// underscore by the property-wrapper machinery, e.g.
+    /// `_smoothScaling`) to a user-facing label for the restart-hint
+    /// pill. Hand-mapped switch instead of camelCase auto-formatting
+    /// because the UI copy needs real review (acronyms like "VSync",
+    /// multi-word phrases) and silent string drift on rename is worse
+    /// than one entry per restart-required field.
     private static func displayLabel(forFieldLabel mirrorLabel: String) -> String {
-        // The property-wrapper machinery prefixes Mirror labels
-        // with an underscore. Normalize to the bare property name
-        // so the switch reads naturally.
+        // Strip the leading underscore the property-wrapper machinery
+        // prefixes onto Mirror labels.
         let key = mirrorLabel.hasPrefix("_")
             ? String(mirrorLabel.dropFirst())
             : mirrorLabel
@@ -368,9 +313,8 @@ struct GameSettings: Codable, Equatable {
         case "postloadScripts":   return "Postload scripts"
         case "useModernRuby":     return "Ruby compatibility mode"
         default:
-            // Fallback for fields added without an entry here -
-            // surface the raw camelCase name so the bug is
-            // visible in the UI rather than silently dropped.
+            // Surface the raw camelCase name so the missing mapping
+            // is visible in the UI rather than silently dropped.
             assertionFailure("Missing displayLabel mapping for GameSettings.\(key)")
             return key
         }
@@ -389,99 +333,61 @@ struct GameSettings: Codable, Equatable {
     }
 
 
-    /// Scans a freshly-imported game folder for Ruby 3-only syntax
-    /// markers and returns true if any are found. Used by the
-    /// import pipeline to set `useModernRuby` so the engine runs
-    /// without the Ruby 1.8 compat transform for games that ship
-    /// modern Ruby source (Reborn 19.5+, PE v20+, mkxp-z JGPs).
+    /// Returns true if a freshly-imported game folder looks like it
+    /// runs on Ruby 3 (Reborn 19.5+, PE v20+, mkxp-z JGPs). Used
+    /// during import to set `useModernRuby` so the engine skips the
+    /// Ruby 1.8 compat transform.
     ///
-    /// Detection runs three checks, in order, ANY-of:
+    /// Three signals, ANY-of:
     ///
-    /// 1. Bundled Ruby 3.x runtime, detected by binary content
-    ///    scan rather than filename. Modern custom engines ship
-    ///    their own Ruby (Pokemon Flux's `x64-msvcrt-ruby310.dll`,
-    ///    macOS bundles' `libruby.3.x.dylib`) because the original
-    ///    RGSS player can't run their scripts. We open every
-    ///    `.dll`/`.dylib`/`.so` in the game folder and look for
-    ///    Ruby's embedded `RUBY_DESCRIPTION` byte pattern (e.g.,
-    ///    `"ruby 3.1.4"`). This is robust against rename: a
-    ///    developer can call the file `bundled.dll` and we still
-    ///    detect it. Ruby 1.8/1.9 binaries embed `"ruby 1.8."` /
-    ///    `"ruby 1.9."` instead, which the scan ignores; vanilla
-    ///    RPG Maker XP/VX/Ace games therefore don't false-positive.
-    ///    RGSS-version and Ruby-version are independent (RGSS1/2/3
-    ///    is a graphics API choice, not a parser choice), so this
-    ///    correctly handles RGSS1 games shipped with a modern Ruby.
+    /// 1. Bundled Ruby 3.x runtime, detected by binary content scan.
+    ///    Modern custom engines ship their own Ruby (Pokemon Flux's
+    ///    `x64-msvcrt-ruby310.dll`, macOS bundles' `libruby.3.x.dylib`).
+    ///    We scan every `.dll`/`.dylib`/`.so` for the byte pattern
+    ///    `"ruby 3."`. Robust to rename. Vanilla 1.8/1.9 binaries
+    ///    embed `"ruby 1.8."` / `"ruby 1.9."` instead, so RGSS1/2/3
+    ///    games don't false-positive (RGSS version and Ruby version
+    ///    are independent).
     ///
-    /// 2. `.fpk` packaging next to `Scripts.rxdata`. .fpk is a 7z
-    ///    archive used by post-2020 custom engines (Pokemon Flux
-    ///    ships scripts inside `Data/Data_0.fpk`, mounted at
-    ///    runtime via `System.mount`). Vanilla RPG Maker doesn't
-    ///    use .fpk; presence of one means a custom modern engine.
-    ///    Complements signal 1 in case the bundled Ruby is
-    ///    statically linked into a game .exe whose path we don't
-    ///    walk.
+    /// 2. `.fpk` packaging in `Data/`. The 7z archive format used by
+    ///    post-2020 custom engines (Pokemon Flux mounts scripts from
+    ///    `Data/Data_0.fpk` via `System.mount`). Vanilla RPG Maker
+    ///    doesn't use .fpk. Catches games that statically linked
+    ///    Ruby into the .exe and so escaped signal 1.
     ///
-    /// 3. Loose `.rb` files containing keyword-arg shorthand
-    ///    (`id: -1,`, `foo: "bar",`). False positives on comments
-    ///    or strings are possible but rare; disabling the transform
-    ///    on a 1.8 game still runs it as Ruby 3, which works for
-    ///    everything except legacy constructs the transform would
-    ///    have rewritten (and the user can flip the setting back
-    ///    manually).
-    ///
-    /// Signals 1 and 2 catch games that ship their entire script
-    /// surface inside encrypted/packaged archives (Pokemon Flux,
-    /// modern fan engines). Signal 3 catches games that ship loose
-    /// .rb (Reborn 19+, Infinite Fusion, PE v20+).
+    /// 3. Loose `.rb` files with keyword-arg shorthand
+    ///    (`id: -1,`, `foo: "bar",`). False positives on comments or
+    ///    strings are rare; running a 1.8 game as Ruby 3 still works
+    ///    for everything except legacy constructs the transform
+    ///    would have rewritten, and the user can flip back manually.
     static func detectModernRubyScripts(in gameDirectory: URL) -> Bool {
         let fm = FileManager.default
 
-        // Signal 1: scan native binaries for an embedded Ruby 3.x
-        // version string. Robust to filename changes: the
-        // `RUBY_DESCRIPTION` literal lives inside the binary at
-        // a fixed offset relative to Ruby's `Init_*` machinery, so
-        // searching for the byte pattern `"ruby 3."` in the file
-        // contents is reliable even if the developer renames the
-        // DLL/dylib.
-        //
-        // Capped at 64 MB per file as a safety bound. Real Ruby
-        // DLLs are 5-15 MB; anything larger is unlikely to be
-        // Ruby and not worth the IO cost.
-        let binaryExtensions: Set<String> = ["dll", "dylib", "so"]
+        // Signal 1: scan native binaries for an embedded `"ruby 3."`
+        // string. Capped at 64 MB per file; real Ruby DLLs are 5-15 MB,
+        // anything bigger is unlikely to be Ruby.
         let modernRubyMarker = Data("ruby 3.".utf8)
         let scanBudget = 64 * 1024 * 1024
-        if let entries = try? fm.contentsOfDirectory(atPath: gameDirectory.path) {
-            for entry in entries {
-                let ext = (entry as NSString).pathExtension.lowercased()
-                guard binaryExtensions.contains(ext) else { continue }
-                let url = gameDirectory.appendingPathComponent(entry)
-                guard let attrs = try? fm.attributesOfItem(atPath: url.path),
-                      let size = attrs[.size] as? Int,
-                      size <= scanBudget,
-                      let data = try? Data(contentsOf: url, options: .alwaysMapped)
-                else { continue }
-                if data.range(of: modernRubyMarker) != nil { return true }
-            }
+        for url in gameDirectory.directoryEntries(matchingExtensions: ["dll", "dylib", "so"], fm: fm) {
+            guard let attrs = try? fm.attributesOfItem(atPath: url.path),
+                  let size = attrs[.size] as? Int,
+                  size <= scanBudget,
+                  let data = try? Data(contentsOf: url, options: .alwaysMapped)
+            else { continue }
+            if data.range(of: modernRubyMarker) != nil { return true }
         }
 
-        // Signal 2: .fpk packaging. The format is a 7z archive
-        // containing scripts, mounted at runtime by the game's Main
-        // bootstrapper via mkxp-z's `System.mount`. Only modern
-        // custom engines use it, so its mere presence in `Data/`
-        // is enough.
+        // Signal 2: .fpk packaging. Modern custom engines mount
+        // scripts from .fpk archives via `System.mount`; presence in
+        // `Data/` is enough.
         let dataDir = gameDirectory.appendingPathComponent("Data")
-        if let dataEntries = try? fm.contentsOfDirectory(atPath: dataDir.path) {
-            for entry in dataEntries
-            where entry.lowercased().hasSuffix(".fpk") {
-                return true
-            }
+        if !dataDir.directoryEntries(matchingExtensions: ["fpk"], fm: fm).isEmpty {
+            return true
         }
 
-        // Signal 3: loose .rb files with Ruby-3 keyword args.
-        // Search depth is capped by the enumerator's defaults.
-        // Stop at the first positive match to keep big fangames
-        // from scanning thousands of files on import.
+        // Signal 3: loose .rb files with Ruby-3 keyword args. Depth
+        // capped by the enumerator's defaults; stops at first match
+        // to keep big fangames from scanning thousands of files.
         let candidates = [
             gameDirectory,
             gameDirectory.appendingPathComponent("Scripts"),
@@ -490,28 +396,23 @@ struct GameSettings: Codable, Equatable {
 
         // Ruby-3 keyword-arg shorthand. A name followed by `:` and a
         // space then a literal/variable, NOT preceded by `:` (which
-        // would make it a symbol literal) and NOT followed by `:`
-        // (which would make it a constant like `Foo::Bar`).
+        // would make it a symbol literal) and NOT followed by `:` (a
+        // constant like `Foo::Bar`).
         //
-        // We match two call-sites:
-        //   1. Start of a line (formatted kwargs):
-        //        method_call(
+        // Matches two call sites:
+        //   1. Start of a line (multi-line kwargs):
+        //        method(
         //          name: "bar",
-        //          other: 123
         //        )
         //   2. Inline after `(` `,` or `{` (single-line kwargs):
-        //        method_call(name: "bar", other: 123)
-        //        { name: "bar" }
+        //        method(name: "bar", other: 123)
         //
-        // The original detector only caught case 1, missing inline
-        // calls like Infinite Fusion's `Game.save(safe: safesave)` on
-        // a single line. That mis-flagged IF as a 1.8 game, leading
-        // to `syntaxTransform: 2` being written and the engine
-        // rejecting `safe:` as "unexpected ':'".
+        // Originally only matched case 1, which missed inline calls
+        // like IF's `Game.save(safe: safesave)` and mis-flagged the
+        // game as Ruby 1.8.
         //
-        // The value side `(-?\d|...|[a-z])` admits a leading
-        // lowercase identifier so that `safe: safesave` (value is a
-        // local variable) matches too, not just literal values.
+        // The value side `(-?\d|...|[a-z])` admits a leading lowercase
+        // identifier so `safe: safesave` (variable, not literal) hits.
         let modernRegex = try? NSRegularExpression(
             pattern: "(?:^|(?<=[(,{]))\\s*[a-z_][a-zA-Z0-9_]*:\\s+(-?\\d|\"|'|\\[|\\{|true|false|nil|:[a-zA-Z_]|[a-z_])",
             options: [.anchorsMatchLines]
@@ -563,7 +464,7 @@ struct GameSettings: Codable, Equatable {
     ///
     /// Three signals, ANY-of. All require PE's actual code, data,
     /// or runtime presence so non-PE games can't false-positive
-    /// simply by being Pokemon-themed (we deliberately do NOT
+    /// just because they're Pokemon-themed (we deliberately do NOT
     /// title-match on "pokemon" / "poké" / "pokémon" since plenty
     /// of games reference the franchise by name without using PE
     /// under the hood):
@@ -679,7 +580,7 @@ struct GameSettings: Codable, Equatable {
     /// Reads the game's mkxp.json defaults straight from the
     /// imported game folder. `gameDirectory` is the per-game
     /// `<container>/Game/` directory which is treated as immutable
-    /// after import — Empo's managed config (`EmpoState/mkxp.json`)
+    /// after import; Empo's managed config (`EmpoState/mkxp.json`)
     /// is generated from this source plus user overrides, never
     /// merged back. That makes `Game/mkxp.json` the developer's
     /// source-of-truth for the per-game-defaults UI.
@@ -722,7 +623,7 @@ struct GameSettings: Codable, Equatable {
             fixedAspectRatio: config["fixedAspectRatio"] as? Bool,
             renderScale: renderScale,
             frameSkip: config["frameSkip"] as? Bool,
-            // The mkxp-z engine actually controls vsync via
+            // mkxp-z controls vsync via
             // `syncToRefreshrate`. The legacy `vsync` field exists in
             // the parsed Config struct but is read by no rendering
             // code, so writing it has no effect. Read both for
@@ -743,7 +644,7 @@ struct GameSettings: Codable, Equatable {
     /// `stateDirectory` is the per-game state directory (where the
     /// merged mkxp.json is written). `gameDirectory` is the
     /// imported `<container>/Game/` folder, which Empo treats as
-    /// immutable after import — so reading the developer's source
+    /// immutable after import; so reading the developer's source
     /// directly from `gameDirectory/mkxp.json` is safe and removes
     /// the need for the historic `mkxp.original.json` snapshot.
     func applyToConfig(stateDirectory: URL, gameDirectory: URL) {
@@ -822,67 +723,15 @@ struct GameSettings: Codable, Equatable {
     }
 
 
-    /// Parses JSON with `//` line comments (as used by mkxp.json).
+    /// Parses mkxp.json (which can have `//` comments). Thin
+    /// wrapper around `JSON5LiteParser` kept for call-site brevity.
     static func parseJSONWithComments(_ raw: String) -> [String: Any]? {
-        // Normalize CRLF/CR to LF first. Swift treats `\r\n` as a single
-        // grapheme cluster that never equals `"\n"`, which would make the
-        // comment-skip loop below consume the rest of the file.
-        let normalized = raw.replacingOccurrences(of: "\r\n", with: "\n")
-                            .replacingOccurrences(of: "\r", with: "\n")
-
-        var cleaned = ""
-        var inString = false
-        var escaped = false
-        var i = normalized.startIndex
-
-        while i < normalized.endIndex {
-            let c = normalized[i]
-
-            if escaped {
-                cleaned.append(c)
-                escaped = false
-                i = normalized.index(after: i)
-                continue
-            }
-
-            if c == "\\" && inString {
-                cleaned.append(c)
-                escaped = true
-                i = normalized.index(after: i)
-                continue
-            }
-
-            if c == "\"" {
-                inString.toggle()
-                cleaned.append(c)
-                i = normalized.index(after: i)
-                continue
-            }
-
-            if !inString && c == "/" {
-                let next = normalized.index(after: i)
-                if next < normalized.endIndex && normalized[next] == "/" {
-                    while i < normalized.endIndex && normalized[i] != "\n" {
-                        i = normalized.index(after: i)
-                    }
-                    continue
-                }
-            }
-
-            cleaned.append(c)
-            i = normalized.index(after: i)
-        }
-
-        guard let data = cleaned.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return nil
-        }
-        return json
+        JSON5LiteParser.parseObject(raw)
     }
 }
 
 
-/// Values from the game's mkxp.json — the developer's intended defaults.
+/// Values from the game's mkxp.json; the developer's intended defaults.
 struct GameConfigDefaults {
     var smoothScaling: Bool?
     var fixedAspectRatio: Bool?

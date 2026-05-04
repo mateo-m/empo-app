@@ -1,21 +1,16 @@
 import SwiftUI
 
-//
 // 60-30-10 rule:
-//   60% neutral  — system backgrounds, primary/secondary text (iOS defaults)
-//   30% secondary — tinted surfaces, cards, badges, supporting elements
-//   10% accent    — CTAs, toggles, active/highlighted states
+//   60% neutral: system backgrounds, primary/secondary text (iOS defaults)
+//   30% secondary: tinted surfaces, cards, badges, supporting elements
+//   10% accent: CTAs, toggles, active/highlighted states
 //
-// The accent color is brand orange. The secondary is a warm-tinted neutral
-// derived from the accent — it creates cohesion without competing.
+// Accent is brand orange. Secondary is a warm-tinted neutral derived
+// from the accent for cohesion.
 
 extension Color {
-    // Pinned brand orange as a fixed RGB - not Color.orange. SwiftUI's
-    // semantic Color.orange shifts toward yellow when rendered on
-    // white backgrounds (like inverted sheets), and the shift is
-    // inconsistent enough across contexts that the brand looked
-    // different from screen to screen. Fixed RGB resolves to one
-    // predictable orange everywhere.
+    /// Brand orange as fixed RGB. `Color.orange` drifts yellow on
+    /// inverted sheets, which read inconsistently across contexts.
     static let brand = Color(red: 0.98, green: 0.56, blue: 0.16)
 
     /// Dark: warm dark surface with a hint of amber.
@@ -60,39 +55,39 @@ extension Color {
 // 4-point grid.
 
 enum Spacing {
-    /// 2pt — hairline gaps, tight label spacing
+    /// 2pt; hairline gaps, tight label spacing
     static let xxs: CGFloat = 2
-    /// 4pt — minimal padding, inline icon gaps
+    /// 4pt; minimal padding, inline icon gaps
     static let xs: CGFloat = 4
-    /// 6pt — compact element spacing
+    /// 6pt; compact element spacing
     static let sm: CGFloat = 6
-    /// 8pt — standard inner padding, small gaps
+    /// 8pt; standard inner padding, small gaps
     static let md: CGFloat = 8
-    /// 12pt — grid gutter, between related elements
+    /// 12pt; grid gutter, between related elements
     static let lg: CGFloat = 12
-    /// 16pt — section padding, screen-edge horizontal margins
+    /// 16pt; section padding, screen-edge horizontal margins
     static let xl: CGFloat = 16
-    /// 20pt — generous section spacing
+    /// 20pt; generous section spacing
     static let _2xl: CGFloat = 20
-    /// 32pt — large section breaks
+    /// 32pt; large section breaks
     static let _3xl: CGFloat = 32
-    /// 40pt — extra-large section breaks
+    /// 40pt; extra-large section breaks
     static let _4xl: CGFloat = 40
 }
 
 
 enum Radius {
-    /// 4pt — small chips, inline badges
+    /// 4pt; small chips, inline badges
     static let xs: CGFloat = 4
-    /// 8pt — thumbnails, list row artwork
+    /// 8pt; thumbnails, list row artwork
     static let sm: CGFloat = 8
-    /// 12pt — cards, dialogs, sheets
+    /// 12pt; cards, dialogs, sheets
     static let md: CGFloat = 12
-    /// 16pt — large cards, prominent containers
+    /// 16pt; large cards, prominent containers
     static let lg: CGFloat = 16
-    /// 24pt — hero elements, large artwork
+    /// 24pt; hero elements, large artwork
     static let xl: CGFloat = 24
-    /// 56pt — modal sheets, experimental cards
+    /// 56pt; modal sheets and large rounded panels
     static let sheet: CGFloat = 56
 }
 
@@ -121,18 +116,11 @@ extension View {
         shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
 
-    /// Width cap + truncation discipline for the principal-toolbar
-    /// VStack on every custom-titled sheet. Without this, long titles
-    /// (e.g. an interpolated game name in a confirmation sheet)
-    /// expand the principal slot horizontally and SwiftUI shoves the
-    /// VStack off-center to make room for the trailing toolbar
-    /// button. The hard 250pt cap matches GameInfoView's existing
-    /// limit, the lineLimit + minimumScaleFactor combo lets text
-    /// scale before truncating so most titles stay legible.
-    ///
-    /// Apply to the outer VStack, NOT individual Text rows: any Text
-    /// inside the capped VStack inherits the layout container, and
-    /// per-row lineLimit/minimumScaleFactor inside still works.
+    /// Width cap for a custom-titled sheet's principal-toolbar VStack.
+    /// Without this, long interpolated titles push the VStack off-center
+    /// to make room for the trailing toolbar button. Applied to the
+    /// outer VStack so child Text rows still get their own line-limit
+    /// and scale-factor treatment.
     func sheetTitle(maxWidth: CGFloat = 250) -> some View {
         self.frame(maxWidth: maxWidth)
     }
@@ -150,13 +138,9 @@ extension View {
 
 
 
-
-
-
-/// Typography tokens used for one-off sites that don't fit a
-/// SwiftUI semantic text style. Prefer a semantic font
-/// (`.body`, `.headline`) first; reach for these only when the
-/// design needs a specific tuned size/weight/design.
+/// Typography tokens for sites that don't fit a SwiftUI semantic
+/// text style. Prefer `.body` / `.headline` first; reach for these
+/// only when the design needs a specific size/weight/design.
 enum AppFont {
     /// The Empo wordmark - splash and settings header.
     static let wordmark = Font.system(size: 40, weight: .bold, design: .rounded)

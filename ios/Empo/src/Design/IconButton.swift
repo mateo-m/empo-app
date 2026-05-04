@@ -1,9 +1,7 @@
 import SwiftUI
 
-/// Size scale for `IconButton`. Mirrors `ButtonSize` so call sites can
-/// pick a semantic scale instead of hardcoding points. The enum
-/// resolves to a frame side length; the SF Symbol scales with it via
-/// the existing 0.42 ratio in `IconButton.icon`.
+/// Frame size for `IconButton`. Resolves to a side length in points;
+/// the SF Symbol scales with it via the 0.42 ratio in `IconButton.icon`.
 enum IconButtonSize {
     case sm, md, lg
 
@@ -19,37 +17,27 @@ enum IconButtonSize {
 struct IconButton: View {
     let systemName: String
     let style: Style
-    let size: CGFloat
+    let size: IconButtonSize
     let tint: Color?
     let contentTransition: ContentTransition
     private let action: (() -> Void)?
 
     enum Style { case primary, secondary, outline }
 
-    init(_ systemName: String, style: Style = .outline, size: CGFloat = AppSize.toolbarButton, tint: Color? = nil, contentTransition: ContentTransition = .identity, action: @escaping () -> Void) {
+    init(
+        _ systemName: String,
+        style: Style = .outline,
+        size: IconButtonSize = .md,
+        tint: Color? = nil,
+        contentTransition: ContentTransition = .identity,
+        action: (() -> Void)? = nil
+    ) {
         self.systemName = systemName
         self.style = style
         self.size = size
         self.tint = tint
         self.contentTransition = contentTransition
         self.action = action
-    }
-
-    init(_ systemName: String, style: Style = .outline, size: IconButtonSize, tint: Color? = nil, contentTransition: ContentTransition = .identity, action: @escaping () -> Void) {
-        self.init(systemName, style: style, size: size.points, tint: tint, contentTransition: contentTransition, action: action)
-    }
-
-    init(_ systemName: String, style: Style = .outline, size: CGFloat = AppSize.toolbarButton, tint: Color? = nil) {
-        self.systemName = systemName
-        self.style = style
-        self.size = size
-        self.tint = tint
-        self.contentTransition = .identity
-        self.action = nil
-    }
-
-    init(_ systemName: String, style: Style = .outline, size: IconButtonSize, tint: Color? = nil) {
-        self.init(systemName, style: style, size: size.points, tint: tint)
     }
 
     var body: some View {
@@ -73,9 +61,9 @@ struct IconButton: View {
     private var icon: some View {
         Image(systemName: systemName)
             .contentTransition(contentTransition)
-            .font(.system(size: size * 0.42, weight: .medium))
+            .font(.system(size: size.points * 0.42, weight: .medium))
             .foregroundStyle(foregroundColor)
-            .frame(width: size, height: size)
+            .frame(width: size.points, height: size.points)
             .background {
                 if style == .outline {
                     Circle().strokeBorder(.quaternary.opacity(0.5), lineWidth: 1)

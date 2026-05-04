@@ -15,7 +15,7 @@ import UIKit
 /// resources, reassembled into a standalone `.ico` blob for
 /// `UIImage(data:)`. The import table is consulted so that in
 /// games which ship multiple executables (e.g. Pokemon Uranium's
-/// `Uranium.exe` + `Patcher.exe`) the one that actually imports
+/// `Uranium.exe` + `Patcher.exe`) the one that imports
 /// `RGSS*.dll` gets picked and updater / installer binaries are skipped.
 ///
 /// Anything unexpected (bad signatures, truncated data, overflows)
@@ -112,11 +112,9 @@ enum ExecutableIconExtractor {
         }
 
         let gameDir = container.gameURL
-        guard let items = try? fm.contentsOfDirectory(atPath: gameDir.path) else {
-            return nil
-        }
-
-        let exeItems = items.filter { $0.lowercased().hasSuffix(".exe") }
+        let exeItems = gameDir
+            .directoryEntries(matchingExtensions: ["exe"], fm: fm)
+            .map { $0.lastPathComponent }
         let ordered: [String]
         if let canonical = exeItems.first(where: { $0.lowercased() == "game.exe" }) {
             ordered = [canonical] + exeItems.sorted().filter { $0 != canonical }
@@ -390,7 +388,7 @@ struct PEImage {
             groups: &groups
         )
 
-        // Pick the largest icon variant that can actually be emitted. A
+        // Pick the largest icon variant we can emit. A
         // variant is only usable when its matching RT_ICON
         // payload is present in the icons dict - some PEs
         // reference variants in GROUP_ICON that the ID subtree
