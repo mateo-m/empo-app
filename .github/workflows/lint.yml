@@ -83,13 +83,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install shfmt + shellcheck
+      - name: Cache apt: shellcheck
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: shellcheck
+          version: "1.0"
+
+      - name: Install shfmt
         run: |
-          # shellcheck is pre-installed on GitHub-hosted ubuntu
-          # runners but not in many community runner images, so
-          # install it explicitly for portability.
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends shellcheck
           curl -fsSL -o /usr/local/bin/shfmt \
             https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64
           chmod +x /usr/local/bin/shfmt
@@ -117,18 +118,22 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
+          # Built-in npm cache keyed off package-lock.json. Saves
+          # ~5s per run after first warm-up.
+          cache: "npm"
 
-      - name: Install tools
-        run: |
-          npm install -g prettier@3
-          # yamllint comes from apt to avoid PEP 668 (Ubuntu 24.04+
-          # blocks unmanaged pip installs into the system Python).
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends yamllint
+      - name: Install Node tools
+        run: npm ci
+
+      - name: Cache apt: yamllint
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: yamllint
+          version: "1.0"
 
       - name: prettier check (YAML + JSON)
         run: |
-          prettier --check 'ios/Empo/project.yml' 'ios/Empo/curated-patches/gameRegistry.json'
+          npx prettier --check 'ios/Empo/project.yml' 'ios/Empo/curated-patches/gameRegistry.json'
 
       - name: yamllint
         run: |
@@ -149,9 +154,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
+          cache: "npm"
 
       - name: Install markdownlint-cli
-        run: npm install -g markdownlint-cli@0.48
+        run: npm ci
 
       - name: markdownlint
         run: |
@@ -160,5 +166,5 @@ jobs:
           # are skipped because they're already gitignored.
           FILES=$(git ls-files '*.md')
           if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs markdownlint -c .markdownlint.json
+            echo "$FILES" | xargs npx markdownlint -c .markdownlint.json
           fi

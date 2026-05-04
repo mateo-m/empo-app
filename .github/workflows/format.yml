@@ -80,10 +80,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
+          cache: "npm"
 
       - name: Install prettier
-        run: npm install -g prettier@3
+        run: npm ci
 
       - name: prettier check
         run: |
-          prettier --check 'ios/Empo/project.yml' 'ios/Empo/curated-patches/gameRegistry.json'
+          npx prettier --check 'ios/Empo/project.yml' 'ios/Empo/curated-patches/gameRegistry.json'
