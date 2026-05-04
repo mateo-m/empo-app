@@ -36,7 +36,7 @@ The name's from *emporos*, ancient Greek for a traveler riding on someone else's
 
 Pre-release. Not on the App Store.
 
-End-to-end working across the RGSS1/2/3 and modern mkxp-z fork landscape. Compatibility reports for individual games are welcome (open an issue).
+End-to-end working across RGSS1/2/3 games and modern mkxp-z forks. Per-game compatibility reports are welcome (open an issue).
 
 ### Limitations
 

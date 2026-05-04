@@ -57,7 +57,7 @@ restrictions). In `rb_spawn_process()`, the call is stubbed out:
 #endif
 ```
 
-## iOS Build Instructions
+## iOS build instructions
 
 Built with Autotools:
 

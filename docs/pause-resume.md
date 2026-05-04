@@ -11,7 +11,7 @@ Both modes share the same engine-side mechanism (condvar block), but differ in h
 
 ---
 
-## Engine-Side Pause
+## Engine-side pause
 
 ### Flow
 
@@ -40,7 +40,7 @@ The fix: **never touch the OpenAL context**. No `alcMakeContextCurrent(NULL)`, n
 
 ---
 
-## Snapshot: Static Double for SwiftUI Transitions
+## Snapshot: static double for SwiftUI transitions
 
 ### The problem
 
@@ -88,7 +88,7 @@ In portrait mode, the game renders at the top of the screen with touch controls 
 
 ---
 
-## Resume Animation Timing
+## Resume animation timing
 
 The resume transition has two stages that use the snapshot in sequence for visual continuity:
 
@@ -106,11 +106,11 @@ The hero zoom from game card → GameLoadingView requires the library to be visi
 5. The library hides (opacity 0), and PlayerView appears. PlayerView picks up the same snapshot from `engineState.pauseSnapshot` and shows it at `engineState.gameRect` as an overlay - **with controls and toolbar visible alongside it**.
 6. The snapshot fades out over 0.35s, revealing the live SDL rendering underneath.
 
-The snapshot appears in both views at the same `engineState.gameRect` position, so the handoff from GameLoadingView → PlayerView is seamless. Controls are visible the moment PlayerView mounts.
+The snapshot sits at the same `engineState.gameRect` in both views, so the handoff from GameLoadingView to PlayerView lands without a visual jump. Controls render the moment PlayerView mounts.
 
 ---
 
-## Key Files
+## Key files
 
 | File                                           | Role                                                                                |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
