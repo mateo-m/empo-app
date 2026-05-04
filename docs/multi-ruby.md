@@ -2,7 +2,7 @@
 
 ## Overview
 
-Empo ships four Ruby interpreters in one binary - 1.8, 1.9, 3.0, 3.1 - and dispatches to the right one per-game at launch. A vintage RPG Maker XP game runs on actual Ruby 1.8.7's parser and VM. A Pokemon Reborn 19+ build runs on Ruby 3.1. Pokemon Studio Development Kit (PSDK) games run on Ruby 3.0, the version PSDK pins its precompiled bytecode to.
+Empo ships four Ruby interpreters in one binary - 1.8.8, 1.9.3, 3.0.7, 3.1.3 - and dispatches to the right one per-game at launch. A vintage RPG Maker XP game runs on actual Ruby 1.8's parser and VM. A Pokemon Reborn 19+ build runs on Ruby 3.1. Ruby 3.0 ships too and is available as a manual override via the per-game Ruby Version picker for runtimes built against 3.0 specifically.
 
 This replaces the older "everything on one Ruby" architecture (originally 1.8-only, briefly 3.1-only via the syntax-transform PR304 experiment).
 
@@ -12,11 +12,10 @@ Different RPG Maker generations target different Ruby versions:
 
 | Generation | Engine DLL | Ruby version | Typical games |
 |---|---|---|---|
-| RGSS1 (RPG Maker XP) | `RGSS104E.dll` | 1.8.1 | Vintage Pokemon Essentials forks (Pokemon Z, Insurgence, Uranium) |
-| RGSS2 (RPG Maker VX) | `RGSS200J.dll` | 1.9.2 | A handful of community projects |
-| RGSS3 (RPG Maker VX Ace) | `RGSS300.dll` | 1.9.2 | BTTheManor, traditional VX Ace games |
+| RGSS1 (RPG Maker XP) | `RGSS104E.dll` | 1.8 | Vintage Pokemon Essentials forks (Pokemon Z, Insurgence, Uranium) |
+| RGSS2 (RPG Maker VX) | `RGSS200J.dll` | 1.9 | A handful of community projects |
+| RGSS3 (RPG Maker VX Ace) | `RGSS300.dll` | 1.9 | BTTheManor, traditional VX Ace games |
 | mkxp-z modern | bundled `x64-msvcrt-rubyXYZ.dll` | 3.0 / 3.1 | Modern PE forks (Reborn 19+, Vanguard, Flux, Inf Fusion) |
-| PSDK | bundled libruby.3.0 | 3.0 only | PSDK-based games (precompiled `.yarb` bytecode is minor-version-locked) |
 
 A single Ruby version that tries to cover all of these is fragile. Ruby 1.8 can't parse modern code (keyword args, safe nav, pattern matching). Ruby 3.x can't parse a lot of vintage code (`when X:`, character literal arithmetic, removed `Object#id`). Source-rewrite hacks like the syntax-transform patches make 3.1 accept some 1.8 grammar but break in subtle ways for genuinely modern games (see "Syntax transform stays" below).
 
@@ -57,9 +56,7 @@ mkxp_setGamePath(...);                     // session starts
 
 `ios/Empo/src/Library/RubyVersionDetection.swift` decides which Ruby version a game wants. Decision tree, first decisive signal wins:
 
-1. **PSDK markers** (`Data/PSDK/`, `Data/Studio/`, `psdk/version.txt`, `project.studio`, `pokemonsdk/`) → **3.0**. PSDK is hard-pinned to 3.0; its precompiled `Game.yarb` is strictly minor-version-locked.
-
-2. **Bundled `*-rubyXYZ.dll`** at the project root - `x64-msvcrt-ruby310.dll`, `msvcrt-ruby187.dll`, `ruby193.dll`, etc. The three-digit suffix decodes:
+1. **Bundled `*-rubyXYZ.dll`** at the project root - `x64-msvcrt-ruby310.dll`, `msvcrt-ruby187.dll`, `ruby193.dll`, etc. The three-digit suffix decodes:
    - `1, 8` → 18
    - `1, 9` → 19
    - `2, X` → 31 (Ruby 2.x is syntactically Ruby-3-shaped; closest available)
@@ -68,13 +65,13 @@ mkxp_setGamePath(...);                     // session starts
 
    Highest version wins when multiple are bundled. Modern PE forks ship the mkxp-z runtime, which links against `x64-msvcrt-ruby310.dll`; their `Game.ini` `Library=` field stays at vestigial `RGSS104E.dll` but the actual runtime is the bundled DLL. This signal is the strongest practical evidence of "what Ruby was the developer testing against."
 
-3. **Script grammar sniff** via `RubyScriptGrammarSniffer.swift`. Decodes `Scripts.{rxdata,rvdata,rvdata2}` (Marshal + zlib) and reads loose `.rb` files. Modern Ruby 3.x tokens (`&.`, pattern-match `case ... in`, endless `def`, numbered block params, kwarg shorthand, `Hash#except`, `Array#filter_map`) → **31**. Pure-legacy source → use the data file extension as a prior. Inconclusive (encrypted archive) → fall through.
+2. **Script grammar sniff** via `RubyScriptGrammarSniffer.swift`. Decodes `Scripts.{rxdata,rvdata,rvdata2}` (Marshal + zlib) and reads loose `.rb` files. Modern Ruby 3.x tokens (`&.`, pattern-match `case ... in`, endless `def`, numbered block params, kwarg shorthand, `Hash#except`, `Array#filter_map`) → **31**. Pure-legacy source → use the data file extension as a prior. Inconclusive (encrypted archive) → fall through.
 
-4. **RGSS archive at project root**: `.rgssad` → 18, `.rgss2a` → 19, `.rgss3a` → 19. Used when scripts live inside the encrypted archive and the sniffer can't reach them.
+3. **RGSS archive at project root**: `.rgssad` → 18, `.rgss2a` → 19, `.rgss3a` → 19. Used when scripts live inside the encrypted archive and the sniffer can't reach them.
 
-5. **`Game.ini` `Library=`** field: `RGSS1*` → 18, `RGSS2*` / `RGSS3*` → 19.
+4. **`Game.ini` `Library=`** field: `RGSS1*` → 18, `RGSS2*` / `RGSS3*` → 19.
 
-6. **Default**: 31. The build's historical fallback for projects that don't match any signal.
+5. **Default**: 31. The build's historical fallback for projects that don't match any signal.
 
 The user can override via the Ruby Version picker in `GameSettings`. Override wins over auto-detection at engine-launch time.
 
@@ -84,11 +81,12 @@ The user can override via the Ruby Version picker in `GameSettings`. Override wi
 
 ```swift
 enum Schema: String {
-    case initial = "initial"                 // PSDK + grammar sniff + RGSS ext + Game.ini
-    case bundledRubyDLL = "bundled-ruby-dll" // adds *-rubyXYZ.dll filename signal
+    case initial = "initial"                          // grammar sniff + RGSS ext + Game.ini
+    case bundledRubyDLL = "bundled-ruby-dll"          // adds *-rubyXYZ.dll filename signal
+    case noStandaloneFramework = "no-standalone-framework"  // current
 }
 
-static let currentSchema: Schema = .bundledRubyDLL
+static let currentSchema: Schema = .noStandaloneFramework
 ```
 
 The detected version is persisted on `GameMetadata.rubyVersion` (Int) alongside `rubyVersionDetectedSchema` (raw string). Library load compares stored vs current; on mismatch it re-runs detection and writes the new value. Users on an older Empo build automatically pick up improved heuristics when they upgrade. String storage is forward-compatible: an older Empo build reading metadata with an unknown case sees a non-matching string, falls back to its own heuristics, and re-detects.
@@ -139,7 +137,9 @@ The same preload also restores `Thread.critical` / `Thread.critical=` as no-ops 
 
 Currently disabled. After a clean engine exit, the iOS host shows an alert ("The game has ended or requested a restart. Close Empo from the app switcher and reopen it to continue.") instead of returning to the library. Cross-session reuse of a Ruby VM with a different game's scripts is fragile: the previous session's class definitions leak into the next session and cause superclass-mismatch errors and weirder issues.
 
-The original "drop to library, pick another game" UX is parked behind a feature flag (see `QUIT_PATHS_DISABLED.md` in the project root for the longer story). Same-game re-entry would be safe in principle but isn't currently distinguishable from picking-a-different-game at the iOS layer.
+A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method scrubbing, intrusive-list detachment for disposables, etc.) that worked for narrow game pairs but didn't survive contact with a broader corpus, especially across different Ruby versions. Until that cleanup is reliable, the user is asked to force-close + relaunch.
+
+Same-game re-entry would be safe in principle (no class leak) but isn't currently distinguishable from picking-a-different-game at the iOS layer. See `docs/multi-session.md` for the engine-side teardown sequence.
 
 ## Files
 

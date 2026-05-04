@@ -1,10 +1,21 @@
-# Ruby 3.1.3 — Patches & Build Notes
+# Ruby 3.1 — Patches & Build Notes
 
 ## Source
 
 - **Upstream**: Ruby 3.1.3
-- **Fork**: <https://github.com/mkxp-z/ruby> branch `mkxp-z-3.1.3` (submodule at `sources/ruby`)
-- **Base commit**: `4d85560` (Nobuyoshi Nakada — "Fix redefinition of `clock_gettime` and `clock_getres`")
+- **Fork**: <https://github.com/mkxp-z/ruby> branch `mkxp-z-3.1.3`
+  (submodule at `sources/ruby`)
+- **Base commit**: `4d85560` (Nobuyoshi Nakada — "Fix redefinition of
+  `clock_gettime` and `clock_getres`")
+
+## Why Ruby 3.1?
+
+Modern mkxp-z forks (Pokemon Reborn 19+, Vanguard, Flux, Infinite
+Fusion) target Ruby 3.x. Ruby 3.1 is also the only Empo build with
+the syntax-transform patches enabled (see `docs/multi-ruby.md`,
+"Syntax transform stays"), so mixed-grammar Pokemon Essentials forks
+(Vinemon Sauce Edition, etc.) that combine 1.8-era syntax with 1.9+
+runtime methods route here in LEGACY transform mode.
 
 ## Patches
 

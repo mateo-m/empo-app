@@ -81,7 +81,7 @@ The historical `resetBetweenSessions()` cleanup (constant-baseline diffing, sing
 
 ---
 
-## 5. Run Loop Pumping While Waiting
+## 4. Run Loop Pumping While Waiting
 
 **Problem (`app_bridge.cpp`):** `SDL_main` runs on the main thread on iOS. When the engine is waiting for the user to select a game from the Library UI, UIKit must still be able to render and handle events.
 
@@ -97,7 +97,7 @@ This keeps UIKit alive (rendering the SwiftUI Library) while the C++ engine bloc
 
 ---
 
-## 6. Callback-Based State Notification
+## 5. Callback-Based State Notification
 
 **Problem:** The SwiftUI Library UI and the C++ engine communicate through a C bridge (`app_bridge.h`). The UI needs to know when the engine changes state (first frame rendered, viewport rect changed, engine terminated).
 
@@ -125,7 +125,7 @@ The engine calls these callbacks at the appropriate points. The rect callback on
 
 ---
 
-## 7. Engine Termination via SDL_QUIT Injection
+## 6. Engine Termination via SDL_QUIT Injection
 
 **Problem:** There's no direct "kill engine" function. The engine runs its own event loop.
 
@@ -141,7 +141,7 @@ void mkxp_requestTerminate(void) {
 
 ---
 
-## 8. AppWindow Layering Above SDL
+## 7. AppWindow Layering Above SDL
 
 **Problem:** SDL creates its own `UIWindow` with an OpenGL view. The SwiftUI Library UI must appear above it, and the Player controls must overlay it while passing non-control touches through.
 
