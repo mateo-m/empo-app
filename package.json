@@ -1,0 +1,9 @@
+{
+  "name": "empo-app-ci-tools",
+  "private": true,
+  "description": "Pinned versions of Node-based CI lint/format tools. Not shipped with the app; consumed only by .github/workflows/.",
+  "devDependencies": {
+    "markdownlint-cli": "0.48.0",
+    "prettier": "3.8.3"
+  }
+}
