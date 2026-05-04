@@ -86,6 +86,16 @@ targets:
     type: application
     platform: iOS
     preBuildScripts:
+      - name: Hydrate ANGLE prebuilt libs
+        # ANGLE static libs (~80 MB) are not tracked in git. They live
+        # as a release artifact on the empo-deps repo, pinned by version
+        # in `ios/Dependencies/ANGLE/.version`. This phase fetches the
+        # tarball on first build and skips when a stamp file matches the
+        # pinned version. See tools/fetch-angle.sh for details.
+        basedOnDependencyAnalysis: false
+        script: |
+          "${PROJECT_DIR}/../../tools/fetch-angle.sh"
+
       - name: Stub multi-Ruby merged objects if missing
         # Multi-Ruby Phase D (MULTI_RUBY_PLAN.md) links per-Ruby
         # merged .o files that are built by `ios/Dependencies/common.make`.
