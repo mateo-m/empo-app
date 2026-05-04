@@ -2,61 +2,42 @@ import Foundation
 
 /// Per-game Ruby interpreter version detection.
 ///
-/// Multi-Ruby (Phase D in MULTI_RUBY_PLAN.md) ships separate native
-/// libraries for each supported Ruby version (1.8, 1.9, 3.0, 3.1).
-/// At import time we sniff the game folder for markers that indicate
-/// which interpreter the game's source/bytecode targets. That value
-/// is persisted on `metadata.rubyVersion` and read by
-/// `AppState.selectGame` to call `mkxp_setActiveRubyVersion()` before
-/// the engine boots.
+/// Multi-Ruby ships separate native libraries for each supported Ruby
+/// version (1.8, 1.9, 3.0, 3.1). At import time we sniff the game
+/// folder for markers indicating which interpreter the game's source/
+/// bytecode targets. The value persists on `metadata.rubyVersion` and
+/// is read by `AppState.selectGame` to call
+/// `mkxp_setActiveRubyVersion()` before the engine boots.
 ///
-/// JoiPlay's RPG Maker plugin uses the same dispatch model (verified
-/// 2026-04-27 by inspecting `RPGMPlugin-1.22.00-patreon-release.apk`'s
-/// `lib/arm64-v8a/`: `libmkxp18.so`, `libmkxp19.so`, `libmkxp30.so`).
-/// JoiPlay caps at 3.0; we mirror their set + retain 3.1 during the
-/// transition.
+/// Detection priority order (first decisive signal wins):
 ///
-/// Detection priority order (first match wins):
+///   1. Bundled `x64-msvcrt-rubyXXX.dll` / `msvcrt-rubyXXX.dll` /
+///      `rubyXXX.dll` shipped alongside the game's executable. The
+///      three-digit suffix encodes the Ruby version the developer
+///      built and tested against. Strongest signal for modern PE
+///      forks built on mkxp-z (Pokemon Flux, Vanguard, Reborn,
+///      Infinite Fusion): they leave `Game.ini`'s `Library=` at the
+///      vestigial `RGSS104E.dll`, but the actual runtime is the
+///      bundled modern Ruby DLL → **18 / 19 / 30 / 31** per filename.
 ///
-    ///   1. PSDK markers (`Data/PSDK/`, `Data/Studio/`, `psdk/version.txt`,
-    ///      `project.studio`, `pokemonsdk/`) → **3.0**.
-    ///      PSDK is hard-pinned to Ruby 3.0.x; its precompiled `Game.yarb`
-    ///      bytecode is strictly minor-version-locked.
-    ///
-    ///   2. Bundled `x64-msvcrt-rubyXXX.dll` / `msvcrt-rubyXXX.dll` /
-    ///      `rubyXXX.dll` shipped alongside the game's executable. The
-    ///      three-digit suffix encodes the Ruby version the developer
-    ///      built and tested against. This is the strongest practical
-    ///      signal for "modern PE forks built on mkxp-z" (Pokemon
-    ///      Flux, Vanguard, Reborn, Infinite Fusion etc): they leave
-    ///      `Game.ini`'s `Library=` field at the vestigial
-    ///      `RGSS104E.dll` but the actual runtime is the bundled
-    ///      modern Ruby DLL → **18 / 19 / 30 / 31** per filename.
-    ///
-    ///   3. JGP manifest declaring `runtime: "mkxp-z"` or `useModernRuby`
-    ///      → **3.0** (matches mkxp-z upstream's pin and JoiPlay's
-    ///      modern tier).
+///   2. Script grammar sniff via `RubyScriptGrammarSniffer`. Decodes
+///      `Scripts.{rxdata,rvdata,rvdata2}` (Marshal + zlib) and reads
+///      loose `.rb` files. Modern Ruby tokens (safe nav, pattern
+///      match, endless `def`, kwarg shorthand) → **31**. Pure-legacy
+///      source → use script-file extension as the prior.
 ///
-///   3. Modern-Ruby script syntax detected (Reborn 19.5+, PE v20+,
-///      anything authored against modern Essentials) → **3.0**.
-///      Reuses the existing `GameSettings.detectModernRubyScripts`
-///      heuristic, which scans `.rb` files for keyword-arg shorthand
-///      and other Ruby-3 syntax.
+///   3. RGSS archive at project root (scripts inside the encrypted
+///      archive, sniffer can't read them):
+///      - `*.rgssad` → **1.8** (RGSS1 / RPG Maker XP)
+///      - `*.rgss2a` → **1.9** (RGSS2 / RPG Maker VX)
+///      - `*.rgss3a` → **1.9** (RGSS3 / RPG Maker VX Ace)
 ///
-///   4. RGSS archive present:
-///      - `*.rgssad` → **1.8** (RGSS1 / RPG Maker XP / Ruby 1.8.1)
-///      - `*.rgss2a` → **1.9** (RGSS2 / RPG Maker VX / Ruby 1.9.2)
-///      - `*.rgss3a` → **1.9** (RGSS3 / RPG Maker VX Ace / Ruby 1.9.2)
+///   4. `Game.ini` `Library=` field:
+///      - `RGSS1xx` → **1.8**
+///      - `RGSS2xx` / `RGSS3xx` → **1.9**
 ///
-///   5. `Game.ini` `Library=` field:
-///      - `RGSS104E.dll` → **1.8**
-///      - `RGSS200.dll` / `RGSS202.dll` etc → **1.9**
-///      - `RGSS300.dll` / `RGSS301.dll` etc → **1.9**
-///
-///   6. Default (unknown layout, or detection-skipped fallback) →
-///      **3.1**, the build's legacy default. Once 3.1's merged.o
-///      becomes the only path and detection is required, this
-///      default goes away.
+///   5. Default → **3.1** (best guess for projects that don't match
+///      any signal).
 enum RubyVersionDetection {
 
     /// Identifies the heuristic set this build uses. Each new
@@ -75,8 +56,8 @@ enum RubyVersionDetection {
     /// match any case, the old detector re-runs with its own
     /// heuristics, and life continues.
     enum Schema: String {
-        /// Initial multi-Ruby detection (PSDK markers + grammar
-        /// sniff + RGSS archive extension + Game.ini Library=).
+        /// Initial multi-Ruby detection (grammar sniff + RGSS
+        /// archive extension + Game.ini Library=).
         case initial = "initial"
 
         /// Adds the bundled `*-rubyXXX.dll` filename signal.
@@ -85,12 +66,19 @@ enum RubyVersionDetection {
         /// `Scripts.rxdata` + custom archive (`Data_0.fpk`,
         /// etc.) where the grammar sniffer has nothing to read.
         case bundledRubyDLL = "bundled-ruby-dll"
+
+        /// Drops the standalone framework auto-detection signal
+        /// while it's a work-in-progress. Existing games with
+        /// `rubyVersion = 30` keep that override; new imports
+        /// fall through to the standard signals (DLL filename,
+        /// script grammar, archive extension, Game.ini Library=).
+        case noStandaloneFramework = "no-standalone-framework"
     }
 
     /// The schema this build's `detect()` implementation
     /// corresponds to. Bump alongside any code change that
     /// re-classifies some games.
-    static let currentSchema: Schema = .bundledRubyDLL
+    static let currentSchema: Schema = .noStandaloneFramework
 
     /// Returns the Ruby version raw value (18 / 19 / 30 / 31) for
     /// `gameDirectory`. Mirrors `MKXPRubyVersion`'s enum integer
@@ -98,10 +86,7 @@ enum RubyVersionDetection {
     ///
     /// **Decision tree** (first decisive signal wins):
     ///
-    ///   1. PSDK markers → **30** (definitive, `.yarb` is
-    ///      strictly minor-version-locked).
-    ///
-    ///   2. Bundled `*-rubyXXX.dll` (`x64-msvcrt-ruby310.dll` etc):
+    ///   1. Bundled `*-rubyXXX.dll` (`x64-msvcrt-ruby310.dll` etc):
     ///      first digit + second digit of suffix decode to:
     ///        18, 19          → **18** / **19**
     ///        2X (Ruby 2.x)   → **31** (closest available; 2.x is
@@ -109,7 +94,7 @@ enum RubyVersionDetection {
     ///        30              → **30**
     ///        31, 32, 33, ...  → **31**
     ///
-    ///   3. Script grammar sniff via `RubyScriptGrammarSniffer`:
+    ///   2. Script grammar sniff via `RubyScriptGrammarSniffer`:
     ///        - modern Ruby tokens found → **31**
     ///        - only legacy tokens found → use script-file
     ///          extension as prior:
@@ -138,16 +123,11 @@ enum RubyVersionDetection {
     /// is the only truth-test.
     ///
     /// User can override the result via
-    /// `GameSettings.rubyVersionOverride` if detection misses.
+    /// `GameSettings.rubyVersionOverride` if detection misses
+    /// (e.g. games using a standalone Ruby framework not yet
+    /// auto-detected).
     static func detect(gameDirectory: URL) -> Int {
         let fm = FileManager.default
-
-        // PSDK → 3.0. PSDK pins to Ruby 3.0.x and ships .yarb
-        // bytecode that's strictly minor-version-locked. No other
-        // value works.
-        if isPSDKGame(at: gameDirectory, fm: fm) {
-            return 30
-        }
 
         // Bundled modern Ruby DLL. Modern PE forks (Pokemon Flux,
         // Vanguard, Reborn, Infinite Fusion) ship the mkxp-z
@@ -382,25 +362,4 @@ enum RubyVersionDetection {
         }
     }
 
-    /// Lightweight PSDK detection. Mirrors what the cores branch's
-    /// `PSDKDetection` does; duplicated here so this branch's
-    /// imports don't depend on cores landing first.
-    private static func isPSDKGame(at gameDirectory: URL,
-                                   fm: FileManager) -> Bool {
-        let candidates = [
-            "project.studio",
-            "Data/PSDK",
-            "Data/Studio",
-            "psdk/version.txt",
-            "pokemonsdk",
-            "psdk",
-        ]
-        for path in candidates {
-            let url = gameDirectory.appendingPathComponent(path)
-            if fm.fileExists(atPath: url.path) {
-                return true
-            }
-        }
-        return false
-    }
 }

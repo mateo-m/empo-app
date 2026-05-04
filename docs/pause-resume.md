@@ -72,7 +72,7 @@ We read from the internal FBO (the engine's render target), not FBO 0 (the scree
 
 **Retrieval (Swift, `AppState.swift`):**
 
-The paused callback runs on the engine thread. It reads the snapshot via `mkxp_getSnapshotSize()` + `mkxp_copySnapshotRGBA()`, converts the bytes to a `CGImage` -> `UIImage`, and dispatches to main to store it as `engineState.pauseSnapshot`.
+The paused callback runs on the engine thread. It reads the snapshot via `mkxp_getSnapshotSize()` + `mkxp_copySnapshotRGBA()`, converts the bytes to a `CGImage` -> `UIImage`, and dispatches to main to store it as `pauseManager.pauseSnapshot`.
 
 **Display (Swift, `GameLoadingView.swift`):**
 
@@ -80,7 +80,7 @@ When `GameLoadingView` detects a resume (snapshot is non-nil), it shows the snap
 
 **Cleanup (Swift, `PlayerView.onAppear`):**
 
-When PlayerView appears, it picks up `engineState.pauseSnapshot`, copies it into local `@State`, and fades it out over 0.35s. After the fade, both the local copy and `engineState.pauseSnapshot` are cleared. The live SDL rendering is now visible underneath.
+When PlayerView appears, it picks up `pauseManager.pauseSnapshot`, copies it into local `@State`, and fades it out over 0.35s. After the fade, both the local copy and `pauseManager.pauseSnapshot` are cleared. The live SDL rendering is now visible underneath.
 
 ### Portrait layout
 
