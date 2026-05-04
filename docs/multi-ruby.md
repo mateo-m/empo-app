@@ -17,7 +17,7 @@ Different RPG Maker generations target different Ruby versions:
 | RGSS3 (RPG Maker VX Ace) | `RGSS300.dll` | 1.9 | Traditional VX Ace games |
 | mkxp-z modern | bundled `x64-msvcrt-rubyXYZ.dll` | 3.0 / 3.1 | Modern Pokemon Essentials forks shipping the mkxp-z runtime |
 
-A single Ruby version that tries to cover all of these is fragile. Ruby 1.8 can't parse modern code (keyword args, safe nav, pattern matching). Ruby 3.x can't parse a lot of vintage code (`when X:`, character literal arithmetic, removed `Object#id`). Source-rewrite hacks like the syntax-transform patches make 3.1 accept some 1.8 grammar but break in subtle ways for genuinely modern games (see "Syntax transform stays" below).
+A single Ruby version that tries to cover all of these is fragile. Ruby 1.8 can't parse modern code (keyword args, safe nav, pattern matching). Ruby 3.x can't parse a lot of vintage code (`when X:`, character literal arithmetic, removed `Object#id`). Source-rewrite hacks like the syntax-transform patches make 3.1 accept some 1.8 grammar but break in subtle ways for genuinely modern games (see [Syntax transform](#syntax-transform) below).
 
 Running each game on its actual native Ruby is the only honest fix.
 
