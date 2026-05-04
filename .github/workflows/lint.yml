@@ -11,17 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.2-noble
     steps:
+      - name: Install dependencies (pre-checkout)
+        run: |
+          # The swift:*-noble base image is minimal. actions/checkout
+          # falls back to a tarball download (no .git) when git is
+          # missing inside the container, which then breaks every
+          # `git`-driven step downstream. Install git BEFORE the
+          # checkout step so a real .git directory lands on disk.
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git curl unzip ca-certificates
+
       - uses: actions/checkout@v6
         with:
           submodules: false
-
-      - name: Install dependencies
-        run: |
-          # The swift:*-noble base image is minimal; pull in curl +
-          # unzip + git for the checkout post-step and SwiftLint
-          # download.
-          apt-get update -qq
-          apt-get install -y --no-install-recommends curl unzip git ca-certificates
 
       - name: Install SwiftLint
         run: |

@@ -15,6 +15,15 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.2-noble
     steps:
+      - name: Install git (pre-checkout)
+        run: |
+          # The swift:*-noble base image is minimal. actions/checkout
+          # falls back to a tarball download (no .git) when git is
+          # missing inside the container; install it first so the
+          # `git diff --exit-code` step downstream has a real repo.
+          apt-get update -qq
+          apt-get install -y --no-install-recommends git ca-certificates
+
       - uses: actions/checkout@v6
         with:
           submodules: false
