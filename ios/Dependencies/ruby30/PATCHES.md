@@ -1,46 +1,55 @@
-# Ruby 3.1.3 — Patches & Build Notes
+# Ruby 3.0 — Patches & Build Notes
 
 ## Source
 
-- **Upstream**: Ruby 3.1.3
-- **Fork**: <https://github.com/mkxp-z/ruby> branch `mkxp-z-3.1.3` (submodule at `sources/ruby`)
-- **Base commit**: `4d85560` (Nobuyoshi Nakada — "Fix redefinition of `clock_gettime` and `clock_getres`")
+- **Upstream**: Ruby 3.0.7 (final 3.0 release before EOL)
+- **Branch**: `ruby_3_0` (submodule at `sources/ruby30`)
+- **Commit**: `724a071` ("Bump up 3.0.7")
+
+## Why Ruby 3.0?
+
+Mirrors the validated set from JoiPlay's RPG Maker plugin (1.8 / 1.9
+/ 3.0) and matches mkxp-z upstream's 3.0 pin. Available as a manual
+override via the per-game Ruby Version picker for projects whose
+runtime is built against Ruby 3.0 specifically. Auto-detection for
+Ruby 3.0-pinned frameworks is a work-in-progress and not currently
+wired up; new imports route to 3.1 by default.
 
 ## Patches
 
-All iOS patches are in `ios.patch` (applied automatically by the makefile
-via `git apply` before `autoreconf`):
+All iOS patches are in `ios.patch` (applied automatically by the
+makefile via `git apply` before `autoreconf`). Same surface as the
+3.1 patch, since iOS makes the same things unavailable in both:
 
 ### 1. `configure.ac` — Remove DYLD_INSERT_LIBRARIES
 
-The line `: ${PRELOADENV=DYLD_INSERT_LIBRARIES}` is deleted. On iOS,
-`DYLD_INSERT_LIBRARIES` is not supported, and referencing it causes
-configure warnings/failures.
+The line `: ${PRELOADENV=DYLD_INSERT_LIBRARIES}` is deleted. iOS doesn't
+support `DYLD_INSERT_LIBRARIES`; referencing it causes configure
+warnings/failures.
 
 ### 2. `dir.c` — sys/vnode.h iOS shim
 
-`<sys/vnode.h>` is not available in the iOS SDK. When `TARGET_OS_IPHONE`
-is true, the header include is skipped and the required constants are
-hardcoded:
+`<sys/vnode.h>` isn't part of the iOS SDK. Under `TARGET_OS_IPHONE`, the
+include is skipped and the required constants are hardcoded:
 
 ```c
-#define VREG   1
-#define VDIR   2
-#define VLNK   5
+#define VREG    1
+#define VDIR    2
+#define VLNK    5
 #define VT_HFS  17
 #define VT_CIFS 23
 ```
 
-On macOS, the original `#include <sys/vnode.h>` is used as before.
+macOS still uses the original `#include <sys/vnode.h>`.
 
-### 3. `process.c` — system() disabled on iOS
+### 3. `process.c` — `system()` disabled on iOS
 
-The `system()` C library call is not available on iOS (sandboxing
-restrictions). In `rb_spawn_process()`, the call is stubbed out:
+iOS sandboxing disallows `system()`. In `rb_spawn_process()`, the call
+is stubbed:
 
 ```c
 #if TARGET_OS_IPHONE
-    status = -1; // system() is unavailable on iOS
+    status = -1; // system() unavailable on iOS
 #else
     status = system(rb_execarg_commandline(...));
 #endif
@@ -69,9 +78,6 @@ Additional CFLAGS: `-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__`
 
 ### Cross-compilation cache overrides
 
-Several functions unavailable or problematic on iOS are forced to `no`
-via autoconf cache variables:
-
 ```
 ac_cv_func_setpgrp_void=yes
 ac_cv_func_fork=no
@@ -90,5 +96,5 @@ cross_compiling=yes
 
 ### Output
 
-- `libruby.3.1-static.a` — manually copied into `$(LIBDIR)`
-- Headers installed to `$(INCLUDEDIR)/ruby-3.1.0/`
+- `libruby.3.0-static.a` — copied into `$(LIBDIR)`
+- Headers installed to `$(INCLUDEDIR)/ruby-3.0.0/`

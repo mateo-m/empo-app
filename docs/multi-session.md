@@ -4,7 +4,7 @@
 
 Cross-session play is currently **disabled**. After a clean game exit, Empo shows an alert ("close from app switcher to play again") instead of returning to the library. The user must force-close + reopen to start a different game.
 
-The original "drop to library, pick another game in the same process" UX is parked behind a feature flag pending reliable Ruby state cleanup. See [`QUIT_PATHS_DISABLED.md`](../QUIT_PATHS_DISABLED.md) in the project root for the longer story.
+The original "drop to library, pick another game in the same process" UX is parked behind a feature flag pending reliable Ruby state cleanup.
 
 ## Why this is hard
 
