@@ -121,22 +121,32 @@ struct GameLoadingView: View {
     @ViewBuilder
     private var cancelButton: some View {
         if cancelVisible {
-            Button("Quit to library") {
-                // During loading the RGSS thread may not have reached a
-                // yield point yet (scripts running back-to-back don't
-                // call Graphics.update/Input.update), so the normal
-                // terminate request can sit unprocessed. returnToLibrary
-                // arms the standard 3s watchdog (alert -> user OK ->
-                // exit) but on the loading view forcing the user to read
-                // an alert on top of being stuck is bad UX. Also
-                // arm a 5s hard-deadline force-quit so the app closes
-                // cleanly even if the engine never ack's.
-                appState.returnToLibrary()
-                appState.armLoadingEscapeForceQuit()
-            }
-            .buttonStyle(.secondary(size: .md, tint: .white))
-            .padding(.bottom, Spacing.xl)
-            .transition(.opacity.combined(with: .offset(y: 8)))
+            // Previously a "Quit to library" button that called
+            // returnToLibrary + a hard-deadline force-quit helper.
+            // Replaced with a static label because:
+            //
+            // 1. returnToLibrary triggers the cross-session Ruby
+            //    state cleanup machinery, which we no longer trust
+            //    after parking the mruby experiment (see
+            //    MRUBY_POSTMORTEM.md). Lingering state from a hung
+            //    game would leak into the next session.
+            // 2. The force-quit helper called the system exit
+            //    function, which violates App Store guideline 2.5.1
+            //    ("Apps should not terminate themselves
+            //    programmatically"). That helper has been removed
+            //    entirely. See QUIT_PATHS_DISABLED.md.
+            //
+            // The label below tells the user to close Empo from the
+            // app switcher, which is the iOS-sanctioned way to
+            // force-close. Same pattern RootView uses for
+            // engineHung errors.
+            Text("If loading is stuck, close Empo from the app switcher and reopen.")
+                .font(.system(size: 14))
+                .foregroundStyle(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, Spacing.xl)
+                .padding(.bottom, Spacing.xl)
+                .transition(.opacity.combined(with: .offset(y: 8)))
         }
     }
 

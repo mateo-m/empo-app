@@ -39,6 +39,31 @@ struct PlayerMoreSheet: View {
         (fastForwardMultiplier ?? 0) >= 2
     }
 
+    /// Whether the sheet would render any actionable row given the
+    /// current settings + per-game state. Mirrors the row-gating
+    /// logic in `body` exactly.
+    ///
+    /// Used by `PlayerToolbar` to hide the Menu button when this
+    /// returns false - otherwise the toolbar offers a button that
+    /// opens an empty sheet, which has been confusing users who
+    /// disable all the experimental features in app settings.
+    static func hasContent(
+        settings: AppSettings,
+        fastForwardMultiplier: Int?
+    ) -> Bool {
+        // Cheats and pause graduated from experimental in May 2026
+        // and are now always enabled. Diagnostics overlay and
+        // fast-forward remain user-gated (the former via app
+        // settings, the latter per-game).
+        let cheats   = true
+        let fastFwd  = (fastForwardMultiplier ?? 0) >= 2
+        let diag     = settings.diagnosticsOverlay
+        let pause    = true
+        // gameQuit is currently forced off in `body`; if/when it
+        // returns, mirror its gate here.
+        return cheats || fastFwd || diag || pause
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: Spacing.lg) {
@@ -47,10 +72,10 @@ struct PlayerMoreSheet: View {
                 // user can flip them and stay in the game.
                 VStack(spacing: 0) {
                     InterleavedRows(separator: { rowSeparator }) {
-                        if settings.isEnabled(.cheats) {
-                            MenuRow(icon: "wand.and.stars", label: "Cheats menu") {
-                                onCheats(); dismiss()
-                            }
+                        // Cheats: graduated from experimental in
+                        // May 2026, always enabled now.
+                        MenuRow(icon: "wand.and.stars", label: "Cheats") {
+                            onCheats(); dismiss()
                         }
                         if fastForwardEnabled {
                             MenuToggleRow(
@@ -59,10 +84,10 @@ struct PlayerMoreSheet: View {
                                 isOn: $fastForwardActive
                             )
                         }
-                        if settings.debugMode {
+                        if settings.diagnosticsOverlay {
                             MenuToggleRow(
                                 icon: "ladybug.fill",
-                                label: "Debug overlay",
+                                label: "Diagnostics overlay",
                                 isOn: $showDebugOverlay
                             )
                         }
@@ -82,8 +107,13 @@ struct PlayerMoreSheet: View {
                 // suspended), quit tears the engine down. Both name
                 // the running game so there's no ambiguity about
                 // which session is affected.
-                let pauseEnabled = settings.isEnabled(.gamePause)
-                let quitEnabled = settings.isEnabled(.gameQuit)
+                // Pause: graduated from experimental in May 2026,
+                // always enabled now.
+                let pauseEnabled = true
+                // gameQuit disabled — see ExperimentalFeature comment
+                // in AppSettings.swift. Forced false so the in-game
+                // Quit toolbar button stays hidden.
+                let quitEnabled = false
                 if pauseEnabled || quitEnabled {
                     VStack(spacing: 0) {
                         InterleavedRows(separator: { rowSeparator }) {

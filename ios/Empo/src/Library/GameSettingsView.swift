@@ -1,14 +1,48 @@
 import SwiftUI
 
-/// Three-way Ruby parser compatibility selection exposed in the
-/// Game Settings sheet. Maps to `GameSettings.useModernRuby`:
-///   auto   -> nil  (detector scans .rb files at launch)
-///   modern -> true (force syntaxTransform = 0, Ruby 3 strict)
-///   compat -> false (force syntaxTransform = 2, Ruby 1.8 compat)
-enum RubyCompatMode: String, CaseIterable, Hashable {
+/// Per-game Ruby interpreter version selection exposed in the
+/// Game Settings sheet. Maps to `GameSettings.rubyVersionOverride`:
+///   auto -> nil (use auto-detection from `metadata.rubyVersion`)
+///   v18 / v19 / v30 / v31 -> force that interpreter version
+///
+/// Detection lives in `RubyVersionDetection` and runs at import
+/// time; this picker is the manual escape hatch when it misses.
+enum RubyVersionPick: String, CaseIterable, Hashable {
     case auto
-    case modern
-    case compat
+    case v18
+    case v19
+    case v30
+    case v31
+
+    var rawValue_: Int? {
+        switch self {
+        case .auto: return nil
+        case .v18: return 18
+        case .v19: return 19
+        case .v30: return 30
+        case .v31: return 31
+        }
+    }
+
+    static func from(_ value: Int?) -> RubyVersionPick {
+        switch value {
+        case 18: return .v18
+        case 19: return .v19
+        case 30: return .v30
+        case 31: return .v31
+        default: return .auto
+        }
+    }
+
+    var displayLabel: String {
+        switch self {
+        case .auto: return "Auto-detect"
+        case .v18: return "Ruby 1.8"
+        case .v19: return "Ruby 1.9"
+        case .v30: return "Ruby 3.0"
+        case .v31: return "Ruby 3.1"
+        }
+    }
 }
 
 struct GameSettingsView: View {
@@ -23,12 +57,12 @@ struct GameSettingsView: View {
 
     @State private var settings: GameSettings
     @State private var defaults: GameConfigDefaults
-    /// Result of the Ruby-syntax scanner used by `useModernRuby = nil`
-    /// ("auto"). nil while the scan is still running, then true if
-    /// the game ships Ruby 3 source, false otherwise. Surfaced in
-    /// the picker label so users see what "Auto-detect" would pick
-    /// without having to flip the setting and watch the game start.
-    @State private var autoDetectedModern: Bool?
+    /// Auto-detected Ruby version raw value (18/19/30/31), read
+    /// from `metadata.rubyVersion`. Populated when the sheet
+    /// opens, used to dress the "Auto-detect" picker row with the
+    /// version the detector picked - so users can see what
+    /// Auto-detect would route to without flipping the override.
+    @State private var autoDetectedVersion: Int?
 
     private let gameDirectory: URL
     private let stateDirectory: URL
@@ -110,17 +144,22 @@ struct GameSettingsView: View {
     }
 
     /// Human-readable label for the "Auto-detect" picker row that
-    /// also reveals which mode the scanner resolved to. Reads
-    /// `autoDetectedModern` (populated by the .task scan):
-    ///   - while scanning -> "Auto-detect"
-    ///   - scan done, modern hit -> "Auto-detect (Modern)"
-    ///   - scan done, no hit -> "Auto-detect (Legacy)"
+    /// also reveals which version the detector resolved to. Reads
+    /// `autoDetectedVersion` (loaded from metadata when the sheet
+    /// opens):
+    ///   - not yet loaded -> "Auto-detect"
+    ///   - detected -> "Auto-detect (Ruby X.Y)"
     private var autoDetectLabel: String {
-        switch autoDetectedModern {
-        case nil:           "Auto-detect"
-        case .some(true):   "Auto-detect (Modern)"
-        case .some(false):  "Auto-detect (Legacy)"
+        guard let v = autoDetectedVersion else { return "Auto-detect" }
+        let pretty: String
+        switch v {
+        case 18: pretty = "Ruby 1.8"
+        case 19: pretty = "Ruby 1.9"
+        case 30: pretty = "Ruby 3.0"
+        case 31: pretty = "Ruby 3.1"
+        default: return "Auto-detect"
         }
+        return "Auto-detect (\(pretty))"
     }
 
     /// Hint to render at the top of the form when a session for
@@ -227,19 +266,16 @@ struct GameSettingsView: View {
             }
             .onChange(of: settings) { save() }
             .task {
-                // Run the Ruby-syntax scanner off the main thread.
-                // detectModernRubyScripts walks `Scripts/` and
-                // `Data/` looking for keyword-arg shorthand and can
-                // visit a few hundred .rb files on big fangames -
-                // doing it on the main actor would stutter the
-                // sheet open animation. We don't need cancellation
-                // because the scanner has its own bounded work
-                // (`scanCap = 2000` files, returns on first match).
-                let dir = gameDirectory
-                let result = await Task.detached(priority: .userInitiated) {
-                    GameSettings.detectModernRubyScripts(in: dir)
-                }.value
-                autoDetectedModern = result
+                // Read the import-time auto-detected Ruby version
+                // from metadata so the "Auto-detect" picker row
+                // shows what would be routed to. Also kicks off
+                // the legacy modern-Ruby script scanner for
+                // backward-compat consumers (postload scripts,
+                // older builds reading useModernRuby).
+                if let container = game.container {
+                    let metadata = GameMetadata.load(from: container)
+                    autoDetectedVersion = metadata.rubyVersion
+                }
             }
         }
         .tint(.brand)
@@ -369,14 +405,16 @@ struct GameSettingsView: View {
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Picker("Ruby compatibility", selection: rubyCompatBinding) {
-                    Text(autoDetectLabel).tag(RubyCompatMode.auto)
-                    Text("Modern (Ruby 3)").tag(RubyCompatMode.modern)
-                    Text("Legacy (Ruby 1.8)").tag(RubyCompatMode.compat)
+                Picker("Ruby version", selection: rubyVersionBinding) {
+                    Text(autoDetectLabel).tag(RubyVersionPick.auto)
+                    Text(RubyVersionPick.v18.displayLabel).tag(RubyVersionPick.v18)
+                    Text(RubyVersionPick.v19.displayLabel).tag(RubyVersionPick.v19)
+                    Text(RubyVersionPick.v30.displayLabel).tag(RubyVersionPick.v30)
+                    Text(RubyVersionPick.v31.displayLabel).tag(RubyVersionPick.v31)
                 }
                 .pickerStyle(.navigationLink)
 
-                Text("Auto-detect scans the game's scripts and picks Modern if it finds Ruby-3-only syntax, otherwise Legacy. Override if a game fails to launch with a script error or behaves incorrectly.")
+                Text("Auto-detect inspects the game's scripts and picks the matching Ruby interpreter. Override only if the game fails to launch with a script error or behaves incorrectly.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -516,25 +554,14 @@ struct GameSettingsView: View {
         )
     }
 
-    /// Tri-state picker backing for `GameSettings.useModernRuby`:
-    /// nil -> auto (run the Ruby-3-syntax detector on launch),
-    /// true -> force Modern (syntaxTransform = 0),
-    /// false -> force Legacy (syntaxTransform = 2).
-    private var rubyCompatBinding: Binding<RubyCompatMode> {
+    /// Picker backing for `GameSettings.rubyVersionOverride`:
+    /// nil  -> .auto (use detection from metadata.rubyVersion),
+    /// 18/19/30/31 -> force that Ruby interpreter version.
+    private var rubyVersionBinding: Binding<RubyVersionPick> {
         Binding(
-            get: {
-                switch settings.useModernRuby {
-                case nil: return .auto
-                case .some(true): return .modern
-                case .some(false): return .compat
-                }
-            },
-            set: { mode in
-                switch mode {
-                case .auto: settings.useModernRuby = nil
-                case .modern: settings.useModernRuby = true
-                case .compat: settings.useModernRuby = false
-                }
+            get: { RubyVersionPick.from(settings.rubyVersionOverride) },
+            set: { pick in
+                settings.rubyVersionOverride = pick.rawValue_
             }
         )
     }
