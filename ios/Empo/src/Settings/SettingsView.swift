@@ -203,7 +203,7 @@ struct SettingsView: View {
                     // SwiftUI's Text initializer parses markdown in
                     // string literals, so the [Grid] link is rendered
                     // tappable with the .tint(.brand) the form uses.
-                    Text("made with ☕ by [Grid](https://twitter.com/gridplay_)")
+                    Text("Made with ☕ by [**Grid**](https://twitter.com/gridplay_)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)

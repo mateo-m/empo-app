@@ -14,17 +14,46 @@ struct DisclaimerView: View {
     /// to true onAppear with a spring, mirroring the splash logo's entrance.
     @State private var entered = false
 
+    /// "Save often..." line as an AttributedString so the GitHub link
+    /// can be both bold AND underlined (markdown's `**bold**` alone
+    /// isn't visually distinct against the white-on-orange copy).
+    private var githubReportLine: AttributedString {
+        var attr =
+            (try? AttributedString(
+                markdown: "Save often. Report issues on [**GitHub**](\(GitInfo.issuesURL)) if you hit any."
+            )) ?? AttributedString("Save often. Report issues on GitHub if you hit any.")
+        for run in attr.runs where run.link != nil {
+            attr[run.range].underlineStyle = .single
+        }
+        return attr
+    }
+
     var body: some View {
-        VStack(spacing: Spacing._2xl) {
-            Text("Here be dragons")
-                .font(.largeTitle.weight(.bold))
-                .fontDesign(.rounded)
-                .foregroundStyle(.white)
+        VStack(alignment: .leading, spacing: Spacing._2xl) {
+            VStack(spacing: 0) {
+                Text("Here be dragons")
+                    .font(.largeTitle.weight(.bold))
+                    .fontDesign(.rounded)
+                Text("or bugs!")
+                    .font(.title3.weight(.semibold))
+                    .fontDesign(.rounded)
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("... or bugs! I'm a lone dev building this in my spare time.")
+                Text("I'm a lone dev building this in my spare time.")
                 Text("Things may crash, freeze, or flat-out refuse to load.")
-                Text("Save often. Report issues on GitHub if you hit any.")
+                // The URL is generated at build time from the git
+                // origin (see project.yml's "Generate Git Info" phase)
+                // so the disclaimer always points at whatever fork
+                // someone is building.
+                Text(githubReportLine)
+                    .tint(.white)
+                Text("Enjoy!")
+                    .padding(.top, Spacing.md)
+                Text("Grid.")
             }
             .font(.body.weight(.medium))
             .fontDesign(.rounded)
