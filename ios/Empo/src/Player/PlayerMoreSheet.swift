@@ -67,30 +67,31 @@ struct PlayerMoreSheet: View {
                 // debug overlay. These are passive in-game tools; the
                 // user can flip them and stay in the game.
                 VStack(spacing: 0) {
-                    InterleavedRows {
-                        // Cheats: graduated from experimental in
-                        // May 2026, always enabled now.
-                        MenuRow(icon: "wand.and.stars", label: "Cheats") {
-                            onCheats()
-                            dismiss()
+                    InterleavedRows(
+                        separator: { rowSeparator },
+                        content: {
+                            // Cheats: graduated from experimental in
+                            // May 2026, always enabled now.
+                            MenuRow(icon: "wand.and.stars", label: "Cheats") {
+                                onCheats()
+                                dismiss()
+                            }
+                            if fastForwardEnabled {
+                                MenuToggleRow(
+                                    icon: "hare.fill",
+                                    label: "Fast forward (\(fastForwardMultiplier ?? 2)x)",
+                                    isOn: $fastForwardActive
+                                )
+                            }
+                            if settings.diagnosticsOverlay {
+                                MenuToggleRow(
+                                    icon: "ladybug.fill",
+                                    label: "Diagnostics overlay",
+                                    isOn: $showDebugOverlay
+                                )
+                            }
                         }
-                        if fastForwardEnabled {
-                            MenuToggleRow(
-                                icon: "hare.fill",
-                                label: "Fast forward (\(fastForwardMultiplier ?? 2)x)",
-                                isOn: $fastForwardActive
-                            )
-                        }
-                        if settings.diagnosticsOverlay {
-                            MenuToggleRow(
-                                icon: "ladybug.fill",
-                                label: "Diagnostics overlay",
-                                isOn: $showDebugOverlay
-                            )
-                        }
-                    } separator: {
-                        rowSeparator
-                    }
+                    )
                 }
                 // No card fill: stacking material on the sheet's own
                 // material reads as a flat white panel, which fights
@@ -115,29 +116,30 @@ struct PlayerMoreSheet: View {
                 let quitEnabled = false
                 if pauseEnabled || quitEnabled {
                     VStack(spacing: 0) {
-                        InterleavedRows {
-                            if pauseEnabled {
-                                MenuRow(
-                                    icon: "pause.fill",
-                                    label: "Pause \(gameTitle)"
-                                ) {
-                                    onPause()
-                                    dismiss()
+                        InterleavedRows(
+                            separator: { rowSeparator },
+                            content: {
+                                if pauseEnabled {
+                                    MenuRow(
+                                        icon: "pause.fill",
+                                        label: "Pause \(gameTitle)"
+                                    ) {
+                                        onPause()
+                                        dismiss()
+                                    }
+                                }
+                                if quitEnabled {
+                                    MenuRow(
+                                        icon: "xmark.circle.fill",
+                                        label: "Quit \(gameTitle)",
+                                        role: .destructive
+                                    ) {
+                                        dismiss()
+                                        onQuit()
+                                    }
                                 }
                             }
-                            if quitEnabled {
-                                MenuRow(
-                                    icon: "xmark.circle.fill",
-                                    label: "Quit \(gameTitle)",
-                                    role: .destructive
-                                ) {
-                                    dismiss()
-                                    onQuit()
-                                }
-                            }
-                        } separator: {
-                            rowSeparator
-                        }
+                        )
                     }
                     .clipShape(.rect(cornerRadius: Radius.md))
                 }
