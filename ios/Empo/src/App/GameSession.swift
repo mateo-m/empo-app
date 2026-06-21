@@ -52,15 +52,19 @@ enum GameSession {
             stateDirectory: stateDir
         )
 
-        var config = MKXPSessionConfig()
-        config.managedConfigDir = stateDir.path
-        config.userDataDirectory = input.userDataDir.path
-        config.rubyVersion = rubyVer
-        config.syntaxTransformMode = syntaxTransform
-        config.verticalAlignment = alignment.bridgeValue
-        config.postloadEnabled = postload
-        config.useInGameKeyboard = settings.useInGameKeyboard ?? inGameKeyboardDefault
-        mkxp_applySessionConfig(&config)
+        stateDir.path.withCString { managedPtr in
+            input.userDataDir.path.withCString { userDataPtr in
+                var config = MKXPSessionConfig()
+                config.managedConfigDir = managedPtr
+                config.userDataDirectory = userDataPtr
+                config.rubyVersion = rubyVer
+                config.syntaxTransformMode = syntaxTransform
+                config.verticalAlignment = alignment.bridgeValue
+                config.postloadEnabled = postload
+                config.useInGameKeyboard = settings.useInGameKeyboard ?? inGameKeyboardDefault
+                mkxp_applySessionConfig(&config)
+            }
+        }
 
         settings.applyToConfig(stateDirectory: stateDir, gameDirectory: gameDir)
         PatcherDistribution.applyToGame(container: container)
