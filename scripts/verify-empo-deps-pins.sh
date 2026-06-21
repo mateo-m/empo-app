@@ -40,8 +40,12 @@ asset_sha256() {
         rm -rf "$tmpdir"
         return 1
     fi
-    shasum -a 256 "$tmpdir/$asset" | awk '{print $1}'
+    sha=$(shasum -a 256 "$tmpdir/$asset" | awk '{print $1}') || {
+        rm -rf "$tmpdir"
+        return 1
+    }
     rm -rf "$tmpdir"
+    printf '%s\n' "$sha"
 }
 
 verify_pin_file() {
