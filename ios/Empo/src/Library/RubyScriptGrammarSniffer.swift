@@ -19,7 +19,7 @@ import Foundation
 /// default" so any decoder bug is non-fatal.
 enum RubyScriptGrammarSniffer {
 
-    enum Result {
+    enum Result: Equatable {
         /// Modern Ruby grammar tokens present (`&.`, kwargs,
         /// pattern matching, endless def, etc). Cannot parse on
         /// 1.8/1.9 - definitive signal for 3.x dispatch.

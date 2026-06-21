@@ -35,7 +35,7 @@ release_exists() {
 asset_sha256() {
     tag=$1
     asset=$2
-    tmpdir=$(mktemp -d)
+    tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/empo-deps-pin.XXXXXX")
     if ! gh release download "$tag" --repo "$DEPS_REPO" --pattern "$asset" --dir "$tmpdir" >/dev/null 2>&1; then
         rm -rf "$tmpdir"
         return 1
