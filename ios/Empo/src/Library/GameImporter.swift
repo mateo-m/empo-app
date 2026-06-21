@@ -63,10 +63,11 @@ enum GameImporter {
         bundle: Jgp.Bundle
     ) {
         var settings = bundle.configuration?.toGameSettings() ?? GameSettings()
+        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
 
         if bundle.manifest.type == .mkxpZ {
             settings.useModernRuby = true
-        } else if GameScriptProfile.analyze(gameDirectory: container.gameURL).modernRubyScripts {
+        } else if profile.modernRubyScripts {
             settings.useModernRuby = true
         }
 
@@ -90,7 +91,6 @@ enum GameImporter {
         metadata.manifestId = bundle.manifest.id
         metadata.manifestVersion = bundle.manifest.version
         metadata.manifestDescription = bundle.manifest.description
-        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
         metadata.rubyVersion = profile.rubyVersion
         metadata.rubyVersionDetectedSchema = GameScriptProfile.currentSchema.rawValue
         metadata.modernRubyScriptsDetected = profile.modernRubyScripts
