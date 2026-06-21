@@ -66,8 +66,8 @@ BIN="$APP/Empo"
 
 echo "==> auditing $(basename "$INPUT")"
 
-file "$BIN" | rg -q "Mach-O 64-bit executable arm64" \
-    || fail "Empo is not an arm64 device executable"
+file "$BIN" | rg -q "Mach-O 64-bit executable arm64" ||
+    fail "Empo is not an arm64 device executable"
 
 has_platform() {
     local path="$1" platform="$2"
@@ -83,16 +83,16 @@ fi
 
 for ver in 18 19 31; do
     sym="_mkxp_get_script_binding_${ver}"
-    nm "$BIN" 2>/dev/null | awk -v sym="$sym" '$3 == sym {found=1} END {exit !found}' \
-        || fail "Empo binary missing ${sym}"
+    nm "$BIN" 2>/dev/null | awk -v sym="$sym" '$3 == sym {found=1} END {exit !found}' ||
+        fail "Empo binary missing ${sym}"
 done
 
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
 
-[[ "$BUNDLE_ID" == "sh.mateo.empo" ]] \
-    || fail "unexpected bundle id: $BUNDLE_ID (expected sh.mateo.empo for release IPA)"
+[[ "$BUNDLE_ID" == "sh.mateo.empo" ]] ||
+    fail "unexpected bundle id: $BUNDLE_ID (expected sh.mateo.empo for release IPA)"
 
 if [[ -n "$EXPECTED_VERSION" && "$VERSION" != "$EXPECTED_VERSION" ]]; then
     fail "Info.plist version $VERSION != expected $EXPECTED_VERSION"
@@ -101,8 +101,8 @@ fi
 HEAD_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD)
 EMBEDDED_COMMIT=$(strings "$BIN" | rg '^commit: [0-9a-f]+$' | head -1 | awk '{print $2}')
 [[ -n "$EMBEDDED_COMMIT" ]] || fail "embedded GitInfo commit not found in binary"
-[[ "$EMBEDDED_COMMIT" == "$HEAD_COMMIT" ]] \
-    || fail "embedded commit $EMBEDDED_COMMIT != HEAD $HEAD_COMMIT"
+[[ "$EMBEDDED_COMMIT" == "$HEAD_COMMIT" ]] ||
+    fail "embedded commit $EMBEDDED_COMMIT != HEAD $HEAD_COMMIT"
 
 if strings "$BIN" | rg -q ' \(dirty\)'; then
     fail "binary embeds dirty GitInfo marker"

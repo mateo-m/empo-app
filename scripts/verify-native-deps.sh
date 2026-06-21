@@ -58,8 +58,8 @@ for ver in 18 19 31; do
     require_file_min "$merged" 1000000 "mkxp${ver}-merged.o"
     require_platform "$merged" "$EXPECTED_PLATFORM" "mkxp${ver}-merged.o"
     sym="_mkxp_get_script_binding_${ver}"
-    nm "$merged" 2>/dev/null | awk -v sym="$sym" '$3 == sym {found=1} END {exit !found}' \
-        || fail "mkxp${ver}-merged.o missing ${sym}"
+    nm "$merged" 2>/dev/null | awk -v sym="$sym" '$3 == sym {found=1} END {exit !found}' ||
+        fail "mkxp${ver}-merged.o missing ${sym}"
 done
 
 for name in libruby.3.1-static.a libruby.3.1-ext.a libruby18-static.a libruby18-ext.a \
@@ -67,7 +67,7 @@ for name in libruby.3.1-static.a libruby.3.1-ext.a libruby18-static.a libruby18-
     path="$LIB/$name"
     min=100000
     case "$name" in
-        libruby.3.1-static.a|libruby18-static.a|libruby19-static.a) min=1000000 ;;
+        libruby.3.1-static.a | libruby18-static.a | libruby19-static.a) min=1000000 ;;
         libruby.3.1-ext.a) min=5000000 ;;
         libcrypto.a) min=1000000 ;;
         libSDL2.a) min=500000 ;;
