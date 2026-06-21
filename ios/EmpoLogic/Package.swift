@@ -22,13 +22,6 @@ let package = Package(
                     package: "SWCompression",
                     condition: .when(platforms: [.linux])
                 ),
-            ],
-            path: "../Empo/src/Library",
-            sources: [
-                "GameScriptProfile.swift",
-                "JSON5LiteParser.swift",
-                "RubyScriptGrammarSniffer.swift",
-                "ZlibInflate.swift",
             ]
         ),
         .testTarget(
