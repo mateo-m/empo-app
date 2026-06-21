@@ -88,139 +88,30 @@ class AppState {
         let userDataDir = container.userDataURL
         let stateDir = container.empoStateURL
 
-        // Tell the engine where to find managed config. The engine's
-        // Config::read and Patcher constructor check this directory
-        // first for mkxp.json and patches.json before falling back
-        // to cwd (= the Game/ subdir).
-        mkxp_setManagedConfigDir(stateDir.path)
-        mkxp_setUserDataDirectory(userDataDir.path)
-
-        let settings = GameSettings.load(from: stateDir)
-
-        // Multi-Ruby (Phase D, MULTI_RUBY_PLAN.md) per-game dispatch.
-        // Precedence:
-        //   1. settings.rubyVersionOverride (manual user pick in
-        //      GameSettingsView's Ruby version picker)
-        //   2. metadata.rubyVersion (auto-detected at import time
-        //      by RubyVersionDetection)
-        //   3. MKXP_RUBY_UNSET → engine falls through to its
-        //      legacy direct-link 3.1 path. Hit when neither
-        //      override nor detection has tagged a value, e.g.
-        //      games imported before this field existed if the
-        //      backfill hasn't run yet.
+        var settings = GameSettings.load(from: stateDir)
         var metadata = GameMetadata.load(from: container)
-        if settings.allowsRubyAutoDetectRefresh {
-            // Re-run auto-detection at launch so upgraded installs
-            // recover from stale persisted values even if the library
-            // screen didn't refresh this container yet. Respect any
-            // explicit Ruby-version or compatibility-mode choice by
-            // leaving their last auto-detected value untouched.
-            metadata.refreshDetectedRubyVersion(in: container, forceRefresh: true)
-            metadata.refreshDetectedModernRubyScripts(in: container, forceRefresh: true)
-        }
-
-        // syntaxTransform travels via the bridge, NOT mkxp.json,
-        // so mkxp.json stays a clean mirror of the developer's
-        // engine-config layer. Has to be set before the engine
-        // reaches `initSyntaxTransform` (during the RGSS-thread
-        // bootstrap kicked off by mkxp_setGamePath later in this
-        // method) - selectGame is the right place for it.
-        //
-        // Important even on multi-Ruby: games that route to Ruby
-        // 3.1 (the only Ruby version with the patches applied)
-        // still need the LEGACY mode for legacy-grammar PE forks
-        // (Vinemon, etc.) whose scripts mix 1.8 syntax with 1.9+
-        // runtime methods. Games on 1.8/1.9/3.0 native ignore
-        // this setting (no patches in those builds).
-        mkxp_setSyntaxTransformMode(
-            settings.resolveSyntaxTransformMode(
-                gameDirectory: gameDir,
-                autoDetectedModern: metadata.modernRubyScriptsDetected
-            )
-        )
-        let rubyVersionRaw = settings.rubyVersionOverride ?? metadata.rubyVersion
-        let rubyVer: MKXPRubyVersion = {
-            switch rubyVersionRaw {
-            case 18: return MKXP_RUBY_18
-            case 19: return MKXP_RUBY_19
-            // 3.0 routes to 3.1 + Legacy syntax-transform; we don't
-            // ship a native 3.0 binding. Old metadata.json values
-            // with rubyVersion: 30 land here and dispatch transparently.
-            case 30, 31: return MKXP_RUBY_31
-            default: return MKXP_RUBY_UNSET
-            }
-        }()
-        mkxp_setActiveRubyVersion(rubyVer)
-
-        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: gameDir)
-
-        // Apply Empo's curated patches.json (auto-discovered by the
-        // engine's Patcher from the managed config dir). Resolves
-        // canonical id from either the JGP manifest (preferred) or
-        // Game.ini Title. No-op if the game isn't in our registry
-        // and no _global rules apply.
-        PatcherDistribution.applyToGame(container: container)
-
-        // sessionLogger has to open the per-session log file before
-        // any bridge call that writes to `mkxp_debugLog` - otherwise
-        // those early lines are silently dropped because the file
-        // isn't open yet.
-        crashTracker.writeMarker(for: container)
-        sessionLogger.beginSession(
-            for: game,
+        GameSession.refreshMetadataIfNeeded(
+            settings: settings,
+            metadata: &metadata,
             container: container,
-            debugLogsEnabled: AppSettings.shared.debugLogs
+            forceRefresh: true
         )
 
-        // These settings go through the bridge, not mkxp.json
-        let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
-        let postload = settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
-        mkxp_applyPerGameSettings(alignment.bridgeValue, postload)
-        // Default the in-game-keyboard toggle to ON for Pokemon
-        // Essentials fan games (Insurgence, Uranium, Reborn, etc.)
-        // since their PE-era keyboard scene is the better UX path
-        // for those games and our backspace shim in
-        // pokemon_input.rb already handles the soft-keyboard case.
-        // Non-PE games default to false (use the iOS soft keyboard).
-        // The user's explicit toggle (true/false in
-        // GameSettings.useInGameKeyboard) always wins over the
-        // detector.
-        let inGameKeyboardDefault = GameSettings.detectPokemonEssentials(
-            in: gameDir, stateDirectory: stateDir
+        GameSession.configureEngine(
+            GameSession.LaunchInput(
+                game: game,
+                container: container,
+                gameDir: gameDir,
+                stateDir: stateDir,
+                userDataDir: userDataDir,
+                settings: settings,
+                metadata: metadata,
+                debugLogsEnabled: AppSettings.shared.debugLogs
+            ),
+            crashTracker: crashTracker,
+            sessionLogger: sessionLogger
         )
-        mkxp_setUseInGameKeyboard(settings.useInGameKeyboard ?? inGameKeyboardDefault)
 
-        // Reset per-session bridge state in one shot. Engine-side
-        // `mkxp_resetSessionState` is the canonical list of
-        // "process-static state that's intrinsically per-game and
-        // would otherwise leak across launches" - the engine
-        // author of a new bridge adds their reset there alongside
-        // the static declaration, so the host doesn't have to
-        // track each bridge individually.
-        //
-        // Effectively a no-op on feat/multi-ruby-v2 since cross-
-        // session play is disabled (QUIT_PATHS_DISABLED.md), but
-        // calling it costs nothing and keeps the iOS code in sync
-        // with main's expected bridge surface.
-        mkxp_resetSessionState()
-
-        // Wait for the RGSS thread to finish tearing down any
-        // previous session before feeding it the new path. If
-        // mkxp_setGamePath is called too early, the engine's own
-        // mkxp_setEngineTerminated() runs afterwards and clears the path
-        // flag just set, leaving the next session stuck in
-        // waitForGamePath forever.
-        //
-        // awaitEngineTermination returns immediately when no previous
-        // session is running, and otherwise parks on a continuation
-        // that the engine-terminated callback wakes up. No polling, no
-        // wall-clock deadline: the hang watchdog in returnToLibrary is
-        // what handles a truly stuck RGSS thread by force-quitting the
-        // app.
-        //
-        // The loading view is already on screen throughout this wait,
-        // so it doubles as a "quitting" indicator when the user quickly
-        // taps a new game right after quitting.
         Task { @MainActor in
             await termination.awaitEngineTermination()
             mkxp_setGamePath(game.path)
