@@ -8,7 +8,7 @@
         "@types/bun": "^1.3.14",
         "lefthook": "2.1.9",
         "markdownlint-cli": "0.48.0",
-        "oxfmt": "^0.55.0",
+        "oxfmt": "0.55.0",
       },
     },
   },

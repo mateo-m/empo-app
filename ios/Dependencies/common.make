@@ -357,7 +357,7 @@ $(OPENSSL_CONFIGURED): $(OPENSSL_DIR)/Configure
 	./Configure $(OPENSSL_CONFIGURE_TARGET) no-shared no-dso \
 		--prefix="$(BUILD_PREFIX)" \
 		--openssldir="$(BUILD_PREFIX)/ssl" \
-		$(if $(filter iphonesimulator,$(SDK)),-mios-simulator-version-min=$(MINIMUM_REQUIRED),-miphoneos-version-min=$(MINIMUM_REQUIRED))
+		$(TARGET_FLAG)
 	touch $@
 
 $(OPENSSL_DIR)/Configure: $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz

@@ -41,10 +41,16 @@ verify_both_trees() {
     PLATFORM_NAME=iphoneos "$VERIFY" && PLATFORM_NAME=iphonesimulator "$VERIFY"
 }
 
-# Stamp matches and both SDK trees are healthy — nothing to do.
+both_build_trees_exist() {
+    [ -d "$DEPS_DIR/build-iphoneos-arm64" ] &&
+        [ -d "$DEPS_DIR/build-iphonesimulator-arm64" ]
+}
+
+# Stamp matches and both SDK trees are present — nothing to do.
+# Full verification runs after download and in the dedicated Xcode phase.
 if [ -f "$STAMP" ] &&
     [ "$(cat "$STAMP" 2>/dev/null)" = "$NATIVE_DEPS_VERSION" ] &&
-    verify_both_trees >/dev/null 2>&1; then
+    both_build_trees_exist; then
     exit 0
 fi
 
@@ -115,6 +121,9 @@ else
 fi
 
 # Tarball paths are relative to ios/Dependencies/ (build-iphoneos-arm64/, …).
+for dir in build-iphoneos-arm64 build-iphonesimulator-arm64; do
+    rm -rf "${DEPS_DIR:?}/$dir"
+done
 tar -xzf "$TMPDIR_DL/$ASSET_NAME" -C "$DEPS_DIR"
 
 if ! verify_both_trees; then
