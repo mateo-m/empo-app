@@ -29,7 +29,7 @@ require_file_min() {
 
 has_platform() {
     local path="$1" platform="$2"
-    otool -l "$path" 2>/dev/null | grep -E "platform ${platform}" | head -1 | grep -q .
+    otool -l "$path" 2>/dev/null | grep -Em1 "platform ${platform}" >/dev/null
 }
 
 require_platform() {
