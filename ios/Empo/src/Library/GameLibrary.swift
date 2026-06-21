@@ -109,7 +109,7 @@ class GameLibrary {
             : false
         let skipIDs = inFlightImports.withLock { Set($0) }
         Task.detached {
-            let scanned = GameLibrary.scanGames(
+            let scanned = GameCatalog.scanGames(
                 cleanupInvalid: cleanupInvalid,
                 skipIDs: skipIDs
             )
@@ -139,124 +139,11 @@ class GameLibrary {
         }
     }
 
-    /// Scan `Documents/Games/`. Each subfolder that parses as a
-    /// `GameContainer` becomes a candidate; folders whose name
-    /// doesn't begin with a parseable UUID are ignored entirely
-    /// (defends against orphan files / dev-era leftovers).
-    ///
-    /// `cleanupInvalid: true` removes containers that fail
-    /// validation; otherwise they're surfaced as `.invalid` cards
-    /// so the user can choose to delete them.
-    nonisolated private static func scanGames(
-        fm: FileManager = .default,
-        cleanupInvalid: Bool,
-        skipIDs: Set<String> = []
-    ) -> [GameEntry] {
-        var entries: [GameEntry] = []
-
-        for container in GameContainer.discover() {
-            // Skip containers whose import is still in-flight on
-            // another task. Without this guard a concurrent reload
-            // - triggered by a sibling import finishing - would see
-            // the partially-populated folder, decide it's invalid,
-            // and produce an "Unknown Game" card that clobbers the
-            // in-memory progress card during the merge step.
-            if skipIDs.contains(container.id) { continue }
-
-            // The Game/ subdir must exist for the import to be
-            // meaningful. If it doesn't, the container is either
-            // half-imported or layout-incompatible (e.g. a folder
-            // from a build before this layout existed).
-            let gameDirExists = fm.fileExists(atPath: container.gameURL.path)
-            let isValid =
-                gameDirExists
-                && (try? GameImportValidator.validate(container.gameURL)) != nil
-
-            if !isValid {
-                if cleanupInvalid {
-                    NSLog(
-                        "[GameLibrary] Removing invalid game container: %@",
-                        container.folderName)
-                    try? container.deleteAll()
-                    continue
-                }
-                if var entry = buildGameEntry(from: container, fm: fm) {
-                    entry.status = .invalid
-                    entries.append(entry)
-                }
-                continue
-            }
-
-            if let entry = buildGameEntry(from: container, fm: fm) {
-                entries.append(entry)
-            }
-        }
-
-        entries.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
-        return entries
-    }
-
-    nonisolated private static func buildGameEntry(
-        from container: GameContainer,
-        fm: FileManager = .default
-    ) -> GameEntry? {
-        let iniTitle = GameEntry.parseINITitle(at: container.gameURL) ?? "Unknown Game"
-        let defaultArtwork = findArtwork(in: container)
-
-        let settings = GameSettings.load(from: container.empoStateURL)
-        var metadata = GameMetadata.load(from: container)
-        if settings.allowsRubyAutoDetectRefresh {
-            metadata.refreshDetectedRubyVersion(in: container)
-            metadata.refreshDetectedModernRubyScripts(in: container)
-        }
-        // Title priority: user's customTitle > import-time baseTitle
-        // (JGP manifest name) > Game.ini title. The `engineTitle`
-        // subtitle on the library card only surfaces when the user
-        // has explicitly set a `customTitle` that diverges from the
-        // engine's Game.ini title - so we can show both their
-        // chosen name and what the game calls itself. JGP imports
-        // deliberately use the manifest as the authoritative title
-        // and don't show a subtitle; JoiPlay's chosen name is THE
-        // name, and surfacing Game.ini alongside would just clutter
-        // the card with a near-duplicate.
-        let baseTitle = metadata.baseTitle ?? iniTitle
-        let title = metadata.customTitle ?? baseTitle
-        let artworkPath = metadata.customArtworkPath(in: container) ?? defaultArtwork
-        let engineTitle: String? = {
-            guard metadata.customTitle != nil else { return nil }
-            return titlesMeaningfullyDiffer(title, iniTitle) ? iniTitle : nil
-        }()
-
-        return GameEntry(
-            id: container.id,
-            container: container,
-            title: title,
-            artworkPath: artworkPath,
-            engineTitle: engineTitle,
-            lastPlayed: metadata.lastPlayed,
-            dateAdded: metadata.dateAdded
-        )
-    }
-
-    /// True when two titles differ in something other than
-    /// diacritics, case, or surrounding whitespace. Keeps
-    /// "Pokémon Reborn" vs "Pokemon Reborn" from looking like
-    /// distinct titles on the library card.
-    nonisolated private static func titlesMeaningfullyDiffer(_ a: String, _ b: String) -> Bool {
-        let folded: (String) -> String = { raw in
-            raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                .folding(
-                    options: [.diacriticInsensitive, .caseInsensitive],
-                    locale: Locale(identifier: "en_US_POSIX"))
-        }
-        return folded(a) != folded(b)
-    }
-
     func refreshGameEntry(id: String) {
         guard let idx = games.firstIndex(where: { $0.id == id }),
             let container = games[idx].container
         else { return }
-        guard var entry = Self.buildGameEntry(from: container) else { return }
+        guard var entry = GameCatalog.buildGameEntry(from: container) else { return }
         entry.status = games[idx].status  // preserve current status
         withAnimation { games[idx] = entry }
     }
@@ -579,7 +466,7 @@ class GameLibrary {
         // afterwards. (For folder imports, sidecars are uncommon
         // because folder imports are usually pre-extracted RGSS
         // trees with `Graphics/Titles/` already present.)
-        let artworkPath = Self.findFolderImportArtwork(at: gameRoot)
+        let artworkPath = GameCatalog.findFolderImportArtwork(at: gameRoot)
         if let path = artworkPath {
             // Warm the decode cache before `tmpDest`'s defer-backed
             // cleanup kicks in so the card keeps rendering the
@@ -609,14 +496,14 @@ class GameLibrary {
 
         if isImportCancelled(importID) { throw ImportCancelled() }
 
-        Self.detectAndPersistModernRuby(in: container)
+        GameImporter.detectAndPersistModernRuby(in: container)
 
         // Lazy: extract the exe-icon sidecar from the now-final
         // location, writing into Metadata/. Idempotent (skipped if
         // already present), so repeat imports are cheap.
         _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
 
-        Self.createMetadata(in: container)
+        GameImporter.createMetadata(in: container)
         committed = true
     }
 
@@ -786,7 +673,7 @@ class GameLibrary {
         // this branch entirely.
         let jgpBundle: Jgp.Bundle? =
             sourceURL.pathExtension.lowercased() == "jgp"
-            ? try Self.preprocessJgp(at: gameRoot)
+            ? try GameImporter.preprocessJgp(at: gameRoot)
             : nil
 
         // Move the extracted tree into <container>/Game/. The
@@ -798,172 +685,14 @@ class GameLibrary {
 
         if isImportCancelled(importID) { throw ImportCancelled() }
         if let bundle = jgpBundle {
-            Self.finalizeJgpImport(
+            GameImporter.finalizeJgpImport(
                 container: container,
                 bundle: bundle
             )
         } else {
-            Self.createMetadata(in: container)
+            GameImporter.createMetadata(in: container)
         }
         committed = true
-    }
-
-    /// JoiPlay .jgp post-extract step. Parses the three JSON
-    /// sidecars, rejects unsupported runtimes, and removes the
-    /// sidecars + icon from the game folder so the runtime sees a
-    /// clean RGSS tree. The returned `Bundle` carries everything
-    /// we need to seed metadata + settings once the folder is
-    /// moved to its final destination.
-    nonisolated private static func preprocessJgp(at gameRoot: URL) throws -> Jgp.Bundle {
-        guard let bundle = Jgp.parseBundle(at: gameRoot) else {
-            throw GameImportValidator.ImportError.invalidJgpManifest
-        }
-
-        switch bundle.manifest.type {
-        case .rpgmxp, .rpgmvx, .rpgmvxace, .mkxpZ:
-            break
-        case .unsupported(let raw):
-            throw GameImportValidator.ImportError.unsupportedRuntime(
-                "This JoiPlay archive uses '\(raw)' which isn't supported. "
-                    + "Only RPG Maker XP, VX, VX Ace, and mkxp-z games are currently supported."
-            )
-        }
-
-        let fm = FileManager.default
-        for name in ["manifest.json", "configuration.json", "gamepad.json"] {
-            try? fm.removeItem(at: gameRoot.appendingPathComponent(name))
-        }
-        if let iconRel = bundle.manifest.icon, !iconRel.isEmpty {
-            try? fm.removeItem(at: gameRoot.appendingPathComponent(iconRel))
-        }
-
-        return bundle
-    }
-
-    /// Seed metadata + per-game settings + per-game control layout
-    /// for a freshly-imported JGP. Runs on the import thread after
-    /// the game folder is at its permanent destination so all
-    /// side-effect paths (game_settings.json, mkxp.json, metadata
-    /// sidecar, UserDefaults layout key) use the final locations.
-    nonisolated private static func finalizeJgpImport(
-        container: GameContainer,
-        bundle: Jgp.Bundle
-    ) {
-        // Seed engine settings from the bundled configuration.
-        var settings = bundle.configuration?.toGameSettings() ?? GameSettings()
-
-        // Ruby-syntax detection. JoiPlay's "mkxp-z" runtime
-        // label plus Reborn-style bootstrap games ship actual
-        // Ruby 3 source, so force useModernRuby for those. For
-        // other runtime types we scan `.rb` files for Ruby 3
-        // markers as a fallback - catches PE v20+ games that
-        // still tag themselves as rpgmxp but have been ported
-        // to the modern Essentials codebase.
-        if bundle.manifest.type == .mkxpZ {
-            settings.useModernRuby = true
-        } else if GameScriptProfile.analyze(gameDirectory: container.gameURL).modernRubyScripts {
-            settings.useModernRuby = true
-        }
-
-        // Persist managed config (mkxp.json, game_settings.json)
-        // into <container>/EmpoState/. applyToConfig reads the
-        // developer's source from `Game/mkxp.json` directly (the
-        // imported folder is treated as immutable), so no snapshot
-        // step is needed.
-        let stateDir = container.ensureEmpoStateDirectory()
-        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: container.gameURL)
-        settings.save(to: stateDir)
-
-        // Seed the per-game control layout from the JGP gamepad
-        // hints. Users can still re-arrange in the player toolbar
-        // afterwards and their edits override this seed.
-        if let gamepad = bundle.gamepad {
-            let seed = gamepad.toSeedLayout()
-            ControlsLayout.writeInitialPerGameLayout(
-                gameID: container.id,
-                dpadCenter: seed.dpadCenter,
-                dpadSize: seed.dpadSize,
-                buttons: seed.buttons
-            )
-        }
-
-        // Metadata carries manifest fields and the JGP icon (if
-        // present) as custom artwork so the library card shows
-        // JoiPlay's canonical branding for the game. The manifest
-        // name becomes the BASE title (not a custom override) -
-        // the library resolves title as customTitle ?? baseTitle ??
-        // iniTitle, so the user still sees the manifest name first
-        // but can type their own customTitle on top if desired,
-        // and Game.ini's title stays available as the final
-        // fallback when there's no manifest.
-        var metadata = GameMetadata()
-        metadata.dateAdded = Date()
-        metadata.baseTitle = bundle.manifest.name
-        metadata.manifestId = bundle.manifest.id
-        metadata.manifestVersion = bundle.manifest.version
-        metadata.manifestDescription = bundle.manifest.description
-        // Multi-Ruby: same detection path as the non-JGP import.
-        // JGP manifests' `runtime` field is consumed indirectly by
-        // RubyVersionDetection (which checks for modern-Ruby
-        // markers including the `useModernRuby` decision the JGP
-        // settings make on its behalf).
-        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
-        metadata.rubyVersion = profile.rubyVersion
-        metadata.rubyVersionDetectedSchema = GameScriptProfile.currentSchema.rawValue
-        metadata.modernRubyScriptsDetected = profile.modernRubyScripts
-        metadata.modernRubyScriptsDetectedSchema =
-            GameScriptProfile.currentSchema.rawValue
-
-        if let iconData = bundle.iconData,
-            let image = UIImage(data: iconData),
-            let filename = GameMetadata.saveImage(image, as: "artwork", in: container)
-        {
-            metadata.customArtworkFilename = filename
-        }
-
-        metadata.save(to: container)
-    }
-
-    nonisolated private static func createMetadata(in container: GameContainer) {
-        var metadata = GameMetadata()
-        metadata.dateAdded = Date()
-        // Multi-Ruby: pick the Ruby interpreter version this game
-        // expects so AppState.selectGame can route through the right
-        // per-version binding via `mkxp_setActiveRubyVersion`.
-        // Detection looks at the bundled Ruby DLL filename, RGSS
-        // archive type, Game.ini's Library= field, and modern-Ruby
-        // script syntax.
-        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
-        metadata.rubyVersion = profile.rubyVersion
-        metadata.rubyVersionDetectedSchema = GameScriptProfile.currentSchema.rawValue
-        metadata.modernRubyScriptsDetected = profile.modernRubyScripts
-        metadata.modernRubyScriptsDetectedSchema =
-            GameScriptProfile.currentSchema.rawValue
-        metadata.save(to: container)
-    }
-
-    /// Scans the freshly-extracted game folder for Ruby 3 syntax
-    /// markers and persists `useModernRuby: true` + updates
-    /// mkxp.json if any are found. A no-op for classical PE
-    /// fangames written in Ruby 1.8 - the heuristic only fires on
-    /// games that actually ship Ruby 3 source (Reborn 19.5+,
-    /// PE v20+, anything built on modern Essentials). JGP imports
-    /// have their own detection path in `finalizeJgpImport` that
-    /// also honors the manifest's runtime hint; this helper covers
-    /// the plain .zip / folder import path.
-    nonisolated private static func detectAndPersistModernRuby(in container: GameContainer) {
-        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
-        guard profile.modernRubyScripts else { return }
-        let stateDir = container.ensureEmpoStateDirectory()
-        var settings = GameSettings.load(from: stateDir)
-        settings.useModernRuby = true
-        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: container.gameURL)
-        settings.save(to: stateDir)
-        var metadata = GameMetadata.load(from: container)
-        metadata.modernRubyScriptsDetected = true
-        metadata.modernRubyScriptsDetectedSchema =
-            GameScriptProfile.currentSchema.rawValue
-        metadata.save(to: container)
     }
 
     func deleteGame(_ entry: GameEntry, onError: (@MainActor @Sendable (String) -> Void)? = nil) {
@@ -976,54 +705,6 @@ class GameLibrary {
         let container = entry.container
         removeLibraryEntry(id: entry.id)
         Self.deleteContainer(container, onError: onError)
-    }
-
-    nonisolated private static func findArtwork(in container: GameContainer) -> String? {
-        let fm = FileManager.default
-
-        // Prefer the pre-extracted `.exe` icon when available. The
-        // sidecar lives in `<container>/Metadata/exe-icon.png`
-        // (kept out of `Game/` so the imported tree stays
-        // untouched). It's written once at import time (or lazily
-        // on-demand below) and carries the "official" game icon
-        // the developer shipped inside the executable. Only fall
-        // through to `Graphics/Titles/` when no icon could be
-        // produced.
-        let sidecar = container.exeIconSidecarURL
-        if fm.fileExists(atPath: sidecar.path) {
-            return sidecar.path
-        }
-        if let sidecarPath = ExecutableIconExtractor.writeSidecarIfPossible(in: container) {
-            return sidecarPath
-        }
-
-        return findTitlesArtwork(in: container.gameURL)
-    }
-
-    /// Pre-import folder-tree variant of `findArtwork` that looks
-    /// inside a tmp directory (not yet inside a container).
-    /// Mirrors the post-import rule for the Graphics/Titles
-    /// fallback only - exe-icon sidecars are produced after the
-    /// move into the container.
-    nonisolated private static func findFolderImportArtwork(at url: URL) -> String? {
-        return findTitlesArtwork(in: url)
-    }
-
-    nonisolated private static func findTitlesArtwork(in gameURL: URL) -> String? {
-        let titlesDir = gameURL.appendingPathComponent("Graphics/Titles")
-        guard
-            let items = try? FileManager.default
-                .contentsOfDirectory(atPath: titlesDir.path)
-        else { return nil }
-
-        let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "bmp"]
-        for item in items.sorted() {
-            let ext = (item as NSString).pathExtension.lowercased()
-            if imageExtensions.contains(ext) {
-                return titlesDir.appendingPathComponent(item).path
-            }
-        }
-        return nil
     }
 
     private func ensureGamesDirectory() {
