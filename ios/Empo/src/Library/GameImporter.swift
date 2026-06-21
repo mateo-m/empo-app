@@ -5,10 +5,12 @@ import UIKit
 /// finalization after files land in the container.
 enum GameImporter {
 
-    nonisolated static func createMetadata(in container: GameContainer) {
+    nonisolated static func createMetadata(
+        in container: GameContainer,
+        profile: GameScriptProfile
+    ) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
-        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
         metadata.rubyVersion = profile.rubyVersion
         metadata.rubyVersionDetectedSchema = GameScriptProfile.currentSchema.rawValue
         metadata.modernRubyScriptsDetected = profile.modernRubyScripts
@@ -17,19 +19,38 @@ enum GameImporter {
         metadata.save(to: container)
     }
 
+    nonisolated static func createMetadata(in container: GameContainer) {
+        createMetadata(
+            in: container,
+            profile: GameScriptProfile.analyze(gameDirectory: container.gameURL)
+        )
+    }
+
+    nonisolated static func seedFolderImport(in container: GameContainer) {
+        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
+        if profile.modernRubyScripts {
+            persistModernRubySettings(in: container)
+        }
+        createMetadata(in: container, profile: profile)
+    }
+
     nonisolated static func detectAndPersistModernRuby(in container: GameContainer) {
         let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
         guard profile.modernRubyScripts else { return }
-        let stateDir = container.ensureEmpoStateDirectory()
-        var settings = GameSettings.load(from: stateDir)
-        settings.useModernRuby = true
-        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: container.gameURL)
-        settings.save(to: stateDir)
+        persistModernRubySettings(in: container)
         var metadata = GameMetadata.load(from: container)
         metadata.modernRubyScriptsDetected = true
         metadata.modernRubyScriptsDetectedSchema =
             GameScriptProfile.currentSchema.rawValue
         metadata.save(to: container)
+    }
+
+    private nonisolated static func persistModernRubySettings(in container: GameContainer) {
+        let stateDir = container.ensureEmpoStateDirectory()
+        var settings = GameSettings.load(from: stateDir)
+        settings.useModernRuby = true
+        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: container.gameURL)
+        settings.save(to: stateDir)
     }
 
     nonisolated static func preprocessJgp(at gameRoot: URL) throws -> Jgp.Bundle {

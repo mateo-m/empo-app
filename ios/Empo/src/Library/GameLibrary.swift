@@ -496,14 +496,12 @@ class GameLibrary {
 
         if isImportCancelled(importID) { throw ImportCancelled() }
 
-        GameImporter.detectAndPersistModernRuby(in: container)
-
         // Lazy: extract the exe-icon sidecar from the now-final
         // location, writing into Metadata/. Idempotent (skipped if
         // already present), so repeat imports are cheap.
         _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
 
-        GameImporter.createMetadata(in: container)
+        GameImporter.seedFolderImport(in: container)
         committed = true
     }
 

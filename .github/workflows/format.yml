@@ -75,7 +75,7 @@ jobs:
 
       - name: shfmt check
         run: |
-          FILES=$(git ls-files 'tools/*.sh')
+          FILES=$(git ls-files 'setup.sh' 'tools/*.sh' 'scripts/*.sh')
           if [ -n "$FILES" ]; then
             echo "$FILES" | xargs shfmt -d -i 4 -ci
           fi
