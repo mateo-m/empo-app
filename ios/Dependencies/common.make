@@ -14,6 +14,11 @@ LD_PLATFORM_VERSION := -platform_version $(LD_PLATFORM) $(MINIMUM_REQUIRED) $(SD
 BUILD_PREFIX := ${PWD}/build-$(SDK)-$(ARCH)
 LIBDIR := $(BUILD_PREFIX)/lib
 INCLUDEDIR := $(BUILD_PREFIX)/include
+# Per-SDK tag for isolated autotools/cmake build dirs. Never share
+# configure output between iphoneos and iphonesimulator — see
+# BUILD_PIPELINE_ISSUES.md issues 3 and 7.
+SDK_TAG := $(SDK)-$(ARCH)
+CMAKE_BUILDDIR := cmakebuild-$(SDK_TAG)
 DOWNLOADS := ${PWD}/downloads/$(HOST)
 SOURCES := ${PWD}/sources
 PATCHES := ${PWD}
@@ -86,9 +91,13 @@ $(LIBDIR)/libtheora.a: $(LIBDIR)/libogg.a $(DOWNLOADS)/theora/Makefile
 	cd $(DOWNLOADS)/theora; \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/theora/Makefile: $(DOWNLOADS)/theora/configure
+$(DOWNLOADS)/theora/.configured-$(SDK_TAG): $(DOWNLOADS)/theora/configure
+	cd $(DOWNLOADS)/theora; $(MAKE) distclean 2>/dev/null || true
 	cd $(DOWNLOADS)/theora; \
 	$(CONFIGURE) --with-ogg=$(BUILD_PREFIX) --enable-shared=false --enable-static=true --disable-examples
+	touch $@
+
+$(DOWNLOADS)/theora/Makefile: $(DOWNLOADS)/theora/.configured-$(SDK_TAG)
 
 $(DOWNLOADS)/theora/configure: $(DOWNLOADS)/theora/autogen.sh
 	cd $(DOWNLOADS)/theora; \
@@ -100,13 +109,13 @@ $(DOWNLOADS)/theora/autogen.sh:
 # Vorbis
 libvorbis: init_dirs libogg $(LIBDIR)/libvorbis.a
 
-$(LIBDIR)/libvorbis.a: $(LIBDIR)/libogg.a $(DOWNLOADS)/vorbis/cmakebuild/Makefile
-	cd $(DOWNLOADS)/vorbis/cmakebuild; \
+$(LIBDIR)/libvorbis.a: $(LIBDIR)/libogg.a $(DOWNLOADS)/vorbis/$(CMAKE_BUILDDIR)/Makefile
+	cd $(DOWNLOADS)/vorbis/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/vorbis/cmakebuild/Makefile: $(DOWNLOADS)/vorbis/CMakeLists.txt
+$(DOWNLOADS)/vorbis/$(CMAKE_BUILDDIR)/Makefile: $(DOWNLOADS)/vorbis/CMakeLists.txt
 	cd $(DOWNLOADS)/vorbis; \
-	mkdir -p cmakebuild; cd cmakebuild; \
+	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) -DBUILD_SHARED_LIBS=no
 
 $(DOWNLOADS)/vorbis/CMakeLists.txt:
@@ -116,13 +125,15 @@ $(DOWNLOADS)/vorbis/CMakeLists.txt:
 # Ogg
 libogg: init_dirs $(LIBDIR)/libogg.a
 
-$(LIBDIR)/libogg.a: $(DOWNLOADS)/ogg/Makefile
+$(LIBDIR)/libogg.a: $(DOWNLOADS)/ogg/.configured-$(SDK_TAG)
 	cd $(DOWNLOADS)/ogg; \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/ogg/Makefile: $(DOWNLOADS)/ogg/configure
+$(DOWNLOADS)/ogg/.configured-$(SDK_TAG): $(DOWNLOADS)/ogg/configure
+	cd $(DOWNLOADS)/ogg; $(MAKE) distclean 2>/dev/null || true
 	cd $(DOWNLOADS)/ogg; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
+	touch $@
 
 $(DOWNLOADS)/ogg/configure: $(DOWNLOADS)/ogg/autogen.sh
 	cd $(DOWNLOADS)/ogg; ./autogen.sh
@@ -133,13 +144,13 @@ $(DOWNLOADS)/ogg/autogen.sh:
 # uchardet
 uchardet: init_dirs $(LIBDIR)/libuchardet.a
 
-$(LIBDIR)/libuchardet.a: $(DOWNLOADS)/uchardet/cmakebuild/Makefile
-	cd $(DOWNLOADS)/uchardet/cmakebuild; \
+$(LIBDIR)/libuchardet.a: $(DOWNLOADS)/uchardet/$(CMAKE_BUILDDIR)/Makefile
+	cd $(DOWNLOADS)/uchardet/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/uchardet/cmakebuild/Makefile: $(DOWNLOADS)/uchardet/CMakeLists.txt
+$(DOWNLOADS)/uchardet/$(CMAKE_BUILDDIR)/Makefile: $(DOWNLOADS)/uchardet/CMakeLists.txt
 	cd $(DOWNLOADS)/uchardet; \
-	mkdir -p cmakebuild; cd cmakebuild; \
+	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) -DBUILD_SHARED_LIBS=no -DBUILD_BINARY=OFF
 
 $(DOWNLOADS)/uchardet/CMakeLists.txt:
@@ -154,10 +165,14 @@ $(LIBDIR)/libpixman-1.a: $(DOWNLOADS)/pixman/Makefile
 	make -C $(DOWNLOADS)/pixman -j$(NPROC)
 	make -C $(DOWNLOADS)/pixman install
 
-$(DOWNLOADS)/pixman/Makefile: $(DOWNLOADS)/pixman/autogen.sh
+$(DOWNLOADS)/pixman/.configured-$(SDK_TAG): $(DOWNLOADS)/pixman/autogen.sh
+	cd $(DOWNLOADS)/pixman; $(MAKE) distclean 2>/dev/null || true
 	cd $(DOWNLOADS)/pixman; \
 	$(AUTOGEN) --enable-static=yes --enable-shared=no \
 	--disable-arm-a64-neon
+	touch $@
+
+$(DOWNLOADS)/pixman/Makefile: $(DOWNLOADS)/pixman/.configured-$(SDK_TAG)
 
 $(DOWNLOADS)/pixman/autogen.sh:
 	$(CLONE) https://gitlab.freedesktop.org/pixman/pixman -b pixman-0.42.2 $(DOWNLOADS)/pixman
@@ -166,13 +181,13 @@ $(DOWNLOADS)/pixman/autogen.sh:
 # PhysFS
 physfs: init_dirs $(LIBDIR)/libphysfs.a
 
-$(LIBDIR)/libphysfs.a: $(DOWNLOADS)/physfs/cmakebuild/Makefile
-	cd $(DOWNLOADS)/physfs/cmakebuild; \
+$(LIBDIR)/libphysfs.a: $(DOWNLOADS)/physfs/$(CMAKE_BUILDDIR)/Makefile
+	cd $(DOWNLOADS)/physfs/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/physfs/cmakebuild/Makefile: $(DOWNLOADS)/physfs/CMakeLists.txt
+$(DOWNLOADS)/physfs/$(CMAKE_BUILDDIR)/Makefile: $(DOWNLOADS)/physfs/CMakeLists.txt
 	cd $(DOWNLOADS)/physfs; \
-	mkdir -p cmakebuild; cd cmakebuild; \
+	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) -DPHYSFS_BUILD_STATIC=true -DPHYSFS_BUILD_SHARED=false -DPHYSFS_BUILD_TEST=false
 
 $(DOWNLOADS)/physfs/CMakeLists.txt:
@@ -185,10 +200,14 @@ $(LIBDIR)/libpng.a: $(DOWNLOADS)/libpng/Makefile
 	cd $(DOWNLOADS)/libpng; \
 	make -j$(NPROC); make install
 
-$(DOWNLOADS)/libpng/Makefile: $(DOWNLOADS)/libpng/configure
+$(DOWNLOADS)/libpng/.configured-$(SDK_TAG): $(DOWNLOADS)/libpng/configure
+	cd $(DOWNLOADS)/libpng; $(MAKE) distclean 2>/dev/null || true
 	cd $(DOWNLOADS)/libpng; \
 	$(CONFIGURE) \
 	--enable-shared=no --enable-static=yes
+	touch $@
+
+$(DOWNLOADS)/libpng/Makefile: $(DOWNLOADS)/libpng/.configured-$(SDK_TAG)
 
 $(DOWNLOADS)/libpng/configure:
 	$(CLONE) $(GITHUB)/pnggroup/libpng -b v1.6.50 $(DOWNLOADS)/libpng
@@ -196,13 +215,13 @@ $(DOWNLOADS)/libpng/configure:
 # SDL2 (submodule: sources/sdl2)
 sdl2: init_dirs $(LIBDIR)/libSDL2.a
 
-$(LIBDIR)/libSDL2.a: $(SOURCES)/sdl2/cmakebuild/Makefile
-	cd $(SOURCES)/sdl2/cmakebuild; \
+$(LIBDIR)/libSDL2.a: $(SOURCES)/sdl2/$(CMAKE_BUILDDIR)/Makefile
+	cd $(SOURCES)/sdl2/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
 
-$(SOURCES)/sdl2/cmakebuild/Makefile: $(SOURCES)/sdl2/CMakeLists.txt
+$(SOURCES)/sdl2/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sdl2/CMakeLists.txt
 	cd $(SOURCES)/sdl2; \
-	mkdir -p cmakebuild; cd cmakebuild; \
+	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) -DBUILD_SHARED_LIBS=no \
 	-DSDL_OPENGL=OFF \
 	-DSDL_OPENGLES=ON \
@@ -212,12 +231,12 @@ $(SOURCES)/sdl2/cmakebuild/Makefile: $(SOURCES)/sdl2/CMakeLists.txt
 # SDL_image (submodule: sources/sdl2_image)
 sdl2image: init_dirs sdl2 $(LIBDIR)/libSDL2_image.a
 
-$(LIBDIR)/libSDL2_image.a: $(SOURCES)/sdl2_image/cmakebuild/Makefile
-	cd $(SOURCES)/sdl2_image/cmakebuild; \
+$(LIBDIR)/libSDL2_image.a: $(SOURCES)/sdl2_image/$(CMAKE_BUILDDIR)/Makefile
+	cd $(SOURCES)/sdl2_image/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
 
-$(SOURCES)/sdl2_image/cmakebuild/Makefile: $(SOURCES)/sdl2_image/CMakeLists.txt
-	cd $(SOURCES)/sdl2_image; mkdir -p cmakebuild; cd cmakebuild; \
+$(SOURCES)/sdl2_image/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sdl2_image/CMakeLists.txt
+	cd $(SOURCES)/sdl2_image; mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) \
 	-DBUILD_SHARED_LIBS=no \
 	-DSDL2IMAGE_SAMPLES=no \
@@ -233,12 +252,12 @@ $(SOURCES)/sdl2_image/cmakebuild/Makefile: $(SOURCES)/sdl2_image/CMakeLists.txt
 # SDL_sound (submodule: sources/sdl_sound)
 sdlsound: init_dirs sdl2 libogg libvorbis $(LIBDIR)/libSDL2_sound.a
 
-$(LIBDIR)/libSDL2_sound.a: $(SOURCES)/sdl_sound/cmakebuild/Makefile
-	cd $(SOURCES)/sdl_sound/cmakebuild; \
+$(LIBDIR)/libSDL2_sound.a: $(SOURCES)/sdl_sound/$(CMAKE_BUILDDIR)/Makefile
+	cd $(SOURCES)/sdl_sound/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
 
-$(SOURCES)/sdl_sound/cmakebuild/Makefile: $(SOURCES)/sdl_sound/CMakeLists.txt
-	cd $(SOURCES)/sdl_sound; mkdir -p cmakebuild; cd cmakebuild; \
+$(SOURCES)/sdl_sound/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sdl_sound/CMakeLists.txt
+	cd $(SOURCES)/sdl_sound; mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) \
 	-DSDLSOUND_BUILD_SHARED=false \
 	-DSDLSOUND_BUILD_TEST=false \
@@ -248,13 +267,15 @@ $(SOURCES)/sdl_sound/cmakebuild/Makefile: $(SOURCES)/sdl_sound/CMakeLists.txt
 # SDL2_ttf (submodule: sources/sdl2_ttf)
 sdl2ttf: init_dirs sdl2 freetype $(LIBDIR)/libSDL2_ttf.a
 
-$(LIBDIR)/libSDL2_ttf.a: $(SOURCES)/sdl2_ttf/Makefile
+$(LIBDIR)/libSDL2_ttf.a: $(SOURCES)/sdl2_ttf/.configured-$(SDK_TAG)
 	cd $(SOURCES)/sdl2_ttf; \
 	make -j$(NPROC) lib; make install-libLTLIBRARIES install-libSDL2_ttfincludeHEADERS install-pkgconfigDATA
 
-$(SOURCES)/sdl2_ttf/Makefile: $(SOURCES)/sdl2_ttf/configure
+$(SOURCES)/sdl2_ttf/.configured-$(SDK_TAG): $(SOURCES)/sdl2_ttf/configure
+	cd $(SOURCES)/sdl2_ttf; $(MAKE) distclean 2>/dev/null || true
 	cd $(SOURCES)/sdl2_ttf; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
+	touch $@
 
 $(SOURCES)/sdl2_ttf/configure: $(SOURCES)/sdl2_ttf/autogen.sh
 	cd $(SOURCES)/sdl2_ttf; ./autogen.sh
@@ -277,13 +298,13 @@ $(SOURCES)/sdl2_ttf/configure: $(SOURCES)/sdl2_ttf/autogen.sh
 # rather than silently producing a no-output lib.
 openal: init_dirs $(LIBDIR)/libopenal.a
 
-$(LIBDIR)/libopenal.a: $(SOURCES)/openal-soft/cmakebuild/Makefile
-	cd $(SOURCES)/openal-soft/cmakebuild; \
+$(LIBDIR)/libopenal.a: $(SOURCES)/openal-soft/$(CMAKE_BUILDDIR)/Makefile
+	cd $(SOURCES)/openal-soft/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
 
-$(SOURCES)/openal-soft/cmakebuild/Makefile: $(SOURCES)/openal-soft/CMakeLists.txt
+$(SOURCES)/openal-soft/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/openal-soft/CMakeLists.txt
 	cd $(SOURCES)/openal-soft; \
-	mkdir -p cmakebuild; cd cmakebuild; \
+	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) \
 	-DLIBTYPE=STATIC \
 	-DALSOFT_UTILS=OFF \
@@ -334,7 +355,7 @@ $(OPENSSL_CONFIGURED): $(OPENSSL_DIR)/Configure
 	./Configure $(OPENSSL_CONFIGURE_TARGET) no-shared no-dso \
 		--prefix="$(BUILD_PREFIX)" \
 		--openssldir="$(BUILD_PREFIX)/ssl" \
-		$(TARGET_FLAG)
+		$(if $(filter iphonesimulator,$(SDK)),-mios-simulator-version-min=$(MINIMUM_REQUIRED),-miphoneos-version-min=$(MINIMUM_REQUIRED))
 	touch $@
 
 $(OPENSSL_DIR)/Configure: $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz
@@ -348,13 +369,15 @@ $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz:
 # Freetype (submodule: sources/freetype)
 freetype: init_dirs $(LIBDIR)/libfreetype.a
 
-$(LIBDIR)/libfreetype.a: $(SOURCES)/freetype/builds/unix/unix-def.mk
+$(LIBDIR)/libfreetype.a: $(SOURCES)/freetype/.configured-$(SDK_TAG)
 	cd $(SOURCES)/freetype; \
 	make -j$(NPROC); make install
 
-$(SOURCES)/freetype/builds/unix/unix-def.mk: $(SOURCES)/freetype/builds/unix/configure
+$(SOURCES)/freetype/.configured-$(SDK_TAG): $(SOURCES)/freetype/builds/unix/configure
+	cd $(SOURCES)/freetype; $(MAKE) distclean 2>/dev/null || true
 	cd $(SOURCES)/freetype; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
+	touch $@
 
 $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 	cd $(SOURCES)/freetype; ./autogen.sh
@@ -362,7 +385,7 @@ $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 # Ruby 3.1 (submodule: sources/ruby)
 ruby: init_dirs openssl $(LIBDIR)/libruby.3.1-static.a $(LIBDIR)/libruby.3.1-ext.a
 
-$(LIBDIR)/libruby.3.1-static.a: $(SOURCES)/ruby/Makefile
+$(LIBDIR)/libruby.3.1-static.a: $(SOURCES)/ruby/.configured-$(SDK_TAG)
 	cd $(SOURCES)/ruby; \
 	$(CONFIGURE_ENV) make -j$(NPROC) libruby.3.1-static.a; \
 	cp libruby.3.1-static.a $(LIBDIR)/; \
@@ -392,8 +415,10 @@ $(LIBDIR)/libruby.3.1-static.a: $(SOURCES)/ruby/Makefile
 # before exts so cross-compile bundle linking can find it.
 $(LIBDIR)/libruby.3.1-ext.a: $(LIBDIR)/libruby.3.1-static.a
 	cd $(SOURCES)/ruby; \
-	$(CONFIGURE_ENV) make -j$(NPROC) miniruby; \
-	$(CONFIGURE_ENV) make -j$(NPROC) exts encs || true
+	$(CONFIGURE_ENV) make -j1 miniruby exts.mk encs; \
+	EXT_TARGETS=$$(sed -n '9,18p' exts.mk | tr '\\' ' ' | grep -oE 'ext/[^ ]+' | sed 's|/\.$$|/static|'); \
+	$(CONFIGURE_ENV) make -j1 -f exts.mk ext/extinit.o $$EXT_TARGETS; \
+	$(CONFIGURE_ENV) make -j1 enc/encinit.o
 	@TMPDIR=$$(mktemp -d); \
 	cd $$TMPDIR; \
 	for a in $$(find $(SOURCES)/ruby/ext -name "*.a" -not -path "*/test/*") \
@@ -413,7 +438,8 @@ $(LIBDIR)/libruby.3.1-ext.a: $(LIBDIR)/libruby.3.1-static.a
 	$(AR) d $(LIBDIR)/libruby.3.1-static.a dmyext.o dmyenc.o || true
 	$(RANLIB) $(LIBDIR)/libruby.3.1-static.a
 
-$(SOURCES)/ruby/Makefile: $(SOURCES)/ruby/configure $(LIBDIR)/libcrypto.a
+$(SOURCES)/ruby/.configured-$(SDK_TAG): $(SOURCES)/ruby/configure $(LIBDIR)/libcrypto.a
+	cd $(SOURCES)/ruby; $(MAKE) distclean 2>/dev/null || true
 	cd $(SOURCES)/ruby; \
 	export $(CONFIGURE_ENV); \
 	export CFLAGS="-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__ $$CFLAGS"; \
@@ -435,6 +461,7 @@ $(SOURCES)/ruby/Makefile: $(SOURCES)/ruby/configure $(LIBDIR)/libcrypto.a
 	ac_cv_func_close_range=no \
 	cross_compiling=yes; \
 	sed -i '' 's|^ASFLAGS.*=.*|ASFLAGS = $$(ARCH_FLAG) $$(INCFLAGS) $(TARGETFLAGS)|' Makefile
+	touch $@
 
 $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 	cd $(SOURCES)/ruby; \
@@ -771,7 +798,7 @@ $(LIBDIR)/mkxp18-merged.o: $(LIBDIR)/libruby18-static.a \
 	@nm $(LIBDIR)/mkxp18-merged.o | awk '$$2 == "T"' | head -3
 
 # Ruby 1.8 (submodule: sources/ruby18)
-ruby18: init_dirs $(LIBDIR)/libruby18-static.a
+ruby18: init_dirs $(LIBDIR)/libruby18-static.a $(LIBDIR)/libruby18-ext.a
 
 # Ruby 1.9 (submodule: sources/ruby19)
 #
@@ -796,7 +823,7 @@ ruby18: init_dirs $(LIBDIR)/libruby18-static.a
 # vendor) instead of aarch64-apple-darwin because 1.9's autoconf
 # 2.59-era target_cpu extraction empties the cpu field for the apple
 # vendor case.
-ruby19: init_dirs $(LIBDIR)/libruby19-static.a
+ruby19: init_dirs $(LIBDIR)/libruby19-static.a $(LIBDIR)/libruby19-ext.a
 
 RUBY19_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
 	-Wno-implicit-function-declaration \
@@ -812,7 +839,7 @@ RUBY19_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
 # uses it.
 RUBY19_EXTS = zlib stringio strscan digest fcntl pathname
 
-$(LIBDIR)/libruby19-static.a: $(SOURCES)/ruby19/Makefile
+$(LIBDIR)/libruby19-static.a: $(SOURCES)/ruby19/.configured-$(SDK_TAG)
 	cd $(SOURCES)/ruby19; \
 	$(CONFIGURE_ENV) make -j$(NPROC) libruby-static.a; \
 	cp libruby-static.a $(LIBDIR)/libruby19-static.a; \
@@ -853,7 +880,8 @@ $(LIBDIR)/libruby19-static.a: $(SOURCES)/ruby19/Makefile
 	$(AR) d $(LIBDIR)/libruby19-static.a dmyext.o || true
 	$(RANLIB) $(LIBDIR)/libruby19-static.a
 
-$(SOURCES)/ruby19/Makefile: $(SOURCES)/ruby19/configure
+$(SOURCES)/ruby19/.configured-$(SDK_TAG): $(SOURCES)/ruby19/configure
+	cd $(SOURCES)/ruby19; $(MAKE) distclean 2>/dev/null || true
 	cd $(SOURCES)/ruby19; \
 	export $(CONFIGURE_ENV); \
 	export CFLAGS="$(RUBY19_CFLAGS) $$CFLAGS"; \
@@ -888,6 +916,7 @@ $(SOURCES)/ruby19/Makefile: $(SOURCES)/ruby19/configure
 	    echo 'extern int  mkxp_ruby19_setjmp(void *env) __attribute__((returns_twice));' >> $$CONFIG_H; \
 	    echo 'extern void mkxp_ruby19_longjmp(void *env, int val) __attribute__((noreturn));' >> $$CONFIG_H; \
 	fi
+	touch $@
 
 $(SOURCES)/ruby19/configure: $(SOURCES)/ruby19/configure.in
 	cd $(SOURCES)/ruby19; \
@@ -918,7 +947,7 @@ RUBY18_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
 # it.
 RUBY18_EXTS = zlib stringio strscan digest fcntl
 
-$(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/Makefile
+$(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/.configured-$(SDK_TAG)
 	set -e; \
 	cd $(SOURCES)/ruby18; \
 	$(CONFIGURE_ENV) CFLAGS="$(RUBY18_CFLAGS)" make -j$(NPROC) COMPILE_PRELUDE=true libruby-static.a; \
@@ -961,7 +990,8 @@ $(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/Makefile
 	$(AR) d $(LIBDIR)/libruby18-static.a dmyext.o || true
 	$(RANLIB) $(LIBDIR)/libruby18-static.a
 
-$(SOURCES)/ruby18/Makefile: $(SOURCES)/ruby18/configure
+$(SOURCES)/ruby18/.configured-$(SDK_TAG): $(SOURCES)/ruby18/configure
+	cd $(SOURCES)/ruby18; $(MAKE) distclean 2>/dev/null || true
 	cd $(SOURCES)/ruby18; \
 	$(CONFIGURE_ENV) CFLAGS="$(RUBY18_CFLAGS)" \
 	./configure \
@@ -993,6 +1023,7 @@ $(SOURCES)/ruby18/Makefile: $(SOURCES)/ruby18/configure
 	echo '' >> $(SOURCES)/ruby18/config.h
 	echo 'extern int  mkxp_ruby18_setjmp(void *env) __attribute__((returns_twice));' >> $(SOURCES)/ruby18/config.h
 	echo 'extern void mkxp_ruby18_longjmp(void *env, int val) __attribute__((noreturn));' >> $(SOURCES)/ruby18/config.h
+	touch $@
 
 $(SOURCES)/ruby18/configure: $(SOURCES)/ruby18/configure.in
 	cd $(SOURCES)/ruby18; \
@@ -1022,13 +1053,19 @@ clean-compiled:
 
 # Clean build artifacts from submodule source trees (configure outputs, object files, etc.)
 clean-sources:
-	@for dir in sdl2 sdl2_image sdl2_ttf sdl_sound freetype ruby openal-soft; do \
-		rm -rf $(SOURCES)/$$dir/cmakebuild 2>/dev/null; \
+	@for dir in sdl2 sdl2_image sdl2_ttf sdl_sound freetype ruby ruby18 ruby19 openal-soft; do \
+		rm -rf $(SOURCES)/$$dir/$(CMAKE_BUILDDIR) 2>/dev/null; \
+		rm -f $(SOURCES)/$$dir/.configured-* 2>/dev/null; \
+	done
+	@for dir in ogg vorbis theora pixman libpng uchardet physfs; do \
+		rm -rf $(DOWNLOADS)/$$dir/$(CMAKE_BUILDDIR) 2>/dev/null; \
+		rm -f $(DOWNLOADS)/$$dir/.configured-* 2>/dev/null; \
 	done
 	cd $(SOURCES)/sdl2_ttf && git checkout -- . 2>/dev/null || true
 	cd $(SOURCES)/freetype && git checkout -- . 2>/dev/null || true
 	cd $(SOURCES)/ruby && git checkout -- . 2>/dev/null || true
 	cd $(SOURCES)/ruby18 && git checkout -- . 2>/dev/null || true
+	cd $(SOURCES)/ruby19 && git checkout -- . 2>/dev/null || true
 
 deps-core: libtheora libvorbis pixman libpng physfs uchardet sdl2 sdl2image sdlsound sdl2ttf freetype openal openssl
 everything: deps-core ruby ruby18
