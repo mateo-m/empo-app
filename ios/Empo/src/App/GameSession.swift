@@ -38,9 +38,9 @@ enum GameSession {
         let rubyVersionRaw = settings.rubyVersionOverride ?? metadata.rubyVersion
         let rubyVer: MKXPRubyVersion = {
             switch rubyVersionRaw {
-            case 18: return MKXP_RUBY_18
-            case 19: return MKXP_RUBY_19
-            case 30, 31: return MKXP_RUBY_31
+            case 18?: return MKXP_RUBY_18
+            case 19?: return MKXP_RUBY_19
+            case 30?, 31?: return MKXP_RUBY_31
             default: return MKXP_RUBY_UNSET
             }
         }()

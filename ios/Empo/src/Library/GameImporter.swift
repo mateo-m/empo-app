@@ -7,7 +7,7 @@ enum GameImporter {
 
     nonisolated static func createMetadata(
         in container: GameContainer,
-        profile: GameScriptProfile
+        profile: GameScriptProfile.Result
     ) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
