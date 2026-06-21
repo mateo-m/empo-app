@@ -44,6 +44,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+PATCHES_ROOT="$(cd "$PATCHES_ROOT" && pwd)"
+ENGINE_ROOT="$(cd "$ENGINE_ROOT" && pwd)"
+
 MANIFEST="${PATCHES_ROOT}/ruby${RUBY_VER}.patches.lst"
 [[ -f "$MANIFEST" ]] || {
     echo "error: missing patch manifest $MANIFEST" >&2
@@ -57,18 +60,44 @@ MANIFEST="${PATCHES_ROOT}/ruby${RUBY_VER}.patches.lst"
 expand_path() {
     local raw="$1"
     raw="${raw//@engine@/${ENGINE_ROOT}}"
-    if [[ "$raw" == *"*"* ]]; then
-        local -a matches=()
-        # shellcheck disable=SC2206
-        matches=( $raw )
-        if [[ ${#matches[@]} -eq 0 ]]; then
-            echo "error: glob matched no patches: $raw" >&2
-            exit 1
-        fi
-        printf '%s\n' "${matches[@]}"
+    if [[ "$raw" != *"*"* ]]; then
+        printf '%s\n' "$raw"
         return
     fi
-    printf '%s\n' "$raw"
+
+    local dir pattern
+    if [[ "$raw" == /* ]]; then
+        dir=$(dirname "$raw")
+        pattern=$(basename "$raw")
+    elif [[ "$raw" == "$ENGINE_ROOT"/* ]]; then
+        dir=$(dirname "$raw")
+        pattern=$(basename "$raw")
+    else
+        case "$raw" in
+            */*)
+                dir="${PATCHES_ROOT}/$(dirname "$raw")"
+                pattern=$(basename "$raw")
+                ;;
+            *)
+                dir="$PATCHES_ROOT"
+                pattern="$raw"
+                ;;
+        esac
+    fi
+
+    shopt -s nullglob
+    local -a matches=( "$dir"/$pattern )
+    shopt -u nullglob
+
+    if ((${#matches[@]} == 0)); then
+        echo "error: glob matched no patches: $1" >&2
+        exit 1
+    fi
+
+    local match
+    while IFS= read -r match; do
+        printf '%s\n' "$match"
+    done < <(printf '%s\n' "${matches[@]}" | LC_ALL=C sort)
 }
 
 apply_git_patch() {
