@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "none",
+  "bracketSpacing": true,
+  "endOfLine": "lf",
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "*.md",
+    "mkxp-z-apple-mobile/",
+    "ios/Empo/build/",
+    "ios/Empo/Empo.xcodeproj/",
+    "ios/Dependencies/build-*/",
+    "ios/Dependencies/downloads/",
+    "ios/Dependencies/sources/",
+    "ios/Dependencies/ANGLE/",
+    "ios/Dependencies/Frameworks/",
+    "ios/Empo/Assets.bundle/",
+    "demo/",
+    "ios/Empo/curated-patches/**/patches.json",
+    "tools/",
+    "ios/Empo/src/App/GitInfo.generated.swift"
+  ]
+}

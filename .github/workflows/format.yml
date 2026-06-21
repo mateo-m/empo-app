@@ -81,19 +81,15 @@ jobs:
           fi
 
   yaml-json:
-    name: YAML / JSON (prettier)
+    name: YAML / JSON (oxfmt)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: Install prettier
+      - name: Install JS tools
         run: bun install --frozen-lockfile
 
-      - name: prettier check
-        run: |
-          bun x prettier --check \
-            'altstore-source.json' \
-            'ios/Empo/project.yml' \
-            'ios/Empo/curated-patches/gameRegistry.json'
+      - name: oxfmt check
+        run: bun run fmt:check

@@ -83,14 +83,14 @@ if [ -n "$SH_FILES" ]; then
         die "shellcheck failed"
 fi
 
-PRETTIER_FILES=$(match '^(altstore-source\.json|ios/Empo/project\.yml|ios/Empo/curated-patches/gameRegistry\.json)$')
-if [ -n "$PRETTIER_FILES" ]; then
-    section "prettier (YAML / JSON)"
+OXFMT_FILES=$(match '^(altstore-source\.json|ios/Empo/project\.yml|ios/Empo/curated-patches/gameRegistry\.json)$')
+if [ -n "$OXFMT_FILES" ]; then
+    section "oxfmt (YAML / JSON)"
     require_tool bun
-    printf '%s\n' "$PRETTIER_FILES" | xargs bun x prettier --write
-    restage "$PRETTIER_FILES"
-    printf '%s\n' "$PRETTIER_FILES" | xargs bun x prettier --check ||
-        die "prettier check failed"
+    printf '%s\n' "$OXFMT_FILES" | xargs bun x oxfmt
+    restage "$OXFMT_FILES"
+    printf '%s\n' "$OXFMT_FILES" | xargs bun x oxfmt --check ||
+        die "oxfmt check failed"
 fi
 
 MD_FILES=$(match '\.md$')

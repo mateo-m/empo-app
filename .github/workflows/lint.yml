@@ -119,7 +119,7 @@ jobs:
           fi
 
   yaml:
-    name: YAML (prettier + yamllint)
+    name: YAML (oxfmt + yamllint)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -137,12 +137,8 @@ jobs:
           packages: yamllint
           version: "1.0"
 
-      - name: prettier check (YAML + JSON)
-        run: |
-          bun x prettier --check \
-            'altstore-source.json' \
-            'ios/Empo/project.yml' \
-            'ios/Empo/curated-patches/gameRegistry.json'
+      - name: oxfmt check (YAML + JSON)
+        run: bun run fmt:check
 
       - name: yamllint
         run: |
