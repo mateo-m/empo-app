@@ -34,17 +34,6 @@ enum GameImporter {
         createMetadata(in: container, profile: profile)
     }
 
-    nonisolated static func detectAndPersistModernRuby(in container: GameContainer) {
-        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
-        guard profile.modernRubyScripts else { return }
-        persistModernRubySettings(in: container)
-        var metadata = GameMetadata.load(from: container)
-        metadata.modernRubyScriptsDetected = true
-        metadata.modernRubyScriptsDetectedSchema =
-            GameScriptProfile.currentSchema.rawValue
-        metadata.save(to: container)
-    }
-
     private nonisolated static func persistModernRubySettings(in container: GameContainer) {
         let stateDir = container.ensureEmpoStateDirectory()
         var settings = GameSettings.load(from: stateDir)

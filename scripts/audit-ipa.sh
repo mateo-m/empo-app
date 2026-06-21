@@ -66,12 +66,12 @@ BIN="$APP/Empo"
 
 echo "==> auditing $(basename "$INPUT")"
 
-file "$BIN" | rg -q "Mach-O 64-bit executable arm64" ||
+file "$BIN" | grep -Eq "Mach-O 64-bit executable arm64" ||
     fail "Empo is not an arm64 device executable"
 
 has_platform() {
     local path="$1" platform="$2"
-    otool -l "$path" 2>/dev/null | rg "platform ${platform}" | head -1 | grep -q .
+    otool -l "$path" 2>/dev/null | grep -Em1 "platform ${platform}" >/dev/null
 }
 
 if ! has_platform "$BIN" 2; then
@@ -99,12 +99,12 @@ if [[ -n "$EXPECTED_VERSION" && "$VERSION" != "$EXPECTED_VERSION" ]]; then
 fi
 
 HEAD_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD)
-EMBEDDED_COMMIT=$(strings "$BIN" | rg '^commit: [0-9a-f]+$' | head -1 | awk '{print $2}')
+EMBEDDED_COMMIT=$(strings "$BIN" | grep -Em1 '^commit: [0-9a-f]+$' | awk '{print $2}')
 [[ -n "$EMBEDDED_COMMIT" ]] || fail "embedded GitInfo commit not found in binary"
 [[ "$EMBEDDED_COMMIT" == "$HEAD_COMMIT" ]] ||
     fail "embedded commit $EMBEDDED_COMMIT != HEAD $HEAD_COMMIT"
 
-if strings "$BIN" | rg -q ' \(dirty\)'; then
+if strings "$BIN" | grep -Eq ' \(dirty\)'; then
     fail "binary embeds dirty GitInfo marker"
 fi
 
