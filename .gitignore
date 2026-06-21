@@ -2,6 +2,7 @@
 demo/
 
 # Build artifacts
+.build/
 ios/Empo/build/
 ios/Empo/Empo.xcodeproj/
 *.ipa
