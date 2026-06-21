@@ -466,11 +466,8 @@ $(SOURCES)/ruby/.configured-$(SDK_TAG): $(SOURCES)/ruby/configure $(LIBDIR)/libc
 $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 	cd $(SOURCES)/ruby; \
 	git checkout -- . 2>/dev/null; \
-	git apply $(PATCHES)/ruby31/ios.patch; \
-	for patch in $(ENGINE)/syntax-transform/3.1/[0-9]*.patch; do \
-		echo "Applying syntax transform: $$(basename $$patch)"; \
-		patch -p1 --fuzz=3 -i $$patch || exit 1; \
-	done; \
+	$(PATCHES)/apply-ruby-patches.sh 31 $(SOURCES)/ruby \
+		--patches-root $(PATCHES) --engine $(ENGINE); \
 	autoreconf -i
 
 # Per-Ruby-version mkxp-z binding compile + libruby merge.
@@ -923,8 +920,8 @@ $(SOURCES)/ruby19/configure: $(SOURCES)/ruby19/configure.in
 	git checkout -- . 2>/dev/null; \
 	git clean -fdxq 2>/dev/null; \
 	rm -f aarch64-darwin-fake.rb arm64-darwin-fake.rb; \
-	git apply $(PATCHES)/ruby19/ios.patch; \
-	git apply $(PATCHES)/ruby19/cont-aligned-stacksize.patch; \
+	$(PATCHES)/apply-ruby-patches.sh 19 $(SOURCES)/ruby19 \
+		--patches-root $(PATCHES) --engine $(ENGINE); \
 	autoconf
 
 RUBY18_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
@@ -1029,8 +1026,8 @@ $(SOURCES)/ruby18/configure: $(SOURCES)/ruby18/configure.in
 	cd $(SOURCES)/ruby18; \
 	git checkout -- . 2>/dev/null; \
 	git clean -fdx 2>/dev/null; \
-	git apply $(PATCHES)/ruby18/ios.patch; \
-	git apply $(PATCHES)/ruby18/cross-host.patch; \
+	$(PATCHES)/apply-ruby-patches.sh 18 $(SOURCES)/ruby18 \
+		--patches-root $(PATCHES) --engine $(ENGINE); \
 	autoconf
 
 # ====
