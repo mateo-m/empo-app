@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-commit hook: lint + format the staged files.
+# Pre-commit hook: format staged files, then lint / verify formatting.
 
 set -e
 
@@ -34,7 +34,16 @@ require_tool() {
     command -v "$1" >/dev/null 2>&1 || die "$1 is required but not installed"
 }
 
-SWIFT_FILES=$(match '^ios/Empo/src/.*\.swift$')
+verify_clang_format() {
+    [ -z "$1" ] && return 0
+    printf '%s\n' "$1" | while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        clang-format --dry-run --Werror "$file" ||
+            die "clang-format check failed for $file"
+    done
+}
+
+SWIFT_FILES=$(match '^ios/Empo/.*\.swift$')
 if [ -n "$SWIFT_FILES" ]; then
     section "swift-format (Swift)"
     require_tool swift-format
@@ -56,24 +65,32 @@ if [ -n "$CPP_FILES" ]; then
     require_tool clang-format
     printf '%s\n' "$CPP_FILES" | xargs clang-format -i
     restage "$CPP_FILES"
+    verify_clang_format "$CPP_FILES"
 fi
 
-SH_FILES=$(match '^(setup\.sh|tools/.*\.sh|scripts/hooks/.*\.sh)$')
+SH_FILES=$(match '^(setup\.sh|tools/.*\.sh|scripts/.*\.sh)$')
 if [ -n "$SH_FILES" ]; then
-    section "shfmt + shellcheck (Shell)"
+    section "shfmt (Shell)"
     require_tool shfmt
-    require_tool shellcheck
     printf '%s\n' "$SH_FILES" | xargs shfmt -w -i 4 -ci
     restage "$SH_FILES"
-    printf '%s\n' "$SH_FILES" | xargs shellcheck || die "shellcheck failed"
+    printf '%s\n' "$SH_FILES" | xargs shfmt -d -i 4 -ci ||
+        die "shfmt check failed"
+
+    section "shellcheck (Shell)"
+    require_tool shellcheck
+    printf '%s\n' "$SH_FILES" | xargs shellcheck ||
+        die "shellcheck failed"
 fi
 
-PRETTIER_FILES=$(match '^(ios/Empo/project\.yml|ios/Empo/curated-patches/gameRegistry\.json)$')
+PRETTIER_FILES=$(match '^(altstore-source\.json|ios/Empo/project\.yml|ios/Empo/curated-patches/gameRegistry\.json)$')
 if [ -n "$PRETTIER_FILES" ]; then
     section "prettier (YAML / JSON)"
     require_tool bun
     printf '%s\n' "$PRETTIER_FILES" | xargs bun x prettier --write
     restage "$PRETTIER_FILES"
+    printf '%s\n' "$PRETTIER_FILES" | xargs bun x prettier --check ||
+        die "prettier check failed"
 fi
 
 MD_FILES=$(match '\.md$')

@@ -22,7 +22,7 @@ final class GameScriptProfileTests: XCTestCase {
             gameDirectory: fixtureURL("modern-loose"))
         XCTAssertEqual(profile.rubyVersion, 31)
         XCTAssertTrue(profile.modernRubyScripts)
-    if case .modern = profile.grammar {
+        if case .modern = profile.grammar {
             // expected
         } else {
             XCTFail("expected modern grammar")
