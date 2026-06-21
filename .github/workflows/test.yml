@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  empo-logic:
+    name: EmpoLogic (swift test, Linux)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ios/EmpoLogic
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Cache Swift toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/swiftly
+          key: swiftly-${{ runner.os }}-6.2
+
+      - name: Install Swift toolchain
+        uses: vapor/swiftly-action@v0.2
+        with:
+          toolchain: "6.2"
+
+      - name: swift test
+        run: swift test --parallel

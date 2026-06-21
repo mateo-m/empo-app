@@ -1,4 +1,3 @@
-import Compression
 import Foundation
 
 /// Decodes RPG Maker `Scripts.{rxdata,rvdata,rvdata2}` files (Ruby
@@ -197,30 +196,8 @@ enum RubyScriptGrammarSniffer {
         return combined.isEmpty ? nil : combined
     }
 
-    /// Zlib inflate. Compression.framework's COMPRESSION_ZLIB is
-    /// raw deflate (no zlib header), so strip the 2-byte zlib
-    /// header (typically 0x78 0x9c) before decoding.
     private static func inflate(_ data: Data) -> Data? {
-        guard data.count > 2 else { return nil }
-        let raw = data.dropFirst(2)
-        // Output buffer sized at 16x input as a starting guess.
-        // Real script source compresses ~3-4x so 16x covers all
-        // real-world cases. If compression_decode_buffer fills the
-        // buffer we'd lose the tail, but at 16x that won't happen
-        // for any sane input.
-        let bufferSize = max(raw.count * 16, 65_536)
-        let dst = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-        defer { dst.deallocate() }
-        let written = raw.withUnsafeBytes { (rawPtr: UnsafeRawBufferPointer) -> Int in
-            guard let base = rawPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
-                return 0
-            }
-            return compression_decode_buffer(
-                dst, bufferSize, base, raw.count, nil, COMPRESSION_ZLIB
-            )
-        }
-        guard written > 0 else { return nil }
-        return Data(bytes: dst, count: written)
+        ZlibInflate.inflateSkippingZlibHeader(data)
     }
 
     // MARK: - Grammar classifier
