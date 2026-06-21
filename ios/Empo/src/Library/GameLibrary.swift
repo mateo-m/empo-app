@@ -861,7 +861,7 @@ class GameLibrary {
         // to the modern Essentials codebase.
         if bundle.manifest.type == .mkxpZ {
             settings.useModernRuby = true
-        } else if GameSettings.detectModernRubyScripts(in: container.gameURL) {
+        } else if GameScriptProfile.analyze(gameDirectory: container.gameURL).modernRubyScripts {
             settings.useModernRuby = true
         }
 
@@ -907,15 +907,12 @@ class GameLibrary {
         // RubyVersionDetection (which checks for modern-Ruby
         // markers including the `useModernRuby` decision the JGP
         // settings make on its behalf).
-        metadata.rubyVersion = RubyVersionDetection.detect(
-            gameDirectory: container.gameURL
-        )
-        metadata.rubyVersionDetectedSchema = RubyVersionDetection.currentSchema.rawValue
-        metadata.modernRubyScriptsDetected = GameSettings.detectModernRubyScripts(
-            in: container.gameURL
-        )
+        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
+        metadata.rubyVersion = profile.rubyVersion
+        metadata.rubyVersionDetectedSchema = GameScriptProfile.currentSchema.rawValue
+        metadata.modernRubyScriptsDetected = profile.modernRubyScripts
         metadata.modernRubyScriptsDetectedSchema =
-            ModernRubyDetection.currentSchema.rawValue
+            GameScriptProfile.currentSchema.rawValue
 
         if let iconData = bundle.iconData,
             let image = UIImage(data: iconData),
@@ -936,15 +933,12 @@ class GameLibrary {
         // Detection looks at the bundled Ruby DLL filename, RGSS
         // archive type, Game.ini's Library= field, and modern-Ruby
         // script syntax.
-        metadata.rubyVersion = RubyVersionDetection.detect(
-            gameDirectory: container.gameURL
-        )
-        metadata.rubyVersionDetectedSchema = RubyVersionDetection.currentSchema.rawValue
-        metadata.modernRubyScriptsDetected = GameSettings.detectModernRubyScripts(
-            in: container.gameURL
-        )
+        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
+        metadata.rubyVersion = profile.rubyVersion
+        metadata.rubyVersionDetectedSchema = GameScriptProfile.currentSchema.rawValue
+        metadata.modernRubyScriptsDetected = profile.modernRubyScripts
         metadata.modernRubyScriptsDetectedSchema =
-            ModernRubyDetection.currentSchema.rawValue
+            GameScriptProfile.currentSchema.rawValue
         metadata.save(to: container)
     }
 
@@ -958,7 +952,8 @@ class GameLibrary {
     /// also honors the manifest's runtime hint; this helper covers
     /// the plain .zip / folder import path.
     nonisolated private static func detectAndPersistModernRuby(in container: GameContainer) {
-        guard GameSettings.detectModernRubyScripts(in: container.gameURL) else { return }
+        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
+        guard profile.modernRubyScripts else { return }
         let stateDir = container.ensureEmpoStateDirectory()
         var settings = GameSettings.load(from: stateDir)
         settings.useModernRuby = true
@@ -967,7 +962,7 @@ class GameLibrary {
         var metadata = GameMetadata.load(from: container)
         metadata.modernRubyScriptsDetected = true
         metadata.modernRubyScriptsDetectedSchema =
-            ModernRubyDetection.currentSchema.rawValue
+            GameScriptProfile.currentSchema.rawValue
         metadata.save(to: container)
     }
 

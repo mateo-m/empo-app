@@ -44,18 +44,6 @@ enum RenderScale: String, Codable, CaseIterable, Hashable {
     }
 }
 
-/// Schema versioning for `GameSettings.detectModernRubyScripts`.
-/// Bump `currentSchema` when heuristics change so library load and
-/// launch re-sniff stale metadata the same way Ruby-version
-/// detection does.
-enum ModernRubyDetection {
-    enum Schema: String {
-        case initial
-    }
-
-    static let currentSchema: Schema = .initial
-}
-
 enum VerticalAlignment: String, Codable, CaseIterable {
     case top
     case topCenter
@@ -373,98 +361,7 @@ struct GameSettings: Codable, Equatable {
     ///    for everything except legacy constructs the transform
     ///    would have rewritten, and the user can flip back manually.
     static func detectModernRubyScripts(in gameDirectory: URL) -> Bool {
-        let fm = FileManager.default
-
-        // Signal 1: scan native binaries for an embedded `"ruby 3."`
-        // string. Capped at 64 MB per file; real Ruby DLLs are 5-15 MB,
-        // anything bigger is unlikely to be Ruby.
-        let modernRubyMarker = Data("ruby 3.".utf8)
-        let scanBudget = 64 * 1024 * 1024
-        for url in gameDirectory.directoryEntries(matchingExtensions: ["dll", "dylib", "so"], fm: fm) {
-            guard let attrs = try? fm.attributesOfItem(atPath: url.path),
-                let size = attrs[.size] as? Int,
-                size <= scanBudget,
-                let data = try? Data(contentsOf: url, options: .alwaysMapped)
-            else { continue }
-            if data.range(of: modernRubyMarker) != nil { return true }
-        }
-
-        // Signal 2: .fpk packaging. Modern custom engines mount
-        // scripts from .fpk archives via `System.mount`; presence in
-        // `Data/` is enough.
-        let dataDir = gameDirectory.appendingPathComponent("Data")
-        if !dataDir.directoryEntries(matchingExtensions: ["fpk"], fm: fm).isEmpty {
-            return true
-        }
-
-        // Signal 3: loose .rb files with Ruby-3 keyword args. Depth
-        // capped by the enumerator's defaults; stops at first match
-        // to keep big fangames from scanning thousands of files.
-        let candidates = [
-            gameDirectory,
-            gameDirectory.appendingPathComponent("Scripts"),
-            dataDir,
-        ]
-
-        // Ruby-3 keyword-arg shorthand. A name followed by `:` and a
-        // space then a literal/variable, NOT preceded by `:` (which
-        // would make it a symbol literal) and NOT followed by `:` (a
-        // constant like `Foo::Bar`).
-        //
-        // Matches two call sites:
-        //   1. Start of a line (multi-line kwargs):
-        //        method(
-        //          name: "bar",
-        //        )
-        //   2. Inline after `(` `,` or `{` (single-line kwargs):
-        //        method(name: "bar", other: 123)
-        //
-        // Originally only matched case 1, which missed inline calls
-        // like IF's `Game.save(safe: safesave)` and mis-flagged the
-        // game as Ruby 1.8.
-        //
-        // The value side `(-?\d|...|[a-z])` admits a leading lowercase
-        // identifier so `safe: safesave` (variable, not literal) hits.
-        let modernRegex = try? NSRegularExpression(
-            pattern:
-                "(?:^|(?<=[(,{]))\\s*[a-z_][a-zA-Z0-9_]*:\\s+(-?\\d|\"|'|\\[|\\{|true|false|nil|:[a-zA-Z_]|[a-z_])",
-            options: [.anchorsMatchLines]
-        )
-        guard let regex = modernRegex else { return false }
-
-        // Scan cap. The old limit of 200 tripped on Infinite Fusion
-        // (541 .rb files scattered deep in `Data/Scripts/NNN_*/`),
-        // causing the detector to miss the modern syntax and flip
-        // `syntaxTransform` to 2 anyway. 2000 is plenty of headroom
-        // for the largest PE fangames (Reborn ~1200, Rejuvenation
-        // ~1500) without risking a slow import on a pathological
-        // tree.
-        let scanCap = 2000
-
-        for root in candidates {
-            guard fm.fileExists(atPath: root.path),
-                let enumerator = fm.enumerator(
-                    at: root,
-                    includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles])
-            else { continue }
-
-            var filesScanned = 0
-            for case let url as URL in enumerator {
-                if url.pathExtension.lowercased() != "rb" { continue }
-                filesScanned += 1
-                if filesScanned > scanCap { break }
-
-                guard let text = try? String(contentsOf: url, encoding: .utf8)
-                else { continue }
-
-                let range = NSRange(text.startIndex..., in: text)
-                if regex.firstMatch(in: text, options: [], range: range) != nil {
-                    return true
-                }
-            }
-        }
-        return false
+        GameScriptProfile.analyze(gameDirectory: gameDirectory).modernRubyScripts
     }
 
     /// Best-effort "is this a Pokemon Essentials fangame?" detector.

@@ -146,44 +146,41 @@ struct GameMetadata: Codable {
     /// `forceRefresh` is used by the game-launch path so upgraded
     /// installs recover even if the library didn't get a chance to
     /// rewrite stale metadata before the user boots a game.
+    /// Re-run `GameScriptProfile` and persist ruby version + modern-
+    /// script flags when schema is stale or values are missing.
+    mutating func refreshDetectedProfile(
+        in container: GameContainer,
+        forceRefresh: Bool = false
+    ) {
+        let currentSchema = GameScriptProfile.currentSchema.rawValue
+        let needsDetect =
+            forceRefresh
+            || rubyVersion == nil
+            || modernRubyScriptsDetected == nil
+            || rubyVersionDetectedSchema != currentSchema
+            || modernRubyScriptsDetectedSchema != currentSchema
+        guard needsDetect else { return }
+
+        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
+        rubyVersion = profile.rubyVersion
+        modernRubyScriptsDetected = profile.modernRubyScripts
+        rubyVersionDetectedSchema = currentSchema
+        modernRubyScriptsDetectedSchema = currentSchema
+        save(to: container)
+    }
+
     mutating func refreshDetectedRubyVersion(
         in container: GameContainer,
         forceRefresh: Bool = false
     ) {
-        let currentSchema = RubyVersionDetection.currentSchema.rawValue
-        let needsDetect =
-            forceRefresh
-            || rubyVersion == nil
-            || rubyVersionDetectedSchema != currentSchema
-        guard needsDetect else { return }
-
-        let detectedVersion = RubyVersionDetection.detect(
-            gameDirectory: container.gameURL
-        )
-        rubyVersion = detectedVersion
-        rubyVersionDetectedSchema = currentSchema
-        save(to: container)
+        refreshDetectedProfile(in: container, forceRefresh: forceRefresh)
     }
 
-    /// Refresh the auto-detected modern-Ruby script classification
-    /// if missing, produced by older heuristics, or the caller
-    /// wants a fresh sniff (Reset to Defaults / game launch).
     mutating func refreshDetectedModernRubyScripts(
         in container: GameContainer,
         forceRefresh: Bool = false
     ) {
-        let currentSchema = ModernRubyDetection.currentSchema.rawValue
-        let needsDetect =
-            forceRefresh
-            || modernRubyScriptsDetected == nil
-            || modernRubyScriptsDetectedSchema != currentSchema
-        guard needsDetect else { return }
-
-        modernRubyScriptsDetected = GameSettings.detectModernRubyScripts(
-            in: container.gameURL
-        )
-        modernRubyScriptsDetectedSchema = currentSchema
-        save(to: container)
+        refreshDetectedProfile(in: container, forceRefresh: forceRefresh)
     }
 
     private func isValidFilename(_ name: String) -> Bool {
