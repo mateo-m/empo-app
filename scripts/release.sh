@@ -14,10 +14,10 @@ usage() {
     echo "         <semver>                  explicit version (e.g. 0.1.0)"
     echo ""
     echo "Every release run:"
-    echo "  1. clean-rebuilds ios/Dependencies (iphoneos)"
-    echo "  2. verifies native artifacts"
-    echo "  3. bumps version, tags, builds Empo.app + IPA"
-    echo "  4. audits the shipped binary before publishing"
+    echo "  1. verifies empo-deps pins and hydrates native prebuilts"
+    echo "     (set RELEASE_REBUILD_DEPS=1 to rebuild from source)"
+    echo "  2. bumps version, tags, builds Empo.app + IPA"
+    echo "  3. audits the shipped binary before publishing"
     exit 1
 }
 
@@ -37,7 +37,7 @@ case "$BUMP_OR_VERSION" in
             VERSION="0.1.0"
         else
             CURRENT="${LATEST_TAG#v}"
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+            IFS='.' read -r MAJOR MINOR PATCH <<<"$CURRENT"
             case "$BUMP_OR_VERSION" in
                 major) VERSION="$((MAJOR + 1)).0.0" ;;
                 minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
@@ -79,10 +79,25 @@ if ! git -C "$REPO_ROOT" diff --quiet HEAD; then
     exit 1
 fi
 
-# 2. Clean-rebuild and verify all iphoneos native deps. Release never
-# links against stale mkxp merged objects or silently broken Ruby archives.
-echo "==> rebuilding device native deps (this takes a while)"
-"$REPO_ROOT/scripts/rebuild-device-deps.sh"
+# 2. Verify dependency pins resolve to published empo-deps releases,
+# then hydrate prebuilts for the device build. Override with
+# RELEASE_REBUILD_DEPS=1 to rebuild from source (dep-bump maintainer flow).
+echo "==> verifying empo-deps pins"
+if [ "${RELEASE_REBUILD_DEPS:-0}" = "1" ]; then
+    REQUIRE_PUBLISHED=0 "$REPO_ROOT/scripts/verify-empo-deps-pins.sh"
+else
+    REQUIRE_PUBLISHED=1 "$REPO_ROOT/scripts/verify-empo-deps-pins.sh"
+fi
+
+if [ "${RELEASE_REBUILD_DEPS:-0}" = "1" ]; then
+    echo "==> rebuilding device native deps from source (RELEASE_REBUILD_DEPS=1)"
+    "$REPO_ROOT/scripts/rebuild-device-deps.sh"
+else
+    echo "==> hydrating native deps from empo-deps"
+    rm -rf "$REPO_ROOT/ios/Dependencies/build-iphoneos-arm64" \
+        "$REPO_ROOT/ios/Dependencies/native/.fetched-version"
+    sh "$REPO_ROOT/tools/fetch-native-deps.sh"
+fi
 "$REPO_ROOT/scripts/verify-device-deps.sh"
 
 # 3. Bump MARKETING_VERSION in project.yml
@@ -128,7 +143,7 @@ FULL_CHANGELOG_ENTRY=$(git-cliff --config "$REPO_ROOT/cliff.toml" --unreleased -
 if [[ -f "$CHANGELOG_PATH" ]]; then
     git-cliff --config "$REPO_ROOT/cliff.toml" --unreleased --tag "v$VERSION" --prepend "$CHANGELOG_PATH"
 else
-    printf '%s\n' "$FULL_CHANGELOG_ENTRY" > "$CHANGELOG_PATH"
+    printf '%s\n' "$FULL_CHANGELOG_ENTRY" >"$CHANGELOG_PATH"
 fi
 
 perl -0pi -e 's/\n{3,}/\n\n/g' "$CHANGELOG_PATH"
