@@ -115,30 +115,37 @@ A few load-bearing tricks worth flagging if you're poking around:
 
 ## Build
 
-```sh
-# Tools
-brew install bun xcodegen autoconf automake libtool cmake pkg-config
+Native libraries (OpenSSL, SDL, Ruby, mkxp-merged) ship as **prebuilt trees per SDK**, same model as ANGLE. After cloning:
 
-# Repo (recursive for submodules)
+```sh
+brew install bun xcodegen gh autoconf automake libtool cmake pkg-config
 git clone --recursive git@github.com:mateo-m/empo-app.git
 cd empo-app
-
-# Install repo-managed hooks for empo-app.
 bun install
 
-# If you'll also commit inside the mkxp submodule, install its hooks too.
-(cd mkxp-z-apple-mobile && bun install)
-
-# Cross-compile third-party deps. Slow on first run, cached after.
-make -C ios/Dependencies -f iphonesimulator.make deps-core
-
-# Generate the Xcode project and build the app
+# Hydrate ANGLE + native deps (downloads from empo-deps when published,
+# or uses locally-built trees — see below)
 xcodegen generate --spec ios/Empo/project.yml --project ios/Empo
 xcodebuild -project ios/Empo/Empo.xcodeproj -target Empo \
   -sdk iphonesimulator -arch arm64 -configuration Debug build
 ```
 
-Install on a booted simulator:
+### First-time / dep-bump setup
+
+When `ios/Dependencies/native/.version` is still `unpublished`, or you changed a dependency version, build **both** SDK trees once (sequential — do not `make -j` everything):
+
+```sh
+scripts/rebuild-all-native-deps.sh
+```
+
+Verify a single tree:
+
+```sh
+PLATFORM_NAME=iphoneos scripts/verify-native-deps.sh
+PLATFORM_NAME=iphonesimulator scripts/verify-native-deps.sh
+```
+
+### Simulator install
 
 ```sh
 SIM=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)

@@ -120,34 +120,24 @@ targets:
         script: |
           "${PROJECT_DIR}/../../tools/fetch-angle.sh"
 
-      - name: Verify multi-Ruby merged objects exist
-        # The link step needs per-Ruby merged.o files
-        # (mkxp{18,19,30,31}-merged.o) under
-        # ios/Dependencies/build-<sdk>-arm64/lib. They're built by
-        # ios/Dependencies/common.make. Fail fast with the exact
-        # command instead of trying to link without them - the
-        # linker errors are confusing and an earlier version of
-        # this phase auto-stubbed missing files with nullptr,
-        # which let the build succeed but produced a binary where
-        # every game launch hit a no-op script-binding lookup.
+      - name: Hydrate native dependency trees
+        # OpenSSL/SDL/Ruby/mkxp-merged trees (~hundreds of MB) are not
+        # built during normal Xcode iteration. They are prebuilt per SDK
+        # on empo-deps (or built locally once via
+        # scripts/rebuild-all-native-deps.sh). See tools/fetch-native-deps.sh.
+        basedOnDependencyAnalysis: false
+        script: |
+          "${PROJECT_DIR}/../../tools/fetch-native-deps.sh"
+
+      - name: Verify native deps for active SDK
+        # Fail fast when the tree for the current destination (device or
+        # simulator) is missing or platform-contaminated. See
+        # scripts/verify-native-deps.sh.
         basedOnDependencyAnalysis: false
         script: |
           set -e
-          DEPS_LIB="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib"
-          MISSING=""
-          for VER in 18 19 31; do
-              OBJ="$DEPS_LIB/mkxp${VER}-merged.o"
-              if [ ! -f "$OBJ" ]; then
-                  MISSING="$MISSING mkxp${VER}-merged.o"
-              fi
-          done
-          if [ -n "$MISSING" ]; then
-              echo "error: missing per-Ruby merged objects:$MISSING" >&2
-              echo "" >&2
-              echo "hint: from ios/Dependencies, run:" >&2
-              echo "  SDK=${PLATFORM_NAME} make -f ${PLATFORM_NAME}.make ruby ruby19 ruby18 mkxp-merged" >&2
-              exit 1
-          fi
+          PLATFORM_NAME="${PLATFORM_NAME}" \
+            "${PROJECT_DIR}/../../scripts/verify-native-deps.sh"
 
       - name: Assemble Assets.bundle
         # Force every build. The script globs the engine's shader/font/
