@@ -498,8 +498,7 @@ struct UpdateStatusIndicator: View {
             actionURL: releaseURL,
             dismissAction: canDismiss ? onDismiss : nil,
             usesBrandGlass: chipPhase.usesBrandGlass,
-            size: size,
-            animationPhase: chipPhase
+            size: size
         )
 
         if chipPhase == .failed {
@@ -563,7 +562,6 @@ struct UpdateStatusBadge: View {
     var dismissAction: (() -> Void)?
     var usesBrandGlass: Bool = false
     var size: UpdateStatusIndicator.Size = .regular
-    fileprivate var animationPhase: UpdateStatusChipPhase?
 
     @Environment(\.openURL) private var openURL
     @State private var dismissDragOffset: CGFloat = 0
@@ -581,7 +579,6 @@ struct UpdateStatusBadge: View {
         dismissibleInteraction(styledBadge)
             .offset(y: usesDismissiblePromoInteraction ? dismissDragOffset : 0)
             .fixedSize(horizontal: true, vertical: false)
-            .animation(Motion.standard, value: animationPhase ?? .hidden)
     }
 
     @ViewBuilder
