@@ -88,22 +88,22 @@ MSG
     exit 1
 fi
 
-TMPDIR="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR"' EXIT
+TMPDIR_DL=$(mktemp -d "${TMPDIR:-/tmp}/empo-native-deps.XXXXXX")
+trap 'rm -rf "$TMPDIR_DL"' EXIT INT TERM
 
 echo "fetch-native-deps: downloading $NATIVE_DEPS_VERSION from $DEPS_REPO"
 
 if ! gh release download "$NATIVE_DEPS_VERSION" \
     --repo "$DEPS_REPO" \
     --pattern "$ASSET_NAME" \
-    --dir "$TMPDIR" \
+    --dir "$TMPDIR_DL" \
     --skip-existing 2>&1; then
     echo "fetch-native-deps: gh release download failed for $DEPS_REPO@$NATIVE_DEPS_VERSION" >&2
     exit 1
 fi
 
 if [ -n "$NATIVE_DEPS_SHA256" ]; then
-    ACTUAL_SHA="$(shasum -a 256 "$TMPDIR/$ASSET_NAME" | awk '{print $1}')"
+    ACTUAL_SHA="$(shasum -a 256 "$TMPDIR_DL/$ASSET_NAME" | awk '{print $1}')"
     if [ "$ACTUAL_SHA" != "$NATIVE_DEPS_SHA256" ]; then
         echo "fetch-native-deps: sha256 mismatch" >&2
         echo "  expected: $NATIVE_DEPS_SHA256" >&2
@@ -115,7 +115,7 @@ else
 fi
 
 # Tarball paths are relative to ios/Dependencies/ (build-iphoneos-arm64/, …).
-tar -xzf "$TMPDIR/$ASSET_NAME" -C "$DEPS_DIR"
+tar -xzf "$TMPDIR_DL/$ASSET_NAME" -C "$DEPS_DIR"
 
 if ! verify_both_trees; then
     echo "fetch-native-deps: extracted tarball failed verification" >&2

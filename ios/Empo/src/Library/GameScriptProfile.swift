@@ -1,9 +1,9 @@
 import Foundation
 
-/// Single-pass analysis of a game's script sources and runtime
+/// Coordinated analysis of a game's script sources and runtime
 /// markers. Replaces the parallel `RubyVersionDetection` +
 /// `GameSettings.detectModernRubyScripts` sniffers so Ruby dispatch
-/// and syntax-transform mode derive from one directory walk.
+/// and syntax-transform mode derive from one profile result.
 enum GameScriptProfile {
 
     /// Schema version for persisted detection results on

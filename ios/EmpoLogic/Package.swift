@@ -6,7 +6,6 @@ let package = Package(
     platforms: [
         .macOS(.v13),
         .iOS(.v13),
-        .linux,
     ],
     products: [
         .library(name: "EmpoLogic", targets: ["EmpoLogic"]),

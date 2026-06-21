@@ -125,9 +125,11 @@ $(DOWNLOADS)/vorbis/CMakeLists.txt:
 # Ogg
 libogg: init_dirs $(LIBDIR)/libogg.a
 
-$(LIBDIR)/libogg.a: $(DOWNLOADS)/ogg/.configured-$(SDK_TAG)
+$(LIBDIR)/libogg.a: $(DOWNLOADS)/ogg/Makefile
 	cd $(DOWNLOADS)/ogg; \
 	make -j$(NPROC); make install
+
+$(DOWNLOADS)/ogg/Makefile: $(DOWNLOADS)/ogg/.configured-$(SDK_TAG)
 
 $(DOWNLOADS)/ogg/.configured-$(SDK_TAG): $(DOWNLOADS)/ogg/configure
 	cd $(DOWNLOADS)/ogg; $(MAKE) distclean 2>/dev/null || true

@@ -30,8 +30,8 @@ PLATFORM_NAME=iphoneos "$VERIFY"
 echo "==> verifying simulator tree"
 PLATFORM_NAME=iphonesimulator "$VERIFY"
 
-OUT="$(mktemp -t native-ios-prebuilt).tar.gz"
-trap 'rm -f "$OUT"' EXIT
+OUT="${TMPDIR:-/tmp}/native-ios-prebuilt.tar.gz"
+rm -f "$OUT"
 
 echo "==> packaging into $OUT"
 (
