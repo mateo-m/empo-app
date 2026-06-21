@@ -102,6 +102,7 @@ settings:
       # Local device installs: use a dev bundle ID a personal team can
       # register. Override in the gitignored Signing.xcconfig if needed.
       PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev
+      ENABLE_TESTABILITY: YES # yamllint disable-line rule:truthy
     Release:
       OTHER_CFLAGS: "-fdeclspec -O3"
       PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo
@@ -417,6 +418,24 @@ targets:
           - -lEGL_static
           - -lGLESv2_static
     dependencies: []
+  EmpoLogicTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/Logic
+        type: group
+        excludes:
+          - Fixtures/**
+      - path: Tests/Logic/Fixtures
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: Empo
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+      PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.logic-tests
+      TEST_HOST: $(BUILT_PRODUCTS_DIR)/Empo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Empo
+      BUNDLE_LOADER: $(TEST_HOST)
 schemes:
   Empo:
     build:
@@ -426,6 +445,8 @@ schemes:
       config: Debug
     test:
       config: Debug
+      targets:
+        - EmpoLogicTests
     profile:
       config: Release
     analyze:
