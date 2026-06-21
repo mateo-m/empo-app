@@ -217,7 +217,7 @@ enum GameScriptProfile {
     ) -> Int? {
         let iniURL = gameDirectory.appendingPathComponent("Game.ini")
         guard
-            let value = GameEntry.parseINIValue(
+            let value = GameINI.parseINIValue(
                 in: iniURL,
                 section: "game",
                 key: "library")
