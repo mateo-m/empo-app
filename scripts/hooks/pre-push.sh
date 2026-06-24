@@ -47,3 +47,16 @@ if ! git -C "$SUBMODULE_PATH" merge-base --is-ancestor "$SUBMODULE_SHA" "origin/
     printf 'Push or merge the submodule branch first, then push the parent repo.\n' >&2
     exit 1
 fi
+
+if ! command -v bundle >/dev/null 2>&1; then
+    printf 'pre-push failed: bundle is required to lint %s compat scripts\n' "$SUBMODULE_PATH" >&2
+    exit 1
+fi
+
+printf '\n-> mkxp-z rubocop (scripts/preload, scripts/postload)\n'
+if ! git -C "$SUBMODULE_PATH" bundle exec rubocop scripts/preload scripts/postload; then
+    printf 'pre-push failed: mkxp-z rubocop failed\n' >&2
+    exit 1
+fi
+
+printf 'pre-push OK\n'
