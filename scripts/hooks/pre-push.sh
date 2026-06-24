@@ -54,7 +54,7 @@ if ! command -v bundle >/dev/null 2>&1; then
 fi
 
 printf '\n-> mkxp-z rubocop (scripts/preload, scripts/postload)\n'
-if ! git -C "$SUBMODULE_PATH" bundle exec rubocop scripts/preload scripts/postload; then
+if ! (cd "$SUBMODULE_PATH" && bundle exec rubocop scripts/preload scripts/postload); then
     printf 'pre-push failed: mkxp-z rubocop failed\n' >&2
     exit 1
 fi
