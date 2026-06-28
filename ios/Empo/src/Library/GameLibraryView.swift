@@ -39,7 +39,7 @@ struct GameLibraryView: View {
     @State private var showSortSheet = false
     @State private var gameSizes: [String: Int64] = [:]
     @State private var sizesTask: Task<Void, Never>?
-    @State private var importWorkflow = ImportWorkflowController()
+    @State private var importPipeline = ImportPipeline()
     /// Per-game record of which visual source triggered the most recent
     /// navigation into the player. Drives `.navigationTransition(.zoom)`
     /// so the exit animation lands on the same spot the user tapped.
@@ -148,7 +148,7 @@ struct GameLibraryView: View {
                 columns = Self.makeColumns(compact: newClass == .compact)
             }
             .task(id: ObjectIdentifier(library)) {
-                importWorkflow.configure(library: library)
+                importPipeline.configure(library: library)
             }
             .task {
                 refreshGameSizes()
@@ -172,9 +172,9 @@ struct GameLibraryView: View {
                     gameForInfo: $gameForInfo,
                     showSortSheet: $showSortSheet,
                     importRootPrompt: importRootPromptBinding,
-                    onImportPicked: importWorkflow.enqueue,
-                    onCancelImportChoice: importWorkflow.cancelChoice,
-                    onConfirmImportChoice: importWorkflow.confirmChoice
+                    onImportPicked: importPipeline.enqueue,
+                    onCancelImportChoice: importPipeline.cancelChoice,
+                    onConfirmImportChoice: importPipeline.confirmChoice
                 )
             )
             .modifier(
@@ -187,11 +187,11 @@ struct GameLibraryView: View {
                     showInvalidAlert: $showInvalidAlert,
                     showCancelValidationAlert: $showCancelValidationAlert,
                     showPausedGameAlert: $showPausedGameAlert,
-                    importWorkflowAlert: importWorkflowAlertBinding,
+                    importPipelineAlert: importPipelineAlertBinding,
                     pausedGame: pauseManager.pausedGame,
                     onDeleteGame: deleteSelectedGame,
-                    onDismissImportWorkflowAlert: importWorkflow.dismissAlert,
-                    onCancelValidation: importWorkflow.cancelValidation,
+                    onDismissImportPipelineAlert: importPipeline.dismissAlert,
+                    onCancelValidation: importPipeline.cancelValidation,
                     onDismissPausedGameAlert: { pendingGame = nil }
                 )
             )
@@ -301,7 +301,7 @@ struct GameLibraryView: View {
                 // collapsed, but using the same phase lets it
                 // surface a spinner during archive/root
                 // inspection before any progress card exists.
-                phase: importWorkflow.importButtonPhase,
+                phase: importPipeline.importButtonPhase,
                 onRequestCancelValidation: { showCancelValidationAlert = true }
             )
         }
@@ -880,21 +880,21 @@ struct GameLibraryView: View {
 
     private var importRootPromptBinding: Binding<ImportRootPrompt?> {
         Binding(
-            get: { importWorkflow.activePrompt },
+            get: { importPipeline.activePrompt },
             set: { newValue in
                 if newValue == nil {
-                    importWorkflow.dismissPrompt()
+                    importPipeline.dismissPrompt()
                 }
             }
         )
     }
 
-    private var importWorkflowAlertBinding: Binding<ImportWorkflowAlert?> {
+    private var importPipelineAlertBinding: Binding<ImportPipelineAlert?> {
         Binding(
-            get: { importWorkflow.alert },
+            get: { importPipeline.alert },
             set: { newValue in
                 if newValue == nil {
-                    importWorkflow.dismissAlert()
+                    importPipeline.dismissAlert()
                 }
             }
         )
@@ -975,20 +975,20 @@ private struct LibraryAlertPresentation: ViewModifier {
     @Binding var showInvalidAlert: Bool
     @Binding var showCancelValidationAlert: Bool
     @Binding var showPausedGameAlert: Bool
-    @Binding var importWorkflowAlert: ImportWorkflowAlert?
+    @Binding var importPipelineAlert: ImportPipelineAlert?
     let pausedGame: GameEntry?
     let onDeleteGame: () -> Void
-    let onDismissImportWorkflowAlert: () -> Void
+    let onDismissImportPipelineAlert: () -> Void
     let onCancelValidation: () -> Void
     let onDismissPausedGameAlert: () -> Void
 
     func body(content: Content) -> some View {
         content
-            .alert(item: $importWorkflowAlert) { alert in
+            .alert(item: $importPipelineAlert) { alert in
                 Alert(
                     title: Text(alert.title),
                     message: Text(alert.message),
-                    dismissButton: .default(Text("OK"), action: onDismissImportWorkflowAlert)
+                    dismissButton: .default(Text("OK"), action: onDismissImportPipelineAlert)
                 )
             }
             .alert(title, isPresented: $showErrorAlert) {
