@@ -28,6 +28,8 @@ final class EngineSessionCoordinator {
     private let sessionLogger = SessionLogger()
     private let termination = EngineTerminationCoordinator()
     private var terminationExpected = false
+    private var textInputModeHandler: ((Bool) -> Void)?
+    private var inputBridgesInstalled = false
 
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
 
@@ -40,6 +42,7 @@ final class EngineSessionCoordinator {
             GameLibrary.shared.refreshGameEntry(id: gameID)
         }
         registerBridgeCallbacks()
+        installInputBridgesIfNeeded()
     }
 
     func consumeCrashRecovery() -> String? {
@@ -104,6 +107,39 @@ final class EngineSessionCoordinator {
 
     func restoreCrashMarker(for container: GameContainer) {
         crashTracker.writeMarker(for: container)
+    }
+
+    func setTextInputModeHandler(_ handler: @escaping (Bool) -> Void) {
+        textInputModeHandler = handler
+    }
+
+    func clearTextInputModeHandler() {
+        textInputModeHandler = nil
+    }
+
+    func injectKey(scancode: Int32, pressed: Bool) {
+        mkxp_injectKeyEvent(scancode, pressed ? 1 : 0)
+    }
+
+    func injectKeyTap(scancode: Int32, holdMilliseconds: Int = 50) {
+        injectKey(scancode: scancode, pressed: true)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(holdMilliseconds))
+            injectKey(scancode: scancode, pressed: false)
+        }
+    }
+
+    private func installInputBridgesIfNeeded() {
+        guard !inputBridgesInstalled else { return }
+        inputBridgesInstalled = true
+
+        mkxp_setTextInputModeCallback(
+            { active, _ in
+                let on = active != 0
+                Task { @MainActor in
+                    EngineSessionCoordinator.shared.textInputModeHandler?(on)
+                }
+            }, nil)
     }
 
     private func registerBridgeCallbacks() {
