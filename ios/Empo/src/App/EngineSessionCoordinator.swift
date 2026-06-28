@@ -63,7 +63,6 @@ final class EngineSessionCoordinator {
 
     /// Returns whether the engine thread was still running before terminate.
     func beginReturnToLibrary(selectedContainer: GameContainer?) -> Bool {
-        terminationExpected = true
         recordSessionPlayTime(for: delegate?.coordinatorActiveSessionGame)
         if let selectedContainer {
             crashTracker.removeMarker(for: selectedContainer)
@@ -71,6 +70,7 @@ final class EngineSessionCoordinator {
 
         let engineWasRunning = mkxp_isEngineTerminated() == 0
         if engineWasRunning {
+            terminationExpected = true
             mkxp_requestTerminate()
         }
         return engineWasRunning
@@ -135,7 +135,7 @@ final class EngineSessionCoordinator {
             { msg, _ in
                 guard let msg else { return }
                 let message = String(cString: msg)
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     EngineSessionCoordinator.shared.delegate?
                         .coordinatorDidReportEngineError(message)
                     AppWindow.setAllowKeyWindow(true)
