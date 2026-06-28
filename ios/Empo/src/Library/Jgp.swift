@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 import UIKit
 
 /// JoiPlay archive runtime type. Any value outside the first-class

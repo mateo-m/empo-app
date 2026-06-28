@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 import UIKit
 
 /// Per-game metadata stored at `<container>/Metadata/metadata.json`,

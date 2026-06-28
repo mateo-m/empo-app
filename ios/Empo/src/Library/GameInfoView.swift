@@ -1,3 +1,4 @@
+import GameProbe
 import SwiftUI
 
 struct GameInfoView: View {

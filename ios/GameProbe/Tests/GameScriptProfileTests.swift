@@ -1,10 +1,20 @@
 import XCTest
 
-@testable import Empo
+@testable import GameProbe
 
 final class GameScriptProfileTests: XCTestCase {
 
     private func fixtureURL(_ name: String) -> URL {
+        #if SWIFT_PACKAGE
+        guard let base = Bundle.module.resourceURL?
+            .appendingPathComponent("Fixtures/games/\(name)"),
+            FileManager.default.fileExists(atPath: base.path)
+        else {
+            XCTFail("missing fixture: \(name)")
+            return URL(fileURLWithPath: "/")
+        }
+        return base
+        #else
         let bundle = Bundle(for: GameScriptProfileTests.self)
         if let base = bundle.resourceURL?
             .appendingPathComponent("Fixtures/games/\(name)"),
@@ -15,6 +25,7 @@ final class GameScriptProfileTests: XCTestCase {
         return URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .appendingPathComponent("Fixtures/games/\(name)")
+        #endif
     }
 
     func testModernLooseScriptsRouteToRuby31() {

@@ -47,7 +47,7 @@ it as part of full JSON5 string rules.
 
 If import-time parsing disagrees with engine runtime parsing for the same file:
 
-1. Add a fixture to `EmpoLogicTests` for the failing bytes.
+1. Add a fixture to `GameProbeTests` for the failing bytes.
 2. Update this doc and either widen `JSON5LiteParser` or simplify the authored file.
 3. Prefer keeping host output strict JSON-with-`//`-comments.
 

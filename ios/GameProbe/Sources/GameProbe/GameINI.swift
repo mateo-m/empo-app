@@ -1,7 +1,7 @@
 import Foundation
 
-enum GameINI {
-    static func parseINIValue(at gameDir: URL, section: String, key: String) -> String? {
+public enum GameINI {
+    public static func parseINIValue(at gameDir: URL, section: String, key: String) -> String? {
         let fm = FileManager.default
         let iniURL: URL? = {
             let gameIni = gameDir.appendingPathComponent("Game.ini")
@@ -19,7 +19,7 @@ enum GameINI {
 
     /// Reads `[section] key=value` from a Game.ini file. Both
     /// `section` and `key` are matched case-insensitively.
-    static func parseINIValue(in iniURL: URL, section: String, key: String) -> String? {
+    public static func parseINIValue(in iniURL: URL, section: String, key: String) -> String? {
         guard let value = try? Data(contentsOf: iniURL).decodeAsLooseText() else {
             return nil
         }

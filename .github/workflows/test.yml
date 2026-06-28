@@ -10,11 +10,11 @@ env:
 
 jobs:
   empo-logic:
-    name: EmpoLogic (swift test, Linux)
+    name: GameProbe (swift test, Linux)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ios/EmpoLogic
+        working-directory: ios/GameProbe
     steps:
       - uses: actions/checkout@v6
         with:

@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 
 /// Per-game Ruby interpreter version detection.
 ///

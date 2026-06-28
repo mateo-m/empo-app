@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 import UIKit
 
 /// Write pipeline for imported games: metadata seeding and JGP

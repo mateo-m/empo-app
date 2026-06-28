@@ -4,12 +4,12 @@ import Foundation
 /// markers. Replaces the parallel `RubyVersionDetection` +
 /// `GameSettings.detectModernRubyScripts` sniffers so Ruby dispatch
 /// and syntax-transform mode derive from one profile result.
-enum GameScriptProfile {
+public enum GameScriptProfile {
 
     /// Schema version for persisted detection results on
     /// `GameMetadata`. Bump when heuristics change enough to
     /// re-classify imported games.
-    enum Schema: String {
+    public enum Schema: String, Sendable {
         case initial = "initial"
         case bundledRubyDLL = "bundled-ruby-dll"
         case noStandaloneFramework = "no-standalone-framework"
@@ -20,17 +20,17 @@ enum GameScriptProfile {
         case unified = "unified"
     }
 
-    static let currentSchema: Schema = .unified
+    public static let currentSchema: Schema = .unified
 
-    struct Result {
-        let rubyVersion: Int
-        let modernRubyScripts: Bool
-        let grammar: RubyScriptGrammarSniffer.Result
+    public struct Result {
+        public let rubyVersion: Int
+        public let modernRubyScripts: Bool
+        public let grammar: RubyScriptGrammarSniffer.Result
     }
 
     /// Analyze `gameDirectory` once and return Ruby dispatch +
     /// syntax-transform hints.
-    static func analyze(gameDirectory: URL) -> Result {
+    public static func analyze(gameDirectory: URL) -> Result {
         let grammar = RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory)
         let rubyVersion = detectRubyVersion(
             gameDirectory: gameDirectory,

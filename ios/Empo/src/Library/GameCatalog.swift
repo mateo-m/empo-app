@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 
 /// Read model for the game library: scan containers on disk and
 /// build `GameEntry` values for the UI.

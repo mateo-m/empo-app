@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 import Observation
 import SwiftUI
 import Synchronization

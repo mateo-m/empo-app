@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 
 /// Render-resolution multiplier applied via mkxp-z's `enableHires`
 /// + `framebufferScalingFactor`. RGSS games render to a buffer with

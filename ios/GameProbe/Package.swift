@@ -2,20 +2,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "EmpoLogic",
+    name: "GameProbe",
     platforms: [
         .macOS(.v13),
         .iOS(.v13),
     ],
     products: [
-        .library(name: "EmpoLogic", targets: ["EmpoLogic"]),
+        .library(name: "GameProbe", targets: ["GameProbe"]),
     ],
     dependencies: [
         .package(url: "https://github.com/tsolomko/SWCompression.git", from: "4.9.0"),
     ],
     targets: [
         .target(
-            name: "EmpoLogic",
+            name: "GameProbe",
             dependencies: [
                 .product(
                     name: "SWCompression",
@@ -25,8 +25,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "EmpoLogicTests",
-            dependencies: ["EmpoLogic"],
+            name: "GameProbeTests",
+            dependencies: ["GameProbe"],
             path: "Tests",
             resources: [
                 .copy("Fixtures"),

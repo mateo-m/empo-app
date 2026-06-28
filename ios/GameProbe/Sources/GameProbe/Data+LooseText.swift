@@ -12,7 +12,7 @@ extension Data {
     /// for the parsing we do (ini key=value pairs, ASCII Ruby
     /// keywords), but text passed verbatim to UI should still go
     /// through a proper encoding detector.
-    func decodeAsLooseText() -> String? {
+    public func decodeAsLooseText() -> String? {
         String(data: self, encoding: .utf8)
             ?? String(data: self, encoding: .isoLatin1)
     }

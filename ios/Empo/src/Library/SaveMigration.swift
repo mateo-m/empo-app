@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 
 enum SaveMigration {
     static func migrateLegacySavesIfNeeded(for container: GameContainer) {

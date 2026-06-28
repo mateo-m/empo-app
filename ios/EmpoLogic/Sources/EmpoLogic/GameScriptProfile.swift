@@ -1,1 +1,0 @@
-../../../Empo/src/Library/GameScriptProfile.swift

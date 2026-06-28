@@ -11,12 +11,12 @@ import Foundation
 /// text once and drops `//`-to-EOL runs, leaving anything inside a
 /// string literal intact (a naive `range(of: "//")` per line trips
 /// over URLs in string values).
-enum JSON5LiteParser {
+public enum JSON5LiteParser {
 
     /// Strip `//` line comments. CRLF / CR get normalized to LF first
     /// so the comment-skip loop doesn't run away if the file came
     /// from a Windows editor.
-    static func stripLineComments(_ raw: String) -> String {
+    public static func stripLineComments(_ raw: String) -> String {
         let normalized = raw.replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
 
@@ -69,7 +69,7 @@ enum JSON5LiteParser {
 
     /// Strip-then-`JSONSerialization.jsonObject`. Returns nil if the
     /// cleaned text isn't a JSON object.
-    static func parseObject(_ raw: String) -> [String: Any]? {
+    public static func parseObject(_ raw: String) -> [String: Any]? {
         let cleaned = stripLineComments(raw)
         guard let data = cleaned.data(using: .utf8),
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -80,7 +80,7 @@ enum JSON5LiteParser {
     }
 
     /// Strip-then-`JSONDecoder.decode`. Returns nil on parse failure.
-    static func decode<T: Decodable>(_ type: T.Type, from raw: String) -> T? {
+    public static func decode<T: Decodable>(_ type: T.Type, from raw: String) -> T? {
         let cleaned = stripLineComments(raw)
         guard let data = cleaned.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)
@@ -88,7 +88,7 @@ enum JSON5LiteParser {
 
     /// Convenience for callers holding `Data` instead of `String`.
     /// Decodes the data as UTF-8 first.
-    static func stripLineComments(in data: Data) -> Data? {
+    public static func stripLineComments(in data: Data) -> Data? {
         guard let text = String(data: data, encoding: .utf8) else { return nil }
         return stripLineComments(text).data(using: .utf8)
     }

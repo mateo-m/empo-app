@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 
 /// Bundled "Patches/" distribution pipeline for the engine's
 /// `Patcher` (see `mkxp-z-apple-mobile/src/patcher.{h,cpp}`).

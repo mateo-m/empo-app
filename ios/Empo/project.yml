@@ -1,4 +1,7 @@
 name: Empo
+packages:
+  GameProbe:
+    path: ../GameProbe
 options:
   bundleIdPrefix: sh.mateo
   deploymentTarget:
@@ -418,25 +421,8 @@ targets:
           - -lANGLE_static
           - -lEGL_static
           - -lGLESv2_static
-    dependencies: []
-  EmpoLogicTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: Tests/Logic
-        type: group
-        excludes:
-          - Fixtures/**
-      - path: Tests/Logic/Fixtures
-        type: folder
-        buildPhase: resources
     dependencies:
-      - target: Empo
-    settings:
-      GENERATE_INFOPLIST_FILE: YES
-      PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.logic-tests
-      TEST_HOST: $(BUILT_PRODUCTS_DIR)/Empo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Empo
-      BUNDLE_LOADER: $(TEST_HOST)
+      - package: GameProbe
 schemes:
   Empo:
     build:
@@ -444,10 +430,6 @@ schemes:
         Empo: all
     run:
       config: Debug
-    test:
-      config: Debug
-      targets:
-        - EmpoLogicTests
     profile:
       config: Release
     analyze:

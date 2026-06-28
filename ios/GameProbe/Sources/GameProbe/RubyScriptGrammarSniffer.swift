@@ -17,9 +17,9 @@ import Foundation
 /// outside that subset → bail, return `.inconclusive`. Detection's
 /// caller treats `.inconclusive` as "fall back to extension or
 /// default" so any decoder bug is non-fatal.
-enum RubyScriptGrammarSniffer {
+public enum RubyScriptGrammarSniffer {
 
-    enum Result: Equatable {
+    public enum Result: Equatable, Sendable {
         /// Modern Ruby grammar tokens present (`&.`, kwargs,
         /// pattern matching, endless def, etc). Cannot parse on
         /// 1.8/1.9 - definitive signal for 3.x dispatch.

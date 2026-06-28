@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import Empo
+@testable import GameProbe
 
 final class JSON5LiteParserTests: XCTestCase {
 

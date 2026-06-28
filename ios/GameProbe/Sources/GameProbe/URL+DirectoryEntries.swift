@@ -9,7 +9,7 @@ extension URL {
     ///
     /// Hidden files are skipped, matching the behavior we want
     /// for game folders (don't pick up `.DS_Store` etc.).
-    func directoryEntries(
+    public func directoryEntries(
         matchingExtensions extensions: Set<String>,
         fm: FileManager = .default
     ) -> [URL] {

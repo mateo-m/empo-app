@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 import UIKit
 
 /// Extracts the embedded icon from a Windows PE executable
