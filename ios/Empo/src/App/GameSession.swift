@@ -47,7 +47,7 @@ enum GameSession {
 
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
         let postload = settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
-        let inGameKeyboardDefault = GameSettings.detectPokemonEssentials(
+        let inGameKeyboardDefault = PokemonEssentialsDetection.detect(
             in: gameDir,
             stateDirectory: stateDir
         )

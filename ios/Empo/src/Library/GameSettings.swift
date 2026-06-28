@@ -229,7 +229,6 @@ struct GameSettings: Codable, Equatable {
     @Setting<Bool?, RuntimeFlag> var useInGameKeyboard: Bool?
 
     private static let settingsFilename = "game_settings.json"
-    private static let configFilename = "mkxp.json"
 
     /// Read the game's settings sidecar from `<container>/EmpoState/`
     /// (NOT the imported `Game/` subdir; settings live outside the
@@ -365,95 +364,6 @@ struct GameSettings: Codable, Equatable {
         GameScriptProfile.analyze(gameDirectory: gameDirectory).modernRubyScripts
     }
 
-    /// Best-effort "is this a Pokemon Essentials fangame?" detector.
-    /// Used to set the default for `useInGameKeyboard` so PE games
-    /// surface their built-in keyboard scene by default (PE 16-18
-    /// era games don't handle the iOS soft-keyboard backspace path
-    /// cleanly without our `pokemon_input.rb` shim, and the in-game
-    /// scene's keyboard navigation is the more natural UX for
-    /// those games anyway).
-    ///
-    /// Three signals, ANY-of. All require PE's actual code, data,
-    /// or runtime presence so non-PE games can't false-positive
-    /// just because they're Pokemon-themed (we deliberately do NOT
-    /// title-match on "pokemon" / "poké" / "pokémon" since plenty
-    /// of games reference the franchise by name without using PE
-    /// under the hood):
-    ///
-    ///   1. Runtime marker `<stateDir>/.pokemon_essentials_detected`
-    ///      written by `pokemon_input.rb` on a previous launch
-    ///      when `$PokemonSystem` was defined. Catches PE games
-    ///      whose scripts live inside an rgssad-encrypted archive
-    ///      where signals 2 and 3 below can't see plaintext PE
-    ///      identifiers. First launch falls through to signals 2/3
-    ///      (and may default to OFF if those also miss); every
-    ///      subsequent launch reads the marker and defaults ON.
-    ///
-    ///   2. `Data/Scripts.rxdata|rvdata|rvdata2` byte-contains a
-    ///      PE script-name signature (`PokeBattle_*`,
-    ///      `PokemonSystem`, `PokemonEntry`, `Compiler_PBS`).
-    ///      Script names live in the marshaled rxdata array as
-    ///      plain ASCII bytes - the source bodies are zlib-
-    ///      compressed but the names aren't, so a raw byte search
-    ///      works without a marshal decoder. Catches PE forks that
-    ///      ship scripts in plaintext rxdata (Vinemon, Edelweiss
-    ///      Chronicles, etc.).
-    ///
-    ///   3. `Data/` contains PE-style compiled PBS data shards
-    ///      (`abilities.dat`, `species.dat`, `moves.dat`, etc.).
-    ///      PE 19+ ships compiled PBS as `*.dat` files alongside
-    ///      the rxdata; vanilla RGSS games don't ship these
-    ///      specific filenames. Catches newer PE forks where the
-    ///      scripts file is a small ScriptLoader stub and the bulk
-    ///      of code lives in external `Data/Scripts/*.rb`.
-    static func detectPokemonEssentials(
-        in gameDirectory: URL,
-        stateDirectory: URL
-    ) -> Bool {
-        let fm = FileManager.default
-
-        // Signal 1: runtime-detection marker from a prior launch.
-        let marker =
-            stateDirectory
-            .appendingPathComponent(".pokemon_essentials_detected")
-        if fm.fileExists(atPath: marker.path) { return true }
-
-        // Signal 2: Scripts.rxdata byte-grep for PE script names.
-        let scriptCandidates = [
-            "Data/Scripts.rxdata",
-            "Data/Scripts.rvdata",
-            "Data/Scripts.rvdata2",
-        ]
-        let scriptSignatures: [Data] = [
-            Data("PokeBattle".utf8),
-            Data("PokemonSystem".utf8),
-            Data("PokemonEntry".utf8),
-            Data("Compiler_PBS".utf8),
-        ]
-        for relPath in scriptCandidates {
-            let url = gameDirectory.appendingPathComponent(relPath)
-            guard let data = try? Data(contentsOf: url), data.count > 1024
-            else { continue }
-            for sig in scriptSignatures where data.range(of: sig) != nil {
-                return true
-            }
-        }
-
-        // Signal 3: PE-style compiled PBS data files.
-        let dataDir = gameDirectory.appendingPathComponent("Data")
-        let peDataMarkers = [
-            "abilities.dat", "species.dat", "moves.dat",
-            "pokemon.dat", "pokemon_forms.dat", "items.dat",
-            "trainer_types.dat", "encounters.dat",
-        ]
-        for marker in peDataMarkers {
-            let url = dataDir.appendingPathComponent(marker)
-            if fm.fileExists(atPath: url.path) { return true }
-        }
-
-        return false
-    }
-
     /// Resolve the engine's `syntaxTransform` mode for this game.
     /// Honors an explicit `useModernRuby` setting; runs the .rb
     /// scanner when the setting is nil ("auto").
@@ -497,153 +407,19 @@ struct GameSettings: Codable, Equatable {
     /// merged back. That makes `Game/mkxp.json` the developer's
     /// source-of-truth for the per-game-defaults UI.
     static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
-        let sourceURL = gameDirectory.appendingPathComponent(configFilename)
-
-        guard let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
-            let config = parseJSONWithComments(raw)
-        else {
-            return GameConfigDefaults()
-        }
-
-        // Read render scale from enableHires + framebufferScalingFactor.
-        // The legacy `defScreenW`/`defScreenH` keys are intentionally
-        // ignored: they only sized the SDL window (irrelevant on
-        // iOS) and never controlled the rendering buffer.
-        let enableHires = config["enableHires"] as? Bool ?? false
-        let scalingFactor =
-            (config["framebufferScalingFactor"] as? Double)
-            ?? (config["framebufferScalingFactor"] as? Int).map(Double.init)
-            ?? 1.0
-        let renderScale: RenderScale? =
-            if enableHires {
-                // Snap to the nearest supported step. Engine accepts
-                // arbitrary doubles, but the UI only exposes 1/2/4 - so
-                // a developer-shipped 3.0 reads back as "High (2x)" in
-                // the defaults row.
-                switch scalingFactor {
-                case ..<1.5: RenderScale.x1
-                case ..<3.0: RenderScale.x2
-                default: RenderScale.x4
-                }
-            } else {
-                nil
-            }
-
-        // solidFonts is an array of font names in mkxp.json; treat non-empty as "enabled"
-        let solidFontsArray = config["solidFonts"] as? [String]
-        let solidFontsEnabled: Bool? = solidFontsArray.map { !$0.isEmpty }
-
-        return GameConfigDefaults(
-            smoothScaling: (config["smoothScaling"] as? Int).map { $0 != 0 },
-            fixedAspectRatio: config["fixedAspectRatio"] as? Bool,
-            renderScale: renderScale,
-            frameSkip: config["frameSkip"] as? Bool,
-            // mkxp-z controls vsync via
-            // `syncToRefreshrate`. The legacy `vsync` field exists in
-            // the parsed Config struct but is read by no rendering
-            // code, so writing it has no effect. Read both for
-            // backward-compat with hand-authored configs that used
-            // the old key, but prefer `syncToRefreshrate`.
-            vsync: (config["syncToRefreshrate"] as? Bool)
-                ?? (config["vsync"] as? Bool),
-            pathCache: config["pathCache"] as? Bool,
-            fontScale: config["fontScale"] as? Double,
-            solidFonts: solidFontsEnabled
-        )
+        EngineConfigProjector.readGameDefaults(from: gameDirectory)
     }
 
-    /// Generate the game's managed mkxp.json (in
-    /// `<container>/EmpoState/`) by merging the developer's
-    /// untouched `Game/mkxp.json` (if present) with these settings.
-    ///
-    /// `stateDirectory` is the per-game state directory (where the
-    /// merged mkxp.json is written). `gameDirectory` is the
-    /// imported `<container>/Game/` folder, which Empo treats as
-    /// immutable after import; so reading the developer's source
-    /// directly from `gameDirectory/mkxp.json` is safe and removes
-    /// the need for the historic `mkxp.original.json` snapshot.
     func applyToConfig(stateDirectory: URL, gameDirectory: URL) {
-        let configURL = stateDirectory.appendingPathComponent(Self.configFilename)
-        let sourceURL = gameDirectory.appendingPathComponent(Self.configFilename)
-
-        var config: [String: Any] = [:]
-        if FileManager.default.fileExists(atPath: sourceURL.path),
-            let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
-            let parsed = Self.parseJSONWithComments(raw)
-        {
-            config = parsed
-        }
-
-        // Host-managed keys travel via engine bridges, NOT through
-        // mkxp.json:
-        //   - syntaxTransform: mkxp_setSyntaxTransformMode
-        //   - fast-forward: mkxp_setFastForwardMultiplier
-        // Strip any leftovers in the developer's source so the
-        // merged config stays a clean mirror of host overrides on
-        // top of developer intent.
-        config.removeValue(forKey: "syntaxTransform")
-
-        if let v = smoothScaling { config["smoothScaling"] = v ? 1 : 0 }
-        if let v = fixedAspectRatio { config["fixedAspectRatio"] = v }
-        if let v = frameSkip { config["frameSkip"] = v }
-        if let v = fontScale { config["fontScale"] = v }
-        // mkxp-z's vsync is gated by `syncToRefreshrate`, not the
-        // dead `vsync` field. Strip the legacy key so the merged
-        // config doesn't carry unused state.
-        config.removeValue(forKey: "vsync")
-        if let v = vsync { config["syncToRefreshrate"] = v }
-        if let v = pathCache { config["pathCache"] = v }
-
-        // Render scale: mapped to mkxp-z's `enableHires` +
-        // `framebufferScalingFactor`. The legacy `defScreenW`/
-        // `defScreenH` keys are stripped from the merged config so
-        // existing imports lose the dead state on next save - those
-        // only sized the SDL window (irrelevant on iOS, which is
-        // always fullscreen) and never controlled the rendering
-        // buffer.
-        config.removeValue(forKey: "defScreenW")
-        config.removeValue(forKey: "defScreenH")
-        if let scale = renderScale {
-            if scale.enableHires {
-                config["enableHires"] = true
-                config["framebufferScalingFactor"] = scale.framebufferScalingFactor
-            } else {
-                // x1 - explicitly disable hires so a developer's
-                // `enableHires=true` from Game/mkxp.json doesn't
-                // leak into the merged config when the user picks
-                // "Default".
-                config["enableHires"] = false
-                config.removeValue(forKey: "framebufferScalingFactor")
-            }
-        }
-
-        // Solid fonts: mkxp.json expects an array of font names.
-        // When enabled via toggle, apply to all fonts with a wildcard entry.
-        if let v = solidFonts {
-            config["solidFonts"] = v ? ["*"] : [] as [String]
-        }
-
-        // speedMultiplier is now runtime-only (PlayerMoreSheet's
-        // Fast forward toggle calls mkxp_setFastForwardMultiplier).
-        // Game launches at default speed; the user opts in via the
-        // in-game menu. Nothing to write here.
-
-        if let data = try? JSONSerialization.data(
-            withJSONObject: config, options: [.prettyPrinted, .sortedKeys]),
-            let jsonString = String(data: data, encoding: .utf8)
-        {
-            try? jsonString.write(to: configURL, atomically: true, encoding: .utf8)
-        }
+        EngineConfigProjector.apply(
+            settings: self,
+            stateDirectory: stateDirectory,
+            gameDirectory: gameDirectory
+        )
     }
 
     var hasCustomizations: Bool {
         self != GameSettings()
-    }
-
-    /// Parses mkxp.json (which can have `//` comments). Thin
-    /// wrapper around `JSON5LiteParser` kept for call-site brevity.
-    static func parseJSONWithComments(_ raw: String) -> [String: Any]? {
-        JSON5LiteParser.parseObject(raw)
     }
 }
 
