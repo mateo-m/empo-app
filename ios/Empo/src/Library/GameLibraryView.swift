@@ -69,11 +69,15 @@ struct GameLibraryView: View {
     // is cheap; .map(\.id) in `.animation(value:)` was the actual
     // hot-loop offender and was dropped.
     private var filteredGames: [GameEntry] {
-        let base =
-            searchText.isEmpty
-            ? library.games
-            : library.games.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-        return settings.librarySortOption.sort(base, sizes: gameSizes)
+        library.displayedCatalog(
+            search: searchText,
+            sort: settings.librarySortOption,
+            sizes: gameSizes
+        )
+    }
+
+    private var catalogAnimationKey: [String] {
+        filteredGames.map { "\($0.id):\($0.status.phase)" }
     }
 
     /// Synthetic cards for pre-flight validations, pinned to the top
@@ -82,10 +86,7 @@ struct GameLibraryView: View {
     /// feedback on the Import button so the empty state doesn't
     /// bounce in and out on invalid imports.
     private var pendingValidationEntries: [GameEntry] {
-        guard !library.games.isEmpty else { return [] }
-        return library.pendingImports.values
-            .sorted { $0.order < $1.order }
-            .map(\.syntheticEntry)
+        library.pendingValidationCatalog()
     }
 
     private var showEmpty: Bool {
@@ -93,15 +94,10 @@ struct GameLibraryView: View {
     }
 
     private var recentlyPlayed: GameEntry? {
-        guard settings.showContinuePlaying else { return nil }
-        guard searchText.isEmpty else { return nil }
-        let readyGames = library.games.filter { $0.status == .ready }
-        guard readyGames.count > 1 else { return nil }  // no hero if only 1 game
-
-        return
-            readyGames
-            .filter { $0.lastPlayed != nil }
-            .max(by: { ($0.lastPlayed ?? .distantPast) < ($1.lastPlayed ?? .distantPast) })
+        library.recentlyPlayedCandidate(
+            showContinuePlaying: settings.showContinuePlaying,
+            searchText: searchText
+        )
     }
 
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -438,8 +434,8 @@ struct GameLibraryView: View {
         .padding(.horizontal)
         .padding(.top, Spacing.lg)
         .padding(.bottom)
-        .animation(Motion.standard, value: filteredGames)
-        .animation(Motion.standard, value: pendingValidationEntries)
+        .animation(Motion.standard, value: catalogAnimationKey)
+        .animation(Motion.standard, value: pendingValidationEntries.map(\.id))
     }
 
     private func heroCard(for game: GameEntry) -> some View {
@@ -529,8 +525,8 @@ struct GameLibraryView: View {
         }
         .padding(.horizontal)
         .padding(.top, Spacing.lg)
-        .animation(Motion.standard, value: filteredGames)
-        .animation(Motion.standard, value: pendingValidationEntries)
+        .animation(Motion.standard, value: catalogAnimationKey)
+        .animation(Motion.standard, value: pendingValidationEntries.map(\.id))
     }
 
     @ViewBuilder

@@ -149,6 +149,43 @@ class GameLibrary {
         withAnimation { games[idx] = entry }
     }
 
+    /// Filtered + sorted catalog for the library grid/list. Reads
+    /// `games` so SwiftUI Observation tracks reloads.
+    func displayedCatalog(
+        search: String,
+        sort: LibrarySortOption,
+        sizes: [String: Int64]
+    ) -> [GameEntry] {
+        let base =
+            search.isEmpty
+            ? games
+            : games.filter { $0.title.localizedCaseInsensitiveContains(search) }
+        return sort.sort(base, sizes: sizes)
+    }
+
+    /// Pre-flight import placeholders shown above the catalog when
+    /// the library already has games.
+    func pendingValidationCatalog() -> [GameEntry] {
+        guard !games.isEmpty else { return [] }
+        return pendingImports.values
+            .sorted { $0.order < $1.order }
+            .map(\.syntheticEntry)
+    }
+
+    /// Hero card candidate for "Continue playing", or nil.
+    func recentlyPlayedCandidate(
+        showContinuePlaying: Bool,
+        searchText: String
+    ) -> GameEntry? {
+        guard showContinuePlaying, searchText.isEmpty else { return nil }
+        let readyGames = games.filter { $0.status == .ready }
+        guard readyGames.count > 1 else { return nil }
+        return
+            readyGames
+            .filter { $0.lastPlayed != nil }
+            .max(by: { ($0.lastPlayed ?? .distantPast) < ($1.lastPlayed ?? .distantPast) })
+    }
+
     func ensureGamesDirectory() {
         if !fm.fileExists(atPath: GameContainer.rootURL.path) {
             try? fm.createDirectory(at: GameContainer.rootURL, withIntermediateDirectories: true)
