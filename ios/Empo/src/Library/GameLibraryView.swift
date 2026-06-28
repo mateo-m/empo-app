@@ -66,8 +66,9 @@ struct GameLibraryView: View {
     // entries stuck around after reload (an imported game stayed in
     // the progress state forever). Keeping it computed means it
     // tracks library.games directly. Filter + sort on 10s of entries
-    // is cheap; .map(\.id) in `.animation(value:)` was the actual
-    // hot-loop offender and was dropped.
+    // is cheap; animating on full `[GameEntry]` arrays (and their
+    // associated values like import progress) was the hot-loop
+    // offender. Lightweight id/phase keys replace those triggers.
     private var filteredGames: [GameEntry] {
         library.displayedCatalog(
             search: searchText,
