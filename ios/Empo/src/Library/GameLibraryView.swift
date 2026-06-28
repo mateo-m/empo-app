@@ -7,6 +7,11 @@ private struct EmptyStateHeightKey: PreferenceKey {
     }
 }
 
+private struct CatalogAnimationKey: Equatable {
+    let id: String
+    let phase: GameStatus.Phase
+}
+
 struct GameLibraryView: View {
     var heroNamespace: Namespace.ID
     var splashDismissed: Bool = true
@@ -77,8 +82,8 @@ struct GameLibraryView: View {
         )
     }
 
-    private var catalogAnimationKey: [String] {
-        filteredGames.map { "\($0.id):\($0.status.phase)" }
+    private var catalogAnimationKey: [CatalogAnimationKey] {
+        filteredGames.map { CatalogAnimationKey(id: $0.id, phase: $0.status.phase) }
     }
 
     /// Synthetic cards for pre-flight validations, pinned to the top
