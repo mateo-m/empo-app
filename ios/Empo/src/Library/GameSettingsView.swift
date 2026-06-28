@@ -136,7 +136,7 @@ struct GameSettingsView: View {
         _settings = State(initialValue: s)
         _defaults = State(initialValue: defs)
         self.initialSettings = s
-        self.isPokemonEssentialsDefault = GameSettings.detectPokemonEssentials(
+        self.isPokemonEssentialsDefault = PokemonEssentialsDetection.detect(
             in: dir, stateDirectory: stateDir
         )
     }
