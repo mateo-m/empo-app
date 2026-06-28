@@ -265,10 +265,14 @@ final class ImportPipeline {
             if accessing { url.stopAccessingSecurityScopedResource() }
 
             if let error {
-                self.presentError(
-                    title: "Couldn't import \(quoted(archiveName))",
-                    message: error.localizedDescription
-                )
+                if error is GameLibrary.ImportCancelled {
+                    // User cancelled; finish cleanup without surfacing UI.
+                } else {
+                    self.presentError(
+                        title: "Couldn't import \(quoted(archiveName))",
+                        message: error.localizedDescription
+                    )
+                }
             } else {
                 Haptics.impact()
             }
@@ -573,6 +577,7 @@ extension GameLibrary {
                 NSLog("[GameLibrary] Import cancelled: %@", importID)
                 await MainActor.run {
                     GameLibrary.shared.abandonImport(importID: importID, container: nil)
+                    completion(ImportCancelled())
                 }
             } catch {
                 markNotInFlight()
