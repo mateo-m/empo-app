@@ -12,8 +12,9 @@ import Foundation
 ///     dir already encodes the game's UUID + slug.
 ///
 /// All path math goes through `GameContainer`. The logger is
-/// stateless across games - a single instance lives on `AppState`
-/// and accepts a `GameContainer` per `beginSession` call.
+/// stateless across games - a single instance lives on
+/// `EngineSessionCoordinator` and accepts a `GameContainer` per
+/// `beginSession` call.
 @MainActor
 final class SessionLogger {
     private static let isoFormatter = ISO8601DateFormatter()

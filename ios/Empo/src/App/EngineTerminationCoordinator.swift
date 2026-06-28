@@ -79,5 +79,5 @@ final class EngineTerminationCoordinator {
     // guideline 2.5.1 forbids self-termination, and the
     // loading-view button that armed this was replaced with a
     // static "close from app switcher" label as part of disabling
-    // all cross-session quit paths (see QUIT_PATHS_DISABLED.md).
+    // all cross-session quit paths (see docs/multi-session.md).
 }

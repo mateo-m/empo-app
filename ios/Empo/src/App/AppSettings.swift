@@ -112,7 +112,7 @@ enum AppTheme: String, CaseIterable {
 // graduated to always-on, leaving no remaining experimental
 // toggles. `gameQuit` was also planned as an experimental feature
 // but never landed (cross-session Ruby state cleanup blocks it -
-// see MRUBY_POSTMORTEM.md / QUIT_PATHS_DISABLED.md).
+// see docs/multi-session.md).
 //
 // To bring back an opt-in experimental toggle later, restore:
 //   - this enum (cases + `label` + `description` + `id`)

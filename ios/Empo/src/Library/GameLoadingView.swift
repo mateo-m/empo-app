@@ -177,13 +177,13 @@ struct GameLoadingView: View {
             // 1. returnToLibrary triggers the cross-session Ruby
             //    state cleanup machinery, which we no longer trust
             //    after parking the mruby experiment (see
-            //    MRUBY_POSTMORTEM.md). Lingering state from a hung
+            //    docs/multi-session.md). Lingering state from a hung
             //    game would leak into the next session.
             // 2. The force-quit helper called the system exit
             //    function, which violates App Store guideline 2.5.1
             //    ("Apps should not terminate themselves
             //    programmatically"). That helper has been removed
-            //    entirely. See QUIT_PATHS_DISABLED.md.
+            //    entirely. See docs/multi-session.md.
             //
             // The label below tells the user to close Empo from the
             // app switcher, which is the iOS-sanctioned way to
