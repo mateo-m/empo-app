@@ -79,7 +79,7 @@ class GameLibrary {
     var nextPendingImportOrder = 0
 
     private let fm = FileManager.default
-    let cancelledImports = Mutex(Set<String>())
+    nonisolated let cancelledImports = Mutex(Set<String>())
 
     /// IDs of imports currently extracting / moving on a detached
     /// task. The library scan skips these so a concurrent reload
@@ -89,7 +89,7 @@ class GameLibrary {
     /// yet - and surface it as an `.invalid` "Unknown Game" entry,
     /// clobbering the in-memory progress card via the
     /// scan/merge replace step in `reload()`.
-    let inFlightImports = Mutex(Set<String>())
+    nonisolated let inFlightImports = Mutex(Set<String>())
 
     nonisolated static var gamesDirectory: URL { GameContainer.rootURL }
 
