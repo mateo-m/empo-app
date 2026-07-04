@@ -18,52 +18,6 @@ static void injectKey(int scancode, BOOL pressed) {
     mkxp_injectKeyEvent(scancode, pressed ? 1 : 0);
 }
 
-NSString *const TCKeyEventNotification = @"TCKeyEvent";
-
-static void keyEventBridgeCallback(int scancode, int pressed, void * /*userdata*/) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[NSNotificationCenter defaultCenter] postNotificationName:TCKeyEventNotification
-                                                            object:nil
-                                                          userInfo:@{
-                                                              @"scancode" : @(scancode),
-                                                              @"pressed" : @(pressed),
-                                                          }];
-    });
-}
-
-static BOOL g_keyWatcherInstalled = NO;
-void TCInstallKeyEventWatcher(void) {
-    if (!g_keyWatcherInstalled) {
-        mkxp_setKeyEventCallback(keyEventBridgeCallback, NULL);
-        g_keyWatcherInstalled = YES;
-    }
-}
-
-NSString *const TCTextInputModeNotification = @"TCTextInputMode";
-
-// Engine fires this from EventThread (main thread) when
-// SDL_StartTextInput / SDL_StopTextInput is dispatched. We bounce
-// onto the main queue (no-op if already there) so SwiftUI can
-// safely react via NotificationCenter.publisher.
-static void textInputModeBridgeCallback(int active, void * /*userdata*/) {
-    BOOL on = active ? YES : NO;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [[NSNotificationCenter defaultCenter] postNotificationName:TCTextInputModeNotification
-                                                            object:nil
-                                                          userInfo:@{
-                                                              @"active" : @(on)
-                                                          }];
-    });
-}
-
-static BOOL g_textInputWatcherInstalled = NO;
-void TCInstallTextInputModeWatcher(void) {
-    if (!g_textInputWatcherInstalled) {
-        mkxp_setTextInputModeCallback(textInputModeBridgeCallback, NULL);
-        g_textInputWatcherInstalled = YES;
-    }
-}
-
 // Character-to-scancode mapping (for system keyboard)
 
 static int scancodeForCharacter(unichar c) {

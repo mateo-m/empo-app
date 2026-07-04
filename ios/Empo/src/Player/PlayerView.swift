@@ -172,29 +172,18 @@ struct PlayerView: View {
             }
         }
         .ignoresSafeArea()
-        .onReceive(
-            NotificationCenter.default.publisher(for: NSNotification.Name(rawValue: "TCTextInputMode"))
-        ) { note in
-            // Engine fired SDL_StartTextInput / SDL_StopTextInput
-            // because the game asked for text input via
-            // `Input.text_input = true/false`. Auto-flip the
-            // keyboard mode so the soft keyboard appears (or
-            // dismisses) without user action.
-            //
-            // No-op if the user already has the keyboard open via
-            // the toolbar toggle - the keyboardMode state is just
-            // re-set to the same value.
-            let active = (note.userInfo?["active"] as? Bool) ?? false
-            if active != keyboardMode {
-                keyboardMode = active
-                if active {
-                    AppWindow.setAllowKeyWindow(true)
+        .onAppear {
+            // Engine fired SDL_StartTextInput / SDL_StopTextInput when
+            // the game toggles `Input.text_input`. Auto-flip keyboard
+            // mode so the soft keyboard appears without user action.
+            EngineSessionCoordinator.shared.setTextInputModeHandler { active in
+                if active != keyboardMode {
+                    keyboardMode = active
+                    if active {
+                        AppWindow.setAllowKeyWindow(true)
+                    }
                 }
             }
-        }
-        .onAppear {
-            TCInstallKeyEventWatcher()
-            TCInstallTextInputModeWatcher()
 
             // Load the per-game fast-forward multiplier (and re-push
             // to the engine if the toggle was already on). Fires on
@@ -221,6 +210,9 @@ struct PlayerView: View {
                     startSnapshotFade()
                 }
             }
+        }
+        .onDisappear {
+            EngineSessionCoordinator.shared.clearTextInputModeHandler()
         }
         .onChange(of: pauseManager.snapshotCanFade) { _, canFade in
             if canFade && resumeSnapshot != nil {
@@ -384,10 +376,8 @@ struct PlayerView: View {
             // the KEYDOWN. Otherwise both events get consumed in the
             // same eventthread batch and Input.update never observes
             // the pressed-edge the Scene_Map hook is waiting for.
-            mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_HOME), 1)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_HOME), 0)
-            }
+            EngineSessionCoordinator.shared.injectKeyTap(
+                scancode: Int32(MKXP_SCANCODE_HOME), holdMilliseconds: 100)
         }
     }
 

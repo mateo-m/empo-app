@@ -754,6 +754,7 @@ extension GameLibrary {
 
         try fm.createDirectory(at: container.url, withIntermediateDirectories: true)
         try fm.moveItem(at: gameRoot, to: container.gameURL)
+        GameContainer.normalizeImportedGamePermissions(at: container.gameURL)
 
         if isImportCancelled(importID) { throw ImportCancelled() }
 
@@ -941,6 +942,7 @@ extension GameLibrary {
         // unchanged because Metadata/ is a sibling of Game/.
         try fm.createDirectory(at: container.url, withIntermediateDirectories: true)
         try fm.moveItem(at: gameRoot, to: container.gameURL)
+        GameContainer.normalizeImportedGamePermissions(at: container.gameURL)
 
         if isImportCancelled(importID) { throw ImportCancelled() }
         if let bundle = jgpBundle {

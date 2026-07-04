@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Invisible UIKit text field used exclusively to bring up the
 /// system keyboard and route its text and return-key events into
-/// the engine via `mkxp_injectKeyEvent`. The visible on-screen
+/// the engine via `EngineSessionCoordinator`. The visible on-screen
 /// controls (D-pad, action buttons) are plain SwiftUI now - see
 /// `GameControls.swift` - so this is the only UIViewRepresentable
 /// the player still needs.
@@ -49,11 +49,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // stays enabled), so the empty-replacement case has to be
             // translated into a scancode injection explicitly.
             if string.isEmpty && range.length > 0 {
-                mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_BACKSPACE), 1)
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(50))
-                    mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_BACKSPACE), 0)
-                }
+                EngineSessionCoordinator.shared.injectKeyTap(scancode: Int32(MKXP_SCANCODE_BACKSPACE))
                 textField.text = " "
                 return false
             }
@@ -93,14 +89,20 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                 let sc = scancodeForSwiftCharacter(c)
                 if sc == MKXP_SCANCODE_UNKNOWN { continue }
 
-                if isUpper { mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_LSHIFT), 1) }
-                mkxp_injectKeyEvent(sc, 1)
+                if isUpper {
+                    EngineSessionCoordinator.shared.injectKey(
+                        scancode: Int32(MKXP_SCANCODE_LSHIFT), pressed: true)
+                }
+                EngineSessionCoordinator.shared.injectKey(scancode: sc, pressed: true)
                 let scancode = sc
                 let upper = isUpper
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(50))
-                    mkxp_injectKeyEvent(scancode, 0)
-                    if upper { mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_LSHIFT), 0) }
+                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+                    if upper {
+                        EngineSessionCoordinator.shared.injectKey(
+                            scancode: Int32(MKXP_SCANCODE_LSHIFT), pressed: false)
+                    }
                 }
             }
             textField.text = " "
@@ -108,11 +110,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-            mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_RETURN), 1)
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(50))
-                mkxp_injectKeyEvent(Int32(MKXP_SCANCODE_RETURN), 0)
-            }
+            EngineSessionCoordinator.shared.injectKeyTap(scancode: Int32(MKXP_SCANCODE_RETURN))
             return false
         }
 

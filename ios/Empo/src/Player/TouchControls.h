@@ -4,8 +4,7 @@
 // TCDPadView (on-screen directional pad). Both have been replaced by
 // SwiftUI + Liquid Glass equivalents in GameControls.swift; what's
 // left here is the invisible keyboard field that UIKit has to own
-// (for system-keyboard IME and scancode injection on key events) and
-// the hardware-keyboard event watcher installed from PlayerView.
+// (for system-keyboard IME and scancode injection on key events).
 
 #import <UIKit/UIKit.h>
 
@@ -22,17 +21,6 @@ extern "C" {
 #endif
 
 UIView *TCCreateKeyboardAccessoryView(void);
-
-extern NSString *const TCKeyEventNotification;
-
-// Posted from the engine bridge when SDL text-input mode flips
-// (game called `Input.text_input = true` or `false`). userInfo
-// has `@"active"` -> NSNumber<BOOL>. PlayerView listens and
-// auto-shows / hides the soft keyboard.
-extern NSString *const TCTextInputModeNotification;
-
-void TCInstallKeyEventWatcher(void);
-void TCInstallTextInputModeWatcher(void);
 
 #ifdef __cplusplus
 }
