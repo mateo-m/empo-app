@@ -276,8 +276,43 @@ struct GameContainer: Equatable, Hashable {
     /// `rm -rf` removes Game/, EmpoState/, Logs/, Metadata/ - and
     /// thus all per-game saves, settings, logs, custom artwork,
     /// crash markers - in a single call.
+    ///
+    /// Archives and folder imports can land with read-only POSIX
+    /// bits on `Game/` (common in Windows-origin zips). iOS refuses
+    /// to unlink children through a non-writable directory, so we
+    /// normalize owner-write permission on the tree first.
     func deleteAll() throws {
-        try FileManager.default.removeItem(at: url)
+        let fm = FileManager.default
+        try Self.makeTreeDeletable(at: url, fm: fm)
+        try fm.removeItem(at: url)
+    }
+
+    /// Ensure every path under `url` is deletable by the app
+    /// sandbox. Only touches owner-write; leaves group/other as-is.
+    private static func makeTreeDeletable(at url: URL, fm: FileManager) throws {
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return }
+
+        if isDir.boolValue {
+            let children = try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
+            for child in children {
+                try makeTreeDeletable(at: child, fm: fm)
+            }
+            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        } else {
+            try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        }
+    }
+
+    /// Imported game trees sometimes arrive with a read-only `Game/`
+    /// root (archive metadata or macOS copyItem). Empo never needs
+    /// that for immutability - file content stays untouched; we just
+    /// need owner-write so a future delete can recurse.
+    static func normalizeImportedGamePermissions(at gameURL: URL) {
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: gameURL.path
+        )
     }
 
     // MARK: - Slug helper
