@@ -14,7 +14,9 @@ final class ControllerInputManager {
     private var resolvedMap = ControllerMapResolver.resolvedRuntimeMap()
     private var elementPressScancode: [String: Int32] = [:]
     private var connectedControllers: [ObjectIdentifier: GCController] = [:]
-    private var heldScancodes: Set<Int32> = []
+    // scancode -> number of elements currently holding it; the engine
+    // sees a press on 0->1 and a release on 1->0 only.
+    private var heldScancodes: [Int32: Int] = [:]
     private var overlayManualOverride = false
 
     private var controlsVisibleBinding: Binding<Bool>?
@@ -241,8 +243,11 @@ final class ControllerInputManager {
                 switch target {
                 case .key(let scancode):
                     elementPressScancode[edge.element] = scancode
-                    heldScancodes.insert(scancode)
-                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
+                    let holders = heldScancodes[scancode, default: 0]
+                    heldScancodes[scancode] = holders + 1
+                    if holders == 0 {
+                        EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
+                    }
                 case .action(let name):
                     switch name {
                     case "$toggleOverlay":
@@ -259,8 +264,13 @@ final class ControllerInputManager {
                 guard let scancode = elementPressScancode.removeValue(forKey: edge.element) else {
                     continue
                 }
-                heldScancodes.remove(scancode)
-                EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+                let holders = heldScancodes[scancode, default: 0]
+                if holders <= 1 {
+                    heldScancodes.removeValue(forKey: scancode)
+                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+                } else {
+                    heldScancodes[scancode] = holders - 1
+                }
             }
         }
     }
@@ -284,7 +294,7 @@ final class ControllerInputManager {
     }
 
     private func releaseAllHeldKeys() {
-        for scancode in heldScancodes {
+        for scancode in heldScancodes.keys {
             EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
         }
         heldScancodes.removeAll()
