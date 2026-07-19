@@ -48,8 +48,9 @@ A complete commented example lives at
 
 The file is JSON with one extension: `//` line comments are allowed.
 Block comments (`/* */`), trailing commas, and single quotes are not.
-Files over 128 KiB fail validation (error V001); a real manifest is a
-few KiB, so the cap only catches files that were never a manifest.
+Empo rejects files over 128 KiB. A real manifest is a few KiB, so the
+cap only catches files that were never a manifest, such as a renamed
+save file.
 
 Top level:
 
