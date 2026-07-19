@@ -200,6 +200,7 @@ class ControlsLayout {
 
     func undoLastEdit() {
         guard let snapshot = editUndoStack.popLast() else { return }
+        staggerGeneration += 1
         withAnimation(Motion.standard) {
             dpadRelativeCenter = snapshot.dpadRelativeCenter
             dpadSize = snapshot.dpadSize
@@ -217,6 +218,7 @@ class ControlsLayout {
         }
         editSessionActive = false
         clearEditUndoStack()
+        staggerGeneration += 1
         currentGameID = newGameID
         loadManifest(from: gameRoot)
         if newGameID != nil {
@@ -240,6 +242,7 @@ class ControlsLayout {
         guard new != currentOrientation else { return }
 
         clearEditUndoStack()
+        staggerGeneration += 1
 
         // Snapshot the orientation we're leaving.
         let leavingDpadCenter = dpadRelativeCenter
@@ -483,16 +486,24 @@ class ControlsLayout {
                 return $0.element.relativeCenter.x < $1.element.relativeCenter.x
             }
 
+        staggerGeneration += 1
+        let generation = staggerGeneration
         for (i, (_, button)) in missing.enumerated() {
             let delay = Motion.controlsAppearDelay + Double(i) * Motion.staggerMedium
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(delay))
+                guard generation == staggerGeneration else { return }
                 withAnimation(Motion.gentle) {
                     buttons.append(button)
                 }
             }
         }
     }
+
+    /// Invalidated whenever the layout is replaced wholesale (undo,
+    /// orientation flip, game switch) so pending stagger-add tasks
+    /// from an earlier reset cannot append onto the new state.
+    private var staggerGeneration = 0
 
     // MARK: - Persistence
 
