@@ -99,55 +99,11 @@ public struct ControllerStateReducer: Sendable {
 
 /// Built-in controller map from SPEC §9.1 with scancodes resolved once.
 public enum ControllerBuiltinMap {
-    public enum ResolvedTarget: Equatable, Sendable {
-        case key(Int32)
-        case action(String)
-        case unbound
-    }
-
+    public typealias ResolvedTarget = ControllerMapResolver.ResolvedTarget
     public typealias Resolved = [String: ResolvedTarget]
 
     public static func builtinResolved() -> Resolved {
-        var map: Resolved = [:]
-        for (element, target) in entries {
-            map[element] = resolve(target)
-        }
-        return map
-    }
-
-    private static let entries: [String: ControllerMap.Target] = [
-        "dpup": .key("ArrowUp"),
-        "dpdown": .key("ArrowDown"),
-        "dpleft": .key("ArrowLeft"),
-        "dpright": .key("ArrowRight"),
-        "-leftx": .key("ArrowLeft"),
-        "+leftx": .key("ArrowRight"),
-        "-lefty": .key("ArrowUp"),
-        "+lefty": .key("ArrowDown"),
-        "a": .key("Enter"),
-        "b": .key("Escape"),
-        "x": .key("ShiftLeft"),
-        "y": .key("KeyA"),
-        "leftshoulder": .key("KeyQ"),
-        "rightshoulder": .key("KeyW"),
-        "leftstick": .key("KeyS"),
-        "rightstick": .key("KeyD"),
-        "start": .action("$pauseMenu"),
-        "back": .action("$toggleOverlay"),
-    ]
-
-    private static func resolve(_ target: ControllerMap.Target) -> ResolvedTarget {
-        switch target {
-        case .key(let code):
-            if let scancode = KeyCodeTable.scancode(for: code) {
-                return .key(scancode)
-            }
-            return .unbound
-        case .action(let name):
-            return .action(name)
-        case .unbound:
-            return .unbound
-        }
+        ControllerMapResolver.resolvedRuntimeMap()
     }
 }
 

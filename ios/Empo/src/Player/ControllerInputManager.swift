@@ -4,15 +4,15 @@ import GameProbe
 import SwiftUI
 
 /// Host-side physical controller input (SPEC §10.2). Maps GCController
-/// elements to keyboard scancodes via the built-in map (§9.1); manifest
-/// merge arrives in EMPO-CTRL-004.
+/// elements to keyboard scancodes via the merged four-layer map (§9).
 @MainActor
 final class ControllerInputManager {
     var pauseMenuHandler: () -> Void = {}
 
     private var sessionActive = false
     private var reducer = ControllerStateReducer()
-    private let resolvedMap = ControllerBuiltinMap.builtinResolved()
+    private var resolvedMap = ControllerMapResolver.resolvedRuntimeMap()
+    private var elementPressScancode: [String: Int32] = [:]
     private var connectedControllers: [ObjectIdentifier: GCController] = [:]
     private var heldScancodes: Set<Int32> = []
     private var overlayManualOverride = false
@@ -22,6 +22,12 @@ final class ControllerInputManager {
 
     private var connectObserver: NSObjectProtocol?
     private var disconnectObserver: NSObjectProtocol?
+
+    /// Atomically swap the merged map. Keys held mid-press keep their
+    /// press-time scancode until release (SPEC §10.2 / ticket 004).
+    func updateResolvedMap(_ map: [String: ControllerMapResolver.ResolvedTarget]) {
+        resolvedMap = map
+    }
 
     func start(controlsVisible: Binding<Bool>, editMode: Binding<Bool>) {
         stop()
@@ -75,6 +81,7 @@ final class ControllerInputManager {
         }
         connectedControllers.removeAll()
         reducer = ControllerStateReducer()
+        elementPressScancode.removeAll()
         controlsVisibleBinding = nil
         editModeBinding = nil
         overlayManualOverride = false
@@ -229,28 +236,31 @@ final class ControllerInputManager {
     private func dispatch(edges: [ControllerStateReducer.Edge]) {
         guard sessionActive else { return }
         for edge in edges {
-            guard let target = resolvedMap[edge.element] else { continue }
-            switch target {
-            case .key(let scancode):
-                if edge.pressed {
+            if edge.pressed {
+                guard let target = resolvedMap[edge.element] else { continue }
+                switch target {
+                case .key(let scancode):
+                    elementPressScancode[edge.element] = scancode
                     heldScancodes.insert(scancode)
                     EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
-                } else {
-                    heldScancodes.remove(scancode)
-                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
-                }
-            case .action(let name):
-                guard edge.pressed else { continue }
-                switch name {
-                case "$toggleOverlay":
-                    toggleOverlay()
-                case "$pauseMenu":
-                    pauseMenuHandler()
-                default:
+                case .action(let name):
+                    switch name {
+                    case "$toggleOverlay":
+                        toggleOverlay()
+                    case "$pauseMenu":
+                        pauseMenuHandler()
+                    default:
+                        break
+                    }
+                case .unbound:
                     break
                 }
-            case .unbound:
-                break
+            } else {
+                guard let scancode = elementPressScancode.removeValue(forKey: edge.element) else {
+                    continue
+                }
+                heldScancodes.remove(scancode)
+                EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
             }
         }
     }
@@ -278,5 +288,6 @@ final class ControllerInputManager {
             EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
         }
         heldScancodes.removeAll()
+        elementPressScancode.removeAll()
     }
 }

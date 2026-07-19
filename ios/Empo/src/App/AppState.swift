@@ -173,6 +173,15 @@ class AppState {
 
     // MARK: - Pause lifecycle
 
+    /// Toggle pause menu — same path as the on-screen pause control (SPEC §8).
+    func togglePauseMenu() {
+        if PauseManager.shared.pausedGame != nil {
+            resumePausedGame()
+        } else {
+            requestPause()
+        }
+    }
+
     func requestPause() {
         // Pause graduated from experimental in May 2026; always
         // enabled. Only gate is "a game is playing."

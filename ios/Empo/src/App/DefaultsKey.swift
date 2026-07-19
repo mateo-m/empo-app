@@ -53,6 +53,15 @@ enum DefaultsKey {
         controlsLayoutPrefix + gameID
     }
 
+    /// Global user controller overrides. `controllerMap.global` -> JSON (SPEC §7).
+    static let controllerMapGlobal = "controllerMap.global"
+
+    /// Per-game user controller overrides. `controllerMap.<gameID>` -> JSON.
+    static let controllerMapPrefix = "controllerMap."
+    static func controllerMap(gameID: String) -> String {
+        controllerMapPrefix + gameID
+    }
+
     // MARK: - Hints (parameterized family)
 
     /// A hint's dismissed-at timestamp. `hint.dismissed.<hintID>` -> Double.

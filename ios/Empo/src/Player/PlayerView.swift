@@ -206,6 +206,9 @@ struct PlayerView: View {
                 }
             }
 
+            controllerInput.pauseMenuHandler = { appState.togglePauseMenu() }
+            ControllerMapBindings.applyRuntimeMap(
+                to: controllerInput, gameID: layout.currentGameID)
             controllerInput.start(controlsVisible: $controlsVisible, editMode: $editMode)
 
             // Load the per-game fast-forward multiplier (and re-push
@@ -237,6 +240,13 @@ struct PlayerView: View {
         .onDisappear {
             controllerInput.stop()
             EngineSessionCoordinator.shared.clearTextInputModeHandler()
+        }
+        .onChange(of: layout.currentGameID) { _, gameID in
+            ControllerMapBindings.applyRuntimeMap(to: controllerInput, gameID: gameID)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .controllerMapDidChange)) { _ in
+            ControllerMapBindings.applyRuntimeMap(
+                to: controllerInput, gameID: layout.currentGameID)
         }
         .onChange(of: pauseManager.snapshotCanFade) { _, canFade in
             if canFade && resumeSnapshot != nil {
