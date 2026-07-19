@@ -197,6 +197,24 @@ final class ControlsManifestLoaderTests: XCTestCase {
         XCTAssertEqual(result.manifest?.touch?.portrait?.buttons?.count, 2)
     }
 
+    func testBooleanVersionRejected() {
+        let json = #"{ "version": true }"#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNil(result.manifest)
+        XCTAssertFalse(result.ignoredNewerVersion)
+        XCTAssertNotNil(finding(result, code: "V002", path: "/version"))
+    }
+
+    func testBooleanCoordinateRejected() {
+        let json = #"""
+            { "version": 1, "touch": { "portrait": {
+              "buttons": [ { "key": "Enter", "x": true, "y": 0.5 } ] } } }
+            """#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V011", path: "/touch/portrait/buttons/0/x"))
+    }
+
     func testVersion2IgnoredWithoutFindings() throws {
         let data = try loadFixture("version2.json5")
         let result = ControlsManifestLoader.parse(data: data)

@@ -108,18 +108,14 @@ public enum ControlsManifestLoader {
             )
         }
 
-        if let versionValue = root["version"] {
-            if let version = versionValue as? Int {
-                if version > 1 {
-                    return Result(manifest: nil, findings: [], ignoredNewerVersion: true)
-                }
-            }
+        if let versionValue = root["version"], let version = asInt(versionValue), version > 1 {
+            return Result(manifest: nil, findings: [], ignoredNewerVersion: true)
         }
 
         var findings: [Finding] = []
         var manifest = ControlsManifest(version: 0)
 
-        if let version = root["version"] as? Int {
+        if let versionValue = root["version"], let version = asInt(versionValue) {
             manifest.version = version
             if version != 1 {
                 findings.append(
@@ -606,14 +602,20 @@ public enum ControlsManifestLoader {
         }
     }
 
+    // JSONSerialization booleans are NSNumbers that bridge to Int/Double,
+    // so they must be filtered by CFTypeID, not by casting.
     private static func asDouble(_ value: Any) -> Double? {
-        if let number = value as? Double { return number }
-        if let number = value as? Int { return Double(number) }
-        if value is Bool { return nil }
-        if let number = value as? NSNumber {
-            return number.doubleValue
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            return nil
         }
-        return nil
+        return number.doubleValue
+    }
+
+    private static func asInt(_ value: Any) -> Int? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
+            return nil
+        }
+        return Int(exactly: number)
     }
 
     private static func appendCoordinateError(findings: inout [Finding], path: String) {
