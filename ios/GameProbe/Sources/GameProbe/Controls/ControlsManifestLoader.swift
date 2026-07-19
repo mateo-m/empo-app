@@ -677,20 +677,35 @@ public enum ControlsManifestLoader {
         }
     }
 
-    // JSONSerialization booleans are NSNumbers that bridge to Int/Double,
-    // so they must be filtered by CFTypeID, not by casting.
+    // JSON booleans must not pass as numbers, and detection is
+    // platform-specific: Darwin's JSONSerialization yields CFBooleans
+    // that bridge to Int/Double via `as?` (so a cast check is not
+    // enough and CFTypeID is required), while corelibs-foundation on
+    // Linux yields values where `is Bool` is reliable and CF APIs are
+    // unavailable.
+    private static func isJSONBool(_ value: Any) -> Bool {
+        #if canImport(Darwin)
+        guard let number = value as? NSNumber else { return false }
+        return CFGetTypeID(number) == CFBooleanGetTypeID()
+        #else
+        return value is Bool
+        #endif
+    }
+
     private static func asDouble(_ value: Any) -> Double? {
-        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
-            return nil
-        }
-        return number.doubleValue
+        guard !isJSONBool(value) else { return nil }
+        if let number = value as? NSNumber { return number.doubleValue }
+        if let double = value as? Double { return double }
+        if let int = value as? Int { return Double(int) }
+        return nil
     }
 
     private static func asInt(_ value: Any) -> Int? {
-        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
-            return nil
-        }
-        return Int(exactly: number)
+        guard !isJSONBool(value) else { return nil }
+        if let number = value as? NSNumber { return Int(exactly: number) }
+        if let int = value as? Int { return int }
+        if let double = value as? Double { return Int(exactly: double) }
+        return nil
     }
 
     private static func appendCoordinateError(findings: inout [Finding], path: String) {
