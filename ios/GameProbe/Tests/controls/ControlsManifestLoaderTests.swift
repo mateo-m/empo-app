@@ -246,7 +246,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
         XCTAssertNil(ControlsManifestLoader.load(gameRoot: dir))
     }
 
-    func testLoadReadsManifestFromGameRoot() throws {
+    func testLoadReadsManifestFromEmpoDirectory() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
         let empoDir = dir.appendingPathComponent("empo")
@@ -258,8 +258,134 @@ final class ControlsManifestLoaderTests: XCTestCase {
             """
         try json.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
 
-        let result = ControlsManifestLoader.load(gameRoot: dir)
-        XCTAssertNotNil(result)
-        XCTAssertEqual(result?.manifest?.controller?.entries["a"], .key("Enter"))
+        let outcome = ControlsManifestLoader.load(gameRoot: dir)
+        XCTAssertNotNil(outcome)
+        XCTAssertEqual(outcome?.result.location, .empo)
+        XCTAssertNil(outcome?.note)
+        XCTAssertEqual(outcome?.result.manifest?.controller?.entries["a"], .key("Enter"))
+    }
+
+    func testLoadResolvesRootOnlyManifest() throws {
+        let dir = try makeTemporaryGameRoot()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let json = """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """
+        try json.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+
+        let outcome = ControlsManifestLoader.load(gameRoot: dir)
+        XCTAssertNotNil(outcome)
+        XCTAssertEqual(outcome?.result.location, .root)
+        XCTAssertNil(outcome?.note)
+        XCTAssertEqual(outcome?.result.manifest?.controller?.entries["a"], .key("Enter"))
+    }
+
+    func testLoadPrefersEmpoWhenBothLocationsExist() throws {
+        let dir = try makeTemporaryGameRoot()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let empoDir = dir.appendingPathComponent("empo")
+        try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
+
+        try """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+        try """
+            { "version": 1, "controller": { "b": "Escape" } }
+            """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+
+        let outcome = ControlsManifestLoader.load(gameRoot: dir)
+        XCTAssertEqual(outcome?.result.location, .empo)
+        XCTAssertEqual(outcome?.note, .rootSkippedBecauseEmpoExists)
+        XCTAssertEqual(outcome?.result.manifest?.controller?.entries["a"], .key("Enter"))
+    }
+
+    func testLoadSurfacesEmpoErrorsWhenRootWouldBeValid() throws {
+        let dir = try makeTemporaryGameRoot()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let empoDir = dir.appendingPathComponent("empo")
+        try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
+
+        try Data(contentsOf: fixtureURL("v002-missing-version.json5")).write(
+            to: empoDir.appendingPathComponent("controls.json"))
+        try """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+
+        let outcome = ControlsManifestLoader.load(gameRoot: dir)
+        XCTAssertEqual(outcome?.result.location, .empo)
+        XCTAssertEqual(outcome?.note, .rootSkippedBecauseEmpoExists)
+        XCTAssertNil(outcome?.result.manifest)
+        XCTAssertNotNil(finding(outcome!.result, code: "V002", path: "/version"))
+    }
+
+    func testLoadIgnoresRootWithoutVersion() throws {
+        let dir = try makeTemporaryGameRoot()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try """
+            { "touch": { "portrait": { "buttons": [] } } }
+            """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+
+        let outcome = ControlsManifestLoader.load(gameRoot: dir)
+        XCTAssertEqual(outcome?.note, .rootUnclaimedNoVersion)
+        XCTAssertNil(outcome?.result.manifest)
+        XCTAssertTrue(outcome?.result.findings.isEmpty == true)
+        XCTAssertNil(outcome?.result.location)
+    }
+
+    func testLoadValidatesClaimedRootManifest() throws {
+        let dir = try makeTemporaryGameRoot()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data(contentsOf: fixtureURL("v010-unknown-key.json5")).write(
+            to: dir.appendingPathComponent("controls.json"))
+
+        let outcome = ControlsManifestLoader.load(gameRoot: dir)
+        XCTAssertEqual(outcome?.result.location, .root)
+        XCTAssertNil(outcome?.note)
+        XCTAssertNil(outcome?.result.manifest)
+        XCTAssertNotNil(
+            finding(outcome!.result, code: "V010", path: "/touch/portrait/buttons/0/key"))
+    }
+
+    func testLoadTreatsOversizedRootAsUnclaimed() throws {
+        let dir = try makeTemporaryGameRoot()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        var data = Data(count: 128 * 1024 + 1)
+        data[0] = UInt8(ascii: "{")
+        data[1] = UInt8(ascii: "\"")
+        data[2] = UInt8(ascii: "v")
+        try data.write(to: dir.appendingPathComponent("controls.json"))
+
+        let outcome = ControlsManifestLoader.load(gameRoot: dir)
+        XCTAssertEqual(outcome?.note, .rootUnclaimedOversized)
+        XCTAssertNil(outcome?.result.manifest)
+        XCTAssertTrue(outcome?.result.findings.isEmpty == true)
+    }
+
+    func testLoadOversizedEmpoStillReturnsV001() throws {
+        let dir = try makeTemporaryGameRoot()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let empoDir = dir.appendingPathComponent("empo")
+        try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
+        try Data(count: 128 * 1024 + 1).write(
+            to: empoDir.appendingPathComponent("controls.json"))
+
+        let outcome = ControlsManifestLoader.load(gameRoot: dir)
+        XCTAssertEqual(outcome?.result.location, .empo)
+        XCTAssertNil(outcome?.note)
+        XCTAssertNotNil(finding(outcome!.result, code: "V001", path: ""))
+    }
+
+    private func makeTemporaryGameRoot() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
     }
 }

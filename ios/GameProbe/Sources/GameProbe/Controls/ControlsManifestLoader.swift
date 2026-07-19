@@ -1,9 +1,35 @@
 import Foundation
 
 public enum ControlsManifestLoader {
-    public static let manifestRelativePath = "empo/controls.json"
+    public static let empoManifestRelativePath = "empo/controls.json"
+    public static let rootManifestRelativePath = "controls.json"
+
+    /// Legacy alias for the authoritative `empo/` location.
+    public static let manifestRelativePath = empoManifestRelativePath
 
     private static let maxFileSize = 128 * 1024
+
+    public enum ManifestLocation: String, Sendable, Equatable {
+        case empo = "empo/controls.json"
+        case root = "controls.json"
+    }
+
+    public struct LoadOutcome: Sendable {
+        public var result: Result
+        public var note: Note?
+
+        public enum Note: Equatable, Sendable {
+            case rootSkippedBecauseEmpoExists
+            case rootUnclaimedNotObject
+            case rootUnclaimedNoVersion
+            case rootUnclaimedOversized
+        }
+
+        public init(result: Result, note: Note? = nil) {
+            self.result = result
+            self.note = note
+        }
+    }
 
     private static let knownActions: Set<String> = [
         "$pauseMenu",
@@ -14,15 +40,18 @@ public enum ControlsManifestLoader {
         public var manifest: ControlsManifest?
         public var findings: [Finding]
         public var ignoredNewerVersion: Bool
+        public var location: ManifestLocation?
 
         public init(
             manifest: ControlsManifest?,
             findings: [Finding],
-            ignoredNewerVersion: Bool = false
+            ignoredNewerVersion: Bool = false,
+            location: ManifestLocation? = nil
         ) {
             self.manifest = manifest
             self.findings = findings
             self.ignoredNewerVersion = ignoredNewerVersion
+            self.location = location
         }
     }
 
@@ -45,10 +74,28 @@ public enum ControlsManifestLoader {
         }
     }
 
-    /// nil if the file does not exist. Never throws for content problems — those land in `findings`.
-    public static func load(gameRoot: URL) -> Result? {
-        let url = gameRoot.appendingPathComponent(manifestRelativePath)
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+    /// nil when neither manifest location exists. Never throws for content problems — those land in `findings`.
+    public static func load(gameRoot: URL) -> LoadOutcome? {
+        let fileManager = FileManager.default
+        let empoURL = gameRoot.appendingPathComponent(empoManifestRelativePath)
+        let rootURL = gameRoot.appendingPathComponent(rootManifestRelativePath)
+        let empoExists = fileManager.fileExists(atPath: empoURL.path)
+        let rootExists = fileManager.fileExists(atPath: rootURL.path)
+
+        guard empoExists || rootExists else { return nil }
+
+        if empoExists {
+            let result = loadEmpo(at: empoURL)
+            if rootExists {
+                return LoadOutcome(result: result, note: .rootSkippedBecauseEmpoExists)
+            }
+            return LoadOutcome(result: result)
+        }
+
+        return loadRoot(at: rootURL)
+    }
+
+    private static func loadEmpo(at url: URL) -> Result {
         guard let data = try? Data(contentsOf: url) else {
             return Result(
                 manifest: nil,
@@ -59,10 +106,44 @@ public enum ControlsManifestLoader {
                         path: "",
                         message: "Failed to read controls manifest"
                     ),
-                ]
+                ],
+                location: .empo
             )
         }
-        return parse(data: data)
+        var result = parse(data: data)
+        result.location = .empo
+        return result
+    }
+
+    private static func loadRoot(at url: URL) -> LoadOutcome {
+        let unclaimed = { (note: LoadOutcome.Note) in
+            LoadOutcome(
+                result: Result(manifest: nil, findings: []),
+                note: note
+            )
+        }
+
+        guard let data = try? Data(contentsOf: url) else {
+            return unclaimed(.rootUnclaimedNotObject)
+        }
+
+        if data.count > maxFileSize {
+            return unclaimed(.rootUnclaimedOversized)
+        }
+
+        guard let text = String(data: data, encoding: .utf8),
+            let root = JSON5LiteParser.parseObject(text)
+        else {
+            return unclaimed(.rootUnclaimedNotObject)
+        }
+
+        guard root["version"] != nil else {
+            return unclaimed(.rootUnclaimedNoVersion)
+        }
+
+        var result = parse(data: data)
+        result.location = .root
+        return LoadOutcome(result: result)
     }
 
     public static func parse(data: Data) -> Result {

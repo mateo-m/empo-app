@@ -592,9 +592,20 @@ class ControlsLayout {
         manifestRejectionErrorCount = 0
         guard let gameRoot else { return }
 
-        guard let result = ControlsManifestLoader.load(gameRoot: gameRoot) else { return }
+        guard let outcome = ControlsManifestLoader.load(gameRoot: gameRoot) else { return }
 
+        let result = outcome.result
         let logsContainer = GameContainer(url: gameRoot.deletingLastPathComponent())
+
+        if let note = outcome.note {
+            logsContainer?.appendLogLine(
+                Self.logLine(for: note),
+                fileName: Self.controlsManifestLogFile
+            )
+            if note != .rootSkippedBecauseEmpoExists {
+                return
+            }
+        }
 
         if result.ignoredNewerVersion {
             logsContainer?.appendLogLine(
@@ -617,6 +628,23 @@ class ControlsLayout {
         }
 
         manifestRejectionErrorCount = result.findings.filter { $0.severity == .error }.count
+    }
+
+    private static func logLine(for note: ControlsManifestLoader.LoadOutcome.Note) -> String {
+        switch note {
+        case .rootSkippedBecauseEmpoExists:
+            return
+                "controls.json: Skipped controls.json at game root; using empo/controls.json"
+        case .rootUnclaimedNoVersion:
+            return
+                "controls.json: Ignored controls.json at game root (no version key; not an Empo manifest)"
+        case .rootUnclaimedNotObject:
+            return
+                "controls.json: Ignored controls.json at game root (not a JSON object; not an Empo manifest)"
+        case .rootUnclaimedOversized:
+            return
+                "controls.json: Ignored controls.json at game root (exceeds 128 KiB; not an Empo manifest)"
+        }
     }
 
     private func applyResolvedLayout() {
