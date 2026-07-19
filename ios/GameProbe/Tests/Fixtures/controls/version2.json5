@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "touch": {
+    "portrait": {
+      "buttons": [
+        { "key": "BadKey", "x": 99, "y": 99 }
+      ]
+    }
+  }
+}

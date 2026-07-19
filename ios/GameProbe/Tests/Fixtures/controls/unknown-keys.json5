@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "extraTop": true,
+  "touch": {
+    "portrait": {
+      "unknownLayoutKey": 1,
+      "buttons": [
+        { "key": "KeyA", "x": 0.5, "y": 0.5, "bonus": true }
+      ]
+    }
+  },
+  "controller": {
+    "a": "Enter"
+  }
+}

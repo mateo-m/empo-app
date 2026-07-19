@@ -1,0 +1,248 @@
+import XCTest
+
+@testable import GameProbe
+
+final class ControlsManifestLoaderTests: XCTestCase {
+
+    private func fixtureURL(_ name: String) -> URL {
+        #if SWIFT_PACKAGE
+        guard let base = Bundle.module.resourceURL?
+            .appendingPathComponent("Fixtures/controls/\(name)"),
+            FileManager.default.fileExists(atPath: base.path)
+        else {
+            XCTFail("missing fixture: \(name)")
+            return URL(fileURLWithPath: "/")
+        }
+        return base
+        #else
+        let bundle = Bundle(for: ControlsManifestLoaderTests.self)
+        if let base = bundle.resourceURL?
+            .appendingPathComponent("Fixtures/controls/\(name)"),
+            FileManager.default.fileExists(atPath: base.path)
+        {
+            return base
+        }
+        return URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../Fixtures/controls/\(name)")
+        #endif
+    }
+
+    private func loadFixture(_ name: String) throws -> Data {
+        try Data(contentsOf: fixtureURL(name))
+    }
+
+    private func finding(
+        _ result: ControlsManifestLoader.Result,
+        code: String,
+        path: String
+    ) -> ControlsManifestLoader.Finding? {
+        result.findings.first { $0.code == code && $0.path == path }
+    }
+
+    func testSpecExampleParsesWithZeroFindings() throws {
+        let data = try loadFixture("spec-example.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+
+        XCTAssertNotNil(result.manifest)
+        XCTAssertFalse(result.ignoredNewerVersion)
+        XCTAssertTrue(result.findings.isEmpty)
+        guard let manifest = result.manifest else {
+            XCTFail("expected manifest")
+            return
+        }
+
+        XCTAssertEqual(manifest.version, 1)
+        XCTAssertEqual(manifest.name, "Starlight Odyssey")
+
+        let portrait = manifest.touch?.portrait
+        XCTAssertEqual(portrait?.dpad, DPadSpec(x: 0.14, y: 0.74, size: 150, opacity: 0.9))
+        XCTAssertEqual(portrait?.buttons?.count, 4)
+        XCTAssertEqual(
+            portrait?.buttons?[0],
+            ButtonSpec(label: "OK", key: "KeyZ", x: 0.88, y: 0.80, size: 68, opacity: nil)
+        )
+        XCTAssertEqual(
+            portrait?.buttons?[1],
+            ButtonSpec(label: "Back", key: "KeyX", x: 0.74, y: 0.86, size: 56, opacity: nil)
+        )
+        XCTAssertEqual(
+            portrait?.buttons?[2],
+            ButtonSpec(label: "Run", key: "ShiftLeft", x: 0.88, y: 0.62, size: 50, opacity: 0.8)
+        )
+        XCTAssertEqual(
+            portrait?.buttons?[3],
+            ButtonSpec(label: "Log", key: "KeyQ", x: 0.06, y: 0.06, size: 44, opacity: 0.5)
+        )
+
+        let landscape = manifest.touch?.landscape
+        XCTAssertEqual(landscape?.dpad, DPadSpec(x: 0.10, y: 0.68, size: nil, opacity: nil))
+        XCTAssertEqual(landscape?.buttons?.count, 2)
+        XCTAssertEqual(
+            landscape?.buttons?[0],
+            ButtonSpec(label: "OK", key: "KeyZ", x: 0.92, y: 0.72, size: 68, opacity: nil)
+        )
+        XCTAssertEqual(
+            landscape?.buttons?[1],
+            ButtonSpec(label: "Back", key: "KeyX", x: 0.82, y: 0.84, size: 56, opacity: nil)
+        )
+
+        XCTAssertEqual(manifest.controller?.entries["y"], .key("F5"))
+        XCTAssertEqual(manifest.controller?.entries["righttrigger"], .key("ShiftLeft"))
+    }
+
+    func testV000InvalidJSON() throws {
+        let data = try loadFixture("v000-invalid-json.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V000", path: ""))
+    }
+
+    func testV001OversizedFile() {
+        let data = Data(count: 128 * 1024 + 1)
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V001", path: ""))
+    }
+
+    func testV002MissingVersion() throws {
+        let data = try loadFixture("v002-missing-version.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V002", path: "/version"))
+    }
+
+    func testV002BadVersionType() throws {
+        let data = try loadFixture("v002-bad-version.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V002", path: "/version"))
+    }
+
+    func testV010UnknownKey() throws {
+        let data = try loadFixture("v010-unknown-key.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        let finding = finding(result, code: "V010", path: "/touch/portrait/buttons/0/key")
+        XCTAssertNotNil(finding)
+        XCTAssertTrue(finding?.message.contains("NotARealKey") == true)
+    }
+
+    func testV011CoordinateRange() throws {
+        let data = try loadFixture("v011-coord-range.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V011", path: "/touch/portrait/buttons/0/x"))
+    }
+
+    func testV012SizeOpacityRange() throws {
+        let data = try loadFixture("v012-size-opacity.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V012", path: "/touch/portrait/buttons/0/size"))
+    }
+
+    func testV013TooManyButtons() throws {
+        let data = try loadFixture("v013-too-many-buttons.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V013", path: "/touch/portrait/buttons"))
+    }
+
+    func testV014ActionInTouchButton() throws {
+        let data = try loadFixture("v014-action-in-touch.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        let finding = finding(result, code: "V014", path: "/touch/portrait/buttons/0/key")
+        XCTAssertNotNil(finding)
+        XCTAssertTrue(finding?.message.contains("$pauseMenu") == true)
+    }
+
+    func testV020UnknownControllerElement() throws {
+        let data = try loadFixture("v020-unknown-element.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V020", path: "/controller/notabutton"))
+    }
+
+    func testV021UnknownAction() throws {
+        let data = try loadFixture("v021-unknown-action.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        let finding = finding(result, code: "V021", path: "/controller/start")
+        XCTAssertNotNil(finding)
+        XCTAssertTrue(finding?.message.contains("$notAnAction") == true)
+    }
+
+    func testW001EmptyManifest() throws {
+        let data = try loadFixture("w001-empty.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "W001", path: ""))
+    }
+
+    func testW002LabelTruncationInModel() throws {
+        let data = try loadFixture("w002-label-truncate.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "W002", path: "/touch/portrait/buttons/0/label"))
+        XCTAssertEqual(result.manifest?.touch?.portrait?.buttons?.first?.label, "VeryLong")
+    }
+
+    func testW003DuplicateKeyStillYieldsManifest() throws {
+        let data = try loadFixture("w003-duplicate-key.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "W003", path: "/touch/portrait/buttons"))
+        XCTAssertEqual(result.manifest?.touch?.portrait?.buttons?.count, 2)
+    }
+
+    func testVersion2IgnoredWithoutFindings() throws {
+        let data = try loadFixture("version2.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNil(result.manifest)
+        XCTAssertTrue(result.ignoredNewerVersion)
+        XCTAssertTrue(result.findings.isEmpty)
+    }
+
+    func testUnknownKeysSilentlyIgnored() throws {
+        let data = try loadFixture("unknown-keys.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertTrue(result.findings.isEmpty)
+        XCTAssertEqual(result.manifest?.controller?.entries["a"], .key("Enter"))
+    }
+
+    func testEmptyButtonsDistinctFromNil() throws {
+        let data = try loadFixture("empty-buttons.json5")
+        let result = ControlsManifestLoader.parse(data: data)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertEqual(result.manifest?.touch?.portrait?.buttons, [])
+    }
+
+    func testLoadReturnsNilForMissingFile() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        XCTAssertNil(ControlsManifestLoader.load(gameRoot: dir))
+    }
+
+    func testLoadReadsManifestFromGameRoot() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let empoDir = dir.appendingPathComponent("empo")
+        try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let json = """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """
+        try json.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+
+        let result = ControlsManifestLoader.load(gameRoot: dir)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.manifest?.controller?.entries["a"], .key("Enter"))
+    }
+}
