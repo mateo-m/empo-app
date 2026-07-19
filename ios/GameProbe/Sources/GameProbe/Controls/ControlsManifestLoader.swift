@@ -677,19 +677,14 @@ public enum ControlsManifestLoader {
         }
     }
 
-    // JSON booleans must not pass as numbers, and detection is
-    // platform-specific: Darwin's JSONSerialization yields CFBooleans
-    // that bridge to Int/Double via `as?` (so a cast check is not
-    // enough and CFTypeID is required), while corelibs-foundation on
-    // Linux yields values where `is Bool` is reliable and CF APIs are
-    // unavailable.
+    // JSON booleans must not pass as numbers. Type casts cannot tell
+    // them apart (`NSNumber(1) is Bool` and `true as? Int` both succeed
+    // on Darwin AND corelibs), but `objCType` can: JSONSerialization
+    // encodes booleans as "c" and integers/doubles as "q"/"d" on both
+    // platforms. CF APIs are not an option — Linux Foundation lacks them.
     private static func isJSONBool(_ value: Any) -> Bool {
-        #if canImport(Darwin)
-        guard let number = value as? NSNumber else { return false }
-        return CFGetTypeID(number) == CFBooleanGetTypeID()
-        #else
-        return value is Bool
-        #endif
+        guard let number = value as? NSNumber else { return value is Bool }
+        return String(cString: number.objCType) == "c"
     }
 
     private static func asDouble(_ value: Any) -> Double? {
