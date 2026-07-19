@@ -1,12 +1,11 @@
 # Shipping custom controls with your game
 
-Ship a file named `empo/controls.json` with your game to set its touch
+Ship a file named `controls.json` with your game to set its touch
 layout and gamepad mapping. Setup takes about five minutes.
 
 ## Quickstart
 
-1. Create a folder named `empo` (lowercase) next to `Game.ini`.
-2. Add a file named `controls.json` inside it:
+1. Create a file named `controls.json` next to `Game.ini`:
 
    ```jsonc
    {
@@ -28,7 +27,7 @@ layout and gamepad mapping. Setup takes about five minutes.
    }
    ```
 
-3. Package and distribute the game as usual. Empo picks the file up at
+2. Package and distribute the game as usual. Empo picks the file up at
    import.
 
 That file works as-is: portrait shows your three buttons and the d-pad
@@ -43,6 +42,24 @@ autocomplete field names and flag typos as you type.
 
 A complete commented example lives at
 [`docs/examples/empo-controls-example.json`](examples/empo-controls-example.json).
+
+## File locations
+
+Empo checks two spots, in order:
+
+1. `empo/controls.json` (a lowercase `empo` folder next to `Game.ini`)
+2. `controls.json` next to `Game.ini`
+
+The root location is the standard one; other launchers can adopt it
+without carrying Empo's name. The `empo/` location is an override for
+Empo alone. When both files exist, Empo reads the `empo/` one and logs
+that it skipped the other.
+
+One rule applies to the root location only: the file must contain the
+`version` key to count as a controls manifest. `controls.json` is a
+generic file name, and some games ship one for their own scripts; Empo
+leaves a root file without `version` alone instead of flagging it as
+broken. A file inside `empo/` is validated no matter what.
 
 ## File format
 
