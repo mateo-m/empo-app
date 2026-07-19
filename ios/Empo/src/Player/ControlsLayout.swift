@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 import Observation
 import SwiftUI
 
@@ -101,6 +102,23 @@ class ControlsLayout {
     /// mutations are kept in memory but not persisted.
     private(set) var currentGameID: String?
 
+    /// Accepted developer manifest for the active game, if any.
+    private(set) var activeManifest: ControlsManifest?
+
+    /// Error findings from a rejected `empo/controls.json`, for edit-mode surfacing.
+    private(set) var manifestRejectionErrorCount = 0
+
+    /// True when the active game ships an accepted manifest with a `touch` section.
+    var hasManifestTouchSection: Bool {
+        activeManifest?.touch != nil
+    }
+
+    var resetConfirmationTitle: String {
+        hasManifestTouchSection ? "Reset to game default" : "Reset to Empo default"
+    }
+
+    private static let controlsManifestLogFile = "controls.json.log"
+
     /// Current device orientation as far as the layout is concerned.
     /// PlayerView updates this via `setOrientation(_:)` when geometry
     /// flips; orientation changes save the current "active" values
@@ -137,12 +155,17 @@ class ControlsLayout {
     /// Bind the layout instance to a specific game's stored layout.
     /// Called from `AppState.selectGame(_:)` when a game starts, and
     /// again with `nil` from `returnToLibrary()` when the user exits.
-    func switchGame(id newGameID: String?) {
+    func switchGame(id newGameID: String?, gameRoot: URL?) {
         if currentGameID != nil {
             save()
         }
         currentGameID = newGameID
-        if newGameID != nil, loadLayout() {
+        loadManifest(from: gameRoot)
+        if newGameID != nil {
+            if loadLayout() {
+                return
+            }
+            applyResolvedLayout()
             return
         }
         applyDefaultsForCurrentOrientation()
@@ -279,6 +302,15 @@ class ControlsLayout {
     nonisolated static var defaultButtons: [ButtonModel] { defaultButtonsPortrait }
 
     // MARK: - Reset
+
+    /// Delete the per-game UserDefaults layout and reload via §9
+    /// precedence (manifest touch, else Empo defaults).
+    func resetToResolvedDefault() {
+        if let key = savedLayoutKey {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        applyResolvedLayout()
+    }
 
     func resetToDefaults() {
         applyDefaultsForCurrentOrientation()
@@ -461,6 +493,130 @@ class ControlsLayout {
         }
 
         return false
+    }
+
+    private func loadManifest(from gameRoot: URL?) {
+        activeManifest = nil
+        manifestRejectionErrorCount = 0
+        guard let gameRoot else { return }
+
+        guard let result = ControlsManifestLoader.load(gameRoot: gameRoot) else { return }
+
+        let logsContainer = GameContainer(url: gameRoot.deletingLastPathComponent())
+
+        if result.ignoredNewerVersion {
+            logsContainer?.appendLogLine(
+                "controls.json: Ignored manifest with version > 1",
+                fileName: Self.controlsManifestLogFile
+            )
+            return
+        }
+
+        for finding in result.findings {
+            let severity = finding.severity == .error ? "error" : "warning"
+            let line =
+                "controls.json: [\(finding.code)] (\(severity)) \(finding.path): \(finding.message)"
+            logsContainer?.appendLogLine(line, fileName: Self.controlsManifestLogFile)
+        }
+
+        if let manifest = result.manifest {
+            activeManifest = manifest
+            return
+        }
+
+        manifestRejectionErrorCount = result.findings.filter { $0.severity == .error }.count
+    }
+
+    private func applyResolvedLayout() {
+        let portrait = Self.resolveInitialLayout(manifest: activeManifest, orientation: .portrait)
+        let landscape = Self.resolveInitialLayout(manifest: activeManifest, orientation: .landscape)
+        applyV2(PersistedLayout(portrait: portrait, landscape: landscape))
+    }
+
+    /// SPEC §9 resolution for one orientation when UserDefaults is absent.
+    fileprivate static func resolveInitialLayout(
+        manifest: ControlsManifest?,
+        orientation: ControlsOrientation
+    ) -> PersistedLayout.Oriented {
+        let builtinDpadCenter: CGPoint
+        let builtinButtons: [ButtonModel]
+        switch orientation {
+        case .portrait:
+            builtinDpadCenter = defaultDPadCenterPortrait
+            builtinButtons = defaultButtonsPortrait
+        case .landscape:
+            builtinDpadCenter = defaultDPadCenterLandscape
+            builtinButtons = defaultButtonsLandscape
+        }
+
+        guard let touch = manifest?.touch else {
+            return builtinOriented(
+                dpadCenter: builtinDpadCenter, buttons: builtinButtons)
+        }
+
+        let touchLayout: TouchLayout?
+        switch orientation {
+        case .portrait:
+            touchLayout = touch.portrait
+        case .landscape:
+            touchLayout = touch.landscape
+        }
+
+        guard let touchLayout else {
+            return builtinOriented(
+                dpadCenter: builtinDpadCenter, buttons: builtinButtons)
+        }
+
+        let dpad: PersistedLayout.DPad
+        if let spec = touchLayout.dpad {
+            dpad = PersistedLayout.DPad(
+                rx: CGFloat(spec.x),
+                ry: CGFloat(spec.y),
+                size: CGFloat(spec.size ?? 140),
+                opacity: spec.opacity ?? 1.0
+            )
+        } else {
+            dpad = PersistedLayout.DPad(
+                rx: builtinDpadCenter.x,
+                ry: builtinDpadCenter.y,
+                size: defaultDPadSize,
+                opacity: 1.0
+            )
+        }
+
+        let buttons: [ButtonModel]
+        if let specs = touchLayout.buttons {
+            buttons = specs.map { spec in
+                let label = spec.label ?? KeyCodeTable.displayName(for: spec.key) ?? spec.key
+                let scancode = KeyCodeTable.scancode(for: spec.key)!
+                return ButtonModel(
+                    label: label,
+                    scancode: scancode,
+                    relativeCenter: CGPoint(x: spec.x, y: spec.y),
+                    size: CGFloat(spec.size ?? 56),
+                    opacity: spec.opacity ?? 1.0
+                )
+            }
+        } else {
+            buttons = builtinButtons
+        }
+
+        return PersistedLayout.Oriented(dpad: dpad, buttons: buttons)
+    }
+
+    private static func builtinOriented(
+        dpadCenter: CGPoint,
+        buttons: [ButtonModel]
+    ) -> PersistedLayout.Oriented {
+        PersistedLayout.Oriented(
+            dpad: .init(
+                rx: dpadCenter.x,
+                ry: dpadCenter.y,
+                size: defaultDPadSize,
+                opacity: 1.0
+            ),
+            buttons: buttons
+        )
     }
 
     private func applyV2(_ layout: PersistedLayout) {

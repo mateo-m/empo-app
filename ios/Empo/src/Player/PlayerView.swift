@@ -67,6 +67,18 @@ struct PlayerView: View {
             ZStack {
                 if editMode {
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
+                    if layout.manifestRejectionErrorCount > 0 {
+                        Text(
+                            "This game ships a controls.json with \(layout.manifestRejectionErrorCount) errors — see Logs"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, Spacing.lg)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, safeArea.bottom + Spacing.md)
+                        .allowsHitTesting(false)
+                    }
                 }
                 // Invisible tap layer that dismisses the keyboard when
                 // it's open. Placed below controls + toolbar so those

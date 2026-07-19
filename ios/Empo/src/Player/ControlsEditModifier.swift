@@ -297,14 +297,14 @@ struct ControlsEditDialogs: ViewModifier {
             .sheet(isPresented: $showAddSheet) {
                 AddButtonSheet(layout: layout)
             }
-            .alert("Reset Controls", isPresented: $showResetConfirm) {
+            .alert(layout.resetConfirmationTitle, isPresented: $showResetConfirm) {
                 Button("Reset", role: .destructive) {
-                    layout.resetWithStagger()
+                    layout.resetToResolvedDefault()
                 }
                 .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Restore default layout?")
+                Text("Your custom layout will be removed.")
             }
             .sheet(item: $editingButton) { button in
                 ButtonEditSheet(layout: layout, buttonID: button.id)

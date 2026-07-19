@@ -272,6 +272,26 @@ struct GameContainer: Equatable, Hashable {
         Self.ensureDirectory(logsURL)
     }
 
+    /// Append a single line to a file under `Logs/`. Creates the
+    /// file on first write. Used for host-side manifest diagnostics.
+    func appendLogLine(_ line: String, fileName: String) {
+        ensureLogsDirectory()
+        let path = logsURL.appendingPathComponent(fileName).path
+        let entry = line.hasSuffix("\n") ? line : line + "\n"
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: path) {
+            try? entry.write(toFile: path, atomically: true, encoding: .utf8)
+            return
+        }
+        if let data = entry.data(using: .utf8),
+            let fh = FileHandle(forWritingAtPath: path)
+        {
+            defer { try? fh.close() }
+            _ = try? fh.seekToEnd()
+            _ = try? fh.write(contentsOf: data)
+        }
+    }
+
     /// Recursively delete the entire container directory. One
     /// `rm -rf` removes Game/, EmpoState/, Logs/, Metadata/ - and
     /// thus all per-game saves, settings, logs, custom artwork,
