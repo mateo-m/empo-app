@@ -51,7 +51,10 @@ struct PlayerControlsOverlay: View {
     private var dpadDragGesture: some Gesture {
         DragGesture()
             .onChanged { value in
-                if !draggingDPad { draggingDPad = true }
+                if !draggingDPad {
+                    layout.recordEditSnapshot()
+                    draggingDPad = true
+                }
                 let clamped = ControlsZone.clampToSafeArea(
                     value.location, controlSize: layout.dpadSize, geoSize: geo.size,
                     safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY)
@@ -108,7 +111,10 @@ struct PlayerControlsOverlay: View {
     private func buttonDragGesture(id: UUID, size: CGFloat) -> some Gesture {
         DragGesture()
             .onChanged { value in
-                if draggingButtonID != id { draggingButtonID = id }
+                if draggingButtonID != id {
+                    layout.recordEditSnapshot()
+                    draggingButtonID = id
+                }
                 let clamped = ControlsZone.clampToSafeArea(
                     value.location, controlSize: size, geoSize: geo.size, safeArea: AppWindow.currentSafeArea,
                     controlsMinY: controlsMinY)

@@ -85,6 +85,7 @@ struct ButtonEditSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var labelText = ""
+    @State private var labelEditSnapshotRecorded = false
 
     private let sizes: [(String, CGFloat)] = [
         ("Small", 44), ("Medium", 50),
@@ -106,6 +107,10 @@ struct ButtonEditSheet: View {
                             TextField("Label", text: $labelText)
                                 .multilineTextAlignment(.trailing)
                                 .onChange(of: labelText) { _, newValue in
+                                    if !labelEditSnapshotRecorded && newValue != button.label {
+                                        layout.recordEditSnapshot()
+                                        labelEditSnapshotRecorded = true
+                                    }
                                     if !newValue.isEmpty {
                                         layout.updateButton(id: buttonID, label: newValue)
                                     }
@@ -133,6 +138,7 @@ struct ButtonEditSheet: View {
                             }
                             .contentShape(Rectangle())
                             .onTapGesture {
+                                layout.recordEditSnapshot()
                                 layout.updateButton(id: buttonID, size: size)
                             }
                         }
@@ -149,7 +155,11 @@ struct ButtonEditSheet: View {
                                     set: { layout.updateButton(id: buttonID, opacity: $0) }
                                 ),
                                 in: 0.2...1.0
-                            )
+                            ) { editing in
+                                if editing {
+                                    layout.recordEditSnapshot()
+                                }
+                            }
                             Text("\(Int(button.opacity * 100))%")
                                 .font(.subheadline.monospacedDigit())
                                 .foregroundStyle(.secondary)
@@ -208,6 +218,7 @@ struct ButtonEditSheet: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture {
+                    layout.recordEditSnapshot()
                     layout.updateButton(id: buttonID, scancode: entry.scancode)
                 }
             }
@@ -250,6 +261,7 @@ struct DPadEditSheet: View {
                         }
                         .contentShape(Rectangle())
                         .onTapGesture {
+                            layout.recordEditSnapshot()
                             layout.dpadSize = size
                         }
                     }
@@ -263,7 +275,11 @@ struct DPadEditSheet: View {
                                 set: { layout.dpadOpacity = $0 }
                             ),
                             in: 0.2...1.0
-                        )
+                        ) { editing in
+                            if editing {
+                                layout.recordEditSnapshot()
+                            }
+                        }
                         Text("\(Int(layout.dpadOpacity * 100))%")
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)

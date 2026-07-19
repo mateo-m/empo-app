@@ -137,6 +137,7 @@ struct PlayerView: View {
                         gameRect: gameRect,
                         safeArea: safeArea,
                         geoSize: geo.size,
+                        layout: layout,
                         showAddSheet: $showAddSheet,
                         showResetConfirm: $showResetConfirm,
                         onDone: { toggleEditMode() }
@@ -386,7 +387,10 @@ struct PlayerView: View {
         if keyboardMode {
             toggleKeyboard()
         }
-        if !editMode {
+        if editMode {
+            layout.beginEditSession()
+        } else {
+            layout.endEditSession()
             layout.save()
             resetToolbarIdleTimer()
         }

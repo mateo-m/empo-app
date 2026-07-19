@@ -148,8 +148,64 @@ class ControlsLayout {
     private var inactiveDpadOpacity: Double = 1.0
     private var inactiveButtons: [ButtonModel] = ControlsLayout.defaultButtonsLandscape
 
+    // MARK: - Edit-session undo (in-memory only; never persisted)
+
+    private struct OrientedLayoutSnapshot: Equatable {
+        var dpadRelativeCenter: CGPoint
+        var dpadSize: CGFloat
+        var dpadOpacity: Double
+        var buttons: [ButtonModel]
+    }
+
+    private static let maxEditUndoDepth = 50
+
+    private var editUndoStack: [OrientedLayoutSnapshot] = []
+    private var editSessionActive = false
+
+    var canUndo: Bool { editSessionActive && !editUndoStack.isEmpty }
+
     private init() {
         applyDefaultsForCurrentOrientation()
+    }
+
+    /// Fresh undo history for a new edit-controls session.
+    func beginEditSession() {
+        editUndoStack.removeAll()
+        editSessionActive = true
+    }
+
+    func endEditSession() {
+        editSessionActive = false
+    }
+
+    private func clearEditUndoStack() {
+        editUndoStack.removeAll()
+    }
+
+    /// Push the active orientation's layout before a user-initiated
+    /// edit. No-op outside an edit session.
+    func recordEditSnapshot() {
+        guard editSessionActive else { return }
+        editUndoStack.append(
+            OrientedLayoutSnapshot(
+                dpadRelativeCenter: dpadRelativeCenter,
+                dpadSize: dpadSize,
+                dpadOpacity: dpadOpacity,
+                buttons: buttons
+            ))
+        if editUndoStack.count > Self.maxEditUndoDepth {
+            editUndoStack.removeFirst(editUndoStack.count - Self.maxEditUndoDepth)
+        }
+    }
+
+    func undoLastEdit() {
+        guard let snapshot = editUndoStack.popLast() else { return }
+        withAnimation(Motion.standard) {
+            dpadRelativeCenter = snapshot.dpadRelativeCenter
+            dpadSize = snapshot.dpadSize
+            dpadOpacity = snapshot.dpadOpacity
+            buttons = snapshot.buttons
+        }
     }
 
     /// Bind the layout instance to a specific game's stored layout.
@@ -159,6 +215,8 @@ class ControlsLayout {
         if currentGameID != nil {
             save()
         }
+        editSessionActive = false
+        clearEditUndoStack()
         currentGameID = newGameID
         loadManifest(from: gameRoot)
         if newGameID != nil {
@@ -180,6 +238,8 @@ class ControlsLayout {
     /// rotation in real time.
     func setOrientation(_ new: ControlsOrientation) {
         guard new != currentOrientation else { return }
+
+        clearEditUndoStack()
 
         // Snapshot the orientation we're leaving.
         let leavingDpadCenter = dpadRelativeCenter
@@ -306,6 +366,7 @@ class ControlsLayout {
     /// Delete the per-game UserDefaults layout and reload via §9
     /// precedence (manifest touch, else Empo defaults).
     func resetToResolvedDefault() {
+        recordEditSnapshot()
         if let key = savedLayoutKey {
             UserDefaults.standard.removeObject(forKey: key)
         }
@@ -663,6 +724,7 @@ class ControlsLayout {
     // MARK: - Mutators
 
     func addButton(label: String, scancode: Int32) {
+        recordEditSnapshot()
         var displayLabel = label
         if let range = label.range(of: " (") {
             displayLabel = String(label[..<range.lowerBound])
@@ -676,6 +738,7 @@ class ControlsLayout {
     }
 
     func removeButton(id: UUID) {
+        recordEditSnapshot()
         buttons.removeAll { $0.id == id }
     }
 

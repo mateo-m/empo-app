@@ -96,6 +96,7 @@ struct PlayerEditToolbar: View {
     let gameRect: CGRect
     let safeArea: EdgeInsets
     let geoSize: CGSize
+    var layout: ControlsLayout
     @Binding var showAddSheet: Bool
     @Binding var showResetConfirm: Bool
     let onDone: () -> Void
@@ -115,6 +116,15 @@ struct PlayerEditToolbar: View {
                 .accessibilityLabel("Add button")
                 .foregroundStyle(.white)
                 .font(.footnote.weight(.semibold))
+            Button {
+                layout.undoLastEdit()
+            } label: {
+                Label("Undo", systemImage: "arrow.uturn.backward")
+            }
+            .accessibilityLabel("Undo layout change")
+            .foregroundStyle(.white.opacity(layout.canUndo ? 1 : Alpha.disabled))
+            .font(.footnote.weight(.semibold))
+            .disabled(!layout.canUndo)
             Button("Reset") { showResetConfirm = true }
                 .foregroundStyle(.brand)
                 .font(.footnote.weight(.semibold))
