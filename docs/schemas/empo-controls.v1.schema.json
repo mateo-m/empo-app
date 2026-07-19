@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/mateo-m/empo-app/main/docs/schemas/empo-controls.v1.schema.json",
+  "title": "Empo controls manifest v1",
+  "description": "Per-game touch layout and controller map for Empo (empo/controls.json). The Swift validator in GameProbe is authoritative; this schema supports editor autocomplete.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "description": "Manifest format version. Must be exactly 1.",
+      "type": "number",
+      "const": 1
+    },
+    "name": {
+      "description": "Optional display name for the layout.",
+      "type": "string"
+    },
+    "touch": {
+      "$ref": "#/$defs/touchSection"
+    },
+    "controller": {
+      "$ref": "#/$defs/controllerMap"
+    }
+  },
+  "$defs": {
+    "keyCode": {
+      "description": "W3C KeyboardEvent.code string (SPEC §6).",
+      "type": "string",
+      "enum": [
+        "KeyA",
+        "KeyB",
+        "KeyC",
+        "KeyD",
+        "KeyE",
+        "KeyF",
+        "KeyG",
+        "KeyH",
+        "KeyI",
+        "KeyJ",
+        "KeyK",
+        "KeyL",
+        "KeyM",
+        "KeyN",
+        "KeyO",
+        "KeyP",
+        "KeyQ",
+        "KeyR",
+        "KeyS",
+        "KeyT",
+        "KeyU",
+        "KeyV",
+        "KeyW",
+        "KeyX",
+        "KeyY",
+        "KeyZ",
+        "Digit1",
+        "Digit2",
+        "Digit3",
+        "Digit4",
+        "Digit5",
+        "Digit6",
+        "Digit7",
+        "Digit8",
+        "Digit9",
+        "Digit0",
+        "Enter",
+        "Escape",
+        "Backspace",
+        "Tab",
+        "Space",
+        "Minus",
+        "Equal",
+        "BracketLeft",
+        "BracketRight",
+        "Backslash",
+        "Semicolon",
+        "Quote",
+        "Backquote",
+        "Comma",
+        "Period",
+        "Slash",
+        "CapsLock",
+        "F1",
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F6",
+        "F7",
+        "F8",
+        "F9",
+        "F10",
+        "F11",
+        "F12",
+        "PrintScreen",
+        "ScrollLock",
+        "Pause",
+        "Insert",
+        "Home",
+        "PageUp",
+        "Delete",
+        "End",
+        "PageDown",
+        "ArrowRight",
+        "ArrowLeft",
+        "ArrowDown",
+        "ArrowUp",
+        "NumLock",
+        "NumpadDivide",
+        "NumpadMultiply",
+        "NumpadSubtract",
+        "NumpadAdd",
+        "NumpadEnter",
+        "Numpad1",
+        "Numpad2",
+        "Numpad3",
+        "Numpad4",
+        "Numpad5",
+        "Numpad6",
+        "Numpad7",
+        "Numpad8",
+        "Numpad9",
+        "Numpad0",
+        "NumpadDecimal",
+        "IntlBackslash",
+        "IntlRo",
+        "IntlYen",
+        "ControlLeft",
+        "ShiftLeft",
+        "AltLeft",
+        "MetaLeft",
+        "ControlRight",
+        "ShiftRight",
+        "AltRight",
+        "MetaRight"
+      ]
+    },
+    "action": {
+      "description": "Host action string (SPEC §8). Valid in controller maps only.",
+      "type": "string",
+      "enum": [
+        "$pauseMenu",
+        "$toggleOverlay"
+      ]
+    },
+    "controllerTarget": {
+      "description": "Key binding, host action, or explicit unbind (null).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/keyCode"
+        },
+        {
+          "$ref": "#/$defs/action"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "coordinate": {
+      "description": "Center position as a fraction of the controls zone (0.0–1.0).",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "opacity": {
+      "description": "Control opacity (0.2–1.0).",
+      "type": "number",
+      "minimum": 0.2,
+      "maximum": 1
+    },
+    "buttonSize": {
+      "description": "Touch button diameter in points (40–100).",
+      "type": "number",
+      "minimum": 40,
+      "maximum": 100
+    },
+    "dpadSize": {
+      "description": "D-pad size in points (100–200).",
+      "type": "number",
+      "minimum": 100,
+      "maximum": 200
+    },
+    "dpad": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/coordinate"
+        },
+        "y": {
+          "$ref": "#/$defs/coordinate"
+        },
+        "size": {
+          "$ref": "#/$defs/dpadSize"
+        },
+        "opacity": {
+          "$ref": "#/$defs/opacity"
+        }
+      }
+    },
+    "button": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "key",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "label": {
+          "description": "Display label (≤ 8 characters; longer labels are truncated at runtime).",
+          "type": "string",
+          "maxLength": 8
+        },
+        "key": {
+          "$ref": "#/$defs/keyCode"
+        },
+        "x": {
+          "$ref": "#/$defs/coordinate"
+        },
+        "y": {
+          "$ref": "#/$defs/coordinate"
+        },
+        "size": {
+          "$ref": "#/$defs/buttonSize"
+        },
+        "opacity": {
+          "$ref": "#/$defs/opacity"
+        }
+      }
+    },
+    "touchLayout": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "dpad": {
+          "$ref": "#/$defs/dpad"
+        },
+        "buttons": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/button"
+          }
+        }
+      }
+    },
+    "touchSection": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "portrait": {
+          "$ref": "#/$defs/touchLayout"
+        },
+        "landscape": {
+          "$ref": "#/$defs/touchLayout"
+        }
+      }
+    },
+    "controllerElement": {
+      "description": "SDL controller element name (SPEC §7).",
+      "type": "string",
+      "enum": [
+        "a",
+        "b",
+        "x",
+        "y",
+        "back",
+        "guide",
+        "start",
+        "leftstick",
+        "rightstick",
+        "leftshoulder",
+        "rightshoulder",
+        "dpup",
+        "dpdown",
+        "dpleft",
+        "dpright",
+        "paddle1",
+        "paddle2",
+        "paddle3",
+        "paddle4",
+        "touchpad",
+        "lefttrigger",
+        "righttrigger",
+        "-leftx",
+        "+leftx",
+        "-lefty",
+        "+lefty",
+        "-rightx",
+        "+rightx",
+        "-righty",
+        "+righty"
+      ]
+    },
+    "controllerMap": {
+      "type": "object",
+      "description": "Patch overlay: only listed elements change; null unbinds.",
+      "propertyNames": {
+        "$ref": "#/$defs/controllerElement"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/controllerTarget"
+      }
+    }
+  }
+}

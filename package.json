@@ -4,10 +4,13 @@
   "description": "Pinned versions of Node-based CI lint/format tools. Not shipped with the app; consumed only by .github/workflows/.",
   "scripts": {
     "prepare": "lefthook install --reset-hooks-path",
-    "fmt:check": "oxfmt --check altstore-source.json ios/Empo/project.yml ios/Empo/curated-patches/gameRegistry.json"
+    "fmt:check": "oxfmt --check altstore-source.json ios/Empo/project.yml ios/Empo/curated-patches/gameRegistry.json",
+    "controls:schema:check": "node tools/controls-schema-check.mjs"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "lefthook": "2.1.9",
     "markdownlint-cli": "0.48.0",
     "oxfmt": "0.55.0"
