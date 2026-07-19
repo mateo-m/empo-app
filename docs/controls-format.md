@@ -1,14 +1,7 @@
 # Shipping custom controls with your game
 
-Empo runs RPG Maker XP, VX, and VX Ace games that were designed for a
-keyboard. The default on-screen controls cover the standard bindings, but
-your game may use F5 for a fishing minigame, X for a quest log, or a
-custom dash key. `empo/controls.json` lets you ship the right controls
-with the game itself: your own touch button layout, and a gamepad mapping
-tuned to how your game reads the keyboard.
-
-Players can still rearrange everything on their device. Your file changes
-the starting point, and the layout players return to when they hit Reset.
+Ship a file named `empo/controls.json` with your game to set its touch
+layout and gamepad mapping. Setup takes about five minutes.
 
 ## Quickstart
 
@@ -37,6 +30,13 @@ the starting point, and the layout players return to when they hit Reset.
 
 3. Package and distribute the game as usual. Empo picks the file up at
    import.
+
+That file works as-is: portrait shows your three buttons and the d-pad
+where you placed them, and the north face button presses F5. Use a
+manifest when Empo's defaults miss keys your game reads, such as script
+hotkeys or a custom dash key. Players can rearrange everything on their
+device; your file sets the starting point and the layout Reset returns
+to.
 
 The `$schema` line is optional. With it, editors like VS Code
 autocomplete field names and flag typos as you type.
@@ -321,3 +321,13 @@ editor, or with a validator like `ajv`.
 - Version 1 files work forever. If a version 2 ever exists, every
   future Empo keeps reading version 1 files exactly as this document
   describes. Shipping a `controls.json` today is safe.
+
+## Before you ship
+
+1. Validate the file: with the `$schema` line, your editor flags errors
+   as you type; any JSON Schema validator works too. One minute.
+2. Import the game in Empo and open the edit-controls screen. A broken
+   file shows an error notice there, with details in the game's
+   `Logs/controls.json.log`. Five minutes.
+3. If you ship a `controller` section, connect a gamepad and press each
+   remapped element once in-game. Five minutes.
