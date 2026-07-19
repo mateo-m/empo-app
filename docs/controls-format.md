@@ -48,7 +48,8 @@ A complete commented example lives at
 
 The file is JSON with one extension: `//` line comments are allowed.
 Block comments (`/* */`), trailing commas, and single quotes are not.
-Keep the file under 128 KiB.
+Files over 128 KiB fail validation (error V001); a real manifest is a
+few KiB, so the cap only catches files that were never a manifest.
 
 Top level:
 
