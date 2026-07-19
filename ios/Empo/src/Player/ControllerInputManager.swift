@@ -13,8 +13,16 @@ final class ControllerInputManager {
     var elementActivityHandler: ((String) -> Void)?
 
     /// When true, edges still update internal state but do not inject keys
-    /// or dispatch host actions (remap screen is frontmost).
-    var suppressInjection = false
+    /// or dispatch host actions (remap screen is frontmost). Keys held at
+    /// the moment suppression begins are released so their swallowed
+    /// release edges cannot leave the engine with a stuck key.
+    var suppressInjection = false {
+        didSet {
+            if suppressInjection, !oldValue {
+                releaseAllHeldKeys()
+            }
+        }
+    }
 
     /// True once any controller has connected during this session.
     private(set) var hasHadControllerThisSession = false
