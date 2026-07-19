@@ -68,8 +68,10 @@ struct PlayerView: View {
                 if editMode {
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
                     if layout.manifestRejectionErrorCount > 0 {
+                        let errorCount = layout.manifestRejectionErrorCount
+                        let errorLabel = errorCount == 1 ? "error" : "errors"
                         Text(
-                            "This game ships a controls.json with \(layout.manifestRejectionErrorCount) errors — see Logs"
+                            "This game ships a controls.json with \(errorCount) \(errorLabel) — see Logs"
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)

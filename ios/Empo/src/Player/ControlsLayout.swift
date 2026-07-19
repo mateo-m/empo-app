@@ -309,7 +309,33 @@ class ControlsLayout {
         if let key = savedLayoutKey {
             UserDefaults.standard.removeObject(forKey: key)
         }
-        applyResolvedLayout()
+
+        let portrait = Self.resolveInitialLayout(manifest: activeManifest, orientation: .portrait)
+        let landscape = Self.resolveInitialLayout(manifest: activeManifest, orientation: .landscape)
+
+        let activeResolved: PersistedLayout.Oriented
+        let inactiveResolved: PersistedLayout.Oriented
+        switch currentOrientation {
+        case .portrait:
+            activeResolved = portrait
+            inactiveResolved = landscape
+        case .landscape:
+            activeResolved = landscape
+            inactiveResolved = portrait
+        }
+
+        inactiveDpadRelativeCenter = CGPoint(
+            x: inactiveResolved.dpad.rx, y: inactiveResolved.dpad.ry)
+        inactiveDpadSize = inactiveResolved.dpad.size
+        inactiveDpadOpacity = inactiveResolved.dpad.opacity ?? 1.0
+        inactiveButtons = inactiveResolved.buttons
+
+        animateReset(
+            toButtons: activeResolved.buttons,
+            dpadCenter: CGPoint(x: activeResolved.dpad.rx, y: activeResolved.dpad.ry),
+            targetDpadSize: activeResolved.dpad.size,
+            targetDpadOpacity: activeResolved.dpad.opacity ?? 1.0
+        )
     }
 
     func resetToDefaults() {
@@ -347,54 +373,48 @@ class ControlsLayout {
         inactiveDpadOpacity = 1.0
     }
 
-    func resetWithStagger() {
-        let defaults =
-            currentOrientation == .portrait
-            ? Self.defaultButtonsPortrait
-            : Self.defaultButtonsLandscape
+    private func animateReset(
+        toButtons targetButtons: [ButtonModel],
+        dpadCenter: CGPoint,
+        targetDpadSize: CGFloat,
+        targetDpadOpacity: Double
+    ) {
         var matchedIDs = Set<UUID>()
-        var matchedDefaults = Set<Int>()
+        var matchedTargets = Set<Int>()
 
-        // Match current buttons to defaults by label + scancode
         var moves: [(id: UUID, center: CGPoint, size: CGFloat)] = []
-        for (di, def) in defaults.enumerated() {
+        for (ti, target) in targetButtons.enumerated() {
             guard
                 let current = buttons.first(where: {
-                    $0.label == def.label && $0.scancode == def.scancode && !matchedIDs.contains($0.id)
+                    $0.label == target.label && $0.scancode == target.scancode
+                        && !matchedIDs.contains($0.id)
                 })
             else { continue }
 
             matchedIDs.insert(current.id)
-            matchedDefaults.insert(di)
+            matchedTargets.insert(ti)
 
             let posChanged =
-                abs(current.relativeCenter.x - def.relativeCenter.x) > 0.001
-                || abs(current.relativeCenter.y - def.relativeCenter.y) > 0.001
-            let sizeChanged = abs(current.size - def.size) > 0.5
+                abs(current.relativeCenter.x - target.relativeCenter.x) > 0.001
+                || abs(current.relativeCenter.y - target.relativeCenter.y) > 0.001
+            let sizeChanged = abs(current.size - target.size) > 0.5
             if posChanged || sizeChanged {
-                moves.append((current.id, def.relativeCenter, def.size))
+                moves.append((current.id, target.relativeCenter, target.size))
             }
         }
 
-        // Animate: remove extras, move displaced, reset D-pad
-        // Controls already at default are untouched (no-op = no animation).
-        let defaultDpadCenter =
-            currentOrientation == .portrait
-            ? Self.defaultDPadCenterPortrait
-            : Self.defaultDPadCenterLandscape
         withAnimation(Motion.standard) {
             buttons.removeAll { !matchedIDs.contains($0.id) }
             for move in moves {
                 updateButton(id: move.id, size: move.size, relativeCenter: move.center)
             }
-            dpadRelativeCenter = defaultDpadCenter
-            dpadSize = Self.defaultDPadSize
-            dpadOpacity = 1.0
+            dpadRelativeCenter = dpadCenter
+            dpadSize = targetDpadSize
+            dpadOpacity = targetDpadOpacity
         }
 
-        // Stagger-add missing defaults (scale/blur/opacity transition)
-        let missing = defaults.enumerated()
-            .filter { !matchedDefaults.contains($0.offset) }
+        let missing = targetButtons.enumerated()
+            .filter { !matchedTargets.contains($0.offset) }
             .sorted {
                 if $0.element.relativeCenter.y != $1.element.relativeCenter.y {
                     return $0.element.relativeCenter.y < $1.element.relativeCenter.y
@@ -586,9 +606,9 @@ class ControlsLayout {
 
         let buttons: [ButtonModel]
         if let specs = touchLayout.buttons {
-            buttons = specs.map { spec in
+            buttons = specs.compactMap { spec in
+                guard let scancode = KeyCodeTable.scancode(for: spec.key) else { return nil }
                 let label = spec.label ?? KeyCodeTable.displayName(for: spec.key) ?? spec.key
-                let scancode = KeyCodeTable.scancode(for: spec.key)!
                 return ButtonModel(
                     label: label,
                     scancode: scancode,
