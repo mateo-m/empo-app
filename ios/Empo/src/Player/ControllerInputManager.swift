@@ -1,0 +1,282 @@
+import Foundation
+import GameController
+import GameProbe
+import SwiftUI
+
+/// Host-side physical controller input (SPEC §10.2). Maps GCController
+/// elements to keyboard scancodes via the built-in map (§9.1); manifest
+/// merge arrives in EMPO-CTRL-004.
+@MainActor
+final class ControllerInputManager {
+    var pauseMenuHandler: () -> Void = {}
+
+    private var sessionActive = false
+    private var reducer = ControllerStateReducer()
+    private let resolvedMap = ControllerBuiltinMap.builtinResolved()
+    private var connectedControllers: [ObjectIdentifier: GCController] = [:]
+    private var heldScancodes: Set<Int32> = []
+    private var overlayManualOverride = false
+
+    private var controlsVisibleBinding: Binding<Bool>?
+    private var editModeBinding: Binding<Bool>?
+
+    private var connectObserver: NSObjectProtocol?
+    private var disconnectObserver: NSObjectProtocol?
+
+    func start(controlsVisible: Binding<Bool>, editMode: Binding<Bool>) {
+        stop()
+        sessionActive = true
+        controlsVisibleBinding = controlsVisible
+        editModeBinding = editMode
+        overlayManualOverride = false
+
+        connectObserver = NotificationCenter.default.addObserver(
+            forName: .GCControllerDidConnect,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let controller = notification.object as? GCController else { return }
+            Task { @MainActor in
+                self?.attach(controller)
+            }
+        }
+
+        disconnectObserver = NotificationCenter.default.addObserver(
+            forName: .GCControllerDidDisconnect,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let controller = notification.object as? GCController else { return }
+            Task { @MainActor in
+                self?.detach(controller)
+            }
+        }
+
+        for controller in GCController.controllers() {
+            attach(controller)
+        }
+    }
+
+    func stop() {
+        sessionActive = false
+        releaseAllHeldKeys()
+
+        if let connectObserver {
+            NotificationCenter.default.removeObserver(connectObserver)
+        }
+        if let disconnectObserver {
+            NotificationCenter.default.removeObserver(disconnectObserver)
+        }
+        connectObserver = nil
+        disconnectObserver = nil
+
+        for controller in connectedControllers.values {
+            controller.extendedGamepad?.valueChangedHandler = nil
+        }
+        connectedControllers.removeAll()
+        reducer = ControllerStateReducer()
+        controlsVisibleBinding = nil
+        editModeBinding = nil
+        overlayManualOverride = false
+    }
+
+    /// Called when the user manually toggles overlay visibility so auto-hide
+    /// does not fight them until the connected controller set changes.
+    func noteManualOverlayToggle() {
+        overlayManualOverride = true
+    }
+
+    private func attach(_ controller: GCController) {
+        guard controller.extendedGamepad != nil else { return }
+        let id = ObjectIdentifier(controller)
+        guard connectedControllers[id] == nil else {
+            installHandler(on: controller)
+            return
+        }
+
+        let priorCount = connectedControllers.count
+        connectedControllers[id] = controller
+        installHandler(on: controller)
+
+        if priorCount == 0 {
+            overlayManualOverride = false
+            applyAutoOverlayVisibility()
+        }
+    }
+
+    private func detach(_ controller: GCController) {
+        let id = ObjectIdentifier(controller)
+        guard connectedControllers.removeValue(forKey: id) != nil else { return }
+
+        controller.extendedGamepad?.valueChangedHandler = nil
+        let edges = reducer.removeController(String(id.hashValue))
+        dispatch(edges: edges)
+
+        overlayManualOverride = false
+        if connectedControllers.isEmpty {
+            applyAutoOverlayVisibility()
+        }
+    }
+
+    private func installHandler(on controller: GCController) {
+        guard let gamepad = controller.extendedGamepad else { return }
+        let controllerID = String(ObjectIdentifier(controller).hashValue)
+
+        gamepad.valueChangedHandler = { [weak self] pad, _ in
+            Task { @MainActor in
+                self?.pollGamepad(controllerID: controllerID, gamepad: pad)
+            }
+        }
+        pollGamepad(controllerID: controllerID, gamepad: gamepad)
+    }
+
+    private func pollGamepad(controllerID: String, gamepad: GCExtendedGamepad) {
+        guard sessionActive else { return }
+
+        feedButton(controllerID: controllerID, element: "a", pressed: gamepad.buttonA.isPressed)
+        feedButton(controllerID: controllerID, element: "b", pressed: gamepad.buttonB.isPressed)
+        feedButton(controllerID: controllerID, element: "x", pressed: gamepad.buttonX.isPressed)
+        feedButton(controllerID: controllerID, element: "y", pressed: gamepad.buttonY.isPressed)
+        feedButton(
+            controllerID: controllerID, element: "leftshoulder", pressed: gamepad.leftShoulder.isPressed)
+        feedButton(
+            controllerID: controllerID, element: "rightshoulder", pressed: gamepad.rightShoulder.isPressed)
+        feedButton(controllerID: controllerID, element: "lefttrigger", value: gamepad.leftTrigger.value)
+        feedButton(controllerID: controllerID, element: "righttrigger", value: gamepad.rightTrigger.value)
+        feedButton(controllerID: controllerID, element: "start", pressed: gamepad.buttonMenu.isPressed)
+        feedButton(
+            controllerID: controllerID, element: "back", pressed: gamepad.buttonOptions?.isPressed ?? false)
+        feedButton(
+            controllerID: controllerID, element: "guide", pressed: gamepad.buttonHome?.isPressed ?? false)
+        feedButton(
+            controllerID: controllerID, element: "leftstick",
+            pressed: gamepad.leftThumbstickButton?.isPressed ?? false)
+        feedButton(
+            controllerID: controllerID, element: "rightstick",
+            pressed: gamepad.rightThumbstickButton?.isPressed ?? false)
+
+        let dpad = gamepad.dpad
+        feedButton(controllerID: controllerID, element: "dpup", pressed: dpad.up.isPressed)
+        feedButton(controllerID: controllerID, element: "dpdown", pressed: dpad.down.isPressed)
+        feedButton(controllerID: controllerID, element: "dpleft", pressed: dpad.left.isPressed)
+        feedButton(controllerID: controllerID, element: "dpright", pressed: dpad.right.isPressed)
+
+        for sample in ControllerStickMapper.halfAxisSamples(
+            stick: "left",
+            x: Float(gamepad.leftThumbstick.xAxis.value),
+            y: Float(gamepad.leftThumbstick.yAxis.value)
+        ) {
+            feedAxis(controllerID: controllerID, element: sample.element, value: sample.value)
+        }
+
+        for sample in ControllerStickMapper.halfAxisSamples(
+            stick: "right",
+            x: Float(gamepad.rightThumbstick.xAxis.value),
+            y: Float(gamepad.rightThumbstick.yAxis.value)
+        ) {
+            feedAxis(controllerID: controllerID, element: sample.element, value: sample.value)
+        }
+
+        feedOptionalPaddles(controllerID: controllerID, gamepad: gamepad)
+    }
+
+    private func feedOptionalPaddles(controllerID: String, gamepad: GCExtendedGamepad) {
+        if let xbox = gamepad as? GCXboxGamepad {
+            if let paddle = xbox.paddleButton1 {
+                feedButton(controllerID: controllerID, element: "paddle1", pressed: paddle.isPressed)
+            }
+            if let paddle = xbox.paddleButton2 {
+                feedButton(controllerID: controllerID, element: "paddle2", pressed: paddle.isPressed)
+            }
+            if let paddle = xbox.paddleButton3 {
+                feedButton(controllerID: controllerID, element: "paddle3", pressed: paddle.isPressed)
+            }
+            if let paddle = xbox.paddleButton4 {
+                feedButton(controllerID: controllerID, element: "paddle4", pressed: paddle.isPressed)
+            }
+        } else if let dualSense = gamepad as? GCDualSenseGamepad {
+            feedButton(
+                controllerID: controllerID,
+                element: "touchpad",
+                pressed: dualSense.touchpadButton.isPressed
+            )
+        }
+    }
+
+    private func feedButton(controllerID: String, element: String, pressed: Bool) {
+        feedAxis(controllerID: controllerID, element: element, value: pressed ? 1 : 0, isAxis: false)
+    }
+
+    private func feedButton(controllerID: String, element: String, value: Float) {
+        feedAxis(controllerID: controllerID, element: element, value: value, isAxis: true)
+    }
+
+    private func feedAxis(
+        controllerID: String,
+        element: String,
+        value: Float,
+        isAxis: Bool = true
+    ) {
+        let edges = reducer.apply(
+            controllerID: controllerID,
+            element: element,
+            value: value,
+            isAxis: isAxis
+        )
+        dispatch(edges: edges)
+    }
+
+    private func dispatch(edges: [ControllerStateReducer.Edge]) {
+        guard sessionActive else { return }
+        for edge in edges {
+            guard let target = resolvedMap[edge.element] else { continue }
+            switch target {
+            case .key(let scancode):
+                if edge.pressed {
+                    heldScancodes.insert(scancode)
+                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
+                } else {
+                    heldScancodes.remove(scancode)
+                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+                }
+            case .action(let name):
+                guard edge.pressed else { continue }
+                switch name {
+                case "$toggleOverlay":
+                    toggleOverlay()
+                case "$pauseMenu":
+                    pauseMenuHandler()
+                default:
+                    break
+                }
+            case .unbound:
+                break
+            }
+        }
+    }
+
+    private func toggleOverlay() {
+        guard let controlsVisibleBinding else { return }
+        noteManualOverlayToggle()
+        controlsVisibleBinding.wrappedValue.toggle()
+    }
+
+    private func applyAutoOverlayVisibility() {
+        guard !overlayManualOverride else { return }
+        guard editModeBinding?.wrappedValue != true else { return }
+        guard let controlsVisibleBinding else { return }
+
+        if connectedControllers.isEmpty {
+            controlsVisibleBinding.wrappedValue = true
+        } else {
+            controlsVisibleBinding.wrappedValue = false
+        }
+    }
+
+    private func releaseAllHeldKeys() {
+        for scancode in heldScancodes {
+            EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+        }
+        heldScancodes.removeAll()
+    }
+}

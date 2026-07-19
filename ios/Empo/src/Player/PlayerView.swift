@@ -25,6 +25,7 @@ struct PlayerView: View {
 
     @State private var resumeSnapshot: UIImage?
     @State private var snapshotOpacity: Double = 1
+    @State private var controllerInput = ControllerInputManager()
     @State private var controlsVisible: Bool = true
 
     @State private var showAddSheet = false
@@ -205,6 +206,8 @@ struct PlayerView: View {
                 }
             }
 
+            controllerInput.start(controlsVisible: $controlsVisible, editMode: $editMode)
+
             // Load the per-game fast-forward multiplier (and re-push
             // to the engine if the toggle was already on). Fires on
             // first launch AND on resume from pause -> library ->
@@ -232,6 +235,7 @@ struct PlayerView: View {
             }
         }
         .onDisappear {
+            controllerInput.stop()
             EngineSessionCoordinator.shared.clearTextInputModeHandler()
         }
         .onChange(of: pauseManager.snapshotCanFade) { _, canFade in

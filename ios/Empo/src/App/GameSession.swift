@@ -79,6 +79,7 @@ enum GameSession {
         )
 
         mkxp_resetSessionState()
+        mkxp_setGameControllerCaptureEnabled(false)
     }
 
     static func refreshMetadataIfNeeded(
