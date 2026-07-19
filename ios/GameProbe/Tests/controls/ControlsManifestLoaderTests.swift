@@ -53,7 +53,6 @@ final class ControlsManifestLoaderTests: XCTestCase {
         }
 
         XCTAssertEqual(manifest.version, 1)
-        XCTAssertEqual(manifest.name, "Starlight Odyssey")
 
         let portrait = manifest.touch?.portrait
         XCTAssertEqual(portrait?.dpad, DPadSpec(x: 0.14, y: 0.74, size: 150, opacity: 0.9))

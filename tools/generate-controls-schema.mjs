@@ -63,10 +63,6 @@ const schema = {
       type: "number",
       const: 1
     },
-    name: {
-      description: "Optional display name for the layout.",
-      type: "string"
-    },
     touch: { $ref: "#/$defs/touchSection" },
     controller: { $ref: "#/$defs/controllerMap" }
   },

@@ -55,7 +55,6 @@ Top level:
 | Field | Required | Meaning |
 |---|---|---|
 | `version` | yes | Must be `1` |
-| `name` | no | A label for your own bookkeeping; Empo does not display it |
 | `touch` | no | On-screen layout ([reference](#touch-reference)) |
 | `controller` | no | Gamepad mapping ([reference](#controller-reference)) |
 

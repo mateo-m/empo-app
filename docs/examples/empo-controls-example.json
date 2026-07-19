@@ -1,20 +1,34 @@
 {
   "$schema": "https://raw.githubusercontent.com/mateo-m/empo-app/main/docs/schemas/empo-controls.v1.schema.json",
+
   "version": 1,
-  "name": "Starlight Odyssey",
 
   "touch": {
     "portrait": {
       "dpad": { "x": 0.14, "y": 0.74, "size": 150, "opacity": 0.9 },
       "buttons": [
-        { "label": "OK", "key": "KeyZ", "x": 0.88, "y": 0.80, "size": 68 },
+        { "label": "OK", "key": "KeyZ", "x": 0.88, "y": 0.8, "size": 68 },
         { "label": "Back", "key": "KeyX", "x": 0.74, "y": 0.86, "size": 56 },
-        { "label": "Run", "key": "ShiftLeft", "x": 0.88, "y": 0.62, "size": 50, "opacity": 0.8 },
-        { "label": "Log", "key": "KeyQ", "x": 0.06, "y": 0.06, "size": 44, "opacity": 0.5 }
+        {
+          "label": "Run",
+          "key": "ShiftLeft",
+          "x": 0.88,
+          "y": 0.62,
+          "size": 50,
+          "opacity": 0.8
+        },
+        {
+          "label": "Log",
+          "key": "KeyQ",
+          "x": 0.06,
+          "y": 0.06,
+          "size": 44,
+          "opacity": 0.5
+        }
       ]
     },
     "landscape": {
-      "dpad": { "x": 0.10, "y": 0.68 },
+      "dpad": { "x": 0.1, "y": 0.68 },
       "buttons": [
         { "label": "OK", "key": "KeyZ", "x": 0.92, "y": 0.72, "size": 68 },
         { "label": "Back", "key": "KeyX", "x": 0.82, "y": 0.84, "size": 56 }

@@ -1,7 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/mateo-m/empo-app/main/docs/schemas/empo-controls.v1.schema.json",
   "version": 1,
-  "name": "Starlight Odyssey",
 
   "touch": {
     // Portrait: game uses Z/X plus a run key and a quest log on Q.

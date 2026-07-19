@@ -138,12 +138,6 @@ public enum ControlsManifestLoader {
             )
         }
 
-        if let name = root["name"] {
-            if let nameString = name as? String {
-                manifest.name = nameString
-            }
-        }
-
         if let touch = root["touch"] as? [String: Any] {
             manifest.touch = parseTouchSection(touch, path: "/touch", findings: &findings)
         } else if root["touch"] != nil {

@@ -2,18 +2,15 @@ import Foundation
 
 public struct ControlsManifest: Equatable, Sendable {
     public var version: Int
-    public var name: String?
     public var touch: TouchSection?
     public var controller: ControllerMap?
 
     public init(
         version: Int,
-        name: String? = nil,
         touch: TouchSection? = nil,
         controller: ControllerMap? = nil
     ) {
         self.version = version
-        self.name = name
         self.touch = touch
         self.controller = controller
     }
