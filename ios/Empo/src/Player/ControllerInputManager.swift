@@ -9,6 +9,34 @@ import SwiftUI
 final class ControllerInputManager {
     var pauseMenuHandler: () -> Void = {}
 
+    /// Called on physical element press edges (listen mode for remap UI).
+    var elementActivityHandler: ((String) -> Void)?
+
+    /// When true, edges still update internal state but do not inject keys
+    /// or dispatch host actions (remap screen is frontmost).
+    var suppressInjection = false
+
+    /// True once any controller has connected during this session.
+    private(set) var hasHadControllerThisSession = false
+
+    /// SDL element names for optional hardware (paddles, touchpad) exposed
+    /// by at least one currently connected controller.
+    var exposedOptionalElements: Set<String> {
+        var exposed = Set<String>()
+        for controller in connectedControllers.values {
+            guard let gamepad = controller.extendedGamepad else { continue }
+            if let xbox = gamepad as? GCXboxGamepad {
+                if xbox.paddleButton1 != nil { exposed.insert("paddle1") }
+                if xbox.paddleButton2 != nil { exposed.insert("paddle2") }
+                if xbox.paddleButton3 != nil { exposed.insert("paddle3") }
+                if xbox.paddleButton4 != nil { exposed.insert("paddle4") }
+            } else if gamepad is GCDualSenseGamepad {
+                exposed.insert("touchpad")
+            }
+        }
+        return exposed
+    }
+
     private var sessionActive = false
     private var reducer = ControllerStateReducer()
     private var resolvedMap = ControllerMapResolver.resolvedRuntimeMap()
@@ -37,6 +65,7 @@ final class ControllerInputManager {
         controlsVisibleBinding = controlsVisible
         editModeBinding = editMode
         overlayManualOverride = false
+        hasHadControllerThisSession = false
 
         connectObserver = NotificationCenter.default.addObserver(
             forName: .GCControllerDidConnect,
@@ -105,6 +134,7 @@ final class ControllerInputManager {
 
         let priorCount = connectedControllers.count
         connectedControllers[id] = controller
+        hasHadControllerThisSession = true
         installHandler(on: controller)
 
         if priorCount == 0 {
@@ -238,6 +268,10 @@ final class ControllerInputManager {
     private func dispatch(edges: [ControllerStateReducer.Edge]) {
         guard sessionActive else { return }
         for edge in edges {
+            if edge.pressed {
+                elementActivityHandler?(edge.element)
+            }
+            if suppressInjection { continue }
             if edge.pressed {
                 guard let target = resolvedMap[edge.element] else { continue }
                 switch target {

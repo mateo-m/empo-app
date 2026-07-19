@@ -39,6 +39,7 @@ struct PlayerView: View {
     /// cheats / fast-forward / debug-overlay / quit so the toolbar
     /// itself stays trimmed to keyboard / edit / hide / more.
     @State private var showMoreSheet = false
+    @State private var showControllerRemap = false
     /// Live fast-forward state. Mirrored into the engine via
     /// `mkxp_setFastForwardMultiplier` so the FPS limiter scales the
     /// frame pacing while the toggle is on. The actual multiplier
@@ -123,7 +124,8 @@ struct PlayerView: View {
                         onShowMore: { showMoreSheet = true },
                         menuVisible: PlayerMoreSheet.hasContent(
                             settings: settings,
-                            fastForwardMultiplier: fastForwardMultiplier
+                            fastForwardMultiplier: fastForwardMultiplier,
+                            controllerRemapAvailable: controllerInput.hasHadControllerThisSession
                         ),
                         onResetIdleTimer: { resetToolbarIdleTimer() }
                     )
@@ -268,9 +270,19 @@ struct PlayerView: View {
                 showDebugOverlay: $showDebugOverlay,
                 fastForwardActive: $fastForwardActive,
                 fastForwardMultiplier: fastForwardMultiplier,
+                showControllerRemap: controllerInput.hasHadControllerThisSession,
+                onControllerRemap: { showControllerRemap = true },
                 onPause: { appState.requestPause() },
                 onCheats: { toggleCheats() },
                 onQuit: { showQuitConfirm = true }
+            )
+        }
+        .sheet(isPresented: $showControllerRemap) {
+            ControllerRemapView(
+                gameID: layout.currentGameID,
+                gameTitle: appState.selectedGame?.title ?? "Game",
+                manifest: layout.activeManifest?.controller,
+                controllerInput: controllerInput
             )
         }
         .onChange(of: showMoreSheet) { _, opened in

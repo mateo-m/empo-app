@@ -22,6 +22,8 @@ struct PlayerMoreSheet: View {
     /// Multiplier the user configured in Game Settings. nil means
     /// fast-forward is disabled for this game; the row is hidden.
     let fastForwardMultiplier: Int?
+    let showControllerRemap: Bool
+    let onControllerRemap: () -> Void
     let onPause: () -> Void
     let onCheats: () -> Void
     let onQuit: () -> Void
@@ -45,7 +47,8 @@ struct PlayerMoreSheet: View {
     /// disable all the experimental features in app settings.
     static func hasContent(
         settings: AppSettings,
-        fastForwardMultiplier: Int?
+        fastForwardMultiplier: Int?,
+        controllerRemapAvailable: Bool = false
     ) -> Bool {
         // Cheats and pause graduated from experimental in May 2026
         // and are now always enabled. Diagnostics overlay and
@@ -57,7 +60,7 @@ struct PlayerMoreSheet: View {
         let pause = true
         // gameQuit is currently forced off in `body`; if/when it
         // returns, mirror its gate here.
-        return cheats || fastFwd || diag || pause
+        return cheats || fastFwd || diag || pause || controllerRemapAvailable
     }
 
     var body: some View {
@@ -89,6 +92,12 @@ struct PlayerMoreSheet: View {
                                     label: "Diagnostics overlay",
                                     isOn: $showDebugOverlay
                                 )
+                            }
+                            if showControllerRemap {
+                                MenuRow(icon: "gamecontroller.fill", label: "Controller") {
+                                    onControllerRemap()
+                                    dismiss()
+                                }
                             }
                         }
                     )

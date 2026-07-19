@@ -30,6 +30,19 @@ enum ControllerMapStore {
         save(map, key: DefaultsKey.controllerMap(gameID: gameID))
     }
 
+    static func deleteGlobal() {
+        delete(key: DefaultsKey.controllerMapGlobal)
+    }
+
+    static func deletePerGame(gameID: String) {
+        delete(key: DefaultsKey.controllerMap(gameID: gameID))
+    }
+
+    private static func delete(key: String) {
+        UserDefaults.standard.removeObject(forKey: key)
+        NotificationCenter.default.post(name: .controllerMapDidChange, object: nil)
+    }
+
     private static func load(key: String) -> ControllerMap? {
         guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
         guard
