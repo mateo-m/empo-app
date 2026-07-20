@@ -275,9 +275,15 @@ $(SOURCES)/sdl_sound/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sdl_sound/CMakeLists
 # SDL2_ttf (submodule: sources/sdl2_ttf)
 sdl2ttf: init_dirs sdl2 freetype $(LIBDIR)/libSDL2_ttf.a
 
+# ACLOCAL=:/AUTOMAKE=:/... no-op the automake refresh rules: on fresh
+# clones (CI runners) file mtimes are checkout-ordered roulette, and a
+# fired refresh rule wants the exact automake version the checked-in
+# files were generated with (`missing automake-1.16`). We always build
+# from the checked-in generated files, so the refresh must never run.
 $(LIBDIR)/libSDL2_ttf.a: $(SOURCES)/sdl2_ttf/.configured-$(SDK_TAG)
 	cd $(SOURCES)/sdl2_ttf; \
-	make -j$(NPROC) lib; make install-libLTLIBRARIES install-libSDL2_ttfincludeHEADERS install-pkgconfigDATA
+	make -j$(NPROC) ACLOCAL=: AUTOCONF=: AUTOMAKE=: AUTOHEADER=: lib; \
+	make ACLOCAL=: AUTOCONF=: AUTOMAKE=: AUTOHEADER=: install-libLTLIBRARIES install-libSDL2_ttfincludeHEADERS install-pkgconfigDATA
 
 $(SOURCES)/sdl2_ttf/.configured-$(SDK_TAG): $(SOURCES)/sdl2_ttf/configure
 	cd $(SOURCES)/sdl2_ttf; $(MAKE) distclean 2>/dev/null || true
