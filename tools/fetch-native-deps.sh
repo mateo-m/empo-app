@@ -38,7 +38,13 @@ if [ -z "$NATIVE_DEPS_VERSION" ]; then
 fi
 
 verify_both_trees() {
-    PLATFORM_NAME=iphoneos "$VERIFY" && PLATFORM_NAME=iphonesimulator "$VERIFY"
+    # The engine-core prebuilt lives in its own channel
+    # (tools/fetch-engine-prebuilt.sh, which runs after this script),
+    # so its check is skipped during native-deps hydration. The full
+    # check still gates every Xcode build via the "Verify native deps
+    # for active SDK" phase.
+    SKIP_ENGINE_CORE_CHECK=1 PLATFORM_NAME=iphoneos "$VERIFY" &&
+        SKIP_ENGINE_CORE_CHECK=1 PLATFORM_NAME=iphonesimulator "$VERIFY"
 }
 
 both_build_trees_exist() {
