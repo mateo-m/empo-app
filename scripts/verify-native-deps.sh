@@ -131,4 +131,33 @@ sources. Rebuild with: cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-merg
 then build). Set EMPO_ALLOW_UNSTAMPED=1 to bypass."
 fi
 
+# Engine core: everything under mkxp-z-apple-mobile/src compiles into
+# the prebuilt libmkxpz-core.a (built by the engine repo's
+# tools/build-core-ios.sh, invoked via `make mkxp-core` or fetched as
+# a published artifact). Same staleness contract as the merged
+# objects above: the build stamps a content hash of the engine src
+# tree; recompute and compare so editing engine sources without
+# rebuilding the core fails loudly instead of linking stale code.
+CORE_LIB="$LIB/libmkxpz-core.a"
+require_file_min "$CORE_LIB" 1000000 "libmkxpz-core.a"
+require_platform "$CORE_LIB" "$EXPECTED_PLATFORM" "libmkxpz-core.a"
+
+CORE_FP_FILE="$LIB/.mkxp-core-fingerprint"
+CORE_FP_SCRIPT="$REPO_ROOT/mkxp-z-apple-mobile/tools/core-fingerprint.sh"
+if [[ -f "$CORE_FP_FILE" ]]; then
+    recorded="$(cat "$CORE_FP_FILE")"
+    current="$("$CORE_FP_SCRIPT")"
+    if [[ "$current" != "$recorded" ]]; then
+        fail "libmkxpz-core.a is STALE for $PLATFORM: engine sources changed since it \
+was built (or the fetched engine prebuilt does not match the checked-out submodule). \
+Rebuild with: cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-core"
+    fi
+elif [[ "${EMPO_ALLOW_UNSTAMPED:-0}" == "1" ]]; then
+    echo "warning: $CORE_FP_FILE missing; core staleness check skipped (EMPO_ALLOW_UNSTAMPED=1)" >&2
+else
+    fail "$CORE_FP_FILE missing: cannot prove libmkxpz-core.a matches the engine \
+sources. Rebuild with: cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-core. \
+Set EMPO_ALLOW_UNSTAMPED=1 to bypass."
+fi
+
 echo "OK: $PLATFORM native dependency artifacts look healthy"

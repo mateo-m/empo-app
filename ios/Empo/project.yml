@@ -140,6 +140,16 @@ targets:
         script: |
           "${PROJECT_DIR}/../../tools/fetch-native-deps.sh"
 
+      - name: Hydrate engine core prebuilt
+        # libmkxpz-core.a per SDK, published from the public
+        # mkxp-z-apple-mobile repo's CI and pinned in
+        # ios/Dependencies/engine/.version. No-op when the pin is
+        # `unpublished` (local `make mkxp-core` builds) or
+        # EMPO_ENGINE_FROM_SOURCE=1. See tools/fetch-engine-prebuilt.sh.
+        basedOnDependencyAnalysis: false
+        script: |
+          "${PROJECT_DIR}/../../tools/fetch-engine-prebuilt.sh"
+
       - name: Verify native deps for active SDK
         # Fail fast when the tree for the current destination (device or
         # simulator) is missing or platform-contaminated. See
@@ -290,65 +300,22 @@ targets:
             echo "$NEW" > "$OUT"
           fi
     sources:
-      - path: ../../mkxp-z-apple-mobile/src/main.cpp
-      - path: ../../mkxp-z-apple-mobile/src/eventthread.cpp
-      - path: ../../mkxp-z-apple-mobile/src/sharedstate.cpp
-      - path: ../../mkxp-z-apple-mobile/src/patcher.cpp
-      - path: ../../mkxp-z-apple-mobile/src/config.cpp
-      - path: ../../mkxp-z-apple-mobile/src/crypto/rgssad.cpp
-      - path: ../../mkxp-z-apple-mobile/src/util/iniconfig.cpp
-      - path: ../../mkxp-z-apple-mobile/src/filesystem/filesystem.cpp
-      - path: ../../mkxp-z-apple-mobile/src/input/input.cpp
-      - path: ../../mkxp-z-apple-mobile/src/input/keybindings.cpp
-      - path: ../../mkxp-z-apple-mobile/src/audio/audio.cpp
-      - path: ../../mkxp-z-apple-mobile/src/audio/audiostream.cpp
-      - path: ../../mkxp-z-apple-mobile/src/audio/alstream.cpp
-      - path: ../../mkxp-z-apple-mobile/src/audio/soundemitter.cpp
-      - path: ../../mkxp-z-apple-mobile/src/audio/sdlsoundsource.cpp
-      - path: ../../mkxp-z-apple-mobile/src/audio/vorbissource.cpp
-      - path: ../../mkxp-z-apple-mobile/src/audio/midisource.cpp
-      - path: ../../mkxp-z-apple-mobile/src/audio/fluid-fun.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/graphics.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/movie.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/bitmap.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/font.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/sprite.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/plane.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/viewport.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/window.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/windowvx.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/tilemap.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/tilemapvx.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/autotiles.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/autotilesvx.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/shader.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/glstate.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/gl-fun.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/gl-meta.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/gl-debug.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/vertex.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/scene.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/texpool.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/tileatlas.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/tileatlasvx.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/gl/tilequad.cpp
-      - path: ../../mkxp-z-apple-mobile/src/etc/etc.cpp
-      - path: ../../mkxp-z-apple-mobile/src/etc/table.cpp
-      - path: ../../mkxp-z-apple-mobile/src/net/net.cpp
-      - path: ../../mkxp-z-apple-mobile/src/net/LUrlParser.cpp
-      - path: ../../mkxp-z-apple-mobile/src/display/libnsgif/libnsgif.c
-      - path: ../../mkxp-z-apple-mobile/src/display/libnsgif/lzw.c
-      - path: ../../mkxp-z-apple-mobile/src/theoraplay/theoraplay.c
-      # mkxp-z's binding/*.cpp + hmode7/*.cpp (all Ruby-API users)
-      # are NOT compiled here. Multi-Ruby Phase D (MULTI_RUBY_PLAN.md)
-      # compiles them per-Ruby-version inside ios/Dependencies/common.make's
-      # mkxp30-merged / mkxp31-merged targets. Each version's libruby +
-      # binding code merges into a single relocatable .o via `ld -r`
-      # with Ruby symbols hidden via the unexport list. The merged
-      # .o files are linked below in OTHER_LDFLAGS.
-      - path: ../../mkxp-z-apple-mobile/src/app_bridge.cpp
-      - path: ../../mkxp-z-apple-mobile/src/ios_fatal_report.mm
-      - path: ../../mkxp-z-apple-mobile/src/angle_native_layer.mm
+      # The mkxp-z engine is NOT compiled here.
+      #
+      # - Engine core (mkxp-z-apple-mobile/src/**) is prebuilt into
+      #   libmkxpz-core.a by the engine repo's tools/build-core-ios.sh
+      #   (invoked via `make -f <platform>.make mkxp-core` in
+      #   ios/Dependencies, or hydrated from a published artifact per
+      #   ios/Dependencies/engine/.version). Linked via -force_load in
+      #   OTHER_LDFLAGS below; staleness is caught per build by
+      #   scripts/verify-native-deps.sh against .mkxp-core-fingerprint.
+      #
+      # - Binding half (binding/*.cpp + hmode7/*.cpp, all Ruby-API
+      #   users) compiles per-Ruby-version inside common.make's
+      #   mkxp*-merged targets. Each version's libruby + binding code
+      #   merges into a single relocatable .o via `ld -r` with Ruby
+      #   symbols hidden via the unexport list. The merged .o files
+      #   are linked below in OTHER_LDFLAGS.
       # Vendored libmspack CAB reader (see vendor/libmspack/README.md).
       # The project-wide HAVE_CONFIG_H (meant for mkxp-z) must not leak
       # into libmspack, whose sources would otherwise include mkxp-z's
@@ -448,6 +415,11 @@ targets:
           # behaviour before multi-Ruby. Adding 1.9 / 1.8 is a
           # mechanical extension — drop the new merged.o here, add
           # the case in `getActiveScriptBinding()`.
+          # Engine core (src/**) as a prebuilt static library — see
+          # the note at the top of `sources`. -force_load keeps every
+          # member (ObjC impls and constructors included) so behavior
+          # matches the old compile-into-app layout exactly.
+          - -Wl,-force_load,$(DEPENDENCY_SEARCH_PATH)/lib/libmkxpz-core.a
           - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp18-merged.o
           - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp19-merged.o
           - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp31-merged.o

@@ -525,6 +525,44 @@ mkxp31-merged: init_dirs ruby     $(LIBDIR)/mkxp31-merged.o
 mkxp19-merged: init_dirs ruby19   $(LIBDIR)/mkxp19-merged.o
 mkxp18-merged: init_dirs ruby18   $(LIBDIR)/mkxp18-merged.o
 mkxp-merged: mkxp18-merged mkxp19-merged mkxp31-merged
+mkxp-core: init_dirs $(LIBDIR)/libmkxpz-core.a
+
+# ---- Engine core static library --------------------------------------
+# Everything under $(ENGINE)/src compiled into libmkxpz-core.a. The
+# recipe lives in the engine repo (tools/build-core-ios.sh) so this
+# makefile, third-party launchers, and the engine's own CI all build
+# the same artifact; here we only supply SDK/paths. Compile-only:
+# dependency headers come from $(INCLUDEDIR) + the ANGLE prebuilt.
+# The script stamps $(LIBDIR)/.mkxp-core-fingerprint (hash of the
+# engine src tree) which scripts/verify-native-deps.sh recomputes per
+# Xcode build to catch stale prebuilts — same contract as the
+# binding fingerprint above.
+MKXPZ_CORE_SRC_DEPS := \
+    $(wildcard $(ENGINE)/src/*.cpp) \
+    $(wildcard $(ENGINE)/src/*.mm) \
+    $(wildcard $(ENGINE)/src/*.h) \
+    $(wildcard $(ENGINE)/src/*/*.c) \
+    $(wildcard $(ENGINE)/src/*/*.cpp) \
+    $(wildcard $(ENGINE)/src/*/*.mm) \
+    $(wildcard $(ENGINE)/src/*/*.h) \
+    $(wildcard $(ENGINE)/src/*/*/*.c) \
+    $(wildcard $(ENGINE)/src/*/*/*.cpp) \
+    $(wildcard $(ENGINE)/src/*/*/*.h)
+
+$(LIBDIR)/libmkxpz-core.a: $(MKXPZ_CORE_SRC_DEPS) $(ENGINE)/tools/build-core-ios.sh
+	@$(ENGINE)/tools/build-core-ios.sh \
+	    --sdk $(SDK) \
+	    --arch $(ARCH) \
+	    --min-os $(MINIMUM_REQUIRED) \
+	    --obj $(BUILD_PREFIX)/core-obj \
+	    --out $(LIBDIR) \
+	    --include $(INCLUDEDIR) \
+	    --include $(INCLUDEDIR)/AL \
+	    --include $(INCLUDEDIR)/SDL2 \
+	    --include $(INCLUDEDIR)/pixman-1 \
+	    --include $(INCLUDEDIR)/uchardet \
+	    --include $(INCLUDEDIR)/freetype2 \
+	    --include ${PWD}/ANGLE/$(SDK)/include
 
 # Every source that compiles into the merged binding objects. Listing
 # them as prerequisites means editing binding-mri.cpp (or any engine

@@ -50,5 +50,8 @@ make -f iphoneos.make ruby-stdlib
 echo "==> building mkxp{18,19,31}-merged.o"
 make -f iphoneos.make mkxp-merged
 
+echo "==> building libmkxpz-core.a"
+make -f iphoneos.make mkxp-core
+
 echo "==> device deps rebuild complete"
 PLATFORM_NAME=iphoneos "$REPO_ROOT/scripts/verify-native-deps.sh"

@@ -36,7 +36,13 @@ rm -f "$OUT"
 echo "==> packaging into $OUT"
 (
     cd "$DEPS_DIR"
+    # Engine-core artifacts are excluded: they version with the engine
+    # submodule (ios/Dependencies/engine/.version, published from the
+    # public mkxp-z-apple-mobile repo's CI), not with the deps tree.
     tar -czf "$OUT" \
+        --exclude '*/libmkxpz-core.a' \
+        --exclude '*/.mkxp-core-fingerprint' \
+        --exclude 'build-*/core-obj' \
         build-iphoneos-arm64 \
         build-iphonesimulator-arm64
 )

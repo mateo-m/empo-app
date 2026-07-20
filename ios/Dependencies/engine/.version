@@ -1,0 +1,11 @@
+# Engine-core prebuilt pin. Updated when a new engine artifact is
+# published from the mkxp-z-apple-mobile repo's CI (see its
+# .github/workflows/artifacts.yml); commit alongside the submodule
+# bump it corresponds to.
+#
+# `unpublished` = no published artifact for the pinned submodule
+# commit; build locally with:
+#   cd ios/Dependencies && make -f iphonesimulator.make mkxp-core
+#   cd ios/Dependencies && make -f iphoneos.make mkxp-core
+ENGINE_VERSION=unpublished
+ENGINE_SHA256=
