@@ -166,34 +166,14 @@ extension KeyedDecodingContainer {
 /// Runtime.
 struct GameSettings: Codable, Equatable {
     // Display
-    /// true = bilinear (1), false = pixel-perfect (0)
-    @Setting<Bool?, RestartFlag> var smoothScaling: Bool?
-    /// true = letterbox, false = stretch-to-fill
-    @Setting<Bool?, RestartFlag> var fixedAspectRatio: Bool?
-    /// Render-buffer multiplier (1x / 2x / 4x). Maps to `enableHires`
-    /// + `framebufferScalingFactor` in mkxp.json.
-    @Setting<RenderScale?, RestartFlag> var renderScale: RenderScale?
     /// portrait screen alignment - host-side rendering, no engine input
     @Setting<VerticalAlignment?, RuntimeFlag> var verticalAlignment: VerticalAlignment?
 
     // Performance
-    /// skip rendering frames when behind
-    @Setting<Bool?, RestartFlag> var frameSkip: Bool?
     /// fast-forward multiplier (2-9, nil = disabled). Runtime-only,
     /// applied via PlayerMoreSheet's Fast forward toggle through
     /// `mkxp_setFastForwardMultiplier`.
     @Setting<Int?, RuntimeFlag> var speedMultiplier: Int?
-    /// vertical sync (written as `syncToRefreshrate` in the merged
-    /// mkxp.json - the engine ignores the legacy `vsync` key)
-    @Setting<Bool?, RestartFlag> var vsync: Bool?
-    /// index files with lowercase paths
-    @Setting<Bool?, RestartFlag> var pathCache: Bool?
-
-    // Text
-    /// global font size multiplier (1.0 = default)
-    @Setting<Double?, RestartFlag> var fontScale: Double?
-    /// don't use alpha blending for text
-    @Setting<Bool?, RestartFlag> var solidFonts: Bool?
 
     // Engine
     /// execute postload scripts for common fixes
@@ -325,14 +305,6 @@ struct GameSettings: Codable, Equatable {
             ? String(mirrorLabel.dropFirst())
             : mirrorLabel
         switch key {
-        case "smoothScaling": return "Smooth scaling"
-        case "fixedAspectRatio": return "Fixed aspect ratio"
-        case "renderScale": return "Render scale"
-        case "frameSkip": return "Frame skip"
-        case "vsync": return "VSync"
-        case "pathCache": return "Path cache"
-        case "fontScale": return "Font scale"
-        case "solidFonts": return "Solid fonts"
         case "postloadScripts": return "Postload scripts"
         case "useModernRuby": return "Ruby compatibility mode"
         case "rubyVersionOverride": return "Ruby version"
@@ -434,9 +406,14 @@ struct GameSettings: Codable, Equatable {
         EngineConfigProjector.readGameDefaults(from: gameDirectory)
     }
 
-    func applyToConfig(stateDirectory: URL, gameDirectory: URL) {
-        EngineConfigProjector.apply(
-            settings: self,
+    /// One-time migration for installs that still carry engine keys in
+    /// `game_settings.json`. Safe to call on every launch and settings
+    /// open; no-ops once the keys are gone.
+    static func migrateLegacyEngineSettingsIfNeeded(
+        stateDirectory: URL,
+        gameDirectory: URL
+    ) {
+        EngineConfigProjector.migrateLegacyEngineSettingsIfNeeded(
             stateDirectory: stateDirectory,
             gameDirectory: gameDirectory
         )

@@ -94,6 +94,7 @@ struct GameSettingsView: View {
     @Environment(\.pauseManager) private var pauseManager
 
     @State private var settings: GameSettings
+    @State private var engineSettings: EngineMkxpSettings
     @State private var defaults: GameConfigDefaults
     /// Auto-detected Ruby version raw value (18/19/30/31), read
     /// from `metadata.rubyVersion`. Populated when the sheet
@@ -110,6 +111,7 @@ struct GameSettingsView: View {
     private let gameDirectory: URL
     private let stateDirectory: URL
     private let initialSettings: GameSettings
+    private let initialEngineSettings: EngineMkxpSettings
     /// Computed once at init: true if the game's `Game.ini` Title
     /// contains a Pokemon-family keyword. Used as the default for
     /// the In-game keyboard toggle when the user hasn't explicitly
@@ -130,25 +132,34 @@ struct GameSettingsView: View {
         let stateDir = container.empoStateURL
         self.stateDirectory = stateDir
 
+        GameSettings.migrateLegacyEngineSettingsIfNeeded(
+            stateDirectory: stateDir,
+            gameDirectory: dir
+        )
+
         let s = GameSettings.load(from: stateDir)
         let defs = GameSettings.readGameDefaults(from: dir)
+        let engine = EngineMkxpSettings.load(from: stateDir, gameDirectory: dir)
 
         _settings = State(initialValue: s)
+        _engineSettings = State(initialValue: engine)
         _defaults = State(initialValue: defs)
         self.initialSettings = s
+        self.initialEngineSettings = engine
         self.isPokemonEssentialsDefault = PokemonEssentialsDetection.detect(
             in: dir, stateDirectory: stateDir
         )
     }
 
     private var effectiveSmoothScaling: Bool {
-        settings.smoothScaling ?? defaults.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
+        engineSettings.smoothScaling ?? defaults.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
     }
     private var effectiveFixedAspectRatio: Bool {
-        settings.fixedAspectRatio ?? defaults.fixedAspectRatio ?? GameConfigDefaults.engineFixedAspectRatio
+        engineSettings.fixedAspectRatio ?? defaults.fixedAspectRatio
+            ?? GameConfigDefaults.engineFixedAspectRatio
     }
     private var effectiveFrameSkip: Bool {
-        settings.frameSkip ?? defaults.frameSkip ?? GameConfigDefaults.engineFrameSkip
+        engineSettings.frameSkip ?? defaults.frameSkip ?? GameConfigDefaults.engineFrameSkip
     }
     /// Fast-forward is enabled when the user has set a multiplier.
     /// nil ↔ disabled. Toggling the switch ON seeds a sensible
@@ -164,16 +175,16 @@ struct GameSettingsView: View {
         return max(2, min(9, v))
     }
     private var effectiveFontScale: Double {
-        settings.fontScale ?? defaults.fontScale ?? GameConfigDefaults.engineFontScale
+        engineSettings.fontScale ?? defaults.fontScale ?? GameConfigDefaults.engineFontScale
     }
     private var effectiveVsync: Bool {
-        settings.vsync ?? defaults.vsync ?? GameConfigDefaults.engineVsync
+        engineSettings.vsync ?? defaults.vsync ?? GameConfigDefaults.engineVsync
     }
     private var effectivePathCache: Bool {
-        settings.pathCache ?? defaults.pathCache ?? GameConfigDefaults.enginePathCache
+        engineSettings.pathCache ?? defaults.pathCache ?? GameConfigDefaults.enginePathCache
     }
     private var effectiveSolidFonts: Bool {
-        settings.solidFonts ?? defaults.solidFonts ?? GameConfigDefaults.engineSolidFonts
+        engineSettings.solidFonts ?? defaults.solidFonts ?? GameConfigDefaults.engineSolidFonts
     }
     private var effectivePostloadScripts: Bool {
         settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
@@ -182,7 +193,11 @@ struct GameSettingsView: View {
         settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
     }
     private var effectiveRenderScale: RenderScale {
-        settings.renderScale ?? defaults.renderScale ?? GameConfigDefaults.engineRenderScale
+        engineSettings.renderScale ?? defaults.renderScale ?? GameConfigDefaults.engineRenderScale
+    }
+
+    private var hasAnyCustomizations: Bool {
+        settings.hasCustomizations || engineSettings.hasOverrides(devDefaults: defaults)
     }
 
     /// Human-readable label for the "Auto-detect" picker row that
@@ -215,7 +230,9 @@ struct GameSettingsView: View {
     /// that to a conditional render so the pill animates in/out.
     private var restartHint: Hint? {
         guard pauseManager.pausedGame?.id == game.id else { return nil }
-        let changed = settings.restartRequiredFieldsChanged(from: initialSettings)
+        let changed =
+            settings.restartRequiredFieldsChanged(from: initialSettings)
+            + engineSettings.restartRequiredFieldsChanged(from: initialEngineSettings)
         guard !changed.isEmpty else { return nil }
         let list = changed.formatted(.list(type: .and, width: .standard))
         return Hint(
@@ -236,7 +253,7 @@ struct GameSettingsView: View {
                 performanceSection
                 engineSection
 
-                if settings.hasCustomizations {
+                if hasAnyCustomizations {
                     Section {
                         Button("Reset to Defaults", role: .destructive) {
                             resetToDefaults()
@@ -305,6 +322,7 @@ struct GameSettingsView: View {
                 }
             }
             .onChange(of: settings) { save() }
+            .onChange(of: engineSettings) { save() }
             .task {
                 refreshAutoDetection(forceRefresh: false)
             }
@@ -314,65 +332,80 @@ struct GameSettingsView: View {
 
     private var displaySection: some View {
         Section {
-            SettingsToggle(
-                title: "Smooth scaling",
-                isOn: smoothScalingBinding,
-                description: "Use bilinear filtering when upscaling. Disable for a pixel-perfect look."
-            )
-
-            SettingsToggle(
-                title: "Fixed aspect ratio",
-                isOn: fixedAspectRatioBinding,
-                description: "Preserve the game's proportions instead of stretching to fill the screen."
-            )
-
-            SettingsToggle(
-                title: "VSync",
-                isOn: vsyncBinding,
-                description: "Synchronize rendering with the display refresh rate to reduce tearing."
-            )
-
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Picker("Render scale", selection: renderScaleBinding) {
-                    ForEach(RenderScale.allCases, id: \.self) { scale in
-                        Text(scale.label).tag(scale)
-                    }
-                }
-                .pickerStyle(.navigationLink)
-
+            if engineSettings.isReadOnly {
                 Text(
-                    effectiveRenderScale.description
-                        + " The game's aspect ratio and on-screen layout are unchanged - this only sharpens the rendering on high-DPI screens."
+                    "This game's mkxp.json could not be parsed; engine settings are read-only."
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             }
-            .padding(.vertical, Spacing.xxs)
 
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack {
-                    Text("Font scale")
-                    Spacer()
-                    Text(String(format: "%.1fx", effectiveFontScale))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                }
-                Slider(
-                    value: fontScaleBinding,
-                    in: 0.5...2.0,
-                    step: 0.1
+            Group {
+                SettingsToggle(
+                    title: "Smooth scaling",
+                    isOn: smoothScalingBinding,
+                    description:
+                        "Use bilinear filtering when upscaling. Disable for a pixel-perfect look."
                 )
-                Text("Scale all in-game text. 1.0x is the default size.")
+
+                SettingsToggle(
+                    title: "Fixed aspect ratio",
+                    isOn: fixedAspectRatioBinding,
+                    description:
+                        "Preserve the game's proportions instead of stretching to fill the screen."
+                )
+
+                SettingsToggle(
+                    title: "VSync",
+                    isOn: vsyncBinding,
+                    description:
+                        "Synchronize rendering with the display refresh rate to reduce tearing."
+                )
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Picker("Render scale", selection: renderScaleBinding) {
+                        ForEach(RenderScale.allCases, id: \.self) { scale in
+                            Text(scale.label).tag(scale)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+
+                    Text(
+                        effectiveRenderScale.description
+                            + " The game's aspect ratio and on-screen layout are unchanged - this only sharpens the rendering on high-DPI screens."
+                    )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, Spacing.xxs)
+                }
+                .padding(.vertical, Spacing.xxs)
 
-            SettingsToggle(
-                title: "Solid fonts",
-                isOn: solidFontsBinding,
-                description: "Disable alpha blending for text, which can look sharper in some games."
-            )
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack {
+                        Text("Font scale")
+                        Spacer()
+                        Text(String(format: "%.1fx", effectiveFontScale))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    Slider(
+                        value: fontScaleBinding,
+                        in: 0.5...2.0,
+                        step: 0.1
+                    )
+                    Text("Scale all in-game text. 1.0x is the default size.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, Spacing.xxs)
+
+                SettingsToggle(
+                    title: "Solid fonts",
+                    isOn: solidFontsBinding,
+                    description:
+                        "Disable alpha blending for text, which can look sharper in some games."
+                )
+            }
+            .disabled(engineSettings.isReadOnly)
         } header: {
             Text("Display")
         } footer: {
@@ -409,6 +442,7 @@ struct GameSettingsView: View {
                 description:
                     "Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness."
             )
+            .disabled(engineSettings.isReadOnly)
         } header: {
             Text("Performance")
         } footer: {
@@ -431,6 +465,7 @@ struct GameSettingsView: View {
                 description:
                     "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
             )
+            .disabled(engineSettings.isReadOnly)
 
             SettingsToggle(
                 title: "In-game keyboard",
@@ -533,21 +568,21 @@ struct GameSettingsView: View {
     private var smoothScalingBinding: Binding<Bool> {
         Binding(
             get: { effectiveSmoothScaling },
-            set: { settings.smoothScaling = $0 }
+            set: { engineSettings.smoothScaling = $0 }
         )
     }
 
     private var fixedAspectRatioBinding: Binding<Bool> {
         Binding(
             get: { effectiveFixedAspectRatio },
-            set: { settings.fixedAspectRatio = $0 }
+            set: { engineSettings.fixedAspectRatio = $0 }
         )
     }
 
     private var frameSkipBinding: Binding<Bool> {
         Binding(
             get: { effectiveFrameSkip },
-            set: { settings.frameSkip = $0 }
+            set: { engineSettings.frameSkip = $0 }
         )
     }
 
@@ -557,9 +592,8 @@ struct GameSettingsView: View {
             set: { newValue in
                 // Enabling: seed default 4x if no value yet (or if
                 // a stale 1x lingers from the old single-slider UI).
-                // Disabling: clear the multiplier so applyToConfig
-                // and the toolbar sheet both treat the game as
-                // fast-forward-free.
+                // Disabling: clear the multiplier so the toolbar
+                // sheet both treat the game as fast-forward-free.
                 if newValue {
                     if (settings.speedMultiplier ?? 0) < 2 {
                         settings.speedMultiplier = 4
@@ -583,28 +617,28 @@ struct GameSettingsView: View {
     private var fontScaleBinding: Binding<Double> {
         Binding(
             get: { effectiveFontScale },
-            set: { settings.fontScale = $0 }
+            set: { engineSettings.fontScale = $0 }
         )
     }
 
     private var vsyncBinding: Binding<Bool> {
         Binding(
             get: { effectiveVsync },
-            set: { settings.vsync = $0 }
+            set: { engineSettings.vsync = $0 }
         )
     }
 
     private var pathCacheBinding: Binding<Bool> {
         Binding(
             get: { effectivePathCache },
-            set: { settings.pathCache = $0 }
+            set: { engineSettings.pathCache = $0 }
         )
     }
 
     private var solidFontsBinding: Binding<Bool> {
         Binding(
             get: { effectiveSolidFonts },
-            set: { settings.solidFonts = $0 }
+            set: { engineSettings.solidFonts = $0 }
         )
     }
 
@@ -699,25 +733,23 @@ struct GameSettingsView: View {
     private var renderScaleBinding: Binding<RenderScale> {
         Binding(
             get: { effectiveRenderScale },
-            set: { settings.renderScale = $0 }
+            set: { engineSettings.renderScale = $0 }
         )
     }
 
     private func save() {
         settings.save(to: stateDirectory)
-        // Regenerate the merged mkxp.json so the engine
-        // sees the new values on next launch. Without this, edits
-        // here only land in game_settings.json (the host-side
-        // record) and the engine keeps reading the stale config it
-        // was launched with - making toggles like Smooth Scaling,
-        // Vsync, and Resolution appear to do nothing.
-        settings.applyToConfig(stateDirectory: stateDirectory, gameDirectory: gameDirectory)
+        engineSettings.save(to: stateDirectory, gameDirectory: gameDirectory)
     }
 
     private func resetToDefaults() {
         withAnimation {
             settings = GameSettings()
             defaults = GameSettings.readGameDefaults(from: gameDirectory)
+            engineSettings.resetToDefaults(
+                gameDirectory: gameDirectory,
+                stateDirectory: stateDirectory
+            )
         }
         Task {
             refreshAutoDetection(forceRefresh: true)

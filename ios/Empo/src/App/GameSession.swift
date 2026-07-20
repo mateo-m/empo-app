@@ -68,7 +68,13 @@ enum GameSession {
             }
         }
 
-        settings.applyToConfig(stateDirectory: stateDir, gameDirectory: gameDir)
+        // Engine config lives in EmpoState/mkxp.json; migrate any
+        // legacy engine keys out of game_settings.json once.
+        GameSettings.migrateLegacyEngineSettingsIfNeeded(
+            stateDirectory: stateDir,
+            gameDirectory: gameDir
+        )
+
         PatcherDistribution.applyToGame(container: container)
 
         crashTracker.writeMarker(for: container)

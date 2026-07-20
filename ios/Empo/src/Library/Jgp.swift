@@ -161,15 +161,23 @@ enum Jgp {
 // MARK: - Configuration -> GameSettings mapping
 
 extension JgpConfiguration {
+    /// Engine keys that belong in `EmpoState/mkxp.json`.
+    func toMkxpEngineValues() -> MkxpEngineValues {
+        MkxpEngineValues(
+            smoothScaling: smoothScaling,
+            frameSkip: frameSkip,
+            vsync: vsync,
+            pathCache: pathCache,
+            fontScale: fontScale.flatMap(Double.init),
+            solidFonts: solidFonts
+        )
+    }
+
     /// Translate a JGP `configuration.json` into our per-game `GameSettings`.
     /// Anything unsupported on iOS is ignored (`renpy_*`, `useRuby18`, etc.).
+    /// Engine keys route through `toMkxpEngineValues()` into mkxp.json.
     func toGameSettings() -> GameSettings {
         var s = GameSettings()
-        s.smoothScaling = smoothScaling
-        s.vsync = vsync
-        s.frameSkip = frameSkip
-        s.solidFonts = solidFonts
-        s.pathCache = pathCache
         // Intentionally NOT mapping `enablePostloadScripts` onto our
         // `postloadScripts` setting. JoiPlay's flag controls its own
         // JoiPlay-specific postload hooks; ours controls the engine's
@@ -180,9 +188,6 @@ extension JgpConfiguration {
         // depend on our compat shims to boot, so leave our postload
         // path enabled by default.
 
-        if let scaleStr = fontScale, let scale = Double(scaleStr) {
-            s.fontScale = scale
-        }
         if let speedStr = speedUp, let speed = Int(speedStr), speed > 1 {
             s.speedMultiplier = speed
         }

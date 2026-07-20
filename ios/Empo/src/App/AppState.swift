@@ -88,6 +88,11 @@ class AppState {
         let userDataDir = container.userDataURL
         let stateDir = container.empoStateURL
 
+        GameSettings.migrateLegacyEngineSettingsIfNeeded(
+            stateDirectory: stateDir,
+            gameDirectory: gameDir
+        )
+
         var settings = GameSettings.load(from: stateDir)
         var metadata = GameMetadata.load(from: container)
         GameSession.refreshMetadataIfNeeded(
