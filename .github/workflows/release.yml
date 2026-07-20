@@ -209,11 +209,6 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: Configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
       - name: Update AltStore source
         run: |
           set -e
@@ -227,8 +222,6 @@ jobs:
             --date "$(date -u +%Y-%m-%d)" \
             --download-url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/${{ needs.build.outputs.ipa_name }}" \
             --description "$(cat changelog-section.md)"
-          git add altstore-source.json
-          git commit -m "sync AltStore source for v$VERSION"
 
       # The empo-v tag (pushed by release.sh alongside the v tag)
       # triggers the engine repo's engine-artifacts workflow. Wait for
@@ -264,14 +257,40 @@ jobs:
           PIN=ios/Dependencies/engine/.version
           sed -i "s/^ENGINE_VERSION=.*/ENGINE_VERSION=$ENGINE_TAG/" "$PIN"
           sed -i "s/^ENGINE_SHA256=.*/ENGINE_SHA256=$SHA256/" "$PIN"
-          git add "$PIN"
-          git commit -m "chore(engine): pin $ENGINE_TAG core prebuilt"
 
-      - name: Push manifest + pin commits
+      - name: Open release-sync PR
+        # Main requires signed commits + a reviewed, squash-merged PR;
+        # the bot can satisfy the signature only via API-created
+        # commits (GitHub signs those itself), and the review gate is
+        # deliberate — approving this PR is part of the release
+        # ritual. Auto-merge is armed so approval is the only click.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          for i in 1 2 3; do
-            git pull --rebase origin main && git push origin main && exit 0
-            sleep 5
-          done
-          exit 1
+          VERSION="${{ needs.build.outputs.version }}"
+          BRANCH="release-sync/v$VERSION"
+          HEAD="$(git rev-parse HEAD)"
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/heads/$BRANCH" -f sha="$HEAD"
+          ALTSTORE_B64="$(base64 < altstore-source.json | tr -d '\n')"
+          PIN_B64="$(base64 < ios/Dependencies/engine/.version | tr -d '\n')"
+          gh api graphql \
+            -F repo="$GITHUB_REPOSITORY" -F branch="$BRANCH" -F head="$HEAD" \
+            -F message="chore(release): sync AltStore source and engine pin for v$VERSION" \
+            -F path1="altstore-source.json" -F contents1="$ALTSTORE_B64" \
+            -F path2="ios/Dependencies/engine/.version" -F contents2="$PIN_B64" \
+            -f query='mutation($repo: String!, $branch: String!, $head: GitObjectID!, $message: String!, $path1: String!, $contents1: Base64String!, $path2: String!, $contents2: Base64String!) {
+              createCommitOnBranch(input: {
+                branch: {repositoryNameWithOwner: $repo, branchName: $branch},
+                expectedHeadOid: $head,
+                message: {headline: $message},
+                fileChanges: {additions: [{path: $path1, contents: $contents1}, {path: $path2, contents: $contents2}]}
+              }) { commit { oid } }
+            }'
+          PR_URL="$(gh pr create \
+            --head "$BRANCH" \
+            --title "chore(release): sync AltStore source and engine pin for v$VERSION" \
+            --body "Post-release metadata for v$VERSION: AltStore manifest entry (IPA size/URL/notes) and the engine prebuilt re-pin to \`empo-v$VERSION\`. Created by the Release workflow (run ${{ github.run_id }}); approving completes the release.")"
+          gh pr merge --auto --squash "$PR_URL" ||
+            echo "auto-merge unavailable; approve and squash-merge $PR_URL manually"

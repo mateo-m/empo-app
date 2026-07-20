@@ -72,9 +72,28 @@ echo "SHA256:   $SHA256"
 echo "Updated:  $VERSION_FILE"
 echo ""
 if [ "$PUBLISH" = "1" ]; then
-    echo "==> publishing to empo-deps as $TAG"
-    gh release create "$TAG" "$OUT" \
-        --repo mateo-m/empo-deps --title "native deps $TAG"
+    # Idempotent: a re-run after a partially-failed pipeline must not
+    # trip over the already-created release. Same content -> skip;
+    # different content under the same tag -> hard error (immutable
+    # pins must never be silently repointed).
+    if EXISTING_URL="$(gh release view "$TAG" --repo mateo-m/empo-deps \
+        --json assets --jq '.assets[] | select(.name == "native-ios-prebuilt.tar.gz") | .url' 2>/dev/null)" &&
+        [ -n "$EXISTING_URL" ]; then
+        EXISTING_SHA="$(gh release download "$TAG" --repo mateo-m/empo-deps \
+            --pattern native-ios-prebuilt.tar.gz --output - | shasum -a 256 | awk '{print $1}')"
+        if [ "$EXISTING_SHA" = "$SHA256" ]; then
+            echo "==> $TAG already published with identical content; skipping upload"
+        else
+            echo "error: $TAG already published with DIFFERENT content" >&2
+            echo "  published: $EXISTING_SHA" >&2
+            echo "  local:     $SHA256" >&2
+            exit 1
+        fi
+    else
+        echo "==> publishing to empo-deps as $TAG"
+        gh release create "$TAG" "$OUT" \
+            --repo mateo-m/empo-deps --title "native deps $TAG"
+    fi
 else
     echo "Upload:"
     echo "  gh release create $TAG \"$OUT\" --repo mateo-m/empo-deps --title \"native deps $TAG\""
