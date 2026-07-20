@@ -26,6 +26,11 @@ ios/Dependencies/ANGLE/.fetched-version
 # via ios/Dependencies/native/.version (tracked).
 ios/Dependencies/native/.fetched-version
 
+# Engine-core prebuilt (libmkxpz-core.a) — hydrated by
+# tools/fetch-engine-prebuilt.sh from mkxp-z-apple-mobile release assets.
+# Version-pinned via ios/Dependencies/engine/.version (tracked).
+ios/Dependencies/engine/.fetched-version
+
 # MetalANGLE.xcframework - unreferenced by the build, kept untracked
 # in case anything ever needs it. Currently not in the working tree.
 ios/Dependencies/Frameworks/
