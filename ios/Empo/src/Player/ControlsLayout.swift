@@ -66,7 +66,7 @@ enum ControlsOrientation: String, Codable {
 }
 
 private struct PersistedLayout: Codable {
-    struct DPad: Codable {
+    struct DPad: Codable, Equatable {
         var rx: CGFloat
         var ry: CGFloat
         var size: CGFloat
@@ -75,7 +75,7 @@ private struct PersistedLayout: Codable {
         /// loading without surprising transparency.
         var opacity: Double?
     }
-    struct Oriented: Codable {
+    struct Oriented: Codable, Equatable {
         var dpad: DPad
         var buttons: [ButtonModel]
     }
@@ -97,16 +97,23 @@ class ControlsLayout {
     static let shared = ControlsLayout()
 
     /// Stable identifier of the game these controls are currently
-    /// bound to. `switchGame(id:)` updates this; mutators save to the
-    /// corresponding per-game key. `nil` means no game is active;
-    /// mutations are kept in memory but not persisted.
+    /// bound to. `switchGame(id:container:)` updates this; mutators
+    /// save to the corresponding per-game file. `nil` means no game is
+    /// active; mutations are kept in memory but not persisted.
     private(set) var currentGameID: String?
+
+    /// Container for the active game (EmpoState paths). Set alongside
+    /// `currentGameID` in `switchGame`.
+    private(set) var currentContainer: GameContainer?
 
     /// Accepted developer manifest for the active game, if any.
     private(set) var activeManifest: ControlsManifest?
 
-    /// Error findings from a rejected `empo/controls.json`, for edit-mode surfacing.
+    /// Error findings from a rejected shipped `controls.json`, for edit-mode surfacing.
     private(set) var manifestRejectionErrorCount = 0
+
+    /// Error findings from a rejected `EmpoState/controls.json` user file.
+    private(set) var userControlsRejectionErrorCount = 0
 
     /// True when the active game ships an accepted manifest with a `touch` section.
     var hasManifestTouchSection: Bool {
@@ -212,7 +219,7 @@ class ControlsLayout {
     /// Bind the layout instance to a specific game's stored layout.
     /// Called from `AppState.selectGame(_:)` when a game starts, and
     /// again with `nil` from `returnToLibrary()` when the user exits.
-    func switchGame(id newGameID: String?, gameRoot: URL?) {
+    func switchGame(id newGameID: String?, container: GameContainer?) {
         if currentGameID != nil {
             save()
         }
@@ -220,12 +227,12 @@ class ControlsLayout {
         clearEditUndoStack()
         staggerGeneration += 1
         currentGameID = newGameID
-        loadManifest(from: gameRoot)
-        if newGameID != nil {
-            if loadLayout() {
-                return
-            }
-            applyResolvedLayout()
+        currentContainer = container
+        userControlsRejectionErrorCount = 0
+        loadManifest(from: container?.gameURL)
+        if let container, newGameID != nil {
+            migrateLegacyPersistenceIfNeeded(container: container)
+            loadUserTouchLayout(from: container)
             return
         }
         applyDefaultsForCurrentOrientation()
@@ -265,50 +272,69 @@ class ControlsLayout {
         currentOrientation = new
     }
 
-    private var savedLayoutKey: String? {
-        guard let id = currentGameID else { return nil }
-        return DefaultsKey.controlsLayout(gameID: id)
-    }
-
-    /// Seed an initial layout for a game ID that isn't currently
-    /// active. Used by the JGP import path so the game starts with
-    /// the layout bundled in the archive rather than our defaults.
-    /// Overwrites any existing persisted layout, so only call during
-    /// first import. Marked `nonisolated` because it only writes to
-    /// UserDefaults and touches no instance state, which lets the
-    /// import pipeline (running on a background Task) seed layouts
-    /// without hopping to the main actor.
+    /// Seed an initial layout during JGP import. Writes
+    /// `EmpoState/controls.json` so the bundled gamepad layout wins
+    /// over shipped-manifest defaults without occupying UserDefaults.
     ///
     /// The bundled JGP layout is treated as the portrait layout; the
     /// landscape slot gets the engine default. Users can edit each
     /// independently after import.
     nonisolated static func writeInitialPerGameLayout(
-        gameID: String,
+        container: GameContainer,
         dpadCenter: CGPoint,
         dpadSize: CGFloat,
         dpadOpacity: Double = 1.0,
         buttons: [ButtonModel]
     ) {
-        let portrait = PersistedLayout.Oriented(
-            dpad: .init(
-                rx: dpadCenter.x, ry: dpadCenter.y,
-                size: dpadSize, opacity: dpadOpacity),
+        let portrait = orientedInput(
+            dpadCenter: dpadCenter,
+            dpadSize: dpadSize,
+            dpadOpacity: dpadOpacity,
             buttons: buttons
         )
-        let landscape = PersistedLayout.Oriented(
-            dpad: .init(
-                rx: defaultDPadCenterLandscape.x,
-                ry: defaultDPadCenterLandscape.y,
-                size: defaultDPadSize,
-                opacity: 1.0
-            ),
+        let landscape = orientedInput(
+            dpadCenter: defaultDPadCenterLandscape,
+            dpadSize: defaultDPadSize,
+            dpadOpacity: 1.0,
             buttons: defaultButtonsLandscape
         )
-        let layout = PersistedLayout(portrait: portrait, landscape: landscape)
-        guard let data = try? JSONEncoder().encode(layout) else { return }
-        UserDefaults.standard.set(
-            data,
-            forKey: DefaultsKey.controlsLayout(gameID: gameID))
+        let touch = ControlsManifestSerializer.touchSection(
+            portrait: portrait,
+            landscape: landscape,
+            onDroppedButton: { label, scancode in
+                NSLog(
+                    "controls.json: Dropped button \"\(label)\" (scancode \(scancode) has no key name)"
+                )
+            }
+        )
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil) else {
+            return
+        }
+        _ = UserControlsFile.write(data, in: container)
+    }
+
+    private nonisolated static func orientedInput(
+        dpadCenter: CGPoint,
+        dpadSize: CGFloat,
+        dpadOpacity: Double,
+        buttons: [ButtonModel]
+    ) -> ControlsManifestSerializer.TouchOrientedInput {
+        ControlsManifestSerializer.TouchOrientedInput(
+            dpadX: Double(dpadCenter.x),
+            dpadY: Double(dpadCenter.y),
+            dpadSize: Double(dpadSize),
+            dpadOpacity: dpadOpacity,
+            buttons: buttons.map { button in
+                ControlsManifestSerializer.TouchButtonInput(
+                    label: button.label,
+                    scancode: button.scancode,
+                    x: Double(button.relativeCenter.x),
+                    y: Double(button.relativeCenter.y),
+                    size: Double(button.size),
+                    opacity: button.opacity
+                )
+            }
+        )
     }
 
     // MARK: - Defaults
@@ -366,12 +392,13 @@ class ControlsLayout {
 
     // MARK: - Reset
 
-    /// Delete the per-game UserDefaults layout and reload via §9
-    /// precedence (manifest touch, else Empo defaults).
+    /// Remove the user touch layer and reload via §9 precedence
+    /// (manifest touch, else Empo defaults). Per-game controller
+    /// overrides in the same file are preserved.
     func resetToResolvedDefault() {
         recordEditSnapshot()
-        if let key = savedLayoutKey {
-            UserDefaults.standard.removeObject(forKey: key)
+        if let container = currentContainer {
+            _ = UserControlsFile.removeTouchSection(in: container)
         }
 
         let portrait = Self.resolveInitialLayout(manifest: activeManifest, orientation: .portrait)
@@ -507,14 +534,25 @@ class ControlsLayout {
 
     // MARK: - Persistence
 
-    /// Persist the current layout under the active game's per-game
-    /// key. No-op when `currentGameID` is nil.
-    ///
-    /// Saves BOTH orientations: the active one snapshotted from the
-    /// public `dpad*`/`buttons` properties, the inactive one
-    /// pulled from the private snapshot fields.
+    /// Persist the current layout to `EmpoState/controls.json`. No-op
+    /// when `currentContainer` is nil. Skips creating the file when
+    /// the player has no touch customizations and no per-game controller
+    /// overrides.
     func save() {
-        guard let key = savedLayoutKey else { return }
+        guard let container = currentContainer else { return }
+
+        let touch = hasTouchCustomization() ? currentTouchSection() : nil
+        let controller = ControllerMapStore.loadPerGame(container: container)
+
+        guard touch != nil || controller != nil else {
+            _ = UserControlsFile.write(nil, in: container)
+            return
+        }
+
+        _ = UserControlsFile.write(in: container, touch: touch, controller: controller)
+    }
+
+    private func currentPersistedLayout() -> PersistedLayout {
         let active = PersistedLayout.Oriented(
             dpad: .init(
                 rx: dpadRelativeCenter.x, ry: dpadRelativeCenter.y,
@@ -531,43 +569,189 @@ class ControlsLayout {
             ),
             buttons: inactiveButtons
         )
-        let layout: PersistedLayout
         switch currentOrientation {
         case .portrait:
-            layout = PersistedLayout(portrait: active, landscape: inactive)
+            return PersistedLayout(portrait: active, landscape: inactive)
         case .landscape:
-            layout = PersistedLayout(portrait: inactive, landscape: active)
-        }
-        if let data = try? JSONEncoder().encode(layout) {
-            UserDefaults.standard.set(data, forKey: key)
+            return PersistedLayout(portrait: inactive, landscape: active)
         }
     }
 
-    /// Load the active game's persisted layout into this instance.
-    /// Returns false if there's no saved layout for the current game
-    /// (so the caller can fall back to factory defaults).
-    ///
-    /// Tries V2 (per-orientation) first. Falls through to V1 (legacy
-    /// single-layout) and migrates: the V1 layout becomes the
-    /// portrait layout, landscape gets the engine default. Re-saves
-    /// in V2 shape on first successful migration so subsequent loads
-    /// take the V2 path.
-    @discardableResult
-    func loadLayout() -> Bool {
-        guard let key = savedLayoutKey,
-            let data = UserDefaults.standard.data(forKey: key)
-        else {
-            return false
+    private func hasTouchCustomization() -> Bool {
+        let current = currentPersistedLayout()
+        let defaultPortrait = Self.resolveInitialLayout(
+            manifest: activeManifest, orientation: .portrait)
+        let defaultLandscape = Self.resolveInitialLayout(
+            manifest: activeManifest, orientation: .landscape)
+        return !Self.layoutsEquivalent(current.portrait, defaultPortrait)
+            || !Self.layoutsEquivalent(current.landscape, defaultLandscape)
+    }
+
+    /// Equality that ignores `ButtonModel.id` — resolveInitialLayout mints
+    /// fresh UUIDs per call, so synthesized == would treat every
+    /// manifest-derived layout as customized.
+    private static func layoutsEquivalent(
+        _ a: PersistedLayout.Oriented,
+        _ b: PersistedLayout.Oriented
+    ) -> Bool {
+        guard a.dpad == b.dpad, a.buttons.count == b.buttons.count else { return false }
+        return zip(a.buttons, b.buttons).allSatisfy { lhs, rhs in
+            lhs.label == rhs.label && lhs.scancode == rhs.scancode
+                && lhs.relativeCenter == rhs.relativeCenter
+                && lhs.size == rhs.size && lhs.opacity == rhs.opacity
+        }
+    }
+
+    private func currentTouchSection() -> TouchSection {
+        let layout = currentPersistedLayout()
+        return ControlsManifestSerializer.touchSection(
+            portrait: Self.orientedInput(
+                dpadCenter: CGPoint(x: layout.portrait.dpad.rx, y: layout.portrait.dpad.ry),
+                dpadSize: layout.portrait.dpad.size,
+                dpadOpacity: layout.portrait.dpad.opacity ?? 1.0,
+                buttons: layout.portrait.buttons
+            ),
+            landscape: Self.orientedInput(
+                dpadCenter: CGPoint(x: layout.landscape.dpad.rx, y: layout.landscape.dpad.ry),
+                dpadSize: layout.landscape.dpad.size,
+                dpadOpacity: layout.landscape.dpad.opacity ?? 1.0,
+                buttons: layout.landscape.buttons
+            ),
+            onDroppedButton: { label, scancode in
+                NSLog(
+                    "controls.json: Dropped button \"\(label)\" (scancode \(scancode) has no key name)"
+                )
+            }
+        )
+    }
+
+    private func loadUserTouchLayout(from container: GameContainer) {
+        guard let result = UserControlsFile.load(in: container) else {
+            applyResolvedLayout()
+            return
         }
 
+        UserControlsFile.logFindings(result.findings, container: container)
+
+        let errors = result.findings.filter { $0.severity == .error }
+        if !errors.isEmpty {
+            userControlsRejectionErrorCount = errors.count
+            applyResolvedLayout()
+            return
+        }
+
+        guard let touch = result.manifest?.touch else {
+            applyResolvedLayout()
+            return
+        }
+
+        let portrait = orientedPersistedLayout(from: touch.portrait, orientation: .portrait)
+        let landscape = orientedPersistedLayout(from: touch.landscape, orientation: .landscape)
+        applyV2(PersistedLayout(portrait: portrait, landscape: landscape))
+    }
+
+    private func orientedPersistedLayout(
+        from layout: TouchLayout?,
+        orientation: ControlsOrientation
+    ) -> PersistedLayout.Oriented {
+        guard let layout else {
+            return Self.resolveInitialLayout(manifest: activeManifest, orientation: orientation)
+        }
+        return Self.oriented(from: layout, orientation: orientation, manifest: activeManifest)
+    }
+
+    private static func oriented(
+        from touchLayout: TouchLayout,
+        orientation: ControlsOrientation,
+        manifest: ControlsManifest?
+    ) -> PersistedLayout.Oriented {
+        let fallback = resolveInitialLayout(manifest: manifest, orientation: orientation)
+
+        let dpad: PersistedLayout.DPad
+        if let spec = touchLayout.dpad {
+            dpad = PersistedLayout.DPad(
+                rx: CGFloat(spec.x),
+                ry: CGFloat(spec.y),
+                size: CGFloat(spec.size ?? 140),
+                opacity: spec.opacity ?? 1.0
+            )
+        } else {
+            dpad = fallback.dpad
+        }
+
+        let buttons: [ButtonModel]
+        if let specs = touchLayout.buttons {
+            buttons = specs.compactMap { spec in
+                guard let scancode = KeyCodeTable.scancode(for: spec.key) else { return nil }
+                let label = spec.label ?? KeyCodeTable.displayName(for: spec.key) ?? spec.key
+                return ButtonModel(
+                    label: label,
+                    scancode: scancode,
+                    relativeCenter: CGPoint(x: spec.x, y: spec.y),
+                    size: CGFloat(spec.size ?? 56),
+                    opacity: spec.opacity ?? 1.0
+                )
+            }
+        } else {
+            buttons = fallback.buttons
+        }
+
+        return PersistedLayout.Oriented(dpad: dpad, buttons: buttons)
+    }
+
+    /// One-time migration from UserDefaults layout/controller keys.
+    private func migrateLegacyPersistenceIfNeeded(container: GameContainer) {
+        guard !UserControlsFile.exists(in: container) else { return }
+
+        let layoutKey = DefaultsKey.controlsLayout(gameID: container.id)
+        let mapKey = DefaultsKey.controllerMap(gameID: container.id)
+        let layoutData = UserDefaults.standard.data(forKey: layoutKey)
+        let hasMap = UserDefaults.standard.data(forKey: mapKey) != nil
+        guard layoutData != nil || hasMap else { return }
+
+        let touch: TouchSection?
+        if let layoutData, let layout = decodeLegacyLayout(data: layoutData) {
+            touch = ControlsManifestSerializer.touchSection(
+                portrait: Self.orientedInput(
+                    dpadCenter: CGPoint(x: layout.portrait.dpad.rx, y: layout.portrait.dpad.ry),
+                    dpadSize: layout.portrait.dpad.size,
+                    dpadOpacity: layout.portrait.dpad.opacity ?? 1.0,
+                    buttons: layout.portrait.buttons
+                ),
+                landscape: Self.orientedInput(
+                    dpadCenter: CGPoint(x: layout.landscape.dpad.rx, y: layout.landscape.dpad.ry),
+                    dpadSize: layout.landscape.dpad.size,
+                    dpadOpacity: layout.landscape.dpad.opacity ?? 1.0,
+                    buttons: layout.landscape.buttons
+                ),
+                onDroppedButton: { label, scancode in
+                    NSLog(
+                        "controls.json: Dropped button \"\(label)\" (scancode \(scancode) has no key name)"
+                    )
+                }
+            )
+        } else {
+            touch = nil
+        }
+
+        let controller = ControllerMapStore.decodeLegacyPerGameMap(gameID: container.id)
+
+        guard touch != nil || controller != nil else { return }
+
+        guard UserControlsFile.write(in: container, touch: touch, controller: controller) else {
+            return
+        }
+
+        UserDefaults.standard.removeObject(forKey: layoutKey)
+        UserDefaults.standard.removeObject(forKey: mapKey)
+    }
+
+    private func decodeLegacyLayout(data: Data) -> PersistedLayout? {
         if let v2 = try? JSONDecoder().decode(PersistedLayout.self, from: data) {
-            applyV2(v2)
-            return true
+            return v2
         }
 
         if let v1 = try? JSONDecoder().decode(PersistedLayoutV1.self, from: data) {
-            // Migrate V1 → V2: the saved layout becomes portrait;
-            // landscape gets defaults.
             let portrait = PersistedLayout.Oriented(dpad: v1.dpad, buttons: v1.buttons)
             let landscape = PersistedLayout.Oriented(
                 dpad: .init(
@@ -578,13 +762,10 @@ class ControlsLayout {
                 ),
                 buttons: Self.defaultButtonsLandscape
             )
-            applyV2(PersistedLayout(portrait: portrait, landscape: landscape))
-            // Re-save so next load takes the V2 path.
-            save()
-            return true
+            return PersistedLayout(portrait: portrait, landscape: landscape)
         }
 
-        return false
+        return nil
     }
 
     private func loadManifest(from gameRoot: URL?) {

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Per-game / global controller remap screen (ticket 005).
 struct ControllerRemapView: View {
-    let gameID: String?
+    let container: GameContainer?
     let gameTitle: String
     let manifest: ControllerMap?
     var controllerInput: ControllerInputManager
@@ -64,12 +64,12 @@ struct ControllerRemapView: View {
                     Button(resetTitle) {
                         showResetConfirm = true
                     }
-                    .disabled(!ControllerRemapCatalog.hasOverrides(scope: scope, gameID: gameID))
+                    .disabled(!ControllerRemapCatalog.hasOverrides(scope: scope, container: container))
                 }
             }
             .alert(resetTitle, isPresented: $showResetConfirm) {
                 Button("Reset", role: .destructive) {
-                    ControllerRemapCatalog.resetOverrides(scope: scope, gameID: gameID)
+                    ControllerRemapCatalog.resetOverrides(scope: scope, container: container)
                     refreshToken = UUID()
                 }
                 Button("Cancel", role: .cancel) {}
@@ -82,7 +82,7 @@ struct ControllerRemapView: View {
                     current: ControllerRemapCatalog.resolvedTarget(
                         element: element.id,
                         scope: scope,
-                        gameID: gameID,
+                        container: container,
                         manifest: manifest
                     )
                 ) { target in
@@ -90,7 +90,7 @@ struct ControllerRemapView: View {
                         element: element.id,
                         target: target,
                         scope: scope,
-                        gameID: gameID
+                        container: container
                     )
                     refreshToken = UUID()
                 }
@@ -137,13 +137,13 @@ struct ControllerRemapView: View {
         let target = ControllerRemapCatalog.resolvedTarget(
             element: element.id,
             scope: scope,
-            gameID: gameID,
+            container: container,
             manifest: manifest
         )
         let provenance = ControllerRemapCatalog.provenance(
             element: element.id,
             scope: scope,
-            gameID: gameID,
+            container: container,
             manifest: manifest
         )
         let bindingLabel = ControllerRemapCatalog.displayName(for: target)
@@ -186,7 +186,7 @@ struct ControllerRemapView: View {
                     ControllerRemapCatalog.removeOverride(
                         element: element.id,
                         scope: scope,
-                        gameID: gameID
+                        container: container
                     )
                     refreshToken = UUID()
                 }
@@ -198,7 +198,7 @@ struct ControllerRemapView: View {
                     ControllerRemapCatalog.removeOverride(
                         element: element.id,
                         scope: scope,
-                        gameID: gameID
+                        container: container
                     )
                     refreshToken = UUID()
                 }

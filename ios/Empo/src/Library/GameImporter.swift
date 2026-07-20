@@ -94,7 +94,7 @@ enum GameImporter {
             } else {
                 let seed = gamepad.toSeedLayout()
                 ControlsLayout.writeInitialPerGameLayout(
-                    gameID: container.id,
+                    container: container,
                     dpadCenter: seed.dpadCenter,
                     dpadSize: seed.dpadSize,
                     buttons: seed.buttons

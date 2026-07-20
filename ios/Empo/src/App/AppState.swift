@@ -73,7 +73,7 @@ class AppState {
         sessionHadError = false
         // Bind the controls layout to this game so edits during play
         // persist to this game's per-game slot (not a global one).
-        ControlsLayout.shared.switchGame(id: game.id, gameRoot: container.gameURL)
+        ControlsLayout.shared.switchGame(id: game.id, container: container)
         PauseManager.shared.reset()
         phase = .loading
 
@@ -165,7 +165,7 @@ class AppState {
         // reads it sees a neutral default, and mutations (shouldn't
         // happen, but still) don't write to the last-played game's
         // slot. `switchGame(nil)` also flushes any pending edits.
-        ControlsLayout.shared.switchGame(id: nil, gameRoot: nil)
+        ControlsLayout.shared.switchGame(id: nil, container: nil)
         engineReady = false
         PauseManager.shared.reset()
         phase = nil
@@ -314,7 +314,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
             sessionHadError = true
         }
         selectedGame = nil
-        ControlsLayout.shared.switchGame(id: nil, gameRoot: nil)
+        ControlsLayout.shared.switchGame(id: nil, container: nil)
         engineReady = false
         PauseManager.shared.reset()
     }

@@ -82,6 +82,19 @@ struct PlayerView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         .padding(.bottom, safeArea.bottom + Spacing.md)
                         .allowsHitTesting(false)
+                    } else if layout.userControlsRejectionErrorCount > 0 {
+                        let errorCount = layout.userControlsRejectionErrorCount
+                        let errorLabel = errorCount == 1 ? "error" : "errors"
+                        Text(
+                            "Your saved controls file has \(errorCount) \(errorLabel) — see Logs"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, Spacing.lg)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, safeArea.bottom + Spacing.md)
+                        .allowsHitTesting(false)
                     }
                 }
                 // Invisible tap layer that dismisses the keyboard when
@@ -211,7 +224,7 @@ struct PlayerView: View {
 
             controllerInput.pauseMenuHandler = { appState.togglePauseMenu() }
             ControllerMapBindings.applyRuntimeMap(
-                to: controllerInput, gameID: layout.currentGameID)
+                to: controllerInput, container: layout.currentContainer)
             controllerInput.start(controlsVisible: $controlsVisible, editMode: $editMode)
 
             // Load the per-game fast-forward multiplier (and re-push
@@ -244,12 +257,12 @@ struct PlayerView: View {
             controllerInput.stop()
             EngineSessionCoordinator.shared.clearTextInputModeHandler()
         }
-        .onChange(of: layout.currentGameID) { _, gameID in
-            ControllerMapBindings.applyRuntimeMap(to: controllerInput, gameID: gameID)
+        .onChange(of: layout.currentContainer) { _, container in
+            ControllerMapBindings.applyRuntimeMap(to: controllerInput, container: container)
         }
         .onReceive(NotificationCenter.default.publisher(for: .controllerMapDidChange)) { _ in
             ControllerMapBindings.applyRuntimeMap(
-                to: controllerInput, gameID: layout.currentGameID)
+                to: controllerInput, container: layout.currentContainer)
         }
         .onChange(of: pauseManager.snapshotCanFade) { _, canFade in
             if canFade && resumeSnapshot != nil {
@@ -280,7 +293,7 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showControllerRemap) {
             ControllerRemapView(
-                gameID: layout.currentGameID,
+                container: layout.currentContainer,
                 gameTitle: appState.selectedGame?.title ?? "Game",
                 manifest: layout.activeManifest?.controller,
                 controllerInput: controllerInput

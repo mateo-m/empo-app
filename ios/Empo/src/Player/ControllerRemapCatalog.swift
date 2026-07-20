@@ -144,12 +144,13 @@ enum ControllerRemapCatalog {
     static func provenance(
         element: String,
         scope: Scope,
-        gameID: String?,
+        container: GameContainer?,
         manifest: ControllerMap?
     ) -> Provenance? {
         switch scope {
         case .thisGame:
-            if let perGame = ControllerMapStore.loadPerGame(gameID: gameID ?? ""),
+            if let container,
+                let perGame = ControllerMapStore.loadPerGame(container: container),
                 perGame.entries[element] != nil
             {
                 return .userOverride
@@ -176,13 +177,13 @@ enum ControllerRemapCatalog {
     static func resolvedTarget(
         element: String,
         scope: Scope,
-        gameID: String?,
+        container: GameContainer?,
         manifest: ControllerMap?
     ) -> ControllerMap.Target? {
         let layers: [ControllerMap]
         switch scope {
         case .thisGame:
-            layers = ControllerMapBindings.overrideLayers(for: gameID)
+            layers = ControllerMapBindings.overrideLayers(for: container)
         case .allGames:
             layers = [ControllerMapStore.loadGlobal()].compactMap { $0 }
         }
@@ -194,14 +195,14 @@ enum ControllerRemapCatalog {
         element: String,
         target: ControllerMap.Target,
         scope: Scope,
-        gameID: String?
+        container: GameContainer?
     ) {
         switch scope {
         case .thisGame:
-            guard let gameID else { return }
-            var map = ControllerMapStore.loadPerGame(gameID: gameID) ?? ControllerMap()
+            guard let container else { return }
+            var map = ControllerMapStore.loadPerGame(container: container) ?? ControllerMap()
             map.entries[element] = target
-            ControllerMapStore.savePerGame(gameID: gameID, map: map)
+            ControllerMapStore.savePerGame(container: container, map: map)
         case .allGames:
             var map = ControllerMapStore.loadGlobal() ?? ControllerMap()
             map.entries[element] = target
@@ -212,18 +213,18 @@ enum ControllerRemapCatalog {
     static func removeOverride(
         element: String,
         scope: Scope,
-        gameID: String?
+        container: GameContainer?
     ) {
         switch scope {
         case .thisGame:
-            guard let gameID,
-                var map = ControllerMapStore.loadPerGame(gameID: gameID)
+            guard let container,
+                var map = ControllerMapStore.loadPerGame(container: container)
             else { return }
             map.entries.removeValue(forKey: element)
             if map.entries.isEmpty {
-                ControllerMapStore.deletePerGame(gameID: gameID)
+                ControllerMapStore.deletePerGame(container: container)
             } else {
-                ControllerMapStore.savePerGame(gameID: gameID, map: map)
+                ControllerMapStore.savePerGame(container: container, map: map)
             }
         case .allGames:
             guard var map = ControllerMapStore.loadGlobal() else { return }
@@ -236,21 +237,21 @@ enum ControllerRemapCatalog {
         }
     }
 
-    static func resetOverrides(scope: Scope, gameID: String?) {
+    static func resetOverrides(scope: Scope, container: GameContainer?) {
         switch scope {
         case .thisGame:
-            guard let gameID else { return }
-            ControllerMapStore.deletePerGame(gameID: gameID)
+            guard let container else { return }
+            ControllerMapStore.deletePerGame(container: container)
         case .allGames:
             ControllerMapStore.deleteGlobal()
         }
     }
 
-    static func hasOverrides(scope: Scope, gameID: String?) -> Bool {
+    static func hasOverrides(scope: Scope, container: GameContainer?) -> Bool {
         switch scope {
         case .thisGame:
-            guard let gameID else { return false }
-            return ControllerMapStore.loadPerGame(gameID: gameID) != nil
+            guard let container else { return false }
+            return ControllerMapStore.loadPerGame(container: container) != nil
         case .allGames:
             return ControllerMapStore.loadGlobal() != nil
         }

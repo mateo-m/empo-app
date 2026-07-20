@@ -5,7 +5,7 @@ import GameProbe
 /// input manager (SPEC §9). Call on game select and override changes.
 @MainActor
 enum ControllerMapBindings {
-    static func overrideLayers(for gameID: String?) -> [ControllerMap] {
+    static func overrideLayers(for container: GameContainer?) -> [ControllerMap] {
         var layers: [ControllerMap] = []
         if let global = ControllerMapStore.loadGlobal() {
             layers.append(global)
@@ -13,14 +13,14 @@ enum ControllerMapBindings {
         if let controller = ControlsLayout.shared.activeManifest?.controller {
             layers.append(controller)
         }
-        if let gameID, let perGame = ControllerMapStore.loadPerGame(gameID: gameID) {
+        if let container, let perGame = ControllerMapStore.loadPerGame(container: container) {
             layers.append(perGame)
         }
         return layers
     }
 
-    static func applyRuntimeMap(to manager: ControllerInputManager, gameID: String?) {
+    static func applyRuntimeMap(to manager: ControllerInputManager, container: GameContainer?) {
         manager.updateResolvedMap(
-            ControllerMapResolver.resolvedRuntimeMap(layers: overrideLayers(for: gameID)))
+            ControllerMapResolver.resolvedRuntimeMap(layers: overrideLayers(for: container)))
     }
 }

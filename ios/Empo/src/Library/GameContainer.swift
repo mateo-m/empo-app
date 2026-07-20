@@ -89,6 +89,11 @@ struct GameContainer: Equatable, Hashable {
         empoStateURL.appendingPathComponent("game_settings.json")
     }
 
+    /// Player-edited touch layout + per-game controller overrides (SPEC §3).
+    var userControlsURL: URL {
+        empoStateURL.appendingPathComponent("controls.json")
+    }
+
     var patchesURL: URL {
         empoStateURL.appendingPathComponent("patches.json")
     }
