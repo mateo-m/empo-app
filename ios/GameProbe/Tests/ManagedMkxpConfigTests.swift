@@ -37,18 +37,46 @@ final class ManagedMkxpConfigTests: XCTestCase {
         )
         let payload = try parseOverlayJSON(json)
         XCTAssertEqual(payload["fontScale"] as? Double, 1.5)
-        XCTAssertTrue(payload["defScreenW"] is NSNull)
-        XCTAssertTrue(payload["defScreenH"] is NSNull)
+        XCTAssertNil(payload["defScreenW"])
+        XCTAssertNil(payload["defScreenH"])
     }
 
-    func testOverlayStringAlwaysIncludesNullScreenPatchesWhenNonNil() throws {
+    func testOverlayStringNeutralizesScreenKeysTheBaseDefines() throws {
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
 
         try """
-            { "pathCache": false }
+            { "defScreenW": 640, "defScreenH": 480, "smoothScaling": 1 }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        // No user overlay at all: the neutralizing patches alone must
+        // still produce an overlay (regression: a plain desktop-shipped
+        // config would otherwise reach the engine with defScreen sizing).
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir
+            )
+        )
+        let payload = try parseOverlayJSON(json)
+        XCTAssertTrue(payload["defScreenW"] is NSNull)
+        XCTAssertTrue(payload["defScreenH"] is NSNull)
+        XCTAssertNil(payload["smoothScaling"])
+    }
+
+    func testOverlayStringHandAddedScreenKeyBeatsNullPatch() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "defScreenW": 640 }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try """
+            { "defScreenW": 800 }
             """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
 
         let json = try XCTUnwrap(
@@ -58,7 +86,28 @@ final class ManagedMkxpConfigTests: XCTestCase {
             )
         )
         let payload = try parseOverlayJSON(json)
-        XCTAssertEqual(payload["pathCache"] as? Bool, false)
+        XCTAssertEqual(payload["defScreenW"] as? Int, 800)
+    }
+
+    func testOverlayStringUnparseableBaseNeutralizesConservatively() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try "{ not json".write(
+            to: gameDir.appendingPathComponent("mkxp.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir
+            )
+        )
+        let payload = try parseOverlayJSON(json)
         XCTAssertTrue(payload["defScreenW"] is NSNull)
         XCTAssertTrue(payload["defScreenH"] is NSNull)
     }
@@ -83,7 +132,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(payload["syncToRefreshrate"] as? Bool, true)
         XCTAssertNil(payload["vsync"])
         XCTAssertTrue(payload["defScreenW"] is NSNull)
-        XCTAssertTrue(payload["defScreenH"] is NSNull)
+        XCTAssertNil(payload["defScreenH"])
     }
 
     func testOverlayStringUserSyncToRefreshrateBeatsVsyncPatch() throws {
@@ -143,6 +192,24 @@ final class ManagedMkxpConfigTests: XCTestCase {
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        XCTAssertNil(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir
+            )
+        )
+    }
+
+    func testOverlayStringNilForPlainBaseWithoutSpecialKeys() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "smoothScaling": 1, "patches": ["base.zip"] }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
 
         XCTAssertNil(
             ManagedMkxpConfig.overlayJSONString(

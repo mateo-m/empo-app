@@ -256,28 +256,42 @@ public enum ManagedMkxpConfig {
             }
         }
 
-        let base = loadBaseDict(from: gameDirectory) ?? [:]
+        let baseExists = FileManager.default.fileExists(
+            atPath: devConfigURL(in: gameDirectory).path)
+        let base = loadBaseDict(from: gameDirectory)
         var patches: [String: Any] = [:]
 
-        if base["vsync"] != nil,
-            base["syncToRefreshrate"] == nil,
-            overlay["syncToRefreshrate"] == nil,
-            overlay["vsync"] == nil,
-            let legacyVsync = base["vsync"] as? Bool
-        {
-            patches["syncToRefreshrate"] = legacyVsync
+        if let base {
+            // Neutralize desktop window sizing only when the base
+            // defines it, so a plain game sends no overlay at all.
+            if base["defScreenW"] != nil { patches["defScreenW"] = NSNull() }
+            if base["defScreenH"] != nil { patches["defScreenH"] = NSNull() }
+
+            if base["vsync"] != nil,
+                base["syncToRefreshrate"] == nil,
+                overlay["syncToRefreshrate"] == nil,
+                overlay["vsync"] == nil,
+                let legacyVsync = base["vsync"] as? Bool
+            {
+                patches["syncToRefreshrate"] = legacyVsync
+            }
+        } else if baseExists {
+            // The engine may parse a base the host cannot; neutralize
+            // conservatively (null on an absent key is harmless).
+            patches["defScreenW"] = NSNull()
+            patches["defScreenH"] = NSNull()
         }
 
         guard !overlay.isEmpty || !patches.isEmpty else {
             return nil
         }
 
-        var payload = overlay
-        for (key, value) in patches {
+        // Overlay wins over patches: a hand-added overlay key (for
+        // example an explicit defScreenW) is the user's call.
+        var payload = patches
+        for (key, value) in overlay {
             payload[key] = value
         }
-        payload["defScreenW"] = NSNull()
-        payload["defScreenH"] = NSNull()
 
         guard let data = try? JSONSerialization.data(
             withJSONObject: payload,
