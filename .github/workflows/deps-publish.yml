@@ -8,14 +8,15 @@
 # off after changing ios/Dependencies makefiles or dependency
 # submodule pins.
 #
-# Requires secret EMPO_DEPS_PUBLISH_TOKEN: write access to empo-deps
-# (contents: read+write on that repo), used to create the release.
-# The resulting pin lands as a PR on this repo, so nothing ships
-# until the pin change is reviewed and merged.
+# Shape: the two SDK trees build on PARALLEL runners (halving
+# wall-clock), then a stitch job verifies, packages, publishes, and
+# PRs the pin. Parallelism BETWEEN runners is safe — the "sequential,
+# no parallel races" rule in the rebuild scripts protects shared
+# state within one checkout, and each runner has its own.
 #
-# First-run caveat: the toolchain bootstrap (brew installs below) was
-# written from the makefiles' requirements, not a proven CI run —
-# adjust as the first execution demands.
+# Secrets:
+#   EMPO_DEPS_READ_TOKEN     read empo-deps (ANGLE headers for mkxp-core)
+#   EMPO_DEPS_PUBLISH_TOKEN  write empo-deps (create the release)
 
 name: deps-publish
 
@@ -35,9 +36,13 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  build-and-publish:
+  build-tree:
+    name: Build ${{ matrix.sdk }} tree
     runs-on: macos-latest
-    timeout-minutes: 360
+    timeout-minutes: 300
+    strategy:
+      matrix:
+        sdk: [iphoneos, iphonesimulator]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -58,8 +63,50 @@ jobs:
       - name: Install build toolchain
         run: brew install automake autoconf libtool cmake pkg-config bison
 
-      - name: Rebuild both dependency trees
-        run: scripts/rebuild-all-native-deps.sh
+      # mkxp-core (built at the end of the rebuild script) compiles
+      # against ANGLE headers.
+      - name: Hydrate ANGLE prebuilts
+        env:
+          GH_TOKEN: ${{ secrets.EMPO_DEPS_READ_TOKEN }}
+        run: tools/fetch-angle.sh
+
+      - name: Rebuild ${{ matrix.sdk }} tree
+        run: scripts/rebuild-${{ matrix.sdk == 'iphoneos' && 'device' || 'simulator' }}-deps.sh
+
+      - name: Pack tree
+        run: tar -czf "tree-${{ matrix.sdk }}.tar.gz" -C ios/Dependencies "build-${{ matrix.sdk }}-arm64"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deps-tree-${{ matrix.sdk }}
+          path: tree-${{ matrix.sdk }}.tar.gz
+
+  publish:
+    name: Verify, publish, PR pin
+    needs: build-tree
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      # Fingerprint verification hashes the engine tree.
+      - name: Checkout engine submodule
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive mkxp-z-apple-mobile
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: deps-tree-*
+          merge-multiple: true
+
+      - name: Unpack trees
+        run: |
+          set -e
+          tar -xzf tree-iphoneos.tar.gz -C ios/Dependencies
+          tar -xzf tree-iphonesimulator.tar.gz -C ios/Dependencies
 
       - name: Package + publish to empo-deps
         env:
