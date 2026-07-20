@@ -1,8 +1,8 @@
 import Foundation
 import GameProbe
 
-/// Live engine settings backed by `EmpoState/mkxp.json`. The eight
-/// projector keys are no longer stored in `game_settings.json`.
+/// Live engine settings backed by the sparse `EmpoState/mkxp.json`
+/// overlay. Effective values merge the overlay with `Game/mkxp.json`.
 struct EngineMkxpSettings: Equatable {
     var smoothScaling: Bool?
     var fixedAspectRatio: Bool?
@@ -17,6 +17,8 @@ struct EngineMkxpSettings: Equatable {
     /// parsed. Engine rows are read-only in this case.
     let isReadOnly: Bool
 
+    private let overlayProvenance: [MkxpEngineField: MkxpValueProvenance]
+
     init(
         smoothScaling: Bool? = nil,
         fixedAspectRatio: Bool? = nil,
@@ -26,7 +28,8 @@ struct EngineMkxpSettings: Equatable {
         pathCache: Bool? = nil,
         fontScale: Double? = nil,
         solidFonts: Bool? = nil,
-        isReadOnly: Bool = false
+        isReadOnly: Bool = false,
+        overlayProvenance: [MkxpEngineField: MkxpValueProvenance] = [:]
     ) {
         self.smoothScaling = smoothScaling
         self.fixedAspectRatio = fixedAspectRatio
@@ -37,15 +40,28 @@ struct EngineMkxpSettings: Equatable {
         self.fontScale = fontScale
         self.solidFonts = solidFonts
         self.isReadOnly = isReadOnly
+        self.overlayProvenance = overlayProvenance
     }
 
     static func load(from stateDirectory: URL, gameDirectory: URL) -> EngineMkxpSettings {
         let readOnly = ManagedMkxpConfig.isDevConfigUnparseable(gameDirectory: gameDirectory)
-        let values = ManagedMkxpConfig.readManaged(from: stateDirectory)
-        return EngineMkxpSettings(values: values, isReadOnly: readOnly)
+        let values = ManagedMkxpConfig.readOverlay(from: stateDirectory)
+        var provenance: [MkxpEngineField: MkxpValueProvenance] = [:]
+        for field in MkxpEngineField.allCases {
+            provenance[field] = ManagedMkxpConfig.provenance(for: field, stateDirectory: stateDirectory)
+        }
+        return EngineMkxpSettings(
+            values: values,
+            isReadOnly: readOnly,
+            overlayProvenance: provenance
+        )
     }
 
-    init(values: MkxpEngineValues, isReadOnly: Bool = false) {
+    init(
+        values: MkxpEngineValues,
+        isReadOnly: Bool = false,
+        overlayProvenance: [MkxpEngineField: MkxpValueProvenance] = [:]
+    ) {
         self.smoothScaling = values.smoothScaling
         self.fixedAspectRatio = values.fixedAspectRatio
         self.renderScale = Self.renderScale(from: values)
@@ -55,6 +71,11 @@ struct EngineMkxpSettings: Equatable {
         self.fontScale = values.fontScale
         self.solidFonts = values.solidFonts
         self.isReadOnly = isReadOnly
+        self.overlayProvenance = overlayProvenance
+    }
+
+    func provenance(for field: MkxpEngineField) -> MkxpValueProvenance {
+        overlayProvenance[field] ?? .game
     }
 
     var mkxpValues: MkxpEngineValues {
@@ -75,24 +96,7 @@ struct EngineMkxpSettings: Equatable {
     }
 
     func hasOverrides(devDefaults: GameConfigDefaults) -> Bool {
-        effectiveBool(smoothScaling, devDefaults.smoothScaling, GameConfigDefaults.engineSmoothScaling)
-            != (devDefaults.smoothScaling ?? GameConfigDefaults.engineSmoothScaling)
-            || effectiveBool(
-                fixedAspectRatio, devDefaults.fixedAspectRatio, GameConfigDefaults.engineFixedAspectRatio
-            )
-                != (devDefaults.fixedAspectRatio ?? GameConfigDefaults.engineFixedAspectRatio)
-            || effectiveRenderScale(devDefaults)
-                != (devDefaults.renderScale ?? GameConfigDefaults.engineRenderScale)
-            || effectiveBool(frameSkip, devDefaults.frameSkip, GameConfigDefaults.engineFrameSkip)
-                != (devDefaults.frameSkip ?? GameConfigDefaults.engineFrameSkip)
-            || effectiveBool(vsync, devDefaults.vsync, GameConfigDefaults.engineVsync)
-                != (devDefaults.vsync ?? GameConfigDefaults.engineVsync)
-            || effectiveBool(pathCache, devDefaults.pathCache, GameConfigDefaults.enginePathCache)
-                != (devDefaults.pathCache ?? GameConfigDefaults.enginePathCache)
-            || effectiveDouble(fontScale, devDefaults.fontScale, GameConfigDefaults.engineFontScale)
-                != (devDefaults.fontScale ?? GameConfigDefaults.engineFontScale)
-            || effectiveBool(solidFonts, devDefaults.solidFonts, GameConfigDefaults.engineSolidFonts)
-                != (devDefaults.solidFonts ?? GameConfigDefaults.engineSolidFonts)
+        MkxpEngineField.allCases.contains { provenance(for: $0) == .yours }
     }
 
     func save(to stateDirectory: URL, gameDirectory: URL) {
@@ -104,13 +108,25 @@ struct EngineMkxpSettings: Equatable {
         )
     }
 
+    mutating func resetField(
+        _ field: MkxpEngineField,
+        gameDirectory: URL,
+        stateDirectory: URL
+    ) {
+        guard !isReadOnly else { return }
+        ManagedMkxpConfig.resetField(
+            field,
+            stateDirectory: stateDirectory,
+            gameDirectory: gameDirectory
+        )
+        self = EngineMkxpSettings.load(from: stateDirectory, gameDirectory: gameDirectory)
+    }
+
     mutating func resetToDefaults(gameDirectory: URL, stateDirectory: URL) {
         guard !isReadOnly else { return }
-        let devDefaults = ManagedMkxpConfig.readGameDefaults(from: gameDirectory)
         ManagedMkxpConfig.resetAllEngineFields(
             stateDirectory: stateDirectory,
-            gameDirectory: gameDirectory,
-            devDefaults: devDefaults
+            gameDirectory: gameDirectory
         )
         self = EngineMkxpSettings.load(from: stateDirectory, gameDirectory: gameDirectory)
     }
@@ -126,18 +142,6 @@ struct EngineMkxpSettings: Equatable {
         if fontScale != other.fontScale { changed.append("Font scale") }
         if solidFonts != other.solidFonts { changed.append("Solid fonts") }
         return changed
-    }
-
-    private func effectiveBool(_ value: Bool?, _ dev: Bool?, _ engine: Bool) -> Bool {
-        value ?? dev ?? engine
-    }
-
-    private func effectiveDouble(_ value: Double?, _ dev: Double?, _ engine: Double) -> Double {
-        value ?? dev ?? engine
-    }
-
-    private func effectiveRenderScale(_ devDefaults: GameConfigDefaults) -> RenderScale {
-        renderScale ?? devDefaults.renderScale ?? GameConfigDefaults.engineRenderScale
     }
 
     private static func renderScale(from values: MkxpEngineValues) -> RenderScale? {

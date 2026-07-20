@@ -1,8 +1,8 @@
 import Foundation
 import GameProbe
 
-/// Merges `GameSettings` overrides into the per-game managed
-/// `EmpoState/mkxp.json` and reads developer defaults from
+/// Composes the engine config from `Game/mkxp.json` + the sparse
+/// `EmpoState/mkxp.json` overlay and reads developer defaults from
 /// `Game/mkxp.json`.
 enum EngineConfigProjector {
     static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
@@ -11,29 +11,32 @@ enum EngineConfigProjector {
         )
     }
 
-    /// One-time import seed: copy `Game/mkxp.json` into the managed
-    /// config with projector normalizations. Does not regenerate on
-    /// every boot.
     @discardableResult
-    static func seedManagedConfig(
+    static func composeManagedConfig(
         stateDirectory: URL,
         gameDirectory: URL
-    ) -> Bool {
-        ManagedMkxpConfig.seed(from: gameDirectory, to: stateDirectory)
+    ) -> ComposeResult {
+        ManagedMkxpConfig.compose(
+            gameDirectory: gameDirectory,
+            stateDirectory: stateDirectory
+        )
     }
 
-    /// Overlay engine values onto the managed config (JGP import).
+    /// Overlay engine values (JGP import) then compose.
     @discardableResult
     static func applyEngineValues(
         _ values: MkxpEngineValues,
         stateDirectory: URL,
         gameDirectory: URL
     ) -> Bool {
-        ManagedMkxpConfig.project(
-            devBaseFrom: gameDirectory,
-            overrides: values,
-            to: stateDirectory
-        )
+        guard ManagedMkxpConfig.writeOverlay(overrides: values, stateDirectory: stateDirectory)
+        else {
+            return false
+        }
+        return ManagedMkxpConfig.compose(
+            gameDirectory: gameDirectory,
+            stateDirectory: stateDirectory
+        ) != .readOnly
     }
 
     static func migrateLegacyEngineSettingsIfNeeded(

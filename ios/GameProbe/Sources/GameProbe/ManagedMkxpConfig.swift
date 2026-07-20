@@ -96,6 +96,19 @@ public enum MkxpEngineField: String, CaseIterable, Sendable {
     case solidFonts
 }
 
+/// Whether an engine setting row's effective value comes from the game
+/// base (`Game/mkxp.json` or engine default) or the user's overlay.
+public enum MkxpValueProvenance: Equatable, Sendable {
+    case game
+    case yours
+}
+
+public enum ComposeResult: Equatable, Sendable {
+    case composed
+    case noSource
+    case readOnly
+}
+
 /// Keys that used to live in `game_settings.json` before the mkxp accessor
 /// migration. Used for one-time idempotent migration.
 public enum ManagedMkxpConfig {
@@ -112,19 +125,35 @@ public enum ManagedMkxpConfig {
 
     private static let configFilename = "mkxp.json"
     private static let settingsFilename = "game_settings.json"
+    private static let engineDirectoryName = ".engine"
 
-    // MARK: - Read
+    // MARK: - Paths
 
-    public static func managedConfigURL(in stateDirectory: URL) -> URL {
+    public static func overlayConfigURL(in stateDirectory: URL) -> URL {
         stateDirectory.appendingPathComponent(configFilename)
+    }
+
+    /// Sparse overlay at `EmpoState/mkxp.json`.
+    public static func managedConfigURL(in stateDirectory: URL) -> URL {
+        overlayConfigURL(in: stateDirectory)
     }
 
     public static func devConfigURL(in gameDirectory: URL) -> URL {
         gameDirectory.appendingPathComponent(configFilename)
     }
 
+    public static func engineConfigDirectory(in stateDirectory: URL) -> URL {
+        stateDirectory.appendingPathComponent(engineDirectoryName, isDirectory: true)
+    }
+
+    public static func composedConfigURL(in stateDirectory: URL) -> URL {
+        engineConfigDirectory(in: stateDirectory).appendingPathComponent(configFilename)
+    }
+
+    // MARK: - Read
+
     /// True when `Game/mkxp.json` exists but cannot be parsed. Engine rows
-    /// are read-only in this case and no managed copy is written.
+    /// are read-only in this case and no composed copy is written.
     public static func isDevConfigUnparseable(gameDirectory: URL) -> Bool {
         let sourceURL = devConfigURL(in: gameDirectory)
         guard FileManager.default.fileExists(atPath: sourceURL.path) else { return false }
@@ -132,14 +161,59 @@ public enum ManagedMkxpConfig {
         return parseJSONWithComments(raw) == nil
     }
 
-    public static func readManaged(from stateDirectory: URL) -> MkxpEngineValues {
-        let configURL = managedConfigURL(in: stateDirectory)
-        guard let raw = try? String(contentsOf: configURL, encoding: .utf8),
-            let config = parseJSONWithComments(raw)
-        else {
+    /// Values stored in the sparse overlay only (missing keys are nil).
+    public static func readOverlay(from stateDirectory: URL) -> MkxpEngineValues {
+        guard let overlay = loadOverlayDict(from: stateDirectory) else {
             return MkxpEngineValues()
         }
-        return values(from: config)
+        return values(from: overlay)
+    }
+
+    /// Effective values after merging `Game/mkxp.json` with the overlay.
+    public static func readEffective(
+        stateDirectory: URL,
+        gameDirectory: URL
+    ) -> MkxpEngineValues {
+        let base = loadBaseDict(from: gameDirectory) ?? [:]
+        let overlay = loadOverlayDict(from: stateDirectory) ?? [:]
+        var merged = base
+        for (key, value) in overlay {
+            merged[key] = value
+        }
+        return values(from: merged)
+    }
+
+    public static func provenance(
+        for field: MkxpEngineField,
+        stateDirectory: URL
+    ) -> MkxpValueProvenance {
+        overlayDefines(field, in: stateDirectory) ? .yours : .game
+    }
+
+    public static func overlayDefines(_ field: MkxpEngineField, in stateDirectory: URL) -> Bool {
+        guard let overlay = loadOverlayDict(from: stateDirectory) else { return false }
+        switch field {
+        case .smoothScaling:
+            return overlay["smoothScaling"] != nil
+        case .fixedAspectRatio:
+            return overlay["fixedAspectRatio"] != nil
+        case .renderScale:
+            return overlay["enableHires"] != nil || overlay["framebufferScalingFactor"] != nil
+        case .frameSkip:
+            return overlay["frameSkip"] != nil
+        case .vsync:
+            return overlay["syncToRefreshrate"] != nil || overlay["vsync"] != nil
+        case .pathCache:
+            return overlay["pathCache"] != nil
+        case .fontScale:
+            return overlay["fontScale"] != nil
+        case .solidFonts:
+            return overlay["solidFonts"] != nil
+        }
+    }
+
+    public static func readManaged(from stateDirectory: URL) -> MkxpEngineValues {
+        readOverlay(from: stateDirectory)
     }
 
     public static func readGameDefaults(from gameDirectory: URL) -> MkxpGameDefaults {
@@ -163,52 +237,68 @@ public enum ManagedMkxpConfig {
         )
     }
 
-    // MARK: - Seed / project
+    // MARK: - Compose
 
-    /// Project `Game/mkxp.json` into `EmpoState/mkxp.json` with the same
-    /// normalizations the old per-boot projector applied. Returns `false`
-    /// when the developer file exists but does not parse (no managed copy
-    /// is written and any stale managed file is removed).
+    /// Merge base + overlay into `EmpoState/.engine/mkxp.json`.
     @discardableResult
-    public static func seed(from gameDirectory: URL, to stateDirectory: URL) -> Bool {
-        project(
-            devBaseFrom: gameDirectory,
-            overrides: MkxpEngineValues(),
-            to: stateDirectory
-        )
-    }
+    public static func compose(
+        gameDirectory: URL,
+        stateDirectory: URL
+    ) -> ComposeResult {
+        let composedURL = composedConfigURL(in: stateDirectory)
+        let engineDir = engineConfigDirectory(in: stateDirectory)
+        let baseURL = devConfigURL(in: gameDirectory)
+        let baseExists = FileManager.default.fileExists(atPath: baseURL.path)
+        let overlay = loadOverlayDict(from: stateDirectory) ?? [:]
 
-    /// Merge developer base + optional overrides into the managed config.
-    /// Used for import-time JGP overlays and legacy migration.
-    @discardableResult
-    public static func project(
-        devBaseFrom gameDirectory: URL,
-        overrides: MkxpEngineValues,
-        to stateDirectory: URL
-    ) -> Bool {
-        let configURL = managedConfigURL(in: stateDirectory)
-        let sourceURL = devConfigURL(in: gameDirectory)
-
-        var config: [String: Any] = [:]
-        if FileManager.default.fileExists(atPath: sourceURL.path) {
-            guard let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
+        var baseConfig: [String: Any]?
+        if baseExists {
+            guard let raw = try? String(contentsOf: baseURL, encoding: .utf8),
                 let parsed = parseJSONWithComments(raw)
             else {
-                try? FileManager.default.removeItem(at: configURL)
-                return false
+                try? FileManager.default.removeItem(at: composedURL)
+                return .readOnly
             }
-            config = parsed
+            baseConfig = parsed
         }
 
-        applyNormalizations(to: &config)
-        applyOverrides(overrides, to: &config)
-        return writeConfig(config, to: configURL)
+        if baseConfig == nil && overlay.isEmpty {
+            try? FileManager.default.removeItem(at: composedURL)
+            return .noSource
+        }
+
+        var composed = baseConfig ?? [:]
+        for (key, value) in overlay {
+            composed[key] = value
+        }
+        applyNormalizations(to: &composed)
+
+        do {
+            try FileManager.default.createDirectory(at: engineDir, withIntermediateDirectories: true)
+        } catch {
+            return .readOnly
+        }
+
+        guard writeConfig(composed, to: composedURL) else {
+            return .readOnly
+        }
+        return .composed
     }
 
-    // MARK: - Read-modify-write
+    // MARK: - Overlay writes
 
-    /// Parse the managed config (or the developer base when missing),
-    /// apply `overrides` for only the non-nil fields, and write back.
+    /// Write only the non-nil override fields into the sparse overlay.
+    @discardableResult
+    public static func writeOverlay(
+        overrides: MkxpEngineValues,
+        stateDirectory: URL
+    ) -> Bool {
+        var overlay = loadOverlayDict(from: stateDirectory) ?? [:]
+        applyOverrides(overrides, to: &overlay)
+        return persistOverlay(overlay, to: stateDirectory)
+    }
+
+    /// Back-compat name for overlay writes from Game Settings.
     @discardableResult
     public static func updateManaged(
         overrides: MkxpEngineValues,
@@ -216,83 +306,41 @@ public enum ManagedMkxpConfig {
         gameDirectory: URL
     ) -> Bool {
         if isDevConfigUnparseable(gameDirectory: gameDirectory) { return false }
-
-        let configURL = managedConfigURL(in: stateDirectory)
-        var config = loadManagedOrDevBase(stateDirectory: stateDirectory, gameDirectory: gameDirectory)
-            ?? [:]
-        applyNormalizations(to: &config)
-        applyOverrides(overrides, to: &config)
-        return writeConfig(config, to: configURL)
+        guard writeOverlay(overrides: overrides, stateDirectory: stateDirectory) else {
+            return false
+        }
+        return compose(gameDirectory: gameDirectory, stateDirectory: stateDirectory) != .readOnly
     }
 
-    /// Reset one engine field to the game's default: copy the developer
-    /// value when `Game/mkxp.json` defines it, otherwise remove the key.
+    /// Remove one engine field from the overlay (fall through to base).
     @discardableResult
     public static func resetField(
         _ field: MkxpEngineField,
         stateDirectory: URL,
-        gameDirectory: URL,
-        devDefaults: MkxpGameDefaults
+        gameDirectory: URL
     ) -> Bool {
         if isDevConfigUnparseable(gameDirectory: gameDirectory) { return false }
 
-        let configURL = managedConfigURL(in: stateDirectory)
-        var config = loadManagedOrDevBase(stateDirectory: stateDirectory, gameDirectory: gameDirectory)
-            ?? [:]
-        applyNormalizations(to: &config)
-        clearField(field, in: &config)
-
-        if devDefaults.defines(field) {
-            let devValues = MkxpEngineValues(
-                smoothScaling: devDefaults.smoothScaling,
-                fixedAspectRatio: devDefaults.fixedAspectRatio,
-                renderScaleEnableHires: devDefaults.renderScaleEnableHires,
-                renderScaleFramebufferFactor: devDefaults.renderScaleFramebufferFactor,
-                frameSkip: devDefaults.frameSkip,
-                vsync: devDefaults.vsync,
-                pathCache: devDefaults.pathCache,
-                fontScale: devDefaults.fontScale,
-                solidFonts: devDefaults.solidFonts
-            )
-            applyOverrides(devValues, to: &config, only: [field])
-        }
-
-        return writeConfig(config, to: configURL)
+        var overlay = loadOverlayDict(from: stateDirectory) ?? [:]
+        clearField(field, in: &overlay)
+        guard persistOverlay(overlay, to: stateDirectory) else { return false }
+        return compose(gameDirectory: gameDirectory, stateDirectory: stateDirectory) != .readOnly
     }
 
     /// Reset every engine field (Reset to Defaults in Game Settings).
     @discardableResult
     public static func resetAllEngineFields(
         stateDirectory: URL,
-        gameDirectory: URL,
-        devDefaults: MkxpGameDefaults
+        gameDirectory: URL
     ) -> Bool {
         if isDevConfigUnparseable(gameDirectory: gameDirectory) { return false }
 
-        let configURL = managedConfigURL(in: stateDirectory)
-        var config = loadManagedOrDevBase(stateDirectory: stateDirectory, gameDirectory: gameDirectory)
-            ?? [:]
-        applyNormalizations(to: &config)
-
+        var overlay = loadOverlayDict(from: stateDirectory) ?? [:]
         for field in MkxpEngineField.allCases {
-            clearField(field, in: &config)
-            if devDefaults.defines(field) {
-                let devValues = MkxpEngineValues(
-                    smoothScaling: devDefaults.smoothScaling,
-                    fixedAspectRatio: devDefaults.fixedAspectRatio,
-                    renderScaleEnableHires: devDefaults.renderScaleEnableHires,
-                    renderScaleFramebufferFactor: devDefaults.renderScaleFramebufferFactor,
-                    frameSkip: devDefaults.frameSkip,
-                    vsync: devDefaults.vsync,
-                    pathCache: devDefaults.pathCache,
-                    fontScale: devDefaults.fontScale,
-                    solidFonts: devDefaults.solidFonts
-                )
-                applyOverrides(devValues, to: &config, only: [field])
-            }
+            clearField(field, in: &overlay)
         }
-
-        return writeConfig(config, to: configURL)
+        guard persistOverlay(overlay, to: stateDirectory) else { return false }
+        return compose(gameDirectory: gameDirectory, stateDirectory: stateDirectory) != .readOnly
     }
 
     // MARK: - Legacy migration
@@ -307,10 +355,9 @@ public enum ManagedMkxpConfig {
         return legacyGameSettingsKeys.contains { json[$0] != nil }
     }
 
-    /// One-time migration: project legacy `game_settings.json` engine keys
-    /// into `EmpoState/mkxp.json`, then strip those keys from the sidecar.
-    /// Idempotent when no legacy keys remain. Never deletes keys unless
-    /// projection succeeds.
+    /// One-time migration: build a sparse overlay from legacy
+    /// `game_settings.json` engine keys, replace `EmpoState/mkxp.json`,
+    /// strip those keys from the sidecar, then compose.
     @discardableResult
     public static func migrateLegacyEngineSettingsIfNeeded(
         stateDirectory: URL,
@@ -328,7 +375,11 @@ public enum ManagedMkxpConfig {
         }
 
         let overrides = legacyValues(from: json)
-        guard project(devBaseFrom: gameDirectory, overrides: overrides, to: stateDirectory) else {
+        guard writeSparseOverlay(overrides, to: stateDirectory) else {
+            return false
+        }
+
+        guard compose(gameDirectory: gameDirectory, stateDirectory: stateDirectory) != .readOnly else {
             return false
         }
 
@@ -355,17 +406,7 @@ public enum ManagedMkxpConfig {
         JSON5LiteParser.parseObject(raw)
     }
 
-    private static func loadManagedOrDevBase(
-        stateDirectory: URL,
-        gameDirectory: URL
-    ) -> [String: Any]? {
-        let managedURL = managedConfigURL(in: stateDirectory)
-        if let raw = try? String(contentsOf: managedURL, encoding: .utf8),
-            let parsed = parseJSONWithComments(raw)
-        {
-            return parsed
-        }
-
+    private static func loadBaseDict(from gameDirectory: URL) -> [String: Any]? {
         let devURL = devConfigURL(in: gameDirectory)
         guard FileManager.default.fileExists(atPath: devURL.path),
             let raw = try? String(contentsOf: devURL, encoding: .utf8),
@@ -374,6 +415,55 @@ public enum ManagedMkxpConfig {
             return nil
         }
         return parsed
+    }
+
+    private static func loadOverlayDict(from stateDirectory: URL) -> [String: Any]? {
+        let overlayURL = overlayConfigURL(in: stateDirectory)
+        guard let raw = try? String(contentsOf: overlayURL, encoding: .utf8),
+            let parsed = parseJSONWithComments(raw)
+        else {
+            return nil
+        }
+        return parsed
+    }
+
+    @discardableResult
+    private static func writeSparseOverlay(
+        _ overrides: MkxpEngineValues,
+        to stateDirectory: URL
+    ) -> Bool {
+        var overlay: [String: Any] = [:]
+        applyOverrides(overrides, to: &overlay)
+        return persistOverlay(overlay, to: stateDirectory)
+    }
+
+    @discardableResult
+    private static func persistOverlay(
+        _ overlay: [String: Any],
+        to stateDirectory: URL
+    ) -> Bool {
+        let sanitized = sanitizeOverlay(overlay)
+        let url = overlayConfigURL(in: stateDirectory)
+        if sanitized.isEmpty {
+            try? FileManager.default.removeItem(at: url)
+            return true
+        }
+        return writeConfig(sanitized, to: url)
+    }
+
+    private static func sanitizeOverlay(_ overlay: [String: Any]) -> [String: Any] {
+        let allowedKeys: Set<String> = [
+            "smoothScaling",
+            "fixedAspectRatio",
+            "enableHires",
+            "framebufferScalingFactor",
+            "frameSkip",
+            "syncToRefreshrate",
+            "pathCache",
+            "fontScale",
+            "solidFonts",
+        ]
+        return overlay.filter { allowedKeys.contains($0.key) }
     }
 
     private static func applyNormalizations(to config: inout [String: Any]) {

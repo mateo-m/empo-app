@@ -1,3 +1,4 @@
+import GameProbe
 import SwiftUI
 
 /// Per-game Ruby interpreter version selection exposed in the
@@ -341,69 +342,81 @@ struct GameSettingsView: View {
             }
 
             Group {
-                SettingsToggle(
-                    title: "Smooth scaling",
-                    isOn: smoothScalingBinding,
-                    description:
-                        "Use bilinear filtering when upscaling. Disable for a pixel-perfect look."
-                )
-
-                SettingsToggle(
-                    title: "Fixed aspect ratio",
-                    isOn: fixedAspectRatioBinding,
-                    description:
-                        "Preserve the game's proportions instead of stretching to fill the screen."
-                )
-
-                SettingsToggle(
-                    title: "VSync",
-                    isOn: vsyncBinding,
-                    description:
-                        "Synchronize rendering with the display refresh rate to reduce tearing."
-                )
-
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Picker("Render scale", selection: renderScaleBinding) {
-                        ForEach(RenderScale.allCases, id: \.self) { scale in
-                            Text(scale.label).tag(scale)
-                        }
-                    }
-                    .pickerStyle(.navigationLink)
-
-                    Text(
-                        effectiveRenderScale.description
-                            + " The game's aspect ratio and on-screen layout are unchanged - this only sharpens the rendering on high-DPI screens."
+                engineFieldRow(.smoothScaling) {
+                    SettingsToggle(
+                        title: "Smooth scaling",
+                        isOn: smoothScalingBinding,
+                        description:
+                            "Use bilinear filtering when upscaling. Disable for a pixel-perfect look."
                     )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
                 }
-                .padding(.vertical, Spacing.xxs)
 
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    HStack {
-                        Text("Font scale")
-                        Spacer()
-                        Text(String(format: "%.1fx", effectiveFontScale))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                    Slider(
-                        value: fontScaleBinding,
-                        in: 0.5...2.0,
-                        step: 0.1
+                engineFieldRow(.fixedAspectRatio) {
+                    SettingsToggle(
+                        title: "Fixed aspect ratio",
+                        isOn: fixedAspectRatioBinding,
+                        description:
+                            "Preserve the game's proportions instead of stretching to fill the screen."
                     )
-                    Text("Scale all in-game text. 1.0x is the default size.")
+                }
+
+                engineFieldRow(.vsync) {
+                    SettingsToggle(
+                        title: "VSync",
+                        isOn: vsyncBinding,
+                        description:
+                            "Synchronize rendering with the display refresh rate to reduce tearing."
+                    )
+                }
+
+                engineFieldRow(.renderScale) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Picker("Render scale", selection: renderScaleBinding) {
+                            ForEach(RenderScale.allCases, id: \.self) { scale in
+                                Text(scale.label).tag(scale)
+                            }
+                        }
+                        .pickerStyle(.navigationLink)
+
+                        Text(
+                            effectiveRenderScale.description
+                                + " The game's aspect ratio and on-screen layout are unchanged - this only sharpens the rendering on high-DPI screens."
+                        )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, Spacing.xxs)
                 }
-                .padding(.vertical, Spacing.xxs)
 
-                SettingsToggle(
-                    title: "Solid fonts",
-                    isOn: solidFontsBinding,
-                    description:
-                        "Disable alpha blending for text, which can look sharper in some games."
-                )
+                engineFieldRow(.fontScale) {
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        HStack {
+                            Text("Font scale")
+                            Spacer()
+                            Text(String(format: "%.1fx", effectiveFontScale))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                        Slider(
+                            value: fontScaleBinding,
+                            in: 0.5...2.0,
+                            step: 0.1
+                        )
+                        Text("Scale all in-game text. 1.0x is the default size.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, Spacing.xxs)
+                }
+
+                engineFieldRow(.solidFonts) {
+                    SettingsToggle(
+                        title: "Solid fonts",
+                        isOn: solidFontsBinding,
+                        description:
+                            "Disable alpha blending for text, which can look sharper in some games."
+                    )
+                }
             }
             .disabled(engineSettings.isReadOnly)
         } header: {
@@ -436,12 +449,14 @@ struct GameSettingsView: View {
 
     private var performanceSection: some View {
         Section {
-            SettingsToggle(
-                title: "Frame skip",
-                isOn: frameSkipBinding,
-                description:
-                    "Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness."
-            )
+            engineFieldRow(.frameSkip) {
+                SettingsToggle(
+                    title: "Frame skip",
+                    isOn: frameSkipBinding,
+                    description:
+                        "Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness."
+                )
+            }
             .disabled(engineSettings.isReadOnly)
         } header: {
             Text("Performance")
@@ -459,12 +474,14 @@ struct GameSettingsView: View {
                     "Run Empo's compatibility scripts after the game's own scripts have loaded. Includes generic RGSS shims (RGSS plugin stubs, cheat menu, nil-safe stubs) and Pokemon Essentials specific fixes (graphics, input, online stubs, session reset, tilemap, window skin)."
             )
 
-            SettingsToggle(
-                title: "Path cache",
-                isOn: pathCacheBinding,
-                description:
-                    "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
-            )
+            engineFieldRow(.pathCache) {
+                SettingsToggle(
+                    title: "Path cache",
+                    isOn: pathCacheBinding,
+                    description:
+                        "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
+                )
+            }
             .disabled(engineSettings.isReadOnly)
 
             SettingsToggle(
@@ -735,6 +752,37 @@ struct GameSettingsView: View {
             get: { effectiveRenderScale },
             set: { engineSettings.renderScale = $0 }
         )
+    }
+
+    private func resetEngineField(_ field: MkxpEngineField) {
+        withAnimation {
+            engineSettings.resetField(
+                field,
+                gameDirectory: gameDirectory,
+                stateDirectory: stateDirectory
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func engineFieldRow<Content: View>(
+        _ field: MkxpEngineField,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let provenance = engineSettings.provenance(for: field)
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            content()
+            Text(provenance == .yours ? "yours" : "game")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .contextMenu {
+            if provenance == .yours {
+                Button("Use game value", role: .destructive) {
+                    resetEngineField(field)
+                }
+            }
+        }
     }
 
     private func save() {

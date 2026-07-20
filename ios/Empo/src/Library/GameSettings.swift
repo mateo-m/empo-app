@@ -397,11 +397,9 @@ struct GameSettings: Codable, Equatable {
 
     /// Reads the game's mkxp.json defaults straight from the
     /// imported game folder. `gameDirectory` is the per-game
-    /// `<container>/Game/` directory which is treated as immutable
-    /// after import; Empo's managed config (`EmpoState/mkxp.json`)
-    /// is generated from this source plus user overrides, never
-    /// merged back. That makes `Game/mkxp.json` the developer's
-    /// source-of-truth for the per-game-defaults UI.
+    /// `<container>/Game/` directory. Empo never writes this file;
+    /// the sparse overlay at `EmpoState/mkxp.json` holds only
+    /// Game Settings overrides.
     static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
         EngineConfigProjector.readGameDefaults(from: gameDirectory)
     }

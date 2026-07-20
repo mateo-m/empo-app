@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 
 /// Owns per-game engine launch: bridge configuration, patch
 /// distribution, logging, and the deferred `mkxp_setGamePath` handoff.
@@ -52,7 +53,17 @@ enum GameSession {
             stateDirectory: stateDir
         )
 
-        stateDir.path.withCString { managedPtr in
+        GameSettings.migrateLegacyEngineSettingsIfNeeded(
+            stateDirectory: stateDir,
+            gameDirectory: gameDir
+        )
+        EngineConfigProjector.composeManagedConfig(
+            stateDirectory: stateDir,
+            gameDirectory: gameDir
+        )
+
+        let engineConfigDir = ManagedMkxpConfig.engineConfigDirectory(in: stateDir)
+        engineConfigDir.path.withCString { managedPtr in
             input.userDataDir.path.withCString { userDataPtr in
                 var config = MKXPSessionConfig()
                 config.managedConfigDir = managedPtr
@@ -67,13 +78,6 @@ enum GameSession {
                 mkxp_applySessionConfig(&config)
             }
         }
-
-        // Engine config lives in EmpoState/mkxp.json; migrate any
-        // legacy engine keys out of game_settings.json once.
-        GameSettings.migrateLegacyEngineSettingsIfNeeded(
-            stateDirectory: stateDir,
-            gameDirectory: gameDir
-        )
 
         PatcherDistribution.applyToGame(container: container)
 
