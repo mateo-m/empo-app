@@ -108,6 +108,11 @@ jobs:
           tools/fetch-engine-prebuilt.sh
           PLATFORM_NAME=iphoneos scripts/verify-native-deps.sh
 
+      - name: Create empty signing overrides
+        # Signing.xcconfig is a gitignored per-machine file (see
+        # Signing.xcconfig.example); CI builds unsigned, so empty works.
+        run: touch ios/Empo/Signing.xcconfig
+
       - name: Generate Xcode project
         working-directory: ios/Empo
         run: xcodegen generate --spec project.yml --project . --quiet
