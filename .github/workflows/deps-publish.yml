@@ -50,6 +50,7 @@ jobs:
     runs-on: ${{ github.event.inputs.runner == 'hosted' && 'macos-latest' || fromJSON('["self-hosted", "macOS"]') }}
     timeout-minutes: 300
     strategy:
+      fail-fast: false
       matrix:
         sdk: [iphoneos, iphonesimulator]
     steps:
@@ -72,7 +73,20 @@ jobs:
           DEVELOPER_DIR="$XCODE/Contents/Developer" xcodebuild -version
 
       - name: Install build toolchain
-        run: brew install automake autoconf libtool cmake pkg-config bison
+        run: |
+          brew install automake autoconf libtool cmake pkg-config bison
+          # The dependency submodules' generated build files record the
+          # automake version they were made with (e.g. sdl2_ttf wants
+          # `automake-1.16`); brew only ships unversioned names. Shim
+          # the versioned names so regeneration after `git clean` works
+          # regardless of the installed automake version.
+          mkdir -p "$HOME/toolshims"
+          for tool in automake aclocal; do
+            for ver in 1.15 1.16 1.17; do
+              ln -sf "$(command -v $tool)" "$HOME/toolshims/${tool}-${ver}"
+            done
+          done
+          echo "$HOME/toolshims" >> "$GITHUB_PATH"
 
       # mkxp-core (built at the end of the rebuild script) compiles
       # against ANGLE headers.
