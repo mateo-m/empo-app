@@ -2,12 +2,15 @@
 # Package both iOS native dependency trees into a tarball for empo-deps.
 #
 # Usage:
-#   tools/package-native-deps.sh [release-tag]
+#   tools/package-native-deps.sh [release-tag] [--publish]
 #
 # Requires healthy build-iphoneos-arm64/ and build-iphonesimulator-arm64/
 # trees (run scripts/rebuild-all-native-deps.sh first). Writes
-# ios/Dependencies/native/.version with the tag and sha256. Upload the
-# printed tarball to a GitHub Release on empo-deps:
+# ios/Dependencies/native/.version with the tag and sha256.
+#
+# With --publish, creates the GitHub Release on empo-deps directly
+# (needs a gh auth context with write access). Without it, upload the
+# printed tarball manually:
 #
 #   gh release create <tag> /tmp/native-ios-prebuilt.tar.gz \
 #     --repo mateo-m/empo-deps --title "native deps <tag>"
@@ -18,7 +21,15 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEPS_DIR="$REPO_ROOT/ios/Dependencies"
 VERSION_FILE="$DEPS_DIR/native/.version"
 VERIFY="$REPO_ROOT/scripts/verify-native-deps.sh"
-TAG="${1:-}"
+TAG=""
+PUBLISH=0
+
+for arg in "$@"; do
+    case "$arg" in
+        --publish) PUBLISH=1 ;;
+        *) TAG="$arg" ;;
+    esac
+done
 
 if [ -z "$TAG" ]; then
     TAG="native-$(date +%Y-%m-%d)"
@@ -60,5 +71,11 @@ echo "Packaged: $OUT"
 echo "SHA256:   $SHA256"
 echo "Updated:  $VERSION_FILE"
 echo ""
-echo "Upload:"
-echo "  gh release create $TAG \"$OUT\" --repo mateo-m/empo-deps --title \"native deps $TAG\""
+if [ "$PUBLISH" = "1" ]; then
+    echo "==> publishing to empo-deps as $TAG"
+    gh release create "$TAG" "$OUT" \
+        --repo mateo-m/empo-deps --title "native deps $TAG"
+else
+    echo "Upload:"
+    echo "  gh release create $TAG \"$OUT\" --repo mateo-m/empo-deps --title \"native deps $TAG\""
+fi
