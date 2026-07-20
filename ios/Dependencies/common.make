@@ -1006,6 +1006,9 @@ $(LIBDIR)/libruby19-static.a: $(SOURCES)/ruby19/.configured-$(SDK_TAG)
 
 $(SOURCES)/ruby19/.configured-$(SDK_TAG): $(SOURCES)/ruby19/configure
 	cd $(SOURCES)/ruby19; $(MAKE) distclean 2>/dev/null || true
+	@# Same TRUE-constant fix as ruby18 above (1.9's copy lives in
+	@# tool/); removed in Ruby 3.2, so modern host rubies choke.
+	sed -i '' 's/=>TRUE/=>true/g' $(SOURCES)/ruby19/tool/mkconfig.rb
 	cd $(SOURCES)/ruby19; \
 	export $(CONFIGURE_ENV); \
 	export CFLAGS="$(RUBY19_CFLAGS) $$CFLAGS"; \
@@ -1133,6 +1136,12 @@ $(LIBDIR)/libruby18-static.a: $(SOURCES)/ruby18/.configured-$(SDK_TAG)
 
 $(SOURCES)/ruby18/.configured-$(SDK_TAG): $(SOURCES)/ruby18/configure
 	cd $(SOURCES)/ruby18; $(MAKE) distclean 2>/dev/null || true
+	@# 1.8's mkconfig.rb uses the TRUE constant, runs under the HOST
+	@# ruby in cross builds, and TRUE was removed in Ruby 3.2 — so
+	@# the build breaks with a modern host ruby. Normalize to `true`
+	@# (valid in every ruby). Idempotent sed instead of a submodule
+	@# patch because sources/ruby18 is third-party (joiplay/ruby).
+	sed -i '' 's/=>TRUE/=>true/g' $(SOURCES)/ruby18/mkconfig.rb
 	cd $(SOURCES)/ruby18; \
 	$(CONFIGURE_ENV) CFLAGS="$(RUBY18_CFLAGS)" \
 	./configure \
