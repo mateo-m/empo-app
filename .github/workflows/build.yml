@@ -37,7 +37,9 @@ jobs:
       # checks hash the engine tree. The ios/Dependencies/sources/*
       # submodules are multi-GB and must NOT be checked out here.
       - name: Checkout engine submodule
-        run: git submodule update --init --recursive mkxp-z-apple-mobile
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive mkxp-z-apple-mobile
 
       - name: Select newest Xcode
         run: |

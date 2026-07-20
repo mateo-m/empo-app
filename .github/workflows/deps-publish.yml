@@ -44,7 +44,9 @@ jobs:
           submodules: false
 
       - name: Checkout all submodules (shallow)
-        run: git submodule update --init --recursive --depth 1
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive --depth 1
 
       - name: Select newest Xcode
         run: |
