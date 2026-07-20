@@ -26,6 +26,11 @@ on:
         description: "Ref to dry-run build (tag, branch, or sha)"
         required: true
         default: "main"
+      runner:
+        description: "Where to build the dry run (self = your registered Mac; hosted = GitHub runners). Real tag releases always build hosted."
+        type: choice
+        options: [hosted, self]
+        default: hosted
 
 permissions:
   contents: write
@@ -39,7 +44,10 @@ concurrency:
 jobs:
   build:
     name: Build + audit .ipa
-    runs-on: macos-latest
+    # Tag releases always build on hosted runners (laptop-independent
+    # releases are the point); dry runs may opt into the self-hosted
+    # Mac for speed.
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.runner == 'self') && fromJSON('["self-hosted", "macOS"]') || 'macos-latest' }}
     timeout-minutes: 90
     outputs:
       version: ${{ steps.meta.outputs.version }}
@@ -76,11 +84,13 @@ jobs:
           echo "Releasing v$VERSION (build $BUILD)"
 
       - name: Select newest Xcode
+        # DEVELOPER_DIR instead of xcode-select: no sudo, so the same
+        # step works on hosted runners and a self-hosted Mac.
         run: |
           XCODE="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
           echo "Using $XCODE"
-          sudo xcode-select -s "$XCODE"
-          xcodebuild -version
+          echo "DEVELOPER_DIR=$XCODE/Contents/Developer" >> "$GITHUB_ENV"
+          DEVELOPER_DIR="$XCODE/Contents/Developer" xcodebuild -version
 
       - name: Install xcodegen
         run: brew install xcodegen
