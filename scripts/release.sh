@@ -174,6 +174,27 @@ git -C "$REPO_ROOT" add "$PROJECT_YML" \
 git -C "$REPO_ROOT" commit -S -m "chore: bump version to $VERSION (build $BUILD)"
 git -C "$REPO_ROOT" tag -s "v$VERSION" -m "v$VERSION"
 
+# 8b. Tag the engine submodule commit this release pins, so the GPL
+# binary->source correspondence is provable per release: anyone can
+# check out mkxp-z-apple-mobile at empo-v<version> and get exactly the
+# engine source compiled into the shipped .ipa. Created locally here
+# (before anything is pushed) so a failure aborts the release cleanly;
+# pushed alongside the app tag in step 11.
+ENGINE_TAG="empo-v$VERSION"
+ENGINE_DIR="$REPO_ROOT/mkxp-z-apple-mobile"
+ENGINE_COMMIT="$(git -C "$REPO_ROOT" rev-parse "HEAD:mkxp-z-apple-mobile")"
+if git -C "$ENGINE_DIR" rev-parse -q --verify "refs/tags/$ENGINE_TAG" >/dev/null; then
+    echo "error: engine tag $ENGINE_TAG already exists"
+    exit 1
+fi
+git -C "$ENGINE_DIR" fetch -q origin dev
+if ! git -C "$ENGINE_DIR" merge-base --is-ancestor "$ENGINE_COMMIT" origin/dev; then
+    echo "error: pinned engine commit $ENGINE_COMMIT is not on mkxp-z-apple-mobile origin/dev"
+    echo "       push the submodule first (policy: gitlink must be an ancestor of origin/dev)"
+    exit 1
+fi
+git -C "$ENGINE_DIR" tag -s "$ENGINE_TAG" "$ENGINE_COMMIT" -m "Engine pinned by Empo v$VERSION"
+
 # 9. Build unsigned .ipa from the clean release commit.
 echo "==> building unsigned ipa"
 BUILD_DIR="$PROJECT_DIR/build/Release-iphoneos"
@@ -251,6 +272,7 @@ fi
 echo "==> pushing to origin"
 git -C "$REPO_ROOT" push origin main
 git -C "$REPO_ROOT" push origin "v$VERSION"
+git -C "$ENGINE_DIR" push origin "$ENGINE_TAG"
 
 # 12. Create GitHub release
 echo "==> creating github release"
