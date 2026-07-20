@@ -13,16 +13,29 @@ usage() {
     echo "  bump   major | minor | patch     bump latest tag's segment"
     echo "         <semver>                  explicit version (e.g. 0.1.0)"
     echo ""
-    echo "Every release run:"
-    echo "  1. verifies empo-deps pins and hydrates native prebuilts"
-    echo "     (set RELEASE_REBUILD_DEPS=1 to rebuild from source)"
-    echo "  2. bumps version, tags, builds Empo.app + IPA"
-    echo "  3. audits the shipped binary before publishing"
+    echo "Default flow (CI builds the release):"
+    echo "  1. verifies empo-deps pins"
+    echo "  2. bumps version, generates the changelog, commits, tags"
+    echo "     (v<version> here + empo-v<version> on the engine repo)"
+    echo "  3. pushes; the Release workflow builds, audits, signs, and"
+    echo "     publishes the IPA, then syncs AltStore + the engine pin"
+    echo ""
+    echo "RELEASE_LOCAL_BUILD=1   build/audit/sign/publish locally instead"
+    echo "                        (fallback for when CI is unavailable)"
+    echo "RELEASE_REBUILD_DEPS=1  rebuild native deps from source first"
+    echo "                        (implies RELEASE_LOCAL_BUILD=1)"
     exit 1
 }
 
 [[ $# -ne 1 ]] && usage
 BUMP_OR_VERSION="$1"
+
+# Rebuilding deps from source only makes sense when the IPA is also
+# built here — CI always hydrates from published pins.
+if [[ "${RELEASE_REBUILD_DEPS:-0}" == "1" ]]; then
+    RELEASE_LOCAL_BUILD=1
+fi
+LOCAL_BUILD="${RELEASE_LOCAL_BUILD:-0}"
 
 # Resolve the new version. Accepts an explicit semver (`0.1.0`) for
 # rare jumps that don't follow the bump-the-last-tag pattern, or one
@@ -79,9 +92,10 @@ if ! git -C "$REPO_ROOT" diff --quiet HEAD; then
     exit 1
 fi
 
-# 2. Verify dependency pins resolve to published empo-deps releases,
-# then hydrate prebuilts for the device build. Override with
-# RELEASE_REBUILD_DEPS=1 to rebuild from source (dep-bump maintainer flow).
+# 2. Verify dependency pins resolve to published empo-deps releases —
+# even for CI builds, so an unpublished pin aborts before anything is
+# tagged. Hydration/rebuild only happens for local builds; the Release
+# workflow hydrates its own runner.
 echo "==> verifying empo-deps pins"
 if [ "${RELEASE_REBUILD_DEPS:-0}" = "1" ]; then
     REQUIRE_PUBLISHED=0 "$REPO_ROOT/scripts/verify-empo-deps-pins.sh"
@@ -89,16 +103,19 @@ else
     REQUIRE_PUBLISHED=1 "$REPO_ROOT/scripts/verify-empo-deps-pins.sh"
 fi
 
-if [ "${RELEASE_REBUILD_DEPS:-0}" = "1" ]; then
-    echo "==> rebuilding device native deps from source (RELEASE_REBUILD_DEPS=1)"
-    "$REPO_ROOT/scripts/rebuild-device-deps.sh"
-else
-    echo "==> hydrating native deps from empo-deps"
-    rm -rf "$REPO_ROOT/ios/Dependencies/build-iphoneos-arm64" \
-        "$REPO_ROOT/ios/Dependencies/native/.fetched-version"
-    sh "$REPO_ROOT/tools/fetch-native-deps.sh"
+if [[ "$LOCAL_BUILD" == "1" ]]; then
+    if [ "${RELEASE_REBUILD_DEPS:-0}" = "1" ]; then
+        echo "==> rebuilding device native deps from source (RELEASE_REBUILD_DEPS=1)"
+        "$REPO_ROOT/scripts/rebuild-device-deps.sh"
+    else
+        echo "==> hydrating native deps from empo-deps"
+        rm -rf "$REPO_ROOT/ios/Dependencies/build-iphoneos-arm64" \
+            "$REPO_ROOT/ios/Dependencies/native/.fetched-version"
+        sh "$REPO_ROOT/tools/fetch-native-deps.sh"
+        sh "$REPO_ROOT/tools/fetch-engine-prebuilt.sh"
+    fi
+    "$REPO_ROOT/scripts/verify-device-deps.sh"
 fi
-"$REPO_ROOT/scripts/verify-device-deps.sh"
 
 # 3. Bump MARKETING_VERSION in project.yml
 sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: $VERSION/" "$PROJECT_YML"
@@ -148,18 +165,7 @@ fi
 
 perl -0pi -e 's/\n{3,}/\n\n/g' "$CHANGELOG_PATH"
 
-CHANGELOG=$(VERSION="$VERSION" perl -0ne '
-    $version = quotemeta($ENV{VERSION});
-    if (/^## $version - .*?\n\n(.*?)(?=^## \d+\.\d+\.\d+ - |\z)/ms) {
-        print $1;
-        exit;
-    }
-' "$CHANGELOG_PATH")
-
-if [[ -z "${CHANGELOG//[$' \t\r\n']/}" ]]; then
-    echo "error: failed to extract v$VERSION release notes from CHANGELOG.md"
-    exit 1
-fi
+CHANGELOG=$("$REPO_ROOT/scripts/extract-changelog.sh" "$VERSION" "$CHANGELOG_PATH")
 
 RELEASE_NOTES=$(printf "## What's changed\n\n%s\n\n---\n> Unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing." "$CHANGELOG")
 
@@ -195,90 +201,103 @@ if ! git -C "$ENGINE_DIR" merge-base --is-ancestor "$ENGINE_COMMIT" origin/dev; 
 fi
 git -C "$ENGINE_DIR" tag -s "$ENGINE_TAG" "$ENGINE_COMMIT" -m "Engine pinned by Empo v$VERSION"
 
-# 9. Build unsigned .ipa from the clean release commit.
-echo "==> building unsigned ipa"
-BUILD_DIR="$PROJECT_DIR/build/Release-iphoneos"
-rm -rf "$BUILD_DIR"
-xcodebuild \
-    -project "$PROJECT_DIR/Empo.xcodeproj" \
-    -target Empo \
-    -sdk iphoneos \
-    -arch arm64 \
-    -configuration Release \
-    CODE_SIGNING_ALLOWED=NO \
-    PRODUCT_BUNDLE_IDENTIFIER=sh.mateo.empo \
-    CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
-    build 2>&1 | grep -E "^(Build|error:|warning: |CompileSwift|Ld )" || true
+# 9-10. Local build + AltStore sync — fallback path only. The default
+# flow stops after pushing (step 11): the Release workflow builds,
+# audits, signs, publishes, and syncs the manifest + engine pin.
+if [[ "$LOCAL_BUILD" == "1" ]]; then
 
-APP_PATH="$BUILD_DIR/Empo.app"
-if [[ ! -d "$APP_PATH" ]]; then
-    echo "error: build failed - Empo.app not found at $BUILD_DIR"
-    exit 1
-fi
+    # 9. Build unsigned .ipa from the clean release commit.
+    echo "==> building unsigned ipa"
+    BUILD_DIR="$PROJECT_DIR/build/Release-iphoneos"
+    rm -rf "$BUILD_DIR"
+    xcodebuild \
+        -project "$PROJECT_DIR/Empo.xcodeproj" \
+        -target Empo \
+        -sdk iphoneos \
+        -arch arm64 \
+        -configuration Release \
+        CODE_SIGNING_ALLOWED=NO \
+        PRODUCT_BUNDLE_IDENTIFIER=sh.mateo.empo \
+        CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
+        build 2>&1 | grep -E "^(Build|error:|warning: |CompileSwift|Ld )" || true
 
-"$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" "$APP_PATH"
-
-echo "==> ad-hoc signing with entitlements"
-codesign --force --sign - \
-    --generate-entitlement-der \
-    --entitlements "$PROJECT_DIR/Empo.entitlements" \
-    "$APP_PATH"
-
-mkdir -p "$IPA_DIR/Payload"
-cp -R "$APP_PATH" "$IPA_DIR/Payload/Empo.app"
-IPA_NAME="Empo-${VERSION}-unsigned.ipa"
-(cd "$IPA_DIR" && zip -qr "$IPA_NAME" Payload)
-rm -rf "$IPA_DIR/Payload"
-IPA_PATH="$IPA_DIR/$IPA_NAME"
-IPA_SIZE=$(stat -f%z "$IPA_PATH")
-echo "    ipa: $IPA_PATH ($IPA_SIZE bytes)"
-
-# 10. Update AltStore source from the locally-built artifact so the
-# manifest lands through the same signed release flow as every other
-# release metadata change.
-echo "==> updating altstore source"
-ORIGIN_URL=$(git -C "$REPO_ROOT" remote get-url origin)
-case "$ORIGIN_URL" in
-    git@github.com:*)
-        REPO_SLUG="${ORIGIN_URL#git@github.com:}"
-        ;;
-    https://github.com/*)
-        REPO_SLUG="${ORIGIN_URL#https://github.com/}"
-        ;;
-    *)
-        echo "error: unsupported origin URL for GitHub release assets: $ORIGIN_URL"
+    APP_PATH="$BUILD_DIR/Empo.app"
+    if [[ ! -d "$APP_PATH" ]]; then
+        echo "error: build failed - Empo.app not found at $BUILD_DIR"
         exit 1
-        ;;
-esac
-REPO_SLUG="${REPO_SLUG%.git}"
-IPA_DOWNLOAD_URL="https://github.com/$REPO_SLUG/releases/download/v$VERSION/$IPA_NAME"
-RELEASE_DATE=$(date -u +%Y-%m-%d)
+    fi
 
-bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
-    --version "$VERSION" \
-    --build "$BUILD" \
-    --size "$IPA_SIZE" \
-    --date "$RELEASE_DATE" \
-    --download-url "$IPA_DOWNLOAD_URL" \
-    --description "$CHANGELOG"
+    "$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" "$APP_PATH"
 
-git -C "$REPO_ROOT" add "$ALTSTORE_SOURCE"
-if ! git -C "$REPO_ROOT" diff --cached --quiet; then
-    # Keep this follow-up commit out of future git-cliff release notes.
-    git -C "$REPO_ROOT" commit -S -m "sync AltStore source for v$VERSION"
-fi
+    echo "==> ad-hoc signing with entitlements"
+    codesign --force --sign - \
+        --generate-entitlement-der \
+        --entitlements "$PROJECT_DIR/Empo.entitlements" \
+        "$APP_PATH"
 
-# 11. Push
+    mkdir -p "$IPA_DIR/Payload"
+    cp -R "$APP_PATH" "$IPA_DIR/Payload/Empo.app"
+    IPA_NAME="Empo-${VERSION}-unsigned.ipa"
+    (cd "$IPA_DIR" && zip -qr "$IPA_NAME" Payload)
+    rm -rf "$IPA_DIR/Payload"
+    IPA_PATH="$IPA_DIR/$IPA_NAME"
+    IPA_SIZE=$(stat -f%z "$IPA_PATH")
+    echo "    ipa: $IPA_PATH ($IPA_SIZE bytes)"
+
+    # 10. Update AltStore source from the locally-built artifact so the
+    # manifest lands through the same signed release flow as every other
+    # release metadata change.
+    echo "==> updating altstore source"
+    ORIGIN_URL=$(git -C "$REPO_ROOT" remote get-url origin)
+    case "$ORIGIN_URL" in
+        git@github.com:*)
+            REPO_SLUG="${ORIGIN_URL#git@github.com:}"
+            ;;
+        https://github.com/*)
+            REPO_SLUG="${ORIGIN_URL#https://github.com/}"
+            ;;
+        *)
+            echo "error: unsupported origin URL for GitHub release assets: $ORIGIN_URL"
+            exit 1
+            ;;
+    esac
+    REPO_SLUG="${REPO_SLUG%.git}"
+    IPA_DOWNLOAD_URL="https://github.com/$REPO_SLUG/releases/download/v$VERSION/$IPA_NAME"
+    RELEASE_DATE=$(date -u +%Y-%m-%d)
+
+    bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
+        --version "$VERSION" \
+        --build "$BUILD" \
+        --size "$IPA_SIZE" \
+        --date "$RELEASE_DATE" \
+        --download-url "$IPA_DOWNLOAD_URL" \
+        --description "$CHANGELOG"
+
+    git -C "$REPO_ROOT" add "$ALTSTORE_SOURCE"
+    if ! git -C "$REPO_ROOT" diff --cached --quiet; then
+        # Keep this follow-up commit out of future git-cliff release notes.
+        git -C "$REPO_ROOT" commit -S -m "sync AltStore source for v$VERSION"
+    fi
+
+fi # LOCAL_BUILD
+
+# 11. Push. On the default flow this is the handoff: the v tag
+# triggers the Release workflow, and the empo-v tag triggers the
+# engine repo's artifact workflow.
 echo "==> pushing to origin"
 git -C "$REPO_ROOT" push origin main
 git -C "$REPO_ROOT" push origin "v$VERSION"
 git -C "$ENGINE_DIR" push origin "$ENGINE_TAG"
 
-# 12. Create GitHub release
-echo "==> creating github release"
-gh release create "v$VERSION" \
-    --title "v$VERSION" \
-    --notes "$RELEASE_NOTES" \
-    "$IPA_PATH"
-
-echo "==> done - v$VERSION released"
+if [[ "$LOCAL_BUILD" == "1" ]]; then
+    # 12. Create GitHub release from the locally-built artifact.
+    echo "==> creating github release"
+    gh release create "v$VERSION" \
+        --title "v$VERSION" \
+        --notes "$RELEASE_NOTES" \
+        "$IPA_PATH"
+    echo "==> done - v$VERSION released (local build)"
+else
+    echo "==> done - v$VERSION handed off to CI"
+    echo "    watch: gh run watch \$(gh run list --workflow=release.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+fi

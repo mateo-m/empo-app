@@ -1,0 +1,259 @@
+---
+# Release pipeline: builds, audits, ad-hoc signs, and publishes the
+# unsigned .ipa whenever scripts/release.sh pushes a v*.*.* tag, then
+# syncs the AltStore manifest and re-pins the engine prebuilt on main.
+#
+# scripts/release.sh owns the decision half (version bump, changelog,
+# tags); this workflow owns the mechanical half, so releases no longer
+# depend on any one machine. RELEASE_LOCAL_BUILD=1 in release.sh is
+# the fallback when CI is unavailable.
+#
+# workflow_dispatch runs a DRY RUN against any ref: build + audit +
+# sign, uploading the .ipa as a workflow artifact without publishing
+# anything.
+#
+# Requires secret EMPO_DEPS_READ_TOKEN (read access to empo-deps).
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Ref to dry-run build (tag, branch, or sha)"
+        required: true
+        default: "main"
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: release
+
+jobs:
+  build:
+    name: Build + audit .ipa
+    runs-on: macos-latest
+    timeout-minutes: 90
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      build: ${{ steps.meta.outputs.build }}
+      ipa_name: ${{ steps.package.outputs.ipa_name }}
+      ipa_size: ${{ steps.package.outputs.ipa_size }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || github.ref }}
+          fetch-depth: 0
+          submodules: false
+
+      - name: Checkout engine submodule
+        run: git submodule update --init --recursive mkxp-z-apple-mobile
+
+      - name: Resolve version + build number
+        id: meta
+        run: |
+          set -e
+          VERSION="$(sed -n 's/.*MARKETING_VERSION: //p' ios/Empo/project.yml | head -n 1 | tr -d '\"')"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [ "$VERSION" != "$TAG_VERSION" ]; then
+              echo "error: tag $GITHUB_REF_NAME does not match project.yml MARKETING_VERSION $VERSION" >&2
+              exit 1
+            fi
+          fi
+          BUILD="$(git rev-list --count HEAD)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$VERSION (build $BUILD)"
+
+      - name: Select newest Xcode
+        run: |
+          XCODE="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Cache dependency trees
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Dependencies/build-iphoneos-arm64
+            ios/Dependencies/build-iphonesimulator-arm64
+            ios/Dependencies/ANGLE/iphoneos
+            ios/Dependencies/ANGLE/iphonesimulator
+            ios/Dependencies/ANGLE/.fetched-version
+            ios/Dependencies/native/.fetched-version
+            ios/Dependencies/engine/.fetched-version
+          key: deps-${{ runner.os }}-${{ hashFiles('ios/Dependencies/native/.version', 'ios/Dependencies/ANGLE/.version', 'ios/Dependencies/engine/.version') }}
+
+      - name: Hydrate prebuilt dependencies
+        env:
+          GH_TOKEN: ${{ secrets.EMPO_DEPS_READ_TOKEN }}
+        run: |
+          set -e
+          tools/fetch-angle.sh
+          tools/fetch-native-deps.sh
+          tools/fetch-engine-prebuilt.sh
+          PLATFORM_NAME=iphoneos scripts/verify-native-deps.sh
+
+      - name: Generate Xcode project
+        working-directory: ios/Empo
+        run: xcodegen generate --spec project.yml --project . --quiet
+
+      - name: Build Release (iphoneos)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/Empo/Empo.xcodeproj \
+            -target Empo \
+            -sdk iphoneos \
+            -arch arm64 \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            PRODUCT_BUNDLE_IDENTIFIER=sh.mateo.empo \
+            CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
+            build 2>&1 | tail -n 40
+          test -d build/Release-iphoneos/Empo.app
+
+      - name: Audit binary
+        run: scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
+
+      # Ad-hoc signature with our entitlements blob embedded — the
+      # template sideloaders (AltStore/Sideloadly/ESign) re-sign over.
+      # See the detailed rationale in scripts/release.sh.
+      - name: Sign + package .ipa
+        id: package
+        run: |
+          set -e
+          codesign --force --sign - \
+            --generate-entitlement-der \
+            --entitlements ios/Empo/Empo.entitlements \
+            build/Release-iphoneos/Empo.app
+          mkdir -p build/ipa/Payload
+          cp -R build/Release-iphoneos/Empo.app build/ipa/Payload/Empo.app
+          IPA_NAME="Empo-${{ steps.meta.outputs.version }}-unsigned.ipa"
+          (cd build/ipa && zip -qr "$IPA_NAME" Payload)
+          IPA_SIZE="$(stat -f%z "build/ipa/$IPA_NAME")"
+          echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
+          echo "ipa_size=$IPA_SIZE" >> "$GITHUB_OUTPUT"
+          echo "Packaged $IPA_NAME ($IPA_SIZE bytes)"
+
+      - name: Upload .ipa artifact (dry run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.ipa_name }}
+          path: build/ipa/${{ steps.package.outputs.ipa_name }}
+
+      - name: Create GitHub release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          VERSION="${{ steps.meta.outputs.version }}"
+          scripts/extract-changelog.sh "$VERSION" > changelog-section.md
+          {
+            echo "## What's changed"
+            echo ""
+            cat changelog-section.md
+            echo ""
+            echo "---"
+            echo "> Unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing."
+          } > release-notes.md
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes-file release-notes.md \
+            "build/ipa/${{ steps.package.outputs.ipa_name }}"
+
+  post-release:
+    name: Sync AltStore manifest + engine pin
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          submodules: false
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Update AltStore source
+        run: |
+          set -e
+          VERSION="${{ needs.build.outputs.version }}"
+          bun install --frozen-lockfile
+          scripts/extract-changelog.sh "$VERSION" > changelog-section.md
+          bun scripts/update-altstore-source.ts \
+            --version "$VERSION" \
+            --build "${{ needs.build.outputs.build }}" \
+            --size "${{ needs.build.outputs.ipa_size }}" \
+            --date "$(date -u +%Y-%m-%d)" \
+            --download-url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/${{ needs.build.outputs.ipa_name }}" \
+            --description "$(cat changelog-section.md)"
+          git add altstore-source.json
+          git commit -m "sync AltStore source for v$VERSION"
+
+      # The empo-v tag (pushed by release.sh alongside the v tag)
+      # triggers the engine repo's engine-artifacts workflow. Wait for
+      # its release, then re-pin the engine prebuilt so the pin always
+      # names the artifact built from this release's exact source.
+      - name: Re-pin engine prebuilt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          VERSION="${{ needs.build.outputs.version }}"
+          ENGINE_TAG="empo-v$VERSION"
+          REPO=mateo-m/mkxp-z-apple-mobile
+          for i in $(seq 1 60); do
+            STATUS="$(gh run list --repo "$REPO" --branch "$ENGINE_TAG" \
+              --workflow engine-artifacts --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | .status + ":" + (.conclusion // "")')"
+            echo "engine-artifacts [$i/60]: ${STATUS:-not started}"
+            case "$STATUS" in
+              completed:success) break ;;
+              completed:*) echo "engine artifact build failed" >&2; exit 1 ;;
+            esac
+            if [ "$i" = "60" ]; then
+              echo "timed out waiting for engine artifact" >&2
+              exit 1
+            fi
+            sleep 30
+          done
+          curl -fL --retry 3 -o engine.tar.gz \
+            "https://github.com/$REPO/releases/download/$ENGINE_TAG/engine-ios-prebuilt.tar.gz"
+          SHA256="$(sha256sum engine.tar.gz | awk '{print $1}')"
+          PIN=ios/Dependencies/engine/.version
+          sed -i "s/^ENGINE_VERSION=.*/ENGINE_VERSION=$ENGINE_TAG/" "$PIN"
+          sed -i "s/^ENGINE_SHA256=.*/ENGINE_SHA256=$SHA256/" "$PIN"
+          git add "$PIN"
+          git commit -m "chore(engine): pin $ENGINE_TAG core prebuilt"
+
+      - name: Push manifest + pin commits
+        run: |
+          set -e
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin main && exit 0
+            sleep 5
+          done
+          exit 1
