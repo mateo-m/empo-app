@@ -986,7 +986,7 @@ $(LIBDIR)/libruby19-static.a: $(SOURCES)/ruby19/.configured-$(SDK_TAG)
 		done; \
 	done; \
 	SOCKDIR=$(SOURCES)/ruby19/ext/socket; \
-	ruby --disable=gems $$SOCKDIR/mkconstants.rb -H $$SOCKDIR/constdefs.h -o $$SOCKDIR/constdefs.c; \
+	/usr/bin/ruby --disable=gems $$SOCKDIR/mkconstants.rb -H $$SOCKDIR/constdefs.h -o $$SOCKDIR/constdefs.c; \
 	for name in $(SOCKET19_SRCS); do \
 		src=$$SOCKDIR/$$name.c; \
 		obj=$${src%.c}.o; \
@@ -1023,9 +1023,14 @@ $(SOURCES)/ruby19/.configured-$(SDK_TAG): $(SOURCES)/ruby19/configure
 		--disable-rubygems \
 		--disable-install-doc \
 		cross_compiling=yes \
-		ac_cv_func_fork=no; \
-	sed -i '' 's|^BASERUBY = ruby$$|BASERUBY = ruby --disable=gems|' Makefile; \
-	sed -i '' 's|^MINIRUBY = ruby |MINIRUBY = ruby --disable=gems |' Makefile
+		ac_cv_func_fork=no
+	@# Pin the system ruby (2.6) as the host ruby, matching the 3.1
+	@# tree's --with-baseruby: 1.9's tool/*.rb uses the legacy 3-arg
+	@# ERB.new that Ruby 4 removed, so a modern PATH ruby (homebrew)
+	@# fails id.h/known_errors.inc generation and the build ships a
+	@# truncated tree.
+	sed -i '' 's|^BASERUBY = ruby$$|BASERUBY = /usr/bin/ruby --disable=gems|' $(SOURCES)/ruby19/Makefile
+	sed -i '' 's|^MINIRUBY = ruby |MINIRUBY = /usr/bin/ruby --disable=gems |' $(SOURCES)/ruby19/Makefile
 	@# Override config.h's RUBY_SETJMP / RUBY_LONGJMP to point at
 	@# our shim symbols (see mkxp_setjmp_arm64.S). The shim
 	@# currently tail-calls libc _setjmp / _longjmp; the
@@ -1151,7 +1156,7 @@ $(SOURCES)/ruby18/.configured-$(SDK_TAG): $(SOURCES)/ruby18/configure
 		--disable-shared \
 		--enable-static \
 		--with-static-linked-ext; \
-		sed -i '' 's|^MINIRUBY = ruby |MINIRUBY = ruby --disable=gems |' $(SOURCES)/ruby18/Makefile; \
+		sed -i '' 's|^MINIRUBY = ruby |MINIRUBY = /usr/bin/ruby --disable=gems |' $(SOURCES)/ruby18/Makefile; \
 	cp $(PATCHES)/ruby18/prelude.c $(SOURCES)/ruby18/prelude.c
 	@# Override config.h's RUBY_SETJMP / RUBY_LONGJMP to point at
 	@# our PAC-free arm64 setjmp variant (see mkxp_setjmp_arm64.S).
