@@ -57,13 +57,23 @@ enum GameSession {
             stateDirectory: stateDir,
             gameDirectory: gameDir
         )
-        EngineConfigProjector.composeManagedConfig(
+        ManagedMkxpConfig.removeLegacyEngineConfigDirectory(in: stateDir)
+
+        let overlayJSON = EngineConfigProjector.overlayJSONString(
             stateDirectory: stateDir,
             gameDirectory: gameDir
         )
+        if let overlayJSON {
+            overlayJSON.withCString { mkxp_setConfigOverlayJSON($0) }
+            logEngineConfigOverlay(overlayJSON, container: container)
+        } else {
+            mkxp_setConfigOverlayJSON(nil)
+        }
 
-        let engineConfigDir = ManagedMkxpConfig.engineConfigDirectory(in: stateDir)
-        engineConfigDir.path.withCString { managedPtr in
+        // Never point managedConfigDir at EmpoState: the sparse overlay
+        // mkxp.json there is not a complete config and would drop every
+        // dev key from Game/mkxp.json if the engine read it as base.
+        "".withCString { managedPtr in
             input.userDataDir.path.withCString { userDataPtr in
                 var config = MKXPSessionConfig()
                 config.managedConfigDir = managedPtr
@@ -90,6 +100,25 @@ enum GameSession {
 
         mkxp_resetSessionState()
         mkxp_setGameControllerCaptureEnabled(false)
+    }
+
+    private static func logEngineConfigOverlay(
+        _ overlayJSON: String,
+        container: GameContainer
+    ) {
+        let logsDir = container.ensureLogsDirectory()
+        let path = logsDir.appendingPathComponent("engine-config.log").path
+        let line = "engine-config: \(overlayJSON)\n"
+        if FileManager.default.fileExists(atPath: path),
+            let data = line.data(using: .utf8),
+            let handle = FileHandle(forWritingAtPath: path)
+        {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            _ = try? handle.write(contentsOf: data)
+        } else {
+            try? line.write(toFile: path, atomically: true, encoding: .utf8)
+        }
     }
 
     static func refreshMetadataIfNeeded(

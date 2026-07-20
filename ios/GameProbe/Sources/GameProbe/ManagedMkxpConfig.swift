@@ -103,12 +103,6 @@ public enum MkxpValueProvenance: Equatable, Sendable {
     case yours
 }
 
-public enum ComposeResult: Equatable, Sendable {
-    case composed
-    case noSource
-    case readOnly
-}
-
 /// Keys that used to live in `game_settings.json` before the mkxp accessor
 /// migration. Used for one-time idempotent migration.
 public enum ManagedMkxpConfig {
@@ -125,7 +119,7 @@ public enum ManagedMkxpConfig {
 
     private static let configFilename = "mkxp.json"
     private static let settingsFilename = "game_settings.json"
-    private static let engineDirectoryName = ".engine"
+    private static let legacyEngineDirectoryName = ".engine"
 
     // MARK: - Paths
 
@@ -142,18 +136,19 @@ public enum ManagedMkxpConfig {
         gameDirectory.appendingPathComponent(configFilename)
     }
 
-    public static func engineConfigDirectory(in stateDirectory: URL) -> URL {
-        stateDirectory.appendingPathComponent(engineDirectoryName, isDirectory: true)
-    }
-
-    public static func composedConfigURL(in stateDirectory: URL) -> URL {
-        engineConfigDirectory(in: stateDirectory).appendingPathComponent(configFilename)
+    /// One-time cleanup for the retired composed-config directory.
+    public static func removeLegacyEngineConfigDirectory(in stateDirectory: URL) {
+        let engineDir = stateDirectory.appendingPathComponent(
+            legacyEngineDirectoryName,
+            isDirectory: true
+        )
+        try? FileManager.default.removeItem(at: engineDir)
     }
 
     // MARK: - Read
 
-    /// True when `Game/mkxp.json` exists but cannot be parsed. Engine rows
-    /// are read-only in this case and no composed copy is written.
+    /// True when `Game/mkxp.json` exists but cannot be parsed. Used only
+    /// for UI annotations; the engine still reads the base file itself.
     public static func isDevConfigUnparseable(gameDirectory: URL) -> Bool {
         let sourceURL = devConfigURL(in: gameDirectory)
         guard FileManager.default.fileExists(atPath: sourceURL.path) else { return false }
@@ -237,52 +232,62 @@ public enum ManagedMkxpConfig {
         )
     }
 
-    // MARK: - Compose
+    // MARK: - Overlay string for engine bridge
 
-    /// Merge base + overlay into `EmpoState/.engine/mkxp.json`.
-    @discardableResult
-    public static func compose(
+    /// JSON object string handed to `mkxp_setConfigOverlayJSON`, or nil
+    /// when there is nothing to send (no overlay keys and no host
+    /// normalization patches apply).
+    public static func overlayJSONString(
         gameDirectory: URL,
-        stateDirectory: URL
-    ) -> ComposeResult {
-        let composedURL = composedConfigURL(in: stateDirectory)
-        let engineDir = engineConfigDirectory(in: stateDirectory)
-        let baseURL = devConfigURL(in: gameDirectory)
-        let baseExists = FileManager.default.fileExists(atPath: baseURL.path)
-        let overlay = loadOverlayDict(from: stateDirectory) ?? [:]
-
-        var baseConfig: [String: Any]?
-        if baseExists {
-            guard let raw = try? String(contentsOf: baseURL, encoding: .utf8),
-                let parsed = parseJSONWithComments(raw)
-            else {
-                try? FileManager.default.removeItem(at: composedURL)
-                return .readOnly
+        stateDirectory: URL,
+        onUnparseableOverlay: ((String) -> Void)? = nil
+    ) -> String? {
+        let overlayURL = overlayConfigURL(in: stateDirectory)
+        var overlay: [String: Any] = [:]
+        if FileManager.default.fileExists(atPath: overlayURL.path) {
+            if let raw = try? String(contentsOf: overlayURL, encoding: .utf8) {
+                if let parsed = parseJSONWithComments(raw) {
+                    overlay = parsed
+                } else {
+                    onUnparseableOverlay?(
+                        "ManagedMkxpConfig: unparseable EmpoState/mkxp.json; treating overlay as absent"
+                    )
+                }
             }
-            baseConfig = parsed
         }
 
-        if baseConfig == nil && overlay.isEmpty {
-            try? FileManager.default.removeItem(at: composedURL)
-            return .noSource
+        let base = loadBaseDict(from: gameDirectory) ?? [:]
+        var patches: [String: Any] = [:]
+
+        if base["vsync"] != nil,
+            base["syncToRefreshrate"] == nil,
+            overlay["syncToRefreshrate"] == nil,
+            overlay["vsync"] == nil,
+            let legacyVsync = base["vsync"] as? Bool
+        {
+            patches["syncToRefreshrate"] = legacyVsync
         }
 
-        var composed = baseConfig ?? [:]
-        for (key, value) in overlay {
-            composed[key] = value
-        }
-        applyNormalizations(to: &composed)
-
-        do {
-            try FileManager.default.createDirectory(at: engineDir, withIntermediateDirectories: true)
-        } catch {
-            return .readOnly
+        guard !overlay.isEmpty || !patches.isEmpty else {
+            return nil
         }
 
-        guard writeConfig(composed, to: composedURL) else {
-            return .readOnly
+        var payload = overlay
+        for (key, value) in patches {
+            payload[key] = value
         }
-        return .composed
+        payload["defScreenW"] = NSNull()
+        payload["defScreenH"] = NSNull()
+
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: payload,
+            options: [.sortedKeys]
+        ),
+            let json = String(data: data, encoding: .utf8)
+        else {
+            return nil
+        }
+        return json
     }
 
     // MARK: - Overlay writes
@@ -305,11 +310,8 @@ public enum ManagedMkxpConfig {
         stateDirectory: URL,
         gameDirectory: URL
     ) -> Bool {
-        if isDevConfigUnparseable(gameDirectory: gameDirectory) { return false }
-        guard writeOverlay(overrides: overrides, stateDirectory: stateDirectory) else {
-            return false
-        }
-        return compose(gameDirectory: gameDirectory, stateDirectory: stateDirectory) != .readOnly
+        _ = gameDirectory
+        return writeOverlay(overrides: overrides, stateDirectory: stateDirectory)
     }
 
     /// Remove one engine field from the overlay (fall through to base).
@@ -319,12 +321,10 @@ public enum ManagedMkxpConfig {
         stateDirectory: URL,
         gameDirectory: URL
     ) -> Bool {
-        if isDevConfigUnparseable(gameDirectory: gameDirectory) { return false }
-
+        _ = gameDirectory
         var overlay = loadOverlayDict(from: stateDirectory) ?? [:]
         clearField(field, in: &overlay)
-        guard persistOverlay(overlay, to: stateDirectory) else { return false }
-        return compose(gameDirectory: gameDirectory, stateDirectory: stateDirectory) != .readOnly
+        return persistOverlay(overlay, to: stateDirectory)
     }
 
     /// Reset every engine field (Reset to Defaults in Game Settings).
@@ -333,14 +333,12 @@ public enum ManagedMkxpConfig {
         stateDirectory: URL,
         gameDirectory: URL
     ) -> Bool {
-        if isDevConfigUnparseable(gameDirectory: gameDirectory) { return false }
-
+        _ = gameDirectory
         var overlay = loadOverlayDict(from: stateDirectory) ?? [:]
         for field in MkxpEngineField.allCases {
             clearField(field, in: &overlay)
         }
-        guard persistOverlay(overlay, to: stateDirectory) else { return false }
-        return compose(gameDirectory: gameDirectory, stateDirectory: stateDirectory) != .readOnly
+        return persistOverlay(overlay, to: stateDirectory)
     }
 
     // MARK: - Legacy migration
@@ -357,12 +355,13 @@ public enum ManagedMkxpConfig {
 
     /// One-time migration: build a sparse overlay from legacy
     /// `game_settings.json` engine keys, replace `EmpoState/mkxp.json`,
-    /// strip those keys from the sidecar, then compose.
+    /// strip those keys from the sidecar.
     @discardableResult
     public static func migrateLegacyEngineSettingsIfNeeded(
         stateDirectory: URL,
         gameDirectory: URL
     ) -> Bool {
+        _ = gameDirectory
         let settingsURL = stateDirectory.appendingPathComponent(settingsFilename)
         guard let data = try? Data(contentsOf: settingsURL),
             var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -376,10 +375,6 @@ public enum ManagedMkxpConfig {
 
         let overrides = legacyValues(from: json)
         guard writeSparseOverlay(overrides, to: stateDirectory) else {
-            return false
-        }
-
-        guard compose(gameDirectory: gameDirectory, stateDirectory: stateDirectory) != .readOnly else {
             return false
         }
 
@@ -419,7 +414,8 @@ public enum ManagedMkxpConfig {
 
     private static func loadOverlayDict(from stateDirectory: URL) -> [String: Any]? {
         let overlayURL = overlayConfigURL(in: stateDirectory)
-        guard let raw = try? String(contentsOf: overlayURL, encoding: .utf8),
+        guard FileManager.default.fileExists(atPath: overlayURL.path),
+            let raw = try? String(contentsOf: overlayURL, encoding: .utf8),
             let parsed = parseJSONWithComments(raw)
         else {
             return nil
@@ -438,8 +434,7 @@ public enum ManagedMkxpConfig {
     }
 
     // UI writes touch only their own keys; anything else a user put in
-    // the overlay by hand is preserved (compose honors it, so deleting
-    // it here would be silent data loss).
+    // the overlay by hand is preserved.
     @discardableResult
     private static func persistOverlay(
         _ overlay: [String: Any],
@@ -451,19 +446,6 @@ public enum ManagedMkxpConfig {
             return true
         }
         return writeConfig(overlay, to: url)
-    }
-
-    private static func applyNormalizations(to config: inout [String: Any]) {
-        config.removeValue(forKey: "syntaxTransform")
-        config.removeValue(forKey: "defScreenW")
-        config.removeValue(forKey: "defScreenH")
-
-        if let legacyVsync = config["vsync"] as? Bool {
-            if config["syncToRefreshrate"] == nil {
-                config["syncToRefreshrate"] = legacyVsync
-            }
-            config.removeValue(forKey: "vsync")
-        }
     }
 
     private static func applyOverrides(

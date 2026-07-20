@@ -19,35 +19,137 @@ final class ManagedMkxpConfigTests: XCTestCase {
         super.tearDown()
     }
 
-    func testComposeOverlayBeatsBaseAndPreservesDevKeys() throws {
+    func testOverlayStringPassesSparseKeysThrough() throws {
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
 
         try """
-            {
-              "smoothScaling": 1,
-              "fontScale": 1.0,
-              "patches": ["overlay.zip"],
-              "scriptPatches": ["foo.rb"]
-            }
-            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
-
-        try """
-            { "smoothScaling": 0, "fontScale": 1.5 }
+            { "fontScale": 1.5 }
             """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(
-            ManagedMkxpConfig.compose(gameDirectory: gameDir, stateDirectory: stateDir),
-            .composed
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir
+            )
+        )
+        let payload = try parseOverlayJSON(json)
+        XCTAssertEqual(payload["fontScale"] as? Double, 1.5)
+        XCTAssertTrue(payload["defScreenW"] is NSNull)
+        XCTAssertTrue(payload["defScreenH"] is NSNull)
+    }
+
+    func testOverlayStringAlwaysIncludesNullScreenPatchesWhenNonNil() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "pathCache": false }
+            """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir
+            )
+        )
+        let payload = try parseOverlayJSON(json)
+        XCTAssertEqual(payload["pathCache"] as? Bool, false)
+        XCTAssertTrue(payload["defScreenW"] is NSNull)
+        XCTAssertTrue(payload["defScreenH"] is NSNull)
+    }
+
+    func testOverlayStringAppliesVsyncPatchOnlyWhenConditionsMet() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "vsync": true, "defScreenW": 640 }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir
+            )
+        )
+        let payload = try parseOverlayJSON(json)
+        XCTAssertEqual(payload["syncToRefreshrate"] as? Bool, true)
+        XCTAssertNil(payload["vsync"])
+        XCTAssertTrue(payload["defScreenW"] is NSNull)
+        XCTAssertTrue(payload["defScreenH"] is NSNull)
+    }
+
+    func testOverlayStringUserSyncToRefreshrateBeatsVsyncPatch() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "vsync": true }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try """
+            { "syncToRefreshrate": false }
+            """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir
+            )
+        )
+        let payload = try parseOverlayJSON(json)
+        XCTAssertEqual(payload["syncToRefreshrate"] as? Bool, false)
+    }
+
+    func testOverlayStringUnparseableOverlayYieldsPatchesOnly() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "vsync": true, "defScreenW": 640 }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try "{ not json".write(
+            to: stateDir.appendingPathComponent("mkxp.json"),
+            atomically: true,
+            encoding: .utf8
         )
 
-        let composed = try readComposedConfig(stateDir)
-        XCTAssertEqual(composed["smoothScaling"] as? Int, 0)
-        XCTAssertEqual(composed["fontScale"] as? Double, 1.5)
-        XCTAssertEqual(composed["patches"] as? [String], ["overlay.zip"])
-        XCTAssertEqual(composed["scriptPatches"] as? [String], ["foo.rb"])
+        var logged: String?
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir,
+                onUnparseableOverlay: { logged = $0 }
+            )
+        )
+        XCTAssertNotNil(logged)
+        let payload = try parseOverlayJSON(json)
+        XCTAssertEqual(payload["syncToRefreshrate"] as? Bool, true)
+        XCTAssertTrue(payload["defScreenW"] is NSNull)
+    }
+
+    func testOverlayStringNilWhenNothingToSend() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        XCTAssertNil(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir
+            )
+        )
     }
 
     func testUIWritePreservesHandAddedOverlayKeys() throws {
@@ -79,44 +181,18 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(overlay["smoothScaling"] as? Int, 0)
         XCTAssertEqual(overlay["fontScale"] as? Double, 1.2)
 
-        let composed = try readComposedConfig(stateDir)
-        XCTAssertEqual(composed["frameRate"] as? Int, 120)
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir
+            )
+        )
+        let payload = try parseOverlayJSON(json)
+        XCTAssertEqual(payload["frameRate"] as? Int, 120)
+        XCTAssertEqual(payload["fontScale"] as? Double, 1.2)
     }
 
-    func testComposeAppliesNormalizationsOnlyToComposedOutput() throws {
-        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
-        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
-        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
-
-        try """
-            {
-              "vsync": true,
-              "syntaxTransform": "legacy",
-              "defScreenW": 640
-            }
-            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
-
-        XCTAssertEqual(
-            ManagedMkxpConfig.compose(gameDirectory: gameDir, stateDirectory: stateDir),
-            .composed
-        )
-
-        let composed = try readComposedConfig(stateDir)
-        XCTAssertEqual(composed["syncToRefreshrate"] as? Bool, true)
-        XCTAssertNil(composed["vsync"])
-        XCTAssertNil(composed["syntaxTransform"])
-        XCTAssertNil(composed["defScreenW"])
-
-        let baseRaw = try String(
-            contentsOf: gameDir.appendingPathComponent("mkxp.json"),
-            encoding: .utf8
-        )
-        XCTAssertTrue(baseRaw.contains("\"vsync\""))
-        XCTAssertTrue(baseRaw.contains("\"syntaxTransform\""))
-    }
-
-    func testUnparseableBaseRemovesComposedFileAndBlocksOverlayWrites() throws {
+    func testUnparseableBaseAllowsOverlayWrites() throws {
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
@@ -128,68 +204,17 @@ final class ManagedMkxpConfigTests: XCTestCase {
             encoding: .utf8
         )
 
-        let staleComposed = ManagedMkxpConfig.composedConfigURL(in: stateDir)
-        try FileManager.default.createDirectory(
-            at: ManagedMkxpConfig.engineConfigDirectory(in: stateDir),
-            withIntermediateDirectories: true
-        )
-        try "{\"smoothScaling\": 0}".write(to: staleComposed, atomically: true, encoding: .utf8)
-
-        XCTAssertEqual(
-            ManagedMkxpConfig.compose(gameDirectory: gameDir, stateDirectory: stateDir),
-            .readOnly
-        )
-        XCTAssertFalse(FileManager.default.fileExists(atPath: staleComposed.path))
         XCTAssertTrue(ManagedMkxpConfig.isDevConfigUnparseable(gameDirectory: gameDir))
-
-        XCTAssertFalse(
+        XCTAssertTrue(
             ManagedMkxpConfig.updateManaged(
                 overrides: MkxpEngineValues(smoothScaling: true),
                 stateDirectory: stateDir,
                 gameDirectory: gameDir
             )
         )
-    }
 
-    func testComposeOverlayOnlyAndBaseOnly() throws {
-        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
-        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
-        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
-
-        try """
-            { "pathCache": true }
-            """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
-
-        XCTAssertEqual(
-            ManagedMkxpConfig.compose(gameDirectory: gameDir, stateDirectory: stateDir),
-            .composed
-        )
-        var composed = try readComposedConfig(stateDir)
-        XCTAssertEqual(composed["pathCache"] as? Bool, true)
-
-        try? FileManager.default.removeItem(at: stateDir.appendingPathComponent("mkxp.json"))
-        try """
-            { "fontScale": 1.2 }
-            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
-
-        XCTAssertEqual(
-            ManagedMkxpConfig.compose(gameDirectory: gameDir, stateDirectory: stateDir),
-            .composed
-        )
-        composed = try readComposedConfig(stateDir)
-        XCTAssertEqual(composed["fontScale"] as? Double, 1.2)
-
-        try? FileManager.default.removeItem(at: gameDir.appendingPathComponent("mkxp.json"))
-        XCTAssertEqual(
-            ManagedMkxpConfig.compose(gameDirectory: gameDir, stateDirectory: stateDir),
-            .noSource
-        )
-        XCTAssertFalse(
-            FileManager.default.fileExists(
-                atPath: ManagedMkxpConfig.composedConfigURL(in: stateDir).path
-            )
-        )
+        let overlay = try readOverlayConfig(stateDir)
+        XCTAssertEqual(overlay["smoothScaling"] as? Int, 1)
     }
 
     func testWriteOverlayStoresOnlyEngineKeys() throws {
@@ -232,9 +257,6 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: ManagedMkxpConfig.overlayConfigURL(in: stateDir).path
         ))
-
-        let composed = try readComposedConfig(stateDir)
-        XCTAssertEqual(composed["fontScale"] as? Double, 1.2)
     }
 
     func testResetAllDeletesEmptyOverlay() throws {
@@ -309,10 +331,6 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertNil(overlay["pathCache"])
         XCTAssertNil(overlay["patches"])
 
-        let composed = try readComposedConfig(stateDir)
-        XCTAssertEqual(composed["pathCache"] as? Bool, true)
-        XCTAssertEqual(composed["patches"] as? [String], ["keep-me.zip"])
-
         let settingsData = try Data(contentsOf: stateDir.appendingPathComponent("game_settings.json"))
         let settings = try XCTUnwrap(JSONSerialization.jsonObject(with: settingsData) as? [String: Any])
         XCTAssertEqual(settings["speedMultiplier"] as? Int, 4)
@@ -357,15 +375,27 @@ final class ManagedMkxpConfigTests: XCTestCase {
         )
     }
 
+    func testRemoveLegacyEngineConfigDirectory() throws {
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        let engineDir = stateDir.appendingPathComponent(".engine", isDirectory: true)
+        try FileManager.default.createDirectory(at: engineDir, withIntermediateDirectories: true)
+        try "{\"smoothScaling\":0}".write(
+            to: engineDir.appendingPathComponent("mkxp.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        ManagedMkxpConfig.removeLegacyEngineConfigDirectory(in: stateDir)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: engineDir.path))
+    }
+
     private func readOverlayConfig(_ stateDir: URL) throws -> [String: Any] {
         let url = ManagedMkxpConfig.overlayConfigURL(in: stateDir)
         let raw = try String(contentsOf: url, encoding: .utf8)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any])
     }
 
-    private func readComposedConfig(_ stateDir: URL) throws -> [String: Any] {
-        let url = ManagedMkxpConfig.composedConfigURL(in: stateDir)
-        let raw = try String(contentsOf: url, encoding: .utf8)
-        return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any])
+    private func parseOverlayJSON(_ json: String) throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
     }
 }

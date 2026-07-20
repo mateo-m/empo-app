@@ -1,9 +1,8 @@
 import Foundation
 import GameProbe
 
-/// Composes the engine config from `Game/mkxp.json` + the sparse
-/// `EmpoState/mkxp.json` overlay and reads developer defaults from
-/// `Game/mkxp.json`.
+/// Reads developer defaults from `Game/mkxp.json` and builds the in-
+/// memory config overlay string for the engine bridge.
 enum EngineConfigProjector {
     static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
         GameConfigDefaults(
@@ -11,32 +10,28 @@ enum EngineConfigProjector {
         )
     }
 
-    @discardableResult
-    static func composeManagedConfig(
+    static func overlayJSONString(
         stateDirectory: URL,
         gameDirectory: URL
-    ) -> ComposeResult {
-        ManagedMkxpConfig.compose(
+    ) -> String? {
+        ManagedMkxpConfig.overlayJSONString(
             gameDirectory: gameDirectory,
-            stateDirectory: stateDirectory
+            stateDirectory: stateDirectory,
+            onUnparseableOverlay: { NSLog($0) }
         )
     }
 
-    /// Overlay engine values (JGP import) then compose.
     @discardableResult
     static func applyEngineValues(
         _ values: MkxpEngineValues,
         stateDirectory: URL,
         gameDirectory: URL
     ) -> Bool {
-        guard ManagedMkxpConfig.writeOverlay(overrides: values, stateDirectory: stateDirectory)
-        else {
-            return false
-        }
-        return ManagedMkxpConfig.compose(
-            gameDirectory: gameDirectory,
+        _ = gameDirectory
+        return ManagedMkxpConfig.writeOverlay(
+            overrides: values,
             stateDirectory: stateDirectory
-        ) != .readOnly
+        )
     }
 
     static func migrateLegacyEngineSettingsIfNeeded(

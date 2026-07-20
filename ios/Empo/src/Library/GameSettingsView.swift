@@ -333,9 +333,9 @@ struct GameSettingsView: View {
 
     private var displaySection: some View {
         Section {
-            if engineSettings.isReadOnly {
+            if engineSettings.gameDefaultsUnknown {
                 Text(
-                    "This game's mkxp.json could not be parsed; engine settings are read-only."
+                    "Empo can't read this game's mkxp.json; game defaults unknown."
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -418,7 +418,6 @@ struct GameSettingsView: View {
                     )
                 }
             }
-            .disabled(engineSettings.isReadOnly)
         } header: {
             Text("Display")
         } footer: {
@@ -457,7 +456,6 @@ struct GameSettingsView: View {
                         "Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness."
                 )
             }
-            .disabled(engineSettings.isReadOnly)
         } header: {
             Text("Performance")
         } footer: {
@@ -482,7 +480,6 @@ struct GameSettingsView: View {
                         "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
                 )
             }
-            .disabled(engineSettings.isReadOnly)
 
             SettingsToggle(
                 title: "In-game keyboard",
@@ -770,9 +767,14 @@ struct GameSettingsView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         let provenance = engineSettings.provenance(for: field)
+        let provenanceLabel: String = {
+            if provenance == .yours { return "yours" }
+            if engineSettings.gameDefaultsUnknown { return "unknown" }
+            return "game"
+        }()
         VStack(alignment: .leading, spacing: Spacing.xxs) {
             content()
-            Text(provenance == .yours ? "yours" : "game")
+            Text(provenanceLabel)
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }

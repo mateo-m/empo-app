@@ -92,6 +92,7 @@ class AppState {
             stateDirectory: stateDir,
             gameDirectory: gameDir
         )
+        ManagedMkxpConfig.removeLegacyEngineConfigDirectory(in: stateDir)
 
         var settings = GameSettings.load(from: stateDir)
         var metadata = GameMetadata.load(from: container)

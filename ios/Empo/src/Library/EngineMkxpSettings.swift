@@ -14,8 +14,9 @@ struct EngineMkxpSettings: Equatable {
     var solidFonts: Bool?
 
     /// True when the developer's `Game/mkxp.json` exists but cannot be
-    /// parsed. Engine rows are read-only in this case.
-    let isReadOnly: Bool
+    /// parsed by the host. Rows stay editable; dev-default annotations
+    /// degrade to unknown.
+    let gameDefaultsUnknown: Bool
 
     private let overlayProvenance: [MkxpEngineField: MkxpValueProvenance]
 
@@ -28,7 +29,7 @@ struct EngineMkxpSettings: Equatable {
         pathCache: Bool? = nil,
         fontScale: Double? = nil,
         solidFonts: Bool? = nil,
-        isReadOnly: Bool = false,
+        gameDefaultsUnknown: Bool = false,
         overlayProvenance: [MkxpEngineField: MkxpValueProvenance] = [:]
     ) {
         self.smoothScaling = smoothScaling
@@ -39,12 +40,12 @@ struct EngineMkxpSettings: Equatable {
         self.pathCache = pathCache
         self.fontScale = fontScale
         self.solidFonts = solidFonts
-        self.isReadOnly = isReadOnly
+        self.gameDefaultsUnknown = gameDefaultsUnknown
         self.overlayProvenance = overlayProvenance
     }
 
     static func load(from stateDirectory: URL, gameDirectory: URL) -> EngineMkxpSettings {
-        let readOnly = ManagedMkxpConfig.isDevConfigUnparseable(gameDirectory: gameDirectory)
+        let defaultsUnknown = ManagedMkxpConfig.isDevConfigUnparseable(gameDirectory: gameDirectory)
         let values = ManagedMkxpConfig.readOverlay(from: stateDirectory)
         var provenance: [MkxpEngineField: MkxpValueProvenance] = [:]
         for field in MkxpEngineField.allCases {
@@ -52,14 +53,14 @@ struct EngineMkxpSettings: Equatable {
         }
         return EngineMkxpSettings(
             values: values,
-            isReadOnly: readOnly,
+            gameDefaultsUnknown: defaultsUnknown,
             overlayProvenance: provenance
         )
     }
 
     init(
         values: MkxpEngineValues,
-        isReadOnly: Bool = false,
+        gameDefaultsUnknown: Bool = false,
         overlayProvenance: [MkxpEngineField: MkxpValueProvenance] = [:]
     ) {
         self.smoothScaling = values.smoothScaling
@@ -70,7 +71,7 @@ struct EngineMkxpSettings: Equatable {
         self.pathCache = values.pathCache
         self.fontScale = values.fontScale
         self.solidFonts = values.solidFonts
-        self.isReadOnly = isReadOnly
+        self.gameDefaultsUnknown = gameDefaultsUnknown
         self.overlayProvenance = overlayProvenance
     }
 
@@ -100,7 +101,6 @@ struct EngineMkxpSettings: Equatable {
     }
 
     func save(to stateDirectory: URL, gameDirectory: URL) {
-        guard !isReadOnly else { return }
         ManagedMkxpConfig.updateManaged(
             overrides: mkxpValues,
             stateDirectory: stateDirectory,
@@ -113,7 +113,6 @@ struct EngineMkxpSettings: Equatable {
         gameDirectory: URL,
         stateDirectory: URL
     ) {
-        guard !isReadOnly else { return }
         ManagedMkxpConfig.resetField(
             field,
             stateDirectory: stateDirectory,
@@ -123,7 +122,6 @@ struct EngineMkxpSettings: Equatable {
     }
 
     mutating func resetToDefaults(gameDirectory: URL, stateDirectory: URL) {
-        guard !isReadOnly else { return }
         ManagedMkxpConfig.resetAllEngineFields(
             stateDirectory: stateDirectory,
             gameDirectory: gameDirectory

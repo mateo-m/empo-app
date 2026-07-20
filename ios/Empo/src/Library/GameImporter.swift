@@ -29,11 +29,6 @@ enum GameImporter {
 
     nonisolated static func seedFolderImport(in container: GameContainer) {
         let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
-        let stateDir = container.ensureEmpoStateDirectory()
-        EngineConfigProjector.composeManagedConfig(
-            stateDirectory: stateDir,
-            gameDirectory: container.gameURL
-        )
         if profile.modernRubyScripts {
             persistModernRubySettings(in: container)
         }
@@ -90,11 +85,6 @@ enum GameImporter {
         if let engineValues = bundle.configuration?.toMkxpEngineValues() {
             EngineConfigProjector.applyEngineValues(
                 engineValues,
-                stateDirectory: stateDir,
-                gameDirectory: container.gameURL
-            )
-        } else {
-            EngineConfigProjector.composeManagedConfig(
                 stateDirectory: stateDir,
                 gameDirectory: container.gameURL
             )
