@@ -38,8 +38,9 @@ jobs:
       # submodules are multi-GB and must NOT be checked out here.
       - name: Checkout engine submodule
         run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive mkxp-z-apple-mobile
+          # -c (not --global) so nothing persists on self-hosted runners.
+          git -c url."https://github.com/".insteadOf="git@github.com:" \
+              submodule update --init --recursive mkxp-z-apple-mobile
 
       - name: Select newest Xcode
         # DEVELOPER_DIR instead of xcode-select: no sudo, so the same

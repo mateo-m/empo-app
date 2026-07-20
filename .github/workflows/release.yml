@@ -63,8 +63,9 @@ jobs:
 
       - name: Checkout engine submodule
         run: |
-          git config --global url."https://github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive mkxp-z-apple-mobile
+          # -c (not --global) so nothing persists on self-hosted runners.
+          git -c url."https://github.com/".insteadOf="git@github.com:" \
+              submodule update --init --recursive mkxp-z-apple-mobile
 
       - name: Resolve version + build number
         id: meta
