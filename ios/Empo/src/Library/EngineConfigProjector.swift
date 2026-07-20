@@ -57,10 +57,22 @@ enum EngineConfigProjector {
         let sourceURL = gameDirectory.appendingPathComponent(configFilename)
 
         var config: [String: Any] = [:]
-        if FileManager.default.fileExists(atPath: sourceURL.path),
-            let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
-            let parsed = parseJSONWithComments(raw)
-        {
+        if FileManager.default.fileExists(atPath: sourceURL.path) {
+            guard let raw = try? String(contentsOf: sourceURL, encoding: .utf8),
+                let parsed = parseJSONWithComments(raw)
+            else {
+                // The developer's mkxp.json exists but doesn't parse
+                // even after JSON5 normalization. A managed config
+                // written now would shadow the developer file while
+                // missing all of its keys (patches, RTP, preload
+                // scripts, ...), so drop any stale managed copy and
+                // let the engine read Game/mkxp.json itself — it only
+                // prefers the managed path when the file exists. User
+                // overrides are skipped for such games rather than
+                // risk silently discarding developer settings.
+                try? FileManager.default.removeItem(at: configURL)
+                return
+            }
             config = parsed
         }
 
@@ -98,6 +110,9 @@ enum EngineConfigProjector {
         }
     }
 
+    // JSON5-tolerant (comments, trailing commas, single quotes,
+    // unquoted keys) to match the engine's json5pp `parse5`, so a
+    // config desktop mkxp-z accepts survives projection.
     private static func parseJSONWithComments(_ raw: String) -> [String: Any]? {
         JSON5LiteParser.parseObject(raw)
     }
