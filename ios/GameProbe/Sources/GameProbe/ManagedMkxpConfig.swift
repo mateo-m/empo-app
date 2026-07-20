@@ -437,33 +437,20 @@ public enum ManagedMkxpConfig {
         return persistOverlay(overlay, to: stateDirectory)
     }
 
+    // UI writes touch only their own keys; anything else a user put in
+    // the overlay by hand is preserved (compose honors it, so deleting
+    // it here would be silent data loss).
     @discardableResult
     private static func persistOverlay(
         _ overlay: [String: Any],
         to stateDirectory: URL
     ) -> Bool {
-        let sanitized = sanitizeOverlay(overlay)
         let url = overlayConfigURL(in: stateDirectory)
-        if sanitized.isEmpty {
+        if overlay.isEmpty {
             try? FileManager.default.removeItem(at: url)
             return true
         }
-        return writeConfig(sanitized, to: url)
-    }
-
-    private static func sanitizeOverlay(_ overlay: [String: Any]) -> [String: Any] {
-        let allowedKeys: Set<String> = [
-            "smoothScaling",
-            "fixedAspectRatio",
-            "enableHires",
-            "framebufferScalingFactor",
-            "frameSkip",
-            "syncToRefreshrate",
-            "pathCache",
-            "fontScale",
-            "solidFonts",
-        ]
-        return overlay.filter { allowedKeys.contains($0.key) }
+        return writeConfig(overlay, to: url)
     }
 
     private static func applyNormalizations(to config: inout [String: Any]) {

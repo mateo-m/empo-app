@@ -50,6 +50,39 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(composed["scriptPatches"] as? [String], ["foo.rb"])
     }
 
+    func testUIWritePreservesHandAddedOverlayKeys() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "smoothScaling": 1 }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try """
+            { "frameRate": 120, "smoothScaling": 0 }
+            """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        XCTAssertTrue(
+            ManagedMkxpConfig.updateManaged(
+                overrides: MkxpEngineValues(fontScale: 1.2),
+                stateDirectory: stateDir,
+                gameDirectory: gameDir
+            )
+        )
+
+        let overlayData = try Data(
+            contentsOf: stateDir.appendingPathComponent("mkxp.json"))
+        let overlay = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: overlayData) as? [String: Any])
+        XCTAssertEqual(overlay["frameRate"] as? Int, 120)
+        XCTAssertEqual(overlay["smoothScaling"] as? Int, 0)
+        XCTAssertEqual(overlay["fontScale"] as? Double, 1.2)
+
+        let composed = try readComposedConfig(stateDir)
+        XCTAssertEqual(composed["frameRate"] as? Int, 120)
+    }
+
     func testComposeAppliesNormalizationsOnlyToComposedOutput() throws {
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
