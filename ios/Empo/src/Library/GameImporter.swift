@@ -58,7 +58,7 @@ enum GameImporter {
         }
 
         let fm = FileManager.default
-        for name in ["manifest.json", "configuration.json", "gamepad.json"] {
+        for name in ["manifest.json", "configuration.json"] {
             try? fm.removeItem(at: gameRoot.appendingPathComponent(name))
         }
         if let iconRel = bundle.manifest.icon, !iconRel.isEmpty {
@@ -91,23 +91,6 @@ enum GameImporter {
         }
         settings.save(to: stateDir)
 
-        if let gamepad = bundle.gamepad {
-            if hasShippedTouchManifest(at: container.gameURL) {
-                NSLog(
-                    "[GameImporter] Skipping JGP gamepad layout seed: game ships controls manifest touch section"
-                )
-            } else {
-                let seed = gamepad.toSeedLayout()
-                ControlsLayout.writeInitialPerGameLayout(
-                    container: container,
-                    dpadCenter: seed.dpadCenter,
-                    dpadSize: seed.dpadSize,
-                    buttons: seed.buttons
-                )
-                NSLog("[GameImporter] Seeding touch layout from JGP gamepad.json")
-            }
-        }
-
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
         metadata.baseTitle = bundle.manifest.name
@@ -128,12 +111,5 @@ enum GameImporter {
         }
 
         metadata.save(to: container)
-    }
-
-    /// True when a shipped controls manifest exists and validates with a `touch` section.
-    nonisolated static func hasShippedTouchManifest(at gameRoot: URL) -> Bool {
-        guard let outcome = ControlsManifestLoader.load(gameRoot: gameRoot) else { return false }
-        guard let manifest = outcome.result.manifest, manifest.touch != nil else { return false }
-        return true
     }
 }

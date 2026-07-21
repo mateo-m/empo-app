@@ -4,6 +4,7 @@ public enum ControlsManifestLoader {
     public static let empoManifestRelativePath = "empo/controls.json"
     public static let rootManifestRelativePath = "controls.json"
     public static let kirinManifestRelativePath = KirinControlsTranslator.fileName
+    public static let joiplayManifestRelativePath = JoiPlayControlsTranslator.fileName
 
     /// Legacy alias for the authoritative `empo/` location.
     public static let manifestRelativePath = empoManifestRelativePath
@@ -14,6 +15,7 @@ public enum ControlsManifestLoader {
         case empo = "empo/controls.json"
         case root = "controls.json"
         case kirin = "kirin-touch-controls.json"
+        case joiplay = "gamepad.json"
     }
 
     public struct LoadOutcome: Sendable {
@@ -23,6 +25,7 @@ public enum ControlsManifestLoader {
         public enum Note: Equatable, Sendable {
             case rootSkippedBecauseEmpoExists
             case kirinSkippedBecauseManifestExists
+            case joiplaySkippedBecauseOtherSourceExists
             case rootUnclaimedNotObject
             case rootUnclaimedNoVersion
             case rootUnclaimedOversized
@@ -83,11 +86,13 @@ public enum ControlsManifestLoader {
         let empoURL = gameRoot.appendingPathComponent(empoManifestRelativePath)
         let rootURL = gameRoot.appendingPathComponent(rootManifestRelativePath)
         let kirinURL = gameRoot.appendingPathComponent(kirinManifestRelativePath)
+        let joiplayURL = gameRoot.appendingPathComponent(joiplayManifestRelativePath)
         let empoExists = fileManager.fileExists(atPath: empoURL.path)
         let rootExists = fileManager.fileExists(atPath: rootURL.path)
         let kirinExists = fileManager.fileExists(atPath: kirinURL.path)
+        let joiplayExists = fileManager.fileExists(atPath: joiplayURL.path)
 
-        guard empoExists || rootExists || kirinExists else { return nil }
+        guard empoExists || rootExists || kirinExists || joiplayExists else { return nil }
 
         if empoExists {
             let result = loadEmpo(at: empoURL)
@@ -96,6 +101,8 @@ public enum ControlsManifestLoader {
                     .rootSkippedBecauseEmpoExists
                 } else if kirinExists {
                     .kirinSkippedBecauseManifestExists
+                } else if joiplayExists {
+                    .joiplaySkippedBecauseOtherSourceExists
                 } else {
                     nil
                 }
@@ -103,10 +110,20 @@ public enum ControlsManifestLoader {
         }
 
         if rootExists {
-            return loadRoot(at: rootURL, kirinExists: kirinExists, kirinURL: kirinURL)
+            return loadRoot(
+                at: rootURL,
+                kirinExists: kirinExists,
+                kirinURL: kirinURL,
+                joiplayExists: joiplayExists,
+                joiplayURL: joiplayURL
+            )
         }
 
-        return loadKirin(at: kirinURL)
+        if kirinExists {
+            return loadKirin(at: kirinURL, joiplayExists: joiplayExists)
+        }
+
+        return loadJoiplay(at: joiplayURL)
     }
 
     private static func loadEmpo(at url: URL) -> Result {
@@ -132,11 +149,16 @@ public enum ControlsManifestLoader {
     private static func loadRoot(
         at url: URL,
         kirinExists: Bool,
-        kirinURL: URL
+        kirinURL: URL,
+        joiplayExists: Bool,
+        joiplayURL: URL
     ) -> LoadOutcome {
         let unclaimed = { (note: LoadOutcome.Note) in
             if kirinExists {
-                return loadKirin(at: kirinURL)
+                return loadKirin(at: kirinURL, joiplayExists: joiplayExists)
+            }
+            if joiplayExists {
+                return loadJoiplay(at: joiplayURL)
             }
             return LoadOutcome(
                 result: Result(manifest: nil, findings: []),
@@ -164,11 +186,18 @@ public enum ControlsManifestLoader {
 
         var result = parse(data: data)
         result.location = .root
-        let note: LoadOutcome.Note? = kirinExists ? .kirinSkippedBecauseManifestExists : nil
+        let note: LoadOutcome.Note? =
+            if kirinExists {
+                .kirinSkippedBecauseManifestExists
+            } else if joiplayExists {
+                .joiplaySkippedBecauseOtherSourceExists
+            } else {
+                nil
+            }
         return LoadOutcome(result: result, note: note)
     }
 
-    private static func loadKirin(at url: URL) -> LoadOutcome {
+    private static func loadKirin(at url: URL, joiplayExists: Bool = false) -> LoadOutcome {
         let data = (try? Data(contentsOf: url)) ?? Data()
         let translation = KirinControlsTranslator.translate(data: data)
         let findings = translation.notes.map { note in
@@ -178,6 +207,22 @@ public enum ControlsManifestLoader {
             manifest: translation.manifest,
             findings: findings,
             location: .kirin
+        )
+        let note: LoadOutcome.Note? =
+            joiplayExists ? .joiplaySkippedBecauseOtherSourceExists : nil
+        return LoadOutcome(result: result, note: note)
+    }
+
+    private static func loadJoiplay(at url: URL) -> LoadOutcome {
+        let data = (try? Data(contentsOf: url)) ?? Data()
+        let translation = JoiPlayControlsTranslator.translate(data: data)
+        let findings = translation.notes.map { note in
+            Finding(severity: .warning, code: "J001", path: "", message: note)
+        }
+        let result = Result(
+            manifest: translation.manifest,
+            findings: findings,
+            location: .joiplay
         )
         return LoadOutcome(result: result)
     }

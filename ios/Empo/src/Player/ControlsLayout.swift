@@ -272,47 +272,6 @@ class ControlsLayout {
         currentOrientation = new
     }
 
-    /// Seed an initial layout during JGP import. Writes
-    /// `EmpoState/controls.json` so the bundled gamepad layout wins
-    /// over shipped-manifest defaults without occupying UserDefaults.
-    ///
-    /// The bundled JGP layout is treated as the portrait layout; the
-    /// landscape slot gets the engine default. Users can edit each
-    /// independently after import.
-    nonisolated static func writeInitialPerGameLayout(
-        container: GameContainer,
-        dpadCenter: CGPoint,
-        dpadSize: CGFloat,
-        dpadOpacity: Double = 1.0,
-        buttons: [ButtonModel]
-    ) {
-        let portrait = orientedInput(
-            dpadCenter: dpadCenter,
-            dpadSize: dpadSize,
-            dpadOpacity: dpadOpacity,
-            buttons: buttons
-        )
-        let landscape = orientedInput(
-            dpadCenter: defaultDPadCenterLandscape,
-            dpadSize: defaultDPadSize,
-            dpadOpacity: 1.0,
-            buttons: defaultButtonsLandscape
-        )
-        let touch = ControlsManifestSerializer.touchSection(
-            portrait: portrait,
-            landscape: landscape,
-            onDroppedButton: { label, scancode in
-                NSLog(
-                    "controls.json: Dropped button \"\(label)\" (scancode \(scancode) has no key name)"
-                )
-            }
-        )
-        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil) else {
-            return
-        }
-        _ = UserControlsFile.write(data, in: container)
-    }
-
     private nonisolated static func orientedInput(
         dpadCenter: CGPoint,
         dpadSize: CGFloat,
@@ -339,11 +298,9 @@ class ControlsLayout {
 
     // MARK: - Defaults
     //
-    // Default constants are `nonisolated` so the `nonisolated`
-    // `writeInitialPerGameLayout` (called from background import
-    // tasks) and the JGP import pipeline can read them without
-    // hopping to the main actor. They're plain Swift `let`s of
-    // value types; safe to read from any thread.
+    // Default constants are `nonisolated` so legacy migration paths can
+    // read them without hopping to the main actor. They're plain Swift
+    // `let`s of value types; safe to read from any thread.
 
     nonisolated static let defaultDPadCenterPortrait = CGPoint(x: 0.13, y: 0.72)
     nonisolated static let defaultDPadCenterLandscape = CGPoint(x: 0.10, y: 0.65)
@@ -783,7 +740,10 @@ class ControlsLayout {
                 Self.logLine(for: note),
                 fileName: Self.controlsManifestLogFile
             )
-            if note != .rootSkippedBecauseEmpoExists && note != .kirinSkippedBecauseManifestExists {
+            if note != .rootSkippedBecauseEmpoExists
+                && note != .kirinSkippedBecauseManifestExists
+                && note != .joiplaySkippedBecauseOtherSourceExists
+            {
                 return
             }
         }
@@ -796,8 +756,12 @@ class ControlsLayout {
             return
         }
 
-        let logPrefix =
-            result.location == .kirin ? "kirin-touch-controls.json:" : "controls.json:"
+        let logPrefix: String =
+            switch result.location {
+            case .kirin: "kirin-touch-controls.json:"
+            case .joiplay: "gamepad.json:"
+            default: "controls.json:"
+            }
         for finding in result.findings {
             let severity = finding.severity == .error ? "error" : "warning"
             let line =
@@ -830,6 +794,9 @@ class ControlsLayout {
         case .kirinSkippedBecauseManifestExists:
             return
                 "kirin-touch-controls.json: Skipped (an Empo controls manifest takes precedence)"
+        case .joiplaySkippedBecauseOtherSourceExists:
+            return
+                "gamepad.json: Skipped (a controls manifest or Kirin layout takes precedence)"
         }
     }
 

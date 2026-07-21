@@ -45,12 +45,13 @@ A complete commented example lives at
 
 ## File locations
 
-Empo checks three spots, in order:
+Empo checks four spots, in order:
 
 1. `empo/controls.json` (a lowercase `empo` folder next to `Game.ini`)
 2. `controls.json` next to `Game.ini`
 3. `kirin-touch-controls.json` next to `Game.ini` (see
-   [Kirin files](#kirin-files))
+   [Files from other launchers](#files-from-other-launchers))
+4. `gamepad.json` next to `Game.ini` (JoiPlay's file, same section)
 
 The root location is the standard one; other launchers can adopt it
 without carrying Empo's name. The `empo/` location is an override for
@@ -63,26 +64,35 @@ generic file name, and some games ship one for their own scripts; Empo
 leaves a root file without `version` alone instead of flagging it as
 broken. A file inside `empo/` is validated no matter what.
 
-## Kirin files
+## Files from other launchers
 
-Kirin, the Android RPG Maker XP player, saves its touch layout as
-`kirin-touch-controls.json` at the game root. If your game already
-ships that file for Android players, Empo converts it on iOS: each
-mapped key becomes a touch button, kept in Kirin's right-hand and
+If your game already ships a touch layout for an Android launcher,
+Empo converts it on iOS. Both conversions follow the same rules: the
+file stays in your game folder and is re-read at every launch, the
+converted layout sits in the same precedence slot as your `touch`
+section (so players' own edits still win), conversion notes go to the
+same log file as manifest findings, and a file Empo cannot use changes
+nothing. Neither format adds controller bindings.
+
+**Kirin** saves its touch layout as `kirin-touch-controls.json`. Empo
+keeps each mapped key as a touch button in Kirin's right-hand and
 left-hand grid arrangement, with Kirin's scale and opacity applied.
+Button colors, d-pad changes, and the diagonal-movement toggle drop
+out.
 
-The conversion carries over keys, grid order, scale, and opacity. It
-drops button colors, d-pad changes, and the diagonal-movement toggle,
-and it adds no controller bindings. Conversion notes go to the same log
-file as manifest findings, and they never block loading; a Kirin file
-Empo cannot use changes nothing.
+**JoiPlay** ships `gamepad.json` inside JGP archives. Empo renders the
+full eight-button pad (C, B, A, X, Y, Z, L, R), applies your
+`*KeyCode` overrides, and falls back per slot to the standard RPG
+Maker keys (C=Enter, B=Esc, A=Shift, X/Y/Z=A/S/D, L/R=Q/W).
+`btnScale` and `btnOpacity` carry over. Because `gamepad.json` is a
+generic name, the file only counts when it contains at least one
+JoiPlay key.
 
-Either manifest location above outranks the Kirin file, and a converted
-Kirin layout sits in the same precedence slot as your `touch` section,
-so players' own edits still win. Ship a manifest when you want the
-layout under your control on both platforms, or when you need anything
-Kirin's format cannot express: exact positions, per-button sizes,
-labels, or controller mappings.
+A controls manifest outranks both files, and Kirin's outranks
+JoiPlay's. Ship a manifest when you want the layout under your control
+on every platform, or when you need anything these formats cannot
+express: exact positions, per-button sizes, labels, or controller
+mappings.
 
 ## File format
 
