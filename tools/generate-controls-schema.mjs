@@ -140,7 +140,7 @@ const schema = {
         dpad: { $ref: "#/$defs/dpad" },
         buttons: {
           type: "array",
-          maxItems: 16,
+          maxItems: 21,
           items: { $ref: "#/$defs/button" }
         }
       }
