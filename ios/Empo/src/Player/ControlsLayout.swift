@@ -113,6 +113,10 @@ class ControlsLayout {
     /// Loader source for `activeManifest` (kirin / joiplay / empo / root).
     private(set) var activeManifestSource: ControlsManifestLoader.ManifestLocation?
 
+    /// True when the active touch resolution derived one orientation
+    /// from the other (metrics-dependent; see `refreshForGameGeometryChange`).
+    private(set) var resolutionInvolvesDerivation = false
+
     /// Error findings from a rejected shipped `controls.json`, for edit-mode surfacing.
     private(set) var manifestRejectionErrorCount = 0
 
@@ -239,6 +243,7 @@ class ControlsLayout {
         userControlsRejectionErrorCount = 0
         separationLogSignature = nil
         activeManifestSource = nil
+        resolutionInvolvesDerivation = false
         loadManifest(from: container?.gameURL)
         if let container, newGameID != nil {
             migrateLegacyPersistenceIfNeeded(container: container)
@@ -282,19 +287,24 @@ class ControlsLayout {
         currentOrientation = new
     }
 
-    /// Re-translate Kirin/JoiPlay layouts when `gameRect` updates so
-    /// portrait top inset matches the live engine viewport.
+    /// Re-resolve manifest and/or user touch layouts when `gameRect`
+    /// updates so metrics-dependent translation/derivation tracks the
+    /// live engine viewport.
     func refreshForGameGeometryChange() {
         guard let container = currentContainer else { return }
-        guard activeManifest != nil else { return }
-        guard activeManifestSource == .kirin || activeManifestSource == .joiplay else { return }
-        guard !UserControlsFile.exists(in: container) else { return }
+        guard activeManifest != nil || UserControlsFile.exists(in: container) else { return }
         guard !editSessionActive else { return }
 
         staggerGeneration += 1
         separationLogSignature = nil
+
         loadManifest(from: container.gameURL)
-        applyResolvedLayout()
+
+        if UserControlsFile.exists(in: container) {
+            loadUserTouchLayout(from: container)
+        } else {
+            applyResolvedLayout()
+        }
     }
 
     private nonisolated static func orientedInput(
@@ -383,8 +393,11 @@ class ControlsLayout {
             _ = UserControlsFile.removeTouchSection(in: container)
         }
 
-        let portrait = Self.resolveInitialLayout(manifest: activeManifest, orientation: .portrait)
-        let landscape = Self.resolveInitialLayout(manifest: activeManifest, orientation: .landscape)
+        let metrics = Self.touchZoneMetricsForManifestLoad()
+        let portrait = Self.resolveInitialLayout(
+            manifest: activeManifest, orientation: .portrait, metrics: metrics)
+        let landscape = Self.resolveInitialLayout(
+            manifest: activeManifest, orientation: .landscape, metrics: metrics)
 
         let activeResolved: PersistedLayout.Oriented
         let inactiveResolved: PersistedLayout.Oriented
@@ -621,10 +634,11 @@ class ControlsLayout {
 
     private func hasTouchCustomization() -> Bool {
         let current = currentPersistedLayout()
+        let metrics = Self.touchZoneMetricsForManifestLoad()
         let defaultPortrait = Self.resolveInitialLayout(
-            manifest: activeManifest, orientation: .portrait)
+            manifest: activeManifest, orientation: .portrait, metrics: metrics)
         let defaultLandscape = Self.resolveInitialLayout(
-            manifest: activeManifest, orientation: .landscape)
+            manifest: activeManifest, orientation: .landscape, metrics: metrics)
         return !Self.layoutsEquivalent(current.portrait, defaultPortrait)
             || !Self.layoutsEquivalent(current.landscape, defaultLandscape)
     }
@@ -646,25 +660,44 @@ class ControlsLayout {
 
     private func currentTouchSection() -> TouchSection {
         let layout = currentPersistedLayout()
-        return ControlsManifestSerializer.touchSection(
-            portrait: Self.orientedInput(
-                dpadCenter: CGPoint(x: layout.portrait.dpad.rx, y: layout.portrait.dpad.ry),
-                dpadSize: layout.portrait.dpad.size,
-                dpadOpacity: layout.portrait.dpad.opacity ?? 1.0,
-                buttons: layout.portrait.buttons
-            ),
-            landscape: Self.orientedInput(
-                dpadCenter: CGPoint(x: layout.landscape.dpad.rx, y: layout.landscape.dpad.ry),
-                dpadSize: layout.landscape.dpad.size,
-                dpadOpacity: layout.landscape.dpad.opacity ?? 1.0,
-                buttons: layout.landscape.buttons
-            ),
-            onDroppedButton: { label, scancode in
-                NSLog(
-                    "controls.json: Dropped button \"\(label)\" (scancode \(scancode) has no key name)"
-                )
-            }
+        let metrics = Self.touchZoneMetricsForManifestLoad()
+        let defaultPortrait = Self.resolveInitialLayout(
+            manifest: activeManifest, orientation: .portrait, metrics: metrics)
+        let defaultLandscape = Self.resolveInitialLayout(
+            manifest: activeManifest, orientation: .landscape, metrics: metrics)
+
+        var portrait: TouchLayout?
+        if !Self.layoutsEquivalent(layout.portrait, defaultPortrait) {
+            portrait = Self.touchLayout(from: layout.portrait)
+        }
+
+        var landscape: TouchLayout?
+        if !Self.layoutsEquivalent(layout.landscape, defaultLandscape) {
+            landscape = Self.touchLayout(from: layout.landscape)
+        }
+
+        return TouchSection(portrait: portrait, landscape: landscape)
+    }
+
+    private static func touchLayout(from oriented: PersistedLayout.Oriented) -> TouchLayout {
+        let dpad = DPadSpec(
+            x: Double(oriented.dpad.rx),
+            y: Double(oriented.dpad.ry),
+            size: Double(oriented.dpad.size),
+            opacity: oriented.dpad.opacity
         )
+        let buttons = oriented.buttons.compactMap { button -> ButtonSpec? in
+            guard let key = KeyCodeTable.code(for: button.scancode) else { return nil }
+            return ButtonSpec(
+                label: button.label.isEmpty ? nil : button.label,
+                key: key,
+                x: Double(button.relativeCenter.x),
+                y: Double(button.relativeCenter.y),
+                size: Double(button.size),
+                opacity: button.opacity
+            )
+        }
+        return TouchLayout(dpad: dpad, buttons: buttons)
     }
 
     private func loadUserTouchLayout(from container: GameContainer) {
@@ -682,32 +715,44 @@ class ControlsLayout {
             return
         }
 
-        guard let touch = result.manifest?.touch else {
+        guard var touch = result.manifest?.touch else {
             applyResolvedLayout()
             return
         }
 
-        let portrait = orientedPersistedLayout(from: touch.portrait, orientation: .portrait)
-        let landscape = orientedPersistedLayout(from: touch.landscape, orientation: .landscape)
+        let metrics = Self.touchZoneMetricsForManifestLoad()
+        let completion = Self.completeTouchSection(touch, metrics: metrics)
+        touch = completion.section
+        resolutionInvolvesDerivation = completion.involvedDerivation
+
+        let portrait = orientedPersistedLayout(
+            from: touch.portrait, orientation: .portrait, metrics: metrics)
+        let landscape = orientedPersistedLayout(
+            from: touch.landscape, orientation: .landscape, metrics: metrics)
         applyV2(PersistedLayout(portrait: portrait, landscape: landscape))
     }
 
     private func orientedPersistedLayout(
         from layout: TouchLayout?,
-        orientation: ControlsOrientation
+        orientation: ControlsOrientation,
+        metrics: TouchZoneMetrics
     ) -> PersistedLayout.Oriented {
         guard let layout else {
-            return Self.resolveInitialLayout(manifest: activeManifest, orientation: orientation)
+            return Self.resolveInitialLayout(
+                manifest: activeManifest, orientation: orientation, metrics: metrics)
         }
-        return Self.oriented(from: layout, orientation: orientation, manifest: activeManifest)
+        return Self.oriented(
+            from: layout, orientation: orientation, manifest: activeManifest, metrics: metrics)
     }
 
     private static func oriented(
         from touchLayout: TouchLayout,
         orientation: ControlsOrientation,
-        manifest: ControlsManifest?
+        manifest: ControlsManifest?,
+        metrics: TouchZoneMetrics
     ) -> PersistedLayout.Oriented {
-        let fallback = resolveInitialLayout(manifest: manifest, orientation: orientation)
+        let fallback = resolveInitialLayout(
+            manifest: manifest, orientation: orientation, metrics: metrics)
 
         let dpad: PersistedLayout.DPad
         if let spec = touchLayout.dpad {
@@ -954,15 +999,43 @@ class ControlsLayout {
     }
 
     private func applyResolvedLayout() {
-        let portrait = Self.resolveInitialLayout(manifest: activeManifest, orientation: .portrait)
-        let landscape = Self.resolveInitialLayout(manifest: activeManifest, orientation: .landscape)
+        let metrics = Self.touchZoneMetricsForManifestLoad()
+        resolutionInvolvesDerivation = false
+        if let touch = activeManifest?.touch {
+            let completion = Self.completeTouchSection(touch, metrics: metrics)
+            resolutionInvolvesDerivation = completion.involvedDerivation
+        }
+        let portrait = Self.resolveInitialLayout(
+            manifest: activeManifest, orientation: .portrait, metrics: metrics)
+        let landscape = Self.resolveInitialLayout(
+            manifest: activeManifest, orientation: .landscape, metrics: metrics)
         applyV2(PersistedLayout(portrait: portrait, landscape: landscape))
     }
+
+    private static func completeTouchSection(
+        _ section: TouchSection,
+        metrics: TouchZoneMetrics
+    ) -> (section: TouchSection, involvedDerivation: Bool) {
+        TouchSectionCompletion.complete(
+            section,
+            metrics: metrics,
+            defaultDpad: defaultDpadSpec
+        )
+    }
+
+    private static let defaultDpadSpec = TouchSectionCompletion.DefaultDpadSpec(
+        portraitX: Double(defaultDPadCenterPortrait.x),
+        portraitY: Double(defaultDPadCenterPortrait.y),
+        landscapeX: Double(defaultDPadCenterLandscape.x),
+        landscapeY: Double(defaultDPadCenterLandscape.y),
+        size: Double(defaultDPadSize)
+    )
 
     /// SPEC §9 resolution for one orientation when UserDefaults is absent.
     fileprivate static func resolveInitialLayout(
         manifest: ControlsManifest?,
-        orientation: ControlsOrientation
+        orientation: ControlsOrientation,
+        metrics: TouchZoneMetrics
     ) -> PersistedLayout.Oriented {
         let builtinDpadCenter: CGPoint
         let builtinButtons: [ButtonModel]
@@ -980,12 +1053,14 @@ class ControlsLayout {
                 dpadCenter: builtinDpadCenter, buttons: builtinButtons)
         }
 
+        let completed = completeTouchSection(touch, metrics: metrics).section
+
         let touchLayout: TouchLayout?
         switch orientation {
         case .portrait:
-            touchLayout = touch.portrait
+            touchLayout = completed.portrait
         case .landscape:
-            touchLayout = touch.landscape
+            touchLayout = completed.landscape
         }
 
         guard let touchLayout else {
