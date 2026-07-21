@@ -98,13 +98,35 @@ class AppWindow: UIWindow {
         )
     }
 
-    /// During gameplay, only control/toolbar subviews should absorb
-    /// touches. Empty game-area hits return nil so UIKit can deliver
-    /// them to the SDL window below and SwiftUI skips useless work.
+    /// During gameplay, route hosting-layer hits using chrome rects
+    /// published by `PlayerView`. `_UIHostingView` is hit-testable
+    /// across the full window and owns every SwiftUI gesture, so view
+    /// identity cannot distinguish empty game area from chrome.
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
         guard AppState.shared.phase == .playing else { return hit }
         guard let hit else { return nil }
+
+        let typeName = String(describing: type(of: hit))
+        let isHostingLayer = typeName.contains("Hosting") || hit === rootViewController?.view
+
+        if isHostingLayer {
+            if ChromeHitRegions.contains(point) {
+                return hit
+            }
+            // The touchable game zone IS the visible game surface
+            // (published by the engine on every layout change), so
+            // letterbox/controls-zone taps never become game mouse
+            // input. UIKit routes each touch sequence to the view
+            // that received its begin, so drags that start inside
+            // keep delivering after the finger leaves the surface.
+            // Empty rect = not yet published (boot): stay permissive.
+            let gameRect = EngineState.shared.gameRect
+            if gameRect.isEmpty || gameRect.contains(point) {
+                return GameViewEmbedder.embeddedView
+            }
+            return hit
+        }
 
         var view: UIView? = hit
         while let current = view {
@@ -116,12 +138,20 @@ class AppWindow: UIWindow {
             }
             view = current.superview
         }
-
-        let typeName = String(describing: type(of: hit))
-        if typeName.contains("Hosting") || hit === rootViewController?.view {
-            return nil
-        }
         return hit
+    }
+
+    /// Any tap during play wakes the toolbar via
+    /// `Notification.Name.gameAreaTouchBegan` — including taps outside
+    /// the game surface that die on the hosting view.
+    override func sendEvent(_ event: UIEvent) {
+        if AppState.shared.phase == .playing,
+            event.type == .touches,
+            event.allTouches?.contains(where: { $0.phase == .began }) == true
+        {
+            NotificationCenter.default.post(name: .gameAreaTouchBegan, object: nil)
+        }
+        super.sendEvent(event)
     }
 
     // Controls handle their own key injection via the bridge.

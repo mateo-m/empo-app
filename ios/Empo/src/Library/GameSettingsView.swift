@@ -489,6 +489,13 @@ struct GameSettingsView: View {
             )
 
             SettingsToggle(
+                title: "Touch acts as mouse",
+                isOn: touchMouseBinding,
+                description:
+                    "Sends taps and drags on the game screen to the game as mouse input."
+            )
+
+            SettingsToggle(
                 title: "JoiPlay compatibility",
                 isOn: joiplayCompatBinding,
                 description:
@@ -667,6 +674,13 @@ struct GameSettingsView: View {
         Binding(
             get: { settings.useInGameKeyboard ?? isPokemonEssentialsDefault },
             set: { settings.useInGameKeyboard = $0 }
+        )
+    }
+
+    private var touchMouseBinding: Binding<Bool> {
+        Binding(
+            get: { settings.touchMouse ?? true },
+            set: { settings.touchMouse = $0 }
         )
     }
 

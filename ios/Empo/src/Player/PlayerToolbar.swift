@@ -49,6 +49,9 @@ struct PlayerToolbar: View {
         // buttons) and doesn't shift appearance with the system
         // color scheme or the backdrop brightness of the game.
         .darkGlass()
+        // Region must be measured BEFORE .position (which expands to
+        // the full proposed space).
+        .chromeHitRegion("toolbar")
         .opacity(toolbarOpacity)
         .position(toolbarPosition)
     }
@@ -136,6 +139,9 @@ struct PlayerEditToolbar: View {
         .padding(.vertical, Spacing.sm)
         .background(Color.black.opacity(Scrim.heavy))
         .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        // No chromeHitRegion here: PlayerEditToolbar stays mounted at
+        // opacity 0 during play (its region would cover center screen),
+        // and edit mode already publishes a full-screen region.
         .position(x: geoSize.width / 2, y: yPos)
     }
 }

@@ -55,7 +55,7 @@ final class ControllerInputManager {
     private var heldScancodes: [Int32: Int] = [:]
     private var overlayManualOverride = false
 
-    private var controlsVisibleBinding: Binding<Bool>?
+    private var overlayHiddenBinding: Binding<Bool>?
     private var editModeBinding: Binding<Bool>?
 
     private var connectObserver: NSObjectProtocol?
@@ -67,10 +67,10 @@ final class ControllerInputManager {
         resolvedMap = map
     }
 
-    func start(controlsVisible: Binding<Bool>, editMode: Binding<Bool>) {
+    func start(overlayHidden: Binding<Bool>, editMode: Binding<Bool>) {
         stop()
         sessionActive = true
-        controlsVisibleBinding = controlsVisible
+        overlayHiddenBinding = overlayHidden
         editModeBinding = editMode
         overlayManualOverride = false
         hasHadControllerThisSession = false
@@ -121,7 +121,7 @@ final class ControllerInputManager {
         connectedControllers.removeAll()
         reducer = ControllerStateReducer()
         elementPressScancode.removeAll()
-        controlsVisibleBinding = nil
+        overlayHiddenBinding = nil
         editModeBinding = nil
         overlayManualOverride = false
     }
@@ -318,20 +318,20 @@ final class ControllerInputManager {
     }
 
     private func toggleOverlay() {
-        guard let controlsVisibleBinding else { return }
+        guard let overlayHiddenBinding else { return }
         noteManualOverlayToggle()
-        controlsVisibleBinding.wrappedValue.toggle()
+        overlayHiddenBinding.wrappedValue.toggle()
     }
 
     private func applyAutoOverlayVisibility() {
         guard !overlayManualOverride else { return }
         guard editModeBinding?.wrappedValue != true else { return }
-        guard let controlsVisibleBinding else { return }
+        guard let overlayHiddenBinding else { return }
 
         if connectedControllers.isEmpty {
-            controlsVisibleBinding.wrappedValue = true
+            overlayHiddenBinding.wrappedValue = false
         } else {
-            controlsVisibleBinding.wrappedValue = false
+            overlayHiddenBinding.wrappedValue = true
         }
     }
 

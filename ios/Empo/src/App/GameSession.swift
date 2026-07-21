@@ -100,6 +100,7 @@ enum GameSession {
 
         mkxp_resetSessionState()
         mkxp_setGameControllerCaptureEnabled(false)
+        mkxp_setTouchMouseEnabled(settings.touchMouse ?? true)
     }
 
     private static func logEngineConfigOverlay(

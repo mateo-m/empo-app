@@ -13,6 +13,9 @@ enum GameViewEmbedder {
 
     static var isEmbedded: Bool { embeddedGameView != nil }
 
+    /// SDL's game view when reparented into `AppWindow`; nil before embed.
+    static var embeddedView: UIView? { embeddedGameView }
+
     static func embedIfNeeded() -> Bool {
         guard embeddedGameView == nil else { return true }
         guard let window = sdlUIKitWindow() else { return false }

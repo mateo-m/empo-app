@@ -33,6 +33,10 @@ struct PlayerControlsOverlay: View {
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
         DPad(size: size, editing: editMode)
             .frame(width: size, height: size)
+            // Region must be measured BEFORE .position: position()
+            // expands to the full proposed space, so a region attached
+            // after it would cover the whole screen.
+            .chromeHitRegion("controls.dpad")
             .opacity(layout.dpadOpacity)
             .scaleEffect(draggingDPad ? ControlsZone.dragScaleFactor : 1.0)
             .animation(Motion.snappy, value: draggingDPad)
@@ -101,6 +105,7 @@ struct PlayerControlsOverlay: View {
                 .transition(.scale.combined(with: .opacity))
             }
         }
+        .chromeHitRegion("controls.button.\(button.id.uuidString)")
         .scaleEffect(isDragging ? ControlsZone.dragScaleFactor : 1.0)
         .animation(Motion.snappy, value: isDragging)
         .position(pos)

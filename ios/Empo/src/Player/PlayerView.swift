@@ -67,7 +67,35 @@ struct PlayerView: View {
                 geoHeight: geo.size.height)
 
             ZStack {
+                // Debug visualization of the touch-mouse zone: the
+                // exact rect AppWindow routes to the game view. Same
+                // source (engine-published gameRect), so what you see
+                // is literally what hitTest checks.
+                if settings.showTouchZone, !gameRect.isEmpty {
+                    // gameRect is in window points; the wrapping
+                    // GeometryReader ignores the safe area so its
+                    // local space matches window space exactly.
+                    GeometryReader { _ in
+                        Rectangle()
+                            .fill(Color.brand.opacity(0.08))
+                            .overlay(
+                                Rectangle()
+                                    .strokeBorder(Color.brand.opacity(0.7), lineWidth: 2)
+                            )
+                            .frame(width: gameRect.width, height: gameRect.height)
+                            .position(x: gameRect.midX, y: gameRect.midY)
+                    }
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                }
+
                 if editMode {
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .ignoresSafeArea()
+                        .chromeHitRegion("editMode")
+                        .allowsHitTesting(false)
+
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
                     if layout.manifestRejectionErrorCount > 0 {
                         let errorCount = layout.manifestRejectionErrorCount
@@ -106,12 +134,14 @@ struct PlayerView: View {
                 if keyboardMode {
                     Color.clear
                         .contentShape(Rectangle())
+                        .ignoresSafeArea()
+                        .chromeHitRegion("keyboardMode")
                         .onTapGesture {
                             toggleKeyboard()
                         }
                 }
 
-                if !controlsHidden && controlsVisible {
+                if !controlsHidden && (controlsVisible || resumeSnapshot == nil) {
                     PlayerControlsOverlay(
                         layout: layout,
                         geo: geo,
@@ -225,7 +255,7 @@ struct PlayerView: View {
             controllerInput.pauseMenuHandler = { appState.togglePauseMenu() }
             ControllerMapBindings.applyRuntimeMap(
                 to: controllerInput, container: layout.currentContainer)
-            controllerInput.start(controlsVisible: $controlsVisible, editMode: $editMode)
+            controllerInput.start(overlayHidden: $controlsHidden, editMode: $editMode)
 
             // Load the per-game fast-forward multiplier (and re-push
             // to the engine if the toggle was already on). Fires on
@@ -254,6 +284,7 @@ struct PlayerView: View {
             }
         }
         .onDisappear {
+            ChromeHitRegions.removeAll()
             controllerInput.stop()
             EngineSessionCoordinator.shared.clearTextInputModeHandler()
         }
@@ -263,6 +294,9 @@ struct PlayerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .controllerMapDidChange)) { _ in
             ControllerMapBindings.applyRuntimeMap(
                 to: controllerInput, container: layout.currentContainer)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .gameAreaTouchBegan)) { _ in
+            resetToolbarIdleTimer()
         }
         .onChange(of: pauseManager.snapshotCanFade) { _, canFade in
             if canFade && resumeSnapshot != nil {
@@ -394,6 +428,11 @@ struct PlayerView: View {
     }
 
     private func toggleEditMode() {
+        let entering = !editMode
+        if entering && controlsHidden {
+            controlsHidden = false
+            controllerInput.noteManualOverlayToggle()
+        }
         withAnimation(Motion.snappy) {
             editMode.toggle()
         }
@@ -413,6 +452,7 @@ struct PlayerView: View {
         withAnimation(Motion.snappy) {
             controlsHidden.toggle()
         }
+        controllerInput.noteManualOverlayToggle()
         resetToolbarIdleTimer()
     }
 

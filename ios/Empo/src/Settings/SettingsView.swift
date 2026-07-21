@@ -103,6 +103,13 @@ struct SettingsView: View {
                     }
 
                     SettingsToggle(
+                        title: "Show touch zone",
+                        isOn: $settings.showTouchZone,
+                        description:
+                            "Outlines the area of the game screen where taps and drags are sent to the game as mouse input."
+                    )
+
+                    SettingsToggle(
                         title: "Clean up broken imports",
                         isOn: $settings.cleanupInvalidGames,
                         description: "Removes games that didn't import properly on the next app launch."

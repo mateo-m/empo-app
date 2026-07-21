@@ -29,6 +29,10 @@ struct DraggableDebugOverlay: View {
         DebugOverlayView(state: state)
             .frame(width: AppSize.debugOverlayWidth)
             .contentShape(Rectangle())
+            // Region must be measured BEFORE .position (which expands
+            // to the full proposed space); the global frame here still
+            // reflects the position/offset applied further down.
+            .chromeHitRegion("debugOverlay")
             .onPreferenceChange(DebugOverlayHeightKey.self) { newHeight in
                 guard newHeight > 0 else { return }
                 height = newHeight

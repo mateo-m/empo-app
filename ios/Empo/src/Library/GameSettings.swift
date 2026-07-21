@@ -208,6 +208,11 @@ struct GameSettings: Codable, Equatable {
     /// to `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
     @Setting<Bool?, RuntimeFlag> var useInGameKeyboard: Bool?
 
+    /// Taps and drags on the game area are delivered to the game as
+    /// left-mouse input; harmless for games that never read the mouse
+    /// (mouse state just sits unread), hence default ON.
+    @Setting<Bool?, RuntimeFlag> var touchMouse: Bool?
+
     /// Make game scripts see `$joiplay = true` so they take their
     /// JoiPlay-specific code paths (mobile-friendly API calls, but
     /// also patches written against JoiPlay's old mkxp fork that can

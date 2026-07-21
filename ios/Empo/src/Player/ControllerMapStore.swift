@@ -4,6 +4,9 @@ import GameProbe
 extension Notification.Name {
     /// Posted after a global or per-game controller map is saved.
     static let controllerMapDidChange = Notification.Name("controllerMapDidChange")
+
+    /// Posted when a touch begins on the embedded SDL game view during play.
+    static let gameAreaTouchBegan = Notification.Name("gameAreaTouchBegan")
 }
 
 /// UserDefaults persistence for global controller overrides; per-game overrides

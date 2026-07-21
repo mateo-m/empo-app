@@ -159,6 +159,12 @@ class AppSettings {
         }
     }
 
+    /// Outlines the in-game area where touches are delivered to the
+    /// game as mouse input (the visible game surface).
+    var showTouchZone: Bool {
+        didSet { UserDefaults.standard.set(showTouchZone, forKey: DefaultsKey.showTouchZone) }
+    }
+
     var debugLogs: Bool {
         didSet { UserDefaults.standard.set(debugLogs, forKey: DefaultsKey.debugLogs) }
     }
@@ -226,6 +232,7 @@ class AppSettings {
         self.theme = AppTheme(rawValue: themeRaw) ?? .auto
         self.diagnosticsOverlay = ud.bool(forKey: DefaultsKey.debugMode)
         self.showViewportBounds = ud.bool(forKey: DefaultsKey.showViewportBounds)
+        self.showTouchZone = ud.bool(forKey: DefaultsKey.showTouchZone)
         self.viewportBoundsColor = Self.loadViewportBoundsColor()
         self.debugLogs = (ud.object(forKey: DefaultsKey.debugLogs) as? Bool) ?? true
         let storedMax = ud.integer(forKey: DefaultsKey.maxLogFiles)

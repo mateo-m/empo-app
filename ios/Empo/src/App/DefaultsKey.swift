@@ -20,6 +20,7 @@ enum DefaultsKey {
     static let theme = "theme"
     static let debugMode = "debugMode"
     static let showViewportBounds = "showViewportBounds"
+    static let showTouchZone = "showTouchZone"
     static let debugLogs = "debugLogs"
     static let maxLogFiles = "maxLogFiles"
     static let interfaceHaptics = "interfaceHaptics"
