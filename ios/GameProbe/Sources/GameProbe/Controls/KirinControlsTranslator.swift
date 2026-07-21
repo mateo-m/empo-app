@@ -15,6 +15,8 @@ public enum KirinControlsTranslator {
     static let edgeMargin: Double = 16
     static let minButtonSize: Double = 40
     static let defaultButtonSize: Double = 56
+    static let minDpadSize: Double = 100
+    static let maxDpadSize: Double = 200
     static let coordMin: Double = 0.02
     static let coordMax: Double = 0.98
 
@@ -108,8 +110,7 @@ public enum KirinControlsTranslator {
             metrics: metrics,
             isLandscape: false,
             baseButtonSize: baseButtonSize,
-            buttonOpacity: buttonOpacity,
-            notes: &notes
+            buttonOpacity: buttonOpacity
         )
 
         let landscapeLayout = buildLayout(
@@ -118,8 +119,7 @@ public enum KirinControlsTranslator {
             metrics: metrics,
             isLandscape: true,
             baseButtonSize: baseButtonSize,
-            buttonOpacity: buttonOpacity,
-            notes: &notes
+            buttonOpacity: buttonOpacity
         )
 
         let portraitButtons = portraitLayout?.buttons ?? []
@@ -129,21 +129,27 @@ public enum KirinControlsTranslator {
             return Translation(manifest: nil, notes: notes + ["no usable buttons; ignored"])
         }
 
-        var finalPortrait = portraitButtons
-        var finalLandscape = landscapeButtons
+        var finalPortrait = portraitLayout
+        var finalLandscape = landscapeLayout
 
-        if finalPortrait.count > maxButtons {
-            let dropped = finalPortrait.count - maxButtons
+        if portraitButtons.count > maxButtons {
+            let dropped = portraitButtons.count - maxButtons
             notes.append("\(dropped) buttons beyond the 21-button limit dropped")
-            finalPortrait = Array(finalPortrait.prefix(maxButtons))
+            finalPortrait = TouchLayout(
+                dpad: portraitLayout?.dpad,
+                buttons: Array(portraitButtons.prefix(maxButtons))
+            )
         }
-        if finalLandscape.count > maxButtons {
-            finalLandscape = Array(finalLandscape.prefix(maxButtons))
+        if landscapeButtons.count > maxButtons {
+            finalLandscape = TouchLayout(
+                dpad: landscapeLayout?.dpad,
+                buttons: Array(landscapeButtons.prefix(maxButtons))
+            )
         }
 
         let touch = TouchSection(
-            portrait: TouchLayout(dpad: nil, buttons: finalPortrait),
-            landscape: TouchLayout(dpad: nil, buttons: finalLandscape)
+            portrait: finalPortrait,
+            landscape: finalLandscape
         )
         let manifest = ControlsManifest(version: 1, touch: touch)
 
@@ -165,13 +171,14 @@ public enum KirinControlsTranslator {
         metrics: TouchZoneMetrics,
         isLandscape: Bool,
         baseButtonSize: Double,
-        buttonOpacity: Double,
-        notes: inout [String]
+        buttonOpacity: Double
     ) -> TouchLayout? {
         let width = metrics.width(isLandscape: isLandscape)
         let height = metrics.height(isLandscape: isLandscape)
         let topInset = metrics.topInset(isLandscape: isLandscape)
         let bottomInset = metrics.bottomInset(isLandscape: isLandscape)
+        let leadingInset = metrics.leadingInset(isLandscape: isLandscape)
+        let trailingInset = metrics.trailingInset(isLandscape: isLandscape)
 
         var cells: [GridCell] = []
         appendCells(from: rightSlots, isRightGrid: true, into: &cells)
@@ -183,65 +190,43 @@ public enum KirinControlsTranslator {
         let leftRowCount = rowCount(for: leftSlots)
         let maxRowCount = max(rightRowCount, leftRowCount)
 
-        let buttonSize = fitButtonSize(
+        let fit = fitButtonSizeAndDpad(
             buttonSize: baseButtonSize,
-            rightRowCount: rightRowCount,
             leftRowCount: leftRowCount,
             maxRowCount: maxRowCount,
             metrics: metrics,
             isLandscape: isLandscape
         )
+        let buttonSize = fit.buttonSize
+        let dpadSize = fit.dpadSize
 
         let available = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: edgeMargin)
-        let rowCountForPitch = isLandscape ? maxRowCount : rightRowCount + leftRowCount
-        let pitch = effectivePitch(
-            buttonSize: buttonSize, rowCount: rowCountForPitch, available: available)
-        let firstRowCenterY = topInset + edgeMargin + buttonSize * 0.5
-        let lastRowCenterY = height - bottomInset - edgeMargin - buttonSize * 0.5
+        let leftKeyAvailable = available - cellGap - dpadSize
+        let rowPitch = effectivePitch(
+            buttonSize: buttonSize, rowCount: maxRowCount, available: available)
+        let leftPitch = effectivePitch(
+            buttonSize: buttonSize, rowCount: leftRowCount, available: leftKeyAvailable)
+        let pitch = min(rowPitch, leftPitch)
 
-        let rowCenters: [Double]
-        if isLandscape {
-            rowCenters = (0 ..< maxRowCount).map { firstRowCenterY + Double($0) * pitch }
-        } else {
-            rowCenters = []
-        }
+        let bandTop = topInset + edgeMargin
+        let firstRowCenterY = bandTop + buttonSize * 0.5
+        let rowCenters = (0..<maxRowCount).map { firstRowCenterY + Double($0) * pitch }
 
         var buttons: [ButtonSpec] = []
 
         for cell in cells {
             guard let w3c = AndroidKeycodeTable.w3cCode(for: cell.keycode) else { continue }
 
-            let x: Double
-            let y: Double
-
-            if isLandscape {
-                x = landscapeColumnCenter(
-                    col: cell.col,
-                    isRightGrid: cell.isRightGrid,
-                    width: width,
-                    buttonSize: buttonSize,
-                    pitch: pitch,
-                    leadingInset: metrics.leadingInset(isLandscape: true),
-                    trailingInset: metrics.trailingInset(isLandscape: true)
-                )
-                y = rowCenters[cell.row]
-            } else {
-                // Portrait: the d-pad owns the left half, so BOTH grids
-                // stack into one right-side band — left-grid rows on
-                // top, right-grid rows at the bottom. Kirin's
-                // bottom-anchored structure survives: the primary
-                // action rows stay nearest the thumb.
-                let totalRows = leftRowCount + rightRowCount
-                let combinedRow = cell.isRightGrid ? leftRowCount + cell.row : cell.row
-                x = portraitRightColumnCenter(
-                    col: cell.col,
-                    width: width,
-                    buttonSize: buttonSize,
-                    pitch: pitch,
-                    trailingInset: metrics.trailingInset(isLandscape: false)
-                )
-                y = lastRowCenterY - Double(totalRows - 1 - combinedRow) * pitch
-            }
+            let x = columnCenter(
+                col: cell.col,
+                isRightGrid: cell.isRightGrid,
+                width: width,
+                buttonSize: buttonSize,
+                pitch: pitch,
+                leadingInset: leadingInset,
+                trailingInset: trailingInset
+            )
+            let y = rowCenters[cell.row]
 
             buttons.append(
                 ButtonSpec(
@@ -255,7 +240,70 @@ public enum KirinControlsTranslator {
             )
         }
 
-        return TouchLayout(dpad: nil, buttons: buttons)
+        let dpad = buildDPad(
+            leftRowCount: leftRowCount,
+            buttonSize: buttonSize,
+            dpadSize: dpadSize,
+            pitch: pitch,
+            width: width,
+            height: height,
+            topInset: topInset,
+            bottomInset: bottomInset,
+            leadingInset: leadingInset,
+            trailingInset: trailingInset,
+            buttonOpacity: buttonOpacity,
+            firstRowCenterY: firstRowCenterY
+        )
+
+        return TouchLayout(dpad: dpad, buttons: buttons)
+    }
+
+    private static func buildDPad(
+        leftRowCount: Int,
+        buttonSize: Double,
+        dpadSize: Double,
+        pitch: Double,
+        width: Double,
+        height: Double,
+        topInset: Double,
+        bottomInset: Double,
+        leadingInset: Double,
+        trailingInset: Double,
+        buttonOpacity: Double,
+        firstRowCenterY: Double
+    ) -> DPadSpec {
+        let leftmost = leadingInset + edgeMargin + buttonSize * 0.5
+        let centerX = leftmost + pitch
+
+        let bandTop = topInset + edgeMargin
+        let bandBottom = height - bottomInset - edgeMargin
+
+        let centerY: Double
+        if leftRowCount > 0 {
+            let lastLeftKeyRowCenter = firstRowCenterY + Double(leftRowCount - 1) * pitch
+            centerY = lastLeftKeyRowCenter + buttonSize * 0.5 + cellGap + dpadSize * 0.5
+        } else {
+            centerY = bandTop + dpadSize * 0.5
+        }
+
+        let half = dpadSize * 0.5
+        let clampedX = clamp(
+            centerX,
+            min: leadingInset + edgeMargin + half,
+            max: width - trailingInset - edgeMargin - half
+        )
+        let clampedY = clamp(
+            centerY,
+            min: bandTop + half,
+            max: bandBottom - half
+        )
+
+        return DPadSpec(
+            x: clampFraction(clampedX / width),
+            y: clampFraction(clampedY / height),
+            size: dpadSize,
+            opacity: buttonOpacity
+        )
     }
 
     private static func appendCells(
@@ -281,7 +329,7 @@ public enum KirinControlsTranslator {
         return (slots.count + columnsPerRow - 1) / columnsPerRow
     }
 
-    private static func landscapeColumnCenter(
+    private static func columnCenter(
         col: Int,
         isRightGrid: Bool,
         width: Double,
@@ -298,40 +346,102 @@ public enum KirinControlsTranslator {
         return leftmost + Double(col) * pitch
     }
 
-    private static func portraitRightColumnCenter(
-        col: Int,
-        width: Double,
-        buttonSize: Double,
-        pitch: Double,
-        trailingInset: Double
-    ) -> Double {
-        let rightmost = width - trailingInset - edgeMargin - buttonSize * 0.5
-        return rightmost - Double(2 - col) * pitch
+    private struct FitResult {
+        var buttonSize: Double
+        var dpadSize: Double
     }
 
+    private static func nominalDpadSize(buttonSize: Double) -> Double {
+        clamp(3 * buttonSize, min: minDpadSize, max: maxDpadSize)
+    }
 
-    private static func fitButtonSize(
+    private static func fitButtonSizeAndDpad(
         buttonSize: Double,
-        rightRowCount: Int,
         leftRowCount: Int,
         maxRowCount: Int,
         metrics: TouchZoneMetrics,
         isLandscape: Bool
-    ) -> Double {
+    ) -> FitResult {
         var size = buttonSize
+        var dpad = nominalDpadSize(buttonSize: size)
         let available = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: edgeMargin)
-        let height = metrics.height(isLandscape: isLandscape)
-        let topInset = metrics.topInset(isLandscape: isLandscape)
-        let bottomInset = metrics.bottomInset(isLandscape: isLandscape)
 
-        while size > minButtonSize {
-            let pitch = size + cellGap
-            let rowCount = isLandscape ? maxRowCount : rightRowCount + leftRowCount
-            let span = rowCount > 0 ? Double(rowCount - 1) * pitch + size : size
-            if span <= available { return size }
-            size -= 1
+        while true {
+            if layoutFits(
+                buttonSize: size,
+                dpadSize: dpad,
+                leftRowCount: leftRowCount,
+                maxRowCount: maxRowCount,
+                available: available,
+                metrics: metrics,
+                isLandscape: isLandscape
+            ) {
+                return FitResult(buttonSize: size, dpadSize: dpad)
+            }
+
+            if size > minButtonSize {
+                size -= 1
+                dpad = nominalDpadSize(buttonSize: size)
+            } else if dpad > minDpadSize {
+                dpad -= 1
+            } else {
+                return FitResult(buttonSize: minButtonSize, dpadSize: minDpadSize)
+            }
         }
-        return minButtonSize
+    }
+
+    private static func layoutFits(
+        buttonSize: Double,
+        dpadSize: Double,
+        leftRowCount: Int,
+        maxRowCount: Int,
+        available: Double,
+        metrics: TouchZoneMetrics,
+        isLandscape: Bool
+    ) -> Bool {
+        let pitch = buttonSize + cellGap
+        let leftKeysSpan = keyRowsSpan(rowCount: leftRowCount, buttonSize: buttonSize, pitch: pitch)
+        let leftBandSpan = leftKeysSpan + cellGap + dpadSize
+        let sharedRowsSpan = keyRowsSpan(
+            rowCount: maxRowCount, buttonSize: buttonSize, pitch: pitch)
+        guard max(sharedRowsSpan, leftBandSpan) <= available else { return false }
+
+        return horizontalFit(
+            buttonSize: buttonSize,
+            dpadSize: dpadSize,
+            pitch: pitch,
+            metrics: metrics,
+            isLandscape: isLandscape
+        )
+    }
+
+    /// Two 3-column bands (left keys + d-pad, right keys) must clear
+    /// each other horizontally when the zone is narrow.
+    private static func horizontalFit(
+        buttonSize: Double,
+        dpadSize: Double,
+        pitch: Double,
+        metrics: TouchZoneMetrics,
+        isLandscape: Bool
+    ) -> Bool {
+        let width = metrics.width(isLandscape: isLandscape)
+        let leadingInset = metrics.leadingInset(isLandscape: isLandscape)
+        let trailingInset = metrics.trailingInset(isLandscape: isLandscape)
+        let leftmost = leadingInset + edgeMargin + buttonSize * 0.5
+        let rightmost = width - trailingInset - edgeMargin - buttonSize * 0.5
+
+        let columnGap = rightmost - 2 * pitch - (leftmost + 2 * pitch)
+        guard columnGap >= buttonSize else { return false }
+
+        let dpadCenterX = leftmost + pitch
+        let dpadRight = dpadCenterX + dpadSize * 0.5
+        let rightGridLeft = rightmost - 2 * pitch - buttonSize * 0.5
+        return rightGridLeft >= dpadRight
+    }
+
+    private static func keyRowsSpan(rowCount: Int, buttonSize: Double, pitch: Double) -> Double {
+        guard rowCount > 0 else { return 0 }
+        return Double(rowCount - 1) * pitch + buttonSize
     }
 
     /// When the standard pitch overflows the usable band, compress row

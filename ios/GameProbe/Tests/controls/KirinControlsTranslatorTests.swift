@@ -42,7 +42,8 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let portrait = translation.manifest?.touch?.portrait
         let landscape = translation.manifest?.touch?.landscape
         XCTAssertNotEqual(portrait, landscape)
-        XCTAssertNil(portrait?.dpad)
+        XCTAssertNotNil(portrait?.dpad)
+        XCTAssertNotNil(landscape?.dpad)
 
         guard let portraitButtons = portrait?.buttons, let landscapeButtons = landscape?.buttons else {
             XCTFail("expected buttons")
@@ -63,14 +64,15 @@ final class KirinControlsTranslatorTests: XCTestCase {
             XCTAssertLessThanOrEqual(button.size ?? 0, 56)
         }
 
-        assertGeometry(layout: portrait!, isLandscape: false, expectBottomActionRow: true)
-        assertGeometry(layout: landscape!, isLandscape: true, expectBottomActionRow: false)
+        assertGeometry(layout: portrait!, isLandscape: false)
+        assertGeometry(layout: landscape!, isLandscape: true)
+        assertArrangementEquality(portrait: portrait!, landscape: landscape!)
         assertRoundTrip(manifest: translation.manifest!)
     }
 
     func testWorstCaseFifteenPlusSixSlotsNonOverlap() throws {
-        let rightSlots = (0 ..< 15).map { _ in "29" }.joined(separator: ", ")
-        let leftSlots = (0 ..< 6).map { _ in "30" }.joined(separator: ", ")
+        let rightSlots = (0..<15).map { _ in "29" }.joined(separator: ", ")
+        let leftSlots = (0..<6).map { _ in "30" }.joined(separator: ", ")
         let json = """
             {
               "version": 1,
@@ -88,8 +90,9 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
         XCTAssertEqual(touch.portrait?.buttons?.count, 21)
         XCTAssertEqual(touch.landscape?.buttons?.count, 21)
-        assertGeometry(layout: touch.portrait!, isLandscape: false, expectBottomActionRow: false)
-        assertGeometry(layout: touch.landscape!, isLandscape: true, expectBottomActionRow: false)
+        assertGeometry(layout: touch.portrait!, isLandscape: false)
+        assertGeometry(layout: touch.landscape!, isLandscape: true)
+        assertArrangementEquality(portrait: touch.portrait!, landscape: touch.landscape!)
     }
 
     // MARK: - Round-trip
@@ -119,7 +122,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(manifest.touch?.portrait?.buttons?.first?.size, 100)
+        XCTAssertEqual(manifest.touch?.portrait?.buttons?.first?.size, 52)
         XCTAssertEqual(manifest.touch?.portrait?.buttons?.first?.opacity, 0.2)
         assertRoundTrip(manifest: manifest)
     }
@@ -177,7 +180,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         XCTAssertEqual(
             KirinControlsTranslator.translate(data: highScale.data(using: .utf8)!).manifest?
                 .touch?.portrait?.buttons?.first?.size,
-            100
+            52
         )
         XCTAssertEqual(
             KirinControlsTranslator.translate(data: lowScale.data(using: .utf8)!).manifest?
@@ -221,7 +224,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
     func testKirinStructuralCapacityTranslatesWhole() {
         // Kirin's own limit (15 right + 6 left slots) is the translation
         // cap; a fully populated file translates with nothing dropped.
-        let slots = (0 ..< 20).map { _ in "29" }.joined(separator: ", ")
+        let slots = (0..<20).map { _ in "29" }.joined(separator: ", ")
         let json = "{\"rightGrid\": {\"slots\": [\(slots)]}}"
         let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)
         XCTAssertEqual(translation.manifest?.touch?.portrait?.buttons?.count, 20)
@@ -281,8 +284,8 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
         try """
-            { "version": 1, "controller": { "a": "Enter" } }
-            """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+        { "version": 1, "controller": { "a": "Enter" } }
+        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
@@ -297,8 +300,8 @@ final class KirinControlsTranslatorTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         try """
-            { "version": 1, "controller": { "b": "Escape" } }
-            """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        { "version": 1, "controller": { "b": "Escape" } }
+        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
@@ -313,8 +316,8 @@ final class KirinControlsTranslatorTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         try """
-            { "touch": { "portrait": { "buttons": [] } } }
-            """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        { "touch": { "portrait": { "buttons": [] } } }
+        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
@@ -331,8 +334,8 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
         try """
-            { "version": true, "touch": { "portrait": { "buttons": [] } } }
-            """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+        { "version": true, "touch": { "portrait": { "buttons": [] } } }
+        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
@@ -363,11 +366,11 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
         try """
-            { "version": 1, "controller": { "a": "Enter" } }
-            """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+        { "version": 1, "controller": { "a": "Enter" } }
+        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
         try """
-            { "version": 1, "controller": { "b": "Escape" } }
-            """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        { "version": 1, "controller": { "b": "Escape" } }
+        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
@@ -388,9 +391,13 @@ final class KirinControlsTranslatorTests: XCTestCase {
         XCTAssertTrue(result.findings.filter { $0.severity == .error }.isEmpty)
     }
 
-    private func assertGeometry(layout: TouchLayout, isLandscape: Bool, expectBottomActionRow: Bool) {
+    private func assertGeometry(layout: TouchLayout, isLandscape: Bool) {
         guard let buttons = layout.buttons else {
             XCTFail("expected buttons")
+            return
+        }
+        guard let dpad = layout.dpad else {
+            XCTFail("expected dpad")
             return
         }
 
@@ -404,41 +411,114 @@ final class KirinControlsTranslatorTests: XCTestCase {
             XCTAssertLessThanOrEqual(button.y, KirinControlsTranslator.coordMax)
         }
 
+        XCTAssertGreaterThanOrEqual(dpad.x, KirinControlsTranslator.coordMin)
+        XCTAssertLessThanOrEqual(dpad.x, KirinControlsTranslator.coordMax)
+        XCTAssertGreaterThanOrEqual(dpad.y, KirinControlsTranslator.coordMin)
+        XCTAssertLessThanOrEqual(dpad.y, KirinControlsTranslator.coordMax)
+
+        let dpadSize = dpad.size ?? KirinControlsTranslator.minDpadSize
+        XCTAssertGreaterThanOrEqual(dpadSize, KirinControlsTranslator.minDpadSize)
+        XCTAssertLessThanOrEqual(dpadSize, KirinControlsTranslator.maxDpadSize)
+
         XCTAssertTrue(
-            pairwiseNonOverlapping(buttons: buttons, width: width, height: height),
-            "buttons overlap in \(isLandscape ? "landscape" : "portrait")"
+            pairwiseNonOverlapping(buttons: buttons, dpad: dpad, width: width, height: height),
+            "buttons overlap d-pad or each other in \(isLandscape ? "landscape" : "portrait")"
         )
 
         assertWithinUsableZone(buttons: buttons, isLandscape: isLandscape)
+        assertDpadWithinUsableZone(dpad: dpad, isLandscape: isLandscape)
+        assertTopAnchored(layout: layout, isLandscape: isLandscape)
 
-        let rightGrid = Array(buttons.prefix(10))
-        let leftGrid = Array(buttons.suffix(6))
+        let rightGrid = Array(buttons.prefix(buttons.count > 10 ? 10 : buttons.count))
+        let leftGrid = buttons.count > 10 ? Array(buttons.suffix(6)) : []
 
         assertColumnPitchesEqual(buttons: rightGrid, width: width, height: height)
-        assertColumnPitchesEqual(buttons: leftGrid, width: width, height: height)
-
-        if isLandscape {
-            assertSharedLandscapeRows(left: leftGrid, right: rightGrid, height: height)
-            XCTAssertGreaterThan(
-                rightGrid.map { $0.x * width }.max() ?? 0,
-                width * 0.75,
-                "right grid should anchor on the right edge"
-            )
-            XCTAssertLessThan(
-                leftGrid.map { $0.x * width }.min() ?? width,
-                width * 0.25,
-                "left grid should anchor on the left edge"
-            )
-        } else if expectBottomActionRow {
-            let bottomRow = rightGrid.filter { ["KeyZ", "KeyX", "Enter"].contains($0.key) }
-            XCTAssertEqual(bottomRow.count, 3)
-            let bottomInset = metrics.portraitBottomInset
-            let size = bottomRow[0].size ?? KirinControlsTranslator.defaultButtonSize
-            let expectedBottomY =
-                height - bottomInset - KirinControlsTranslator.edgeMargin - size * 0.5
-            let bottomY = bottomRow.map { $0.y * height }
-            XCTAssertTrue(bottomY.allSatisfy { abs($0 - expectedBottomY) < 2 })
+        if !leftGrid.isEmpty {
+            assertColumnPitchesEqual(buttons: leftGrid, width: width, height: height)
+            assertSharedRows(left: leftGrid, right: rightGrid, height: height)
+            assertDpadOnLeftGridMiddleColumn(
+                dpad: dpad, leftGrid: leftGrid, width: width, isLandscape: isLandscape)
+            assertDpadBelowLeftGrid(
+                dpad: dpad, leftGrid: leftGrid, height: height, dpadSize: dpadSize,
+                isLandscape: isLandscape)
         }
+    }
+
+    private func assertArrangementEquality(portrait: TouchLayout, landscape: TouchLayout) {
+        guard let portraitButtons = portrait.buttons, let landscapeButtons = landscape.buttons else {
+            XCTFail("expected buttons")
+            return
+        }
+        XCTAssertEqual(portraitButtons.map(\.key), landscapeButtons.map(\.key))
+
+        let portraitWidth = metrics.portraitWidth
+        let portraitHeight = metrics.portraitHeight
+        let landscapeWidth = metrics.landscapeWidth
+        let landscapeHeight = metrics.landscapeHeight
+
+        let portraitPoints = portraitButtons.map { ($0.x * portraitWidth, $0.y * portraitHeight) }
+        let landscapePoints = landscapeButtons.map { ($0.x * landscapeWidth, $0.y * landscapeHeight) }
+
+        for index in 0..<portraitPoints.count {
+            for other in (index + 1)..<portraitPoints.count {
+                assertSameSign(
+                    portraitPoints[index].0 - portraitPoints[other].0,
+                    landscapePoints[index].0 - landscapePoints[other].0,
+                    "dx between buttons \(index) and \(other)"
+                )
+                assertSameSign(
+                    portraitPoints[index].1 - portraitPoints[other].1,
+                    landscapePoints[index].1 - landscapePoints[other].1,
+                    "dy between buttons \(index) and \(other)"
+                )
+            }
+        }
+
+        guard let portraitDpad = portrait.dpad, let landscapeDpad = landscape.dpad else {
+            XCTFail("expected dpad")
+            return
+        }
+        let portraitDpadPoint = (
+            portraitDpad.x * portraitWidth, portraitDpad.y * portraitHeight
+        )
+        let landscapeDpadPoint = (
+            landscapeDpad.x * landscapeWidth, landscapeDpad.y * landscapeHeight
+        )
+
+        for (index, portraitPoint) in portraitPoints.enumerated() {
+            assertSameSign(
+                portraitDpadPoint.0 - portraitPoint.0,
+                landscapeDpadPoint.0 - landscapePoints[index].0,
+                "dpad dx vs button \(index)"
+            )
+            assertSameSign(
+                portraitDpadPoint.1 - portraitPoint.1,
+                landscapeDpadPoint.1 - landscapePoints[index].1,
+                "dpad dy vs button \(index)"
+            )
+        }
+    }
+
+    private func assertSameSign(_ lhs: Double, _ rhs: Double, _ label: String) {
+        XCTAssertEqual(sign(lhs), sign(rhs), accuracy: 0, label)
+    }
+
+    private func sign(_ value: Double) -> Double {
+        if abs(value) < 1e-6 { return 0 }
+        return value > 0 ? 1 : -1
+    }
+
+    private func assertTopAnchored(layout: TouchLayout, isLandscape: Bool) {
+        guard let buttons = layout.buttons, !buttons.isEmpty else { return }
+        let height = metrics.height(isLandscape: isLandscape)
+        let topInset = metrics.topInset(isLandscape: isLandscape)
+        let bottomInset = metrics.bottomInset(isLandscape: isLandscape)
+        let zoneMidY = (topInset + height - bottomInset) * 0.5
+        let firstRowCenterY = buttons.map { $0.y * height }.min() ?? height
+        XCTAssertLessThan(
+            firstRowCenterY, zoneMidY,
+            "first row should be top-anchored above zone midpoint in \(isLandscape ? "landscape" : "portrait")"
+        )
     }
 
     private func assertWithinUsableZone(buttons: [ButtonSpec], isLandscape: Bool) {
@@ -461,9 +541,13 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
     private func pairwiseNonOverlapping(
         buttons: [ButtonSpec],
+        dpad: DPadSpec,
         width: Double,
         height: Double
     ) -> Bool {
+        let dpadSize = dpad.size ?? KirinControlsTranslator.minDpadSize
+        let dpadPoint = (x: dpad.x * width, y: dpad.y * height, size: dpadSize)
+
         let points = buttons.map { button in
             (
                 x: button.x * width,
@@ -471,14 +555,67 @@ final class KirinControlsTranslatorTests: XCTestCase {
                 size: button.size ?? KirinControlsTranslator.defaultButtonSize
             )
         }
-        for i in 0 ..< points.count {
-            for j in (i + 1) ..< points.count {
+        for i in 0..<points.count {
+            for j in (i + 1)..<points.count {
                 let required = (points[i].size + points[j].size) * 0.5
                 let dist = hypot(points[i].x - points[j].x, points[i].y - points[j].y)
                 if dist < required - 1e-3 { return false }
             }
+            let required = (points[i].size + dpadPoint.size) * 0.5
+            let dist = hypot(points[i].x - dpadPoint.x, points[i].y - dpadPoint.y)
+            if dist < required - 1e-3 { return false }
         }
         return true
+    }
+
+    private func assertDpadWithinUsableZone(dpad: DPadSpec, isLandscape: Bool) {
+        let height = metrics.height(isLandscape: isLandscape)
+        let topInset = metrics.topInset(isLandscape: isLandscape)
+        let bottomInset = metrics.bottomInset(isLandscape: isLandscape)
+        let size = dpad.size ?? KirinControlsTranslator.minDpadSize
+        let centerY = dpad.y * height
+        XCTAssertGreaterThanOrEqual(centerY - size * 0.5, topInset - 1)
+        XCTAssertLessThanOrEqual(centerY + size * 0.5, height - bottomInset + 1)
+    }
+
+    private func assertDpadOnLeftGridMiddleColumn(
+        dpad: DPadSpec,
+        leftGrid: [ButtonSpec],
+        width: Double,
+        isLandscape: Bool
+    ) {
+        let columnXs = Array(Set(leftGrid.map { $0.x * width })).sorted()
+        let expectedX: Double
+        if columnXs.count >= 2 {
+            expectedX = columnXs[columnXs.count / 2]
+        } else {
+            let leadingInset = metrics.leadingInset(isLandscape: isLandscape)
+            let buttonSize = leftGrid.first?.size ?? KirinControlsTranslator.defaultButtonSize
+            let pitch = buttonSize + KirinControlsTranslator.cellGap
+            expectedX = leadingInset + KirinControlsTranslator.edgeMargin + buttonSize * 0.5 + pitch
+        }
+        XCTAssertEqual(dpad.x * width, expectedX, accuracy: 2.0)
+    }
+
+    private func assertDpadBelowLeftGrid(
+        dpad: DPadSpec,
+        leftGrid: [ButtonSpec],
+        height: Double,
+        dpadSize: Double,
+        isLandscape: Bool
+    ) {
+        let dpadTop = dpad.y * height - dpadSize * 0.5
+        guard !leftGrid.isEmpty else {
+            let bandTop = metrics.topInset(isLandscape: isLandscape) + KirinControlsTranslator.edgeMargin
+            XCTAssertGreaterThanOrEqual(dpadTop, bandTop - 1)
+            return
+        }
+        let bottomYs = leftGrid.map {
+            ($0.y * height) + (($0.size ?? KirinControlsTranslator.defaultButtonSize) * 0.5)
+        }
+        let lastLeftBottom = bottomYs.max() ?? 0
+        XCTAssertGreaterThanOrEqual(
+            dpadTop, lastLeftBottom + KirinControlsTranslator.cellGap - 1)
     }
 
     private func assertColumnPitchesEqual(buttons: [ButtonSpec], width: Double, height: Double) {
@@ -497,7 +634,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         }
     }
 
-    private func assertSharedLandscapeRows(left: [ButtonSpec], right: [ButtonSpec], height: Double) {
+    private func assertSharedRows(left: [ButtonSpec], right: [ButtonSpec], height: Double) {
         let leftRows = Dictionary(grouping: left) { Int(round($0.y * height / 10)) }
         let rightRows = Dictionary(grouping: right) { Int(round($0.y * height / 10)) }
         for (rowKey, leftButtons) in leftRows {

@@ -231,7 +231,11 @@ struct PlayerView: View {
             .onChange(of: isPortrait, initial: true) { _, nowPortrait in
                 layout.setOrientation(nowPortrait ? .portrait : .landscape)
             }
-            .onChange(of: engineState.gameRect) { _, _ in
+            // `initial: true`: the engine usually publishes gameRect
+            // during the loading transition, BEFORE PlayerView mounts —
+            // without an initial firing the one real publish is missed
+            // and translated layouts keep their estimate-based bands.
+            .onChange(of: engineState.gameRect, initial: true) { _, _ in
                 layout.refreshForGameGeometryChange()
             }
         }
