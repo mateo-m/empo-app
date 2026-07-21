@@ -303,14 +303,14 @@ jobs:
         # required Lint/Format checks are dispatched explicitly with
         # a PAT scoped to Actions: write.
         env:
-          KICK_TOKEN: ${{ secrets.EMPO_APP_ACTIONS_TOKEN }}
+          GH_TOKEN: ${{ secrets.EMPO_APP_ACTIONS_TOKEN }}
         run: |
           set -e
-          if [ -z "$KICK_TOKEN" ]; then
+          if [ -z "$GH_TOKEN" ]; then
             echo "EMPO_APP_ACTIONS_TOKEN not set; start Lint/Format manually" \
               "(gh workflow run lint.yml --ref <branch>) or admin-merge."
             exit 0
           fi
           BRANCH="release-sync/v${{ needs.build.outputs.version }}"
-          GH_TOKEN="$KICK_TOKEN" gh workflow run lint.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"
-          GH_TOKEN="$KICK_TOKEN" gh workflow run format.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"
+          gh workflow run lint.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"
+          gh workflow run format.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"
