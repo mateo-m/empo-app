@@ -125,9 +125,20 @@ name, or out-of-range number rejects the file. See
 }
 ```
 
-Each orientation is optional. An orientation you omit keeps Empo's
-default layout. Within an orientation, `dpad` and `buttons` are each
-optional too, with one distinction:
+Each orientation is optional, and you only need to design one: when
+you define a single orientation, Empo derives the other from it — same
+arrangement, refit to the other screen shape. Buttons keep their sizes
+and their relative placement; spacing tightens or relaxes to match the
+zone. Define both orientations when you want full control of each.
+
+Two special cases:
+
+- `"landscape": {}` (an explicit empty object) opts that orientation
+  into Empo's default layout instead of derivation.
+- Define neither orientation and both use Empo's defaults.
+
+Within an orientation, `dpad` and `buttons` are each optional too,
+with one distinction:
 
 - `"buttons"` omitted: Empo's default buttons appear.
 - `"buttons": []`: no buttons at all. Use this for mouse-driven games.
