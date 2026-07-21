@@ -110,6 +110,9 @@ class ControlsLayout {
     /// Accepted developer manifest for the active game, if any.
     private(set) var activeManifest: ControlsManifest?
 
+    /// Loader source for `activeManifest` (kirin / joiplay / empo / root).
+    private(set) var activeManifestSource: ControlsManifestLoader.ManifestLocation?
+
     /// Error findings from a rejected shipped `controls.json`, for edit-mode surfacing.
     private(set) var manifestRejectionErrorCount = 0
 
@@ -235,6 +238,7 @@ class ControlsLayout {
         currentContainer = container
         userControlsRejectionErrorCount = 0
         separationLogSignature = nil
+        activeManifestSource = nil
         loadManifest(from: container?.gameURL)
         if let container, newGameID != nil {
             migrateLegacyPersistenceIfNeeded(container: container)
@@ -276,6 +280,21 @@ class ControlsLayout {
         inactiveButtons = leavingButtons
 
         currentOrientation = new
+    }
+
+    /// Re-translate Kirin/JoiPlay layouts when `gameRect` updates so
+    /// portrait top inset matches the live engine viewport.
+    func refreshForGameGeometryChange() {
+        guard let container = currentContainer else { return }
+        guard activeManifest != nil else { return }
+        guard activeManifestSource == .kirin || activeManifestSource == .joiplay else { return }
+        guard !UserControlsFile.exists(in: container) else { return }
+        guard !editSessionActive else { return }
+
+        staggerGeneration += 1
+        separationLogSignature = nil
+        loadManifest(from: container.gameURL)
+        applyResolvedLayout()
     }
 
     private nonisolated static func orientedInput(
@@ -519,8 +538,21 @@ class ControlsLayout {
             return (x: Double(clamped.x), y: Double(clamped.y), size: Double(button.size))
         }
 
+        let dpadClamped = ControlsZone.absolutePosition(
+            for: dpadRelativeCenter, in: geoSize,
+            controlSize: CGSize(width: dpadSize, height: dpadSize),
+            safeArea: safeArea, controlsMinY: controlsMinY
+        )
+        let obstacles = [
+            (x: Double(dpadClamped.x), y: Double(dpadClamped.y), size: Double(dpadSize))
+        ]
+
         let result = ButtonSeparation.separate(
-            inputs, width: Double(geoSize.width), height: Double(geoSize.height))
+            inputs,
+            width: Double(geoSize.width),
+            height: Double(geoSize.height),
+            obstacles: obstacles
+        )
 
         if result.movedCount > 0 {
             let signature =
@@ -844,6 +876,7 @@ class ControlsLayout {
 
     private func loadManifest(from gameRoot: URL?) {
         activeManifest = nil
+        activeManifestSource = nil
         manifestRejectionErrorCount = 0
         guard let gameRoot else { return }
 
@@ -852,6 +885,7 @@ class ControlsLayout {
         guard let outcome = ControlsManifestLoader.load(gameRoot: gameRoot, metrics: metrics) else { return }
 
         let result = outcome.result
+        activeManifestSource = result.location
         let logsContainer = GameContainer(url: gameRoot.deletingLastPathComponent())
 
         if let note = outcome.note {

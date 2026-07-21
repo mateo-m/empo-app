@@ -231,6 +231,9 @@ struct PlayerView: View {
             .onChange(of: isPortrait, initial: true) { _, nowPortrait in
                 layout.setOrientation(nowPortrait ? .portrait : .landscape)
             }
+            .onChange(of: engineState.gameRect) { _, _ in
+                layout.refreshForGameGeometryChange()
+            }
         }
         .ignoresSafeArea()
         // Opt out of SwiftUI keyboard avoidance: the soft keyboard

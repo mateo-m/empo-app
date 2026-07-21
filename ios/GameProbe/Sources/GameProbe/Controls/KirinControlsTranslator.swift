@@ -193,7 +193,7 @@ public enum KirinControlsTranslator {
         )
 
         let available = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: edgeMargin)
-        let rowCountForPitch = isLandscape ? maxRowCount : rightRowCount
+        let rowCountForPitch = isLandscape ? maxRowCount : rightRowCount + leftRowCount
         let pitch = effectivePitch(
             buttonSize: buttonSize, rowCount: rowCountForPitch, available: available)
         let firstRowCenterY = topInset + edgeMargin + buttonSize * 0.5
@@ -225,8 +225,14 @@ public enum KirinControlsTranslator {
                     trailingInset: metrics.trailingInset(isLandscape: true)
                 )
                 y = rowCenters[cell.row]
-            } else if cell.isRightGrid {
-                let rowCount = rightRowCount
+            } else {
+                // Portrait: the d-pad owns the left half, so BOTH grids
+                // stack into one right-side band — left-grid rows on
+                // top, right-grid rows at the bottom. Kirin's
+                // bottom-anchored structure survives: the primary
+                // action rows stay nearest the thumb.
+                let totalRows = leftRowCount + rightRowCount
+                let combinedRow = cell.isRightGrid ? leftRowCount + cell.row : cell.row
                 x = portraitRightColumnCenter(
                     col: cell.col,
                     width: width,
@@ -234,16 +240,7 @@ public enum KirinControlsTranslator {
                     pitch: pitch,
                     trailingInset: metrics.trailingInset(isLandscape: false)
                 )
-                y = lastRowCenterY - Double(rowCount - 1 - cell.row) * pitch
-            } else {
-                x = portraitLeftColumnCenter(
-                    col: cell.col,
-                    width: width,
-                    buttonSize: buttonSize,
-                    pitch: pitch,
-                    leadingInset: metrics.leadingInset(isLandscape: false)
-                )
-                y = firstRowCenterY + Double(cell.row) * pitch
+                y = lastRowCenterY - Double(totalRows - 1 - combinedRow) * pitch
             }
 
             buttons.append(
@@ -312,16 +309,6 @@ public enum KirinControlsTranslator {
         return rightmost - Double(2 - col) * pitch
     }
 
-    private static func portraitLeftColumnCenter(
-        col: Int,
-        width: Double,
-        buttonSize: Double,
-        pitch: Double,
-        leadingInset: Double
-    ) -> Double {
-        let leftmost = leadingInset + edgeMargin + buttonSize * 0.5
-        return leftmost + Double(col) * pitch
-    }
 
     private static func fitButtonSize(
         buttonSize: Double,
@@ -339,19 +326,9 @@ public enum KirinControlsTranslator {
 
         while size > minButtonSize {
             let pitch = size + cellGap
-            let rowCount = isLandscape ? maxRowCount : rightRowCount
+            let rowCount = isLandscape ? maxRowCount : rightRowCount + leftRowCount
             let span = rowCount > 0 ? Double(rowCount - 1) * pitch + size : size
-            var fits = span <= available
-
-            if fits && !isLandscape && leftRowCount > 0 && rightRowCount > 0 {
-                let firstLeftCenter = topInset + edgeMargin + size * 0.5
-                let leftBottomEdge = firstLeftCenter + Double(leftRowCount - 1) * pitch + size * 0.5
-                let lastRightCenter = height - bottomInset - edgeMargin - size * 0.5
-                let rightTopEdge = lastRightCenter - Double(rightRowCount - 1) * pitch - size * 0.5
-                fits = leftBottomEdge + cellGap <= rightTopEdge
-            }
-
-            if fits { return size }
+            if span <= available { return size }
             size -= 1
         }
         return minButtonSize

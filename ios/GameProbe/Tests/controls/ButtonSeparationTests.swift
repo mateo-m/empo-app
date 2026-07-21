@@ -50,13 +50,46 @@ final class ButtonSeparationTests: XCTestCase {
         XCTAssertEqual(result.movedCount, 0)
     }
 
+    func testButtonIntersectingObstacleSeparatesWhileObstacleUnmoved() {
+        let buttons = [(x: 100.0, y: 100.0, size: 40.0)]
+        let obstacles = [(x: 110.0, y: 100.0, size: 40.0)]
+        let result = ButtonSeparation.separate(buttons, width: 200, height: 200, obstacles: obstacles)
+        let required = (buttons[0].size + obstacles[0].size) * 0.5 + ButtonSeparation.minimumGap
+        XCTAssertGreaterThanOrEqual(
+            distance(result.positions[0], (obstacles[0].x, obstacles[0].y)), required - 1e-6)
+        XCTAssertGreaterThan(result.movedCount, 0)
+    }
+
+    func testButtonSqueezedBetweenObstacleAndBoundsStaysInside() {
+        let buttons = [(x: 25.0, y: 100.0, size: 40.0)]
+        let obstacles = [(x: 10.0, y: 100.0, size: 40.0)]
+        let result = ButtonSeparation.separate(buttons, width: 200, height: 200, obstacles: obstacles)
+        let half = buttons[0].size * 0.5
+        XCTAssertGreaterThanOrEqual(result.positions[0].x, half)
+        XCTAssertLessThanOrEqual(result.positions[0].x, 200 - half)
+        XCTAssertGreaterThanOrEqual(result.positions[0].y, half)
+        XCTAssertLessThanOrEqual(result.positions[0].y, 200 - half)
+        let required = (buttons[0].size + obstacles[0].size) * 0.5 + ButtonSeparation.minimumGap
+        XCTAssertGreaterThanOrEqual(
+            distance(result.positions[0], (obstacles[0].x, obstacles[0].y)), required - 1e-6)
+    }
+
+    func testNonIntersectingButtonAndObstacleUnchanged() {
+        let buttons = [(x: 160.0, y: 160.0, size: 40.0)]
+        let obstacles = [(x: 40.0, y: 40.0, size: 40.0)]
+        let result = ButtonSeparation.separate(buttons, width: 200, height: 200, obstacles: obstacles)
+        XCTAssertEqual(result.positions[0].x, 160, accuracy: 1e-6)
+        XCTAssertEqual(result.positions[0].y, 160, accuracy: 1e-6)
+        XCTAssertEqual(result.movedCount, 0)
+    }
+
     private func distance(_ a: (x: Double, y: Double), _ b: (x: Double, y: Double)) -> Double {
         hypot(a.x - b.x, a.y - b.y)
     }
 
     private func pairwiseNonOverlapping(positions: [(x: Double, y: Double)], sizes: [Double]) -> Bool {
-        for i in 0 ..< positions.count {
-            for j in (i + 1) ..< positions.count {
+        for i in 0..<positions.count {
+            for j in (i + 1)..<positions.count {
                 let required = (sizes[i] + sizes[j]) * 0.5
                 if distance(positions[i], positions[j]) < required - 1e-6 {
                     return false
