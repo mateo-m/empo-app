@@ -96,3 +96,15 @@ jobs:
 
       - name: oxfmt check
         run: bun run fmt:check
+
+  # Aggregate gate whose check-run name matches the ruleset's required
+  # "Format" context exactly (same pattern as lint.yml's summary job).
+  summary:
+    name: Format
+    needs: [swift, objc-cpp, shell, yaml-json]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every format job passed
+        run: |
+          [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "false" ]

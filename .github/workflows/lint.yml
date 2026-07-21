@@ -173,3 +173,16 @@ jobs:
           if [ -n "$FILES" ]; then
             echo "$FILES" | xargs bun x markdownlint -c .markdownlint.json
           fi
+
+  # Aggregate gate whose check-run name matches the ruleset's required
+  # "Lint" context exactly. The per-tool jobs above have descriptive
+  # names that the ruleset does not (and should not) track one by one.
+  summary:
+    name: Lint
+    needs: [swift, objc-cpp, shell, yaml, markdown]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify every lint job passed
+        run: |
+          [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "false" ]
