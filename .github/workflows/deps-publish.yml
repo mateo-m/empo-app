@@ -153,8 +153,15 @@ jobs:
         # into main. CLI commits from the runner are unsigned, so the
         # commit is created via the GraphQL API instead — GitHub signs
         # API-created commits itself, which satisfies the ruleset.
+        #
+        # EMPO_APP_BOT_TOKEN (a PAT, ideally on a machine account):
+        # events created with the default GITHUB_TOKEN never trigger
+        # other workflows, so PRs opened with it show the required
+        # Lint/Format checks as "Expected" forever. A PAT-created
+        # branch/PR triggers them normally. Falls back to the default
+        # token when the secret is absent.
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.EMPO_APP_BOT_TOKEN || github.token }}
         run: |
           set -e
           TAG="$(sed -n 's/^NATIVE_DEPS_VERSION=//p' ios/Dependencies/native/.version)"

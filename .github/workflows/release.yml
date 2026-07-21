@@ -264,8 +264,15 @@ jobs:
         # commits (GitHub signs those itself), and the review gate is
         # deliberate — approving this PR is part of the release
         # ritual. Auto-merge is armed so approval is the only click.
+        #
+        # EMPO_APP_BOT_TOKEN: see deps-publish.yml's "Open pin PR" —
+        # PRs created with the default GITHUB_TOKEN never trigger the
+        # required Lint/Format checks ("Expected" forever). Use a
+        # machine-account PAT so the maintainer can still APPROVE the
+        # PR (authors cannot approve their own PRs — a personal PAT
+        # would break this release ritual).
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.EMPO_APP_BOT_TOKEN || github.token }}
         run: |
           set -e
           VERSION="${{ needs.build.outputs.version }}"
