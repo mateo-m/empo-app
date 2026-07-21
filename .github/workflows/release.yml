@@ -264,6 +264,7 @@ jobs:
         # commits (GitHub signs those itself), and the review gate is
         # deliberate — approving this PR is part of the release
         # ritual. Auto-merge is armed so approval is the only click.
+        #
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -294,3 +295,22 @@ jobs:
             --body "Post-release metadata for v$VERSION: AltStore manifest entry (IPA size/URL/notes) and the engine prebuilt re-pin to \`empo-v$VERSION\`. Created by the Release workflow (run ${{ github.run_id }}); approving completes the release.")"
           gh pr merge --auto --squash "$PR_URL" ||
             echo "auto-merge unavailable; approve and squash-merge $PR_URL manually"
+
+      - name: Trigger required checks on the release-sync branch
+        # Same recursion-guard workaround as deps-publish's
+        # "Trigger required checks on the pin branch" step: the
+        # bot-authored PR can't start pull_request workflows, so the
+        # required Lint/Format checks are dispatched explicitly with
+        # a PAT scoped to Actions: write.
+        env:
+          GH_TOKEN: ${{ secrets.EMPO_APP_ACTIONS_TOKEN }}
+        run: |
+          set -e
+          if [ -z "$GH_TOKEN" ]; then
+            echo "EMPO_APP_ACTIONS_TOKEN not set; start Lint/Format manually" \
+              "(gh workflow run lint.yml --ref <branch>) or admin-merge."
+            exit 0
+          fi
+          BRANCH="release-sync/v${{ needs.build.outputs.version }}"
+          gh workflow run lint.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"
+          gh workflow run format.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"

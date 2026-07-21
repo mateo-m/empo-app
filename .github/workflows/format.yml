@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Manual kick for branches whose PRs can't trigger pull_request
+  # workflows (bot-created pin PRs; GITHUB_TOKEN events never chain).
+  workflow_dispatch:
 
 # Several pinned actions (actions/cache, cirruslabs/swiftlint-action)
 # still run on Node.js 20. GitHub is forcing all JS actions to
