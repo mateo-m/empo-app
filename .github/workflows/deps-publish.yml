@@ -153,15 +153,8 @@ jobs:
         # into main. CLI commits from the runner are unsigned, so the
         # commit is created via the GraphQL API instead — GitHub signs
         # API-created commits itself, which satisfies the ruleset.
-        #
-        # EMPO_APP_BOT_TOKEN (a PAT, ideally on a machine account):
-        # events created with the default GITHUB_TOKEN never trigger
-        # other workflows, so PRs opened with it show the required
-        # Lint/Format checks as "Expected" forever. A PAT-created
-        # branch/PR triggers them normally. Falls back to the default
-        # token when the secret is absent.
         env:
-          GH_TOKEN: ${{ secrets.EMPO_APP_BOT_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           TAG="$(sed -n 's/^NATIVE_DEPS_VERSION=//p' ios/Dependencies/native/.version)"
@@ -186,3 +179,25 @@ jobs:
             --head "$BRANCH" \
             --title "chore(deps): pin $TAG native prebuilts" \
             --body "CI-built native dependency trees, published to empo-deps as \`$TAG\` by the deps-publish workflow (run ${{ github.run_id }}). Merging flips every clone to the new prebuilts."
+
+      - name: Trigger required checks on the pin branch
+        # PRs created with the default GITHUB_TOKEN never trigger
+        # pull_request workflows (GitHub's recursion guard), which
+        # leaves the required Lint/Format checks stuck at "Expected".
+        # Dispatching them with a PAT (Actions: write only) attaches
+        # their check runs to the branch head, satisfying the ruleset
+        # while the PR stays bot-authored — so the maintainer can
+        # still approve it.
+        env:
+          KICK_TOKEN: ${{ secrets.EMPO_APP_ACTIONS_TOKEN }}
+        run: |
+          set -e
+          if [ -z "$KICK_TOKEN" ]; then
+            echo "EMPO_APP_ACTIONS_TOKEN not set; start Lint/Format manually" \
+              "(gh workflow run lint.yml --ref <branch>) or admin-merge."
+            exit 0
+          fi
+          TAG="$(sed -n 's/^NATIVE_DEPS_VERSION=//p' ios/Dependencies/native/.version)"
+          BRANCH="deps/$TAG"
+          GH_TOKEN="$KICK_TOKEN" gh workflow run lint.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"
+          GH_TOKEN="$KICK_TOKEN" gh workflow run format.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"

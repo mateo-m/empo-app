@@ -265,14 +265,8 @@ jobs:
         # deliberate — approving this PR is part of the release
         # ritual. Auto-merge is armed so approval is the only click.
         #
-        # EMPO_APP_BOT_TOKEN: see deps-publish.yml's "Open pin PR" —
-        # PRs created with the default GITHUB_TOKEN never trigger the
-        # required Lint/Format checks ("Expected" forever). Use a
-        # machine-account PAT so the maintainer can still APPROVE the
-        # PR (authors cannot approve their own PRs — a personal PAT
-        # would break this release ritual).
         env:
-          GH_TOKEN: ${{ secrets.EMPO_APP_BOT_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           VERSION="${{ needs.build.outputs.version }}"
@@ -301,3 +295,22 @@ jobs:
             --body "Post-release metadata for v$VERSION: AltStore manifest entry (IPA size/URL/notes) and the engine prebuilt re-pin to \`empo-v$VERSION\`. Created by the Release workflow (run ${{ github.run_id }}); approving completes the release.")"
           gh pr merge --auto --squash "$PR_URL" ||
             echo "auto-merge unavailable; approve and squash-merge $PR_URL manually"
+
+      - name: Trigger required checks on the release-sync branch
+        # Same recursion-guard workaround as deps-publish's
+        # "Trigger required checks on the pin branch" step: the
+        # bot-authored PR can't start pull_request workflows, so the
+        # required Lint/Format checks are dispatched explicitly with
+        # a PAT scoped to Actions: write.
+        env:
+          KICK_TOKEN: ${{ secrets.EMPO_APP_ACTIONS_TOKEN }}
+        run: |
+          set -e
+          if [ -z "$KICK_TOKEN" ]; then
+            echo "EMPO_APP_ACTIONS_TOKEN not set; start Lint/Format manually" \
+              "(gh workflow run lint.yml --ref <branch>) or admin-merge."
+            exit 0
+          fi
+          BRANCH="release-sync/v${{ needs.build.outputs.version }}"
+          GH_TOKEN="$KICK_TOKEN" gh workflow run lint.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"
+          GH_TOKEN="$KICK_TOKEN" gh workflow run format.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"
