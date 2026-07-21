@@ -25,37 +25,54 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
         "Enter", "Escape", "ShiftLeft", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyW",
     ]
     private let defaultLabels = ["C", "B", "A", "X", "Y", "Z", "L", "R"]
-    private let defaultXs = [0.86, 0.73, 0.63, 0.63, 0.74, 0.86, 0.06, 0.94]
-    private let defaultYs = [0.80, 0.72, 0.84, 0.60, 0.54, 0.60, 0.08, 0.08]
-    private let defaultSizes = [60.0, 56.0, 50.0, 44.0, 44.0, 44.0, 44.0, 44.0]
+    private let metrics = TouchZoneMetrics.reference
 
     // MARK: - Defaults
 
     func testDefaultsProduceEightButtonsInTableOrder() throws {
         let json = #"{"btnScale": 100}"#
-        let translation = JoiPlayControlsTranslator.translate(data: json.data(using: .utf8)!)
+        let translation = JoiPlayControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: metrics)
 
         XCTAssertNotNil(translation.manifest)
         XCTAssertNil(translation.manifest?.controller)
 
         let portrait = translation.manifest?.touch?.portrait
         let landscape = translation.manifest?.touch?.landscape
-        XCTAssertEqual(portrait, landscape)
+        XCTAssertNotEqual(portrait, landscape)
         XCTAssertNil(portrait?.dpad)
 
-        guard let buttons = portrait?.buttons else {
+        guard let portraitButtons = portrait?.buttons, let landscapeButtons = landscape?.buttons else {
             XCTFail("expected buttons")
             return
         }
-        XCTAssertEqual(buttons.count, 8)
-        XCTAssertEqual(buttons.map(\.key), defaultKeys)
-        XCTAssertEqual(buttons.map(\.label), defaultLabels)
+        XCTAssertEqual(portraitButtons.count, 8)
+        XCTAssertEqual(landscapeButtons.count, 8)
+        XCTAssertEqual(portraitButtons.map(\.key), defaultKeys)
+        XCTAssertEqual(landscapeButtons.map(\.key), defaultKeys)
+        XCTAssertEqual(portraitButtons.map(\.label), defaultLabels)
 
-        for (index, button) in buttons.enumerated() {
-            XCTAssertEqual(button.x, defaultXs[index], accuracy: 0.000_001)
-            XCTAssertEqual(button.y, defaultYs[index], accuracy: 0.000_001)
-            XCTAssertEqual(button.size, defaultSizes[index])
-            XCTAssertEqual(button.opacity, 1.0)
+        for buttons in [portraitButtons, landscapeButtons] {
+            for button in buttons {
+                XCTAssertEqual(button.opacity, 1.0)
+            }
+        }
+
+        assertClusterShape(buttons: portraitButtons, isLandscape: false)
+        assertClusterShape(buttons: landscapeButtons, isLandscape: true)
+        assertNonOverlap(buttons: portraitButtons, isLandscape: false, scale: 100)
+        assertNonOverlap(buttons: landscapeButtons, isLandscape: true, scale: 100)
+    }
+
+    func testNonOverlapAtScaleExtremes() {
+        for scale in [100, 10, 300] {
+            let json = #"{"btnScale": \#(scale)}"#
+            let translation = JoiPlayControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: metrics)
+            guard let touch = translation.manifest?.touch else {
+                XCTFail("expected manifest for scale \(scale)")
+                continue
+            }
+            assertNonOverlap(buttons: touch.portrait!.buttons!, isLandscape: false, scale: scale)
+            assertNonOverlap(buttons: touch.landscape!.buttons!, isLandscape: true, scale: scale)
         }
     }
 
@@ -63,7 +80,9 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
 
     func testFullCustomMapsAllKeycodes() throws {
         let translation = JoiPlayControlsTranslator.translate(
-            data: Self.fullCustomJSON.data(using: .utf8)!)
+            data: Self.fullCustomJSON.data(using: .utf8)!,
+            metrics: metrics
+        )
 
         guard let buttons = translation.manifest?.touch?.portrait?.buttons else {
             XCTFail("expected buttons")
@@ -76,6 +95,8 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
             ["KeyZ", "Backspace", "Space", "KeyB", "Digit1", "F5", "PageUp", "PageDown"]
         )
         XCTAssertEqual(buttons[0].opacity, 0.8)
+        assertNonOverlap(buttons: buttons, isLandscape: false, scale: 100)
+        assertNonOverlap(buttons: translation.manifest!.touch!.landscape!.buttons!, isLandscape: true, scale: 100)
     }
 
     // MARK: - Keycode mapping
@@ -102,11 +123,13 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
         let lowOpacity = #"{"btnOpacity": 5}"#
         let highOpacity = #"{"btnOpacity": 250}"#
 
-        XCTAssertEqual(
-            JoiPlayControlsTranslator.translate(data: highScale.data(using: .utf8)!).manifest?
-                .touch?.portrait?.buttons?.first?.size,
-            100
-        )
+        let highScaleButtons = JoiPlayControlsTranslator.translate(
+            data: highScale.data(using: .utf8)!, metrics: metrics
+        ).manifest?.touch?.portrait?.buttons
+        let cSize = highScaleButtons?.first?.size
+        XCTAssertNotNil(cSize)
+        XCTAssertGreaterThanOrEqual(cSize ?? 0, 40)
+        XCTAssertLessThanOrEqual(cSize ?? 0, 100)
         let lowScaleButtons = JoiPlayControlsTranslator.translate(data: lowScale.data(using: .utf8)!).manifest?
             .touch?.portrait?.buttons
         XCTAssertTrue(lowScaleButtons?.allSatisfy { $0.size == 40 } == true)
@@ -146,7 +169,9 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
 
     func testRoundTripTranslatedManifest() throws {
         let translation = JoiPlayControlsTranslator.translate(
-            data: Self.fullCustomJSON.data(using: .utf8)!)
+            data: Self.fullCustomJSON.data(using: .utf8)!,
+            metrics: metrics
+        )
         guard let manifest = translation.manifest else {
             XCTFail("expected manifest")
             return
@@ -329,5 +354,70 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
         XCTAssertNotNil(outcome?.result.manifest)
         XCTAssertEqual(outcome?.result.findings.allSatisfy { $0.severity == .warning }, true)
         XCTAssertEqual(outcome?.result.findings.contains { $0.code == "J001" }, true)
+    }
+
+    // MARK: - Geometry helpers
+
+    private func assertNonOverlap(buttons: [ButtonSpec], isLandscape: Bool, scale: Int) {
+        let width = metrics.width(isLandscape: isLandscape)
+        let height = metrics.height(isLandscape: isLandscape)
+        let points = buttons.map { button in
+            (
+                x: button.x * width,
+                y: button.y * height,
+                size: button.size ?? 56
+            )
+        }
+        for i in 0 ..< points.count {
+            for j in (i + 1) ..< points.count {
+                let required = (points[i].size + points[j].size) * 0.5
+                let dist = hypot(points[i].x - points[j].x, points[i].y - points[j].y)
+                XCTAssertGreaterThanOrEqual(
+                    dist, required - 1e-3,
+                    "overlap at scale \(scale) between \(i) and \(j) in \(isLandscape ? "landscape" : "portrait")"
+                )
+            }
+        }
+        for button in buttons {
+            XCTAssertGreaterThanOrEqual(button.x, JoiPlayControlsTranslator.coordMin)
+            XCTAssertLessThanOrEqual(button.x, JoiPlayControlsTranslator.coordMax)
+            XCTAssertGreaterThanOrEqual(button.y, JoiPlayControlsTranslator.coordMin)
+            XCTAssertLessThanOrEqual(button.y, JoiPlayControlsTranslator.coordMax)
+        }
+        assertWithinUsableZone(buttons: buttons, isLandscape: isLandscape)
+    }
+
+    private func assertWithinUsableZone(buttons: [ButtonSpec], isLandscape: Bool) {
+        let height = metrics.height(isLandscape: isLandscape)
+        let topInset = metrics.topInset(isLandscape: isLandscape)
+        let bottomInset = metrics.bottomInset(isLandscape: isLandscape)
+        for button in buttons {
+            let size = button.size ?? 56
+            let centerY = button.y * height
+            XCTAssertGreaterThanOrEqual(centerY - size * 0.5, topInset - 1)
+            XCTAssertLessThanOrEqual(centerY + size * 0.5, height - bottomInset + 1)
+        }
+    }
+
+    private func assertClusterShape(buttons: [ButtonSpec], isLandscape: Bool) {
+        let width = metrics.width(isLandscape: isLandscape)
+        let height = metrics.height(isLandscape: isLandscape)
+        let topInset = metrics.topInset(isLandscape: isLandscape)
+
+        let c = buttons[0]
+        let l = buttons[6]
+        let r = buttons[7]
+        let lSize = l.size ?? 44
+        let rSize = r.size ?? 44
+
+        XCTAssertGreaterThan(c.x * width, width * 0.5, "C should sit on the right half")
+        XCTAssertGreaterThan(
+            c.y * height, height - metrics.bottomInset(isLandscape: isLandscape) - 80,
+            "C should sit in the bottom band")
+        let expectedCornerY = topInset + JoiPlayControlsTranslator.edgeMargin + lSize * 0.5
+        XCTAssertEqual(l.y * height, expectedCornerY, accuracy: 2, "L should anchor below top inset")
+        XCTAssertEqual(r.y * height, topInset + JoiPlayControlsTranslator.edgeMargin + rSize * 0.5, accuracy: 2)
+        XCTAssertLessThan(l.x * width, width * 0.2, "L should anchor top-left")
+        XCTAssertGreaterThan(r.x * width, width * 0.8, "R should anchor top-right")
     }
 }

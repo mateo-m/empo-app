@@ -82,6 +82,10 @@ public enum ControlsManifestLoader {
 
     /// nil when no manifest location exists. Never throws for content problems — those land in `findings`.
     public static func load(gameRoot: URL) -> LoadOutcome? {
+        load(gameRoot: gameRoot, metrics: .reference)
+    }
+
+    public static func load(gameRoot: URL, metrics: TouchZoneMetrics) -> LoadOutcome? {
         let fileManager = FileManager.default
         let empoURL = gameRoot.appendingPathComponent(empoManifestRelativePath)
         let rootURL = gameRoot.appendingPathComponent(rootManifestRelativePath)
@@ -112,6 +116,7 @@ public enum ControlsManifestLoader {
         if rootExists {
             return loadRoot(
                 at: rootURL,
+                metrics: metrics,
                 kirinExists: kirinExists,
                 kirinURL: kirinURL,
                 joiplayExists: joiplayExists,
@@ -120,10 +125,10 @@ public enum ControlsManifestLoader {
         }
 
         if kirinExists {
-            return loadKirin(at: kirinURL, joiplayExists: joiplayExists)
+            return loadKirin(at: kirinURL, metrics: metrics, joiplayExists: joiplayExists)
         }
 
-        return loadJoiplay(at: joiplayURL)
+        return loadJoiplay(at: joiplayURL, metrics: metrics)
     }
 
     private static func loadEmpo(at url: URL) -> Result {
@@ -148,6 +153,7 @@ public enum ControlsManifestLoader {
 
     private static func loadRoot(
         at url: URL,
+        metrics: TouchZoneMetrics,
         kirinExists: Bool,
         kirinURL: URL,
         joiplayExists: Bool,
@@ -155,10 +161,10 @@ public enum ControlsManifestLoader {
     ) -> LoadOutcome {
         let unclaimed = { (note: LoadOutcome.Note) in
             if kirinExists {
-                return loadKirin(at: kirinURL, joiplayExists: joiplayExists)
+                return loadKirin(at: kirinURL, metrics: metrics, joiplayExists: joiplayExists)
             }
             if joiplayExists {
-                return loadJoiplay(at: joiplayURL)
+                return loadJoiplay(at: joiplayURL, metrics: metrics)
             }
             return LoadOutcome(
                 result: Result(manifest: nil, findings: []),
@@ -197,9 +203,13 @@ public enum ControlsManifestLoader {
         return LoadOutcome(result: result, note: note)
     }
 
-    private static func loadKirin(at url: URL, joiplayExists: Bool = false) -> LoadOutcome {
+    private static func loadKirin(
+        at url: URL,
+        metrics: TouchZoneMetrics,
+        joiplayExists: Bool = false
+    ) -> LoadOutcome {
         let data = (try? Data(contentsOf: url)) ?? Data()
-        let translation = KirinControlsTranslator.translate(data: data)
+        let translation = KirinControlsTranslator.translate(data: data, metrics: metrics)
         let findings = translation.notes.map { note in
             Finding(severity: .warning, code: "K001", path: "", message: note)
         }
@@ -213,9 +223,9 @@ public enum ControlsManifestLoader {
         return LoadOutcome(result: result, note: note)
     }
 
-    private static func loadJoiplay(at url: URL) -> LoadOutcome {
+    private static func loadJoiplay(at url: URL, metrics: TouchZoneMetrics) -> LoadOutcome {
         let data = (try? Data(contentsOf: url)) ?? Data()
-        let translation = JoiPlayControlsTranslator.translate(data: data)
+        let translation = JoiPlayControlsTranslator.translate(data: data, metrics: metrics)
         let findings = translation.notes.map { note in
             Finding(severity: .warning, code: "J001", path: "", message: note)
         }
@@ -466,13 +476,13 @@ public enum ControlsManifestLoader {
         path: String,
         findings: inout [Finding]
     ) -> [ButtonSpec] {
-        if array.count > 16 {
+        if array.count > 21 {
             findings.append(
                 Finding(
                     severity: .error,
                     code: "V013",
                     path: path,
-                    message: "More than 16 buttons in one orientation"
+                    message: "More than 21 buttons in one orientation"
                 )
             )
         }

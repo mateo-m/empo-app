@@ -2,6 +2,7 @@ import Foundation
 import GameProbe
 import Observation
 import SwiftUI
+import UIKit
 
 struct ButtonModel: Identifiable, Equatable, Codable {
     let id: UUID
@@ -125,6 +126,10 @@ class ControlsLayout {
     }
 
     private static let controlsManifestLogFile = "controls.json.log"
+    private static let separationLogFile = "controls.json.log"
+
+    /// Dedupes display-time separation log lines per layout + geometry signature.
+    private var separationLogSignature: String?
 
     /// Current device orientation as far as the layout is concerned.
     /// PlayerView updates this via `setOrientation(_:)` when geometry
@@ -229,6 +234,7 @@ class ControlsLayout {
         currentGameID = newGameID
         currentContainer = container
         userControlsRejectionErrorCount = 0
+        separationLogSignature = nil
         loadManifest(from: container?.gameURL)
         if let container, newGameID != nil {
             migrateLegacyPersistenceIfNeeded(container: container)
@@ -489,6 +495,53 @@ class ControlsLayout {
     /// from an earlier reset cannot append onto the new state.
     private var staggerGeneration = 0
 
+    // MARK: - Display-time button separation
+
+    /// Single choke point for resolved button centers at display resolution.
+    /// Maps each fraction center through the SAME transform the renderer
+    /// uses (`ControlsZone.absolutePosition`, including safe-area and
+    /// toolbar-line clamping) and only THEN runs `ButtonSeparation` —
+    /// separating in any earlier space misses overlaps the clamp
+    /// reintroduces (e.g. rows collapsing onto controlsMinY). Covers
+    /// manifest, translated, user, and builtin layouts alike without
+    /// persisting adjusted positions. Returns final absolute positions.
+    func separatedDisplayPositions(
+        for geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat
+    ) -> [UUID: CGPoint] {
+        guard !buttons.isEmpty, geoSize.width > 0, geoSize.height > 0 else { return [:] }
+
+        let inputs = buttons.map { button -> (x: Double, y: Double, size: Double) in
+            let clamped = ControlsZone.absolutePosition(
+                for: button.relativeCenter, in: geoSize,
+                controlSize: CGSize(width: button.size, height: button.size),
+                safeArea: safeArea, controlsMinY: controlsMinY
+            )
+            return (x: Double(clamped.x), y: Double(clamped.y), size: Double(button.size))
+        }
+
+        let result = ButtonSeparation.separate(
+            inputs, width: Double(geoSize.width), height: Double(geoSize.height))
+
+        if result.movedCount > 0 {
+            let signature =
+                "\(result.movedCount)-\(Int(geoSize.width))x\(Int(geoSize.height))-\(buttons.count)"
+            if separationLogSignature != signature, let container = currentContainer {
+                separationLogSignature = signature
+                container.appendLogLine(
+                    "controls: separated \(result.movedCount) overlapping buttons",
+                    fileName: Self.separationLogFile
+                )
+            }
+        }
+
+        var centers: [UUID: CGPoint] = [:]
+        for (index, button) in buttons.enumerated() {
+            let point = result.positions[index]
+            centers[button.id] = CGPoint(x: CGFloat(point.x), y: CGFloat(point.y))
+        }
+        return centers
+    }
+
     // MARK: - Persistence
 
     /// Persist the current layout to `EmpoState/controls.json`. No-op
@@ -725,12 +778,78 @@ class ControlsLayout {
         return nil
     }
 
+    /// Host metrics for Kirin/JoiPlay translation at manifest load.
+    /// Uses live safe area + toolbar geometry when available; portrait
+    /// top falls back to a 4:3 game-bottom estimate when the engine has
+    /// not published `gameRect` yet (typical at game select).
+    private static func touchZoneMetricsForManifestLoad() -> TouchZoneMetrics {
+        let bounds = UIScreen.main.bounds
+        let safeArea = AppWindow.currentSafeArea
+        let portraitWidth = min(bounds.width, bounds.height)
+        let portraitHeight = max(bounds.width, bounds.height)
+        let toolbarBtnSize = IconButtonSize.sm.points
+
+        let landscapeTop = ControlsZone.landscapeControlsTopInset(
+            safeArea: safeArea, toolbarButtonSize: toolbarBtnSize)
+        let bottomInset = Double(safeArea.bottom + ControlsZone.padding)
+
+        let gameRect = EngineState.shared.gameRect
+        let portraitTop: Double
+        if gameRect.height > 0 {
+            portraitTop = Double(
+                ControlsZone.toolbarBottomY(
+                    isPortrait: true,
+                    gameRect: gameRect,
+                    safeArea: safeArea,
+                    btnSize: toolbarBtnSize,
+                    geoHeight: portraitHeight
+                ))
+        } else {
+            // RPG Maker viewports are 4:3; in portrait the game bottom
+            // sits at roughly safe-area top + 0.75 × screen width.
+            portraitTop = Double(safeArea.top) + portraitWidth * 0.75 + ControlsZone.toolbarGap
+        }
+
+        // Landscape lateral insets = the notch / home-indicator depth,
+        // which the render clamp reserves on both edges. When currently
+        // landscape, the live safe area has the exact values; in
+        // portrait the notch depth appears as safeArea.top, so use it
+        // as the estimate for both landscape edges.
+        let isLandscapeNow = bounds.width > bounds.height
+        let landscapeLeading: Double
+        let landscapeTrailing: Double
+        if isLandscapeNow {
+            landscapeLeading = Double(safeArea.leading)
+            landscapeTrailing = Double(safeArea.trailing)
+        } else {
+            landscapeLeading = Double(safeArea.top)
+            landscapeTrailing = Double(safeArea.top)
+        }
+
+        return TouchZoneMetrics(
+            portraitWidth: Double(portraitWidth),
+            portraitHeight: Double(portraitHeight),
+            landscapeWidth: Double(portraitHeight),
+            landscapeHeight: Double(portraitWidth),
+            portraitTopInset: portraitTop,
+            portraitBottomInset: bottomInset,
+            landscapeTopInset: Double(landscapeTop),
+            landscapeBottomInset: bottomInset,
+            portraitLeadingInset: 0,
+            portraitTrailingInset: 0,
+            landscapeLeadingInset: landscapeLeading,
+            landscapeTrailingInset: landscapeTrailing
+        )
+    }
+
     private func loadManifest(from gameRoot: URL?) {
         activeManifest = nil
         manifestRejectionErrorCount = 0
         guard let gameRoot else { return }
 
-        guard let outcome = ControlsManifestLoader.load(gameRoot: gameRoot) else { return }
+        let metrics = Self.touchZoneMetricsForManifestLoad()
+
+        guard let outcome = ControlsManifestLoader.load(gameRoot: gameRoot, metrics: metrics) else { return }
 
         let result = outcome.result
         let logsContainer = GameContainer(url: gameRoot.deletingLastPathComponent())

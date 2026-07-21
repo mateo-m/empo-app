@@ -16,10 +16,12 @@ struct PlayerControlsOverlay: View {
     @Binding var draggingButtonID: UUID?
 
     var body: some View {
+        let separatedPositions = layout.separatedDisplayPositions(
+            for: geo.size, safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY)
         ZStack {
             dpadView
             ForEach(Array(layout.buttons.enumerated()), id: \.element.id) { index, button in
-                actionButton(button: button, index: index)
+                actionButton(button: button, index: index, displayPosition: separatedPositions[button.id])
             }
         }
     }
@@ -74,11 +76,16 @@ struct PlayerControlsOverlay: View {
     }
 
     @ViewBuilder
-    private func actionButton(button: ButtonModel, index: Int) -> some View {
-        let pos = ControlsZone.absolutePosition(
-            for: button.relativeCenter, in: geo.size,
-            controlSize: CGSize(width: button.size, height: button.size), safeArea: AppWindow.currentSafeArea,
-            controlsMinY: controlsMinY)
+    private func actionButton(button: ButtonModel, index: Int, displayPosition: CGPoint?) -> some View {
+        // displayPosition is already absolute and separation-adjusted
+        // (post-clamp); the fallback only covers the empty-layout case.
+        let pos =
+            displayPosition
+            ?? ControlsZone.absolutePosition(
+                for: button.relativeCenter, in: geo.size,
+                controlSize: CGSize(width: button.size, height: button.size),
+                safeArea: AppWindow.currentSafeArea,
+                controlsMinY: controlsMinY)
         let isDragging = draggingButtonID == button.id
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
         ActionButton(

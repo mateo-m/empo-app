@@ -163,7 +163,7 @@ the d-pad; these games need arrow keys.
 
 ### `buttons`
 
-Up to 16 per orientation.
+Up to 21 per orientation.
 
 | Field | Required | Range | Default |
 |---|---|---|---|
@@ -347,7 +347,7 @@ says your controls did not show up.
 | V010 | Unknown key code (the message echoes the bad string) |
 | V011 | Coordinate missing or outside 0.0 to 1.0 |
 | V012 | Size or opacity out of range |
-| V013 | More than 16 buttons in one orientation |
+| V013 | More than 21 buttons in one orientation |
 | V014 | `$action` on a touch button |
 | V020 | Unknown controller element |
 | V021 | Unknown `$action` |

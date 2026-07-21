@@ -54,6 +54,11 @@ enum ControlsZone {
         return spaceBelow < minControlsZoneHeight
     }
 
+    static func landscapeControlsTopInset(safeArea: EdgeInsets, toolbarButtonSize: CGFloat) -> CGFloat {
+        let topInset = max(safeArea.top, minLandscapeInset)
+        return topInset + toolbarEdgePad + toolbarButtonSize + toolbarEdgePad
+    }
+
     /// Top edge of the controls zone: controls can only live below
     /// this Y. In portrait with space below the game, the zone begins
     /// right at the game's bottom edge (toolbar is now at the top so
@@ -68,8 +73,7 @@ enum ControlsZone {
         {
             return gameRect.origin.y + gameRect.height + toolbarGap
         } else {
-            let topInset = max(safeArea.top, minLandscapeInset)
-            return topInset + toolbarEdgePad + btnSize + toolbarEdgePad
+            return landscapeControlsTopInset(safeArea: safeArea, toolbarButtonSize: btnSize)
         }
     }
 

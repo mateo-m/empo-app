@@ -28,59 +28,80 @@ final class KirinControlsTranslatorTests: XCTestCase {
         "KeyT", "KeyM", "F12", "KeyQ", "KeyW", "F11",
     ]
 
+    private let metrics = TouchZoneMetrics.reference
+
     // MARK: - Reference example
 
     func testReferenceExampleProducesSixteenButtons() throws {
         let data = Self.referenceExampleJSON.data(using: .utf8)!
-        let translation = KirinControlsTranslator.translate(data: data)
+        let translation = KirinControlsTranslator.translate(data: data, metrics: metrics)
 
         XCTAssertNotNil(translation.manifest)
         XCTAssertNil(translation.manifest?.controller)
 
         let portrait = translation.manifest?.touch?.portrait
         let landscape = translation.manifest?.touch?.landscape
-        XCTAssertEqual(portrait, landscape)
+        XCTAssertNotEqual(portrait, landscape)
         XCTAssertNil(portrait?.dpad)
 
-        guard let buttons = portrait?.buttons else {
+        guard let portraitButtons = portrait?.buttons, let landscapeButtons = landscape?.buttons else {
             XCTFail("expected buttons")
             return
         }
-        XCTAssertEqual(buttons.count, 16)
-        XCTAssertEqual(buttons.map(\.key), expectedKeys)
+        XCTAssertEqual(portraitButtons.count, 16)
+        XCTAssertEqual(landscapeButtons.count, 16)
+        XCTAssertEqual(portraitButtons.map(\.key), expectedKeys)
+        XCTAssertEqual(landscapeButtons.map(\.key), expectedKeys)
 
-        for button in buttons {
+        for button in portraitButtons + landscapeButtons {
             XCTAssertNil(button.label)
-            XCTAssertEqual(button.size, 56)
             XCTAssertEqual(button.opacity, 0.8)
         }
 
-        let bottomRow = buttons.filter { ["KeyZ", "KeyX", "Enter"].contains($0.key) }
-        XCTAssertEqual(bottomRow.map(\.key), ["KeyZ", "KeyX", "Enter"])
-        for button in bottomRow {
-            XCTAssertEqual(button.y, 0.86, accuracy: 0.000_001)
+        for button in portraitButtons {
+            XCTAssertGreaterThanOrEqual(button.size ?? 0, KirinControlsTranslator.minButtonSize)
+            XCTAssertLessThanOrEqual(button.size ?? 0, 56)
         }
+
+        assertGeometry(layout: portrait!, isLandscape: false, expectBottomActionRow: true)
+        assertGeometry(layout: landscape!, isLandscape: true, expectBottomActionRow: false)
+        assertRoundTrip(manifest: translation.manifest!)
+    }
+
+    func testWorstCaseFifteenPlusSixSlotsNonOverlap() throws {
+        let rightSlots = (0 ..< 15).map { _ in "29" }.joined(separator: ", ")
+        let leftSlots = (0 ..< 6).map { _ in "30" }.joined(separator: ", ")
+        let json = """
+            {
+              "version": 1,
+              "scale": 100,
+              "opacity": 100,
+              "rightGrid": { "slots": [\(rightSlots)] },
+              "leftGrid": { "slots": [\(leftSlots)] }
+            }
+            """
+        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: metrics)
+        guard let touch = translation.manifest?.touch else {
+            XCTFail("expected manifest")
+            return
+        }
+
+        XCTAssertEqual(touch.portrait?.buttons?.count, 21)
+        XCTAssertEqual(touch.landscape?.buttons?.count, 21)
+        assertGeometry(layout: touch.portrait!, isLandscape: false, expectBottomActionRow: false)
+        assertGeometry(layout: touch.landscape!, isLandscape: true, expectBottomActionRow: false)
     }
 
     // MARK: - Round-trip
 
     func testRoundTripReferenceExample() throws {
         let data = Self.referenceExampleJSON.data(using: .utf8)!
-        let translation = KirinControlsTranslator.translate(data: data)
+        let translation = KirinControlsTranslator.translate(data: data, metrics: metrics)
         guard let manifest = translation.manifest else {
             XCTFail("expected manifest")
             return
         }
-
-        let serialized = ControlsManifestSerializer.serialize(
-            touch: manifest.touch,
-            controller: manifest.controller
-        )
-        XCTAssertNotNil(serialized)
-
-        let result = ControlsManifestLoader.parse(data: serialized!)
-        XCTAssertNotNil(result.manifest)
-        XCTAssertTrue(result.findings.filter { $0.severity == .error }.isEmpty)
+        assertRoundTrip(manifest: manifest)
     }
 
     func testRoundTripClampedEdgeFixture() throws {
@@ -92,7 +113,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
               "rightGrid": { "slots": [29, 30, 31] }
             }
             """
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)
+        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: metrics)
         guard let manifest = translation.manifest else {
             XCTFail("expected manifest")
             return
@@ -100,13 +121,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
         XCTAssertEqual(manifest.touch?.portrait?.buttons?.first?.size, 100)
         XCTAssertEqual(manifest.touch?.portrait?.buttons?.first?.opacity, 0.2)
-
-        let serialized = ControlsManifestSerializer.serialize(
-            touch: manifest.touch,
-            controller: manifest.controller
-        )
-        let result = ControlsManifestLoader.parse(data: serialized!)
-        XCTAssertTrue(result.findings.filter { $0.severity == .error }.isEmpty)
+        assertRoundTrip(manifest: manifest)
     }
 
     // MARK: - Android keycode table
@@ -203,12 +218,14 @@ final class KirinControlsTranslatorTests: XCTestCase {
         XCTAssertTrue(translation.notes.contains { $0.contains("keycode 999") })
     }
 
-    func testMoreThanSixteenButtonsTruncated() {
+    func testKirinStructuralCapacityTranslatesWhole() {
+        // Kirin's own limit (15 right + 6 left slots) is the translation
+        // cap; a fully populated file translates with nothing dropped.
         let slots = (0 ..< 20).map { _ in "29" }.joined(separator: ", ")
         let json = "{\"rightGrid\": {\"slots\": [\(slots)]}}"
         let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)
-        XCTAssertEqual(translation.manifest?.touch?.portrait?.buttons?.count, 16)
-        XCTAssertTrue(translation.notes.contains { $0.contains("4 buttons beyond") })
+        XCTAssertEqual(translation.manifest?.touch?.portrait?.buttons?.count, 20)
+        XCTAssertFalse(translation.notes.contains { $0.contains("dropped") })
     }
 
     func testAllNullSlotsIgnored() {
@@ -356,5 +373,138 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.note, .rootSkippedBecauseEmpoExists)
+    }
+
+    // MARK: - Geometry helpers
+
+    private func assertRoundTrip(manifest: ControlsManifest) {
+        let serialized = ControlsManifestSerializer.serialize(
+            touch: manifest.touch,
+            controller: manifest.controller
+        )
+        XCTAssertNotNil(serialized)
+        let result = ControlsManifestLoader.parse(data: serialized!)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertTrue(result.findings.filter { $0.severity == .error }.isEmpty)
+    }
+
+    private func assertGeometry(layout: TouchLayout, isLandscape: Bool, expectBottomActionRow: Bool) {
+        guard let buttons = layout.buttons else {
+            XCTFail("expected buttons")
+            return
+        }
+
+        let width = metrics.width(isLandscape: isLandscape)
+        let height = metrics.height(isLandscape: isLandscape)
+
+        for button in buttons {
+            XCTAssertGreaterThanOrEqual(button.x, KirinControlsTranslator.coordMin)
+            XCTAssertLessThanOrEqual(button.x, KirinControlsTranslator.coordMax)
+            XCTAssertGreaterThanOrEqual(button.y, KirinControlsTranslator.coordMin)
+            XCTAssertLessThanOrEqual(button.y, KirinControlsTranslator.coordMax)
+        }
+
+        XCTAssertTrue(
+            pairwiseNonOverlapping(buttons: buttons, width: width, height: height),
+            "buttons overlap in \(isLandscape ? "landscape" : "portrait")"
+        )
+
+        assertWithinUsableZone(buttons: buttons, isLandscape: isLandscape)
+
+        let rightGrid = Array(buttons.prefix(10))
+        let leftGrid = Array(buttons.suffix(6))
+
+        assertColumnPitchesEqual(buttons: rightGrid, width: width, height: height)
+        assertColumnPitchesEqual(buttons: leftGrid, width: width, height: height)
+
+        if isLandscape {
+            assertSharedLandscapeRows(left: leftGrid, right: rightGrid, height: height)
+            XCTAssertGreaterThan(
+                rightGrid.map { $0.x * width }.max() ?? 0,
+                width * 0.75,
+                "right grid should anchor on the right edge"
+            )
+            XCTAssertLessThan(
+                leftGrid.map { $0.x * width }.min() ?? width,
+                width * 0.25,
+                "left grid should anchor on the left edge"
+            )
+        } else if expectBottomActionRow {
+            let bottomRow = rightGrid.filter { ["KeyZ", "KeyX", "Enter"].contains($0.key) }
+            XCTAssertEqual(bottomRow.count, 3)
+            let bottomInset = metrics.portraitBottomInset
+            let size = bottomRow[0].size ?? KirinControlsTranslator.defaultButtonSize
+            let expectedBottomY =
+                height - bottomInset - KirinControlsTranslator.edgeMargin - size * 0.5
+            let bottomY = bottomRow.map { $0.y * height }
+            XCTAssertTrue(bottomY.allSatisfy { abs($0 - expectedBottomY) < 2 })
+        }
+    }
+
+    private func assertWithinUsableZone(buttons: [ButtonSpec], isLandscape: Bool) {
+        let height = metrics.height(isLandscape: isLandscape)
+        let topInset = metrics.topInset(isLandscape: isLandscape)
+        let bottomInset = metrics.bottomInset(isLandscape: isLandscape)
+        for button in buttons {
+            let size = button.size ?? KirinControlsTranslator.defaultButtonSize
+            let centerY = button.y * height
+            XCTAssertGreaterThanOrEqual(
+                centerY - size * 0.5, topInset - 1,
+                "button \(button.key) above usable zone in \(isLandscape ? "landscape" : "portrait")"
+            )
+            XCTAssertLessThanOrEqual(
+                centerY + size * 0.5, height - bottomInset + 1,
+                "button \(button.key) below usable zone in \(isLandscape ? "landscape" : "portrait")"
+            )
+        }
+    }
+
+    private func pairwiseNonOverlapping(
+        buttons: [ButtonSpec],
+        width: Double,
+        height: Double
+    ) -> Bool {
+        let points = buttons.map { button in
+            (
+                x: button.x * width,
+                y: button.y * height,
+                size: button.size ?? KirinControlsTranslator.defaultButtonSize
+            )
+        }
+        for i in 0 ..< points.count {
+            for j in (i + 1) ..< points.count {
+                let required = (points[i].size + points[j].size) * 0.5
+                let dist = hypot(points[i].x - points[j].x, points[i].y - points[j].y)
+                if dist < required - 1e-3 { return false }
+            }
+        }
+        return true
+    }
+
+    private func assertColumnPitchesEqual(buttons: [ButtonSpec], width: Double, height: Double) {
+        var rows: [Int: [ButtonSpec]] = [:]
+        for button in buttons {
+            let rowKey = Int(round(button.y * height / 10))
+            rows[rowKey, default: []].append(button)
+        }
+        for rowButtons in rows.values where rowButtons.count >= 2 {
+            let xs = rowButtons.map { $0.x * width }.sorted()
+            let pitches = zip(xs.dropFirst(), xs).map { $0.0 - $0.1 }
+            guard let firstPitch = pitches.first else { continue }
+            for pitch in pitches.dropFirst() {
+                XCTAssertEqual(pitch, firstPitch, accuracy: 1.0)
+            }
+        }
+    }
+
+    private func assertSharedLandscapeRows(left: [ButtonSpec], right: [ButtonSpec], height: Double) {
+        let leftRows = Dictionary(grouping: left) { Int(round($0.y * height / 10)) }
+        let rightRows = Dictionary(grouping: right) { Int(round($0.y * height / 10)) }
+        for (rowKey, leftButtons) in leftRows {
+            guard let rightButtons = rightRows[rowKey] else { continue }
+            let leftY = leftButtons.map(\.y).reduce(0, +) / Double(leftButtons.count)
+            let rightY = rightButtons.map(\.y).reduce(0, +) / Double(rightButtons.count)
+            XCTAssertEqual(leftY, rightY, accuracy: 0.001)
+        }
     }
 }
