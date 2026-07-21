@@ -783,7 +783,7 @@ class ControlsLayout {
                 Self.logLine(for: note),
                 fileName: Self.controlsManifestLogFile
             )
-            if note != .rootSkippedBecauseEmpoExists {
+            if note != .rootSkippedBecauseEmpoExists && note != .kirinSkippedBecauseManifestExists {
                 return
             }
         }
@@ -796,10 +796,12 @@ class ControlsLayout {
             return
         }
 
+        let logPrefix =
+            result.location == .kirin ? "kirin-touch-controls.json:" : "controls.json:"
         for finding in result.findings {
             let severity = finding.severity == .error ? "error" : "warning"
             let line =
-                "controls.json: [\(finding.code)] (\(severity)) \(finding.path): \(finding.message)"
+                "\(logPrefix) [\(finding.code)] (\(severity)) \(finding.path): \(finding.message)"
             logsContainer?.appendLogLine(line, fileName: Self.controlsManifestLogFile)
         }
 
@@ -825,6 +827,9 @@ class ControlsLayout {
         case .rootUnclaimedOversized:
             return
                 "controls.json: Ignored controls.json at game root (exceeds 128 KiB; not an Empo manifest)"
+        case .kirinSkippedBecauseManifestExists:
+            return
+                "kirin-touch-controls.json: Skipped (an Empo controls manifest takes precedence)"
         }
     }
 

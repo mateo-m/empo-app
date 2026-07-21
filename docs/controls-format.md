@@ -45,10 +45,12 @@ A complete commented example lives at
 
 ## File locations
 
-Empo checks two spots, in order:
+Empo checks three spots, in order:
 
 1. `empo/controls.json` (a lowercase `empo` folder next to `Game.ini`)
 2. `controls.json` next to `Game.ini`
+3. `kirin-touch-controls.json` next to `Game.ini` (see
+   [Kirin files](#kirin-files))
 
 The root location is the standard one; other launchers can adopt it
 without carrying Empo's name. The `empo/` location is an override for
@@ -60,6 +62,27 @@ One rule applies to the root location only: the file must contain the
 generic file name, and some games ship one for their own scripts; Empo
 leaves a root file without `version` alone instead of flagging it as
 broken. A file inside `empo/` is validated no matter what.
+
+## Kirin files
+
+Kirin, the Android RPG Maker XP player, saves its touch layout as
+`kirin-touch-controls.json` at the game root. If your game already
+ships that file for Android players, Empo converts it on iOS: each
+mapped key becomes a touch button, kept in Kirin's right-hand and
+left-hand grid arrangement, with Kirin's scale and opacity applied.
+
+The conversion carries over keys, grid order, scale, and opacity. It
+drops button colors, d-pad changes, and the diagonal-movement toggle,
+and it adds no controller bindings. Conversion notes go to the same log
+file as manifest findings, and they never block loading; a Kirin file
+Empo cannot use changes nothing.
+
+Either manifest location above outranks the Kirin file, and a converted
+Kirin layout sits in the same precedence slot as your `touch` section,
+so players' own edits still win. Ship a manifest when you want the
+layout under your control on both platforms, or when you need anything
+Kirin's format cannot express: exact positions, per-button sizes,
+labels, or controller mappings.
 
 ## File format
 

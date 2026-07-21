@@ -3,6 +3,7 @@ import Foundation
 public enum ControlsManifestLoader {
     public static let empoManifestRelativePath = "empo/controls.json"
     public static let rootManifestRelativePath = "controls.json"
+    public static let kirinManifestRelativePath = KirinControlsTranslator.fileName
 
     /// Legacy alias for the authoritative `empo/` location.
     public static let manifestRelativePath = empoManifestRelativePath
@@ -12,6 +13,7 @@ public enum ControlsManifestLoader {
     public enum ManifestLocation: String, Sendable, Equatable {
         case empo = "empo/controls.json"
         case root = "controls.json"
+        case kirin = "kirin-touch-controls.json"
     }
 
     public struct LoadOutcome: Sendable {
@@ -20,6 +22,7 @@ public enum ControlsManifestLoader {
 
         public enum Note: Equatable, Sendable {
             case rootSkippedBecauseEmpoExists
+            case kirinSkippedBecauseManifestExists
             case rootUnclaimedNotObject
             case rootUnclaimedNoVersion
             case rootUnclaimedOversized
@@ -74,25 +77,36 @@ public enum ControlsManifestLoader {
         }
     }
 
-    /// nil when neither manifest location exists. Never throws for content problems — those land in `findings`.
+    /// nil when no manifest location exists. Never throws for content problems — those land in `findings`.
     public static func load(gameRoot: URL) -> LoadOutcome? {
         let fileManager = FileManager.default
         let empoURL = gameRoot.appendingPathComponent(empoManifestRelativePath)
         let rootURL = gameRoot.appendingPathComponent(rootManifestRelativePath)
+        let kirinURL = gameRoot.appendingPathComponent(kirinManifestRelativePath)
         let empoExists = fileManager.fileExists(atPath: empoURL.path)
         let rootExists = fileManager.fileExists(atPath: rootURL.path)
+        let kirinExists = fileManager.fileExists(atPath: kirinURL.path)
 
-        guard empoExists || rootExists else { return nil }
+        guard empoExists || rootExists || kirinExists else { return nil }
 
         if empoExists {
             let result = loadEmpo(at: empoURL)
-            if rootExists {
-                return LoadOutcome(result: result, note: .rootSkippedBecauseEmpoExists)
-            }
-            return LoadOutcome(result: result)
+            let note: LoadOutcome.Note? =
+                if rootExists {
+                    .rootSkippedBecauseEmpoExists
+                } else if kirinExists {
+                    .kirinSkippedBecauseManifestExists
+                } else {
+                    nil
+                }
+            return LoadOutcome(result: result, note: note)
         }
 
-        return loadRoot(at: rootURL)
+        if rootExists {
+            return loadRoot(at: rootURL, kirinExists: kirinExists, kirinURL: kirinURL)
+        }
+
+        return loadKirin(at: kirinURL)
     }
 
     private static func loadEmpo(at url: URL) -> Result {
@@ -115,9 +129,16 @@ public enum ControlsManifestLoader {
         return result
     }
 
-    private static func loadRoot(at url: URL) -> LoadOutcome {
+    private static func loadRoot(
+        at url: URL,
+        kirinExists: Bool,
+        kirinURL: URL
+    ) -> LoadOutcome {
         let unclaimed = { (note: LoadOutcome.Note) in
-            LoadOutcome(
+            if kirinExists {
+                return loadKirin(at: kirinURL)
+            }
+            return LoadOutcome(
                 result: Result(manifest: nil, findings: []),
                 note: note
             )
@@ -143,6 +164,21 @@ public enum ControlsManifestLoader {
 
         var result = parse(data: data)
         result.location = .root
+        let note: LoadOutcome.Note? = kirinExists ? .kirinSkippedBecauseManifestExists : nil
+        return LoadOutcome(result: result, note: note)
+    }
+
+    private static func loadKirin(at url: URL) -> LoadOutcome {
+        let data = (try? Data(contentsOf: url)) ?? Data()
+        let translation = KirinControlsTranslator.translate(data: data)
+        let findings = translation.notes.map { note in
+            Finding(severity: .warning, code: "K001", path: "", message: note)
+        }
+        let result = Result(
+            manifest: translation.manifest,
+            findings: findings,
+            location: .kirin
+        )
         return LoadOutcome(result: result)
     }
 
