@@ -10,13 +10,16 @@
 #
 # Shape: the two SDK trees build on PARALLEL runners (halving
 # wall-clock), then a stitch job verifies, packages, publishes, and
-# PRs the pin. Parallelism BETWEEN runners is safe — the "sequential,
-# no parallel races" rule in the rebuild scripts protects shared
-# state within one checkout, and each runner has its own.
+# commits the pin straight to main. Parallelism BETWEEN runners is
+# safe — the "sequential, no parallel races" rule in the rebuild
+# scripts protects shared state within one checkout, and each runner
+# has its own.
 #
 # Secrets:
 #   EMPO_DEPS_READ_TOKEN     read empo-deps (ANGLE headers for mkxp-core)
 #   EMPO_DEPS_PUBLISH_TOKEN  write empo-deps (create the release)
+#   EMPO_RELEASE_TOKEN       fine-grained PAT (Contents: RW here);
+#                            powers the direct pin commit to main
 
 name: deps-publish
 
@@ -35,7 +38,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -112,7 +114,7 @@ jobs:
           path: tree-${{ matrix.sdk }}.tar.gz
 
   publish:
-    name: Verify, publish, PR pin
+    name: Verify, publish, pin
     needs: build-tree
     runs-on: ${{ github.event.inputs.runner == 'hosted' && 'macos-latest' || fromJSON('["self-hosted", "macOS"]') }}
     timeout-minutes: 60
@@ -148,55 +150,34 @@ jobs:
           [ -n "$TAG" ] || TAG="native-$(date -u +%Y-%m-%d)"
           tools/package-native-deps.sh "$TAG" --publish
 
-      - name: Open pin PR
-        # The repo rulesets require signed commits everywhere and PRs
-        # into main. CLI commits from the runner are unsigned, so the
-        # commit is created via the GraphQL API instead — GitHub signs
-        # API-created commits itself, which satisfies the ruleset.
+      - name: Push pin commit to main
+        # No PR: commits created with EMPO_RELEASE_TOKEN are
+        # GitHub-signed and authored by the token's owner, whose
+        # repo-admin role bypasses the ruleset (same mechanism as the
+        # Release workflow's sync commit). The expected head is
+        # re-read live so a concurrent push fails loudly instead of
+        # being clobbered.
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
         run: |
           set -e
           TAG="$(sed -n 's/^NATIVE_DEPS_VERSION=//p' ios/Dependencies/native/.version)"
-          BRANCH="deps/$TAG"
-          HEAD="$(git rev-parse HEAD)"
-          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f ref="refs/heads/$BRANCH" -f sha="$HEAD"
-          PIN_B64="$(base64 < ios/Dependencies/native/.version | tr -d '\n')"
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::EMPO_RELEASE_TOKEN is not set; commit ios/Dependencies/native/.version (pin $TAG) manually."
+            exit 1
+          fi
+          HEAD="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          base64 < ios/Dependencies/native/.version | tr -d '\n' > /tmp/pin.b64
           gh api graphql \
-            -F repo="$GITHUB_REPOSITORY" -F branch="$BRANCH" -F head="$HEAD" \
+            -F repo="$GITHUB_REPOSITORY" -F head="$HEAD" \
             -F message="chore(deps): pin $TAG native prebuilts" \
-            -F path="ios/Dependencies/native/.version" -F contents="$PIN_B64" \
-            -f query='mutation($repo: String!, $branch: String!, $head: GitObjectID!, $message: String!, $path: String!, $contents: Base64String!) {
+            -F path="ios/Dependencies/native/.version" -F contents=@/tmp/pin.b64 \
+            -f query='mutation($repo: String!, $head: GitObjectID!, $message: String!, $path: String!, $contents: Base64String!) {
               createCommitOnBranch(input: {
-                branch: {repositoryNameWithOwner: $repo, branchName: $branch},
+                branch: {repositoryNameWithOwner: $repo, branchName: "main"},
                 expectedHeadOid: $head,
                 message: {headline: $message},
                 fileChanges: {additions: [{path: $path, contents: $contents}]}
               }) { commit { oid } }
-            }'
-          gh pr create \
-            --head "$BRANCH" \
-            --title "chore(deps): pin $TAG native prebuilts" \
-            --body "CI-built native dependency trees, published to empo-deps as \`$TAG\` by the deps-publish workflow (run ${{ github.run_id }}). Merging flips every clone to the new prebuilts."
-
-      - name: Trigger required checks on the pin branch
-        # PRs created with the default GITHUB_TOKEN never trigger
-        # pull_request workflows (GitHub's recursion guard), which
-        # leaves the required Lint/Format checks stuck at "Expected".
-        # Dispatching them with a PAT (Actions: write only) attaches
-        # their check runs to the branch head, satisfying the ruleset
-        # while the PR stays bot-authored — so the maintainer can
-        # still approve it.
-        env:
-          GH_TOKEN: ${{ secrets.EMPO_APP_ACTIONS_TOKEN }}
-        run: |
-          set -e
-          if [ -z "$GH_TOKEN" ]; then
-            echo "EMPO_APP_ACTIONS_TOKEN not set; start Lint/Format manually" \
-              "(gh workflow run lint.yml --ref <branch>) or admin-merge."
-            exit 0
-          fi
-          TAG="$(sed -n 's/^NATIVE_DEPS_VERSION=//p' ios/Dependencies/native/.version)"
-          gh workflow run lint.yml --ref "deps/$TAG" -R "$GITHUB_REPOSITORY"
-          gh workflow run format.yml --ref "deps/$TAG" -R "$GITHUB_REPOSITORY"
+            }' --jq '.data.createCommitOnBranch.commit.oid'
+          echo "pinned $TAG on main"

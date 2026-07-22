@@ -14,18 +14,20 @@ usage() {
     echo "  bump   major | minor | patch     bump latest tag's segment"
     echo "         <semver>                  explicit version (e.g. 0.1.0)"
     echo ""
-    echo "Default flow (single command; CI builds, this script finishes):"
+    echo "Default flow (cut locally, CI finishes everything):"
     echo "  1. verifies empo-deps pins"
     echo "  2. bumps version, generates the changelog, commits, tags"
     echo "     (v<version> here + empo-v<version> on the engine repo)"
-    echo "  3. pushes; the Release workflow builds, audits, and"
-    echo "     publishes the IPA"
-    echo "  4. waits for the published IPA + engine artifact, then"
-    echo "     syncs the AltStore manifest + engine pin and pushes"
-    echo "     them straight to main (signed, no PR)"
+    echo "  3. pushes and exits; the Release workflow builds, audits,"
+    echo "     publishes the IPA, syncs the AltStore manifest + engine"
+    echo "     pin straight to main, and announces on Discord"
     echo ""
-    echo "--sync-only <version>   re-run step 4 for an already-cut tag"
-    echo "                        (resume after an interrupt or a CI retry)"
+    echo "The same release can be cut without this script at all:"
+    echo "GitHub > Actions > Release > Run workflow (mode=cut)."
+    echo ""
+    echo "--sync-only <version>   run the AltStore/engine-pin sync"
+    echo "                        locally for an already-cut tag"
+    echo "                        (fallback if CI's sync job failed)"
     echo ""
     echo "RELEASE_LOCAL_BUILD=1   build/audit/sign/publish locally instead"
     echo "                        (fallback for when CI is unavailable)"
@@ -62,13 +64,13 @@ repo_slug() {
     printf '%s' "${slug%.git}"
 }
 
-# Step 4 of the default flow: wait for the Release workflow's
-# published IPA and the fork's engine artifact, then update the
-# AltStore manifest + engine pin and push both straight to main.
-# Runs locally under the operator's credentials on purpose: main's
-# ruleset requires reviewed PRs from bot identities, but a direct
-# admin push with a signed commit completes the release without a
-# manual approval step.
+# --sync-only fallback: the Release workflow's post-release job
+# normally does this sync (direct commit to main via
+# EMPO_RELEASE_TOKEN). When that job fails or the token isn't
+# configured, this reproduces it locally: wait for the published IPA
+# and the fork's engine artifact, then update the AltStore manifest +
+# engine pin and push both straight to main under the operator's
+# credentials (signed commit + admin ruleset bypass).
 run_ci_sync() {
     local version="$1"
     local ipa_name="Empo-${version}-unsigned.ipa"
@@ -442,7 +444,8 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         "$IPA_PATH"
     echo "==> done - v$VERSION released (local build)"
 else
-    echo "==> handed off to CI - waiting to finish the release"
-    echo "    (safe to interrupt; resume later with: $0 --sync-only $VERSION)"
-    run_ci_sync "$VERSION"
+    echo "==> done - v$VERSION handed off to CI, which finishes the release"
+    echo "    (build + audit + publish + AltStore/engine-pin sync + Discord)"
+    echo "    watch:    gh run watch \$(gh run list --workflow=release.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+    echo "    fallback: $0 --sync-only $VERSION  # if CI's sync job fails"
 fi
