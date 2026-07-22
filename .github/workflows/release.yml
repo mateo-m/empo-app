@@ -36,14 +36,18 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "cut = bump + tag + full release; dry-run = build + audit only"
+        description: "cut = bump + tag + full release; dry-run = build + audit only; announce = re-post an existing release to Discord"
         type: choice
-        options: [cut, dry-run]
+        options: [cut, dry-run, announce]
         default: cut
       bump:
         description: "cut only: major | minor | patch, or an explicit semver"
         required: false
         default: "patch"
+      version:
+        description: "announce only: released version to post (e.g. 0.4.0)"
+        required: false
+        default: ""
       ref:
         description: "dry-run only: ref to build (tag, branch, or sha)"
         required: false
@@ -477,21 +481,42 @@ jobs:
   # ── Announce ─────────────────────────────────────────────────────
   # Chained as a job (not an `on: release` workflow) because releases
   # created with GITHUB_TOKEN never emit chained workflow events.
+  # Dispatch mode=announce re-posts an already-published release
+  # (build is skipped then, so the version comes from the input).
   notify:
     name: Post release changelog to Discord
     needs: build
-    if: github.event_name == 'push'
+    if: >-
+      !cancelled() &&
+      ((github.event_name == 'push' && needs.build.result == 'success') ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'announce'))
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve version
+        id: version
+        run: |
+          set -e
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            if [ -z "$VERSION" ]; then
+              echo "::error::announce mode needs the version input (e.g. 0.4.0)"
+              exit 1
+            fi
+          else
+            VERSION="${{ needs.build.outputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v6
         with:
+          ref: v${{ steps.version.outputs.version }}
           submodules: false
 
       - name: Extract release notes
         id: notes
         run: |
           set -e
-          VERSION="${{ needs.build.outputs.version }}"
+          VERSION="${{ steps.version.outputs.version }}"
           {
             echo "body<<EMPO_NOTES_EOF"
             scripts/extract-changelog.sh "$VERSION"
@@ -505,6 +530,6 @@ jobs:
           username: Empo Releases
           footer_title: Empo Release Notes
           reduce_headings: true
-          release_name: v${{ needs.build.outputs.version }}
+          release_name: v${{ steps.version.outputs.version }}
           release_body: ${{ steps.notes.outputs.body }}
-          release_html_url: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.build.outputs.version }}
+          release_html_url: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}
