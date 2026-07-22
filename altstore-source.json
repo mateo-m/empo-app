@@ -5,9 +5,7 @@
   "iconURL": "https://raw.githubusercontent.com/mateo-m/empo-app/main/docs/media/empo-icon.png",
   "website": "https://github.com/mateo-m/empo-app",
   "tintColor": "#FA8F29",
-  "featuredApps": [
-    "sh.mateo.empo"
-  ],
+  "featuredApps": ["sh.mateo.empo"],
   "apps": [
     {
       "name": "Empo",
