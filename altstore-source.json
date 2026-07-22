@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.4.1",
+          "buildVersion": "538",
+          "date": "2026-07-22",
+          "localizedDescription": "### Bug Fixes\n\n- Grant release workflow pull-requests write for the sync PR ([`62c2d10`](https://github.com/mateo-m/empo-app/commit/62c2d106a4c19d42af553baf6592503754ba0649))\n- Format generated altstore-source.json before the sync commit ([`f99e31f`](https://github.com/mateo-m/empo-app/commit/f99e31fe55e4f4ef1ecbf0c5bb18dd39d977ad2d))\n- Newline-terminate the announce notes heredoc ([`3d88bc5`](https://github.com/mateo-m/empo-app/commit/3d88bc528e95dda1af332b067e889b7d0fe328f6))\n\n### CI\n\n- Consolidate nine workflows into ci, release, and deps-publish ([`0a36f70`](https://github.com/mateo-m/empo-app/commit/0a36f70a4ff0d4e8a5acba7dad55b336b8471d65))\n- Announce mode to re-post a release to Discord ([`a11629d`](https://github.com/mateo-m/empo-app/commit/a11629d823e9e2d98b596be07a67d9b693ff60e8))\n\n### Chores\n\n- Bump submodule with bool-coercion postload for strict setters ([`4b8f1a4`](https://github.com/mateo-m/empo-app/commit/4b8f1a45e6f88c8503137d136fd77abc7d261e6d))\n- Pin native-2026-07-22-r4 with bool-coercion binding objects ([`5428219`](https://github.com/mateo-m/empo-app/commit/5428219c0a1ee48afabcdbc0300b5a3ba15ffb2c))\n\n### Release\n\n- Finish releases from release.sh without a sync PR ([`a133ae6`](https://github.com/mateo-m/empo-app/commit/a133ae6c628f14466e8968e1027c477d8bb6984c))",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.4.1/Empo-0.4.1-unsigned.ipa",
+          "size": 18641342,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.4.0",
           "buildVersion": "528",
           "date": "2026-07-22",
