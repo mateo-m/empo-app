@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.1 - 2026-07-22
+
+### Bug Fixes
+
+- Grant release workflow pull-requests write for the sync PR ([`62c2d10`](https://github.com/mateo-m/empo-app/commit/62c2d106a4c19d42af553baf6592503754ba0649))
+- Format generated altstore-source.json before the sync commit ([`f99e31f`](https://github.com/mateo-m/empo-app/commit/f99e31fe55e4f4ef1ecbf0c5bb18dd39d977ad2d))
+- Newline-terminate the announce notes heredoc ([`3d88bc5`](https://github.com/mateo-m/empo-app/commit/3d88bc528e95dda1af332b067e889b7d0fe328f6))
+
+### CI
+
+- Consolidate nine workflows into ci, release, and deps-publish ([`0a36f70`](https://github.com/mateo-m/empo-app/commit/0a36f70a4ff0d4e8a5acba7dad55b336b8471d65))
+- Announce mode to re-post a release to Discord ([`a11629d`](https://github.com/mateo-m/empo-app/commit/a11629d823e9e2d98b596be07a67d9b693ff60e8))
+
+### Chores
+
+- Bump submodule with bool-coercion postload for strict setters ([`4b8f1a4`](https://github.com/mateo-m/empo-app/commit/4b8f1a45e6f88c8503137d136fd77abc7d261e6d))
+- Pin native-2026-07-22-r4 with bool-coercion binding objects ([`5428219`](https://github.com/mateo-m/empo-app/commit/5428219c0a1ee48afabcdbc0300b5a3ba15ffb2c))
+
+### Release
+
+- Finish releases from release.sh without a sync PR ([`a133ae6`](https://github.com/mateo-m/empo-app/commit/a133ae6c628f14466e8968e1027c477d8bb6984c))
+
 ## 0.4.0 - 2026-07-22
 
 ### Bug Fixes
