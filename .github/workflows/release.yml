@@ -517,9 +517,13 @@ jobs:
         run: |
           set -e
           VERSION="${{ steps.version.outputs.version }}"
+          # Command substitution strips trailing newlines; printf puts
+          # exactly one back so the heredoc delimiter sits on its own
+          # line (extract-changelog.sh output has no trailing newline).
+          BODY="$(scripts/extract-changelog.sh "$VERSION")"
           {
             echo "body<<EMPO_NOTES_EOF"
-            scripts/extract-changelog.sh "$VERSION"
+            printf '%s\n' "$BODY"
             echo "EMPO_NOTES_EOF"
           } >> "$GITHUB_OUTPUT"
 
