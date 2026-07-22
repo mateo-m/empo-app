@@ -223,6 +223,9 @@ jobs:
             --date "$(date -u +%Y-%m-%d)" \
             --download-url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/${{ needs.build.outputs.ipa_name }}" \
             --description "$(cat changelog-section.md)"
+          # The sync PR commits this file verbatim and the Format
+          # check (oxfmt) gates that PR, so format it here.
+          bunx oxfmt altstore-source.json
 
       # The empo-v tag (pushed by release.sh alongside the v tag)
       # triggers the engine repo's engine-artifacts workflow. Wait for
