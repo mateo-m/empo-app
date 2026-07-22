@@ -1,12 +1,14 @@
 ---
 # Release pipeline: builds, audits, ad-hoc signs, and publishes the
-# unsigned .ipa whenever scripts/release.sh pushes a v*.*.* tag, then
-# syncs the AltStore manifest and re-pins the engine prebuilt on main.
+# unsigned .ipa whenever scripts/release.sh pushes a v*.*.* tag.
 #
 # scripts/release.sh owns the decision half (version bump, changelog,
-# tags); this workflow owns the mechanical half, so releases no longer
-# depend on any one machine. RELEASE_LOCAL_BUILD=1 in release.sh is
-# the fallback when CI is unavailable.
+# tags) AND the finishing half (it waits for this workflow's IPA and
+# the fork's engine artifact, then syncs the AltStore manifest +
+# engine pin to main directly); this workflow owns the mechanical
+# build half, so releases don't depend on any one machine's Xcode.
+# RELEASE_LOCAL_BUILD=1 in release.sh is the fallback when CI is
+# unavailable.
 #
 # workflow_dispatch runs a DRY RUN against any ref: build + audit +
 # sign, uploading the .ipa as a workflow artifact without publishing
@@ -34,7 +36,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -194,127 +195,3 @@ jobs:
             --title "v$VERSION" \
             --notes-file release-notes.md \
             "build/ipa/${{ steps.package.outputs.ipa_name }}"
-
-  post-release:
-    name: Sync AltStore manifest + engine pin
-    needs: build
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: main
-          fetch-depth: 0
-          submodules: false
-
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Update AltStore source
-        run: |
-          set -e
-          VERSION="${{ needs.build.outputs.version }}"
-          bun install --frozen-lockfile
-          scripts/extract-changelog.sh "$VERSION" > changelog-section.md
-          bun scripts/update-altstore-source.ts \
-            --version "$VERSION" \
-            --build "${{ needs.build.outputs.build }}" \
-            --size "${{ needs.build.outputs.ipa_size }}" \
-            --date "$(date -u +%Y-%m-%d)" \
-            --download-url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/${{ needs.build.outputs.ipa_name }}" \
-            --description "$(cat changelog-section.md)"
-          # The sync PR commits this file verbatim and the Format
-          # check (oxfmt) gates that PR, so format it here.
-          bunx oxfmt altstore-source.json
-
-      # The empo-v tag (pushed by release.sh alongside the v tag)
-      # triggers the engine repo's engine-artifacts workflow. Wait for
-      # its release, then re-pin the engine prebuilt so the pin always
-      # names the artifact built from this release's exact source.
-      - name: Re-pin engine prebuilt
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -e
-          VERSION="${{ needs.build.outputs.version }}"
-          ENGINE_TAG="empo-v$VERSION"
-          REPO=mateo-m/mkxp-z-apple-mobile
-          for i in $(seq 1 60); do
-            STATUS="$(gh run list --repo "$REPO" --branch "$ENGINE_TAG" \
-              --workflow engine-artifacts --limit 1 \
-              --json status,conclusion \
-              --jq '.[0] | .status + ":" + (.conclusion // "")')"
-            echo "engine-artifacts [$i/60]: ${STATUS:-not started}"
-            case "$STATUS" in
-              completed:success) break ;;
-              completed:*) echo "engine artifact build failed" >&2; exit 1 ;;
-            esac
-            if [ "$i" = "60" ]; then
-              echo "timed out waiting for engine artifact" >&2
-              exit 1
-            fi
-            sleep 30
-          done
-          curl -fL --retry 3 -o engine.tar.gz \
-            "https://github.com/$REPO/releases/download/$ENGINE_TAG/engine-ios-prebuilt.tar.gz"
-          SHA256="$(sha256sum engine.tar.gz | awk '{print $1}')"
-          PIN=ios/Dependencies/engine/.version
-          sed -i "s/^ENGINE_VERSION=.*/ENGINE_VERSION=$ENGINE_TAG/" "$PIN"
-          sed -i "s/^ENGINE_SHA256=.*/ENGINE_SHA256=$SHA256/" "$PIN"
-
-      - name: Open release-sync PR
-        # Main requires signed commits + a reviewed, squash-merged PR;
-        # the bot can satisfy the signature only via API-created
-        # commits (GitHub signs those itself), and the review gate is
-        # deliberate — approving this PR is part of the release
-        # ritual. Auto-merge is armed so approval is the only click.
-        #
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -e
-          VERSION="${{ needs.build.outputs.version }}"
-          BRANCH="release-sync/v$VERSION"
-          HEAD="$(git rev-parse HEAD)"
-          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f ref="refs/heads/$BRANCH" -f sha="$HEAD"
-          ALTSTORE_B64="$(base64 < altstore-source.json | tr -d '\n')"
-          PIN_B64="$(base64 < ios/Dependencies/engine/.version | tr -d '\n')"
-          gh api graphql \
-            -F repo="$GITHUB_REPOSITORY" -F branch="$BRANCH" -F head="$HEAD" \
-            -F message="chore(release): sync AltStore source and engine pin for v$VERSION" \
-            -F path1="altstore-source.json" -F contents1="$ALTSTORE_B64" \
-            -F path2="ios/Dependencies/engine/.version" -F contents2="$PIN_B64" \
-            -f query='mutation($repo: String!, $branch: String!, $head: GitObjectID!, $message: String!, $path1: String!, $contents1: Base64String!, $path2: String!, $contents2: Base64String!) {
-              createCommitOnBranch(input: {
-                branch: {repositoryNameWithOwner: $repo, branchName: $branch},
-                expectedHeadOid: $head,
-                message: {headline: $message},
-                fileChanges: {additions: [{path: $path1, contents: $contents1}, {path: $path2, contents: $contents2}]}
-              }) { commit { oid } }
-            }'
-          PR_URL="$(gh pr create \
-            --head "$BRANCH" \
-            --title "chore(release): sync AltStore source and engine pin for v$VERSION" \
-            --body "Post-release metadata for v$VERSION: AltStore manifest entry (IPA size/URL/notes) and the engine prebuilt re-pin to \`empo-v$VERSION\`. Created by the Release workflow (run ${{ github.run_id }}); approving completes the release.")"
-          gh pr merge --auto --squash "$PR_URL" ||
-            echo "auto-merge unavailable; approve and squash-merge $PR_URL manually"
-
-      - name: Trigger required checks on the release-sync branch
-        # Same recursion-guard workaround as deps-publish's
-        # "Trigger required checks on the pin branch" step: the
-        # bot-authored PR can't start pull_request workflows, so the
-        # required Lint/Format checks are dispatched explicitly with
-        # a PAT scoped to Actions: write.
-        env:
-          GH_TOKEN: ${{ secrets.EMPO_APP_ACTIONS_TOKEN }}
-        run: |
-          set -e
-          if [ -z "$GH_TOKEN" ]; then
-            echo "EMPO_APP_ACTIONS_TOKEN not set; start Lint/Format manually" \
-              "(gh workflow run lint.yml --ref <branch>) or admin-merge."
-            exit 0
-          fi
-          BRANCH="release-sync/v${{ needs.build.outputs.version }}"
-          gh workflow run lint.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"
-          gh workflow run format.yml --ref "$BRANCH" -R "$GITHUB_REPOSITORY"

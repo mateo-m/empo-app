@@ -19,6 +19,7 @@ footer = ""
 conventional_commits = true
 filter_unconventional = true
 commit_parsers = [
+  { message = "^chore\\(release\\): sync AltStore source", skip = true },
   { message = "^feat\\(release\\):", group = "Release" },
   { message = "^feat", group = "Features" },
   { message = "^fix\\(release\\):", group = "Release" },
