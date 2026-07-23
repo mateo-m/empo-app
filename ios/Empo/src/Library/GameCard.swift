@@ -37,8 +37,8 @@ struct GameCard: View {
                     .frame(height: titleHeight * 2.5)
                     .allowsHitTesting(false)
                     // Force dark scheme on the material so its tint
-                    // stays dark; ensures the white title stays
-                    // readable against every artwork.  Scoped here so
+                    // stays dark. This keeps the white title readable
+                    // against every artwork. Scoped here so
                     // the artwork placeholder underneath keeps its
                     // actual-scheme color.
                     .darkGlass()
@@ -194,8 +194,8 @@ struct GameListRow: View {
 /// Takes a single `GameStatusIndicator.Kind` so the four mutually
 /// exclusive display states are exhaustive at the type level. Callers
 /// at the grid/list sites compute `.kind` from
-/// `game.status` + `PauseManager.pausedGame` - mixing those two
-/// concerns into the enum here would muddle `GameStatus` which only
+/// `game.status` + `PauseManager.pausedGame`. Mixing those two
+/// concerns into the enum here would muddle `GameStatus`, which only
 /// knows about filesystem/import state, not about whether a session is
 /// currently paused.
 struct GameStatusIndicator: View {
@@ -232,9 +232,9 @@ struct GameStatusIndicator: View {
     }
 
     /// Paused state gets an inverted scheme for emphasis: a light badge
-    /// in dark mode and a dark badge in light mode. Makes it pop
-    /// against the surrounding glass/artwork without screaming for
-    /// attention, which wouldn't be right for a passive "paused" state.
+    /// in dark mode and a dark badge in light mode. This makes it stand
+    /// out against the surrounding glass/artwork without demanding
+    /// attention, which would be wrong for a passive "paused" state.
     private var pausedForeground: Color {
         colorScheme == .dark ? .black : .white
     }

@@ -2,10 +2,10 @@ import Foundation
 
 /// Central registry of every UserDefaults key this app reads or
 /// writes. Call sites reference these constants instead of literal
-/// strings so that renaming a key is a one-line change and a grep
+/// strings. A key rename is then a one-line change, and a grep
 /// across the project surfaces every consumer immediately.
 ///
-/// Three shapes are supported:
+/// The registry supports three shapes:
 ///
 ///   - Fixed-name keys: plain `static let` constants. Most keys.
 ///   - Parameterized key families: `static func key(for: ...) -> String`.
@@ -66,7 +66,7 @@ enum DefaultsKey {
     // MARK: - Hints (parameterized family)
 
     /// A hint's dismissed-at timestamp. `hint.dismissed.<hintID>` -> Double.
-    /// (UI hint persistence; not StoreKit / IAP / donations.)
+    /// (UI hint persistence, not StoreKit / IAP / donations.)
     static let hintDismissedPrefix = "hint.dismissed."
     static func hintDismissed(hintID: String) -> String {
         hintDismissedPrefix + hintID

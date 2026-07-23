@@ -12,8 +12,8 @@ import Foundation
 /// - CAB (what RPG Maker's "Compress Game Data" installer produces) goes
 ///   through the vendored libmspack, because libarchive both mis-locates
 ///   the cabinet behind decoy `MSCF` bytes in the stub and has a broken
-///   LZX decoder (fails mid-archive on real-world cabinets that 7-Zip
-///   and libmspack decode fine; reproduced on upstream libarchive 3.8.7).
+///   LZX decoder (it fails mid-archive on real-world cabinets that 7-Zip
+///   and libmspack decode fine, reproduced on upstream libarchive 3.8.7).
 /// - 7z/RAR payloads go through libarchive, reading from the sniffed
 ///   payload offset via seek-translating callbacks.
 /// - Anything else falls through to libarchive reading the whole file,
@@ -364,8 +364,8 @@ enum ArchiveExtractor {
     /// Enables all formats/filters and opens `reader`. For a payload at
     /// an offset (7z/RAR appended to an .exe stub), the file is fed
     /// through offset-translating callbacks so libarchive sees a stream
-    /// that starts at the payload; the returned stream object is the
-    /// callback client data and must be kept alive until the read loop
+    /// that starts at the payload. The returned stream object is the
+    /// callback client data and must stay alive until the read loop
     /// finishes. Returns nil for the plain whole-file open.
     private static func openLibarchiveReader(
         _ reader: OpaquePointer,
@@ -417,9 +417,9 @@ enum ArchiveExtractor {
 
     private static func openFailureMessage(_ reader: OpaquePointer, archiveURL: URL) -> String {
         if Format(extension: archiveURL.pathExtension) == .exeSfx {
-            return "\(archiveURL.lastPathComponent) doesn't appear to be a "
-                + "self-extracting archive. Only .exe files that unpack "
-                + "themselves (CAB, 7z, RAR, or zip based) can be imported."
+            return "\(archiveURL.lastPathComponent) does not look like a "
+                + "self-extracting archive. Empo can import only .exe files "
+                + "that unpack themselves (CAB, 7z, RAR, or zip based)."
         }
         return errorString(reader) ?? "Cannot open archive"
     }
@@ -444,8 +444,8 @@ enum ArchiveExtractor {
         let sevenZipSignature = Data([0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C])  // "7z"
         let rarSignature = Data([0x52, 0x61, 0x72, 0x21, 0x1A, 0x07])  // "Rar!", 4 + 5
 
-        // Extractor stubs are small (the RPG Maker one is ~170 KB;
-        // WinRAR/7-Zip SFX modules are a few hundred KB), so the payload
+        // Extractor stubs are small (the RPG Maker one is ~170 KB,
+        // and WinRAR/7-Zip SFX modules are a few hundred KB), so the payload
         // signature sits well within the first few MB. Chunks overlap by
         // a signature length so matches never straddle a boundary.
         let chunkSize = 1 << 20

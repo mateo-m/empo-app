@@ -1,4 +1,4 @@
-# SDL2_image: Patches & Build Notes
+# SDL2_image: patches and build notes
 
 ## Source
 
@@ -8,13 +8,13 @@
 
 ## Patches
 
-No mkxp-z specific source patches. The `mkxp-z` branch tracks a specific
-upstream release point (all 18 commits above `release-2.6.0` are standard
-upstream bug fixes and version bumps by Sam Lantinga).
+No mkxp-z specific source patches. The `mkxp-z` branch tracks an
+upstream release point. All 18 commits above `release-2.6.0` are
+standard upstream bug fixes and version bumps by Sam Lantinga.
 
 ## iOS build instructions
 
-Built with CMake (out-of-tree in `cmakebuild/`):
+The build uses CMake (out-of-tree in `cmakebuild/`):
 
 ```
 cmake .. \
@@ -32,8 +32,8 @@ cmake .. \
 Key flags:
 
 - Static build with vendored sub-dependencies (libjpeg, etc.)
-- Apple ImageIO backend disabled: uses vendored decoders instead
+- Apple ImageIO backend disabled: the build uses vendored decoders instead
 - JPEG XL support disabled
-- After cloning, `./external/download.sh` is run to fetch vendored sources
+- After the clone step, `./external/download.sh` runs to fetch the vendored sources
 
 Depends on: SDL2

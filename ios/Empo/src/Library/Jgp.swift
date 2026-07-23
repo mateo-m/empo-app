@@ -5,12 +5,12 @@ import UIKit
 /// JoiPlay archive runtime type. Any value outside the first-class
 /// cases is surfaced as `.unsupported(raw:)` so we can display a
 /// precise error. The supported set covers every RGSS version our
-/// mkxp-z engine handles (XP = RGSS1, VX = RGSS2, VX Ace = RGSS3)
-/// plus the explicit "mkxp-z" label JoiPlay uses for games that
-/// were pre-packaged against the mkxp-z engine with Ruby 3 - that
-/// label matches our runtime exactly so we accept it too.
+/// mkxp-z engine handles (XP = RGSS1, VX = RGSS2, VX Ace = RGSS3).
+/// It also covers the explicit "mkxp-z" label JoiPlay uses for
+/// games pre-packaged against the mkxp-z engine with Ruby 3. That
+/// label matches our runtime exactly, so we accept it too.
 /// JoiPlay also issues archives for Ren'Py, TyranoBuilder, HTML,
-/// Flash, and MZ/MV - we have no runtime for those and reject them
+/// Flash, and MZ/MV. We have no runtime for those and reject them
 /// with a per-type explanation during import.
 enum JgpRuntime: Codable, Equatable {
     case rpgmxp  // RPG Maker XP  (RGSS1)
@@ -52,7 +52,7 @@ enum JgpRuntime: Codable, Equatable {
     }
 }
 
-/// `manifest.json` - identifies the game and its runtime.
+/// `manifest.json`: identifies the game and its runtime.
 struct JgpManifest: Codable {
     let id: String
     let name: String
@@ -63,9 +63,9 @@ struct JgpManifest: Codable {
     let type: JgpRuntime
 }
 
-/// `configuration.json` - engine and renderer preferences bundled by the
-/// game developer. All fields are optional; anything unsupported on our
-/// platform is ignored.
+/// `configuration.json`: engine and renderer preferences bundled by the
+/// game developer. All fields are optional. We ignore anything
+/// unsupported on our platform.
 struct JgpConfiguration: Codable {
     // Shared
     let cheats: Bool?
@@ -158,7 +158,7 @@ extension JgpConfiguration {
         var s = GameSettings()
         // Intentionally NOT mapping `enablePostloadScripts` onto our
         // `postloadScripts` setting. JoiPlay's flag controls its own
-        // JoiPlay-specific postload hooks; ours controls the engine's
+        // JoiPlay-specific postload hooks. Ours controls the engine's
         // compat-shim pipeline (NilClass safe-stubs, $joiplay signal,
         // MKXP.plugin_version, Graphics.poke_* aliases, Pokemon-
         // specific session-reset hooks, etc.). JGPs that set
@@ -172,13 +172,13 @@ extension JgpConfiguration {
         // The legacy `windowSize` JGP field encodes a target SDL
         // window size (e.g. "1920x1080"). On iOS the window is
         // always fullscreen, so this value can't be honored as
-        // dimensions; and the host doesn't expose an aspect-ratio
+        // dimensions. The host also doesn't expose an aspect-ratio
         // override (RGSS games hardcode their layout to the
         // developer-chosen `scRes`, so feeding an arbitrary buffer
         // size would just clip / leave gutters in the rendered
-        // scene). We skip JGP `windowSize` entirely - the
+        // scene). We skip JGP `windowSize` entirely. The
         // user-facing Render scale picker is the supported way to
-        // bump pixel density.
+        // raise pixel density.
         _ = windowSize
         return s
     }

@@ -6,13 +6,13 @@ import Foundation
 ///   - `session-history.log`: chronological list of session
 ///     entries for THIS game, appended once per `beginSession`.
 ///     No header rewrite per app launch (the original cross-game
-///     design needed one); each line is a self-contained record.
+///     design needed one). Each line is a self-contained record.
 ///   - `<iso8601>.log`: per-session debug log when `debugLogs` is
 ///     on. Filename uses just the timestamp because the parent
 ///     dir already encodes the game's UUID + slug.
 ///
 /// All path math goes through `GameContainer`. The logger is
-/// stateless across games - a single instance lives on
+/// stateless across games. A single instance lives on
 /// `EngineSessionCoordinator` and accepts a `GameContainer` per
 /// `beginSession` call.
 @MainActor
@@ -24,7 +24,7 @@ final class SessionLogger {
     private var activeGame: GameEntry?
     private var periodicFlushTask: Task<Void, Never>?
 
-    /// Called on the main actor after play time is written to disk.
+    /// Runs on the main actor after the logger writes play time to disk.
     var onPlayTimeFlushed: ((String) -> Void)?
 
     init() {}
@@ -42,7 +42,7 @@ final class SessionLogger {
     }
 
     /// Restarts the wall-clock timer after a pause or background
-    /// flush without appending another line to session-history.log.
+    /// flush. It does not append another line to session-history.log.
     func resumeSessionTiming(for game: GameEntry) {
         activeGame = game
         sessionStartTime = Date()
@@ -110,10 +110,10 @@ final class SessionLogger {
 
         let timestamp = Self.isoFormatter.string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
-        // Filename is just the timestamp: the parent dir
+        // The filename is just the timestamp. The parent dir
         // (`<container>/Logs/`) already lives inside
-        // `Games/<uuid>-<slug>/` so embedding either id or slug in
-        // the filename would be redundant.
+        // `Games/<uuid>-<slug>/`, so an id or slug in the filename
+        // would be redundant.
         let filename = "\(timestamp).log"
         let logPath = logsDir.appendingPathComponent(filename).path
 
@@ -142,8 +142,8 @@ final class SessionLogger {
 
         let fm = FileManager.default
         if !fm.fileExists(atPath: path) {
-            // First session for this game: write a one-line header
-            // followed by the entry. Subsequent sessions append.
+            // First session for this game: write a one-line header,
+            // then the entry. Subsequent sessions append.
             let header = "\(AppInfo.name) session history for \(game.title)\n---\n"
             try? (header + entry).write(toFile: path, atomically: true, encoding: .utf8)
             return
@@ -165,7 +165,7 @@ final class SessionLogger {
                 at: logsDir, includingPropertiesForKeys: [.creationDateKey])
         else { return }
 
-        // Only prune debug logs (<iso8601>.log); leave
+        // Only prune debug logs (<iso8601>.log). Leave
         // session-history.log alone.
         let logFiles = files.filter {
             $0.lastPathComponent != "session-history.log" && $0.pathExtension == "log"

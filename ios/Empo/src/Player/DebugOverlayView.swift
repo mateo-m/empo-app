@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Preference key used by the overlay to report its measured height
+/// Preference key the overlay uses to report its measured height
 /// back to PlayerView, so the draggable clamp math matches whatever
 /// size the content settles at (long titles / wrapped lines
 /// make the overlay taller than the fixed-height guess).
@@ -11,10 +11,10 @@ struct DebugOverlayHeightKey: PreferenceKey {
     }
 }
 
-/// Observable state backing `DebugOverlayView`. Kept in the player
-/// view as a long-lived property so the overlay can be
-/// transitioned in and out (via `if showDebugOverlay { ... }`)
-/// without losing its FPS graph, cached game title, or RGSS version.
+/// Observable state that backs `DebugOverlayView`. It lives in the
+/// player view as a long-lived property so the overlay can transition
+/// in and out (via `if showDebugOverlay { ... }`) without loss of its
+/// FPS graph, cached game title, or RGSS version.
 @MainActor @Observable
 final class DebugOverlayState {
     var fps: Double = 0
@@ -22,12 +22,13 @@ final class DebugOverlayState {
     var rgssVersion: Int32 = 0
     var ringBuffer = FPSRingBuffer(capacity: 120)
     var metadataLoaded = false
-    /// Resident memory in MB (phys_footprint via task_vm_info, matching
-    /// what Xcode's memory gauge and the App Store "Memory" stat show).
-    /// 0 when the query isn't available yet or fails (e.g. sandboxed
-    /// variant that denies the mach port). Refreshed on the same 10Hz
-    /// tick as FPS so we can eyeball a growing number over time to
-    /// spot leaks from the compat layer without reaching for Instruments.
+    /// Resident memory in MB (phys_footprint via task_vm_info, the
+    /// same number Xcode's memory gauge and the App Store "Memory"
+    /// stat show). 0 when the query isn't available yet or fails
+    /// (e.g. sandboxed variant that denies the mach port). It
+    /// refreshes on the same 10Hz tick as FPS, so we can watch a
+    /// number that grows over time and spot leaks from the compat
+    /// layer without Instruments.
     var memoryMB: Double = 0
     /// Rolling memory samples for the overlay's mini-graph. Same
     /// capacity as the FPS buffer so the two line charts stay
@@ -74,9 +75,10 @@ struct DebugOverlayView: View {
                     .foregroundStyle(fpsColor)
                     .frame(width: 90, alignment: .leading)
 
-                // FPS Graph. Canvas has no intrinsic content size;
-                // constrained to a fixed height; otherwise it grabs every
-                // available point and bloats the overlay vertically.
+                // FPS Graph. Canvas has no intrinsic content size, so
+                // we constrain it to a fixed height. Otherwise it grabs
+                // every available point and bloats the overlay
+                // vertically.
                 Canvas { context, size in
                     let samples = ringBuffer.samples
                     guard samples.count >= 2 else { return }
@@ -128,9 +130,9 @@ struct DebugOverlayView: View {
 
     /// Row that mirrors the FPS row layout: left-aligned label,
     /// right-flexible graph. The graph autoscales between the
-    /// minimum and maximum seen values so small growth is still
-    /// visible even as the baseline increases, which is exactly
-    /// what we want for spotting leak trends.
+    /// minimum and maximum seen values, so small growth stays
+    /// visible even as the baseline increases. That makes leak
+    /// trends easy to spot.
     @ViewBuilder
     private var memoryRow: some View {
         HStack(spacing: Spacing.xs) {
@@ -203,10 +205,10 @@ struct DebugOverlayView: View {
     }
 
     /// Monospaced text row with the overlay's default styling. Wraps
-    /// to additional lines when the content exceeds the overlay's
-    /// fixed width instead of truncating. Font defaults to
-    /// `AppFont.debugBody`; callers that need a bigger/bolder
-    /// variant (e.g. the title line) pass the corresponding token.
+    /// to more lines when the content exceeds the overlay's fixed
+    /// width instead of truncating. The font defaults to
+    /// `AppFont.debugBody`. Callers that need a bigger or bolder
+    /// variant (e.g. the title line) pass the matching token.
     @ViewBuilder
     private func debugText(
         _ text: String,
@@ -221,10 +223,10 @@ struct DebugOverlayView: View {
     }
 
     /// Game title with the RGSS version next to it when it fits on one
-    /// line (separated by a middle-dot), or stacked on a second line
+    /// line (a middle-dot separates them), or stacked on a second line
     /// when it doesn't. ViewThatFits picks the first child whose
-    /// measured size is <= the proposed width; the single-line variant
-    /// is listed first and falls back to the two-row variant if the
+    /// measured size is <= the proposed width. The single-line variant
+    /// comes first, and the two-row variant takes over when the
     /// overlay's 220pt width can't hold the full title + dot + RGSS.
     @ViewBuilder
     private var gameTitleBlock: some View {
@@ -249,9 +251,9 @@ struct DebugOverlayView: View {
     }
 
     /// Reports the active syntax-transform mode set via
-    /// `mkxp_setSyntaxTransformMode`. The transforms are only
-    /// effective on the patched Ruby 3.1 parser; on the Ruby
-    /// 1.8 / 1.9 / 3.0 builds the value is a no-op so we hide
+    /// `mkxp_setSyntaxTransformMode`. The transforms only take
+    /// effect on the patched Ruby 3.1 parser. On the Ruby
+    /// 1.8 / 1.9 / 3.0 builds the value is a no-op, so we hide
     /// the line. Returns nil when the mode hasn't been set or
     /// when the active interpreter doesn't honor the patches.
     private var syntaxTransformLine: String? {
@@ -265,8 +267,8 @@ struct DebugOverlayView: View {
         }
     }
 
-    /// Renderer line. Shows the ANGLE version once GL has initialized;
-    /// falls back to `ANGLE (Metal)` before then.
+    /// Renderer line. Shows the ANGLE version once GL has initialized.
+    /// Falls back to `ANGLE (Metal)` before then.
     private var rendererLine: String {
         let version = String(cString: mkxp_getANGLEVersion())
         if version == "unknown" {

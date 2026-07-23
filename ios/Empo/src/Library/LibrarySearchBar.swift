@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Search bar + sort + grid/list toggle shown at the top of the library.
-/// Own state stays on GameLibraryView; this view just renders bindings.
+/// Own state stays on GameLibraryView. This view only renders bindings.
 /// Multi-select entry now lives in each game's context menu instead.
 
 struct LibrarySearchBar: View {

@@ -3,23 +3,22 @@ import Foundation
 /// Tracks unclean engine terminations via per-game marker files.
 ///
 /// While a session runs, the marker `<container>/EmpoState/.session-active`
-/// is present. On clean exit it's removed. If it's still present
-/// on next launch, the previous session died unexpectedly (user
-/// force-kill, OOM, C++ crash) - unless the binary was replaced
-/// in the meantime (redeploy, TestFlight update, App Store
-/// update), in which case the marker belongs to a prior install
-/// and is discarded.
+/// is present. A clean exit removes it. If it is still present on
+/// the next launch, the previous session died unexpectedly (user
+/// force-kill, OOM, C++ crash). Exception: when an update replaced
+/// the binary in the meantime (redeploy, TestFlight, App Store),
+/// the marker belongs to a prior install, and we discard it.
 ///
 /// Per-game placement (vs. a single top-level marker) means we
-/// also know WHICH game crashed - useful for surfacing context
-/// in the recovery alert and for cleaning up only the affected
+/// also know WHICH game crashed. That gives context for the
+/// recovery alert, and it lets us clean up only the affected
 /// container's transient state.
 @MainActor
 final class CrashTracker {
 
-    /// True iff a marker from THIS install was found at launch.
-    /// Flipped to false once `consumeRecovery()` has run so
-    /// repeated checks after handling the alert don't re-trigger.
+    /// True iff launch found a marker from THIS install.
+    /// Becomes false once `consumeRecovery()` has run, so repeated
+    /// checks after we handle the alert do not re-trigger.
     private(set) var pendingCrashRecovery: Bool
 
     init() {
@@ -29,31 +28,30 @@ final class CrashTracker {
             guard FileManager.default.fileExists(atPath: url.path) else { continue }
             if Self.isMarkerFromCurrentInstall(at: url) {
                 pendingCrashRecovery = true
-                // Don't break - keep scanning so any other stale
-                // markers from current install also get noticed
-                // (rare; only happens if multiple games are
-                // somehow active at once, which the rest of the
-                // app structurally prevents).
+                // Do not break. Keep the scan, so we also notice
+                // any other stale markers from the current install.
+                // This is rare: it only occurs when multiple games
+                // are somehow active at once, which the rest of the
+                // app structurally prevents.
             } else {
-                // Stale marker from a previous install. The
-                // session it recorded can't have been in this
-                // binary, so treat as already resolved and clean
-                // up. Avoids a spurious "didn't exit cleanly"
-                // alert on first launch after a redeploy.
+                // A stale marker from a previous install. The
+                // session it recorded cannot have run in this
+                // binary, so treat it as resolved and clean up.
+                // This avoids a spurious "did not exit cleanly"
+                // alert on the first launch after a redeploy.
                 try? FileManager.default.removeItem(at: url)
             }
         }
     }
 
-    /// Marks the pending recovery as handled. Call once the UI has
-    /// surfaced the alert so subsequent reads see false.
+    /// Marks the pending recovery as handled. Call it once the UI
+    /// has shown the alert, so subsequent reads see false.
     ///
-    /// Also deletes every current-install marker on disk so the
-    /// next launch doesn't re-trigger the same alert. Without this
-    /// step, force-quitting after dismissing the alert would
-    /// re-show the alert on every subsequent launch (the marker
-    /// outlives the in-memory flag because no clean game exit ran
-    /// to remove it).
+    /// It also deletes every current-install marker on disk, so the
+    /// next launch does not trigger the same alert again. Without
+    /// this step, a force-quit after the alert would show the alert
+    /// again on every later launch. The marker outlives the
+    /// in-memory flag because no clean game exit ran to remove it.
     func consumeRecovery() {
         pendingCrashRecovery = false
         let fm = FileManager.default
@@ -79,17 +77,16 @@ final class CrashTracker {
     }
 
     /// Compare the marker's mtime with the executable's bundle
-    /// mtime. The bundle executable is replaced on every install,
-    /// so its mtime is a reliable install-time proxy across
-    /// simulators, real devices, TestFlight, and App Store
-    /// updates.
+    /// mtime. Every install replaces the bundle executable, so its
+    /// mtime is a reliable install-time proxy across simulators,
+    /// real devices, TestFlight, and App Store updates.
     private static func isMarkerFromCurrentInstall(at markerURL: URL) -> Bool {
         let fm = FileManager.default
         guard let markerAttrs = try? fm.attributesOfItem(atPath: markerURL.path),
             let markerMtime = markerAttrs[.modificationDate] as? Date
         else {
-            // Couldn't stat the marker - assume current install so
-            // this doesn't silently swallow a real crash.
+            // We could not stat the marker. Assume the current
+            // install, so we do not silently swallow a real crash.
             // Conservative default.
             return true
         }

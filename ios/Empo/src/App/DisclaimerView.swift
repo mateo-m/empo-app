@@ -1,27 +1,29 @@
 import SwiftUI
 
 /// First-launch disclaimer shown over the splash screen. The user must
-/// acknowledge it before reaching the library. Co-located with the splash
-/// logic in RootView.swift; driven by `AppSettings.needsDisclaimer`.
+/// acknowledge it before the library appears. It lives with the splash
+/// logic in RootView.swift. `AppSettings.needsDisclaimer` drives it.
 ///
-/// The view is pure presentation - it never reads or writes UserDefaults
-/// directly. RootView orchestrates the transition and calls
+/// The view is pure presentation. It never reads or writes UserDefaults
+/// directly. RootView runs the transition and calls
 /// `AppSettings.shared.acknowledgeDisclaimer()` when the user taps through.
 struct DisclaimerView: View {
     let onAcknowledge: () -> Void
 
-    /// Drives the entry animation (scale + opacity). Starts false, flipped
-    /// to true onAppear with a spring, mirroring the splash logo's entrance.
+    /// Drives the entry animation (scale + opacity). Starts false.
+    /// onAppear flips it to true with a spring, which mirrors the
+    /// splash logo's entrance.
     @State private var entered = false
 
-    /// "Save often..." line as an AttributedString so the GitHub link
-    /// can be both bold AND underlined (markdown's `**bold**` alone
-    /// isn't visually distinct against the white-on-orange copy).
+    /// The "Save often..." line as an AttributedString, so the GitHub
+    /// link can be both bold AND underlined. Markdown's `**bold**`
+    /// alone is not visually distinct against the white-on-orange
+    /// copy.
     private var githubReportLine: AttributedString {
         var attr =
             (try? AttributedString(
-                markdown: "Save often. Report issues on [**GitHub**](\(GitInfo.issuesURL)) if you hit any."
-            )) ?? AttributedString("Save often. Report issues on GitHub if you hit any.")
+                markdown: "Save often. If you hit issues, report them on [**GitHub**](\(GitInfo.issuesURL))."
+            )) ?? AttributedString("Save often. If you hit issues, report them on GitHub.")
         for run in attr.runs where run.link != nil {
             attr[run.range].underlineStyle = .single
         }
@@ -43,12 +45,12 @@ struct DisclaimerView: View {
             .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("I'm a lone dev building this in my spare time.")
-                Text("Things may crash, freeze, or flat-out refuse to load.")
-                // The URL is generated at build time from the git
-                // origin (see project.yml's "Generate Git Info" phase)
-                // so the disclaimer always points at whatever fork
-                // someone is building.
+                Text("I am a lone dev who builds this in my spare time.")
+                Text("Things can crash, freeze, or refuse to load.")
+                // The build generates the URL from the git origin
+                // (see project.yml's "Generate Git Info" phase).
+                // The disclaimer thus always points at the fork
+                // someone builds.
                 Text(githubReportLine)
                     .tint(.white)
                 Text("Enjoy!")
@@ -85,7 +87,7 @@ struct DisclaimerView: View {
 }
 
 /// White capsule button for the orange splash background.
-/// Contrasts the brand-colored backdrop with white surface and
+/// Contrasts the brand-colored backdrop with a white surface and
 /// brand-colored text.
 private struct DisclaimerButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

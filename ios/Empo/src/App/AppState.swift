@@ -15,21 +15,23 @@ class AppState {
     var phase: GamePhase?
     var selectedGame: GameEntry?
     var errorMessage: String?
-    /// Deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
-    /// The engine thread is blocked in `mkxp_presentInfoAndWait()`
-    /// until RootView's info alert is dismissed; the game then
-    /// continues running, so no restart framing is shown.
+    /// A deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
+    /// The engine thread blocks in `mkxp_presentInfoAndWait()` until
+    /// the user dismisses RootView's info alert. The game then
+    /// continues to run, so the alert shows no restart framing.
     var infoMessage: String?
     var engineReady = false
-    /// Set when an error alert fires during a `.loading` session
-    /// and stays true until the next `selectGame`. The loading
-    /// view reads this after the user dismisses the alert to
-    /// switch from spinner to error content.
+    /// Becomes true when an error alert fires during a `.loading`
+    /// session. Stays true until the next `selectGame`. The loading
+    /// view reads this after the user dismisses the alert, then
+    /// switches from the spinner to the error content.
     var sessionHadError = false
-    /// Latest release check result for sideload/dev builds. Filled at
-    /// launch from `RootView`; Settings and the library banner read it.
+    /// The latest release-check result for sideload/dev builds.
+    /// `RootView` fills it at launch. Settings and the library banner
+    /// read it.
     var updateStatus: UpdateChecker.Status = .unknown
-    /// Library update banner dismissed for this launch only.
+    /// True when the user dismissed the library update banner.
+    /// Applies to this launch only.
     var updateBannerDismissed = false
 
     private let session = EngineSessionCoordinator.shared
@@ -81,8 +83,8 @@ class AppState {
         // `<container>/`. `Game/` holds the imported files (engine
         // cwd target). `EmpoState/` holds Empo-managed config
         // (mkxp.json, patches.json, game_settings.json,
-        // .session-active, etc.). `Logs/` and `Metadata/` round
-        // out the per-game tree.
+        // .session-active, etc.). `Logs/` and `Metadata/` complete
+        // the per-game tree.
         try? container.ensureSubdirs()
         let gameDir = container.gameURL
         let userDataDir = container.userDataURL
@@ -125,15 +127,15 @@ class AppState {
         selectedGame ?? PauseManager.shared.pausedGame
     }
 
-    /// Body text shown when the engine signals a clean exit
-    /// (Ruby `SystemExit` / `Reset`) mid-session: game's built-in
-    /// "Exit to desktop" menu, or postload scripts raising Reset
-    /// after compiling data files. With cross-session play
-    /// disabled (`docs/multi-session.md`) we can't safely return
-    /// to the library and launch another game in the same
-    /// process; the user has to force-close + reopen. RootView
-    /// appends "Close Empo from the app switcher and reopen it
-    /// to continue." so the body reads as a single natural
+    /// Body text for when the engine signals a clean exit
+    /// (Ruby `SystemExit` / `Reset`) mid-session. Sources: the
+    /// game's built-in "Exit to desktop" menu, or postload scripts
+    /// that raise Reset after they compile data files.
+    /// Cross-session play is disabled (`docs/multi-session.md`), so
+    /// we cannot safely return to the library and launch another
+    /// game in the same process. The user has to force-close and
+    /// reopen. RootView appends "Close Empo from the app switcher
+    /// and reopen it to continue." so the body reads as one natural
     /// sentence.
     private static let cleanExitMessage = "The game has ended or requested a restart."
 
@@ -144,9 +146,9 @@ class AppState {
     }
 
     func dismissCrashRecovery() {
-        // No-op: stale markers were already cleaned up at app
-        // launch by CrashTracker.init. The recovery flag is just
-        // an in-memory bool that consumeRecovery flips.
+        // No-op: CrashTracker.init already cleaned up stale markers
+        // at app launch. The recovery flag is only an in-memory bool
+        // that consumeRecovery flips.
         errorMessage = nil
     }
 
@@ -160,17 +162,18 @@ class AppState {
         }
     }
 
-    /// Resets per-session UI state without touching the engine or
-    /// crash marker. Shared by the explicit `returnToLibrary` path
-    /// and the engine-initiated clean-exit path (game's own
-    /// "Exit to desktop" menu, font-install restart, etc.) so both
-    /// drop back to the library through the same transition.
+    /// Resets per-session UI state without a touch on the engine or
+    /// the crash marker. The explicit `returnToLibrary` path and the
+    /// engine-initiated clean-exit path (game's own "Exit to
+    /// desktop" menu, font-install restart, etc.) share it. Both
+    /// then drop back to the library through the same transition.
     private func tearDownSessionState() {
         selectedGame = nil
-        // Unbind the controls layout so any library-screen UI that
-        // reads it sees a neutral default, and mutations (shouldn't
-        // happen, but still) don't write to the last-played game's
-        // slot. `switchGame(nil)` also flushes any pending edits.
+        // Unbind the controls layout. Library-screen UI that reads
+        // it then sees a neutral default, and mutations (they should
+        // not occur, but still) do not write to the last-played
+        // game's slot. `switchGame(nil)` also flushes any pending
+        // edits.
         ControlsLayout.shared.switchGame(id: nil, container: nil)
         engineReady = false
         PauseManager.shared.reset()
@@ -179,7 +182,7 @@ class AppState {
 
     // MARK: - Pause lifecycle
 
-    /// Toggle pause menu — same path as the on-screen pause control (SPEC §8).
+    /// Toggle the pause menu. Same path as the on-screen pause control (SPEC section 8).
     func togglePauseMenu() {
         if PauseManager.shared.pausedGame != nil {
             resumePausedGame()
@@ -189,8 +192,8 @@ class AppState {
     }
 
     func requestPause() {
-        // Pause graduated from experimental in May 2026; always
-        // enabled. Only gate is "a game is playing."
+        // Pause graduated from experimental in May 2026. It is
+        // always enabled. The only gate is "a game is playing."
         guard phase == .playing else { return }
         // Pause is the primary return-to-library path (in-game Quit
         // is disabled). Flush play time here so last-played and
@@ -200,8 +203,9 @@ class AppState {
         session.requestPause()
     }
 
-    /// Called on the main thread from the bridge's paused callback.
-    /// Background pauses are ignored; they stay silent with no UI transition.
+    /// The bridge's paused callback calls this on the main thread.
+    /// We ignore background pauses. They stay silent with no UI
+    /// transition.
     func handlePause(snapshot: UIImage?) {
         guard phase == .playing else { return }
         if EngineState.shared.isBackgroundPause { return }
@@ -213,15 +217,16 @@ class AppState {
         }
     }
 
-    /// Phase change is delayed so the hero zoom animation plays while
-    /// the library is still visible. The snapshot stays alive; PlayerView
-    /// picks it up as a fade-out overlay so there's no flash at handoff.
+    /// We delay the phase change so the hero zoom animation plays
+    /// while the library is still visible. The snapshot stays alive.
+    /// PlayerView picks it up as a fade-out overlay, so there is no
+    /// flash at handoff.
     ///
     /// The `pm.pausedGame == nil` guard in the Task prevents a stray
-    /// `phase = .playing` after the user cancelled mid-resume by
-    /// returning to the library; previously the chained asyncAfter
-    /// calls could race past `returnToLibrary()` and put the app back
-    /// into .playing with no game loaded.
+    /// `phase = .playing` after the user cancels mid-resume with a
+    /// return to the library. Before, the chained asyncAfter calls
+    /// could race past `returnToLibrary()` and put the app back into
+    /// .playing with no game loaded.
     func resumePausedGame() {
         let pm = PauseManager.shared
         guard pm.pausedGame != nil else { return }
@@ -237,16 +242,16 @@ class AppState {
             AppWindow.resignKeyToSDL()
             // The frame-rendered callback in EngineSessionCoordinator
             // also flips `snapshotCanFade` once the engine has drawn
-            // a real frame; this timed fallback just guarantees the
-            // snapshot fades out even if the callback is delayed.
+            // a real frame. This timed fallback guarantees the
+            // snapshot fades out even when the callback is late.
             try? await Task.sleep(for: .milliseconds(300))
             pm.snapshotCanFade = true
         }
     }
 
-    /// Remove the crash marker when backgrounding a healthy session.
-    /// Re-creates it when the app returns to foreground so a subsequent
-    /// crash after resume is still detected.
+    /// Removes the crash marker when a healthy session goes to the
+    /// background. The foreground path re-creates it, so we still
+    /// detect a later crash after resume.
     func clearCrashMarkerForBackground() {
         guard let container = selectedGame?.container else { return }
         session.clearCrashMarker(for: container)
@@ -257,16 +262,16 @@ class AppState {
         session.restoreCrashMarker(for: container)
     }
 
-    /// Called from `UIApplication.didEnterBackgroundNotification`.
+    /// Runs on `UIApplication.didEnterBackgroundNotification`.
     /// Flushes wall-clock play time for any live session (in-game
-    /// or paused-to-library) so metadata survives a force-quit.
+    /// or paused-to-library). Metadata then survives a force-quit.
     func flushSessionPlayTimeForBackground() {
         guard activeSessionGame != nil else { return }
         session.recordSessionPlayTime(for: activeSessionGame)
     }
 
-    /// Restarts the session timer after returning from background
-    /// while the game is still in the `.playing` phase.
+    /// Restarts the session timer after the app returns from the
+    /// background while the game is still in the `.playing` phase.
     func resumeSessionTimingAfterBackground() {
         session.resumeSessionTiming(for: activeSessionGame)
     }
@@ -276,8 +281,8 @@ class AppState {
 
 extension AppState {
     /// True when the game declares RTP in `Game.ini` but Empo has no
-    /// configured RTP paths. `GameLibraryView` warns before launch;
-    /// the user can continue anyway.
+    /// configured RTP paths. `GameLibraryView` warns before launch.
+    /// The user can continue anyway.
     static func needsRTPLaunchWarning(for container: GameContainer) -> Bool {
         guard !RTPAvailability.isConfigured else { return false }
         return GameRTPRequirement.detect(at: container.gameURL) != nil
@@ -302,16 +307,16 @@ extension AppState: EngineSessionCoordinatorDelegate {
     func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool) {
         // Both clean and crash exits surface an alert that routes
         // through RootView's dismiss-only branch (phase != nil).
-        // With cross-session play disabled (`docs/multi-session.md`)
-        // we can't safely return to the library and launch another
-        // game in the same process; the only way to play again is
-        // to force-close from the app switcher.
+        // Cross-session play is disabled (`docs/multi-session.md`),
+        // so we cannot safely return to the library and launch
+        // another game in the same process. To play again, the user
+        // must force-close from the app switcher.
         //
-        // Intentionally do NOT set phase = nil here: setting phase
-        // = nil while an error alert is already presenting causes
-        // SwiftUI to swallow the NavigationStack pop. Leaving phase
-        // non-nil means the alert OK button sees phase != nil and
-        // routes through the dismiss-only handler.
+        // We intentionally do NOT set phase = nil here. If phase
+        // becomes nil while an error alert already presents, SwiftUI
+        // swallows the NavigationStack pop. Phase stays non-nil, so
+        // the alert OK button sees phase != nil and routes through
+        // the dismiss-only handler.
         if errorMessage == nil {
             errorMessage =
                 cleanExit ? Self.cleanExitMessage : EngineSessionCoordinator.crashMessage

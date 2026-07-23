@@ -8,13 +8,13 @@ import UIKit
 /// In-flight import that's still in its pre-flight validation phase.
 /// Once the pre-flight passes, the matching `GameEntry` is appended
 /// to `games` with `.importing(progress:)` status and the pending
-/// entry is cleared - progress from that point on lives on the real
+/// entry is cleared. Progress from that point on lives on the real
 /// game card/row. On any pre-flight failure, the pending entry is
 /// dropped without the user ever seeing a half-broken skeleton.
 ///
 /// Rendering of the validating state is delegated to the call site:
 /// when the library is empty the Import button hoists it onto its
-/// own label; when the library already has games the grid/list
+/// own label. When the library already has games the grid/list
 /// renders a synthetic card via `syntheticEntry` so the status
 /// feedback stays anchored where the user expects it.
 struct PendingImport: Identifiable, Hashable {
@@ -24,7 +24,7 @@ struct PendingImport: Identifiable, Hashable {
 
     /// Placeholder `GameEntry` used when rendering the pending
     /// import inside the existing grid/list. Container is nil
-    /// because nothing is on disk yet; `progress: 0` renders as
+    /// because nothing is on disk yet. `progress: 0` renders as
     /// the indeterminate spinner inside `GameStatusIndicator`,
     /// which is the right visual read for the pre-flight phase.
     var syntheticEntry: GameEntry {
@@ -92,10 +92,10 @@ class GameLibrary {
     /// IDs of imports currently extracting / moving on a detached
     /// task. The library scan skips these so a concurrent reload
     /// (triggered by another import finishing) doesn't see a
-    /// half-imported container - i.e. one where the destination
-    /// folder exists but the inner `Game/` subdir hasn't landed
-    /// yet - and surface it as an `.invalid` "Unknown Game" entry,
-    /// clobbering the in-memory progress card via the
+    /// half-imported container (one where the destination folder
+    /// exists but the inner `Game/` subdir hasn't landed yet) and
+    /// surface it as an `.invalid` "Unknown Game" entry, which
+    /// would clobber the in-memory progress card via the
     /// scan/merge replace step in `reload()`.
     nonisolated let inFlightImports = Mutex(Set<String>())
 
@@ -120,14 +120,14 @@ class GameLibrary {
         // .userInitiated: the initial scan gates first meaningful
         // paint (library vs empty state), and later reloads refresh
         // what's on screen. The default detached priority gets
-        // deprioritized under system load - exactly when the scan
-        // is slowest and the priority matters most.
+        // deprioritized under system load. That is exactly when the
+        // scan is slowest and the priority matters most.
         Task.detached(priority: .userInitiated) {
             if initialLoad {
                 // Fast pass: titles + metadata + already-extracted
                 // artwork, no validation / PE icon extraction /
                 // script-profile detection. Gets real cards (and
-                // the emptiness answer) on screen quickly; the full
+                // the emptiness answer) on screen quickly. The full
                 // pass below corrects status and artwork in place.
                 let quick = ImportSignpost.interval("library-quick-scan", id: "reload") {
                     GameCatalog.quickScanGames(skipIDs: skipIDs)
@@ -252,9 +252,9 @@ class GameLibrary {
         if !fm.fileExists(atPath: GameContainer.rootURL.path) {
             try? fm.createDirectory(at: GameContainer.rootURL, withIntermediateDirectories: true)
         }
-        // Belt-and-suspenders: even though every container also
-        // gets its own `isExcludedFromBackup` flag, marking the
-        // root directory ensures iOS skips it entirely if it scans
+        // Extra safety: every container also gets its own
+        // `isExcludedFromBackup` flag, but the flag on the root
+        // directory makes iOS skip it entirely if it scans
         // top-down before reaching the children. iOS treats the
         // attribute as inheriting to contents per the URL resource
         // docs, so this single set covers anything inside Games/.
@@ -265,7 +265,7 @@ class GameLibrary {
 
         // Sweep existing containers in case they predate this
         // exclusion (or were created before `ensureSubdirs()` set
-        // the flag). One-shot per app launch; cheap because the
+        // the flag). Runs once per app launch. Cheap because the
         // setter is a no-op when the flag is already set.
         for container in GameContainer.discover() {
             container.excludeFromBackup()

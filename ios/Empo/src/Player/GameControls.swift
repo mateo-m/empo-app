@@ -32,14 +32,14 @@ struct ActionButton: View {
     var body: some View {
         // Label drawn on top of a Liquid Glass circle. `.interactive()`
         // supplies the native press-style brightness on the glass
-        // itself; a matching scaleEffect on the whole ZStack ensures
-        // the label scales together with the glass (the interactive
+        // itself. A matching scaleEffect on the whole ZStack makes
+        // the label scale together with the glass (the interactive
         // modifier alone only scales the glass layer, not content
         // drawn on top of it).
         ZStack {
-            // Opaque backing under glass — same reason as the D-pad:
-            // with the game view embedded in AppWindow, Liquid Glass
-            // otherwise samples the Metal layer on device.
+            // Opaque backing under glass, for the same reason as the
+            // D-pad: with the game view embedded in AppWindow, Liquid
+            // Glass otherwise samples the Metal layer on device.
             Circle()
                 .fill(Color.black)
 
@@ -124,13 +124,13 @@ struct ActionButton: View {
 
 /// Eight-wedge D-pad rendered as a physical-looking rounded plus
 /// shape. The four arms are individual glass surfaces that brighten
-/// when their direction is active; a small center dot marks the
+/// when their direction is active. A small center dot marks the
 /// pivot (and the dead zone).
 ///
-/// Diagonals press two scancodes at once; the bitwise diff across
-/// `onChanged` ticks means holding steady emits zero events and a
+/// Diagonals press two scancodes at once. The bitwise diff across
+/// `onChanged` ticks means a steady hold emits zero events, and a
 /// straight slide from NE to SE releases UP and presses DOWN while
-/// leaving RIGHT held throughout (no stutter).
+/// RIGHT stays held throughout (no stutter).
 ///
 /// The hit-test shape is a full circle that inscribes the plus
 /// outline, so touches in the outer "corners" between arms still
@@ -143,9 +143,9 @@ struct DPad: View {
 
     @State private var activeDirections: DPadDirectionSet = []
 
-    /// Once the finger drags more than `slideOffMargin` past the D-pad
-    /// edge all directions are released but the gesture stays alive so
-    /// sliding back in re-engages.
+    /// When the finger drags more than `slideOffMargin` past the D-pad
+    /// edge, the view releases all directions. The gesture stays alive,
+    /// so a slide back in re-engages.
     @State private var slideOff: Bool = false
 
     private var radius: CGFloat { size / 2 }
@@ -165,7 +165,7 @@ struct DPad: View {
     /// Inner-corner fillet radius, as a fraction of armWidth. Rounds
     /// the four notches between the arms so the plus-to-square
     /// transitions don't feel sharp. Small values (0.05-0.15) give
-    /// a subtle fillet; 0 keeps the notches perfectly square.
+    /// a subtle fillet. 0 keeps the notches perfectly square.
     private let innerCornerFraction: CGFloat = 0.1
 
     var body: some View {
@@ -193,9 +193,9 @@ struct DPad: View {
                 .fill(.clear)
                 .glassEffect(.regular.interactive(), in: plus)
 
-            // Arm highlights are framed to each arm's local rect so
+            // Frame arm highlights to each arm's local rect so
             // tip→center UnitPoints are identical for every direction.
-            // Filling a Shape that only draws in one corner of the
+            // A fill on a Shape that only draws in one corner of the
             // full D-pad frame made up/left gradients resolve
             // differently from down/right on device.
             ZStack {
@@ -298,7 +298,7 @@ struct DPad: View {
         }
 
         // 8-wedge angular mapping with pi/8 thresholds. The UIKit impl
-        // uses atan2 with the same math; ported verbatim.
+        // uses atan2 with the same math, ported verbatim.
         // atan2(dy, dx) in SwiftUI's view coordinate space has +y down,
         // so "up" is -y which corresponds to an angle near -pi/2.
         let angle = atan2(dy, dx)
@@ -361,8 +361,8 @@ enum DPadDirection: CaseIterable, Hashable {
 
     /// Offset from the center of the D-pad at which to draw the
     /// chevron for this direction. Centered within the arm's outer
-    /// rectangle: the arm spans `armLen = (size - armW) / 2` from
-    /// the outer edge to the center-square edge, so its midpoint is
+    /// rectangle. The arm spans `armLen = (size - armW) / 2` from
+    /// the outer edge to the center-square edge. Its midpoint is
     /// at `armLen/2` from the outer edge, which is `size/2 - armLen/2
     /// = (size + armW) / 4` from the D-pad center. That offset puts
     /// the chevron in the visual center of each arm, not near the tip.
@@ -458,14 +458,14 @@ struct DPadDirectionSet: OptionSet {
 
 /// Rounded plus silhouette that forms the D-pad's base. Built as a
 /// single closed polygon (no overlapping sub-paths), so there are no
-/// internal seams where two rectangles used to meet. The 8 outer
-/// corners are rounded by `cornerFraction`; the 4 inner corners
-/// (the notches between arms) are filleted by `innerCornerFraction`
-/// with a concave arc for a friendlier silhouette.
+/// internal seams where two rectangles used to meet. `cornerFraction`
+/// rounds the 8 outer corners. `innerCornerFraction` fillets the 4
+/// inner corners (the notches between arms) with a concave arc for a
+/// friendlier silhouette.
 ///
 /// `armFraction` is the width of each arm as a fraction of the
-/// bounding box. 0.3 - 0.4 gives a balanced "plus" feel; below that
-/// it starts to look spindly, above that the arms merge into a
+/// bounding box. 0.3 - 0.4 gives a balanced "plus" feel. Below that
+/// it starts to look spindly. Above that the arms merge into a
 /// square-with-notches look.
 private struct DPadPlusShape: Shape {
     let armFraction: CGFloat

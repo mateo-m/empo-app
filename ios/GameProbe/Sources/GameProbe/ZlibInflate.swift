@@ -4,7 +4,8 @@ import Foundation
 import Compression
 
 enum ZlibInflate {
-    /// Zlib payload with 2-byte header stripped; body is raw deflate.
+    /// Zlib payload with the 2-byte header stripped. The body is raw
+    /// deflate.
     static func inflateSkippingZlibHeader(_ data: Data) -> Data? {
         guard data.count > 2 else { return nil }
         let raw = data.dropFirst(2)

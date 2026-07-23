@@ -133,8 +133,8 @@ private struct ImageDocumentPicker: UIViewControllerRepresentable {
     let onImageSelected: (UIImage) -> Void
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        // `asCopy: true` matches DocumentPickerView's posture - same
-        // sideloader-resigning rationale (see comment there).
+        // `asCopy: true` matches DocumentPickerView. The same
+        // sideloader-resigning rationale applies (see the comment there).
         let picker = UIDocumentPickerViewController(
             forOpeningContentTypes: [.image],
             asCopy: true

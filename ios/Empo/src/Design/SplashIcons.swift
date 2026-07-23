@@ -1,15 +1,15 @@
 import UIKit
 
-/// Pixelated 16x16 SVG icon pack used by the splash background's
+/// Pixelated 16x16 SVG icon pack for the splash background's
 /// panning pattern. The icons are from the Smallbits pack by
 /// Minor Adventures (https://smallbits.design - free for
 /// commercial use under the Smallbits License). They live in
 /// `Assets.bundle/SplashIcons/` (see project.yml's "Assemble
-/// Assets.bundle" step) and are rasterized on demand via a tiny
-/// in-process SVG parser that handles the `M` / `H` / `V` / `Z`
-/// subset of path syntax used by every icon in the pack. We
-/// deliberately avoid pulling in a third-party SVG library or
-/// pre-rasterizing at build time:
+/// Assets.bundle" step). A tiny in-process SVG parser rasterizes
+/// them on demand. The parser handles the `M` / `H` / `V` / `Z`
+/// subset of path syntax that every icon in the pack uses. We
+/// deliberately avoid a third-party SVG library and build-time
+/// pre-rasterization:
 ///   - The pack is 202 simple shapes with single-color fills.
 ///   - The parser surface is ~30 lines, runs once per icon at
 ///     splash time, and produces a `UIBezierPath` we can fill at
@@ -23,15 +23,15 @@ import UIKit
 ///   `SplashIcons.path(for: name)`           -> filled UIBezierPath.
 enum SplashIcons {
 
-    /// Curated subset of the icon pack used by the splash background.
+    /// Curated subset of the icon pack for the splash background.
     ///
-    /// We deliberately ship only geometric-primitive shapes here -
-    /// circles, squares, diamond, heart, star, plus, cube, sphere -
-    /// since the splash backdrop reads better as an abstract pattern
-    /// than as a wall of literal UI affordances (arrows, gears,
-    /// document outlines, etc. would compete for attention with the
-    /// "Empo" wordmark and look like accidental UI). The full pack
-    /// is still on disk under `Assets.bundle/SplashIcons/`; if a
+    /// We deliberately ship only geometric-primitive shapes here:
+    /// circles, squares, diamond, heart, star, plus, cube, sphere.
+    /// The splash backdrop reads better as an abstract pattern than
+    /// as a wall of literal UI affordances. Arrows, gears, document
+    /// outlines, and the like would compete for attention with the
+    /// "Empo" wordmark and look like accidental UI. The full pack
+    /// is still on disk under `Assets.bundle/SplashIcons/`. If a
     /// future surface (settings background, empty state, etc.)
     /// wants the broader set, expose another curated list here
     /// rather than dropping the filter.
@@ -48,8 +48,8 @@ enum SplashIcons {
     ]
 
     /// Pick `count` random icon basenames without replacement. If
-    /// the pack has fewer icons than requested, returns whatever's
-    /// available (caller is responsible for handling shortfalls).
+    /// the pack has fewer icons than requested, the function returns
+    /// what is available. The caller handles shortfalls.
     static func randomNames(count: Int) -> [String] {
         Array(allNames.shuffled().prefix(count))
     }
@@ -57,8 +57,8 @@ enum SplashIcons {
     /// Resolve `name` to a `UIBezierPath` filled-region representation.
     /// Returns nil if the SVG is missing or its path data fails to
     /// parse. Output coordinates are in the SVG's native viewBox
-    /// space (`0...16`); callers translate / scale via
-    /// `CGAffineTransform` to draw at the desired pixel size.
+    /// space (`0...16`). Callers translate and scale via
+    /// `CGAffineTransform` to draw at the pixel size they want.
     static func path(for name: String) -> UIBezierPath? {
         guard
             let bundleURL = Bundle.main.url(
@@ -78,10 +78,11 @@ enum SplashIcons {
     // MARK: - Internal: SVG extraction
 
     /// Pull the first `<path d="...">` value out of `svg`. The icon
-    /// pack stores everything in a single path per file; if a
+    /// pack stores everything in a single path per file. If a
     /// future icon variant uses multiple paths or other shapes
-    /// (`<rect>`, `<circle>`, etc.) this loader silently drops
-    /// them - acceptable since the curated pack is single-path.
+    /// (`<rect>`, `<circle>`, etc.), this loader silently drops
+    /// them. That is acceptable because the curated pack is
+    /// single-path.
     private static func extractPathData(from svg: String) -> String? {
         guard let dRange = svg.range(of: "d=\"") else { return nil }
         let afterQuote = dRange.upperBound
@@ -90,14 +91,14 @@ enum SplashIcons {
         return String(svg[afterQuote..<endQuote.lowerBound])
     }
 
-    /// Parse a pixel-art SVG path comprising only `M x y`, `H x`,
+    /// Parse a pixel-art SVG path that contains only `M x y`, `H x`,
     /// `V y`, and `Z` commands at integer coordinates. Returns a
     /// non-zero-fill UIBezierPath ready to drop into a graphics
     /// context with any uniform color set as the fill style.
     ///
-    /// The SVG spec treats each `M` after the first as starting
-    /// an implicit subpath, which we honor by leaving the prior
-    /// `Z` (or implicit close) untouched and starting a fresh
+    /// The SVG spec treats each `M` after the first as the start of
+    /// an implicit subpath. We honor that: we leave the prior
+    /// `Z` (or implicit close) untouched and start a fresh
     /// `move(to:)`. Holes inside icons (e.g. the inner notch of
     /// `archive.svg`'s lid) come out correctly under non-zero
     /// winding because each subpath traces the perimeter in a
@@ -141,7 +142,7 @@ enum SplashIcons {
                 i = d.index(after: i)
             default:
                 // Unsupported command (curve, arc, lowercase
-                // relative form, etc.). Skip a single byte; the
+                // relative form, etc.). Skip a single byte. The
                 // outer whitespace loop will resync on the next
                 // recognized command. No icon in the curated pack
                 // hits this branch today.

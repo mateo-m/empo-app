@@ -52,8 +52,9 @@ enum LibrarySortOption: String, CaseIterable {
         }
     }
 
-    /// Groups for the sort sheet. Order here drives section order in
-    /// the UI; each group's options also render in the listed order.
+    /// Groups for the sort sheet. The order here drives the section
+    /// order in the UI. Each group's options also render in the
+    /// listed order.
     static let groups: [LibrarySortGroup] = [
         LibrarySortGroup(title: "Title", options: [.titleAZ, .titleZA]),
         LibrarySortGroup(
@@ -107,12 +108,12 @@ enum AppTheme: String, CaseIterable {
     }
 }
 
-// `ExperimentalFeature` enum and its `isEnabled` / `setEnabled`
-// machinery were removed in May 2026 once `gamePause` and `cheats`
-// graduated to always-on, leaving no remaining experimental
-// toggles. `gameQuit` was also planned as an experimental feature
-// but never landed (cross-session Ruby state cleanup blocks it -
-// see docs/multi-session.md).
+// We removed the `ExperimentalFeature` enum and its `isEnabled` /
+// `setEnabled` machinery in May 2026, after `gamePause` and
+// `cheats` graduated to always-on. No experimental toggles remain.
+// We also planned `gameQuit` as an experimental feature, but it
+// never landed (cross-session Ruby state cleanup blocks it, see
+// docs/multi-session.md).
 //
 // To bring back an opt-in experimental toggle later, restore:
 //   - this enum (cases + `label` + `description` + `id`)
@@ -122,9 +123,9 @@ enum AppTheme: String, CaseIterable {
 //   - the `ForEach(ExperimentalFeature.allCases)` in `SettingsView`
 //   - per-feature gating sites in PlayerMoreSheet etc.
 //
-// The DefaultsKey strings should re-use the historical
-// `experimental.<name>` shape so users with the old toggle stored
-// pick it back up automatically.
+// Make the DefaultsKey strings reuse the historical
+// `experimental.<name>` shape. Users with the old toggle stored
+// then pick it up again automatically.
 
 @MainActor
 @Observable
@@ -135,12 +136,13 @@ class AppSettings {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: DefaultsKey.theme) }
     }
 
-    /// Toggle for the in-game Diagnostics overlay (the floating
-    /// draggable panel showing title / Ruby version / renderer /
-    /// FPS). The persistence key stays at `DefaultsKey.debugMode`
-    /// for backward-compat with users who already toggled the
-    /// setting under its earlier name; the Swift property and the
-    /// user-facing label both moved to "diagnosticsOverlay".
+    /// Toggle for the in-game Diagnostics overlay. The overlay is
+    /// the floating draggable panel that shows title, Ruby version,
+    /// renderer, and FPS. The persistence key stays at
+    /// `DefaultsKey.debugMode` for backward compatibility with users
+    /// who already set the toggle under its earlier name. The Swift
+    /// property and the user-facing label both moved to
+    /// "diagnosticsOverlay".
     var diagnosticsOverlay: Bool {
         didSet { UserDefaults.standard.set(diagnosticsOverlay, forKey: DefaultsKey.debugMode) }
     }
@@ -159,8 +161,8 @@ class AppSettings {
         }
     }
 
-    /// Outlines the in-game area where touches are delivered to the
-    /// game as mouse input (the visible game surface).
+    /// Outlines the in-game area where the app delivers touches to
+    /// the game as mouse input (the visible game surface).
     var showTouchZone: Bool {
         didSet { UserDefaults.standard.set(showTouchZone, forKey: DefaultsKey.showTouchZone) }
     }
@@ -207,8 +209,8 @@ class AppSettings {
 
     // MARK: - Splash disclaimer acknowledgment
 
-    /// Monotonically increasing version so the flow can re-prompt when the
-    /// disclaimer copy changes meaningfully.
+    /// A version number that only increases. The flow can then prompt
+    /// again when the disclaimer copy changes in a meaningful way.
     static let currentDisclaimerVersion = 1
 
     var disclaimerAcknowledgedVersion: Int {
@@ -238,7 +240,7 @@ class AppSettings {
         let storedMax = ud.integer(forKey: DefaultsKey.maxLogFiles)
         self.maxLogFiles = storedMax > 0 ? storedMax : 20
         self.cleanupInvalidGames = ud.bool(forKey: DefaultsKey.cleanupInvalidGames)
-        // Haptics default to on - UserDefaults.bool returns false for unset keys
+        // Haptics default to on. UserDefaults.bool returns false for unset keys.
         self.interfaceHaptics = ud.object(forKey: DefaultsKey.interfaceHaptics) as? Bool ?? true
         self.controllerHaptics = ud.object(forKey: DefaultsKey.controllerHaptics) as? Bool ?? true
         let raw = ud.string(forKey: DefaultsKey.titlePosition) ?? TitlePosition.inside.rawValue

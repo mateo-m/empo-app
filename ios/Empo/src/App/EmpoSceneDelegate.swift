@@ -1,7 +1,7 @@
 import UIKit
 
-/// Adopts the UIScene lifecycle required when building with the iOS 27 SDK.
-/// SDL still owns the game window; this delegate only boots Empo's SwiftUI shell
+/// Adopts the UIScene lifecycle that the iOS 27 SDK requires.
+/// SDL still owns the game window. This delegate only boots Empo's SwiftUI shell
 /// once UIKit has connected a `UIWindowScene`.
 @objc(EmpoSceneDelegate)
 final class EmpoSceneDelegate: UIResponder, UIWindowSceneDelegate {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Clean-rebuild all iphonesimulator native deps Empo links against.
-# Mirror of scripts/rebuild-device-deps.sh — run once per dep bump, not
-# when switching Xcode destinations.
+# This script mirrors scripts/rebuild-device-deps.sh. Run once per dep
+# bump. Do not run when you switch Xcode destinations.
 #
 # Usage: scripts/rebuild-simulator-deps.sh
 set -euo pipefail

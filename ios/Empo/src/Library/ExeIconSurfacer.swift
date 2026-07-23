@@ -2,7 +2,7 @@ import Foundation
 
 /// Debounced, off-thread PE icon extraction for mid-import artwork.
 /// The extraction callback calls `offer` with candidate .exe files
-/// (cheap string checks only); a serial queue processes the latest
+/// (cheap string checks only). A serial queue processes the latest
 /// best candidate. `Game.exe` locks the choice.
 final class ExeIconSurfacer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "empo.import.exe-icon", qos: .utility)

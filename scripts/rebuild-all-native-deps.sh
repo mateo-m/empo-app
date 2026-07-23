@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Rebuild BOTH iphoneos and iphonesimulator native dep trees sequentially.
-# Run once after a dep version bump — not when switching Xcode destinations.
+# Rebuild BOTH the iphoneos and iphonesimulator native dep trees, one
+# after the other. Run once after a dep version bump. Do not run when
+# you switch Xcode destinations.
 #
 # Usage: scripts/rebuild-all-native-deps.sh
 set -euo pipefail
@@ -15,5 +16,5 @@ echo "==> rebuilding simulator (iphonesimulator) native deps"
 "$REPO_ROOT/scripts/rebuild-simulator-deps.sh"
 
 echo ""
-echo "==> both trees healthy; safe to switch Xcode destinations without make"
+echo "==> both trees are healthy. You can switch Xcode destinations without make"
 echo "To publish for the team: tools/package-native-deps.sh <release-tag>"

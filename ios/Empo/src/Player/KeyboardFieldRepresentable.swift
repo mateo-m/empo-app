@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Invisible UIKit text field used exclusively to bring up the
-/// system keyboard and route its text and return-key events into
-/// the engine via `EngineSessionCoordinator`. The visible on-screen
+/// Invisible UIKit text field with one job: bring up the system
+/// keyboard and route its text and return-key events into the
+/// engine via `EngineSessionCoordinator`. The visible on-screen
 /// controls (D-pad, action buttons) are plain SwiftUI now - see
 /// `GameControls.swift` - so this is the only UIViewRepresentable
 /// the player still needs.
@@ -46,8 +46,8 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // over a non-zero range. UIKit's `deleteBackward` override
             // on TCKeyboardField doesn't fire when `text` is non-empty
             // (we prime it with a space so the on-screen Bksp key
-            // stays enabled), so the empty-replacement case has to be
-            // translated into a scancode injection explicitly.
+            // stays enabled), so we must translate the empty-replacement
+            // case into a scancode injection explicitly.
             if string.isEmpty && range.length > 0 {
                 EngineSessionCoordinator.shared.injectKeyTap(scancode: Int32(MKXP_SCANCODE_BACKSPACE))
                 textField.text = " "

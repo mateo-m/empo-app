@@ -52,11 +52,12 @@ struct ButtonModel: Identifiable, Equatable, Codable {
 }
 
 /// Active orientation for the controls overlay. Each game stores
-/// independent layouts per orientation; buttons sized via fraction
-/// of viewport are unworkable across orientation flips because the
-/// aspect ratio inverts (portrait 0.09 vertical gap = 79pt, but the
+/// an independent layout per orientation. Buttons sized as a
+/// fraction of the viewport do not survive an orientation flip
+/// because the aspect ratio inverts. A portrait 0.09 vertical gap
+/// is 79pt, but the
 /// same fraction in landscape collapses to 37pt and overlaps the
-/// 56pt button), so we keep two layouts instead.
+/// 56pt button. So we keep two layouts instead.
 enum ControlsOrientation: String, Codable {
     case portrait
     case landscape
@@ -71,9 +72,9 @@ private struct PersistedLayout: Codable {
         var rx: CGFloat
         var ry: CGFloat
         var size: CGFloat
-        /// Per-D-pad opacity in [0, 1]. Decoded with a 1.0 fallback
-        /// so older persisted layouts (missing the key) continue
-        /// loading without surprising transparency.
+        /// Per-D-pad opacity in [0, 1]. The decoder falls back to
+        /// 1.0, so older persisted layouts (without the key) still
+        /// load without surprise transparency.
         var opacity: Double?
     }
     struct Oriented: Codable, Equatable {
@@ -84,9 +85,9 @@ private struct PersistedLayout: Codable {
     var landscape: Oriented
 }
 
-/// V1 (pre-orientation) on-disk shape. Decoder tries V2 first; if
-/// that fails, we fall through to V1 and migrate by treating it as
-/// the portrait layout and seeding landscape from defaults.
+/// V1 (pre-orientation) on-disk shape. The decoder tries V2 first.
+/// If that fails, we fall through to V1 and migrate: we treat it as
+/// the portrait layout, and we seed landscape from defaults.
 private struct PersistedLayoutV1: Codable {
     var dpad: PersistedLayout.DPad
     var buttons: [ButtonModel]
@@ -98,13 +99,13 @@ class ControlsLayout {
     static let shared = ControlsLayout()
 
     /// Stable identifier of the game these controls are currently
-    /// bound to. `switchGame(id:container:)` updates this; mutators
-    /// save to the corresponding per-game file. `nil` means no game is
-    /// active; mutations are kept in memory but not persisted.
+    /// bound to. `switchGame(id:container:)` updates this. Mutators
+    /// save to the matching per-game file. `nil` means no game is
+    /// active, so mutations stay in memory and never reach disk.
     private(set) var currentGameID: String?
 
-    /// Container for the active game (EmpoState paths). Set alongside
-    /// `currentGameID` in `switchGame`.
+    /// Container for the active game (EmpoState paths). `switchGame`
+    /// sets it together with `currentGameID`.
     private(set) var currentContainer: GameContainer?
 
     /// Accepted developer manifest for the active game, if any.
@@ -114,7 +115,7 @@ class ControlsLayout {
     private(set) var activeManifestSource: ControlsManifestLoader.ManifestLocation?
 
     /// True when the active touch resolution derived one orientation
-    /// from the other (metrics-dependent; see `refreshForGameGeometryChange`).
+    /// from the other (metrics-dependent, see `refreshForGameGeometryChange`).
     private(set) var resolutionInvolvesDerivation = false
 
     /// Error findings from a rejected shipped `controls.json`, for edit-mode surfacing.
@@ -140,8 +141,8 @@ class ControlsLayout {
 
     /// Current device orientation as far as the layout is concerned.
     /// PlayerView updates this via `setOrientation(_:)` when geometry
-    /// flips; orientation changes save the current "active" values
-    /// into the matching snapshot before loading the other.
+    /// flips. An orientation change saves the current "active" values
+    /// into the matching snapshot before it loads the other.
     private(set) var currentOrientation: ControlsOrientation = .portrait
 
     // MARK: - Active layout (current orientation)
@@ -160,14 +161,14 @@ class ControlsLayout {
 
     /// Snapshot of the orientation NOT currently active. The active
     /// orientation's values live in the public `dpad*`/`buttons`
-    /// properties above; the other lives here. Swapped in/out by
-    /// `setOrientation(_:)`.
+    /// properties above. The other orientation lives here.
+    /// `setOrientation(_:)` swaps them in and out.
     private var inactiveDpadRelativeCenter: CGPoint = ControlsLayout.defaultDPadCenterLandscape
     private var inactiveDpadSize: CGFloat = ControlsLayout.defaultDPadSize
     private var inactiveDpadOpacity: Double = 1.0
     private var inactiveButtons: [ButtonModel] = ControlsLayout.defaultButtonsLandscape
 
-    // MARK: - Edit-session undo (in-memory only; never persisted)
+    // MARK: - Edit-session undo (in-memory only, never persisted)
 
     private struct OrientedLayoutSnapshot: Equatable {
         var dpadRelativeCenter: CGPoint
@@ -229,8 +230,9 @@ class ControlsLayout {
     }
 
     /// Bind the layout instance to a specific game's stored layout.
-    /// Called from `AppState.selectGame(_:)` when a game starts, and
-    /// again with `nil` from `returnToLibrary()` when the user exits.
+    /// `AppState.selectGame(_:)` calls this when a game starts.
+    /// `returnToLibrary()` calls it again with `nil` when the user
+    /// exits.
     func switchGame(id newGameID: String?, container: GameContainer?) {
         if currentGameID != nil {
             save()
@@ -257,9 +259,9 @@ class ControlsLayout {
     /// values into the matching slot, then load the other slot's
     /// values back into the active properties.
     ///
-    /// No-op if `new == currentOrientation`. Called from PlayerView's
-    /// `.onChange(of: isPortrait)` so the layout follows device
-    /// rotation in real time.
+    /// No-op if `new == currentOrientation`. PlayerView's
+    /// `.onChange(of: isPortrait)` calls this so the layout follows
+    /// device rotation in real time.
     func setOrientation(_ new: ControlsOrientation) {
         guard new != currentOrientation else { return }
 
@@ -334,15 +336,15 @@ class ControlsLayout {
     // MARK: - Defaults
     //
     // Default constants are `nonisolated` so legacy migration paths can
-    // read them without hopping to the main actor. They're plain Swift
-    // `let`s of value types; safe to read from any thread.
+    // read them without a hop to the main actor. They're plain Swift
+    // `let`s of value types, so any thread can read them safely.
 
     nonisolated static let defaultDPadCenterPortrait = CGPoint(x: 0.13, y: 0.72)
     nonisolated static let defaultDPadCenterLandscape = CGPoint(x: 0.10, y: 0.65)
     nonisolated static let defaultDPadSize: CGFloat = 140
 
     /// Legacy alias. Some imports / migration paths still reference
-    /// `defaultDPadCenter` (singular); keep it pointing at the
+    /// `defaultDPadCenter` (singular). Keep it pointed at the
     /// portrait default so callers without orientation context get
     /// the more common case.
     nonisolated static let defaultDPadCenter = defaultDPadCenterPortrait
@@ -385,8 +387,8 @@ class ControlsLayout {
     // MARK: - Reset
 
     /// Remove the user touch layer and reload via §9 precedence
-    /// (manifest touch, else Empo defaults). Per-game controller
-    /// overrides in the same file are preserved.
+    /// (manifest touch, else Empo defaults). The reset keeps
+    /// per-game controller overrides in the same file.
     func resetToResolvedDefault() {
         recordEditSnapshot()
         if let container = currentContainer {
@@ -522,21 +524,21 @@ class ControlsLayout {
         }
     }
 
-    /// Invalidated whenever the layout is replaced wholesale (undo,
-    /// orientation flip, game switch) so pending stagger-add tasks
-    /// from an earlier reset cannot append onto the new state.
+    /// Each wholesale layout replacement (undo, orientation flip,
+    /// game switch) bumps this. Pending stagger-add tasks from an
+    /// earlier reset then cannot append onto the new state.
     private var staggerGeneration = 0
 
     // MARK: - Display-time button separation
 
     /// Single choke point for resolved button centers at display resolution.
-    /// Maps each fraction center through the SAME transform the renderer
-    /// uses (`ControlsZone.absolutePosition`, including safe-area and
-    /// toolbar-line clamping) and only THEN runs `ButtonSeparation` —
-    /// separating in any earlier space misses overlaps the clamp
-    /// reintroduces (e.g. rows collapsing onto controlsMinY). Covers
-    /// manifest, translated, user, and builtin layouts alike without
-    /// persisting adjusted positions. Returns final absolute positions.
+    /// Maps each fraction center through the same transform the renderer
+    /// uses (`ControlsZone.absolutePosition`, with safe-area and
+    /// toolbar-line clamping) and only then runs `ButtonSeparation`.
+    /// Separation in any earlier space misses overlaps that the clamp
+    /// brings back (e.g. rows that collapse onto controlsMinY). Covers
+    /// manifest, translated, user, and builtin layouts alike, and never
+    /// persists adjusted positions. Returns final absolute positions.
     func separatedDisplayPositions(
         for geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat
     ) -> [UUID: CGPoint] {
@@ -643,7 +645,7 @@ class ControlsLayout {
             || !Self.layoutsEquivalent(current.landscape, defaultLandscape)
     }
 
-    /// Equality that ignores `ButtonModel.id` — resolveInitialLayout mints
+    /// Equality that ignores `ButtonModel.id`. resolveInitialLayout mints
     /// fresh UUIDs per call, so synthesized == would treat every
     /// manifest-derived layout as customized.
     private static func layoutsEquivalent(
@@ -856,7 +858,7 @@ class ControlsLayout {
     }
 
     /// Host metrics for Kirin/JoiPlay translation at manifest load.
-    /// Uses live safe area + toolbar geometry when available; portrait
+    /// Uses live safe area + toolbar geometry when available. The portrait
     /// top falls back to a 4:3 game-bottom estimate when the engine has
     /// not published `gameRect` yet (typical at game select).
     private static func touchZoneMetricsForManifestLoad() -> TouchZoneMetrics {
@@ -882,14 +884,14 @@ class ControlsLayout {
                     geoHeight: portraitHeight
                 ))
         } else {
-            // RPG Maker viewports are 4:3; in portrait the game bottom
+            // RPG Maker viewports are 4:3. In portrait the game bottom
             // sits at roughly safe-area top + 0.75 × screen width.
             portraitTop = Double(safeArea.top) + portraitWidth * 0.75 + ControlsZone.toolbarGap
         }
 
         // Landscape lateral insets = the notch / home-indicator depth,
         // which the render clamp reserves on both edges. When currently
-        // landscape, the live safe area has the exact values; in
+        // landscape, the live safe area has the exact values. In
         // portrait the notch depth appears as safeArea.top, so use it
         // as the estimate for both landscape edges.
         let isLandscapeNow = bounds.width > bounds.height

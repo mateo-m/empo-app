@@ -13,10 +13,10 @@ import UIKit
 /// of the PE format needed to reach the resource section and the
 /// import table. Icons come from `RT_GROUP_ICON` + `RT_ICON`
 /// resources, reassembled into a standalone `.ico` blob for
-/// `UIImage(data:)`. The import table is consulted so that in
+/// `UIImage(data:)`. We consult the import table so that, in
 /// games which ship multiple executables (e.g. Pokemon Uranium's
-/// `Uranium.exe` + `Patcher.exe`) the one that imports
-/// `RGSS*.dll` gets picked and updater / installer binaries are skipped.
+/// `Uranium.exe` + `Patcher.exe`), we pick the one that imports
+/// `RGSS*.dll` and skip updater / installer binaries.
 ///
 /// Anything unexpected (bad signatures, truncated data, overflows)
 /// returns nil rather than throwing so the caller can fall back to
@@ -26,7 +26,7 @@ enum ExecutableIconExtractor {
     /// Sidecar filename written into a game's `Metadata/` directory
     /// so the library scan picks up the already-decoded PE icon
     /// without re-parsing the `.exe` on every reload. The actual
-    /// path is `<container>/Metadata/<sidecarFilename>`; lives
+    /// path is `<container>/Metadata/<sidecarFilename>`. It lives
     /// outside `Game/` so the imported game tree stays untouched.
     static let sidecarFilename = GameContainer.exeIconSidecarFilename
 
@@ -67,7 +67,7 @@ enum ExecutableIconExtractor {
     /// Reads `url` and returns the largest icon found inside, as a
     /// `UIImage`. Returns nil when the file isn't a recognisable
     /// PE executable, has no icon resources, or fails any of the
-    /// internal bounds / signature checks. Never throws; never
+    /// internal bounds / signature checks. It never throws or
     /// crashes on malformed input.
     static func extractIcon(fromExecutableAt url: URL) -> UIImage? {
         guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
@@ -121,8 +121,8 @@ enum ExecutableIconExtractor {
 
         for item in ordered {
             // Skip utility binaries unless they ARE Game.exe
-            // (defensive - some oddball game names might hit a
-            // keyword; Game.exe always qualifies).
+            // (defensive: some unusual game names might hit a
+            // keyword, but Game.exe always qualifies).
             if item.lowercased() != "game.exe", isUtilityExecutable(filename: item) {
                 continue
             }
@@ -156,7 +156,7 @@ enum ExecutableIconExtractor {
 ///   - data directories (used for the import table)
 ///   - resource tree walking (used for icon extraction)
 ///
-/// Every read is bounds-checked; constructor returns nil on any
+/// Every read is bounds-checked. The constructor returns nil on any
 /// malformed header so the rest of the pipeline can treat the file
 /// as "not an icon source" and move on.
 struct PEImage {
@@ -270,15 +270,15 @@ struct PEImage {
         self.reader = reader
     }
 
-    /// Walks each section looking for one whose virtual range
-    /// contains `rva`, returning the file offset of that RVA.
-    /// Returns nil when no section covers it (defensive - valid
+    /// Walks each section to find one whose virtual range
+    /// contains `rva`, and returns the file offset of that RVA.
+    /// Returns nil when no section covers it (defensive: valid
     /// RVAs always lie in exactly one section).
     fileprivate func rvaToFileOffset(_ rva: UInt32) -> Int? {
         for section in sections {
             let start = section.virtualAddress
             // `virtualSize` can be smaller than `rawSize` when a
-            // section is padded out to file alignment; the raw
+            // section is padded out to file alignment. The raw
             // bounds are the authoritative cap for "can I read
             // bytes at this RVA" checks.
             let size = UInt32(max(Int(section.virtualSize), section.rawSize))
@@ -383,7 +383,7 @@ struct PEImage {
 
         // Pick the largest icon variant we can emit. A
         // variant is only usable when its matching RT_ICON
-        // payload is present in the icons dict - some PEs
+        // payload is present in the icons dict. Some PEs
         // reference variants in GROUP_ICON that the ID subtree
         // never delivers.
         var bestEntry: GroupIconEntry?
@@ -638,7 +638,7 @@ struct PEImage {
 
 /// Bounds-checked reader over an arbitrary `Data` buffer. Every
 /// read returns an optional so one malformed PE doesn't surface
-/// as a crash; callers translate failures into the same nil result
+/// as a crash. Callers translate failures into the same nil result
 /// as "no icon found".
 private struct ByteReader {
     let data: Data

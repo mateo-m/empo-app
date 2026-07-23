@@ -1,6 +1,7 @@
 import Foundation
 
-/// Hysteresis thresholds for analog triggers and stick half-axes (SPEC §7).
+/// Hysteresis thresholds for analog triggers and stick half-axes
+/// (SPEC section 7).
 public enum ControllerDigitalThreshold {
     public static let press: Float = 0.5
     public static let release: Float = 0.4
@@ -14,7 +15,7 @@ public enum ControllerDigitalThreshold {
         return magnitude >= press
     }
 
-    /// Digital press state for a binary button (`isPressed` → 0 or 1).
+    /// Digital press state for a binary button (`isPressed` as 0 or 1).
     public static func buttonPressed(value: Float) -> Bool {
         value >= press
     }
@@ -38,8 +39,8 @@ public struct ControllerStateReducer: Sendable {
 
     public init() {}
 
-    /// Apply a raw element sample for one controller. Returns edges on the
-    /// OR-merged logical state only.
+    /// Applies a raw element sample for one controller. Returns edges on
+    /// the OR-merged logical state only.
     public mutating func apply(
         controllerID: String,
         element: String,
@@ -56,13 +57,13 @@ public struct ControllerStateReducer: Sendable {
         return reconcileMerged(element: element)
     }
 
-    /// Drop a disconnected controller and emit any merged release edges.
+    /// Drops a disconnected controller and emits any merged release edges.
     public mutating func removeController(_ controllerID: String) -> [Edge] {
         guard perController.removeValue(forKey: controllerID) != nil else { return [] }
         return reconcileAllMerged()
     }
 
-    /// Elements currently pressed in the OR-merged view.
+    /// The elements now pressed in the OR-merged view.
     public var mergedPressedElements: [String] {
         merged.filter(\.value).map(\.key).sorted()
     }
@@ -97,7 +98,8 @@ public struct ControllerStateReducer: Sendable {
     }
 }
 
-/// Built-in controller map from SPEC §9.1 with scancodes resolved once.
+/// Built-in controller map from SPEC section 9.1 with scancodes
+/// resolved once.
 public enum ControllerBuiltinMap {
     public typealias ResolvedTarget = ControllerMapResolver.ResolvedTarget
     public typealias Resolved = [String: ResolvedTarget]
@@ -108,7 +110,7 @@ public enum ControllerBuiltinMap {
 }
 
 /// Maps a GCController stick position into SDL half-axis element samples.
-/// GC Y is +up; SDL `-lefty` is stick up (SPEC §7).
+/// GC Y is +up. SDL `-lefty` is stick up (SPEC section 7).
 public enum ControllerStickMapper {
     public struct Sample: Equatable, Sendable {
         public let element: String

@@ -1,23 +1,25 @@
 import Foundation
 
 public struct TouchZoneMetrics: Sendable {
-    /// Usable touch area per orientation, in points (screen size is
-    /// fine; translators keep their own edge margins).
+    /// Usable touch area per orientation, in points. The screen
+    /// size is fine. Translators keep their own edge margins.
     public var portraitWidth: Double
     public var portraitHeight: Double
     public var landscapeWidth: Double
     public var landscapeHeight: Double
 
     /// Usable zone insets from the screen edge, in points. Host chrome
-    /// (toolbar, safe area, portrait game rect) lives above/below these.
+    /// (toolbar, safe area, portrait game rect) sits above or below
+    /// these.
     public var portraitTopInset: Double
     public var portraitBottomInset: Double
     public var landscapeTopInset: Double
     public var landscapeBottomInset: Double
 
-    /// Lateral insets, in points. Landscape phones reserve the notch /
-    /// home-indicator edges (the host clamps X there); layouts anchored
-    /// at the raw screen edge get pushed into their neighbors.
+    /// Lateral insets, in points. When a phone is on its side, it
+    /// reserves the notch and home-indicator edges, and the host
+    /// clamps X there. A layout anchored at the raw screen edge
+    /// gets pushed into its neighbors.
     public var portraitLeadingInset: Double
     public var portraitTrailingInset: Double
     public var landscapeLeadingInset: Double
@@ -51,10 +53,11 @@ public struct TouchZoneMetrics: Sendable {
         self.landscapeTrailingInset = landscapeTrailingInset
     }
 
-    /// Reference metrics for tests and as a fallback when the host
+    /// Reference metrics for tests, and a fallback when the host
     /// passes nothing: 402x874 / 874x402 (iPhone 17 Pro points).
-    /// Insets mirror typical host chrome: landscape toolbar line ≈96,
-    /// portrait 4:3 game-bottom estimate ≈369, bottoms ≈40.
+    /// The insets match typical host chrome: landscapeTopInset ≈96
+    /// is the toolbar line, portraitTopInset ≈369 estimates the 4:3
+    /// game bottom, and the bottom insets are ≈40.
     public static let reference = TouchZoneMetrics(
         portraitWidth: 402,
         portraitHeight: 874,
@@ -94,8 +97,8 @@ public struct TouchZoneMetrics: Sendable {
         isLandscape ? landscapeTrailingInset : portraitTrailingInset
     }
 
-    /// Vertical span available for grid/cluster layout after host
-    /// insets and translator edge margins on both sides.
+    /// The vertical span available for grid or cluster layout after
+    /// the host insets and the translator edge margins on both sides.
     public func usableHeight(isLandscape: Bool, edgeMargin: Double) -> Double {
         let h = height(isLandscape: isLandscape)
         return h - topInset(isLandscape: isLandscape) - bottomInset(isLandscape: isLandscape)

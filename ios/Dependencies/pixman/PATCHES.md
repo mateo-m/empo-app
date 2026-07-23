@@ -1,4 +1,4 @@
-# Pixman: Patches & Build Notes
+# Pixman: patches and build notes
 
 ## Source
 
@@ -11,7 +11,7 @@ No source modifications.
 
 ## iOS build instructions
 
-Built with Autotools:
+The build uses Autotools:
 
 ```
 ./autogen.sh
@@ -24,9 +24,8 @@ Built with Autotools:
 
 Key flags:
 
-- `--disable-arm-a64-neon`: Required to avoid NEON assembly issues when
-  cross-compiling for iOS ARM64. Without this flag, the build attempts to
-  use A64 NEON intrinsics that cause compilation failures with the iOS
-  toolchain.
+- `--disable-arm-a64-neon`: this flag avoids NEON assembly issues in the
+  iOS ARM64 cross-compile. Without it, the build tries to use A64 NEON
+  intrinsics, and the iOS toolchain fails to compile them.
 
 Depends on: libpng

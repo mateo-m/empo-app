@@ -73,7 +73,7 @@ enum VerticalAlignment: String, Codable, CaseIterable {
 // or `@Setting<T, RuntimeFlag>`. The dirty-check below walks fields
 // via Mirror reflection and consults each wrapper's flag, so adding
 // a field forces the author to pick a category at the declaration
-// site - no separate descriptor list to keep in sync.
+// site. There is no separate descriptor list to keep in sync.
 
 /// Phantom-type tag for whether a field can re-apply mid-session
 /// (runtime) or only at next launch (restart).
@@ -154,7 +154,7 @@ extension KeyedDecodingContainer {
 }
 
 /// Per-game settings stored as `game_settings.json` in each game
-/// directory. All fields are optional; nil means "use game/engine
+/// directory. All fields are optional. nil means "use game/engine
 /// default".
 ///
 /// Each field carries `@Setting<..., RestartFlag>` or
@@ -162,11 +162,11 @@ extension KeyedDecodingContainer {
 /// to surface a "restart required" hint when the user edits a
 /// launch-time field during an active session. When adding a field,
 /// pick the flag that matches how the value reaches the engine:
-/// `mkxp.json` at launch -> Restart; host bridge or rendering ->
+/// `mkxp.json` at launch -> Restart. Host bridge or rendering ->
 /// Runtime.
 struct GameSettings: Codable, Equatable {
     // Display
-    /// portrait screen alignment - host-side rendering, no engine input
+    /// portrait screen alignment. Host-side rendering, no engine input.
     @Setting<VerticalAlignment?, RuntimeFlag> var verticalAlignment: VerticalAlignment?
 
     // Performance
@@ -179,14 +179,14 @@ struct GameSettings: Codable, Equatable {
     /// execute postload scripts for common fixes
     @Setting<Bool?, RestartFlag> var postloadScripts: Bool?
     /// Override for the engine's syntax-transform mode. nil = auto
-    /// (the script scanner picks based on the source's grammar);
+    /// (the script scanner picks based on the source's grammar).
     /// true = `MKXP_SYNTAX_TRANSFORM_DISABLED` (Ruby 3 strict, no
-    /// rewrites); false = `MKXP_SYNTAX_TRANSFORM_LEGACY` (rewrite
+    /// rewrites). false = `MKXP_SYNTAX_TRANSFORM_LEGACY` (rewrite
     /// `when X:`, hash rockets, kwarg shorthand etc into Ruby-3
-    /// compatible forms). The transforms are only applied by the
-    /// patched Ruby 3.1 parser; on the 1.8 / 1.9 / 3.0 builds the
-    /// value is a no-op. Surfaced as the "Compatibility mode"
-    /// picker in GameSettingsView.
+    /// compatible forms). Only the patched Ruby 3.1 parser applies
+    /// the transforms. On the 1.8 / 1.9 / 3.0 builds the value is
+    /// a no-op. Surfaced as the "Compatibility mode" picker in
+    /// GameSettingsView.
     @Setting<Bool?, RestartFlag> var useModernRuby: Bool?
 
     /// Manual override for the per-game Ruby interpreter version.
@@ -208,9 +208,9 @@ struct GameSettings: Codable, Equatable {
     /// to `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
     @Setting<Bool?, RuntimeFlag> var useInGameKeyboard: Bool?
 
-    /// Taps and drags on the game area are delivered to the game as
-    /// left-mouse input; harmless for games that never read the mouse
-    /// (mouse state just sits unread), hence default ON.
+    /// The game receives taps and drags on the game area as
+    /// left-mouse input. This is harmless for games that never read
+    /// the mouse (mouse state just sits unread), so the default is ON.
     @Setting<Bool?, RuntimeFlag> var touchMouse: Bool?
 
     /// Make game scripts see `$joiplay = true` so they take their
@@ -218,8 +218,8 @@ struct GameSettings: Codable, Equatable {
     /// also patches written against JoiPlay's old mkxp fork that can
     /// misbehave on our engine). Default off. Routes through
     /// `MKXPSessionConfig.joiplayCompat` to `platform_compat.rb`,
-    /// which sets the global before game scripts load - hence
-    /// restart-required.
+    /// which sets the global before game scripts load, so a
+    /// restart is required.
     @Setting<Bool?, RestartFlag> var joiplayCompat: Bool?
 
     /// Let the game reach the network. On (the default), the engine's
@@ -229,16 +229,16 @@ struct GameSettings: Codable, Equatable {
     /// airplane mode: libraries still load, but every connection
     /// attempt fails the way it does with no connectivity, so games
     /// take their own offline fallback paths. Routes through
-    /// `MKXPSessionConfig.networkEnabled`; the preload layer reads it
-    /// via `System.network_enabled?` before game scripts load - hence
-    /// restart-required.
+    /// `MKXPSessionConfig.networkEnabled`. The preload layer reads it
+    /// via `System.network_enabled?` before game scripts load, so a
+    /// restart is required.
     @Setting<Bool?, RestartFlag> var networkEnabled: Bool?
 
     private static let settingsFilename = "game_settings.json"
 
     /// Read the game's settings sidecar from `<container>/EmpoState/`
-    /// (NOT the imported `Game/` subdir; settings live outside the
-    /// game files so the imported tree stays pristine).
+    /// (NOT the imported `Game/` subdir. Settings live outside the
+    /// game files so the imported tree stays untouched).
     static func load(from stateDirectory: URL) -> GameSettings {
         let url = stateDirectory.appendingPathComponent(settingsFilename)
         guard let data = try? Data(contentsOf: url),
@@ -259,7 +259,7 @@ struct GameSettings: Codable, Equatable {
     /// True if any `RestartFlag`-tagged field differs between `self`
     /// and `other`. The engine reads its config once at RGSS thread
     /// startup and never re-reads, so launch-time fields need a quit
-    /// + relaunch; runtime fields apply on resume.
+    /// + relaunch. Runtime fields apply on resume.
     func differsInRestartRequiredFields(from other: GameSettings) -> Bool {
         !restartRequiredFieldsChanged(from: other).isEmpty
     }
@@ -277,8 +277,8 @@ struct GameSettings: Codable, Equatable {
             guard let lhsSetting = lhs.value as? AnySetting,
                 let rhsSetting = rhs.value as? AnySetting
             else {
-                // Bare properties bypass the dirty-check in release;
-                // crash debug builds so a new field author gets nudged
+                // Bare properties bypass the dirty-check in release.
+                // Crash debug builds so a new field author remembers
                 // to add `@Setting<..., Flag>`.
                 assertionFailure(
                     "GameSettings.\(lhs.label ?? "<unknown>") missing @Setting wrapper - "
@@ -358,7 +358,7 @@ struct GameSettings: Codable, Equatable {
     ///
     /// 3. Loose `.rb` files with keyword-arg shorthand
     ///    (`id: -1,`, `foo: "bar",`). False positives on comments or
-    ///    strings are rare; running a 1.8 game as Ruby 3 still works
+    ///    strings are rare. Running a 1.8 game as Ruby 3 still works
     ///    for everything except legacy constructs the transform
     ///    would have rewritten, and the user can flip back manually.
     static func detectModernRubyScripts(in gameDirectory: URL) -> Bool {
@@ -366,15 +366,15 @@ struct GameSettings: Codable, Equatable {
     }
 
     /// Resolve the engine's `syntaxTransform` mode for this game.
-    /// Honors an explicit `useModernRuby` setting; runs the .rb
+    /// Honors an explicit `useModernRuby` setting. Runs the .rb
     /// scanner when the setting is nil ("auto").
     ///
     /// Most PE fangames are written in Ruby 1.8 syntax and need
     /// the LEGACY transform so the engine rewrites old forms
     /// (`when X:`, unparenthesized method chains, legacy hash
-    /// rockets, etc) before Ruby 3 parses them. Games targeting
-    /// the modern mkxp-z runtime - Reborn 19.5+, PE v20+, anything
-    /// packaged as an mkxp-z JGP - ship actual Ruby 3 source
+    /// rockets, etc) before Ruby 3 parses them. Games that target
+    /// the modern mkxp-z runtime (Reborn 19.5+, PE v20+, anything
+    /// packaged as an mkxp-z JGP) ship actual Ruby 3 source
     /// (keyword-arg shorthand `id: -1`, `foo: "bar"`) which the
     /// 1.8 transform would mis-parse, so we DISABLE the transform
     /// for those.
@@ -402,8 +402,8 @@ struct GameSettings: Codable, Equatable {
 
     /// Reads the game's mkxp.json defaults straight from the
     /// imported game folder. `gameDirectory` is the per-game
-    /// `<container>/Game/` directory. Empo never writes this file;
-    /// the sparse overlay at `EmpoState/mkxp.json` holds only
+    /// `<container>/Game/` directory. Empo never writes this file.
+    /// The sparse overlay at `EmpoState/mkxp.json` holds only
     /// Game Settings overrides.
     static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
         EngineConfigProjector.readGameDefaults(from: gameDirectory)
@@ -411,7 +411,7 @@ struct GameSettings: Codable, Equatable {
 
     /// One-time migration for installs that still carry engine keys in
     /// `game_settings.json`. Safe to call on every launch and settings
-    /// open; no-ops once the keys are gone.
+    /// open. No-ops once the keys are gone.
     static func migrateLegacyEngineSettingsIfNeeded(
         stateDirectory: URL,
         gameDirectory: URL
@@ -427,7 +427,7 @@ struct GameSettings: Codable, Equatable {
     }
 }
 
-/// Values from the game's mkxp.json; the developer's intended defaults.
+/// Values from the game's mkxp.json. These are the developer's intended defaults.
 struct GameConfigDefaults {
     var smoothScaling: Bool?
     var fixedAspectRatio: Bool?

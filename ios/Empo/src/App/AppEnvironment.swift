@@ -2,19 +2,20 @@ import SwiftUI
 
 /// SwiftUI environment injection for app-wide services.
 ///
-/// Views read services via `@Environment(\.appState)` etc. instead of
-/// reaching into `AppState.shared`. A single composition root (RootView)
-/// injects instances once; nested views inherit them automatically.
+/// Views read services via `@Environment(\.appState)` and the other
+/// keys instead of a direct reach into `AppState.shared`. One
+/// composition root (RootView) injects the instances once. Nested
+/// views inherit them automatically.
 ///
 /// Non-UI code (C bridge callbacks, AppWindow statics, Haptics) still
-/// uses `.shared` because SwiftUI environment isn't reachable from
-/// those contexts.
+/// uses `.shared` because the SwiftUI environment is not reachable
+/// from those contexts.
 ///
 /// `EnvironmentKey.defaultValue` must be nonisolated, but our service
 /// singletons are `@MainActor`-isolated. SwiftUI always queries
 /// EnvironmentValues on the main actor, so `MainActor.assumeIsolated`
-/// is sound here: it documents that runtime invariant and traps loudly
-/// if anyone ever calls us from a non-main thread.
+/// is sound here. It documents that runtime invariant and traps
+/// loudly if a call ever comes from a non-main thread.
 
 private struct AppStateKey: EnvironmentKey {
     static let defaultValue: AppState = MainActor.assumeIsolated { .shared }

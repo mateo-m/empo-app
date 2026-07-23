@@ -57,8 +57,8 @@ struct GameLibraryView: View {
     // conflict that would arise if a raw long-press handler tried
     // to coexist with the system long-press that opens the context
     // menu itself. Once in selection mode the tap action on a card
-    // toggles its membership in `selectedIDs`; tapping `Done` (in
-    // the library header) or hitting the bulk-delete confirmation
+    // toggles its membership in `selectedIDs`. A tap on `Done` (in
+    // the library header) or the bulk-delete confirmation
     // exits.
     @State private var selectionMode: Bool = false
     @State private var selectedIDs: Set<String> = []
@@ -70,7 +70,7 @@ struct GameLibraryView: View {
     // entries stuck around after reload (an imported game stayed in
     // the progress state forever). Keeping it computed means it
     // tracks library.games directly. Filter + sort on 10s of entries
-    // is cheap; animating on full `[GameEntry]` arrays (and their
+    // is cheap. Animation on full `[GameEntry]` arrays (and their
     // associated values like import progress) was the hot-loop
     // offender. Lightweight id/phase keys replace those triggers.
     private var filteredGames: [GameEntry] {
@@ -87,7 +87,7 @@ struct GameLibraryView: View {
 
     /// Synthetic cards for pre-flight validations, pinned to the top
     /// of the grid/list. These only render when the library is
-    /// already populated - the empty-state flow keeps validation
+    /// already populated. The empty-state flow keeps validation
     /// feedback on the Import button so the empty state doesn't
     /// bounce in and out on invalid imports.
     private var pendingValidationEntries: [GameEntry] {
@@ -290,8 +290,8 @@ struct GameLibraryView: View {
     private var libraryBackground: some View {
         // Clear while playing so a faded-out library cannot paint an
         // opaque systemBackground over the SDL game window beneath
-        // AppWindow (device compositing; simulator often still shows
-        // through opacity(0) alone).
+        // AppWindow (device compositing, though the simulator often
+        // still shows through opacity(0) alone).
         Group {
             if appState.phase == .playing {
                 Color.clear
@@ -477,10 +477,11 @@ struct GameLibraryView: View {
 
     private func heroCard(for game: GameEntry) -> some View {
         let isPaused = pauseManager.pausedGame?.id == game.id
-        // In landscape the narrower vertical space means a 2.2:1 ratio
-        // hero card eats most of the screen and pushes the grid below
-        // the fold. Widen it in compact-height so the card stays
-        // visible but the grid also gets breathing room.
+        // With a compact height (device on its side), vertical space
+        // is narrow, so a 2.2:1 ratio hero card fills most of the
+        // screen and pushes the grid out of view. Widen it in
+        // compact-height so the card stays visible and the grid
+        // also keeps space.
         let ratio: CGFloat = verticalSizeClass == .compact ? 4.5 : 2.2
         return GameHeroCard(
             game: game,
@@ -743,10 +744,10 @@ struct GameLibraryView: View {
     }
 
     /// Tap entrypoint for grid cards / list rows. Branches on
-    /// selection mode: when active, taps toggle membership in
-    /// `selectedIDs` (and only on .ready games - importing /
-    /// invalid cards aren't legal multi-select targets); otherwise
-    /// dispatches to the existing per-status flow.
+    /// selection mode. When active, taps toggle membership in
+    /// `selectedIDs`, and only .ready games qualify (importing /
+    /// invalid cards aren't legal multi-select targets). Otherwise
+    /// it dispatches to the existing per-status flow.
     private func handleCardTap(for game: GameEntry) {
         if selectionMode {
             guard game.status == .ready else { return }
@@ -761,8 +762,8 @@ struct GameLibraryView: View {
     }
 
     /// Enter selection mode. When `gameId` is non-nil the game is
-    /// pre-selected (used when entering from a per-card affordance);
-    /// when nil the user starts with an empty selection (used by
+    /// pre-selected (used when entering from a per-card control).
+    /// When nil the user starts with an empty selection (used by
     /// the library-header Select icon).
     private func enterSelectionMode(seedingWith gameId: String? = nil) {
         Haptics.impact()
@@ -833,10 +834,10 @@ struct GameLibraryView: View {
     /// when in selection mode AND at least one game is selected.
     /// Routed through the design system's `.primary` glass-capsule
     /// style with a red tint so it reads as the same family of
-    /// action as the rest of the app's primary buttons - not an
-    /// iOS toolbar bar. Visibility is gated at the call-site so
-    /// the button physically appears/disappears with the selection
-    /// (no greyed-out empty state taking up screen real estate).
+    /// action as the rest of the app's primary buttons, not an
+    /// iOS toolbar bar. Visibility is gated at the call site so
+    /// the button appears and disappears with the selection
+    /// (no greyed-out empty state taking up screen space).
     private var bulkDeleteButton: some View {
         Button(role: .destructive) {
             showBulkDeleteConfirm = true
@@ -883,7 +884,7 @@ struct GameLibraryView: View {
                 guard !Task.isCancelled else { return }
                 guard let container = game.container else { continue }
                 // Whole container size (Game/ + EmpoState/ + Logs/
-                // + Metadata/) - dominated by Game/ in practice.
+                // + Metadata/). Game/ dominates in practice.
                 sizes[game.id] = await GameMetadata.diskSize(for: container.url)
             }
             guard !Task.isCancelled else { return }
@@ -1062,7 +1063,7 @@ private struct LibraryAlertPresentation: ViewModifier {
             .alert("Invalid Game", isPresented: $showInvalidAlert) {
                 Button("OK") {}
             } message: {
-                Text("This game couldn't be loaded properly. You can delete it and try importing again.")
+                Text("Empo could not load this game correctly. You can delete it and import it again.")
             }
             .alert("Run-Time Package Required", isPresented: $showRTPRequiredAlert) {
                 Button("Cancel", role: .cancel) {}
@@ -1087,7 +1088,7 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Button("Keep importing", role: .cancel) {}
                 Button("Cancel import", role: .destructive, action: onCancelValidation)
             } message: {
-                Text("The game is still being validated. Cancelling will stop the import.")
+                Text("Empo is still validating the game. If you cancel, the import stops.")
             }
             .alert("A game is paused", isPresented: $showPausedGameAlert) {
                 Button("OK", role: .cancel, action: onDismissPausedGameAlert)

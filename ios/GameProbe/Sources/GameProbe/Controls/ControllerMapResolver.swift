@@ -1,7 +1,8 @@
 import Foundation
 
-/// Four-layer controller map merge (SPEC §9). Builtin is always the base;
-/// each layer in `layers` overlays in order (global → manifest → per-game).
+/// Four-layer controller map merge (SPEC section 9). Builtin is always
+/// the base. Each layer in `layers` overlays in order (global, then
+/// manifest, then per-game).
 public enum ControllerMapResolver {
     public enum ResolvedTarget: Equatable, Sendable {
         case key(Int32)
@@ -9,12 +10,12 @@ public enum ControllerMapResolver {
         case unbound
     }
 
-    /// SPEC §9.1 built-in map, as data.
+    /// SPEC section 9.1 built-in map, as data.
     public static var builtinDefault: ControllerMap {
         ControllerMap(entries: builtinEntries)
     }
 
-    /// Later layers override earlier ones per-element; `.unbound` removes.
+    /// Later layers override earlier ones per element. `.unbound` removes.
     public static func resolve(layers: [ControllerMap]) -> [String: ControllerMap.Target] {
         var result = builtinDefault.entries
         for layer in layers {

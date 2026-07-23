@@ -12,8 +12,8 @@
 
 set -e
 
-# Anchor paths off PROJECT_DIR when running as an Xcode build phase,
-# fall back to the script's own location for manual invocation.
+# When the script runs as an Xcode build phase, anchor paths off
+# PROJECT_DIR. For manual runs, fall back to the script's own location.
 if [ -n "$PROJECT_DIR" ]; then
     REPO_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
 else
@@ -39,7 +39,8 @@ if [ -z "$ANGLE_VERSION" ] || [ -z "$ANGLE_SHA256" ]; then
     exit 1
 fi
 
-# Already hydrated and stamp matches the pinned version? nothing to do.
+# When the tree is hydrated and the stamp matches the pinned
+# version, there is nothing to do.
 if [ -f "$STAMP" ] &&
     [ "$(cat "$STAMP" 2>/dev/null)" = "$ANGLE_VERSION" ] &&
     [ -f "$ANGLE_DIR/iphoneos/lib/libANGLE_static.a" ] &&
@@ -53,9 +54,9 @@ fetch-angle: \`gh\` CLI not found.
 
 Install with: brew install gh && gh auth login
 
-empo-deps is a private repo for now; the build needs gh to download
-its release assets. When empo-deps goes public this script will
-fall back to plain curl.
+empo-deps is a private repo for now, so the build needs gh to
+download its release assets. When empo-deps goes public, this script
+will fall back to plain curl.
 MSG
     exit 1
 fi

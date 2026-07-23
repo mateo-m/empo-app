@@ -28,8 +28,8 @@ enum ButtonSize {
     }
 }
 
-/// Solid brand-filled glass capsule with white text; primary CTAs.
-/// Pair with `.secondary` on the supporting action.
+/// A solid glass capsule with the brand fill and white text. Use it for primary actions.
+/// Pair it with `.secondary` for the supporting action.
 struct PrimaryButtonStyle: ButtonStyle {
     var size: ButtonSize = .lg
     var tint: Color = .brand
@@ -58,7 +58,7 @@ extension ButtonStyle where Self == PrimaryButtonStyle {
     }
 }
 
-/// Lightly brand-tinted glass with brand-colored text; supporting actions.
+/// Glass with a light brand tint and brand-colored text. Use it for supporting actions.
 struct SecondaryButtonStyle: ButtonStyle {
     var size: ButtonSize = .lg
     var tint: Color = .brand
@@ -87,7 +87,7 @@ extension ButtonStyle where Self == SecondaryButtonStyle {
     }
 }
 
-/// Scale-down press effect for tappable cards.
+/// A scale-down press effect for tappable cards.
 struct CardPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -99,7 +99,7 @@ struct CardPressStyle: ButtonStyle {
     }
 }
 
-/// Subtle opacity press effect for list rows.
+/// A light opacity press effect for list rows.
 struct ListRowPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

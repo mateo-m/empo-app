@@ -1,7 +1,8 @@
 import Foundation
 
 /// Canonical v1 `controls.json` writer (SPEC ticket 009 item 1).
-/// Output always parses through `ControlsManifestLoader.parse` with zero errors.
+/// The output always parses through `ControlsManifestLoader.parse`
+/// with zero errors.
 public enum ControlsManifestSerializer {
 
     public struct TouchOrientedInput: Equatable, Sendable {
@@ -51,9 +52,9 @@ public enum ControlsManifestSerializer {
         }
     }
 
-    /// Build a `TouchSection` from in-memory layout values (scancode-based).
-    /// Buttons whose scancode has no W3C code are dropped; `onDroppedButton`
-  /// is called once per dropped button.
+    /// Builds a `TouchSection` from in-memory layout values (scancode-based).
+    /// If a button's scancode has no W3C code, the button is dropped.
+    /// `onDroppedButton` runs once per dropped button.
     public static func touchSection(
         portrait: TouchOrientedInput,
         landscape: TouchOrientedInput,
@@ -269,7 +270,7 @@ public enum ControlsManifestSerializer {
         }
     }
 
-    // MARK: - Clamping (writer-side; keeps round-trip valid)
+    // MARK: - Clamping (writer-side, keeps the round trip valid)
 
     private static func clampCoordinate(_ value: Double) -> Double {
         min(1.0, max(0.0, value))

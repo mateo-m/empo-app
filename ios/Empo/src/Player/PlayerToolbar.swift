@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Top-right toolbar overlay shown during play. Kept as a standalone
+/// Top-right toolbar overlay shown during play. It stays a standalone
 /// View so PlayerView can focus on orchestration (state, lifecycle,
 /// alerts) while toolbar assembly + edit-mode variant live here.
 
@@ -49,8 +49,8 @@ struct PlayerToolbar: View {
         // buttons) and doesn't shift appearance with the system
         // color scheme or the backdrop brightness of the game.
         .darkGlass()
-        // Region must be measured BEFORE .position (which expands to
-        // the full proposed space).
+        // Measure the region BEFORE .position, which expands to
+        // the full proposed space.
         .chromeHitRegion("toolbar")
         .opacity(toolbarOpacity)
         .position(toolbarPosition)
@@ -77,9 +77,9 @@ struct PlayerToolbar: View {
         ]
         if menuVisible {
             // ellipsis.circle is the iOS-idiomatic "more options"
-            // cue; opens PlayerMoreSheet for cheats / fast-forward
-            // / diagnostics-overlay / pause. Hidden when none of
-            // those rows would render.
+            // cue. It opens PlayerMoreSheet for cheats / fast-forward
+            // / diagnostics-overlay / pause. It stays hidden when
+            // none of those rows would render.
             entries.append(
                 ToolbarEntry(icon: "ellipsis.circle", label: "Menu", tint: .white, action: onShowMore))
         }

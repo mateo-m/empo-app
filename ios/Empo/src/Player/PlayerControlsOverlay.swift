@@ -35,7 +35,7 @@ struct PlayerControlsOverlay: View {
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
         DPad(size: size, editing: editMode)
             .frame(width: size, height: size)
-            // Region must be measured BEFORE .position: position()
+            // Measure the region BEFORE .position: position()
             // expands to the full proposed space, so a region attached
             // after it would cover the whole screen.
             .chromeHitRegion("controls.dpad")
@@ -78,7 +78,7 @@ struct PlayerControlsOverlay: View {
     @ViewBuilder
     private func actionButton(button: ButtonModel, index: Int, displayPosition: CGPoint?) -> some View {
         // displayPosition is already absolute and separation-adjusted
-        // (post-clamp); the fallback only covers the empty-layout case.
+        // (post-clamp). The fallback only covers the empty-layout case.
         let pos =
             displayPosition
             ?? ControlsZone.absolutePosition(

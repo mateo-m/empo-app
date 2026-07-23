@@ -479,7 +479,7 @@ extension GameLibrary {
     }
 
     /// Recursively delete a game container. `onError` is set for
-    /// user-initiated deletes; import abandon passes nil so a
+    /// user-initiated deletes. Import abandon passes nil so a
     /// failed cleanup stays silent.
     nonisolated static func deleteContainer(
         _ container: GameContainer?,
@@ -490,8 +490,8 @@ extension GameLibrary {
             do {
                 let fm = FileManager.default
                 guard fm.fileExists(atPath: container.url.path) else { return }
-                // One rm -rf nukes Game/, EmpoState/, Logs/, and
-                // Metadata/ together - per-game saves, settings,
+                // One rm -rf removes Game/, EmpoState/, Logs/, and
+                // Metadata/ together. Per-game saves, settings,
                 // logs, custom artwork, and crash markers all go
                 // in a single call.
                 try container.deleteAll()
@@ -847,7 +847,7 @@ extension GameLibrary {
 
     /// Commits a progress-card `GameEntry` to `games` and drops the
     /// matching pending entry. Called from the import pipeline once
-    /// pre-flight validation passes - from this point on the user
+    /// pre-flight validation passes. From this point on, the user
     /// can see and cancel the import from the card itself.
     nonisolated func commitPendingToCard(
         _ importID: String,
@@ -872,15 +872,16 @@ extension GameLibrary {
     }
 
     /// Swap in the card's artwork mid-extract, once the archive
-    /// has yielded a `Graphics/Titles/*` image or `.exe` icon.
-    /// Called more than once per import: each time the extractor
-    /// finds an alphabetically-smaller candidate the card updates
-    /// to match, mirroring the rule used by `findArtwork` after
-    /// the full extract completes so the card doesn't flicker to
-    /// a different artwork when the import finishes. Rebuilding
-    /// the entry (rather than mutating `artworkPath` on the
-    /// existing one) goes through SwiftUI's normal diffing so the
-    /// card cross-fades the placeholder to the real artwork.
+    /// has yielded a root-level `.exe` icon via `ExeIconSurfacer`.
+    /// Only `.exe` icons surface mid-import. `Graphics/Titles/*`
+    /// previews never do, because they would flash and then
+    /// get replaced by the final artwork pick. Can fire more than
+    /// once per import: the first non-utility `.exe` is a
+    /// tentative pick that a later `Game.exe` supersedes and
+    /// locks. Rebuilding the entry (rather than mutating
+    /// `artworkPath` on the existing one) goes through SwiftUI's
+    /// normal diffing so the card cross-fades the placeholder to
+    /// the real artwork.
     nonisolated func updateCardArtwork(_ importID: String, artworkPath: String) {
         Task { @MainActor in
             let lib = GameLibrary.shared
@@ -889,13 +890,13 @@ extension GameLibrary {
             // is at a fixed location (`<container>/Metadata/exe-icon.png`)
             // and gets overwritten on disk when a later .exe in the
             // archive supersedes the earlier pick (e.g. Reborn1950
-            // ships [Patcher.exe (skipped), Reborn.exe, Game.exe] -
+            // ships [Patcher.exe (skipped), Reborn.exe, Game.exe]:
             // Reborn writes first, Game.exe overwrites). The path
-            // string is unchanged across those writes so a guard
-            // here would skip the SwiftUI re-render and the card
-            // would keep showing the first icon decoded into the
-            // ImageCache - until reload-time view rebuild swaps it
-            // for the latest disk content, producing a visible
+            // string is unchanged across those writes, so a guard
+            // here would skip the SwiftUI re-render. The card would
+            // keep showing the first icon decoded into the
+            // ImageCache until a reload-time view rebuild swaps it
+            // for the latest disk content. That produces a visible
             // mid-import-vs-final mismatch. Always rebuilding the
             // entry forces the body re-eval, which re-reads cache
             // (already evicted at write time), so the displayed

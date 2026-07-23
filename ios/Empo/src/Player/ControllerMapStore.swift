@@ -2,14 +2,14 @@ import Foundation
 import GameProbe
 
 extension Notification.Name {
-    /// Posted after a global or per-game controller map is saved.
+    /// The store posts this after it saves a global or per-game controller map.
     static let controllerMapDidChange = Notification.Name("controllerMapDidChange")
 
-    /// Posted when a touch begins on the embedded SDL game view during play.
+    /// The app posts this when a touch begins on the embedded SDL game view during play.
     static let gameAreaTouchBegan = Notification.Name("gameAreaTouchBegan")
 }
 
-/// UserDefaults persistence for global controller overrides; per-game overrides
+/// UserDefaults persistence for global controller overrides. Per-game overrides
 /// live in `EmpoState/controls.json` (SPEC §3, ticket 009).
 enum ControllerMapStore {
     private static let knownActions: Set<String> = [

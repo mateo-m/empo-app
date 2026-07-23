@@ -28,8 +28,8 @@ struct DocumentPickerView: UIViewControllerRepresentable {
         // `asCopy: true`: iOS copies the picked file/folder into our
         // app's tmp directory and hands us a regular file:// URL,
         // no security-scoped resource involved. We extract / copy
-        // game files immediately on import anyway, so the security
-        // scope was never load-bearing.
+        // game files immediately on import anyway, so we never
+        // needed the security scope.
         //
         // Why this matters for sideloaded installs: on-device
         // resigners (ESign, Feather/Zsign with empty entitlements

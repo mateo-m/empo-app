@@ -17,9 +17,9 @@ public enum GameINI {
         return parseINIValue(in: iniURL, section: section, key: key)
     }
 
-    /// Reads `[section] key=value` from a Game.ini file. Both
-    /// `section` and `key` are matched case-insensitively. Optional
-    /// whitespace around `=` is accepted (`title =BLACK SOULS`).
+    /// Reads `[section] key=value` from a Game.ini file. The parser
+    /// matches `section` and `key` without case. It accepts optional
+    /// whitespace around `=` (`title =BLACK SOULS`).
     public static func parseINIValue(in iniURL: URL, section: String, key: String) -> String? {
         guard let value = try? Data(contentsOf: iniURL).decodeAsLooseText() else {
             return nil

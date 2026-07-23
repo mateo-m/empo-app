@@ -52,7 +52,7 @@ enum UserControlsFile {
         }
     }
 
-    /// Replace the on-disk manifest, preserving sections that are not being updated.
+    /// Replace the on-disk manifest. Keep the sections that this call does not update.
     static func write(
         in container: GameContainer,
         touch: TouchSection?,

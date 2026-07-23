@@ -7,7 +7,8 @@ public enum KeyCodeTable {
         let displayName: String
     }
 
-    // SPEC §6 — table order is canonical for `allCodes` and reverse lookup.
+    // SPEC section 6. The table order is canonical for `allCodes` and
+    // the reverse lookup.
     private static let entries: [Entry] = [
         // KeyA … KeyZ → 4 … 29
         Entry(code: "KeyA", scancode: 4, displayName: "A"),
@@ -123,17 +124,19 @@ public enum KeyCodeTable {
         Dictionary(uniqueKeysWithValues: entries.map { ($0.code, $0) })
     }()
 
-    /// W3C KeyboardEvent.code -> SDL/USB-HID scancode. nil = unknown code.
+    /// W3C KeyboardEvent.code -> SDL/USB-HID scancode. nil means an
+    /// unknown code.
     public static func scancode(for code: String) -> Int32? {
         byCode[code]?.scancode
     }
 
-    /// Short human label for the edit UI / auto-labels.
+    /// Short human label for the edit UI and auto-labels.
     public static func displayName(for code: String) -> String? {
         byCode[code]?.displayName
     }
 
-    /// Reverse lookup (first match wins; used for migrating existing layouts to names).
+    /// Reverse lookup (first match wins). The migration of existing
+    /// layouts to names uses it.
     public static func code(for scancode: Int32) -> String? {
         entries.first(where: { $0.scancode == scancode })?.code
     }

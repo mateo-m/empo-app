@@ -10,7 +10,7 @@ enum GameCatalog {
     /// expensive per-container work: validation, orphan cleanup, PE
     /// icon extraction, and Ruby script-profile detection. Entries
     /// come back `.ready` even if a full scan would mark them
-    /// `.invalid`; the full `scanGames` pass that follows corrects
+    /// `.invalid`. The full `scanGames` pass that follows corrects
     /// status and artwork in place.
     nonisolated static func quickScanGames(
         fm: FileManager = .default,
@@ -20,8 +20,8 @@ enum GameCatalog {
 
         for container in GameContainer.discover() {
             if skipIDs.contains(container.id) { continue }
-            // Orphaned containers (no Game/ subdir) are skipped, not
-            // deleted - the full pass owns cleanup.
+            // Skip orphaned containers (no Game/ subdir) instead of
+            // deleting them. The full pass owns cleanup.
             guard fm.fileExists(atPath: container.gameURL.path) else { continue }
             if let entry = buildGameEntry(from: container, fm: fm, quick: true) {
                 entries.append(entry)

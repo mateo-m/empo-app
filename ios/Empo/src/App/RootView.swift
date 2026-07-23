@@ -2,11 +2,12 @@ import SwiftUI
 
 private enum SplashTiming {
     static let holdDuration: TimeInterval = 1.2
-    /// Extra time after the hold to keep the splash up while the
+    /// Extra time after the hold. It keeps the splash up while the
     /// initial library scan finishes, so dismissal never reveals an
-    /// in-between library (blank, or empty-state-then-snap). Capped
-    /// so a pathological scan can't hold the splash hostage - past
-    /// this, the library's own pre-scan blank state takes over.
+    /// in-between library (blank, or empty-state-then-snap). The cap
+    /// makes sure a pathological scan cannot hold the splash
+    /// forever. Past the cap, the library's own pre-scan blank state
+    /// takes over.
     static let scanGraceDuration: TimeInterval = 2.5
     static let cycleDuration: TimeInterval = 3
 }
@@ -21,9 +22,9 @@ struct RootView: View {
     @State private var showSplash: Bool
     @State private var splashExiting = false
     @State private var splashDismissed: Bool
-    /// Library stays mounted through the loading→playing fade, then
-    /// unmounts so Ken Burns / NavigationStack stop compositing over
-    /// the embedded game view.
+    /// The library stays mounted through the loading→playing fade.
+    /// It then unmounts, so Ken Burns / NavigationStack stop
+    /// compositing over the embedded game view.
     @State private var libraryMounted = true
 
     init() {
@@ -32,8 +33,9 @@ struct RootView: View {
         _splashDismissed = State(initialValue: recovering)
     }
     /// When true, the splash logo cross-fades out and the disclaimer
-    /// cross-fades in on top of the same orange background. Flipped at
-    /// the 1.2s mark only if the user hasn't acknowledged yet.
+    /// cross-fades in on top of the same orange background. The flow
+    /// flips it at the 1.2s mark, and only when the user has not
+    /// acknowledged yet.
     @State private var showDisclaimer = false
 
     var body: some View {
@@ -44,10 +46,11 @@ struct RootView: View {
             // device even when every child view is "clear".
             Color.clear.ignoresSafeArea()
 
-            // Fade the library out on play (loading banner handoff), then
-            // unmount after the spring so Ken Burns / NavigationStack
-            // don't keep running over the embedded game view. Remounts
-            // on pause/return; path is cleared by GameLibraryView.
+            // Fade the library out on play (loading banner handoff).
+            // Then unmount after the spring, so Ken Burns /
+            // NavigationStack do not keep running over the embedded
+            // game view. Remounts on pause/return. GameLibraryView
+            // clears the path.
             if libraryMounted {
                 GameLibraryView(heroNamespace: hero, splashDismissed: splashDismissed)
                     .opacity(appState.phase == .playing ? 0 : 1)
@@ -55,8 +58,8 @@ struct RootView: View {
                     .transition(.identity)
             }
 
-            // Instant appear: library fades out underneath without a
-            // cross-fade dim on the controls.
+            // Instant appear: the library fades out underneath without
+            // a cross-fade dim on the controls.
             if appState.phase == .playing {
                 PlayerView(appState: appState, engineState: engineState, layout: layout)
                     .transition(.identity)
@@ -98,19 +101,19 @@ struct RootView: View {
                 appState.consumeCrashRecovery()
                 return
             }
-            // Hold the splash visible for ~1.2s before transitioning
+            // Hold the splash visible for ~1.2s before the transition
             // to either the disclaimer (first launch) or the library.
-            // .task cancels on disappear so if the view is ever torn
-            // down early, the sleep unwinds cleanly.
+            // .task cancels on disappear. If the view goes away early,
+            // the sleep unwinds cleanly.
             try? await Task.sleep(for: .milliseconds(Int(SplashTiming.holdDuration * 1000)))
             if settings.needsDisclaimer {
-                // Hold the splash open: fade the logo out (by entering
-                // the "exiting" visual but without dismissing the
-                // container) and reveal the disclaimer. The normal
-                // dismissal runs once the user acknowledges. No scan
-                // gating here - reading the disclaimer dwarfs the
-                // scan, and the library's pre-scan blank state covers
-                // the residual case.
+                // Hold the splash open: fade the logo out (enter the
+                // "exiting" visual, but do not dismiss the container)
+                // and reveal the disclaimer. The normal dismissal
+                // runs once the user acknowledges. No scan gating
+                // here. The disclaimer read time dwarfs the scan, and
+                // the library's pre-scan blank state covers the
+                // residual case.
                 withAnimation(Motion.gentle) {
                     showDisclaimer = true
                 }
@@ -159,25 +162,27 @@ struct RootView: View {
             if appState.phase == .playing {
                 engineState.requestBackgroundPause()
                 // If the engine rendered at least one frame, this was a
-                // healthy session. Remove the crash marker so a force-kill
-                // from the app switcher won't trigger a false crash alert.
-                // Black-screen crashes leave engineReady false, so the
-                // marker persists and the alert still fires.
+                // healthy session. Remove the crash marker, so a
+                // force-kill from the app switcher does not trigger a
+                // false crash alert. Black-screen crashes leave
+                // engineReady false, so the marker persists and the
+                // alert still fires.
                 if appState.engineReady {
                     appState.clearCrashMarkerForBackground()
                 }
             }
-            // Persist play time when the app backgrounds so a force-kill
-            // from the switcher doesn't lose the session. No-op when the
-            // timer was already flushed (e.g. user paused to the library).
+            // Persist play time when the app backgrounds, so a
+            // force-kill from the switcher does not lose the session.
+            // No-op when the timer already flushed (e.g. the user
+            // paused to the library).
             appState.flushSessionPlayTimeForBackground()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) {
             _ in
             if appState.phase == .playing {
                 engineState.resumeFromBackground()
-                // Re-create the crash marker so a crash after resume is
-                // still detected on the next launch.
+                // Re-create the crash marker, so the next launch still
+                // detects a crash after resume.
                 appState.restoreCrashMarkerForForeground()
                 appState.resumeSessionTimingAfterBackground()
             }
@@ -222,35 +227,35 @@ struct RootView: View {
         )
     }
 
-    /// The game speaks in its own name: title the alert after the
-    /// running game so the notice doesn't read as an Empo message.
+    /// The game speaks in its own name. Title the alert after the
+    /// running game, so the notice does not read as an Empo message.
     private var infoAlertTitle: String {
         appState.selectedGame?.title
             ?? PauseManager.shared.pausedGame?.title
             ?? "Message"
     }
 
-    /// Unblocks the engine thread waiting in `mkxp_presentInfoAndWait()`;
-    /// the game resumes right where it called `msgbox`.
+    /// Unblocks the engine thread that waits in `mkxp_presentInfoAndWait()`.
+    /// The game resumes right where it called `msgbox`.
     private func dismissInfoAlert() {
         mkxp_signalInfoDismissed()
         appState.infoMessage = nil
     }
 
-    /// True when the RGSS thread didn't ack a termination request in
-    /// time, leaving Ruby in an unrecoverable state. The single-thread
-    /// engine architecture can't respawn the VM in-place, so the only
-    /// way out is for the user to close + reopen the app manually
-    /// (we don't call `exit()` per App Store guideline 2.5.1).
+    /// True when the RGSS thread did not ack a termination request in
+    /// time. Ruby is then in an unrecoverable state. The single-thread
+    /// engine architecture cannot respawn the VM in place, so the only
+    /// way out is for the user to close and reopen the app manually.
+    /// We do not call `exit()`, per App Store guideline 2.5.1.
     private var engineHung: Bool {
         mkxp_isEngineHung() != 0
     }
 
-    /// Wait (up to `scanGraceDuration`) for the initial library scan
-    /// so the splash lifts on a settled library instead of a blank or
-    /// soon-to-snap one. Polling at 50ms is invisible at splash
-    /// timescales and avoids threading continuation plumbing through
-    /// GameLibrary; bails early if the hosting `.task` is cancelled.
+    /// Wait (up to `scanGraceDuration`) for the initial library scan.
+    /// The splash then lifts on a settled library instead of a blank
+    /// or soon-to-snap one. A 50ms poll is invisible at splash
+    /// timescales and avoids continuation plumbing through
+    /// GameLibrary. Bails out early when the hosting `.task` cancels.
     private func waitForInitialLibraryScan() async {
         let deadline = ContinuousClock.now + .seconds(SplashTiming.scanGraceDuration)
         while !library.initialScanCompleted,
@@ -261,8 +266,8 @@ struct RootView: View {
         }
     }
 
-    /// Normal splash exit: fade background + logo + any disclaimer that
-    /// might still be on screen, then unmount the splash overlay.
+    /// Normal splash exit: fade the background, the logo, and any
+    /// disclaimer still on screen. Then unmount the splash overlay.
     private func dismissSplash() {
         splashDismissed = true
         withAnimation(Motion.slow) {
@@ -273,7 +278,7 @@ struct RootView: View {
         }
     }
 
-    /// Called from the disclaimer's "I understand" button. Persists
+    /// The disclaimer's "I understand" button calls this. It persists
     /// the acknowledgment and runs the usual splash exit animation.
     private func acknowledgeAndDismissSplash() {
         settings.acknowledgeDisclaimer()
@@ -282,19 +287,19 @@ struct RootView: View {
 }
 
 private struct SplashView: View {
-    /// True when the whole splash is animating out (fades background +
-    /// everything on top of it). This is the final exit phase.
+    /// True when the whole splash animates out (fades the background
+    /// and all content on top of it). This is the final exit phase.
     let exiting: Bool
-    /// True when the disclaimer has taken over - logo should fade out
-    /// and the disclaimer should fade in. Splash stays mounted.
+    /// True when the disclaimer has taken over. The logo then fades
+    /// out and the disclaimer fades in. The splash stays mounted.
     let showDisclaimer: Bool
     let onAcknowledgeDisclaimer: () -> Void
 
     @State private var entered = false
 
     /// Combined "logo should be visually absent" flag. True during the
-    /// disclaimer phase OR during the full exit. Kept as a single
-    /// variable so the same fade/scale/blur treatment drives both.
+    /// disclaimer phase OR during the full exit. It stays one variable
+    /// so the same fade/scale/blur treatment drives both.
     private var logoHidden: Bool { exiting || showDisclaimer }
 
     var body: some View {
@@ -324,8 +329,8 @@ private struct SplashView: View {
             .scaleEffect(logoHidden ? 0.8 : (entered ? 1 : 0.8))
             .opacity(logoHidden ? 0 : (entered ? 1 : 0))
 
-            // Disclaimer slides into the same centered position the
-            // logo just vacated. Only mounted while needed so the
+            // The disclaimer slides into the same centered position
+            // the logo just left. It mounts only while needed, so the
             // @State-driven entry animation fires fresh.
             if showDisclaimer {
                 DisclaimerView(onAcknowledge: onAcknowledgeDisclaimer)
@@ -361,17 +366,17 @@ private struct PixelDitherPattern: View {
     private static let tileHeight: CGFloat =
         iconSize * CGFloat(iconRows) + iconGutter * CGFloat(iconRows + 1)
 
-    /// Tile rasterized lazily on first splash render: pick six
-    /// random icons from the curated 16x16 SVG pack
+    /// The tile rasterizes lazily on the first splash render: pick
+    /// six random icons from the curated 16x16 SVG pack
     /// (`Assets.bundle/SplashIcons/`), parse each via the
     /// in-process `SplashIcons.path(for:)` parser, and stamp them
-    /// into the tile in row-major order. Background stays
-    /// transparent so the splash's `Color.brand` shows through;
-    /// the fill color is white-with-low-alpha to match the prior
+    /// into the tile in row-major order. The background stays
+    /// transparent, so the splash's `Color.brand` shows through.
+    /// The fill color is white with low alpha, to match the prior
     /// "subtle pattern over the brand color" visual. Tile content
-    /// changes between launches (icons are picked anew on each
-    /// process start) but stays static within a session - the
-    /// panning Canvas reuses this single image.
+    /// changes between launches (each process start picks new
+    /// icons) but stays static within a session. The panning
+    /// Canvas reuses this single image.
     nonisolated private static let cachedTileImage: UIImage = {
         let size = CGSize(width: tileWidth, height: tileHeight)
         let uiColor = UIColor.white.withAlphaComponent(0.08)

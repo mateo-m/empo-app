@@ -5,7 +5,7 @@ enum GameStatus: Hashable {
     case importing(progress: Double)  // 0.0 to 1.0
     case invalid
 
-    /// Strips associated values - useful as an animation trigger.
+    /// Strips associated values. Useful as an animation trigger.
     enum Phase: Hashable { case ready, importing, invalid }
     var phase: Phase {
         switch self {
@@ -32,11 +32,11 @@ struct GameEntry: Identifiable, Hashable {
     let artworkPath: String?  // resolved artwork path
     // The engine's own title for the game (parsed from Game.ini),
     // surfaced on the library card alongside `title` when they
-    // differ. Non-nil only when the display title has been
-    // overridden - by a user-set customTitle or a JGP manifest
-    // name - so users can still see what the game calls itself
-    // inside the RGSS runtime. nil means `title` IS the engine
-    // title and showing it twice would be redundant.
+    // differ. Non-nil only when a user-set customTitle or a JGP
+    // manifest name overrides the display title, so users can
+    // still see what the game calls itself inside the RGSS
+    // runtime. nil means `title` IS the engine title and showing
+    // it twice would be redundant.
     var engineTitle: String?
     var lastPlayed: Date?  // from metadata, cached at scan time
     var dateAdded: Date?  // from metadata, cached at scan time

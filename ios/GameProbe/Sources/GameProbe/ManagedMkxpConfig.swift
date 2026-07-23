@@ -5,7 +5,7 @@ import Foundation
 public struct MkxpEngineValues: Equatable, Sendable {
     public var smoothScaling: Bool?
     public var fixedAspectRatio: Bool?
-    /// `nil` = native resolution (`enableHires` false, factor stripped).
+    /// `nil` means native resolution (`enableHires` false, factor stripped).
     public var renderScaleEnableHires: Bool?
     public var renderScaleFramebufferFactor: Double?
     public var frameSkip: Bool?
@@ -96,15 +96,17 @@ public enum MkxpEngineField: String, CaseIterable, Sendable {
     case solidFonts
 }
 
-/// Whether an engine setting row's effective value comes from the game
-/// base (`Game/mkxp.json` or engine default) or the user's overlay.
+/// Tells whether the effective value of an engine setting comes from
+/// the game base (`Game/mkxp.json` or the engine default) or from
+/// the user's overlay.
 public enum MkxpValueProvenance: Equatable, Sendable {
     case game
     case yours
 }
 
-/// Keys that used to live in `game_settings.json` before the mkxp accessor
-/// migration. Used for one-time idempotent migration.
+/// Keys that lived in `game_settings.json` before the mkxp accessor
+/// migration. The one-time migration uses them. The migration is
+/// safe to repeat.
 public enum ManagedMkxpConfig {
     public static let legacyGameSettingsKeys: [String] = [
         "smoothScaling",
@@ -147,8 +149,9 @@ public enum ManagedMkxpConfig {
 
     // MARK: - Read
 
-    /// True when `Game/mkxp.json` exists but cannot be parsed. Used only
-    /// for UI annotations; the engine still reads the base file itself.
+    /// True when `Game/mkxp.json` exists but does not parse. Only UI
+    /// annotations use this. The engine still reads the base file
+    /// itself.
     public static func isDevConfigUnparseable(gameDirectory: URL) -> Bool {
         let sourceURL = devConfigURL(in: gameDirectory)
         guard FileManager.default.fileExists(atPath: sourceURL.path) else { return false }
@@ -164,7 +167,8 @@ public enum ManagedMkxpConfig {
         return values(from: overlay)
     }
 
-    /// Effective values after merging `Game/mkxp.json` with the overlay.
+    /// The effective values after the merge of `Game/mkxp.json` and
+    /// the overlay.
     public static func readEffective(
         stateDirectory: URL,
         gameDirectory: URL
@@ -234,9 +238,9 @@ public enum ManagedMkxpConfig {
 
     // MARK: - Overlay string for engine bridge
 
-    /// JSON object string handed to `mkxp_setConfigOverlayJSON`, or nil
-    /// when there is nothing to send (no overlay keys and no host
-    /// normalization patches apply).
+    /// The JSON object string that goes to `mkxp_setConfigOverlayJSON`,
+    /// or nil when there is nothing to send (no overlay keys, and no
+    /// host normalization patches apply).
     public static func overlayJSONString(
         gameDirectory: URL,
         stateDirectory: URL,
@@ -263,7 +267,7 @@ public enum ManagedMkxpConfig {
 
         if let base {
             // Neutralize desktop window sizing only when the base
-            // defines it, so a plain game sends no overlay at all.
+            // defines it. A plain game then sends no overlay at all.
             if base["defScreenW"] != nil { patches["defScreenW"] = NSNull() }
             if base["defScreenH"] != nil { patches["defScreenH"] = NSNull() }
 
@@ -276,8 +280,9 @@ public enum ManagedMkxpConfig {
                 patches["syncToRefreshrate"] = legacyVsync
             }
         } else if baseExists {
-            // The engine may parse a base the host cannot; neutralize
-            // conservatively (null on an absent key is harmless).
+            // The engine can parse a base that the host cannot. In
+            // that case, neutralize both keys as a safe default. A
+            // null on an absent key is harmless.
             patches["defScreenW"] = NSNull()
             patches["defScreenH"] = NSNull()
         }
@@ -286,8 +291,8 @@ public enum ManagedMkxpConfig {
             return nil
         }
 
-        // Overlay wins over patches: a hand-added overlay key (for
-        // example an explicit defScreenW) is the user's call.
+        // The overlay wins over the patches: a hand-added overlay key
+        // (for example, an explicit defScreenW) is the user's call.
         var payload = patches
         for (key, value) in overlay {
             payload[key] = value
@@ -306,7 +311,7 @@ public enum ManagedMkxpConfig {
 
     // MARK: - Overlay writes
 
-    /// Write only the non-nil override fields into the sparse overlay.
+    /// Writes only the non-nil override fields into the sparse overlay.
     @discardableResult
     public static func writeOverlay(
         overrides: MkxpEngineValues,
@@ -328,7 +333,8 @@ public enum ManagedMkxpConfig {
         return writeOverlay(overrides: overrides, stateDirectory: stateDirectory)
     }
 
-    /// Remove one engine field from the overlay (fall through to base).
+    /// Removes one engine field from the overlay. The value then
+    /// falls through to the base.
     @discardableResult
     public static func resetField(
         _ field: MkxpEngineField,
@@ -341,7 +347,7 @@ public enum ManagedMkxpConfig {
         return persistOverlay(overlay, to: stateDirectory)
     }
 
-    /// Reset every engine field (Reset to Defaults in Game Settings).
+    /// Resets every engine field (Reset to Defaults in Game Settings).
     @discardableResult
     public static func resetAllEngineFields(
         stateDirectory: URL,
@@ -367,9 +373,9 @@ public enum ManagedMkxpConfig {
         return legacyGameSettingsKeys.contains { json[$0] != nil }
     }
 
-    /// One-time migration: build a sparse overlay from legacy
-    /// `game_settings.json` engine keys, replace `EmpoState/mkxp.json`,
-    /// strip those keys from the sidecar.
+    /// One-time migration. Build a sparse overlay from the legacy
+    /// `game_settings.json` engine keys. Replace `EmpoState/mkxp.json`.
+    /// Strip those keys from the sidecar.
     @discardableResult
     public static func migrateLegacyEngineSettingsIfNeeded(
         stateDirectory: URL,
@@ -447,8 +453,8 @@ public enum ManagedMkxpConfig {
         return persistOverlay(overlay, to: stateDirectory)
     }
 
-    // UI writes touch only their own keys; anything else a user put in
-    // the overlay by hand is preserved.
+    // UI writes touch only their own keys. Anything else that the
+    // user put in the overlay by hand stays intact.
     @discardableResult
     private static func persistOverlay(
         _ overlay: [String: Any],

@@ -3,11 +3,11 @@
 # prebuilt tarballs on the empo-deps repo (ANGLE-style fetch-on-build).
 #
 # Daily workflow: Xcode builds fetch (or no-op when stamp + trees match).
-# Dep bumps: CI publishes a new release asset; bump native/.version here.
+# Dep bumps: CI publishes a new release asset. Bump native/.version here.
 #
-# Escape hatch for maintainers building locally:
-#   IOS_DEPS_SKIP_FETCH=1  — never download; require local trees.
-#   NATIVE_DEPS_VERSION=unpublished — no remote asset; use local trees only.
+# Escape hatch for maintainers who build locally:
+#   IOS_DEPS_SKIP_FETCH=1: never download, require local trees.
+#   NATIVE_DEPS_VERSION=unpublished: no remote asset, use local trees only.
 
 set -e
 
@@ -40,9 +40,9 @@ fi
 verify_both_trees() {
     # The engine-core prebuilt lives in its own channel
     # (tools/fetch-engine-prebuilt.sh, which runs after this script),
-    # so its check is skipped during native-deps hydration. The full
-    # check still gates every Xcode build via the "Verify native deps
-    # for active SDK" phase.
+    # so this step skips its check during native-deps hydration. The
+    # full check still gates every Xcode build via the "Verify native
+    # deps for active SDK" phase.
     SKIP_ENGINE_CORE_CHECK=1 PLATFORM_NAME=iphoneos "$VERIFY" &&
         SKIP_ENGINE_CORE_CHECK=1 PLATFORM_NAME=iphonesimulator "$VERIFY"
 }
@@ -52,8 +52,9 @@ both_build_trees_exist() {
         [ -d "$DEPS_DIR/build-iphonesimulator-arm64" ]
 }
 
-# Stamp matches and both SDK trees are present — nothing to do.
-# Full verification runs after download and in the dedicated Xcode phase.
+# When the stamp matches and both SDK trees exist, there is nothing
+# to do. Full verification runs after download and in the dedicated
+# Xcode phase.
 if [ -f "$STAMP" ] &&
     [ "$(cat "$STAMP" 2>/dev/null)" = "$NATIVE_DEPS_VERSION" ] &&
     both_build_trees_exist; then
@@ -83,8 +84,8 @@ Build both SDK trees once, then switch Xcode destinations freely:
 
   scripts/rebuild-all-native-deps.sh
 
-To publish prebuilts for the team, run tools/package-native-deps.sh and
-upload the tarball to empo-deps, then bump ios/Dependencies/native/.version.
+To publish prebuilts for the team, run tools/package-native-deps.sh.
+Upload the tarball to empo-deps. Then bump ios/Dependencies/native/.version.
 MSG
     exit 1
 fi

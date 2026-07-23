@@ -5,24 +5,25 @@ import Foundation
 ///
 /// The engine verifies game TLS traffic (native HTTP client + Ruby's
 /// openssl via SSL_CERT_FILE) against a Mozilla CA bundle. The copy in
-/// Assets.bundle is only a first-run seed: root stores churn slowly
-/// but do churn, and a bundle frozen at build time eventually bites
-/// (the 2021 Let's Encrypt root expiry variety). Rather than asking
-/// users to care, refresh silently: download the current bundle from
-/// curl.se over URLSession — which trusts the *OS* root store, so the
-/// refresh itself can never go stale — and prefer the refreshed copy.
+/// Assets.bundle is only a first-run seed. Root stores churn slowly,
+/// but they do churn, and a bundle frozen at build time eventually
+/// bites (the 2021 Let's Encrypt root expiry variety). We do not ask
+/// users to care. We refresh silently: download the current bundle
+/// from curl.se over URLSession, and prefer the refreshed copy.
+/// URLSession trusts the *OS* root store, so the refresh itself can
+/// never go stale.
 ///
 /// **Integrity.** The payload must match curl.se's published SHA-256
 /// sidecar and look like a plausible PEM bundle (parseable, dozens of
-/// certificates) before it replaces anything. Failures of any kind
-/// keep the previous copy; there is no user-visible error surface.
+/// certificates) before it replaces anything. On any failure we keep
+/// the previous copy. There is no user-visible error surface.
 ///
 /// **Throttle.** At most one *successful* refresh per
-/// `refreshInterval`; the stamp is only written when a verified
-/// bundle lands. Failed attempts (offline launch, captive portal,
-/// server hiccup) retry on the next launch — one small GET, so
-/// re-trying until first success is cheap, and it's what rescues a
-/// fresh install whose bundled seed is years old by install time.
+/// `refreshInterval`. We write the stamp only when a verified bundle
+/// lands. Failed attempts (offline launch, captive portal, server
+/// hiccup) retry on the next launch. Each retry is one small GET, so
+/// retries until the first success are cheap. The retries also rescue
+/// a fresh install whose bundled seed is years old by install time.
 enum CABundleStore {
 
     private static let bundleURL = URL(string: "https://curl.se/ca/cacert.pem")!
@@ -31,7 +32,7 @@ enum CABundleStore {
     private static let lastRefreshKey = DefaultsKey.caBundleLastRefresh
 
     /// Minimum root certificates for a payload to be believable. The
-    /// real Mozilla bundle carries 100+; anything tiny is a truncated
+    /// real Mozilla bundle carries 100+. Anything tiny is a truncated
     /// download or a captive-portal page.
     private static let minimumCertCount = 50
 
@@ -44,8 +45,8 @@ enum CABundleStore {
         return support.appendingPathComponent("CABundle/cacert.pem")
     }
 
-    /// Path the engine should trust: the refreshed copy when one has
-    /// been downloaded and still looks valid, the built-in seed
+    /// Path the engine should trust: the refreshed copy when we
+    /// downloaded one and it still looks valid, the built-in seed
     /// otherwise. Never nil unless the app bundle itself is broken.
     static var effectivePath: String? {
         if let refreshed = refreshedURL,
@@ -58,7 +59,7 @@ enum CABundleStore {
             forResource: "cacert", ofType: "pem", inDirectory: "Assets.bundle")
     }
 
-    /// Fire-and-forget refresh; safe to call every launch.
+    /// Fire-and-forget refresh. Safe to call on every launch.
     static func refreshIfStale(onRefresh: @escaping () -> Void) {
         let last = UserDefaults.standard.double(forKey: lastRefreshKey)
         guard Date().timeIntervalSince1970 - last >= refreshInterval else { return }

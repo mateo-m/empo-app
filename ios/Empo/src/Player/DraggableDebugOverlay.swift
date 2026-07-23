@@ -3,8 +3,8 @@ import SwiftUI
 /// Positioned, draggable wrapper around `DebugOverlayView`. Owns its
 /// own drag / offset / measured-height state so gesture ticks don't
 /// invalidate the parent `PlayerView` body (which would rebuild the
-/// D-pad and every action button at ~60 Hz while the overlay is
-/// being dragged).
+/// D-pad and every action button at ~60 Hz during a drag of the
+/// overlay).
 struct DraggableDebugOverlay: View {
     let state: DebugOverlayState
     let visible: Bool
@@ -29,8 +29,8 @@ struct DraggableDebugOverlay: View {
         DebugOverlayView(state: state)
             .frame(width: AppSize.debugOverlayWidth)
             .contentShape(Rectangle())
-            // Region must be measured BEFORE .position (which expands
-            // to the full proposed space); the global frame here still
+            // Measure the region BEFORE .position, which expands to
+            // the full proposed space. The global frame here still
             // reflects the position/offset applied further down.
             .chromeHitRegion("debugOverlay")
             .onPreferenceChange(DebugOverlayHeightKey.self) { newHeight in
@@ -99,9 +99,9 @@ struct DraggableDebugOverlay: View {
 }
 
 /// Layout constants duplicated into a public enum so the extracted
-/// overlay view can reuse them without importing PlayerView's
-/// private state. Kept namespaced (`PlayerLayoutTokens`) to avoid
-/// clashing with any other design-system enum.
+/// overlay view can reuse them without an import of PlayerView's
+/// private state. The namespace (`PlayerLayoutTokens`) avoids a
+/// clash with any other design-system enum.
 enum PlayerLayoutTokens {
     static let toolbarGap: CGFloat = 8
     static let toolbarEdgePad: CGFloat = 4

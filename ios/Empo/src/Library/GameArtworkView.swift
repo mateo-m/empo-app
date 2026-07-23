@@ -65,12 +65,12 @@ struct GameArtworkView: View {
 
     /// Renders the image loaded from disk. PE-extracted icons
     /// (the sidecar files) typically ship with transparent
-    /// backgrounds; stretching them to `.fill` would let the
-    /// transparency reveal whatever surface sits behind the card,
-    /// which looks wrong when the artwork is meant to be the
-    /// card's focal point. Route those through the composite
-    /// branch so the icon floats on the same gradient the
-    /// empty-state placeholder uses.
+    /// backgrounds. Stretched to `.fill`, the transparency would
+    /// reveal whatever surface sits behind the card. That looks
+    /// wrong when the artwork should be the card's focal point.
+    /// Route those through the composite branch so the icon
+    /// floats on the same gradient the empty-state placeholder
+    /// uses.
     @ViewBuilder
     private func loadedArtwork(path: String, uiImage: UIImage) -> some View {
         if isExecutableIconSidecar(path: path) {
@@ -95,11 +95,11 @@ struct GameArtworkView: View {
     }
 
     /// Shared backdrop for the empty placeholder and the
-    /// icon-composite path. Base uses secondarySystemBackground
+    /// icon-composite path. The base uses secondarySystemBackground
     /// so light mode lands on a soft gray instead of pure white
-    /// (which reads cheap next to vibrant artwork on sibling
+    /// (which looks cheap next to colorful artwork on sibling
     /// cards). A subtle top-to-bottom highlight gradient adds
-    /// depth so the surface feels crafted rather than flat.
+    /// depth so the surface does not look flat.
     @ViewBuilder
     private var placeholderBackground: some View {
         ZStack {
@@ -119,9 +119,9 @@ struct GameArtworkView: View {
     /// Renders a transparent icon artwork centered on the
     /// placeholder gradient. The icon keeps its aspect ratio and
     /// takes up a fraction of the frame so padding shows around
-    /// it - PE icons are typically 128-256px whereas the card
-    /// itself can be substantially larger, so stretching would
-    /// blur them. Inset scales to the container so the icon
+    /// it. PE icons are typically 128-256px, and the card itself
+    /// can be much larger, so stretching would blur them.
+    /// The inset scales to the container so the icon
     /// reads at the same relative size in the 48pt list row and
     /// the 150pt+ grid card.
     @ViewBuilder
@@ -141,9 +141,9 @@ struct GameArtworkView: View {
     }
 
     /// Artwork stored at the sidecar path is always a PE icon
-    /// extracted from `Game.exe`. Using the filename as the
-    /// signal avoids per-pixel alpha scans and stays consistent
-    /// with the side that wrote the file.
+    /// extracted from `Game.exe`. The filename as the signal
+    /// avoids per-pixel alpha scans and stays consistent with
+    /// the side that wrote the file.
     private func isExecutableIconSidecar(path: String) -> Bool {
         (path as NSString).lastPathComponent == ExecutableIconExtractor.sidecarFilename
     }

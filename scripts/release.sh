@@ -18,11 +18,11 @@ usage() {
     echo "  1. verifies empo-deps pins"
     echo "  2. bumps version, generates the changelog, commits, tags"
     echo "     (v<version> here + empo-v<version> on the engine repo)"
-    echo "  3. pushes and exits; the Release workflow builds, audits,"
-    echo "     publishes the IPA, syncs the AltStore manifest + engine"
-    echo "     pin straight to main, and announces on Discord"
+    echo "  3. pushes and exits. The Release workflow builds, audits,"
+    echo "     and publishes the IPA. It syncs the AltStore manifest +"
+    echo "     engine pin straight to main and announces on Discord."
     echo ""
-    echo "The same release can be cut without this script at all:"
+    echo "You can cut the same release without this script at all:"
     echo "GitHub > Actions > Release > Run workflow (mode=cut)."
     echo ""
     echo "--sync-only <version>   run the AltStore/engine-pin sync"
@@ -30,7 +30,7 @@ usage() {
     echo "                        (fallback if CI's sync job failed)"
     echo ""
     echo "RELEASE_LOCAL_BUILD=1   build/audit/sign/publish locally instead"
-    echo "                        (fallback for when CI is unavailable)"
+    echo "                        (fallback when CI is unavailable)"
     echo "RELEASE_REBUILD_DEPS=1  rebuild native deps from source first"
     echo "                        (implies RELEASE_LOCAL_BUILD=1)"
     exit 1
@@ -44,8 +44,8 @@ fi
 [[ $# -ne 1 ]] && usage
 BUMP_OR_VERSION="$1"
 
-# Resolve the GitHub "owner/repo" slug from the origin remote so
-# release assets can be addressed by URL.
+# Resolve the GitHub "owner/repo" slug from the origin remote so the
+# script can address release assets by URL.
 repo_slug() {
     local origin_url slug
     origin_url=$(git -C "$REPO_ROOT" remote get-url origin)
@@ -66,11 +66,12 @@ repo_slug() {
 
 # --sync-only fallback: the Release workflow's post-release job
 # normally does this sync (direct commit to main via
-# EMPO_RELEASE_TOKEN). When that job fails or the token isn't
-# configured, this reproduces it locally: wait for the published IPA
-# and the fork's engine artifact, then update the AltStore manifest +
-# engine pin and push both straight to main under the operator's
-# credentials (signed commit + admin ruleset bypass).
+# EMPO_RELEASE_TOKEN). When that job fails, or when the token is not
+# configured, this function reproduces the sync locally. It waits for
+# the published IPA and the fork's engine artifact. It then updates
+# the AltStore manifest + engine pin and pushes both straight to main
+# under the operator's credentials (signed commit + admin ruleset
+# bypass).
 run_ci_sync() {
     local version="$1"
     local ipa_name="Empo-${version}-unsigned.ipa"
@@ -148,7 +149,7 @@ run_ci_sync() {
         --date "$release_date" \
         --download-url "https://github.com/$slug/releases/download/v$version/$ipa_name" \
         --description "$changelog"
-    # The Format gate (oxfmt) checks this file on main; keep the
+    # The Format gate (oxfmt) checks this file on main. Keep the
     # generated manifest formatted so the gate stays green.
     bunx oxfmt "$ALTSTORE_SOURCE"
 
@@ -162,23 +163,24 @@ run_ci_sync() {
     echo "==> done - v$version fully released"
 }
 
-# Rebuilding deps from source only makes sense when the IPA is also
-# built here — CI always hydrates from published pins.
+# A deps rebuild from source only makes sense when this script also
+# builds the IPA. CI always hydrates from published pins.
 if [[ "${RELEASE_REBUILD_DEPS:-0}" == "1" ]]; then
     RELEASE_LOCAL_BUILD=1
 fi
 LOCAL_BUILD="${RELEASE_LOCAL_BUILD:-0}"
 
-# Resolve the new version. Accepts an explicit semver (`0.1.0`) for
-# rare jumps that don't follow the bump-the-last-tag pattern, or one
-# of `major` / `minor` / `patch` to derive it from the latest git
-# tag matching `v*.*.*`. Falls back to `0.1.0` when no prior tag
-# exists so the first release-cut works without a manual seed.
+# Resolve the new version. An explicit semver (`0.1.0`) covers rare
+# jumps that do not follow the bump-the-last-tag pattern. One of
+# `major` / `minor` / `patch` derives the version from the latest
+# git tag that matches `v*.*.*`. When no prior tag exists, the
+# version falls back to `0.1.0`, so the first release cut needs no
+# manual seed.
 case "$BUMP_OR_VERSION" in
     major | minor | patch)
         LATEST_TAG=$(git -C "$REPO_ROOT" tag --list "v*.*.*" --sort=-v:refname | head -n 1)
         if [[ -z "$LATEST_TAG" ]]; then
-            echo "    no prior v*.*.* tag found; seeding at 0.1.0"
+            echo "    no prior v*.*.* tag found, seeding at 0.1.0"
             VERSION="0.1.0"
         else
             CURRENT="${LATEST_TAG#v}"
@@ -203,7 +205,7 @@ esac
 
 if [[ "$SYNC_ONLY" == "1" ]]; then
     if ! git -C "$REPO_ROOT" rev-parse "v$VERSION" >/dev/null 2>&1; then
-        echo "error: tag v$VERSION not found; --sync-only resumes an already-cut release"
+        echo "error: tag v$VERSION not found. --sync-only resumes an already-cut release"
         exit 1
     fi
     if ! git -C "$REPO_ROOT" diff --quiet HEAD; then
@@ -221,13 +223,12 @@ if ! command -v git-cliff >/dev/null 2>&1; then
     exit 1
 fi
 
-# Refuse to bump onto an existing tag. Re-cutting an already-shipped
-# version overwrites the tag + GitHub release in place, which is
-# almost never what `release.sh` should be doing automatically. Use
-# manual `git tag -fs` + `gh release upload --clobber` for that
-# flow.
+# Refuse to bump onto an existing tag. A re-cut of a shipped version
+# overwrites the tag + GitHub release in place, and `release.sh`
+# should almost never do that automatically. For that flow, use
+# manual `git tag -fs` + `gh release upload --clobber`.
 if git -C "$REPO_ROOT" rev-parse "v$VERSION" >/dev/null 2>&1; then
-    echo "error: tag v$VERSION already exists; pick a different bump"
+    echo "error: tag v$VERSION already exists. Pick a different bump"
     exit 1
 fi
 
@@ -237,10 +238,10 @@ if ! git -C "$REPO_ROOT" diff --quiet HEAD; then
     exit 1
 fi
 
-# 2. Verify dependency pins resolve to published empo-deps releases —
-# even for CI builds, so an unpublished pin aborts before anything is
-# tagged. Hydration/rebuild only happens for local builds; the Release
-# workflow hydrates its own runner.
+# 2. Verify dependency pins resolve to published empo-deps releases,
+# even for CI builds, so an unpublished pin aborts before the script
+# tags anything. Hydration/rebuild only happens for local builds. The
+# Release workflow hydrates its own runner.
 echo "==> verifying empo-deps pins"
 if [ "${RELEASE_REBUILD_DEPS:-0}" = "1" ]; then
     REQUIRE_PUBLISHED=0 "$REPO_ROOT/scripts/verify-empo-deps-pins.sh"
@@ -276,24 +277,23 @@ cd "$PROJECT_DIR"
 /opt/homebrew/bin/xcodegen generate --spec project.yml --project . --quiet
 cd "$REPO_ROOT"
 
-# 6. Ad-hoc sign with our entitlements file so the Mach-O has an
-# entitlements blob embedded. Sideloaders that resign the IPA
+# 6. Ad-hoc sign with our entitlements file so the Mach-O carries
+# an embedded entitlements blob. Sideloaders that resign the IPA
 # (AltStore, Sideloadly, ESign, Feather) read this blob as their
-# template; without it some resigners synthesize an incomplete
-# blob and break runtime behaviors. iOS won't trust the ad-hoc
-# signature directly, but every sideloader re-signs over it with
-# the user's cert before installing.
+# template. Without the blob, some resigners synthesize an
+# incomplete one and break runtime behaviors. iOS does not trust
+# the ad-hoc signature directly, but every sideloader re-signs
+# over it with the user's cert before install.
 #
 # `--generate-entitlement-der` writes the modern DER-encoded
-# entitlements format alongside the plist form. Required by
-# iOS 15+ for some entitlement keys to be honored, and makes
-# the signature easier for naive resigners to round-trip
-# without losing data.
+# entitlements format alongside the plist form. iOS 15+ requires
+# it before it honors some entitlement keys, and it lets naive
+# resigners round-trip the signature without data loss.
 #
-# Don't pass `--options=runtime`: hardened runtime is a macOS
-# concept (restricts JIT/dyld/debugger), and setting it on an
-# iOS binary makes dyld refuse to load the Mach-O at app
-# launch, producing a black screen on startup.
+# Do not pass `--options=runtime`: hardened runtime is a macOS
+# concept (restricts JIT/dyld/debugger). If you set it on an iOS
+# binary, dyld refuses to load the Mach-O at app launch, and the
+# app shows a black screen on startup.
 # 7. Generate release notes before the version-bump commit so
 # `--unreleased --tag` covers everything since the previous tag
 # under the version we're about to ship. After prepending the entry to
@@ -317,20 +317,21 @@ RELEASE_NOTES=$(printf "## What's changed\n\n%s\n\n---\n> Unsigned build - sign 
 # 8. Commit + tag (signed). Tag the release metadata first so the IPA
 # build below runs from a clean tree and bakes the release commit hash
 # into GitInfo instead of the pre-release parent plus a dirty marker.
-# AltStore metadata is synced locally after the IPA is built, then
-# committed as a follow-up on main so the published manifest cannot be
-# skipped if the release succeeds.
+# The script syncs AltStore metadata locally after the IPA build, then
+# commits it as a follow-up on main, so a successful release can never
+# skip the published manifest.
 git -C "$REPO_ROOT" add "$PROJECT_YML" \
     "$CHANGELOG_PATH"
 git -C "$REPO_ROOT" commit -S -m "chore: bump version to $VERSION (build $BUILD)"
 git -C "$REPO_ROOT" tag -s "v$VERSION" -m "v$VERSION"
 
-# 8b. Tag the engine submodule commit this release pins, so the GPL
-# binary->source correspondence is provable per release: anyone can
-# check out mkxp-z-apple-mobile at empo-v<version> and get exactly the
-# engine source compiled into the shipped .ipa. Created locally here
-# (before anything is pushed) so a failure aborts the release cleanly;
-# pushed alongside the app tag in step 11.
+# 8b. Tag the engine submodule commit this release pins. This proves
+# the GPL binary->source correspondence per release: anyone can check
+# out mkxp-z-apple-mobile at empo-v<version> and get exactly the
+# engine source compiled into the shipped .ipa. The script creates
+# the tag locally here, before it pushes anything, so a failure
+# aborts the release cleanly. Step 11 pushes the tag alongside the
+# app tag.
 ENGINE_TAG="empo-v$VERSION"
 ENGINE_DIR="$REPO_ROOT/mkxp-z-apple-mobile"
 ENGINE_COMMIT="$(git -C "$REPO_ROOT" rev-parse "HEAD:mkxp-z-apple-mobile")"
@@ -346,10 +347,10 @@ if ! git -C "$ENGINE_DIR" merge-base --is-ancestor "$ENGINE_COMMIT" origin/dev; 
 fi
 git -C "$ENGINE_DIR" tag -s "$ENGINE_TAG" "$ENGINE_COMMIT" -m "Engine pinned by Empo v$VERSION"
 
-# 9-10. Local build + AltStore sync — fallback path only. On the
+# 9-10. Local build + AltStore sync, fallback path only. On the
 # default flow the Release workflow builds, audits, and publishes the
 # IPA, and run_ci_sync (called after the push below) finishes the
-# release by syncing the manifest + engine pin from here.
+# release when it syncs the manifest + engine pin from here.
 if [[ "$LOCAL_BUILD" == "1" ]]; then
 
     # 9. Build unsigned .ipa from the clean release commit.

@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Bottom sheet of secondary in-game actions reachable from the
 /// player toolbar's "Menu" button. Houses options that don't earn a
-/// permanent toolbar slot; pause, cheats, debug overlay, fast
-/// forward, quit. Toggles update host state directly; tap actions
+/// permanent toolbar slot: pause, cheats, debug overlay, fast
+/// forward, quit. Toggles update host state directly. Tap actions
 /// dismiss the sheet via `dismiss()` so the user lands back in the
 /// game.
 ///
@@ -12,15 +12,15 @@ import SwiftUI
 /// styled `Button`s inside a VStack with
 /// `.fixedSize(horizontal: false, vertical: true)`.
 struct PlayerMoreSheet: View {
-    /// Display title of the running game. Substituted into the
-    /// destructive section's row labels ("Pause <title>" / "Quit
-    /// <title>") so the user sees exactly what they're acting on.
-    /// Falls back to "Game" if `selectedGame` is nil at present time.
+    /// Display title of the running game. The destructive section's
+    /// row labels interpolate it ("Pause <title>" / "Quit <title>")
+    /// so the user sees exactly what they act on. Falls back to
+    /// "Game" if `selectedGame` is nil at present time.
     let gameTitle: String
     @Binding var showDebugOverlay: Bool
     @Binding var fastForwardActive: Bool
     /// Multiplier the user configured in Game Settings. nil means
-    /// fast-forward is disabled for this game; the row is hidden.
+    /// fast-forward is off for this game, so the row stays hidden.
     let fastForwardMultiplier: Int?
     let showControllerRemap: Bool
     let onControllerRemap: () -> Void
@@ -58,7 +58,7 @@ struct PlayerMoreSheet: View {
         let fastFwd = (fastForwardMultiplier ?? 0) >= 2
         let diag = settings.diagnosticsOverlay
         let pause = true
-        // gameQuit is currently forced off in `body`; if/when it
+        // gameQuit is currently forced off in `body`. If/when it
         // returns, mirror its gate here.
         return cheats || fastFwd || diag || pause || controllerRemapAvailable
     }
@@ -66,8 +66,8 @@ struct PlayerMoreSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: Spacing.lg) {
-                // Auxiliary toggles group; cheats, fast forward,
-                // debug overlay. These are passive in-game tools; the
+                // Auxiliary toggles group: cheats, fast forward,
+                // debug overlay. These are passive in-game tools. The
                 // user can flip them and stay in the game.
                 VStack(spacing: 0) {
                     InterleavedRows(
@@ -111,17 +111,17 @@ struct PlayerMoreSheet: View {
                 // below.
                 .clipShape(.rect(cornerRadius: Radius.md))
 
-                // Session-ending actions grouped together; pause
+                // Session-ending actions grouped together. Pause
                 // takes the user back to the library (game stays
-                // suspended), quit tears the engine down. Both name
-                // the running game so there's no ambiguity about
-                // which session is affected.
+                // suspended). Quit tears the engine down. Both name
+                // the running game so it is clear which session
+                // they act on.
                 // Pause: graduated from experimental in May 2026,
                 // always enabled now.
                 let pauseEnabled = true
-                // gameQuit disabled; see ExperimentalFeature comment
-                // in AppSettings.swift. Forced false so the in-game
-                // Quit toolbar button stays hidden.
+                // gameQuit is off. See the ExperimentalFeature comment
+                // in AppSettings.swift. We force it false so the
+                // in-game Quit toolbar button stays hidden.
                 let quitEnabled = false
                 if pauseEnabled || quitEnabled {
                     VStack(spacing: 0) {
@@ -182,12 +182,12 @@ struct PlayerMoreSheet: View {
 /// Helper that interleaves `separator` between each emitted row of
 /// the trailing `content` builder. Skips separators around
 /// conditionally-omitted rows so the visual rhythm doesn't show
-/// dangling dividers when a section is gated by a setting.
+/// dangling dividers when a setting gates a section off.
 ///
-/// Uses `_VariadicView_Tree` to introspect the children produced by
-/// the ViewBuilder closure; this is private SwiftUI but stable
-/// enough for menu-style row layouts. Same trick used by
-/// SwiftUI's own `Form` sections.
+/// Uses `_VariadicView_Tree` to introspect the children the
+/// ViewBuilder closure produces. This is private SwiftUI but stable
+/// enough for menu-style row layouts. SwiftUI's own `Form` sections
+/// use the same trick.
 private struct InterleavedRows<Separator: View, Content: View>: View {
     @ViewBuilder var separator: () -> Separator
     @ViewBuilder var content: () -> Content
@@ -212,9 +212,9 @@ private struct InterleavedRows<Separator: View, Content: View>: View {
     }
 }
 
-/// Tappable row in `PlayerMoreSheet`. Layout matches
+/// Tappable row in `PlayerMoreSheet`. The layout matches
 /// `ImageSourceSheet`'s `ImageSourceRow` (icon + label, full-row
-/// hit target) but kept private to this file so the destructive
+/// hit target) but stays private to this file so the destructive
 /// styling can diverge if needed.
 private struct MenuRow: View {
     let icon: String
@@ -239,7 +239,7 @@ private struct MenuRow: View {
     }
 }
 
-/// Toggle row in `PlayerMoreSheet`. Icon color matches the label
+/// Toggle row in `PlayerMoreSheet`. The icon color matches the label
 /// text rather than the system tint so it reads as one unit.
 private struct MenuToggleRow: View {
     let icon: String

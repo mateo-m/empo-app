@@ -1,13 +1,14 @@
 import Foundation
 
 public enum AndroidKeycodeTable {
-    /// Android KeyEvent keycode -> W3C KeyboardEvent.code (SPEC §6 vocabulary).
-    /// nil when the keycode has no equivalent in the §6 table.
+    /// Android KeyEvent keycode -> W3C KeyboardEvent.code (SPEC
+    /// section 6 vocabulary). nil when the keycode has no equivalent
+    /// in the section 6 table.
     public static func w3cCode(for androidKeycode: Int) -> String? {
         mapping[androidKeycode]
     }
 
-    /// Every Android keycode mapped by this table (for tests).
+    /// Every Android keycode that this table maps (for tests).
     public static var allMappedKeycodes: [Int] {
         mapping.keys.sorted()
     }

@@ -27,9 +27,9 @@ public extension KeyCodeTable {
         }
     }
 
-    /// Codes in `allCodes` order, bucketed into picker sections. Common
-    /// keys ALSO appear in their natural group so e.g. the Letters
-    /// section stays a complete alphabet.
+    /// Codes in `allCodes` order, put into picker sections. Common
+    /// keys also appear in their natural group, so for example the
+    /// Letters section stays a complete alphabet.
     static var codesByPickerGroup: [KeyCodePickerGroup: [String]] {
         var buckets = Dictionary(uniqueKeysWithValues: KeyCodePickerGroup.allCases.map { ($0, [String]()) })
         for code in allCodes {
@@ -41,7 +41,7 @@ public extension KeyCodeTable {
         return buckets
     }
 
-    /// Primary group (Common wins) — drives the annotation display.
+    /// Primary group (Common wins). It drives the annotation display.
     static func pickerGroup(for code: String) -> KeyCodePickerGroup {
         commonPickerCodes.contains(code) ? .common : naturalGroup(for: code)
     }

@@ -4,8 +4,8 @@ import XCTest
 
 final class JoiPlayControlsTranslatorTests: XCTestCase {
 
-    // Every keycode maps to a key DIFFERENT from its slot default, so a
-    // translator that ignored the file and emitted defaults would fail.
+    // Every keycode maps to a key that differs from its slot default.
+    // A translator that ignored the file and emitted defaults would fail.
     private static let fullCustomJSON = """
         {
           "btnOpacity": 80,

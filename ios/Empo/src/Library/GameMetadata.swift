@@ -6,10 +6,10 @@ import UIKit
 /// with custom artwork/banner images alongside it as
 /// `<container>/Metadata/<filename>.jpg`.
 ///
-/// All path math goes through `GameContainer`; this type is just the
-/// codable struct + load/save/image helpers. Survives game directory
-/// clearing only insofar as the container survives - on game delete
-/// the entire container is rm'd, metadata included.
+/// All path math goes through `GameContainer`. This type is only the
+/// codable struct + load/save/image helpers. It survives only as
+/// long as the container survives. On game delete, the entire
+/// container is removed, metadata included.
 struct GameMetadata: Codable {
     var dateAdded: Date?
     var lastPlayed: Date?
@@ -37,8 +37,8 @@ struct GameMetadata: Codable {
 
     // Ruby interpreter version this game expects, encoded as the
     // engine bridge's MKXPRubyVersion enum raw value (18, 19, 30,
-    // 31; nil = default / fall back to whatever the engine's legacy
-    // path picks). Populated at import time by sniffing the bundled
+    // or 31). nil = default, fall back to whatever the engine's
+    // legacy path picks. Populated at import time by sniffing the bundled
     // Ruby DLL filename, script grammar, RGSS archive type, and
     // Game.ini's Library= field. AppState.selectGame reads this and
     // calls `mkxp_setActiveRubyVersion()` so the multi-Ruby
@@ -47,27 +47,27 @@ struct GameMetadata: Codable {
     //
     // Stored as Int so unknown values from a future Empo build
     // don't break decoding of older metadata.json (compare to the
-    // coreKind String pattern; same idea, different type).
+    // coreKind String pattern, same idea, different type).
     var rubyVersion: Int?
 
     // Identifier (raw value of `RubyVersionDetection.Schema`) for
     // the heuristic set this entry's `rubyVersion` was produced
     // by. Library load compares the stored string against
-    // `RubyVersionDetection.currentSchema.rawValue`; if it differs
-    // (or is missing) we re-run detection and overwrite.
+    // `RubyVersionDetection.currentSchema.rawValue`. If it differs
+    // (or is missing), we re-run detection and overwrite.
     //
     // Stored as String, not the enum directly, so an older Empo
     // build reading metadata written by a newer one with an
-    // unknown case doesn't crash; it just sees a non-matching
+    // unknown case doesn't crash. It just sees a non-matching
     // string and re-detects with its own (older) heuristics.
     //
-    // The `rubyVersionOverride` user setting still wins; this only
+    // The `rubyVersionOverride` user setting still wins. This only
     // affects the auto-detected default.
     var rubyVersionDetectedSchema: String?
 
     // Whether auto-detect classifies this game's scripts as modern
-    // Ruby 3 syntax (true = Modern / no syntax transform; false =
-    // Legacy). Populated at import and refreshed when
+    // Ruby 3 syntax (true = Modern with no syntax transform,
+    // false = Legacy). Populated at import and refreshed when
     // `useModernRuby` is nil, same lifecycle as `rubyVersion`.
     // `GameSettings.useModernRuby` override still wins.
     var modernRubyScriptsDetected: Bool?
@@ -374,8 +374,8 @@ struct GameMetadata: Codable {
     /// `.dll`/`.dylib`/`.so` in the game folder for Ruby's embedded
     /// `RUBY_DESCRIPTION` literal (`"ruby X.Y.ZpN"`). A developer
     /// can rename the DLL to `bundled.dll` and we still find it.
-    /// Files larger than 64 MB are skipped as a safety bound -
-    /// real Ruby DLLs are 5-15 MB.
+    /// Files larger than 64 MB are skipped as a safety bound.
+    /// Real Ruby DLLs are 5-15 MB.
     static func detectBundledRubyVersion(in gameDirectory: URL) -> String? {
         let fm = FileManager.default
         let scanBudget = 64 * 1024 * 1024
@@ -478,9 +478,10 @@ struct GameMetadata: Codable {
     }
 
     // Cached, lazily-built regex. Pattern matches "ruby 1.8.7",
-    // "ruby 2.6.10", "ruby 3.1.0p0", "ruby 3.4.0p1234" - tolerant
-    // of patch suffix. Anchors on the literal "ruby " prefix so
-    // unrelated version strings inside the binary don't match.
+    // "ruby 2.6.10", "ruby 3.1.0p0", "ruby 3.4.0p1234". It
+    // tolerates a patch suffix. Anchors on the literal "ruby "
+    // prefix so unrelated version strings inside the binary don't
+    // match.
     private static let _rubyVersionRegex = try? NSRegularExpression(
         pattern: #"ruby (\d+\.\d+\.\d+(?:p\d+)?)"#
     )
@@ -488,7 +489,7 @@ struct GameMetadata: Codable {
 
 /// Per-filter cache for `engineRubyVersion(forMajorMinor:)`. Swift
 /// doesn't let us easily mutate a `static var` from inside a
-/// `static func` without `nonisolated(unsafe)` ceremony; a
+/// `static func` without `nonisolated(unsafe)` ceremony. A
 /// reference-typed holder is the cleanest workaround.
 private final class _EngineRubyVersionCache: @unchecked Sendable {
     private var values: [String: String] = [:]

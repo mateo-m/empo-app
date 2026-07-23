@@ -47,9 +47,10 @@ rm -f "$OUT"
 echo "==> packaging into $OUT"
 (
     cd "$DEPS_DIR"
-    # Engine-core artifacts are excluded: they version with the engine
-    # submodule (ios/Dependencies/engine/.version, published from the
-    # public mkxp-z-apple-mobile repo's CI), not with the deps tree.
+    # The tarball excludes engine-core artifacts: they version with
+    # the engine submodule (ios/Dependencies/engine/.version, published
+    # from the public mkxp-z-apple-mobile repo's CI), not with the
+    # deps tree.
     tar -czf "$OUT" \
         --exclude '*/libmkxpz-core.a' \
         --exclude '*/.mkxp-core-fingerprint' \
@@ -61,7 +62,7 @@ echo "==> packaging into $OUT"
 SHA256="$(shasum -a 256 "$OUT" | awk '{print $1}')"
 
 cat >"$VERSION_FILE" <<EOF
-# Auto-updated by tools/package-native-deps.sh — commit with the release.
+# tools/package-native-deps.sh updates this file. Commit it with the release.
 NATIVE_DEPS_VERSION=$TAG
 NATIVE_DEPS_SHA256=$SHA256
 EOF
@@ -72,17 +73,17 @@ echo "SHA256:   $SHA256"
 echo "Updated:  $VERSION_FILE"
 echo ""
 if [ "$PUBLISH" = "1" ]; then
-    # Idempotent: a re-run after a partially-failed pipeline must not
-    # trip over the already-created release. Same content -> skip;
-    # different content under the same tag -> hard error (immutable
-    # pins must never be silently repointed).
+    # Idempotent: a re-run after a partly failed pipeline must not
+    # trip over the already-created release. Same content -> skip.
+    # Different content under the same tag -> hard error, because an
+    # immutable pin must never move silently.
     if EXISTING_URL="$(gh release view "$TAG" --repo mateo-m/empo-deps \
         --json assets --jq '.assets[] | select(.name == "native-ios-prebuilt.tar.gz") | .url' 2>/dev/null)" &&
         [ -n "$EXISTING_URL" ]; then
         EXISTING_SHA="$(gh release download "$TAG" --repo mateo-m/empo-deps \
             --pattern native-ios-prebuilt.tar.gz --output - | shasum -a 256 | awk '{print $1}')"
         if [ "$EXISTING_SHA" = "$SHA256" ]; then
-            echo "==> $TAG already published with identical content; skipping upload"
+            echo "==> $TAG already published with identical content, skipping upload"
         else
             echo "error: $TAG already published with DIFFERENT content" >&2
             echo "  published: $EXISTING_SHA" >&2

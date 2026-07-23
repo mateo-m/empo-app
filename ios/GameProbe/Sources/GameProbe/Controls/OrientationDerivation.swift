@@ -4,8 +4,8 @@ public enum OrientationDerivation {
     static let coordMin: Double = 0.02
     static let coordMax: Double = 0.98
 
-    /// Derives the missing orientation's layout from `source`,
-    /// preserving the arrangement in point space.
+    /// Derives the layout of the missing orientation from `source`.
+    /// It keeps the arrangement in point space.
     public static func derive(
         from source: TouchLayout,
         sourceIsLandscape: Bool,

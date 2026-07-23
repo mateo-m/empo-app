@@ -1,22 +1,22 @@
 import Foundation
 import Observation
 
-/// In-app discoverability hint shown via `HintBanner`. Examples: a
-/// one-time pointer to a UI affordance the user might miss
-/// otherwise (e.g. "tap the artwork to customize").
+/// An in-app discoverability hint shown via `HintBanner`. Example:
+/// a one-time pointer to a UI control the user might miss otherwise
+/// (e.g. "tap the artwork to customize").
 ///
-/// Not related to App Store / StoreKit "tipping" or donations -
-/// this is purely a UI hint system, persisted via UserDefaults.
+/// Not related to App Store / StoreKit "tipping" or donations.
+/// This is purely a UI hint system, persisted via UserDefaults.
 struct Hint: Identifiable {
     let id: String
     let excerpt: String
     let description: String?
     let dismissal: DismissalPolicy
-    /// SF Symbol shown in the leading slot of `HintBanner`. Defaults
-    /// to the design-system "tip" icon (a filled lightbulb); hints
-    /// signaling action needed (e.g. "restart this game") can opt
-    /// into a more directional symbol while keeping the same brand
-    /// colored pill visual.
+    /// The SF Symbol in the leading slot of `HintBanner`. Defaults
+    /// to the design-system "tip" icon (a filled lightbulb). Hints
+    /// that signal needed action (e.g. "restart this game") can opt
+    /// into a more directional symbol and keep the same
+    /// brand-colored pill visual.
     let icon: String
 
     init(
@@ -34,9 +34,9 @@ struct Hint: Identifiable {
     }
 
     enum DismissalPolicy: Equatable {
-        /// Hint cannot be dismissed by the user.
+        /// The user cannot dismiss the hint.
         case none
-        /// Once dismissed, never shown again.
+        /// Once the user dismisses it, it never shows again.
         case permanent
         /// Reappears after `interval` seconds since dismissal.
         case temporary(interval: TimeInterval)

@@ -1,57 +1,60 @@
 import Foundation
 
-/// Decodes RPG Maker `Scripts.{rxdata,rvdata,rvdata2}` files (Ruby
-/// Marshal envelope around zlib-deflated source per script entry)
-/// and classifies the contained Ruby source as modern (3.x grammar)
-/// or legacy (1.8/1.9 grammar).
+/// Decodes RPG Maker `Scripts.{rxdata,rvdata,rvdata2}` files and
+/// classifies the Ruby source inside as modern (3.x grammar) or
+/// legacy (1.8/1.9 grammar). Each script entry holds zlib-deflated
+/// source in a Ruby Marshal envelope.
 ///
-/// Used by `RubyVersionDetection` to tell apart vanilla RPG Maker
-/// games (where extension pins Ruby version) from forks that ship
-/// the original RGSS data layout but ported their scripts to modern
-/// Ruby grammar (Pokemon Reborn 19.5+, Pokemon Essentials v20+,
-/// etc).
+/// `RubyVersionDetection` uses this to tell vanilla RPG Maker
+/// games apart from forks. In vanilla games, the file extension
+/// pins the Ruby version. Forks such as Pokemon Reborn 19.5+ and
+/// Pokemon Essentials v20+ keep the original RGSS data layout but
+/// port their scripts to modern Ruby grammar.
 ///
-/// The Marshal mini-decoder handles only the narrow subset RPG
-/// Maker emits: outer Array of 3-tuples [Integer, String, String]
-/// where the third String is zlib-deflated Ruby source. Anything
-/// outside that subset → bail, return `.inconclusive`. Detection's
-/// caller treats `.inconclusive` as "fall back to extension or
-/// default" so any decoder bug is non-fatal.
+/// The Marshal mini-decoder reads only the narrow subset that RPG
+/// Maker emits: an outer Array of 3-tuples [Integer, String,
+/// String], where the third String is zlib-deflated Ruby source.
+/// On anything outside that subset, the decoder stops and returns
+/// `.inconclusive`. The caller treats `.inconclusive` as "fall
+/// back to the extension or the default", so a decoder bug is not
+/// fatal.
 public enum RubyScriptGrammarSniffer {
 
     public enum Result: Equatable, Sendable {
-        /// Modern Ruby grammar tokens present (`&.`, kwargs,
-        /// pattern matching, endless def, etc). Cannot parse on
-        /// 1.8/1.9 - definitive signal for 3.x dispatch.
+        /// The source contains modern Ruby grammar tokens (`&.`,
+        /// kwargs, pattern matching, endless def). Ruby 1.8/1.9
+        /// cannot parse these tokens, so this is a sure signal
+        /// for 3.x dispatch.
         case modern
 
-        /// Successfully read script source but found no modern
-        /// tokens. Caller should use the data file extension as
-        /// the prior to choose between 1.8 (`.rxdata`) and 1.9
+        /// The sniffer read the script source but found no modern
+        /// tokens. The caller should use the data file extension
+        /// to choose between 1.8 (`.rxdata`) and 1.9
         /// (`.rvdata`/`.rvdata2`).
         case legacy
 
-        /// Could not read or decode Scripts file (encrypted
-        /// archive without unpack, missing file, parse error,
-        /// unknown Marshal tag). Caller falls back to extension /
-        /// Game.ini / default.
+        /// The sniffer could not read or decode the Scripts file.
+        /// Causes: an encrypted archive with no unpack, a missing
+        /// file, a parse error, or an unknown Marshal tag. The
+        /// caller falls back to the extension, Game.ini, or the
+        /// default.
         case inconclusive
     }
 
-    /// Sniff a game directory. Reads loose `.rb` files first
-    /// (mkxp-z runtime loads those on top of the compiled
-    /// Scripts.rxdata, so they're the authoritative source for
-    /// forks that ship both), then falls back to the compiled
-    /// `Scripts.{rxdata,rvdata,rvdata2}` file. Runs the grammar
-    /// classifier on the concatenated source.
+    /// Sniffs a game directory. The sniffer reads loose `.rb`
+    /// files first. The mkxp-z runtime loads those on top of the
+    /// compiled Scripts.rxdata, so they are the live source for
+    /// forks that ship both. The sniffer then falls back to the
+    /// compiled `Scripts.{rxdata,rvdata,rvdata2}` file. It runs
+    /// the grammar classifier on the joined source.
     static func sniff(gameDirectory: URL) -> Result {
         let fm = FileManager.default
 
         // Loose .rb files take priority. Forks like Pokemon Reborn
-        // 19.5+ ship ONLY loose scripts (no compiled file).
+        // 19.5+ ship only loose scripts and no compiled file.
         // Forks like Pokemon Infinite Fusion ship loose scripts
-        // alongside a stale compiled Scripts.rxdata; the loose
-        // files are the live runtime, the .rxdata is vestigial.
+        // next to a stale compiled Scripts.rxdata. The loose files
+        // are the live runtime. The .rxdata is a leftover.
         let looseURLs = locateLooseScripts(in: gameDirectory, fm: fm)
         if !looseURLs.isEmpty {
             let source = readLooseScripts(urls: looseURLs)
@@ -60,9 +63,9 @@ public enum RubyScriptGrammarSniffer {
             }
         }
 
-        // Compiled Scripts file. Used by vanilla RPG Maker XP /
-        // VX / VX Ace projects and by forks that haven't extracted
-        // their scripts.
+        // Compiled Scripts file. Vanilla RPG Maker XP / VX /
+        // VX Ace projects use it, and so do forks that did not
+        // extract their scripts.
         guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm) else {
             return .inconclusive
         }
@@ -104,9 +107,9 @@ public enum RubyScriptGrammarSniffer {
         return nil
     }
 
-    /// Walk `Scripts/` and `Data/Scripts/` looking for `.rb`
-    /// files. Caps at `maxLooseFiles` so a pathological project
-    /// with thousands of scripts can't make sniffing slow.
+    /// Walks `Scripts/` and `Data/Scripts/` to find `.rb` files.
+    /// The walk stops at `maxLooseFiles` so a project with
+    /// thousands of scripts cannot make the sniff slow.
     private static let maxLooseFiles = 200
 
     private static func locateLooseScripts(
@@ -122,8 +125,9 @@ public enum RubyScriptGrammarSniffer {
             else {
                 continue
             }
-            // Recursive enumerator picks up nested per-feature
-            // folders that some forks use (e.g. Plugins layout).
+            // The recursive enumerator finds the nested
+            // per-feature folders that some forks use (for
+            // example, a Plugins layout).
             guard
                 let enumerator = fm.enumerator(
                     at: dir,
@@ -139,9 +143,9 @@ public enum RubyScriptGrammarSniffer {
         return found
     }
 
-    /// Read up to `maxLooseFiles` `.rb` files and concatenate.
-    /// Cap at 4 MB combined so a single huge generated file can't
-    /// blow memory.
+    /// Reads up to `maxLooseFiles` `.rb` files and joins them.
+    /// A 4 MB cap on the total prevents one huge generated file
+    /// from using too much memory.
     private static func readLooseScripts(urls: [URL]) -> String {
         var combined = ""
         let cap = 4_000_000
@@ -160,16 +164,16 @@ public enum RubyScriptGrammarSniffer {
         guard let data = try? Data(contentsOf: url) else { return nil }
         var reader = MarshalReader(data: data)
         guard reader.readVersion() else { return nil }
-        // Outer container is an array of script entries.
+        // The outer container is an array of script entries.
         guard reader.expect(0x5b) else { return nil }  // '['
         guard let count = reader.readLong(), count >= 0, count < 100_000 else {
             return nil
         }
 
         var combined = ""
-        // Cap aggregate inflated source so a corrupted file with a
-        // huge claimed count can't run us out of memory. 4 MB is
-        // ~10x larger than the biggest real-world Scripts file we've
+        // Cap the total inflated source. A corrupted file with a
+        // huge claimed count then cannot run us out of memory.
+        // 4 MB is about 10x the largest real Scripts file we have
         // seen.
         let combinedCap = 4_000_000
 
@@ -202,26 +206,30 @@ public enum RubyScriptGrammarSniffer {
 
     // MARK: - Grammar classifier
 
-    /// Patterns whose presence implies Ruby >= 3.0 grammar (or at
-    /// minimum >= 2.x for some). Each is an NSRegularExpression
-    /// pattern; matches across the concatenated script source.
+    /// Patterns that imply Ruby >= 3.0 grammar (or at minimum
+    /// >= 2.x for some). Each entry is an NSRegularExpression
+    /// pattern. The classifier matches them across the joined
+    /// script source.
     ///
-    /// The set is conservative - every entry should be a token
-    /// that a 1.8/1.9 parser literally cannot parse, not just one
-    /// that's stylistically modern. False positives here = wrongly
-    /// tagging a vanilla 1.8 game as modern → game wouldn't boot.
+    /// The set is conservative. Every entry must be a token that
+    /// a 1.8/1.9 parser cannot parse at all, not just one that
+    /// looks modern in style. A false positive here tags a
+    /// vanilla 1.8 game as modern, and then the game will not
+    /// boot.
     private static let modernTokens: [String] = [
         // Safe call (2.3+): foo&.bar
         #"&\."#,
-        // Pattern matching (3.0+): `case x; in pat`. Require the
-        // `in` branch to appear immediately after the case
-        // expression (modulo whitespace / comments / semicolons),
-        // otherwise ordinary RGSS `case ... when ... end` blocks in
-        // legacy scripts false-positive constantly.
+        // Pattern matching (3.0+): `case x` with an `in pat`
+        // branch. The `in` branch must appear directly after the
+        // case expression, with only whitespace, comments, or
+        // semicolons between. Without this rule, normal RGSS
+        // `case ... when ... end` blocks in legacy scripts match
+        // all the time.
         #"\bcase\b(?:\s|#.*?$|;)+[^\n;#]+(?:\s|#.*?$|;)+\bin\b\s*[\[\{\(\w]"#,
-        // Endless method def (3.0+): `def foo = expr`. Exclude
-        // setter methods (`def x=(v)`), which are common in RGSS1
-        // and were being mistaken for endless defs.
+        // Endless method def (3.0+): `def foo = expr`. The
+        // pattern excludes setter methods (`def x=(v)`). Setters
+        // are common in RGSS1 and were mistaken for endless defs
+        // before.
         #"\bdef\s+(?!\w+=)\w+(?:\([^)]*\))?\s*=\s*(?!\()\S"#,
         // Numbered block params (2.7+): _1, _2 inside { ... }
         #"\{\s*[^}]*\b_[1-9]\b"#,
@@ -233,14 +241,15 @@ public enum RubyScriptGrammarSniffer {
         #"\.filter_map\b"#,
         // Object#then or yield_self (2.5+/2.6+): obj.then { ... }
         #"\.then\s*\{\s*\|"#,
-        // Frozen-string-literal magic comment (2.3+, ubiquitous in
+        // Frozen-string-literal magic comment (2.3+, common in
         // modern code): # frozen_string_literal: true
         #"#\s*frozen_string_literal:\s*true"#,
     ]
 
-    /// Threshold for declaring source modern. Single matches could
-    /// be in comments, embedded test fixtures, or coincidence; 3+
-    /// tokens across the whole script source is a strong signal.
+    /// Threshold to declare the source modern. A single match can
+    /// come from a comment, an embedded test fixture, or chance.
+    /// Three or more tokens across the whole source is a strong
+    /// signal.
     private static let modernThreshold = 3
 
     private static func classify(source: String) -> Result {
@@ -262,11 +271,11 @@ public enum RubyScriptGrammarSniffer {
 
 // MARK: - Marshal reader
 
-/// Minimal Ruby Marshal reader. Implements only what's needed for
-/// RPG Maker's Scripts file: version header, fixed-size positive
-/// longs, bare strings, ivar-wrapped strings, integer/symbol/array
-/// skipping. Bails on any unknown tag - caller treats that as
-/// inconclusive.
+/// Minimal Ruby Marshal reader. It implements only what the RPG
+/// Maker Scripts file needs: the version header, fixed-size
+/// positive longs, bare strings, ivar-wrapped strings, and skips
+/// for integers, symbols, and arrays. On an unknown tag it stops,
+/// and the caller treats that as inconclusive.
 ///
 /// Reference: Ruby's Marshal format at doc/marshal.rdoc.
 private struct MarshalReader {
@@ -284,8 +293,8 @@ private struct MarshalReader {
         return b
     }
 
-    /// Marshal version is 2 bytes (major, minor). Current Ruby
-    /// emits 4.8; we accept any 4.x.
+    /// The Marshal version is 2 bytes (major, minor). Current
+    /// Ruby emits 4.8. We accept any 4.x.
     mutating func readVersion() -> Bool {
         guard let major = readByte(), readByte() != nil else { return false }
         return major == 4
@@ -296,7 +305,8 @@ private struct MarshalReader {
         return b == tag
     }
 
-    /// Marshal long-encoded integer. The byte b is interpreted as:
+    /// Marshal long-encoded integer. The reader interprets the
+    /// byte b as:
     ///   b == 0      -> 0
     ///   b in 1..4   -> next b bytes little-endian unsigned
     ///   b in -4..-1 -> next |b| bytes, sign-extended negative
@@ -330,17 +340,17 @@ private struct MarshalReader {
         return Int(signed) + 5
     }
 
-    /// Read a string's raw byte payload, transparently unwrapping
-    /// the `I` ivar wrapper that Ruby uses to attach encoding
-    /// metadata. We don't care about the encoding tag for our use
-    /// case; the bytes are what we want.
+    /// Reads a string's raw byte payload. The reader unwraps the
+    /// `I` ivar wrapper that Ruby uses to attach encoding
+    /// metadata. We do not need the encoding tag. We only want
+    /// the bytes.
     mutating func readStringBytes() -> Data? {
         guard let tag = readByte() else { return nil }
         if tag == 0x49 {  // 'I' = ivar wrapper
             guard let inner = readByte(), inner == 0x22 else { return nil }  // '"'
             guard let bytes = readRawString() else { return nil }
-            // Skip ivars (encoding flag and friends). Each ivar is
-            // [symbol, value] - skipValue handles both.
+            // Skip the ivars (the encoding flag and others). Each
+            // ivar is [symbol, value]. skipValue handles both.
             guard let ivarCount = readLong() else { return nil }
             for _ in 0..<ivarCount {
                 guard skipValue() else { return nil }  // symbol
@@ -354,8 +364,8 @@ private struct MarshalReader {
         return nil
     }
 
-    /// Read a Marshal string body (without the leading tag byte):
-    /// length prefix + that many bytes.
+    /// Reads a Marshal string body without the leading tag byte:
+    /// a length prefix, then that many bytes.
     private mutating func readRawString() -> Data? {
         guard let len = readLong(), len >= 0, pos + len <= data.count else {
             return nil
@@ -365,11 +375,11 @@ private struct MarshalReader {
         return bytes
     }
 
-    /// Skip a complete Marshal value of any supported type. Used
-    /// to discard fields we don't care about (script id, title)
-    /// while staying in sync with the byte stream. Returns false
-    /// if an unknown tag is encountered, which propagates up to
-    /// "inconclusive".
+    /// Skips a complete Marshal value of any supported type. This
+    /// discards fields we do not need (script id, title) and
+    /// keeps the reader in sync with the byte stream. If the
+    /// reader finds an unknown tag, it returns false. The result
+    /// then becomes "inconclusive".
     mutating func skipValue() -> Bool {
         guard let tag = readByte() else { return false }
         switch tag {
@@ -413,9 +423,9 @@ private struct MarshalReader {
             }
             return true
         default:
-            // Unknown / unsupported tag (object instances, regexps,
-            // bignums, etc). Bail; caller falls back to extension
-            // heuristic.
+            // Unknown or unsupported tag (object instances,
+            // regexps, bignums). Stop here. The caller falls back
+            // to the extension heuristic.
             return false
         }
     }

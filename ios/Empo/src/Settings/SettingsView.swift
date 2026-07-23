@@ -6,10 +6,10 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showBuildInfo = false
 
-    // ExperimentalFeature toggles + ConfirmSheet/InfoSheet were
-    // deleted alongside the gamePause/cheats graduation - see the
-    // ExperimentalFeature comment block in AppSettings.swift for
-    // how to bring opt-in toggles back.
+    // We deleted the ExperimentalFeature toggles and the
+    // ConfirmSheet/InfoSheet when gamePause/cheats graduated. See
+    // the ExperimentalFeature comment block in AppSettings.swift
+    // for how to bring opt-in toggles back.
 
     var body: some View {
         @Bindable var settings = settings
@@ -78,14 +78,14 @@ struct SettingsView: View {
                         title: "Diagnostics overlay",
                         isOn: $settings.diagnosticsOverlay,
                         description:
-                            "Adds a button to the in-game toolbar that toggles a draggable overlay showing the title, Ruby version, renderer, and FPS."
+                            "Adds a button to the in-game toolbar. The button toggles a draggable overlay with the title, Ruby version, renderer, and FPS."
                     )
 
                     SettingsToggle(
                         title: "Show viewport bounds",
                         isOn: $settings.showViewportBounds,
                         description:
-                            "Fills the framebuffer area outside the game viewport with a color of your choosing."
+                            "Fills the framebuffer area outside the game viewport with a color you choose."
                     )
 
                     if settings.showViewportBounds {
@@ -106,13 +106,13 @@ struct SettingsView: View {
                         title: "Show touch zone",
                         isOn: $settings.showTouchZone,
                         description:
-                            "Outlines the area of the game screen where taps and drags are sent to the game as mouse input."
+                            "Outlines the area of the game screen where the app sends taps and drags to the game as mouse input."
                     )
 
                     SettingsToggle(
                         title: "Clean up broken imports",
                         isOn: $settings.cleanupInvalidGames,
-                        description: "Removes games that didn't import properly on the next app launch."
+                        description: "On the next app launch, removes games that did not import correctly."
                     )
 
                     SettingsToggle(
@@ -127,7 +127,7 @@ struct SettingsView: View {
                             Stepper(
                                 "Keep last \(settings.maxLogFiles) logs per game",
                                 value: $settings.maxLogFiles, in: 5...100, step: 5)
-                            Text("Older logs get cleaned up automatically when a session starts.")
+                            Text("The app removes older logs automatically when a session starts.")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
@@ -136,7 +136,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Advanced")
                 } footer: {
-                    Text("These options are intended for debugging and troubleshooting.")
+                    Text("These options are for debugging and troubleshooting.")
                 }
 
                 Section {
@@ -209,7 +209,7 @@ struct SettingsView: View {
 
                 Section {
                     // SwiftUI's Text initializer parses markdown in
-                    // string literals, so the [Grid] link is rendered
+                    // string literals, so the [Grid] link renders as
                     // tappable with the .tint(.brand) the form uses.
                     Text("Made with ☕ by [**Grid**](https://twitter.com/gridplay_)")
                         .font(.caption)
@@ -251,9 +251,9 @@ struct SettingsView: View {
                 .scaledToFit()
                 .frame(width: 64, height: 64)
                 .foregroundStyle(.brand)
-            // Match splash screen wordmark styling so the
+            // Match the splash screen wordmark style so the
             // first run and the settings header feel
-            // continuous, scaled down to fit the sheet.
+            // continuous. Scale it down to fit the sheet.
             Text(AppInfo.name)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
@@ -340,7 +340,7 @@ private enum UpdateStatusChipPhase: Hashable {
 
 /// Compact refresh affordance with a spring-driven spin while active.
 /// When the check completes, the icon springs forward until it has
-/// completed at least one full turn from when the spin started, then
+/// made at least one full turn from when the spin started. It then
 /// resets to 0° invisibly (360° and 0° look identical).
 private struct RefreshSpinIcon: View {
     let spinning: Bool
@@ -576,8 +576,9 @@ struct UpdateStatusBadge: View {
 
     private static let dismissSwipeThreshold: CGFloat = 24
 
-    /// Library banner: tap opens the release page, swipe down or X
-    /// dismisses. Settings header keeps a plain `Link` instead.
+    /// Library banner: a tap opens the release page, and a swipe down
+    /// or the X dismisses. The settings header keeps a plain `Link`
+    /// instead.
     private var usesDismissiblePromoInteraction: Bool {
         actionURL != nil && dismissAction != nil
     }
@@ -799,10 +800,10 @@ struct UpdateStatusBadge: View {
     }
 }
 
-/// Presented as a sheet when the user taps the version label in the
+/// A sheet that appears when the user taps the version label in the
 /// settings header. Shows build details as a grouped list styled to
-/// match GameInfoView. The branch row is only included when the
-/// current branch differs from the default, so release builds on
+/// match GameInfoView. The sheet includes the branch row only when
+/// the current branch differs from the default, so release builds on
 /// `main` stay minimal.
 ///
 /// Uses the same navigation-stack-with-inline-title pattern as
@@ -812,10 +813,11 @@ private struct BuildInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var measuredHeight: CGFloat = 0
 
-    /// A detail row shown in the list. `value` is the copyable string; the
-    /// optional `annotation` is rendered next to it but NOT part of the
-    /// text-selection range so users can long-press to copy just the
-    /// canonical value (e.g. the commit hash without a "(dirty)" suffix).
+    /// A detail row shown in the list. `value` is the copyable string.
+    /// The optional `annotation` renders next to it but stays out of
+    /// the text-selection range. Users can then long-press to copy only
+    /// the canonical value (e.g. the commit hash without a "(dirty)"
+    /// suffix).
     private struct Row: Identifiable {
         let label: String
         let value: String
@@ -851,10 +853,10 @@ private struct BuildInfoSheet: View {
                             Text(row.label)
                             Spacer(minLength: Spacing.md)
                             // RootView applies `.fontDesign(.rounded)`
-                            // to the entire app tree, which overrides
-                            // any `.font(design: .monospaced)` set here via
-                            // environment resolution. Override
-                            // back to `.monospaced` explicitly so the
+                            // to the whole app tree. Environment
+                            // resolution lets it override any
+                            // `.font(design: .monospaced)` set here.
+                            // Set `.monospaced` again explicitly so the
                             // value's font reads as fixed-width.
                             Text(row.value)
                                 .font(.system(size: 15))
@@ -1040,10 +1042,9 @@ private struct DevicePreview: View {
 }
 
 extension URL {
-    /// Fallback for any URL literal that fails to parse. Empty string
-    /// URL initialization is the only way to guarantee a non-nil URL
-    /// at compile time without a force-unwrap, so the project homepage
-    /// serves as a safe landing page.
+    /// Fallback for any URL literal that fails to parse. There is no
+    /// way to guarantee a non-nil URL at compile time without a
+    /// force-unwrap, so the project homepage is the safe landing page.
     fileprivate static let empoHomepage =
         URL(string: "https://github.com/mateo-m/empo-app") ?? URL(fileURLWithPath: "/")
 }

@@ -9,13 +9,14 @@ import SwiftUI
 final class ControllerInputManager {
     var pauseMenuHandler: () -> Void = {}
 
-    /// Called on physical element press edges (listen mode for remap UI).
+    /// Runs on physical element press edges (listen mode for the remap UI).
     var elementActivityHandler: ((String) -> Void)?
 
     /// When true, edges still update internal state but do not inject keys
-    /// or dispatch host actions (remap screen is frontmost). Keys held at
-    /// the moment suppression begins are released so their swallowed
-    /// release edges cannot leave the engine with a stuck key.
+    /// or dispatch host actions (remap screen is frontmost). When
+    /// suppression begins, the manager releases the keys held at that
+    /// moment. Their swallowed release edges then cannot leave the
+    /// engine with a stuck key.
     var suppressInjection = false {
         didSet {
             if suppressInjection, !oldValue {
@@ -27,8 +28,8 @@ final class ControllerInputManager {
     /// True once any controller has connected during this session.
     private(set) var hasHadControllerThisSession = false
 
-    /// SDL element names for optional hardware (paddles, touchpad) exposed
-    /// by at least one currently connected controller.
+    /// SDL element names for optional hardware (paddles, touchpad) that
+    /// at least one currently connected controller exposes.
     var exposedOptionalElements: Set<String> {
         var exposed = Set<String>()
         for controller in connectedControllers.values {
@@ -50,7 +51,7 @@ final class ControllerInputManager {
     private var resolvedMap = ControllerMapResolver.resolvedRuntimeMap()
     private var elementPressScancode: [String: Int32] = [:]
     private var connectedControllers: [ObjectIdentifier: GCController] = [:]
-    // scancode -> number of elements currently holding it; the engine
+    // scancode -> number of elements that currently hold it. The engine
     // sees a press on 0->1 and a release on 1->0 only.
     private var heldScancodes: [Int32: Int] = [:]
     private var overlayManualOverride = false
@@ -126,8 +127,9 @@ final class ControllerInputManager {
         overlayManualOverride = false
     }
 
-    /// Called when the user manually toggles overlay visibility so auto-hide
-    /// does not fight them until the connected controller set changes.
+    /// The player calls this when the user manually toggles overlay
+    /// visibility. Auto-hide then does not fight the user until the
+    /// connected controller set changes.
     func noteManualOverlayToggle() {
         overlayManualOverride = true
     }

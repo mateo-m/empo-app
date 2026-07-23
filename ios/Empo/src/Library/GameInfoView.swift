@@ -34,7 +34,7 @@ struct GameInfoView: View {
         _editingTitle = State(initialValue: meta.customTitle ?? "")
 
         // Title shown when the user hasn't set a customTitle. For
-        // JGP imports this is the manifest name; for plain
+        // JGP imports this is the manifest name. For plain
         // folder/zip imports it's the Game.ini title. The label
         // under the text field (and the text-field placeholder)
         // both track this so resetting the custom title gives the
@@ -58,9 +58,9 @@ struct GameInfoView: View {
     /// Path to the artwork to render: user-set custom override
     /// first, then whatever the import pipeline resolved into
     /// `game.artworkPath` (extracted exec icon -> Graphics/Titles
-    /// -> nil). Same chain other library surfaces honor; centralized
-    /// here so `bannerBackground` and `artworkView` agree without
-    /// duplicating the branch.
+    /// -> nil). Other library surfaces honor the same chain.
+    /// Centralized here so `bannerBackground` and `artworkView`
+    /// agree without duplicating the branch.
     private var resolvedArtworkPath: String? {
         guard let container else { return game.artworkPath }
         return metadata.customArtworkPath(in: container) ?? game.artworkPath
@@ -155,7 +155,7 @@ struct GameInfoView: View {
                         // graphics-API version and the bundled-Ruby
                         // version (when present) so an advanced user
                         // can confirm what compatibility surface a
-                        // game ships with - useful for debugging
+                        // game ships with. Useful for debugging
                         // syntax-transform misdetections (a custom
                         // engine shipping RGSS1 graphics + Ruby 3.x
                         // vs vanilla XP shipping RGSS1 + Ruby 1.8).
@@ -179,7 +179,7 @@ struct GameInfoView: View {
                                 // own DLL targets (e.g. Pokemon Flux's
                                 // x64-msvcrt-ruby310.dll). On iOS we
                                 // execute on the statically-linked engine
-                                // Ruby below; this row just says what the
+                                // Ruby below. This row only says what the
                                 // scripts were written for.
                                 if let v = rubyVersion {
                                     DetailRow("Ruby (bundled)") {
@@ -308,10 +308,10 @@ struct GameInfoView: View {
             .task {
                 if let container {
                     // Disk size of the entire container (Game/ +
-                    // EmpoState/ + Logs/ + Metadata/) - what users
-                    // expect to see when asking "how big is this
-                    // game on my device". Game/ dominates by far
-                    // (tens of MB to GB) so the rest is rounding.
+                    // EmpoState/ + Logs/ + Metadata/). This is what
+                    // users expect to see when they ask "how big is
+                    // this game on my device". Game/ dominates by far
+                    // (tens of MB to GB), so the rest is rounding.
                     diskSize = await GameMetadata.diskSize(for: container.url)
                 }
             }
@@ -360,7 +360,7 @@ struct GameInfoView: View {
     /// → 1.9) when the explicit Ruby field hasn't been set yet
     /// (e.g. games imported before multi-Ruby detection rolled
     /// out, or before the library backfill task ran).
-    /// Returns nil when no signal is available; the caller falls
+    /// Returns nil when no signal is available. The caller falls
     /// back to a no-filter scan.
     private func rubyMajorMinorForGame() -> String? {
         // Per-game override wins.
@@ -498,7 +498,7 @@ struct GameInfoView: View {
             // blurred, so the two surfaces stay visually
             // consistent. Banner-less games show the placeholder
             // here AND on the loading view (where it gets blurred
-            // and darkened); using artwork here would produce two
+            // and darkened). Artwork here would produce two
             // different visuals for the same game.
             GameArtworkView(
                 artworkPath: nil,

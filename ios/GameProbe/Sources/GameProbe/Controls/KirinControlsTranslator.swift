@@ -10,7 +10,8 @@ public enum KirinControlsTranslator {
         public var notes: [String]
     }
 
-    // Geometry constants (IMPL choices; gap ≥ 12pt per ticket).
+    // Geometry constants chosen in this implementation. The ticket
+    // requires a gap of 12pt or more.
     static let cellGap: Double = 14
     static let edgeMargin: Double = 16
     static let minButtonSize: Double = 40
@@ -22,10 +23,9 @@ public enum KirinControlsTranslator {
 
     private static let columnsPerRow = 3
     /// Kirin's own structural capacity (15 right-grid + 6 left-grid
-    /// slots). The translation layer respects Kirin's limit rather
-    /// than imposing one of its own, so a fully populated file
-    /// translates whole; the guard below can only fire if the format
-    /// ever grows.
+    /// slots). The translation layer follows Kirin's limit and does
+    /// not add one of its own, so a full file translates whole. The
+    /// guard below can only fire if the format ever grows.
     private static let maxButtons = 21
     private static let maxFileSize = 128 * 1024
 
@@ -444,9 +444,9 @@ public enum KirinControlsTranslator {
         return Double(rowCount - 1) * pitch + buttonSize
     }
 
-    /// When the standard pitch overflows the usable band, compress row
-    /// spacing evenly so the grid still fits (separation handles residue
-    /// if even compression is insufficient).
+    /// If the standard pitch overflows the usable band, compress the
+    /// row spacing evenly so the grid still fits. If even compression
+    /// is not enough, the separation step handles the rest.
     private static func effectivePitch(
         buttonSize: Double, rowCount: Int, available: Double
     ) -> Double {
@@ -461,7 +461,7 @@ public enum KirinControlsTranslator {
         clamp(value, min: coordMin, max: coordMax)
     }
 
-    // MARK: - JSON helpers (Linux-safe; mirrors ControlsManifestLoader)
+    // MARK: - JSON helpers (Linux-safe, mirrors ControlsManifestLoader)
 
     private static func isJSONBool(_ value: Any) -> Bool {
         guard let number = value as? NSNumber else { return value is Bool }

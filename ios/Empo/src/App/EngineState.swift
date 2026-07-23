@@ -8,19 +8,19 @@ class EngineState {
 
     var gameRect: CGRect = .zero
 
-    /// Whether the current pause was triggered by app backgrounding
-    /// (silent; no UI transition to library).
+    /// True when app backgrounding triggered the current pause
+    /// (silent, no UI transition to the library).
     var isBackgroundPause = false
 
     private init() {}
 
-    /// Caller must guard `phase == .playing` before calling.
+    /// The caller must guard `phase == .playing` before the call.
     func requestBackgroundPause() {
         isBackgroundPause = true
         mkxp_requestPause()
     }
 
-    /// Caller must guard `phase == .playing` before calling.
+    /// The caller must guard `phase == .playing` before the call.
     func resumeFromBackground() {
         guard mkxp_isPaused() else { return }
         mkxp_requestResume()

@@ -1,4 +1,4 @@
-# SDL2_ttf: Patches & Build Notes
+# SDL2_ttf: patches and build notes
 
 ## Source
 
@@ -17,7 +17,7 @@ Two custom commits on top of upstream:
 
 ## iOS build instructions
 
-Built with Autotools:
+The build uses Autotools:
 
 ```
 ./autogen.sh

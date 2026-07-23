@@ -21,8 +21,8 @@ struct GameLoadingView: View {
     @State private var readyZoom = false
     private static let readyZoomScale: CGFloat = 1.08
 
-    /// Escape hatch while loading: after a short delay a
-    /// Cancel button is revealed so the user can bail if a game hangs during
+    /// Way out while loading: after a short delay, a Cancel control
+    /// appears so the user can get out when a game hangs during
     /// boot (common with broken Win32 DLL dependencies or bad scripts).
     @State private var cancelVisible = false
     private static let cancelAppearDelay: Duration = .seconds(7)
@@ -49,7 +49,7 @@ struct GameLoadingView: View {
         ZStack {
             // Keep banner/scrim mounted through the playing handoff so
             // RootView's opacity fade has something to dissolve. Clear
-            // only the NavigationStack container fill — an opaque
+            // only the NavigationStack container fill. An opaque
             // UIKit backdrop would otherwise flash black under the fade.
             Color.black.ignoresSafeArea()
                 .opacity(isPlayingPhase ? 0 : 1)
@@ -136,8 +136,8 @@ struct GameLoadingView: View {
     /// True when an error fired during this loading session and the
     /// user has dismissed the alert. Switches the loading view's
     /// inner content from `<title> + spinner` to a stable error
-    /// message so the user isn't left staring at a perpetual
-    /// spinner after acknowledging "OK".
+    /// message so the user does not face an endless spinner after
+    /// tapping "OK".
     private var showErrorContent: Bool {
         appState.sessionHadError && appState.errorMessage == nil
     }
@@ -149,7 +149,7 @@ struct GameLoadingView: View {
                 .fontWeight(.bold)
                 .foregroundStyle(.white)
 
-            Text("An unexpected error happened when trying to start \(game.title).")
+            Text("An unexpected error happened when Empo tried to start \(game.title).")
                 .font(.system(size: 15))
                 .foregroundStyle(.white.opacity(0.85))
                 .multilineTextAlignment(.center)
@@ -159,9 +159,9 @@ struct GameLoadingView: View {
                 .foregroundStyle(.white.opacity(0.85))
                 .multilineTextAlignment(.center)
 
-            // The GitHub link routes to the issues page since that's
-            // the actionable surface for "the error keeps happening"
-            // - filing a bug report, not browsing the repo.
+            // The GitHub link routes to the issues page since that is
+            // where the user can act on "the error keeps happening":
+            // filing a bug report, not browsing the repo.
             (Text("If the error keeps happening, please open an issue on ")
                 + Text("[GitHub](\(GitInfo.issuesURL))")
                 .foregroundColor(.brand)
@@ -247,11 +247,11 @@ struct GameLoadingView: View {
             // No banner: fall through to the unified placeholder
             // (gradient + Empo mark). The Game Info
             // sheet's banner uses the same fallback so the two
-            // surfaces match - this view just blurs + darkens the
+            // surfaces match. This view only blurs and darkens the
             // result. Skip the Ken Burns / blur path here because
             // the placeholder gradient is already soft and a blur
             // would just muddy it. A scrim still goes on top so
-            // the foreground title text retains contrast.
+            // the foreground title text keeps contrast.
             ZStack {
                 GameArtworkView(
                     artworkPath: nil,

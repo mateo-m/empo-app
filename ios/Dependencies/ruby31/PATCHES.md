@@ -1,4 +1,4 @@
-# Ruby 3.1: Patches & Build Notes
+# Ruby 3.1: patches and build notes
 
 ## Source
 
@@ -10,29 +10,28 @@
 
 ## Why Ruby 3.1?
 
-Modern Pokemon Essentials forks built on the mkxp-z runtime target
-Ruby 3.x. Ruby 3.1 is also the only Empo build with the syntax-
-transform patches enabled (see `docs/multi-ruby.md`, "Syntax transform
-stays"), so mixed-grammar Pokemon Essentials forks that combine
-1.8-era syntax with 1.9+ runtime methods route here in LEGACY transform
-mode.
+Modern Pokemon Essentials forks on the mkxp-z runtime target Ruby 3.x.
+Ruby 3.1 is also the only Empo build with the syntax-transform patches
+enabled (see `docs/multi-ruby.md`, "Syntax transform stays").
+Mixed-grammar Pokemon Essentials forks, which combine 1.8-era syntax
+with 1.9+ runtime methods, route here in LEGACY transform mode.
 
 ## Patches
 
-All iOS patches are in `ios.patch` (applied automatically by the makefile
-via `git apply` before `autoreconf`):
+All iOS patches are in `ios.patch`. The makefile applies it
+automatically via `git apply` before `autoreconf`:
 
-### 1. `configure.ac`: Remove DYLD_INSERT_LIBRARIES
+### 1. `configure.ac`: remove DYLD_INSERT_LIBRARIES
 
-The line `: ${PRELOADENV=DYLD_INSERT_LIBRARIES}` is deleted. On iOS,
-`DYLD_INSERT_LIBRARIES` is not supported, and referencing it causes
-configure warnings/failures.
+The patch deletes the line `: ${PRELOADENV=DYLD_INSERT_LIBRARIES}`.
+iOS does not support `DYLD_INSERT_LIBRARIES`, and a reference to it
+causes configure warnings or failures.
 
 ### 2. `dir.c`: sys/vnode.h iOS shim
 
-`<sys/vnode.h>` is not available in the iOS SDK. When `TARGET_OS_IPHONE`
-is true, the header include is skipped and the required constants are
-hardcoded:
+The iOS SDK does not include `<sys/vnode.h>`. When `TARGET_OS_IPHONE`
+is true, the patch skips the header include and hardcodes the required
+constants:
 
 ```c
 #define VREG   1
@@ -42,12 +41,12 @@ hardcoded:
 #define VT_CIFS 23
 ```
 
-On macOS, the original `#include <sys/vnode.h>` is used as before.
+On macOS, the code uses the original `#include <sys/vnode.h>` as before.
 
 ### 3. `process.c`: system() disabled on iOS
 
-The `system()` C library call is not available on iOS (sandboxing
-restrictions). In `rb_spawn_process()`, the call is stubbed out:
+iOS does not provide the `system()` C library call (sandbox
+restrictions). The patch stubs out the call in `rb_spawn_process()`:
 
 ```c
 #if TARGET_OS_IPHONE
@@ -59,7 +58,7 @@ restrictions). In `rb_spawn_process()`, the call is stubbed out:
 
 ## iOS build instructions
 
-Built with Autotools:
+The build uses Autotools:
 
 ```
 autoreconf -fi
@@ -80,8 +79,8 @@ Additional CFLAGS: `-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__`
 
 ### Cross-compilation cache overrides
 
-Several functions unavailable or problematic on iOS are forced to `no`
-via autoconf cache variables:
+Autoconf cache variables force several functions to `no`. These
+functions are unavailable or problematic on iOS:
 
 ```
 ac_cv_func_setpgrp_void=yes
@@ -101,5 +100,5 @@ cross_compiling=yes
 
 ### Output
 
-- `libruby.3.1-static.a`: manually copied into `$(LIBDIR)`
-- Headers installed to `$(INCLUDEDIR)/ruby-3.1.0/`
+- `libruby.3.1-static.a`: copied manually into `$(LIBDIR)`
+- Headers go to `$(INCLUDEDIR)/ruby-3.1.0/`

@@ -19,8 +19,8 @@ enum GameTapSource {
 }
 
 /// "Continue playing" hero card used at the top of the library when a
-/// recently-played game exists. Same layout is used for grid and list
-/// modes, with the aspect ratio varying so the card sizes itself for
+/// recently-played game exists. Grid and list modes use the same
+/// layout. The aspect ratio varies so the card sizes itself for
 /// portrait vs. compact-height layouts.
 
 struct GameHeroCard: View {
@@ -57,7 +57,7 @@ struct GameHeroCard: View {
                     // Frosted-glass gradient region that fades the
                     // bottom of the artwork into a blurred dark
                     // surface so the title text reads cleanly.
-                    // Same construction as GameCard.insideCard - an
+                    // Same construction as GameCard.insideCard: an
                     // ultraThinMaterial rectangle masked by a
                     // top-fading gradient, pinned to dark scheme via
                     // .darkGlass() so the tint stays consistent
@@ -113,10 +113,10 @@ struct GameHeroCard: View {
                         .foregroundStyle(.white)
                         .iconShadow()
                         .padding(Spacing.xl)
-                        // Icon is decorative - the whole card is
+                        // The icon is decorative. The whole card is
                         // already a tappable "resume game" target
                         // announced by the enclosing Button, so
-                        // reading the glyph separately would just
+                        // reading the glyph separately would only
                         // repeat context for VoiceOver users.
                         .accessibilityHidden(true)
                 }

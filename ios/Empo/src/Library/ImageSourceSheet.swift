@@ -5,8 +5,8 @@ import SwiftUI
 /// caller already has an image set. Replaces the previous
 /// `confirmationDialog` action-sheet so the UI matches the rest
 /// of the app's bottom-sheet patterns (library sort, experimental
-/// info) instead of surfacing a system dialog that looks out of
-/// place next to native-SwiftUI sheets.
+/// info). The old system dialog looked out of place next to
+/// native-SwiftUI sheets.
 struct ImageSourceSheet: View {
     @Binding var isPresented: Bool
     let title: String
@@ -27,7 +27,7 @@ struct ImageSourceSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: Spacing.lg) {
-                // Sources group - rounded card that mirrors the
+                // Sources group: a rounded card that mirrors the
                 // native grouped-list look without embedding in a
                 // List (which would want to fill the sheet).
                 VStack(spacing: 0) {
@@ -64,9 +64,9 @@ struct ImageSourceSheet: View {
 
                 if hasExisting, let onRemove {
                     // Destructive "Remove" action as its own card
-                    // so it reads as separate from the sources,
-                    // matching the sectioning pattern users expect
-                    // from grouped lists.
+                    // so it reads as separate from the sources.
+                    // This matches the sectioning pattern users
+                    // expect from grouped lists.
                     ImageSourceRow(
                         icon: "trash",
                         label: "Remove",
@@ -105,7 +105,7 @@ struct ImageSourceSheet: View {
 
 /// Single tappable row inside `ImageSourceSheet`. Kept private to
 /// the file because the layout (SF Symbol + label + chevron) is
-/// specific to this sheet - the library sort rows use a different
+/// specific to this sheet. The library sort rows use a different
 /// right-edge accessory (a checkmark).
 private struct ImageSourceRow: View {
     let icon: String

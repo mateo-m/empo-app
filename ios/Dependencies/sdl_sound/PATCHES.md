@@ -1,4 +1,4 @@
-# SDL_sound: Patches & Build Notes
+# SDL_sound: patches and build notes
 
 ## Source
 
@@ -15,7 +15,7 @@ One custom commit on top of upstream:
 
 ## iOS build instructions
 
-Built with CMake (out-of-tree in `cmakebuild/`):
+The build uses CMake (out-of-tree in `cmakebuild/`):
 
 ```
 cmake .. \
@@ -27,7 +27,7 @@ cmake .. \
 
 Key flags:
 
-- CoreAudio decoder disabled: uses Vorbis/Ogg decoders instead
+- CoreAudio decoder disabled: the build uses the Vorbis/Ogg decoders instead
 - Test programs disabled
 
 Depends on: SDL2, libogg, libvorbis

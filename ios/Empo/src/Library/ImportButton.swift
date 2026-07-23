@@ -91,7 +91,7 @@ struct ImportButton: View {
             }
             .buttonStyle(.plain)
             // Label text is either hidden ("+" only, collapsed state)
-            // or localised to "Import game"; either way VoiceOver
+            // or localised to "Import game". Either way VoiceOver
             // needs a stable announcement that doesn't flip between
             // "Plus button" and "Import game button" during the
             // collapsed<->expanded morph.

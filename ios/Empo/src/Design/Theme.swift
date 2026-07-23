@@ -58,48 +58,48 @@ extension Color {
 // 4-point grid.
 
 enum Spacing {
-    /// 2pt; hairline gaps, tight label spacing
+    /// 2pt: hairline gaps, tight label spacing
     static let xxs: CGFloat = 2
-    /// 4pt; minimal padding, inline icon gaps
+    /// 4pt: minimal padding, inline icon gaps
     static let xs: CGFloat = 4
-    /// 6pt; compact element spacing
+    /// 6pt: compact element spacing
     static let sm: CGFloat = 6
-    /// 8pt; standard inner padding, small gaps
+    /// 8pt: standard inner padding, small gaps
     static let md: CGFloat = 8
-    /// 12pt; grid gutter, between related elements
+    /// 12pt: grid gutter, between related elements
     static let lg: CGFloat = 12
-    /// 16pt; section padding, screen-edge horizontal margins
+    /// 16pt: section padding, screen-edge horizontal margins
     static let xl: CGFloat = 16
-    /// 20pt; generous section spacing
+    /// 20pt: generous section spacing
     static let _2xl: CGFloat = 20
-    /// 32pt; large section breaks
+    /// 32pt: large section breaks
     static let _3xl: CGFloat = 32
-    /// 40pt; extra-large section breaks
+    /// 40pt: extra-large section breaks
     static let _4xl: CGFloat = 40
 }
 
 enum Radius {
-    /// 4pt; small chips, inline badges
+    /// 4pt: small chips, inline badges
     static let xs: CGFloat = 4
-    /// 8pt; thumbnails, list row artwork
+    /// 8pt: thumbnails, list row artwork
     static let sm: CGFloat = 8
-    /// 12pt; cards, dialogs, sheets
+    /// 12pt: cards, dialogs, sheets
     static let md: CGFloat = 12
-    /// 16pt; large cards, prominent containers
+    /// 16pt: large cards, prominent containers
     static let lg: CGFloat = 16
-    /// 24pt; hero elements, large artwork
+    /// 24pt: hero elements, large artwork
     static let xl: CGFloat = 24
-    /// 56pt; modal sheets and large rounded panels
+    /// 56pt: modal sheets and large rounded panels
     static let sheet: CGFloat = 56
 }
 
 extension View {
-    /// Two-layer shadow used on library artwork tiles and hero
+    /// Two-layer shadow for library artwork tiles and hero
     /// cards. The tight first layer defines the edge against the
-    /// surface; the diffuse second layer gives ambient elevation.
-    /// MUST be applied after `matchedTransitionSource` in the
-    /// modifier chain - the transition source clips its subtree
-    /// to the configured snapshot bounds, which would crop a
+    /// surface. The diffuse second layer gives ambient elevation.
+    /// Apply it after `matchedTransitionSource` in the modifier
+    /// chain. The transition source clips its subtree to the
+    /// configured snapshot bounds, and that clip would crop a
     /// shadow drawn earlier in the chain.
     func cardShadow() -> some View {
         self
@@ -115,7 +115,7 @@ extension View {
         shadow(color: .black.opacity(0.25), radius: 8, y: 4)
     }
 
-    /// Drop shadow used on hero title text overlaid on game
+    /// Drop shadow for hero title text overlaid on game
     /// artwork, both on the splash and inside game-loading
     /// screens.
     func heroTitleShadow() -> some View {
@@ -128,24 +128,24 @@ extension View {
 
     /// Width cap for a custom-titled sheet's principal-toolbar VStack.
     /// Without this, long interpolated titles push the VStack off-center
-    /// to make room for the trailing toolbar button. Applied to the
+    /// to make room for the trailing toolbar button. Apply it to the
     /// outer VStack so child Text rows still get their own line-limit
     /// and scale-factor treatment.
     func sheetTitle(maxWidth: CGFloat = 250) -> some View {
         self.frame(maxWidth: maxWidth)
     }
 
-    /// Pin the Liquid Glass material to its dark variant. Used on
-    /// player controls (toolbar, D-pad, action buttons, debug
-    /// overlay) so the glass tone stays consistent regardless of
-    /// system color scheme or backdrop brightness.
+    /// Pin the Liquid Glass material to its dark variant. The player
+    /// controls (toolbar, D-pad, action buttons, debug overlay) use
+    /// it so the glass tone stays consistent regardless of the
+    /// system color scheme or the backdrop brightness.
     func darkGlass() -> some View {
         environment(\.colorScheme, .dark)
     }
 }
 
 /// Typography tokens for sites that don't fit a SwiftUI semantic
-/// text style. Prefer `.body` / `.headline` first; reach for these
+/// text style. Prefer `.body` / `.headline` first. Use these
 /// only when the design needs a specific size/weight/design.
 enum AppFont {
     /// The Empo wordmark - splash and settings header.

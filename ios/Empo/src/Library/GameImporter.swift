@@ -52,8 +52,8 @@ enum GameImporter {
             break
         case .unsupported(let raw):
             throw GameImportValidator.ImportError.unsupportedRuntime(
-                "This JoiPlay archive uses '\(raw)' which isn't supported. "
-                    + "Only RPG Maker XP, VX, VX Ace, and mkxp-z games are currently supported."
+                "This JoiPlay archive uses '\(raw)', which Empo does not support. "
+                    + "Empo currently supports only RPG Maker XP, VX, VX Ace, and mkxp-z games."
             )
         }
 

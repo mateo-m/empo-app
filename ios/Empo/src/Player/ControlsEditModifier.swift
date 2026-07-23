@@ -145,9 +145,9 @@ struct ButtonEditSheet: View {
                     }
 
                     Section("Opacity") {
-                        // Integer-percent label mirrors the Photos
-                        // adjust-panel idiom so the slider's exact
-                        // value stays visible while dragging.
+                        // The integer-percent label mirrors the Photos
+                        // adjust-panel idiom, so the exact slider
+                        // value stays visible while you drag.
                         HStack {
                             Slider(
                                 value: Binding(
@@ -228,17 +228,17 @@ struct ButtonEditSheet: View {
     }
 }
 
-/// Edit sheet specific to the D-pad. The D-pad isn't configurable
-/// the same way action buttons are (no label, no key assignment, no
-/// delete) so it gets its own slimmed-down sheet with just size and
-/// opacity controls.
+/// Edit sheet specific to the D-pad. Unlike an action button, the
+/// D-pad has no label, no key assignment, and no delete option. So
+/// it gets its own smaller sheet with only size and opacity
+/// controls.
 struct DPadEditSheet: View {
     var layout: ControlsLayout
     @Environment(\.dismiss) private var dismiss
 
     /// Size presets match the action button sheet's progression so
-    /// the two controls feel consistent when sized alongside each
-    /// other. The D-pad's default (140pt) is the middle preset.
+    /// the two controls feel consistent when you size them side by
+    /// side. The D-pad's default (140pt) is the middle preset.
     private let sizes: [(String, CGFloat)] = [
         ("Small", 110), ("Medium", 125),
         ("Default", 140), ("Large", 160), ("Extra large", 180),
@@ -320,7 +320,7 @@ struct ControlsEditDialogs: ViewModifier {
                 .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Your custom layout will be removed.")
+                Text("This removes your custom layout.")
             }
             .sheet(item: $editingButton) { button in
                 ButtonEditSheet(layout: layout, buttonID: button.id)

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Clean-rebuild all iphoneos native deps Empo links against.
 #
-# Encodes the known-good sequence from BUILD_PIPELINE_ISSUES.md: nuke
-# stale autotools/cmake/ruby artifacts, rebuild deps sequentially (no
-# parallel races), force Ruby 3.1 extensions before mkxp-merged.
+# This script follows the known-good sequence from
+# BUILD_PIPELINE_ISSUES.md. It removes stale autotools/cmake/ruby
+# artifacts. It rebuilds the deps one at a time to prevent parallel
+# races. It builds the Ruby 3.1 extensions before mkxp-merged.
 #
 # Usage: scripts/rebuild-device-deps.sh
 set -euo pipefail

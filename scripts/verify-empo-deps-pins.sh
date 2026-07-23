@@ -5,8 +5,8 @@
 #   scripts/verify-empo-deps-pins.sh
 #   REQUIRE_PUBLISHED=1 scripts/verify-empo-deps-pins.sh
 #
-# REQUIRE_PUBLISHED=1 fails when native deps are still pinned to
-# "unpublished". Use in release.sh and on version tags.
+# REQUIRE_PUBLISHED=1 fails when the native deps pin is still
+# "unpublished". Use it in release.sh and on version tags.
 
 set -e
 
@@ -83,7 +83,7 @@ verify_pin_file() {
         [ "$actual_sha" = "$expected_sha" ] ||
             die "$label: sha256 mismatch for $asset_name@$version"
     else
-        printf 'verify-empo-deps-pins: warning: %s empty; release exists but checksum not verified\n' \
+        printf 'verify-empo-deps-pins: warning: %s empty, release exists but checksum not verified\n' \
             "$sha_var" >&2
     fi
 

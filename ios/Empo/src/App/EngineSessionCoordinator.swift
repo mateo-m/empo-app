@@ -32,7 +32,7 @@ final class EngineSessionCoordinator {
     private var textInputModeHandler: ((Bool) -> Void)?
     private var inputBridgesInstalled = false
     /// Per-scancode press start times. Light taps release before the
-    /// RGSS thread observes a pressed-edge; we defer KEYUP until the
+    /// RGSS thread observes a pressed-edge. We defer KEYUP until the
     /// key has been down for at least one frame (~16ms @ 60fps, with
     /// headroom). Same idea as `injectKeyTap(holdMilliseconds:)`.
     private var keyPressStartedAt: [Int32: ContinuousClock.Instant] = [:]
@@ -42,7 +42,7 @@ final class EngineSessionCoordinator {
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
 
     static let crashMessage =
-        "It looks like the game didn't exit cleanly last time. "
+        "The game did not exit cleanly last time. "
         + "Your save data should be fine."
 
     private init() {
@@ -54,15 +54,16 @@ final class EngineSessionCoordinator {
         mkxp_setLauncherIdentity("empo")
         // TLS trust store for the engine's networking (native HTTP
         // client + Ruby openssl via SSL_CERT_FILE). Without it, TLS
-        // fails closed - plain http still works. CABundleStore keeps
-        // the store silently refreshed; the native client re-reads
-        // the path per request, so a refresh landing mid-run applies
-        // to that side immediately (Ruby picks it up next session).
+        // fails closed. Plain http still works. CABundleStore keeps
+        // the store refreshed silently. The native client re-reads
+        // the path on each request, so a refresh that lands mid-run
+        // applies to that side immediately (Ruby picks it up next
+        // session).
         if let caPath = CABundleStore.effectivePath {
             mkxp_setCABundlePath(caPath)
         } else {
-            // Bundle assembly must have skipped the CA store; catch in
-            // development, fail closed (no TLS) in release.
+            // Bundle assembly must have skipped the CA store. Catch
+            // it in development. In release, fail closed (no TLS).
             assertionFailure("cacert.pem missing from Assets.bundle")
         }
         CABundleStore.refreshIfStale {

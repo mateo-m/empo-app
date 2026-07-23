@@ -7,7 +7,7 @@ import SwiftUI
 ///   v18 / v19 / v31 -> force that interpreter version
 ///
 /// Detection lives in `RubyVersionDetection` and runs at import
-/// time; this picker is the manual escape hatch when it misses.
+/// time. This picker is the manual override when detection misses.
 enum RubyVersionPick: String, CaseIterable, Hashable {
     case auto
     case v18
@@ -48,10 +48,10 @@ enum RubyVersionPick: String, CaseIterable, Hashable {
 }
 
 /// Compatibility-mode pick for the Game Settings sheet. Backs
-/// `GameSettings.useModernRuby`; resolved to a
+/// `GameSettings.useModernRuby`. Resolved to a
 /// `MKXPSyntaxTransformMode` at engine boot via
 /// `GameSettings.resolveSyntaxTransformMode`. Effective only on
-/// the patched Ruby 3.1 build; selecting "Legacy" with the 1.x
+/// the patched Ruby 3.1 build. Selecting "Legacy" with the 1.x
 /// or 3.0 native interpreter is a no-op (the warning footer in
 /// the picker calls this out).
 enum CompatibilityPick: String, CaseIterable, Hashable {
@@ -100,7 +100,7 @@ struct GameSettingsView: View {
     /// Auto-detected Ruby version raw value (18/19/30/31), read
     /// from `metadata.rubyVersion`. Populated when the sheet
     /// opens, used to dress the "Auto-detect" picker row with the
-    /// version the detector picked - so users can see what
+    /// version the detector picked, so users can see what
     /// Auto-detect would route to without flipping the override.
     @State private var autoDetectedVersion: Int?
     /// Cached modern-Ruby classification from
@@ -164,7 +164,7 @@ struct GameSettingsView: View {
     }
     /// Fast-forward is enabled when the user has set a multiplier.
     /// nil ↔ disabled. Toggling the switch ON seeds a sensible
-    /// default (4x); the slider then ranges 2-9.
+    /// default (4x). The slider then ranges 2-9.
     private var fastForwardEnabled: Bool {
         settings.speedMultiplier != nil && (settings.speedMultiplier ?? 0) >= 2
     }
@@ -214,7 +214,7 @@ struct GameSettingsView: View {
         case 18: pretty = "Ruby 1.8"
         case 19: pretty = "Ruby 1.9"
         // Old metadata may carry 30 from when a native 3.0 binding
-        // shipped; the dispatcher folds that onto 3.1 + Legacy.
+        // shipped. The dispatcher folds that onto 3.1 + Legacy.
         case 30, 31: pretty = "Ruby 3.1"
         default: return "Auto-detect"
         }
@@ -227,8 +227,8 @@ struct GameSettingsView: View {
     /// excerpt names the specific settings pending a relaunch so
     /// the user can see "Restart this game to apply: Smooth
     /// scaling and Render scale." instead of a generic notice.
-    /// `nil` when no relaunch is needed - the parent view binds
-    /// that to a conditional render so the pill animates in/out.
+    /// `nil` when no relaunch is needed. The parent view binds
+    /// that to a conditional render so the pill animates in and out.
     private var restartHint: Hint? {
         guard pauseManager.pausedGame?.id == game.id else { return nil }
         let changed =
@@ -266,7 +266,7 @@ struct GameSettingsView: View {
             }
             // Pin the restart-required pill above the form via a
             // top safe-area inset. The inset gives the pill a
-            // z-order above the scrolling rows for free; we don't
+            // z-order above the scrolling rows for free. We don't
             // try to paint a wide backdrop in the inset's
             // surrounding area because that just produces a
             // visible white/gray panel in light mode (regardless
@@ -275,9 +275,9 @@ struct GameSettingsView: View {
             //
             // The pill itself gets a `.regularMaterial` fill
             // clipped to the same rounded shape `HintBanner`
-            // already uses internally - translucent so form rows
-            // scrolling past show through with a blur, while
-            // staying opaque enough that hint text doesn't visibly
+            // already uses internally. It is translucent so form
+            // rows scrolling past show through with a blur, yet
+            // opaque enough that hint text doesn't visibly
             // collide with row labels underneath. The pill's own
             // brand-tinted layer (`.brand.opacity(0.1)` from
             // `HintBanner`) renders on top of the material, giving
@@ -287,8 +287,8 @@ struct GameSettingsView: View {
             // one used by GameInfoView's customization hint). We
             // animate on the boolean (not the excerpt) so adding
             // or removing individual fields updates the text in
-            // place without re-running the slide-in transition -
-            // only true appear/disappear cycles trigger movement.
+            // place without re-running the slide-in transition.
+            // Only true appear/disappear cycles trigger movement.
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let hint = restartHint {
                     HintBanner(hint: hint)
@@ -335,7 +335,7 @@ struct GameSettingsView: View {
         Section {
             if engineSettings.gameDefaultsUnknown {
                 Text(
-                    "Empo can't read this game's mkxp.json; game defaults unknown."
+                    "Empo can't read this game's mkxp.json. Game defaults are unknown."
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -380,7 +380,7 @@ struct GameSettingsView: View {
 
                         Text(
                             effectiveRenderScale.description
-                                + " The game's aspect ratio and on-screen layout are unchanged - this only sharpens the rendering on high-DPI screens."
+                                + " The game's aspect ratio and on-screen layout do not change. This only sharpens the rendering on high-DPI screens."
                         )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -579,9 +579,9 @@ struct GameSettingsView: View {
         } header: {
             Text("Gameplay")
         } footer: {
-            // Cheats live in App Settings (Experimental section) -
-            // the per-game toggle was orthogonal stored-but-unused
-            // state, see commit message and TODO.md "P0 #3".
+            // Cheats live in App Settings (Experimental section).
+            // The per-game toggle was orthogonal stored-but-unused
+            // state. See the commit message and TODO.md "P0 #3".
             Text("Options that change how you play the game.")
         }
     }
@@ -613,8 +613,9 @@ struct GameSettingsView: View {
             set: { newValue in
                 // Enabling: seed default 4x if no value yet (or if
                 // a stale 1x lingers from the old single-slider UI).
-                // Disabling: clear the multiplier so the toolbar
-                // sheet both treat the game as fast-forward-free.
+                // Disabling: clear the multiplier so the toggle and
+                // the toolbar sheet both treat the game as
+                // fast-forward-free.
                 if newValue {
                     if (settings.speedMultiplier ?? 0) < 2 {
                         settings.speedMultiplier = 4
@@ -626,7 +627,7 @@ struct GameSettingsView: View {
         )
     }
 
-    /// Slider binding; only meaningful when fast-forward is enabled.
+    /// Slider binding. Only meaningful when fast-forward is enabled.
     /// Range 2-9 (1x is "off" and lives on the toggle now).
     private var speedBinding: Binding<Double> {
         Binding(
@@ -821,8 +822,8 @@ struct GameSettingsView: View {
     }
 
     /// Loads or re-runs the Ruby-version and compatibility-mode
-    /// sniffers so the Auto-detect picker rows reflect what the
-    /// engine would route to. Reads cached metadata on sheet open;
+    /// sniffers so the Auto-detect picker rows show what the
+    /// engine would route to. Reads cached metadata on sheet open.
     /// `forceRefresh` re-sniffs the game folder and rewrites
     /// `metadata.json` (Reset to Defaults).
     private func refreshAutoDetection(forceRefresh: Bool) {

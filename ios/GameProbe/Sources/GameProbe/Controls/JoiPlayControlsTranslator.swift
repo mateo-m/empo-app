@@ -260,7 +260,7 @@ public enum JoiPlayControlsTranslator {
         clamp(value, min: coordMin, max: coordMax)
     }
 
-    // MARK: - JSON helpers (Linux-safe; mirrors KirinControlsTranslator)
+    // MARK: - JSON helpers (Linux-safe, mirrors KirinControlsTranslator)
 
     private static func isJSONBool(_ value: Any) -> Bool {
         guard let number = value as? NSNumber else { return value is Bool }

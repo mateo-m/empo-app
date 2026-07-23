@@ -25,8 +25,9 @@ private class AppRootViewController: UIViewController {
 
         addChild(hostingController)
         // UIHostingController defaults to an opaque systemBackground.
-        // Clear + isOpaque=false so the SDL/ANGLE window under AppWindow
-        // can show through during gameplay (PlayerView is mostly clear).
+        // Set clear + isOpaque=false so the SDL/ANGLE window under
+        // AppWindow can show through during gameplay (PlayerView is
+        // mostly clear).
         let hosted = hostingController.view!
         hosted.backgroundColor = .clear
         hosted.isOpaque = false
@@ -40,7 +41,7 @@ private class AppRootViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         // SwiftUI can reintroduce an opaque hosting background after
-        // hierarchy updates; keep the pass-through contract intact.
+        // hierarchy updates. Keep the pass-through contract intact.
         let hosted = hostingController.view!
         if hosted.backgroundColor != .clear || hosted.isOpaque {
             hosted.backgroundColor = .clear
@@ -115,12 +116,13 @@ class AppWindow: UIWindow {
                 return hit
             }
             // The touchable game zone IS the visible game surface
-            // (published by the engine on every layout change), so
+            // (the engine publishes it on every layout change), so
             // letterbox/controls-zone taps never become game mouse
             // input. UIKit routes each touch sequence to the view
             // that received its begin, so drags that start inside
             // keep delivering after the finger leaves the surface.
-            // Empty rect = not yet published (boot): stay permissive.
+            // An empty rect means not yet published (boot): stay
+            // permissive.
             let gameRect = EngineState.shared.gameRect
             if gameRect.isEmpty || gameRect.contains(point) {
                 return GameViewEmbedder.embeddedView
@@ -142,8 +144,8 @@ class AppWindow: UIWindow {
     }
 
     /// Any tap during play wakes the toolbar via
-    /// `Notification.Name.gameAreaTouchBegan` — including taps outside
-    /// the game surface that die on the hosting view.
+    /// `Notification.Name.gameAreaTouchBegan`. This includes taps
+    /// outside the game surface that die on the hosting view.
     override func sendEvent(_ event: UIEvent) {
         if AppState.shared.phase == .playing,
             event.type == .touches,
@@ -157,8 +159,8 @@ class AppWindow: UIWindow {
     // Controls handle their own key injection via the bridge.
 
     /// In library/loading: this window must be key for SwiftUI.
-    /// In player: SDL needs key; unless keyboard mode is active or
-    /// an error alert is presenting (SDL would steal OK taps).
+    /// In player: SDL needs key, unless keyboard mode is active or
+    /// an error alert presents (SDL would steal OK taps).
     override var canBecomeKey: Bool {
         let state = AppState.shared
         if state.errorMessage != nil { return true }
@@ -187,7 +189,7 @@ class AppWindow: UIWindow {
     }
 
     /// Returns UIKit key-window status to SDL after the overlay
-    /// relinquishes `canBecomeKey` (e.g. loading -> playing).
+    /// gives up `canBecomeKey` (e.g. loading -> playing).
     @objc static func resignKeyToSDL() {
         guard let overlay = instance, let scene = overlay.windowScene else { return }
         for window in scene.windows where window !== overlay {
@@ -196,7 +198,7 @@ class AppWindow: UIWindow {
         }
     }
 
-    /// Called once at app startup from `EmpoSceneDelegate` when UIKit
+    /// `EmpoSceneDelegate` calls this once at app startup when UIKit
     /// connects the primary `UIWindowScene`.
     /// Checks for an active scene first, otherwise waits for one.
     /// During crash recovery, accepts any connected scene so the
@@ -206,8 +208,8 @@ class AppWindow: UIWindow {
     }
 
     /// Installs the SwiftUI overlay window. Pass the scene from
-    /// `scene(_:willConnectTo:)` when available so we don't wait for
-    /// `foregroundActive` before the library shell can appear.
+    /// `scene(_:willConnectTo:)` when available, so we do not wait
+    /// for `foregroundActive` before the library shell can appear.
     @objc static func install(in preferredScene: UIWindowScene?) {
         if instance != nil {
             return
@@ -282,8 +284,8 @@ class AppWindow: UIWindow {
         }
     }
 
-    /// Keep AppWindow visible; reparent SDL's game view here while
-    /// playing so one UIWindow owns the compositing stack.
+    /// Keep AppWindow visible. Reparent SDL's game view here while
+    /// the game plays, so one UIWindow owns the compositing stack.
     private static func applyOverlayPresentationMode(window: AppWindow) {
         let playing = AppState.shared.phase == .playing
 

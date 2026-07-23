@@ -13,8 +13,8 @@ struct EngineMkxpSettings: Equatable {
     var fontScale: Double?
     var solidFonts: Bool?
 
-    /// True when the developer's `Game/mkxp.json` exists but cannot be
-    /// parsed by the host. Rows stay editable; dev-default annotations
+    /// True when the developer's `Game/mkxp.json` exists but the host
+    /// cannot parse it. Rows stay editable. Dev-default annotations
     /// degrade to unknown.
     let gameDefaultsUnknown: Bool
 

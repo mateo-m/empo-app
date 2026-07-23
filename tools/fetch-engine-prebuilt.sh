@@ -2,15 +2,15 @@
 # Hydrate the prebuilt engine-core libraries (libmkxpz-core.a per SDK)
 # from a published artifact on the PUBLIC mkxp-z-apple-mobile repo.
 #
-# The artifact is built by that repo's CI (.github/workflows/
-# artifacts.yml) from a tagged public commit, so the shipped binary
-# provably corresponds to public GPL source. Pinned by version+sha256
-# in ios/Dependencies/engine/.version.
+# That repo's CI (.github/workflows/artifacts.yml) builds the
+# artifact from a tagged public commit, so the shipped binary provably
+# corresponds to public GPL source. ios/Dependencies/engine/.version
+# pins it by version+sha256.
 #
-# Local-source dev path (never blocked by publishing):
+# Local-source dev path (publishing never blocks it):
 #   - ENGINE_VERSION=unpublished in the pin file, or
 #   - EMPO_ENGINE_FROM_SOURCE=1 in the environment
-# both skip fetching entirely; build with
+# both skip the fetch entirely. Build with:
 #   cd ios/Dependencies && make -f <platform>.make mkxp-core
 # scripts/verify-native-deps.sh enforces freshness either way via the
 # .mkxp-core-fingerprint stamp, so a fetched artifact that does not

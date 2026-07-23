@@ -4,9 +4,10 @@ public enum ButtonSeparation {
     public static let minimumGap: Double = 2
     public static let maxIterations: Int = 24
 
-    /// Iteratively separates intersecting circles in point space.
-    /// Returns adjusted centers and how many buttons moved from their inputs.
-    /// Obstacles are fixed circles (e.g. the d-pad); only buttons move.
+    /// Separates intersecting circles in point space, one step at a
+    /// time. Returns the adjusted centers and how many buttons moved
+    /// from their inputs. Obstacles are fixed circles (for example,
+    /// the d-pad). Only buttons move.
     public static func separate(
         _ buttons: [(x: Double, y: Double, size: Double)],
         width: Double,

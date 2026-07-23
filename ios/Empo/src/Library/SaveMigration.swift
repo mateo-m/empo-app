@@ -4,7 +4,8 @@ import GameProbe
 enum SaveMigration {
     /// Marker inserted into backup names while recovering from the
     /// missing-trailing-slash `System.data_directory` regression
-    /// (v0.2.1–…). Not a PE/RGSS save slot — games ignore these files.
+    /// (introduced in v0.2.1). Not a PE/RGSS save slot. Games
+    /// ignore these files.
     private static let pathRegressionBackupMarker = "empo-path-regression"
 
     static func migrateLegacySavesIfNeeded(for container: GameContainer) {
@@ -63,8 +64,8 @@ enum SaveMigration {
     /// concatenated `dir + filename` (e.g. `UserDataGame.rxdata`).
     ///
     /// On conflict with an existing `UserData/<name>` file, the newer
-    /// mtime wins the canonical name; the older is kept beside it as
-    /// `<name>.empo-path-regression.bak`.
+    /// mtime wins the canonical name. The older file stays beside it
+    /// as `<name>.empo-path-regression.bak`.
     private static func migrateConcatenatedUserDataSavesIfNeeded(
         for container: GameContainer, userDataDir: URL, fileManager fm: FileManager
     ) {

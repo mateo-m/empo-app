@@ -4,39 +4,39 @@ import Foundation
 ///
 /// Hits GitHub's Releases API to compare the running build's
 /// `CFBundleShortVersionString` against the latest tagged release on
-/// the project's repo. Hidden on App Store / TestFlight builds since
-/// the platform handles updates there.
+/// the project's repo. It stays hidden on App Store / TestFlight
+/// builds because the platform handles updates there.
 ///
 /// **Install-source detection.** Apple stamps a receipt file on App
 /// Store and TestFlight installs at `Bundle.main.appStoreReceiptURL`.
 /// Sideloaded IPAs (AltStore, Sideloadly, SideStore, ESign, Feather)
-/// don't get one because no purchase was issued. We treat the
+/// do not get one because no purchase occurred. We treat the
 /// receipt's presence as the App Store / TestFlight signal and absence
 /// as "sideloaded or local Xcode build". Local debug builds also have
-/// no receipt; they get the banner too, which is fine for dogfooding.
+/// no receipt. They get the banner too, which is fine for dogfooding.
 ///
 /// **Throttle.** A successful check writes a timestamp to
-/// UserDefaults; subsequent launches within `recheckInterval` reuse
-/// the last cached result instead of hitting GitHub again. GitHub's
-/// unauthenticated rate limit is 60 req/hour/IP and we only fire one
-/// per launch even without the cache, but throttling keeps offline
-/// launches from spamming "failed to check".
+/// UserDefaults. Later launches within `recheckInterval` reuse the
+/// last cached result instead of another GitHub hit. GitHub's
+/// unauthenticated rate limit is 60 req/hour/IP, and we only fire one
+/// request per launch even without the cache. The throttle mainly
+/// keeps offline launches from repeated "failed to check" spam.
 enum UpdateChecker {
 
     /// Result of a check, also persisted between launches.
     enum Status: Equatable {
-        /// We haven't run a check yet this launch.
+        /// No check ran yet this launch.
         case unknown
-        /// Currently fetching the latest release.
+        /// A fetch of the latest release is in progress.
         case checking
-        /// Build is up to date relative to the latest tag.
+        /// The build is up to date relative to the latest tag.
         case upToDate(currentVersion: String)
-        /// A newer release is available; `releaseURL` opens the
-        /// GitHub release page where the IPA is attached.
+        /// A newer release is available. `releaseURL` opens the
+        /// GitHub release page with the IPA attached.
         case available(latestVersion: String, releaseURL: URL)
         /// Network error, JSON parse error, rate limit, or any
-        /// other transient failure. Never raises; the UI shows a
-        /// retry affordance.
+        /// other transient failure. Never raises. The UI shows a
+        /// retry control.
         case failed(message: String)
     }
 
@@ -46,46 +46,47 @@ enum UpdateChecker {
     /// installs natively.
     static var isSideloadOrDevBuild: Bool {
         guard let receiptURL = Bundle.main.appStoreReceiptURL else {
-            // No receipt URL at all -> definitely not App Store /
+            // No receipt URL at all: definitely not App Store /
             // TestFlight. Common for non-paid-team builds and for
             // some sideload tools that strip the URL entirely.
             return true
         }
-        // Receipt URL is set, but the file doesn't exist (Apple
+        // The receipt URL is set, but the file does not exist (Apple
         // issues the file only on App Store / TestFlight). On
-        // sideload + Xcode debug installs the URL exists in the
-        // bundle layout but the actual receipt is absent.
+        // sideload and Xcode debug installs, the URL exists in the
+        // bundle layout, but the actual receipt is absent.
         return !FileManager.default.fileExists(atPath: receiptURL.path)
     }
 
-    /// GitHub repo coordinates for the API + release URLs. Kept
-    /// hardcoded since the project has a single canonical home;
-    /// move to Info.plist if a fork ever needs to point elsewhere.
+    /// GitHub repo coordinates for the API and release URLs. They
+    /// stay hardcoded because the project has a single canonical
+    /// home. Move them to Info.plist if a fork ever needs to point
+    /// elsewhere.
     private static let owner = "mateo-m"
     private static let repo = "empo-app"
 
     /// How long to trust a successful "up to date" or "available"
-    /// result before rechecking. One hour keeps repeat launches
-    /// quiet without holding stale info long enough to mislead a
-    /// user who just released a new build.
+    /// result before a recheck. One hour keeps repeat launches
+    /// quiet, and it does not hold stale info long enough to
+    /// mislead a user who just released a new build.
     private static let recheckInterval: TimeInterval = 60 * 60
 
     /// Minimum time the UI should stay in `.checking` before a
-    /// result is shown. Cached or fast network hits otherwise
+    /// result shows. Cached or fast network hits otherwise
     /// flash the spinner for a single frame, which feels broken.
     private static let minimumCheckingDuration: Duration = .milliseconds(500)
 
-    /// UserDefaults keys for the persisted check result. Kept as
-    /// raw strings (no enum) so older builds can still decode the
-    /// payload schema even if a future build adds new fields.
+    /// UserDefaults keys for the persisted check result. They stay
+    /// raw strings (no enum), so older builds can still decode the
+    /// payload schema even when a future build adds new fields.
     private enum DefaultsKey {
         static let lastCheckedAt = "UpdateChecker.lastCheckedAt"
         static let lastKnownLatestVersion = "UpdateChecker.lastKnownLatestVersion"
     }
 
-    /// Returns the freshest status without rechecking when a
-    /// previous check is still inside `recheckInterval`. Called once
-    /// at launch from `RootView`. Use `checkNow()` for a forced
+    /// Returns the freshest status without a recheck when a
+    /// previous check is still inside `recheckInterval`. `RootView`
+    /// calls it once at launch. Use `checkNow()` for a forced
     /// refresh.
     static func checkIfStale() async -> Status {
         await withMinimumCheckingDuration {
@@ -100,8 +101,8 @@ enum UpdateChecker {
         }
     }
 
-    /// Forces a network fetch; used by the manual refresh control in
-    /// Settings and by retry affordances in the update UI.
+    /// Forces a network fetch. The manual refresh control in
+    /// Settings and the retry controls in the update UI use it.
     static func checkNow() async -> Status {
         await withMinimumCheckingDuration {
             guard isSideloadOrDevBuild else {
@@ -117,12 +118,12 @@ enum UpdateChecker {
                 string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest"
             )
         else {
-            return .failed(message: "Couldn't build update URL.")
+            return .failed(message: "Could not build the update URL.")
         }
         var request = URLRequest(url: url)
-        // GitHub recommends an explicit Accept header per their
-        // API guide; without it the response shape is technically
-        // free to change between API versions.
+        // GitHub recommends an explicit Accept header in their
+        // API guide. Without it, the response shape is free to
+        // change between API versions.
         request.setValue(
             "application/vnd.github+json",
             forHTTPHeaderField: "Accept"
@@ -147,7 +148,7 @@ enum UpdateChecker {
                 let htmlURLString = json["html_url"] as? String,
                 let htmlURL = URL(string: htmlURLString)
             else {
-                return .failed(message: "Couldn't parse GitHub response.")
+                return .failed(message: "Could not parse the GitHub response.")
             }
             let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
             persist(latestVersion: latest)
@@ -172,11 +173,11 @@ enum UpdateChecker {
         return status
     }
 
-    /// Returns the cached result if the last successful check is
-    /// still inside `recheckInterval`. The cached version is
-    /// re-compared each call so a hot-fix bump to MARKETING_VERSION
-    /// (without restarting the app) still flips status to
-    /// `upToDate` instead of leaving a stale `available`.
+    /// Returns the cached result when the last successful check is
+    /// still inside `recheckInterval`. Each call re-compares the
+    /// cached version, so a hot-fix bump to MARKETING_VERSION
+    /// (without an app restart) still flips status to `upToDate`
+    /// instead of a stale `available`.
     private static func cachedStatus() -> Status? {
         let defaults = UserDefaults.standard
         guard

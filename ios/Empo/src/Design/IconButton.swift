@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Frame size for `IconButton`. Resolves to a side length in points;
-/// the SF Symbol scales with it via the 0.42 ratio in `IconButton.icon`.
+/// Frame size for `IconButton`. Resolves to a side length in points.
+/// The SF Symbol scales with it via the 0.42 ratio in `IconButton.icon`.
 enum IconButtonSize {
     case sm, md, lg
 

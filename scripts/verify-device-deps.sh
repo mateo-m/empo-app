@@ -15,7 +15,7 @@ LIB="$REPO_ROOT/ios/Dependencies/build-iphoneos-arm64/lib"
 # simulator rebuild contaminated shared Ruby source state.
 if [[ -f "$SIM_LIB/libruby.3.1-ext.a" && -f "$LIB/libruby.3.1-ext.a" ]]; then
     if [[ "$SIM_LIB/libruby.3.1-ext.a" -nt "$LIB/libruby.3.1-ext.a" ]]; then
-        echo "error: simulator libruby.3.1-ext.a is newer than device — rebuild both trees" >&2
+        echo "error: simulator libruby.3.1-ext.a is newer than device. Rebuild both trees" >&2
         echo "hint: scripts/rebuild-all-native-deps.sh" >&2
         exit 1
     fi

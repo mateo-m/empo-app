@@ -223,7 +223,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
     func testKirinStructuralCapacityTranslatesWhole() {
         // Kirin's own limit (15 right + 6 left slots) is the translation
-        // cap; a fully populated file translates with nothing dropped.
+        // cap. A full file translates with nothing dropped.
         let slots = (0..<20).map { _ in "29" }.joined(separator: ", ")
         let json = "{\"rightGrid\": {\"slots\": [\(slots)]}}"
         let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)

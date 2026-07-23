@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Verify native dependency artifacts for one SDK tree (iphoneos or
-# iphonesimulator). Used by Xcode pre-build, fetch-native-deps.sh, and CI.
+# iphonesimulator). Xcode pre-build, fetch-native-deps.sh, and CI use it.
 #
 # Usage:
 #   PLATFORM_NAME=iphoneos scripts/verify-native-deps.sh
@@ -30,8 +30,8 @@ require_file_min() {
 has_platform() {
     local path="$1" platform="$2"
     local out
-    # Slurp otool output: early-exit grep pipelines SIGPIPE otool under
-    # set -o pipefail and make has_platform falsely return failure.
+    # Slurp the otool output. Under set -o pipefail, an early-exit grep
+    # pipeline SIGPIPEs otool and makes has_platform falsely fail.
     out=$(otool -l "$path" 2>/dev/null) || return 1
     grep -Eq "platform ${platform}([[:space:]]|$)" <<<"$out"
 }
@@ -66,12 +66,13 @@ for ver in 18 19 31; do
         fail "mkxp${ver}-merged.o missing ${sym}"
 done
 
-# Networking: every VM must carry the statically-linked socket ext
-# (Init_socket is hidden to a local symbol inside the merged object,
-# so look in the ext archives which are the merge inputs), and the
-# pure-Ruby stdlib trees the launcher bundles must exist.
-# awk (not `grep -q`) to drain nm's output: with pipefail, grep -q's
-# early exit SIGPIPEs nm and fails the pipeline on a *successful* match.
+# Networking: every VM must carry the statically-linked socket ext.
+# The merge hides Init_socket as a local symbol inside the merged
+# object, so look in the ext archives, which are the merge inputs.
+# The pure-Ruby stdlib trees the launcher bundles must also exist.
+# Use awk (not `grep -q`) to drain nm's output: with pipefail,
+# grep -q's early exit SIGPIPEs nm and fails the pipeline on a
+# *successful* match.
 for ext in libruby18-ext.a libruby19-ext.a "libruby.3.1-ext.a"; do
     nm "$LIB/$ext" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_socket" {found=1} END {exit !found}' ||
         fail "$ext missing Init_socket (socket ext dropped out of the build)"
@@ -100,12 +101,12 @@ done
 
 # Staleness guard: binding/*.cpp + hmode7 + engine headers compile into
 # the prebuilt mkxp*-merged.o files, NOT into the Xcode build (see the
-# note above OTHER_LDFLAGS in ios/Empo/project.yml). Editing those
-# sources without re-running `make mkxp-merged` silently links stale
-# engine code. common.make stamps a content hash of that source set
-# next to the merged objects; recompute and compare here so the Xcode
-# build fails loudly instead. Content-based (not mtime) so prebuilt
-# tarballs still verify on fresh clones.
+# note above OTHER_LDFLAGS in ios/Empo/project.yml). If you edit those
+# sources and do not re-run `make mkxp-merged`, the link silently uses
+# stale engine code. common.make stamps a content hash of that source
+# set next to the merged objects. Recompute and compare it here so the
+# Xcode build fails loudly instead. The check is content-based (not
+# mtime), so prebuilt tarballs still verify on fresh clones.
 FINGERPRINT_FILE="$LIB/.mkxp-binding-fingerprint"
 FINGERPRINT_SCRIPT="$REPO_ROOT/ios/Dependencies/tools/binding-fingerprint.sh"
 if [[ -f "$FINGERPRINT_FILE" ]]; then
@@ -117,14 +118,14 @@ sources changed since mkxp*-merged.o was built. Rebuild with: \
 cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-merged"
     fi
 elif [[ "${EMPO_ALLOW_UNSTAMPED:-0}" == "1" ]]; then
-    echo "warning: $FINGERPRINT_FILE missing; staleness check skipped (EMPO_ALLOW_UNSTAMPED=1)" >&2
+    echo "warning: $FINGERPRINT_FILE missing, staleness check skipped (EMPO_ALLOW_UNSTAMPED=1)" >&2
 else
     # Every supported tree carries the stamp as of native-2026-07-16
-    # (make mkxp-merged writes it; the published tarball includes it).
-    # A missing stamp means an ancient tree whose merged objects cannot
-    # be trusted — this is exactly how the stale-msgbox bug shipped, so
-    # fail instead of warning. EMPO_ALLOW_UNSTAMPED=1 overrides for
-    # archaeology on pre-stamp trees.
+    # (make mkxp-merged writes it, and the published tarball includes
+    # it). A missing stamp means an ancient tree whose merged objects
+    # you cannot trust. The stale-msgbox bug shipped exactly this way,
+    # so fail instead of warn. EMPO_ALLOW_UNSTAMPED=1 overrides this
+    # for archaeology on pre-stamp trees.
     fail "$FINGERPRINT_FILE missing: cannot prove mkxp*-merged.o match the binding \
 sources. Rebuild with: cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-merged \
 (or re-hydrate: rm -rf ios/Dependencies/build-* ios/Dependencies/native/.fetched-version, \
@@ -132,14 +133,14 @@ then build). Set EMPO_ALLOW_UNSTAMPED=1 to bypass."
 fi
 
 # Engine core: everything under mkxp-z-apple-mobile/src compiles into
-# the prebuilt libmkxpz-core.a (built by the engine repo's
-# tools/build-core-ios.sh, invoked via `make mkxp-core` or fetched as
-# a published artifact). Same staleness contract as the merged
+# the prebuilt libmkxpz-core.a. The engine repo's
+# tools/build-core-ios.sh builds it, via `make mkxp-core` or as a
+# fetched published artifact. Same staleness contract as the merged
 # objects above: the build stamps a content hash of the engine src
-# tree; recompute and compare so editing engine sources without
-# rebuilding the core fails loudly instead of linking stale code.
-# SKIP_ENGINE_CORE_CHECK=1 is set only by tools/fetch-native-deps.sh,
-# whose hydration finishes before the engine-core channel has run.
+# tree. Recompute and compare it here, so an engine-source edit
+# without a core rebuild fails loudly instead of linking stale code.
+# Only tools/fetch-native-deps.sh sets SKIP_ENGINE_CORE_CHECK=1, and
+# its hydration finishes before the engine-core channel has run.
 if [[ "${SKIP_ENGINE_CORE_CHECK:-0}" == "1" ]]; then
     echo "note: engine-core check skipped (native hydration in progress)"
     echo "OK: $PLATFORM native dependency artifacts look healthy"
@@ -161,7 +162,7 @@ was built (or the fetched engine prebuilt does not match the checked-out submodu
 Rebuild with: cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-core"
     fi
 elif [[ "${EMPO_ALLOW_UNSTAMPED:-0}" == "1" ]]; then
-    echo "warning: $CORE_FP_FILE missing; core staleness check skipped (EMPO_ALLOW_UNSTAMPED=1)" >&2
+    echo "warning: $CORE_FP_FILE missing, core staleness check skipped (EMPO_ALLOW_UNSTAMPED=1)" >&2
 else
     fail "$CORE_FP_FILE missing: cannot prove libmkxpz-core.a matches the engine \
 sources. Rebuild with: cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-core. \

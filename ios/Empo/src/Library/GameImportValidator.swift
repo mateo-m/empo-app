@@ -21,7 +21,7 @@ enum GameImportValidator {
                 return "Corrupt zip file: \(detail)"
             case .notAnRPGMakerGame:
                 return
-                    "This doesn't appear to be an RPG Maker game. No recognised game configuration was found."
+                    "This does not look like an RPG Maker game. Empo found no known game configuration."
             case .unsupportedRuntime(let detail):
                 return detail
             case .missingScripts(let path):
@@ -112,7 +112,7 @@ enum GameImportValidator {
     }
 
     /// Throws ImportError on failure. Validates a folder already
-    /// present on disk - used both for full extracted imports and
+    /// present on disk. Used for full extracted imports and for
     /// folder-based imports. Archives are validated during the
     /// resolution probe before import starts.
     static func validate(_ url: URL) throws {
@@ -220,9 +220,9 @@ enum GameImportValidator {
 
         let lowercaseItems = items.map { $0.lowercased() }
 
-        // 1. Check for RGSS archive; definitive proof + version detection.
-        //    When an archive is present, scripts are packed inside it and
-        //    scripts can't be validated without decrypting, so only the version is checked.
+        // 1. Check for an RGSS archive: definitive proof + version detection.
+        //    When an archive is present, the scripts are packed inside it and
+        //    can't be validated without decryption, so we check only the version.
         if let version = rgssVersionFromArchive(lowercaseItems) {
             try checkRuntimeSupport(version)
             return
@@ -241,7 +241,7 @@ enum GameImportValidator {
             }
         }
 
-        // 3. Check for mkxp.json; only valid if it has a customScript
+        // 3. Check for mkxp.json. Only valid if it has a customScript
         //    (without customScript AND without a valid .ini, the engine
         //    won't know where to find scripts and will fail at runtime)
         var customScriptPath: String?
@@ -693,7 +693,7 @@ enum GameImportValidator {
 
     /// Validates that an RGSS scripts file (Marshal-dumped Array) exists and is valid.
     private static func validateRGSSScripts(at gameDir: URL, scriptsPath: String) throws {
-        // Game.ini uses backslashes (Windows paths); convert to forward slashes
+        // Game.ini uses backslashes (Windows paths). Convert them to forward slashes.
         let normalized = scriptsPath.replacingOccurrences(of: "\\", with: "/")
         let fileURL = gameDir.appendingPathComponent(normalized)
 
@@ -701,8 +701,8 @@ enum GameImportValidator {
             throw ImportError.missingScripts(normalized)
         }
 
-        // Ruby Marshal format: first 2 bytes are version (0x04, 0x08),
-        // third byte is the type tag; 0x5B means Array
+        // Ruby Marshal format: the first 2 bytes are the version (0x04,
+        // 0x08), and the third byte is the type tag. 0x5B means Array.
         guard let fh = FileHandle(forReadingAtPath: fileURL.path) else {
             throw ImportError.invalidScripts(normalized)
         }
@@ -744,8 +744,8 @@ enum GameImportValidator {
 
     private static func checkRuntimeSupport(_ version: RGSSVersion) throws {
         // Ask the engine which RGSS versions this build supports. The mask
-        // depends on which Ruby runtime is linked (legacy Ruby 1.8 only runs
-        // RGSS1 + RGSS2; Ruby 3.x with syntax transform runs all three).
+        // depends on which Ruby runtime is linked: legacy Ruby 1.8 only runs
+        // RGSS1 + RGSS2, while Ruby 3.x with syntax transform runs all three.
         let mask = Int(mkxp_getSupportedRGSSVersionMask())
         let bit = 1 << (version.rawValue - 1)
         if mask & bit != 0 { return }
@@ -757,7 +757,7 @@ enum GameImportValidator {
         case .vxAce: label = "RPG Maker VX Ace (RGSS3)"
         }
         throw ImportError.unsupportedRuntime(
-            "This game requires \(label), which isn't supported right now."
+            "This game requires \(label). Empo does not support it right now."
         )
     }
 }

@@ -75,7 +75,8 @@ public struct ButtonSpec: Equatable, Sendable {
     }
 }
 
-/// Ordered element -> target map. Target distinguishes key / action / explicit unbind.
+/// Ordered element -> target map. A target is a key, an action, or an
+/// explicit unbind.
 public struct ControllerMap: Equatable, Sendable {
     public enum Target: Equatable, Sendable {
         case key(String)
@@ -90,7 +91,7 @@ public struct ControllerMap: Equatable, Sendable {
     }
 }
 
-/// Closed SDL controller element vocabulary (SPEC §7).
+/// Closed SDL controller element vocabulary (SPEC section 7).
 public enum ControllerElement {
     public static let allNames: Set<String> = Set(allElements)
 

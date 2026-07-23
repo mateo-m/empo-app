@@ -7,10 +7,10 @@ final class ImageCache {
 
     private init() {
         cache.countLimit = 50
-        // 64 MB ceiling so a user importing many large banners doesn't
-        // push steady-state memory through the roof while still hitting
-        // the countLimit cap on typical libraries. NSCache drains on
-        // memory warnings automatically.
+        // A 64 MB ceiling keeps steady-state memory bounded when a
+        // user imports many large banners. Typical libraries still
+        // hit the countLimit cap first. NSCache drains on memory
+        // warnings automatically.
         cache.totalCostLimit = 64 * 1024 * 1024
     }
 

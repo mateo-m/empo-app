@@ -1,11 +1,11 @@
 import UIKit
 
-/// Reparents SDL's game view into `AppWindow` while playing.
+/// Reparents SDL's game view into `AppWindow` while a game plays.
 ///
-/// Two stacked UIWindows (SDL + AppWindow) breaks compositing on
-/// device. Hiding AppWindow and relying on SDL alone breaks sim.
-/// Single-window: game UIView at the bottom of AppWindow, SwiftUI on
-/// top, SDL's UIWindow hidden.
+/// Two stacked UIWindows (SDL + AppWindow) break compositing on a
+/// device. If we hide AppWindow and rely on SDL alone, the simulator
+/// breaks. Single-window: the game UIView at the bottom of AppWindow,
+/// SwiftUI on top, SDL's UIWindow hidden.
 @MainActor
 enum GameViewEmbedder {
     private static weak var embeddedGameView: UIView?
@@ -13,7 +13,7 @@ enum GameViewEmbedder {
 
     static var isEmbedded: Bool { embeddedGameView != nil }
 
-    /// SDL's game view when reparented into `AppWindow`; nil before embed.
+    /// SDL's game view when reparented into `AppWindow`. Nil before embed.
     static var embeddedView: UIView? { embeddedGameView }
 
     static func embedIfNeeded() -> Bool {

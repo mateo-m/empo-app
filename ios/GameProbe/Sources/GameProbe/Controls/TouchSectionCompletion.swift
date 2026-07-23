@@ -2,7 +2,7 @@ import Foundation
 
 public enum TouchSectionCompletion {
     /// Default d-pad centers and size in fraction / point units for each
-    /// orientation. Host supplies Empo's built-in defaults.
+    /// orientation. The host supplies Empo's built-in defaults.
     public struct DefaultDpadSpec: Sendable {
         public var portraitX: Double
         public var portraitY: Double
@@ -25,9 +25,9 @@ public enum TouchSectionCompletion {
         }
     }
 
-    /// When exactly one orientation key is present, derives the missing
-    /// orientation in-memory. Both keys present (including explicit `{}`)
-    /// are left unchanged.
+    /// If exactly one orientation key is present, derives the missing
+    /// orientation in memory. If both keys are present (including an
+    /// explicit `{}`), the section stays unchanged.
     public static func complete(
         _ section: TouchSection,
         metrics: TouchZoneMetrics,

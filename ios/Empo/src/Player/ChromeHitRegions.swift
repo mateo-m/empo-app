@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Window-coordinate chrome rects published by `PlayerView` so
-/// `AppWindow.hitTest` can route touches without relying on view
+/// Window-coordinate chrome rects that `PlayerView` publishes so
+/// `AppWindow.hitTest` can route touches without a check on view
 /// identity (SwiftUI's hosting view is hit-testable everywhere).
 @MainActor
 enum ChromeHitRegions {

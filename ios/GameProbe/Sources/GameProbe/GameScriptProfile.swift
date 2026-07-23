@@ -1,22 +1,22 @@
 import Foundation
 
-/// Coordinated analysis of a game's script sources and runtime
-/// markers. Replaces the parallel `RubyVersionDetection` +
-/// `GameSettings.detectModernRubyScripts` sniffers so Ruby dispatch
-/// and syntax-transform mode derive from one profile result.
+/// Combined analysis of a game's script sources and runtime
+/// markers. It replaces the parallel `RubyVersionDetection` and
+/// `GameSettings.detectModernRubyScripts` sniffers. Ruby dispatch
+/// and the syntax-transform mode now come from one profile result.
 public enum GameScriptProfile {
 
-    /// Schema version for persisted detection results on
-    /// `GameMetadata`. Bump when heuristics change enough to
-    /// re-classify imported games.
+    /// Schema version for the detection results stored on
+    /// `GameMetadata`. If the heuristics change enough to
+    /// re-classify imported games, bump this version.
     public enum Schema: String, Sendable {
         case initial = "initial"
         case bundledRubyDLL = "bundled-ruby-dll"
         case noStandaloneFramework = "no-standalone-framework"
         case dropRuby30 = "drop-ruby-30"
         case tightenGrammarSniff = "tighten-grammar-sniff"
-        /// Unified profile module: one sniff drives ruby version +
-        /// modern-script classification.
+        /// Unified profile module: one sniff drives the ruby version
+        /// and the modern-script classification.
         case unified = "unified"
     }
 
@@ -28,7 +28,7 @@ public enum GameScriptProfile {
         public let grammar: RubyScriptGrammarSniffer.Result
     }
 
-    /// Analyze `gameDirectory` once and return Ruby dispatch +
+    /// Analyzes `gameDirectory` once and returns Ruby dispatch and
     /// syntax-transform hints.
     public static func analyze(gameDirectory: URL) -> Result {
         let grammar = RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory)

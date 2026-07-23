@@ -10,9 +10,9 @@ struct PlayerView: View {
     @State private var controlsHidden = false
     @State private var keyboardMode = false
     @State private var showDebugOverlay = false
-    /// Long-lived state for the debug overlay. Kept on `PlayerView`
-    /// so the overlay can be transitioned in/out via `if visible`
-    /// without losing its FPS graph, cached game title, or RGSS
+    /// Long-lived state for the debug overlay. It lives on `PlayerView`
+    /// so the overlay can transition in/out via `if visible`
+    /// and keep its FPS graph, cached game title, and RGSS
     /// version across show/hide cycles.
     @State private var debugOverlayState = DebugOverlayState()
     /// Toolbar starts dimmed so it doesn't dominate attention when the
@@ -40,14 +40,14 @@ struct PlayerView: View {
     /// itself stays trimmed to keyboard / edit / hide / more.
     @State private var showMoreSheet = false
     @State private var showControllerRemap = false
-    /// Live fast-forward state. Mirrored into the engine via
+    /// Live fast-forward state. We mirror it into the engine via
     /// `mkxp_setFastForwardMultiplier` so the FPS limiter scales the
     /// frame pacing while the toggle is on. The actual multiplier
     /// comes from `fastForwardMultiplier` (per-game setting).
     @State private var fastForwardActive = false
     /// Per-game fast-forward multiplier loaded from GameSettings.
-    /// nil = disabled (the toolbar sheet hides the row). Refreshed
-    /// every time the Menu sheet opens, since the user can pause →
+    /// nil = off (the toolbar sheet hides the row). It refreshes
+    /// every time the Menu sheet opens, because the user can pause →
     /// library → edit Game Settings → resume and change this value
     /// mid-session.
     @State private var fastForwardMultiplier: Int?
@@ -72,7 +72,7 @@ struct PlayerView: View {
                 // source (engine-published gameRect), so what you see
                 // is literally what hitTest checks.
                 if settings.showTouchZone, !gameRect.isEmpty {
-                    // gameRect is in window points; the wrapping
+                    // gameRect is in window points. The wrapping
                     // GeometryReader ignores the safe area so its
                     // local space matches window space exactly.
                     GeometryReader { _ in
@@ -101,7 +101,7 @@ struct PlayerView: View {
                         let errorCount = layout.manifestRejectionErrorCount
                         let errorLabel = errorCount == 1 ? "error" : "errors"
                         Text(
-                            "This game ships a controls.json with \(errorCount) \(errorLabel) — see Logs"
+                            "This game ships a controls.json with \(errorCount) \(errorLabel). See Logs."
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -114,7 +114,7 @@ struct PlayerView: View {
                         let errorCount = layout.userControlsRejectionErrorCount
                         let errorLabel = errorCount == 1 ? "error" : "errors"
                         Text(
-                            "Your saved controls file has \(errorCount) \(errorLabel) — see Logs"
+                            "Your saved controls file has \(errorCount) \(errorLabel). See Logs."
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -232,8 +232,8 @@ struct PlayerView: View {
                 layout.setOrientation(nowPortrait ? .portrait : .landscape)
             }
             // `initial: true`: the engine usually publishes gameRect
-            // during the loading transition, BEFORE PlayerView mounts —
-            // without an initial firing the one real publish is missed
+            // during the loading transition, BEFORE PlayerView mounts.
+            // Without an initial firing we miss the one real publish,
             // and translated layouts keep their estimate-based bands.
             .onChange(of: engineState.gameRect, initial: true) { _, _ in
                 layout.refreshForGameGeometryChange()
@@ -247,9 +247,10 @@ struct PlayerView: View {
         .ignoresSafeArea(.keyboard)
         .background(Color.clear)
         .onAppear {
-            // Engine fired SDL_StartTextInput / SDL_StopTextInput when
-            // the game toggles `Input.text_input`. Auto-flip keyboard
-            // mode so the soft keyboard appears without user action.
+            // The engine fires SDL_StartTextInput / SDL_StopTextInput
+            // when the game toggles `Input.text_input`. Auto-flip
+            // keyboard mode so the soft keyboard appears without user
+            // action.
             EngineSessionCoordinator.shared.setTextInputModeHandler { active in
                 if active != keyboardMode {
                     keyboardMode = active
@@ -275,8 +276,8 @@ struct PlayerView: View {
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
             //
-            // The toolbar is deliberately NOT reset to full opacity on
-            // first appear - it stays at its `toolbarOpacity` default
+            // We deliberately do NOT reset the toolbar to full opacity
+            // on first appear. It stays at its `toolbarOpacity` default
             // (0.3, dimmed) so it doesn't dominate attention when the
             // player first loads. Any user interaction starts the
             // normal restore-then-fade cycle.
@@ -317,7 +318,7 @@ struct PlayerView: View {
             }
             .keyboardShortcut(.defaultAction)
         } message: {
-            Text("Are you sure you want to quit the current game?")
+            Text("Do you want to quit the current game?")
         }
         .sheet(isPresented: $showMoreSheet) {
             PlayerMoreSheet(
@@ -345,14 +346,14 @@ struct PlayerView: View {
             // resume mid-session, so refresh the per-game multiplier
             // every time the Menu sheet opens. If they bumped fast
             // forward from 2x to 4x while paused, the toggle should
-            // pick that up; if they disabled it entirely, the row
+            // pick that up. If they turned it off entirely, the row
             // should disappear.
             guard opened else { return }
             syncFastForwardFromSettings()
         }
         .onChange(of: fastForwardActive) { _, active in
-            // Active = use the per-game configured multiplier; not
-            // active = 1 (no scaling). Engine clamps to >= 1.
+            // Active = use the per-game configured multiplier. Not
+            // active = 1 (no scaling). The engine clamps to >= 1.
             let mult = active ? (fastForwardMultiplier ?? 1) : 1
             mkxp_setFastForwardMultiplier(Int32(mult))
         }
@@ -376,16 +377,16 @@ struct PlayerView: View {
     /// back to its default `false`. The engine's host-bridge
     /// multiplier is process-static and survives that recycle, so
     /// the only reliable "is fast-forward currently on?" signal is
-    /// the bridge itself - reading it here lets the toolbar toggle
+    /// the bridge itself. A read here lets the toolbar toggle
     /// reflect the engine's truth instead of stale local state.
     ///
     /// Reconciliation rules (engine state vs. configured value):
     ///   - engine fast-forwarding AND settings still allow it ->
-    ///     toggle on; .onChange pushes the configured value back to
+    ///     toggle on. .onChange pushes the configured value back to
     ///     the bridge so an in-pause settings edit (e.g. 4x -> 2x)
     ///     takes effect on resume.
     ///   - engine fast-forwarding BUT settings cleared the
-    ///     multiplier -> toggle off; .onChange pushes 1 to the
+    ///     multiplier -> toggle off. .onChange pushes 1 to the
     ///     bridge so the engine stops speeding next frame.
     ///   - engine at 1x -> toggle off regardless of settings.
     private func syncFastForwardFromSettings() {
@@ -470,10 +471,10 @@ struct PlayerView: View {
         }
     }
 
-    /// Toggle the JoiPlay-derived cheat menu. First tap arms $CHEATS
-    /// and injects a HOME keypress so the in-game Scene_Cheat hook
-    /// fires immediately; second tap disables $CHEATS again. The
-    /// Ruby-side poller installed by the engine keeps $CHEATS in
+    /// Toggle the JoiPlay-derived cheat menu. The first tap arms
+    /// $CHEATS and injects a HOME keypress so the in-game Scene_Cheat
+    /// hook fires immediately. The second tap disarms $CHEATS again.
+    /// The Ruby-side poller the engine installs keeps $CHEATS in
     /// sync with the bridge flag each Input.update.
     private func toggleCheats() {
         cheatsEnabled.toggle()
@@ -519,8 +520,8 @@ struct PlayerView: View {
             snapshotOpacity = 0
             controlsVisible = true
         } completion: {
-            // Tied to the fade completion instead of a wall-clock
-            // asyncAfter so the snapshot unmounts exactly
+            // We tie this to the fade completion instead of a
+            // wall-clock asyncAfter so the snapshot unmounts exactly
             // when the user no longer sees it, even if the spring
             // duration changes.
             resumeSnapshot = nil

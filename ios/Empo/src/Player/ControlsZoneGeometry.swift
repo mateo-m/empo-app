@@ -1,9 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// Pure geometry helpers for placing on-screen controls. Lifted out of
-/// PlayerView so the layout math is testable / diffable in isolation
-/// and PlayerView stays focused on state + view composition.
+/// Pure geometry helpers for on-screen control placement. We lifted
+/// them out of PlayerView so the layout math is testable and diffable
+/// in isolation, and PlayerView stays focused on state + view
+/// composition.
 
 enum ControlsZone {
     static let padding: CGFloat = 12.0
