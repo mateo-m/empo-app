@@ -313,13 +313,19 @@ jobs:
         run: xcodegen generate --spec project.yml --project . --quiet
 
       - name: Build Release (iphoneos)
+        # Build the SCHEME, not the target. A -target build resolves
+        # SwiftPM packages through the legacy build system, which
+        # cannot find the generated module map for a C-family package
+        # target (json5cpp): "module map file ...
+        # GeneratedModuleMaps-iphoneos/json5cpp.modulemap not found",
+        # reported on hosted runners as unresolvable _DarwinFoundation
+        # module dependencies.
         run: |
           set -o pipefail
           xcodebuild \
             -project ios/Empo/Empo.xcodeproj \
-            -target Empo \
-            -sdk iphoneos \
-            -arch arm64 \
+            -scheme Empo \
+            -destination 'generic/platform=iOS' \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
             PRODUCT_BUNDLE_IDENTIFIER=sh.mateo.empo \
