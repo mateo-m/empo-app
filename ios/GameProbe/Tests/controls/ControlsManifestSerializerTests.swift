@@ -9,17 +9,13 @@ final class ControlsManifestSerializerTests: XCTestCase {
     }
 
     private func sampleTouch() -> TouchSection {
-        // The loader parses with the engine's json5pp. json5pp reads
-        // the text `0.7` as the double one ulp above 0.7, because it
-        // builds fractions with pow(10, -n). The sample pins that
-        // engine value so the round trip stays exact.
         TouchSection(
             portrait: TouchLayout(
                 dpad: DPadSpec(x: 0.13, y: 0.72, size: 140, opacity: 1),
                 buttons: [
                     ButtonSpec(
                         label: "OK", key: "Enter",
-                        x: 0.7000000000000001, y: 0.67, size: 56, opacity: 1),
+                        x: 0.7, y: 0.67, size: 56, opacity: 1),
                     ButtonSpec(label: "Quit", key: "Escape", x: 0.88, y: 0.67, size: 56, opacity: 1),
                 ]
             ),
@@ -49,8 +45,20 @@ final class ControlsManifestSerializerTests: XCTestCase {
         let result = parseSerialized(data)
         XCTAssertNil(result.findings.first { $0.severity == .error })
         XCTAssertEqual(result.manifest?.version, 1)
-        XCTAssertEqual(result.manifest?.touch, sampleTouch())
         XCTAssertEqual(result.manifest?.controller, controller)
+        // The loader parses with the engine's json5pp, which builds
+        // fractions with pow(10, -n). The parsed double lands within
+        // an ulp of the written value, and WHICH ulp differs per
+        // platform (Apple arm64 and glibc x86_64 disagree). An exact
+        // Double comparison against the fixture is therefore not
+        // portable. The contract that matters is at the wire level:
+        // the parsed manifest must re-serialize to the exact same
+        // bytes, because the serializer rounds to 6 decimals.
+        let reserialized = ControlsManifestSerializer.serialize(
+            touch: result.manifest?.touch,
+            controller: result.manifest?.controller
+        )
+        XCTAssertEqual(reserialized, data)
     }
 
     func testDeterministicOutput() {
