@@ -588,6 +588,11 @@ MKXPZ_BINDING_SRC_DEPS := \
 
 MKXPZ_BINDING_FINGERPRINT := ${PWD}/tools/binding-fingerprint.sh
 
+# Shared feature flags come from the engine's single source of truth,
+# src/mkxpz-buildconfig.h (force-included below). Only per-consumer
+# parameters stay as -D options in the per-Ruby lists.
+MKXPZ_BUILDCONFIG := -include $(ENGINE)/src/mkxpz-buildconfig.h
+
 # Ruby 3.1 — patched parser with syntax-transform support. Includes
 # are
 # anchored at the global $(INCLUDEDIR) (3.1's traditional install
@@ -595,8 +600,9 @@ MKXPZ_BINDING_FINGERPRINT := ${PWD}/tools/binding-fingerprint.sh
 # `ruby` make target installs there. Once 3.1 is migrated to a
 # per-version subdir like 3.0, the include line gets updated.
 #
-# Defines mirror project.yml: includes MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES
-# (still needed for the 3.1 build until syntax-transform/ is removed).
+# Per-Ruby parameter defines only. Includes
+# MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES (still needed for the 3.1 build
+# until syntax-transform/ is removed).
 BINDING_OBJDIR_31 := $(BUILD_PREFIX)/binding31
 
 MKXPZ_INCLUDES_31 := \
@@ -626,18 +632,13 @@ MKXPZ_INCLUDES_31 := \
     -I${PWD}/ANGLE/$(SDK)/include
 
 MKXPZ_DEFINES_31 := \
-    -DMKXPZ_BUILD_XCODE \
-    -DMKXPZ_ALCDEVICE=ALCdevice \
+    $(MKXPZ_BUILDCONFIG) \
     -DMKXPZ_VERSION='"1.0.0"' \
     -DMKXPZ_GIT_HASH='"ios"' \
     -DMKXPZ_RUBY_VERSION='"3.1"' \
     -DMKXPZ_RUBY_VERSION_MAJOR=3 \
     -DMKXPZ_RUBY_VERSION_MINOR=1 \
-    -DMKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES \
-    -DGLES2_HEADER \
-    -DMKXPZ_HAS_ANGLE \
-    -DHAVE_CONFIG_H \
-    -DHM7_HAVE_MKXP_BITMAP
+    -DMKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES
 
 $(LIBDIR)/mkxp31-merged.o: $(LIBDIR)/libruby.3.1-static.a \
                           $(LIBDIR)/libruby.3.1-ext.a \
@@ -732,17 +733,12 @@ MKXPZ_INCLUDES_19 := \
     -I${PWD}/ANGLE/$(SDK)/include
 
 MKXPZ_DEFINES_19 := \
-    -DMKXPZ_BUILD_XCODE \
-    -DMKXPZ_ALCDEVICE=ALCdevice \
+    $(MKXPZ_BUILDCONFIG) \
     -DMKXPZ_VERSION='"1.0.0"' \
     -DMKXPZ_GIT_HASH='"ios"' \
     -DMKXPZ_RUBY_VERSION='"1.9"' \
     -DMKXPZ_RUBY_VERSION_MAJOR=1 \
-    -DMKXPZ_RUBY_VERSION_MINOR=9 \
-    -DGLES2_HEADER \
-    -DMKXPZ_HAS_ANGLE \
-    -DHAVE_CONFIG_H \
-    -DHM7_HAVE_MKXP_BITMAP
+    -DMKXPZ_RUBY_VERSION_MINOR=9
 
 MKXPZ_INCLUDES_18 := \
     -I$(ENGINE) \
@@ -771,17 +767,12 @@ MKXPZ_INCLUDES_18 := \
     -I$(INCLUDEDIR)/ruby18
 
 MKXPZ_DEFINES_18 := \
-    -DMKXPZ_BUILD_XCODE \
-    -DMKXPZ_ALCDEVICE=ALCdevice \
+    $(MKXPZ_BUILDCONFIG) \
     -DMKXPZ_VERSION='"1.0.0"' \
     -DMKXPZ_GIT_HASH='"ios"' \
     -DMKXPZ_RUBY_VERSION='"1.8"' \
     -DMKXPZ_RUBY_VERSION_MAJOR=1 \
-    -DMKXPZ_RUBY_VERSION_MINOR=8 \
-    -DGLES2_HEADER \
-    -DMKXPZ_HAS_ANGLE \
-    -DHAVE_CONFIG_H \
-    -DHM7_HAVE_MKXP_BITMAP
+    -DMKXPZ_RUBY_VERSION_MINOR=8
 
 $(LIBDIR)/mkxp19-merged.o: $(LIBDIR)/libruby19-static.a \
                           $(LIBDIR)/libruby19-ext.a \

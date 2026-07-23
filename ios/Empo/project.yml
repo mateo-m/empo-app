@@ -82,29 +82,12 @@ settings:
     LIBRARY_SEARCH_PATHS:
       - $(DEPENDENCY_SEARCH_PATH)/lib
       - $(PROJECT_DIR)/../Dependencies/ANGLE/$(PLATFORM_NAME)/lib
-    GCC_PREPROCESSOR_DEFINITIONS:
-      - MKXPZ_BUILD_XCODE
-      # Forward-decl helper for ALCdevice. Apple's <OpenAL/alc.h>
-      # named the struct `ALCdevice_struct`; OpenAL-Soft's
-      # <AL/alc.h> names it just `ALCdevice`. We're on OpenAL-Soft.
-      - MKXPZ_ALCDEVICE=ALCdevice
-      - 'MKXPZ_VERSION="\"1.0.0\""'
-      - 'MKXPZ_GIT_HASH="\"ios\""'
-      - 'MKXPZ_RUBY_VERSION="\"3.1\""'
-      # TLS for the in-engine HTTP client (src/net/net.cpp). NOT the
-      # upstream MKXPZ_SSL flag - that one also toggles xBRZ shader
-      # paths we don't build; see the comment in net.cpp.
-      - MKXPZ_NET_TLS
-      - MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES
-      - GLES2_HEADER
-      - MKXPZ_HAS_ANGLE
-      - HAVE_CONFIG_H
-      # Selects the real mkxp-z Bitmap/Table/Ruby wrappers in
-      # hmode7-apple-mobile/src/hm7_bindings.cpp. Without this the
-      # file compiles the unit-test stub path (returns nullptr for
-      # everything), which would make the renderer produce no
-      # output despite the binding being registered.
-      - HM7_HAVE_MKXP_BITMAP
+    # No engine preprocessor defines here. The engine no longer
+    # compiles in this target: the core is a prebuilt library, and
+    # the binding objects come from common.make. Shared engine
+    # feature flags live in one place, the submodule's
+    # src/mkxpz-buildconfig.h. App sources use no engine macros
+    # (app_bridge.h is self-contained).
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: YES # yamllint disable-line rule:truthy
   configs:
@@ -311,12 +294,8 @@ targets:
       #   symbols hidden via the unexport list. The merged .o files
       #   are linked below in OTHER_LDFLAGS.
       # Vendored libmspack CAB reader (see vendor/libmspack/README.md).
-      # The project-wide HAVE_CONFIG_H (meant for mkxp-z) must not leak
-      # into libmspack, whose sources would otherwise include mkxp-z's
-      # C++ config.h.
       - path: vendor/libmspack
         type: group
-        compilerFlags: -UHAVE_CONFIG_H
       - path: src
         type: group
       # Gitignored generated file; listed explicitly so xcodegen keeps
