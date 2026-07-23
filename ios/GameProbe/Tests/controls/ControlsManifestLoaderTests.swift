@@ -81,16 +81,18 @@ final class ControlsManifestLoaderTests: XCTestCase {
             landscape?.buttons?[0],
             ButtonSpec(label: "OK", key: "KeyZ", x: 0.92, y: 0.72, size: 68, opacity: nil)
         )
-        // The loader parses with the engine's json5pp. json5pp reads
-        // the fixture text `0.82` as the double one ulp above 0.82,
-        // because it builds fractions with pow(10, -n). The host must
-        // carry the engine's value, so the test pins it.
-        XCTAssertEqual(
-            landscape?.buttons?[1],
-            ButtonSpec(
-                label: "Back", key: "KeyX",
-                x: 0.8200000000000001, y: 0.84, size: 56, opacity: nil)
-        )
+        // The loader parses with the engine's json5pp, which builds
+        // fractions with pow(10, -n). The parsed double lands within
+        // an ulp of the fixture text `0.82`, and WHICH ulp differs
+        // per platform (Apple arm64 and glibc x86_64 disagree). The
+        // x coordinate therefore compares with a tolerance.
+        let back = landscape?.buttons?[1]
+        XCTAssertEqual(back?.label, "Back")
+        XCTAssertEqual(back?.key, "KeyX")
+        XCTAssertEqual(back?.x ?? .nan, 0.82, accuracy: 1e-9)
+        XCTAssertEqual(back?.y, 0.84)
+        XCTAssertEqual(back?.size, 56)
+        XCTAssertNil(back?.opacity)
 
         XCTAssertEqual(manifest.controller?.entries["y"], .key("F5"))
         XCTAssertEqual(manifest.controller?.entries["righttrigger"], .key("ShiftLeft"))
