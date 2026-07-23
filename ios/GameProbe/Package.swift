@@ -12,11 +12,13 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/tsolomko/SWCompression.git", from: "4.9.0"),
+        .package(path: "../Json5"),
     ],
     targets: [
         .target(
             name: "GameProbe",
             dependencies: [
+                .product(name: "Json5", package: "Json5"),
                 .product(
                     name: "SWCompression",
                     package: "SWCompression",

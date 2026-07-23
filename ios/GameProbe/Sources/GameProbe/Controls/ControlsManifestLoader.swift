@@ -1,4 +1,5 @@
 import Foundation
+import Json5
 
 public enum ControlsManifestLoader {
     public static let empoManifestRelativePath = "empo/controls.json"
@@ -80,7 +81,8 @@ public enum ControlsManifestLoader {
         }
     }
 
-    /// nil when no manifest location exists. Never throws for content problems — those land in `findings`.
+    /// nil when no manifest location exists. Never throws for content
+    /// problems. Those land in `findings`.
     public static func load(gameRoot: URL) -> LoadOutcome? {
         load(gameRoot: gameRoot, metrics: .reference)
     }
@@ -266,7 +268,44 @@ public enum ControlsManifestLoader {
             )
         }
 
-        guard let root = JSON5LiteParser.parseObject(text) else {
+        // Parse with the engine's json5pp grammar. A syntax error
+        // carries a position, which goes into the finding so the
+        // controls.json.log diagnostics name the broken line.
+        let root: [String: Any]
+        do {
+            let strict = try Json5.normalizeToStrictJSON(text)
+            guard let strictData = strict.data(using: .utf8),
+                let object = try? JSONSerialization.jsonObject(with: strictData)
+                    as? [String: Any]
+            else {
+                return Result(
+                    manifest: nil,
+                    findings: [
+                        Finding(
+                            severity: .error,
+                            code: "V000",
+                            path: "",
+                            message: "Invalid JSON in controls manifest"
+                        ),
+                    ]
+                )
+            }
+            root = object
+        } catch let error as Json5SyntaxError {
+            return Result(
+                manifest: nil,
+                findings: [
+                    Finding(
+                        severity: .error,
+                        code: "V000",
+                        path: "",
+                        message: "Invalid JSON in controls manifest: "
+                            + "\(error.message) "
+                            + "(line \(error.line), column \(error.column))"
+                    ),
+                ]
+            )
+        } catch {
             return Result(
                 manifest: nil,
                 findings: [
@@ -770,9 +809,9 @@ public enum ControlsManifestLoader {
 
     // JSON booleans must not pass as numbers. Type casts cannot tell
     // them apart (`NSNumber(1) is Bool` and `true as? Int` both succeed
-    // on Darwin AND corelibs), but `objCType` can: JSONSerialization
+    // on Darwin and corelibs), but `objCType` can: JSONSerialization
     // encodes booleans as "c" and integers/doubles as "q"/"d" on both
-    // platforms. CF APIs are not an option — Linux Foundation lacks them.
+    // platforms. CF APIs are not an option. Linux Foundation lacks them.
     private static func isJSONBool(_ value: Any) -> Bool {
         guard let number = value as? NSNumber else { return value is Bool }
         return String(cString: number.objCType) == "c"

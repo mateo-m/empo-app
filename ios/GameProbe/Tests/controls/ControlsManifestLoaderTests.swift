@@ -81,9 +81,15 @@ final class ControlsManifestLoaderTests: XCTestCase {
             landscape?.buttons?[0],
             ButtonSpec(label: "OK", key: "KeyZ", x: 0.92, y: 0.72, size: 68, opacity: nil)
         )
+        // The loader parses with the engine's json5pp. json5pp reads
+        // the fixture text `0.82` as the double one ulp above 0.82,
+        // because it builds fractions with pow(10, -n). The host must
+        // carry the engine's value, so the test pins it.
         XCTAssertEqual(
             landscape?.buttons?[1],
-            ButtonSpec(label: "Back", key: "KeyX", x: 0.82, y: 0.84, size: 56, opacity: nil)
+            ButtonSpec(
+                label: "Back", key: "KeyX",
+                x: 0.8200000000000001, y: 0.84, size: 56, opacity: nil)
         )
 
         XCTAssertEqual(manifest.controller?.entries["y"], .key("F5"))
@@ -94,7 +100,18 @@ final class ControlsManifestLoaderTests: XCTestCase {
         let data = try loadFixture("v000-invalid-json.json5")
         let result = ControlsManifestLoader.parse(data: data)
         XCTAssertNil(result.manifest)
-        XCTAssertNotNil(finding(result, code: "V000", path: ""))
+        let finding = finding(result, code: "V000", path: "")
+        XCTAssertNotNil(finding)
+        // The finding must carry the json5pp error position so the
+        // controls.json.log diagnostics name the broken line.
+        XCTAssertTrue(
+            finding?.message.contains("line") == true,
+            "message lacks a position: \(finding?.message ?? "nil")"
+        )
+        XCTAssertTrue(
+            finding?.message.contains("column") == true,
+            "message lacks a position: \(finding?.message ?? "nil")"
+        )
     }
 
     func testV001OversizedFile() {

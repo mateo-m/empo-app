@@ -9,11 +9,17 @@ final class ControlsManifestSerializerTests: XCTestCase {
     }
 
     private func sampleTouch() -> TouchSection {
+        // The loader parses with the engine's json5pp. json5pp reads
+        // the text `0.7` as the double one ulp above 0.7, because it
+        // builds fractions with pow(10, -n). The sample pins that
+        // engine value so the round trip stays exact.
         TouchSection(
             portrait: TouchLayout(
                 dpad: DPadSpec(x: 0.13, y: 0.72, size: 140, opacity: 1),
                 buttons: [
-                    ButtonSpec(label: "OK", key: "Enter", x: 0.7, y: 0.67, size: 56, opacity: 1),
+                    ButtonSpec(
+                        label: "OK", key: "Enter",
+                        x: 0.7000000000000001, y: 0.67, size: 56, opacity: 1),
                     ButtonSpec(label: "Quit", key: "Escape", x: 0.88, y: 0.67, size: 56, opacity: 1),
                 ]
             ),
