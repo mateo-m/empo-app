@@ -196,17 +196,11 @@ targets:
           mkdir -p "$BUNDLE/Postload"
           cp "$ENGINE"/scripts/postload/*.rb "$BUNDLE/Postload/"
 
-          # Curated game patches.
-          # Mirror layout (gameRegistry.json + _global/ + per-game
-          # subdirs) into the bundle so the runtime can resolve a
-          # canonical id from the game's manifest/Game.ini and write
-          # the merged patches.json into the game folder at launch.
-          # See ios/Empo/curated-patches/gameRegistry.json for the
-          # registry schema and `src/Library/PatcherDistribution.swift`
-          # (Empo) for the resolver + writer.
+          # Curated patch distribution was removed (2026-07): the
+          # engine's generic Patcher (scriptPatches / game-folder
+          # patches.json) remains, but Empo no longer ships or merges
+          # a curated patch bundle. Drop any stale assembled copy.
           rm -rf "$BUNDLE/Patches"
-          mkdir -p "$BUNDLE/Patches"
-          cp -R "${PROJECT_DIR}/curated-patches/"* "$BUNDLE/Patches/"
 
           # Splash background icon pack. Pixelated 16x16 SVGs that
           # the splash's PixelDitherPattern picks N random ones from

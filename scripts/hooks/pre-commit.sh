@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pre-commit hook: format staged files, then lint / verify formatting.
+# Pre-commit hook: format staged files, then lint/verify formatting.
 
 set -e
 
@@ -83,7 +83,7 @@ if [ -n "$SH_FILES" ]; then
         die "shellcheck failed"
 fi
 
-OXFMT_FILES=$(match '^(altstore-source\.json|ios/Empo/project\.yml|ios/Empo/curated-patches/gameRegistry\.json)$')
+OXFMT_FILES=$(match '^(altstore-source\.json|ios/Empo/project\.yml)$')
 if [ -n "$OXFMT_FILES" ]; then
     section "oxfmt (YAML / JSON)"
     require_tool bun

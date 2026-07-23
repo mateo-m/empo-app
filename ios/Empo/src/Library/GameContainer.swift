@@ -14,7 +14,6 @@ import Foundation
 ///   ├── EmpoState/         Empo-managed state:
 ///   │                        - mkxp.json (generated config; merged
 ///   │                          from Game/mkxp.json + per-game settings)
-///   │                        - patches.json (merged curated patches)
 ///   │                        - game_settings.json (per-game UI prefs)
 ///   │                        - .pokemon_essentials_detected (runtime
 ///   │                          marker written by pokemon_input.rb)
@@ -34,8 +33,8 @@ import Foundation
 ///                              the game's .exe at import time)
 ///   ```
 ///
-/// `GameContainer` is purely value-typed URL math; calling its
-/// initializers and properties has zero side effects. Only the
+/// `GameContainer` is pure value-typed URL math. Calls to its
+/// initializers and properties have zero side effects. Only the
 /// explicit `ensure*` and `*delete*` helpers, and the snapshot
 /// helper, touch the filesystem.
 struct GameContainer: Equatable, Hashable {
@@ -94,10 +93,6 @@ struct GameContainer: Equatable, Hashable {
         empoStateURL.appendingPathComponent("controls.json")
     }
 
-    var patchesURL: URL {
-        empoStateURL.appendingPathComponent("patches.json")
-    }
-
     var peDetectedMarkerURL: URL {
         empoStateURL.appendingPathComponent(".pokemon_essentials_detected")
     }
@@ -128,7 +123,7 @@ struct GameContainer: Equatable, Hashable {
     // MARK: - Initializers
 
     /// Build a container for a fresh import. Generates the path
-    /// from a UUID + slug; doesn't touch disk.
+    /// from a UUID + slug. Does not touch disk.
     init(id: String, slug: String?) {
         let trimmed = slug?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let folderName = trimmed.isEmpty ? id : "\(id)-\(trimmed)"
@@ -194,7 +189,7 @@ struct GameContainer: Equatable, Hashable {
     // MARK: - Filesystem side effects
 
     /// Create the container directory and its canonical
-    /// subdirs. Idempotent; safe to call repeatedly.
+    /// subdirs. Idempotent. Safe to call repeatedly.
     func ensureSubdirs() throws {
         let fm = FileManager.default
         try fm.createDirectory(at: gameURL, withIntermediateDirectories: true)
@@ -206,26 +201,25 @@ struct GameContainer: Equatable, Hashable {
     }
 
     /// Set `NSURLIsExcludedFromBackupKey` on the container so iCloud
-    /// + iTunes backups skip the entire game tree (including Game/,
-    /// EmpoState/, Logs/, Metadata/; iOS propagates the flag to a
-    /// directory's contents).
+    /// + iTunes backups skip the entire game tree: Game/,
+    /// EmpoState/, Logs/, and Metadata/. iOS propagates the flag to
+    /// a directory's contents.
     ///
     /// Why we exclude everything for now: the per-game id is a
     /// fresh `UUID()` minted at import time, so a backup of one
     /// device's `Documents/Games/<id>/EmpoState/` won't match any
     /// container on a different device (or even the same device
-    /// after a re-import) - the saves and metadata would orphan
+    /// after a re-import). The saves and metadata would orphan
     /// silently. Until we have a content-based fingerprint that
-    /// produces a stable id across imports, backing up per-game
+    /// produces a stable id across imports, a backup of per-game
     /// state can only mislead users about what's recoverable.
     /// Game/ is also re-importable from the source archive at zero
-    /// data cost, so excluding the entire tree is strictly the
-    /// right call.
+    /// data cost, so excluding the entire tree is the right call.
     ///
     /// Idempotent: setting the flag on an already-excluded URL is
-    /// a no-op (and silently swallowed if the URL is missing - a
-    /// container that hasn't been created yet just won't have the
-    /// attribute, which is fine).
+    /// a no-op. A missing URL is silently swallowed: a container
+    /// that hasn't been created yet just won't have the attribute,
+    /// which is fine.
     func excludeFromBackup() {
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
@@ -298,9 +292,9 @@ struct GameContainer: Equatable, Hashable {
     }
 
     /// Recursively delete the entire container directory. One
-    /// `rm -rf` removes Game/, EmpoState/, Logs/, Metadata/ - and
-    /// thus all per-game saves, settings, logs, custom artwork,
-    /// crash markers - in a single call.
+    /// `rm -rf` removes Game/, EmpoState/, Logs/, and Metadata/ in
+    /// a single call. That also removes all per-game saves,
+    /// settings, logs, custom artwork, and crash markers.
     ///
     /// Archives and folder imports can land with read-only POSIX
     /// bits on `Game/` (common in Windows-origin zips). iOS refuses
@@ -313,7 +307,7 @@ struct GameContainer: Equatable, Hashable {
     }
 
     /// Ensure every path under `url` is deletable by the app
-    /// sandbox. Only touches owner-write; leaves group/other as-is.
+    /// sandbox. Only touches owner-write. Leaves group/other as-is.
     private static func makeTreeDeletable(at url: URL, fm: FileManager) throws {
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return }
@@ -331,7 +325,7 @@ struct GameContainer: Equatable, Hashable {
 
     /// Imported game trees sometimes arrive with a read-only `Game/`
     /// root (archive metadata or macOS copyItem). Empo never needs
-    /// that for immutability - file content stays untouched; we just
+    /// that for immutability. File content stays untouched. We only
     /// need owner-write so a future delete can recurse.
     static func normalizeImportedGamePermissions(at gameURL: URL) {
         try? FileManager.default.setAttributes(
@@ -365,7 +359,7 @@ struct GameContainer: Equatable, Hashable {
     /// Otherwise returns `dir` itself.
     ///
     /// Archive imports often wrap the game in a single top-level
-    /// folder; raw folder imports usually drop the files at the
+    /// folder. Raw folder imports usually drop the files at the
     /// top level. This helper picks the right one.
     static func findGameRoot(
         in dir: URL,

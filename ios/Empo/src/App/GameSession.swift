@@ -19,7 +19,7 @@ enum GameSession {
 
     /// Apply managed dirs, Ruby dispatch, syntax transform, patches,
     /// session logging, and bridge session config. Does not set
-    /// `mkxp_setGamePath` — caller awaits engine termination first.
+    /// `mkxp_setGamePath`. The caller awaits engine termination first.
     static func configureEngine(
         _ input: LaunchInput,
         crashTracker: CrashTracker,
@@ -70,9 +70,10 @@ enum GameSession {
             mkxp_setConfigOverlayJSON(nil)
         }
 
-        // Never point managedConfigDir at EmpoState: the sparse overlay
-        // mkxp.json there is not a complete config and would drop every
-        // dev key from Game/mkxp.json if the engine read it as base.
+        // Never point managedConfigDir at EmpoState. The sparse
+        // overlay mkxp.json there is not a complete config. If the
+        // engine read it as base, it would drop every dev key from
+        // Game/mkxp.json.
         "".withCString { managedPtr in
             input.userDataDir.path.withCString { userDataPtr in
                 var config = MKXPSessionConfig()
@@ -88,8 +89,6 @@ enum GameSession {
                 mkxp_applySessionConfig(&config)
             }
         }
-
-        PatcherDistribution.applyToGame(container: container)
 
         crashTracker.writeMarker(for: container)
         sessionLogger.beginSession(
