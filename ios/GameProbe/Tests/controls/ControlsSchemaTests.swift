@@ -64,14 +64,14 @@ final class ControlsSchemaTests: XCTestCase {
     }
 
     func testPublishedExampleParsesWithZeroFindings() throws {
-        let data = try loadRepoData("docs/examples/empo-controls-example.json")
+        let data = try loadRepoData("docs/examples/controls.json")
         let result = ControlsManifestLoader.parse(data: data)
         XCTAssertNotNil(result.manifest)
         XCTAssertTrue(result.findings.isEmpty)
     }
 
     func testPublishedExampleMatchesSpecFixture() throws {
-        let published = try loadRepoData("docs/examples/empo-controls-example.json")
+        let published = try loadRepoData("docs/examples/controls.json")
         let fixture = try Data(contentsOf: fixtureURL("spec-example.json5"))
 
         let publishedResult = ControlsManifestLoader.parse(data: published)

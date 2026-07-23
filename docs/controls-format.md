@@ -30,22 +30,22 @@ layout and gamepad mapping. Setup takes about five minutes.
 2. Package and distribute the game as usual. Empo picks the file up at
    import.
 
-That file works as-is: portrait shows your three buttons and the d-pad
-where you placed them, and the north face button presses F5. Use a
-manifest when Empo's defaults miss keys your game reads, such as script
-hotkeys or a custom dash key. Players can rearrange everything on their
-device; your file sets the starting point and the layout Reset returns
-to.
+That file works as written. Portrait mode shows your three buttons and
+the d-pad where you placed them. The north face button presses F5. Use
+a manifest when Empo's defaults miss keys your game reads, such as
+script hotkeys or a custom dash key. Players can rearrange everything
+on their device. Your file sets the starting point and the layout that
+Reset returns to.
 
 The `$schema` line is optional. With it, editors like VS Code
 autocomplete field names and flag typos as you type.
 
-A complete commented example lives at
-[`docs/examples/empo-controls-example.json`](examples/empo-controls-example.json).
+A full commented example is at
+[`docs/examples/controls.json`](examples/controls.json).
 
 ## File locations
 
-Empo checks four spots, in order:
+Empo checks four locations, in this order:
 
 1. `empo/controls.json` (a lowercase `empo` folder next to `Game.ini`)
 2. `controls.json` next to `Game.ini`
@@ -53,54 +53,54 @@ Empo checks four spots, in order:
    [Files from other launchers](#files-from-other-launchers))
 4. `gamepad.json` next to `Game.ini` (JoiPlay's file, same section)
 
-The root location is the standard one; other launchers can adopt it
-without carrying Empo's name. The `empo/` location is an override for
-Empo alone. When both files exist, Empo reads the `empo/` one and logs
-that it skipped the other.
+The root location is the standard one. Other launchers can adopt it,
+because the file name does not contain Empo's name. The `empo/`
+location is an override for Empo alone. When both files exist, Empo
+reads the `empo/` one and logs that it skipped the other.
 
 One rule applies to the root location only: the file must contain the
 `version` key to count as a controls manifest. `controls.json` is a
-generic file name, and some games ship one for their own scripts; Empo
-leaves a root file without `version` alone instead of flagging it as
-broken. A file inside `empo/` is validated no matter what.
+generic file name, and some games ship one for their own scripts. Empo
+leaves a root file without `version` alone and does not flag it as
+broken. Empo always validates a file inside `empo/`.
 
 ## Files from other launchers
 
 If your game already ships a touch layout for an Android launcher,
-Empo converts it on iOS. Both conversions follow the same rules: the
-file stays in your game folder and is re-read at every launch, the
-converted layout sits in the same precedence slot as your `touch`
-section (so players' own edits still win), conversion notes go to the
-same log file as manifest findings, and a file Empo cannot use changes
-nothing. Neither format adds controller bindings.
+Empo converts it on iOS. Both conversions follow the same rules. The
+file stays in your game folder, and Empo reads it again at each
+launch. The converted layout sits in the same precedence slot as your
+`touch` section, so players' own edits still win. Conversion notes go
+to the same log file as manifest findings. A file that Empo cannot use
+changes nothing. Neither format adds controller bindings.
 
 **Kirin** saves its touch layout as `kirin-touch-controls.json`. Empo
 keeps each mapped key as a touch button in Kirin's right-hand and
-left-hand grid arrangement, with Kirin's scale and opacity applied.
-Button colors, d-pad changes, and the diagonal-movement toggle drop
-out.
+left-hand grid arrangement. Empo applies Kirin's scale and opacity.
+Button colors, d-pad changes, and the diagonal-movement toggle do not
+carry over.
 
-**JoiPlay** ships `gamepad.json` inside JGP archives. Empo renders the
-full eight-button pad (C, B, A, X, Y, Z, L, R), applies your
-`*KeyCode` overrides, and falls back per slot to the standard RPG
-Maker keys (C=Enter, B=Esc, A=Shift, X/Y/Z=A/S/D, L/R=Q/W).
-`btnScale` and `btnOpacity` carry over. Because `gamepad.json` is a
-generic name, the file only counts when it contains at least one
-JoiPlay key.
+**JoiPlay** ships `gamepad.json` inside JGP archives. Empo shows the
+full eight-button pad (C, B, A, X, Y, Z, L, R) and applies your
+`*KeyCode` overrides. For each slot without an override, Empo uses the
+standard RPG Maker key (C=Enter, B=Esc, A=Shift, X/Y/Z=A/S/D,
+L/R=Q/W). `btnScale` and `btnOpacity` carry over. Because
+`gamepad.json` is a generic name, the file only counts when it
+contains at least one JoiPlay key.
 
 A controls manifest outranks both files, and Kirin's outranks
-JoiPlay's. Ship a manifest when you want the layout under your control
-on every platform, or when you need anything these formats cannot
+JoiPlay's. Ship a manifest when you want control of the layout on
+every platform. Also ship one when you need what these formats cannot
 express: exact positions, per-button sizes, labels, or controller
 mappings.
 
 ## File format
 
-The file is JSON with one extension: `//` line comments are allowed.
-Block comments (`/* */`), trailing commas, and single quotes are not.
-Empo rejects files over 128 KiB. A real manifest is a few KiB, so the
-cap only catches files that were never a manifest, such as a renamed
-save file.
+The file is JSON with one extension: you can use `//` line comments.
+You cannot use block comments (`/* */`), trailing commas, or single
+quotes. Empo rejects files over 128 KiB. A real manifest is a few KiB.
+The cap only catches files that were never a manifest, such as a
+renamed save file.
 
 Top level:
 
@@ -125,17 +125,18 @@ name, or out-of-range number rejects the file. See
 }
 ```
 
-Each orientation is optional, and you only need to design one: when
-you define a single orientation, Empo derives the other from it — same
-arrangement, refit to the other screen shape. Buttons keep their sizes
-and their relative placement; spacing tightens or relaxes to match the
-zone. Define both orientations when you want full control of each.
+Each orientation is optional, and you only need to design one. When
+you define a single orientation, Empo derives the other from it. Empo
+keeps the same arrangement and refits it to the other screen shape.
+Buttons keep their sizes and their relative placement. Spacing
+tightens or relaxes to match the zone. Define both orientations when
+you want full control of each.
 
 Two special cases:
 
 - `"landscape": {}` (an explicit empty object) opts that orientation
   into Empo's default layout instead of derivation.
-- Define neither orientation and both use Empo's defaults.
+- When you define neither orientation, both use Empo's defaults.
 
 Within an orientation, `dpad` and `buttons` are each optional too,
 with one distinction:
@@ -157,9 +158,9 @@ controls area:
 (0,1) └─────────────┘ (1,1)
 ```
 
-`{ "x": 0.5, "y": 0.5 }` is dead center. Empo nudges controls that land
-under a notch or home indicator back into the safe area at runtime, so
-you do not need to account for individual devices.
+`{ "x": 0.5, "y": 0.5 }` is the exact center. At runtime, Empo moves
+controls that land under a notch or home indicator back into the safe
+area. You do not need to adjust for individual devices.
 
 ### `dpad`
 
@@ -169,8 +170,8 @@ you do not need to account for individual devices.
 | `size` | no | 100 to 200 (points) | 140 |
 | `opacity` | no | 0.2 to 1.0 | 1.0 |
 
-Omit `dpad` to keep the default placement. There is no way to remove
-the d-pad; these games need arrow keys.
+Omit `dpad` to keep the default placement. You cannot remove the
+d-pad, because these games need arrow keys.
 
 ### `buttons`
 
@@ -184,15 +185,15 @@ Up to 21 per orientation.
 | `size` | no | 40 to 100 (points) | 56 |
 | `opacity` | no | 0.2 to 1.0 | 1.0 |
 
-Empo truncates labels longer than 8 characters and logs a warning. Two
-buttons may share a key; Empo logs a warning and allows it.
+Empo truncates labels longer than 8 characters and logs a warning.
+Two buttons may share a key. Empo allows this and logs a warning.
 
 Any key from the [table below](#key-codes) works, including keys the
-in-app edit screen does not offer, such as numpad keys. Empo sends real
-keyboard scancodes to the engine, so if a desktop keyboard press
-triggers something in your game, a touch button bound to that key will
-too. That includes F-key script hotkeys and custom Input module
-bindings.
+in-app edit screen does not offer, such as numpad keys. Empo sends
+real keyboard scancodes to the engine. If a desktop keyboard press
+triggers something in your game, a touch button bound to that key
+triggers it too. That includes F-key script hotkeys and custom Input
+module bindings.
 
 ## Controller reference
 
@@ -210,14 +211,13 @@ Each entry maps a gamepad element to a key code, an action, or `null`.
 
 **Your map is a patch.** Empo has a built-in mapping (table below).
 Your file changes only the elements you list, and `null` removes a
-binding the built-in map had. This differs from touch, where a
+binding from the built-in map. This differs from touch, where a
 `buttons` array replaces the whole set for that orientation.
 
 **Element names are positional.** `a` means the south face button on any
 controller: Xbox A, PlayStation Cross, and the Switch button labeled B
 are all `a`. Map by physical position, never by the letter printed on
-the button. This is the single most common mistake in controller
-configs.
+the button. This is the most common mistake in controller configs.
 
 ### Elements
 
@@ -237,17 +237,18 @@ Notes:
 - Stick directions use a sign convention: minus is left or up, plus is
   right or down. `-lefty` fires when the player pushes the left stick
   up.
-- Triggers and stick directions act as digital buttons: pressed at 50%
-  travel, released below 40%, so a half-pulled trigger never flutters.
+- Triggers and stick directions act as digital buttons. They press at
+  50% travel and release below 40%, so a half-pulled trigger never
+  flutters.
 - iOS often reserves `guide` for the system. You can bind it, but test
-  on a real device before relying on it.
+  on a real device before you rely on it.
 - Paddles and touchpad only exist on some controllers (Xbox Elite,
   DualSense). Bindings for absent hardware do nothing.
 
 ### Actions
 
-Values starting with `$` trigger Empo features instead of keys.
-Controller maps only; touch buttons cannot bind actions.
+Values that start with `$` trigger Empo features instead of keys.
+Only controller maps can use them. Touch buttons cannot bind actions.
 
 | Action | Effect |
 |---|---|
@@ -299,7 +300,7 @@ JavaScript reports in a browser. Matching is case-sensitive.
 
 ### RGSS cheat sheet
 
-Which keyboard keys the engines read by default:
+The keyboard keys that the engines read by default:
 
 | Game input | XP | VX / VX Ace | Typical meaning |
 |---|---|---|---|
@@ -310,10 +311,10 @@ Which keyboard keys the engines read by default:
 | L / R | `KeyQ` / `KeyW` | `KeyQ` / `KeyW` | Page up / page down |
 
 The trap: `KeyZ` confirms on VX and VX Ace but maps to the A button on
-XP. `Enter` and `Space` confirm on all three engines, which is why the
-built-in gamepad map uses `Enter` for the south button. If your game
-replaces the Input module (Pokémon Essentials does), your bindings win;
-base your map on them instead of on this table.
+XP. `Enter` and `Space` confirm on all three engines. For this reason,
+the built-in gamepad map uses `Enter` for the south button. If your
+game replaces the Input module (Pokémon Essentials does), your
+bindings win. Base your map on your bindings instead of on this table.
 
 ## Precedence
 
@@ -323,10 +324,12 @@ Touch layout, first match wins:
 2. Your `touch` section
 3. Empo's defaults
 
-The Reset button in Empo's edit mode returns players to layer 2 when
-your file provides it, labeled "Reset to game default."
+When your file provides layer 2, the Reset button in Empo's edit mode
+returns players to it. The button label is then "Reset to game
+default."
 
-Controller bindings merge per element, later layers override:
+Controller bindings merge per element. Later layers override earlier
+ones:
 
 1. Empo's built-in map
 2. The player's global overrides (all games)
@@ -335,20 +338,20 @@ Controller bindings merge per element, later layers override:
 
 Your file outranks a player's global preferences because you know your
 game's scripts. The player keeps the last word for your specific game.
-Design your map as the best default, and expect players to tweak it.
+Design your map as the best default, and expect players to adjust it.
 
 ## Validation and debugging
 
 Empo validates the whole file at load. One error rejects the entire
-file, and the game falls back to defaults as if the file were absent.
-There is no partial application: players get either your exact layout or
-Empo's, never a mix you have not tested.
+file. The game then falls back to the defaults, as if the file did not
+exist. There is no partial application: players get either your exact
+layout or Empo's, never a mix you did not test.
 
 A rejected file is loud on purpose. Empo writes every finding to the
-game's log folder (`Logs/controls.json.log` inside the game's container)
-and shows a notice in the edit-controls screen: "This game ships a
-controls.json with N errors." Ask a tester for that log line if a report
-says your controls did not show up.
+game's log folder (`Logs/controls.json.log` inside the game's
+container). Empo also shows a notice in the edit-controls screen:
+"This game ships a controls.json with N errors." If a report says your
+controls did not show up, ask a tester for that log line.
 
 | Code | Meaning |
 |---|---|
@@ -368,9 +371,9 @@ says your controls did not show up.
 
 Warnings never reject the file.
 
-To catch errors before shipping, validate against the
-[JSON Schema](schemas/empo-controls.v1.schema.json) in any JSON-aware
-editor, or with a validator like `ajv`.
+To catch errors before you ship, validate the file against the
+[JSON Schema](schemas/empo-controls.v1.schema.json). Any JSON-aware
+editor or a validator like `ajv` works.
 
 ## Versioning
 
@@ -381,15 +384,16 @@ editor, or with a validator like `ajv`.
 - An Empo that only knows version 1 ignores a `version: 2` file in
   full. Newer formats never half-apply.
 - Version 1 files work forever. If a version 2 ever exists, every
-  future Empo keeps reading version 1 files exactly as this document
-  describes. Shipping a `controls.json` today is safe.
+  future Empo will read version 1 files exactly as this document
+  describes. It is safe to ship a `controls.json` today.
 
 ## Before you ship
 
-1. Validate the file: with the `$schema` line, your editor flags errors
-   as you type; any JSON Schema validator works too. One minute.
+1. Validate the file. With the `$schema` line, your editor flags
+   errors as you type. Any JSON Schema validator works too. One
+   minute.
 2. Import the game in Empo and open the edit-controls screen. A broken
-   file shows an error notice there, with details in the game's
+   file shows an error notice there. Details go to the game's
    `Logs/controls.json.log`. Five minutes.
-3. If you ship a `controller` section, connect a gamepad and press each
-   remapped element once in-game. Five minutes.
+3. If you ship a `controller` section, connect a gamepad and press
+   each remapped element once in-game. Five minutes.

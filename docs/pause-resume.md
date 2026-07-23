@@ -1,13 +1,13 @@
-# Pause / Resume
+# Pause / resume
 
 ## Overview
 
-The app supports two pause modes:
+The app has two pause modes:
 
-1. **Manual pause** - user taps the pause button in the toolbar. The engine suspends, the UI returns to the library, and the game card shows a pause indicator. Tapping the card resumes with a hero zoom animation.
-2. **Background pause** - the app moves to the background. The engine suspends silently; the player view stays mounted. Auto-resumes when the app returns to the foreground.
+1. **Manual pause** - the user taps the pause button in the toolbar. The engine suspends, the UI returns to the library, and the game card shows a pause indicator. A tap on the card resumes the game with a hero zoom animation.
+2. **Background pause** - the app moves to the background. The engine suspends silently, and the player view stays mounted. The game resumes automatically when the app returns to the foreground.
 
-Both modes share the same engine-side mechanism (condvar block), but differ in how the UI responds.
+Both modes use the same engine-side mechanism (a condvar block). They differ in how the UI responds.
 
 ---
 
@@ -15,28 +15,28 @@ Both modes share the same engine-side mechanism (condvar block), but differ in h
 
 ### Flow
 
-1. UI calls `mkxp_requestPause()` - sets an atomic flag.
+1. The UI calls `mkxp_requestPause()`. This sets an atomic flag.
 2. On the next frame, `GraphicsPrivate::checkPause()` sees the flag and:
    - Captures a snapshot of the front buffer (see below).
    - Calls `mkxp_checkPause()`, which pauses all `AL_PLAYING` audio sources, fires the paused callback, and blocks on a condvar.
 3. The engine thread is now frozen. No rendering, no audio, no script execution.
-4. UI calls `mkxp_requestResume()` - signals the condvar.
+4. The UI calls `mkxp_requestResume()`. This signals the condvar.
 5. `mkxp_checkPause()` unblocks, resumes the paused audio sources, and returns.
-6. `checkPause()` resets frame timing so the FPS limiter doesn't try to catch up.
+6. `checkPause()` resets frame timing so the FPS limiter does not try to catch up.
 
 ### Audio: the context must stay current
 
-Apple's iOS OpenAL implementation triggers audio hardware activity the moment a context is restored via `alcMakeContextCurrent(ctx)` - regardless of source state, suspend calls, or listener gain. This caused an audible blip when quitting a paused game to start another.
+Apple's iOS OpenAL implementation starts audio hardware activity the moment `alcMakeContextCurrent(ctx)` restores a context. Source state, suspend calls, and listener gain do not matter. This caused an audible blip when the user quit a paused game to start another.
 
-The fix: **never touch the OpenAL context**. No `alcMakeContextCurrent(NULL)`, no `alcMakeContextCurrent(ctx)`. The context stays current the entire time. We pause/resume individual sources instead:
+The fix: **never touch the OpenAL context**. No `alcMakeContextCurrent(NULL)`, no `alcMakeContextCurrent(ctx)`. The context stays current the entire time. We pause and resume individual sources instead:
 
-- **On pause:** `alSourcePause()` each `AL_PLAYING` source (tracked by ID).
-- **On resume:** `alSourcePlay()` the tracked sources - audio picks up where it left off.
+- **On pause:** call `alSourcePause()` on each `AL_PLAYING` source (tracked by ID).
+- **On resume:** call `alSourcePlay()` on the tracked sources. Audio continues where it stopped.
 - **On terminate:** sources stay paused (silent) until `finiInstance()` deletes them.
 
 ### Terminate while paused
 
-`mkxp_requestTerminate()` also unblocks the condvar. It sets `s_terminateRequested`, clears the pause flags, signals the condvar, and pushes `SDL_QUIT`. The resume path in `mkxp_checkPause()` checks the terminate flag and skips audio restoration - the sources stay silent until cleanup.
+`mkxp_requestTerminate()` also unblocks the condvar. It sets `s_terminateRequested`, clears the pause flags, signals the condvar, and pushes `SDL_QUIT`. The resume path in `mkxp_checkPause()` checks the terminate flag and skips audio restoration. The sources stay silent until cleanup.
 
 ---
 
@@ -44,13 +44,11 @@ The fix: **never touch the OpenAL context**. No `alcMakeContextCurrent(NULL)`, n
 
 ### The problem
 
-The SDL window is a fullscreen `UIWindow` that sits behind the SwiftUI layer. It can't be moved, resized, or made to participate in SwiftUI view transitions. When the hero zoom animation needs to animate from a game card into the player, there's nothing at the destination - the SDL view isn't part of the SwiftUI view hierarchy, and the PlayerView is a transparent controls overlay.
+The SDL window is a fullscreen `UIWindow` behind the SwiftUI layer. The app cannot move it, resize it, or include it in SwiftUI view transitions. When the hero zoom animation goes from a game card into the player, there is nothing at the destination. The SDL view is not part of the SwiftUI view hierarchy, and the PlayerView is a transparent controls overlay.
 
 ### The pattern
 
-This is a standard technique for bridging non-native rendering surfaces (OpenGL, Metal, video players) with UIKit/SwiftUI transitions. Apple's own APIs use the same approach - `UIView.snapshotView(afterScreenUpdates:)` exists for this purpose, and the system uses frozen snapshots during app switcher animations and rotation transitions.
-
-The idea: **capture the last rendered frame, animate the static image, swap in the live surface when the animation ends.**
+Capture the last rendered frame. Animate the static image. Swap in the live surface when the animation ends. Apple uses the same technique for the app switcher and rotation transitions, and exposes it as `UIView.snapshotView(afterScreenUpdates:)`. It is the standard way to bridge a non-native rendering surface (OpenGL, Metal, video players) into UIKit/SwiftUI transitions.
 
 ### Implementation
 
@@ -64,47 +62,47 @@ gl.ReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 mkxp_setSnapshot(pixels.data(), w, h);
 ```
 
-We read from the internal FBO (the engine's render target), not FBO 0 (the screen), because iOS gives undefined content for the on-screen framebuffer after `swapBuffers`. The engine's 2D projection maps Y top-to-bottom, so the pixel data is already in the correct orientation - no vertical flip needed.
+We read from the internal FBO (the engine's render target), not FBO 0 (the screen), because iOS gives undefined content for the on-screen framebuffer after `swapBuffers`. The engine's 2D projection maps Y from top to bottom, so the pixel data is already in the correct orientation. No vertical flip is needed.
 
 **Storage (bridge, `app_bridge.cpp`):**
 
-`mkxp_setSnapshot()` copies the RGBA data into a `std::vector<unsigned char>` guarded by a mutex. The app reads it out via a two-call copy API (`mkxp_getSnapshotSize()` to learn the dimensions, `mkxp_copySnapshotRGBA()` to copy bytes into a caller-owned buffer). The previous pointer-returning API was dangling-prone across threads and got retired.
+`mkxp_setSnapshot()` copies the RGBA data into a `std::vector<unsigned char>`. A mutex guards the vector. The app reads it out through a two-call copy API: `mkxp_getSnapshotSize()` gives the dimensions, and `mkxp_copySnapshotRGBA()` copies bytes into a caller-owned buffer. We retired the previous pointer-returning API because its pointers dangled across threads.
 
 **Retrieval (Swift, `AppState.swift`):**
 
-The paused callback runs on the engine thread. It reads the snapshot via `mkxp_getSnapshotSize()` + `mkxp_copySnapshotRGBA()`, converts the bytes to a `CGImage` -> `UIImage`, and dispatches to main to store it as `pauseManager.pauseSnapshot`.
+The paused callback runs on the engine thread. It reads the snapshot via `mkxp_getSnapshotSize()` + `mkxp_copySnapshotRGBA()`, converts the bytes to a `CGImage` -> `UIImage`, and dispatches to the main thread to store it as `pauseManager.pauseSnapshot`.
 
 **Display (Swift, `GameLoadingView.swift`):**
 
-When `GameLoadingView` detects a resume (snapshot is non-nil), it shows the snapshot positioned at `engineState.gameRect` - the exact viewport position the engine was using, accounting for portrait layout and safe areas. This makes the hero zoom appear to zoom into the live game.
+When `GameLoadingView` detects a resume (the snapshot is non-nil), it shows the snapshot at `engineState.gameRect`. This is the exact viewport position the engine used, with portrait layout and safe areas included. The hero zoom then appears to zoom into the live game.
 
 **Cleanup (Swift, `PlayerView.onAppear`):**
 
-When PlayerView appears, it picks up `pauseManager.pauseSnapshot`, copies it into local `@State`, and fades it out over 0.35s. After the fade, both the local copy and `pauseManager.pauseSnapshot` are cleared. The live SDL rendering is now visible underneath.
+When PlayerView appears, it picks up `pauseManager.pauseSnapshot`, copies it into local `@State`, and fades it out over 0.35s. After the fade, the view clears the local copy and `pauseManager.pauseSnapshot`. The live SDL rendering is now visible underneath.
 
 ### Portrait layout
 
-In portrait mode, the game renders at the top of the screen with touch controls below. The snapshot must be placed at `engineState.gameRect` (not stretched to fill the screen) to match this layout. `gameRect` is in logical points and already accounts for safe area insets, aspect ratio, and vertical alignment settings.
+In portrait mode, the game renders at the top of the screen with touch controls below. Place the snapshot at `engineState.gameRect` to match this layout. Do not stretch it to fill the screen. `gameRect` is in logical points and already includes safe area insets, aspect ratio, and vertical alignment settings.
 
 ---
 
 ## Resume animation timing
 
-The resume transition has two stages that use the snapshot in sequence for visual continuity:
+The resume transition has two stages. Both use the snapshot in sequence for visual continuity:
 
-### Stage 1: Hero zoom (GameLoadingView)
+### Stage 1: hero zoom (GameLoadingView)
 
-The hero zoom from game card → GameLoadingView requires the library to be visible. `resume()` delays the phase change so the library stays mounted:
+The hero zoom from game card → GameLoadingView requires a visible library. `resume()` delays the phase change so the library stays mounted:
 
 1. `handleGameTap` calls `appState.resume()` then `path.append(game)`.
-2. `resume()` immediately clears `pausedGame` and calls `mkxp_requestResume()` (engine unblocks), but does **not** set `phase = .playing` yet.
+2. `resume()` immediately clears `pausedGame` and calls `mkxp_requestResume()`. The engine unblocks. `resume()` does **not** set `phase = .playing` yet.
 3. `path.append(game)` pushes `GameLoadingView` with the hero zoom. The destination shows the snapshot at `engineState.gameRect` on a black background.
 
-### Stage 2: Handoff to PlayerView
+### Stage 2: handoff to PlayerView
 
-1. After 0.35s (matching the hero zoom duration), `resume()` sets `phase = .playing`.
-2. The library hides (opacity 0), and PlayerView appears. PlayerView picks up the same snapshot from `engineState.pauseSnapshot` and shows it at `engineState.gameRect` as an overlay - **with controls and toolbar visible alongside it**.
-3. The snapshot fades out over 0.35s, revealing the live SDL rendering underneath.
+1. After 0.35s (the hero zoom duration), `resume()` sets `phase = .playing`.
+2. The library hides (opacity 0), and PlayerView appears. PlayerView picks up the same snapshot from `engineState.pauseSnapshot` and shows it at `engineState.gameRect` as an overlay, **with controls and the toolbar visible next to it**.
+3. The snapshot fades out over 0.35s. The live SDL rendering shows underneath.
 
 The snapshot sits at the same `engineState.gameRect` in both views, so the handoff from GameLoadingView to PlayerView lands without a visual jump. Controls render the moment PlayerView mounts.
 

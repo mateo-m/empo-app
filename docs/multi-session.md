@@ -1,40 +1,52 @@
-# Multi-Session
+# Multi-session
 
 ## Status
 
-Cross-session play is currently **disabled**. After a clean game exit, Empo shows an alert ("close from app switcher to play again") instead of returning to the library. The user must force-close + reopen to start a different game.
+Cross-session play is **disabled**. After a clean game exit, Empo shows an alert ("close from app switcher to play again"). It does not return to the library. To start a different game, the user must force-close the app and open it again.
 
-The original "drop to library, pick another game in the same process" UX is parked behind a feature flag pending reliable Ruby state cleanup.
+A feature flag parks the original UX ("drop to library, pick another game in the same process") until Ruby state cleanup is reliable.
 
 ## Why this is hard
 
-iOS apps can't kill themselves and respawn. Android emulators (JoiPlay) sidestep this entirely by calling `Process.killProcess()` after each game. iOS has to clean up the active Ruby VM's state manually between games:
+An iOS app cannot kill itself and start again. Android emulators (JoiPlay) avoid the problem: they call `Process.killProcess()` after each game. On iOS, the app must clean the active Ruby VM's state manually between games:
 
 - Game A defines `class Foo < Bar`. The class lives in the active Ruby's constant table.
 - Game B runs in the same VM. It defines `class Foo < Baz`. Ruby raises `TypeError: superclass mismatch for class Foo`.
-- The hierarchy of leaked classes / monkey-patches / aliases / disposed RGSS objects across two arbitrary games' scripts is unpredictable.
+- The set of leaked classes, monkey-patches, aliases, and disposed RGSS objects across two arbitrary games is unpredictable.
 
-A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method baseline, `MkxpNullMouse` shim for orphan globals, intrusive-list detachment for disposables, etc.) and it worked for narrow same-version game pairs. It didn't survive contact with broader game corpora, especially mixed-version sessions where the active Ruby's data structures differ between games.
+A previous version shipped aggressive cross-session cleanup: constant-baseline diffing, a singleton-method baseline, the `MkxpNullMouse` shim for orphan globals, and intrusive-list detachment for disposables. It worked for narrow same-version game pairs. It failed on broader game sets, especially mixed-version sessions where the active Ruby's data structures differ between games.
 
-The decision: rather than ship a half-working cross-session UX that breaks unpredictably, we surface a clean alert that asks the user to force-close. Future work could re-enable cross-session play either via process forking (separate PID per game) or by moving the engine's per-session VM state into a fully resettable container.
+The decision: we show a clean alert that asks the user to force-close, instead of a half-working cross-session UX that breaks unpredictably. Future work can re-enable cross-session play in two ways: process forking (a separate PID per game), or a move of the engine's per-session VM state into a fully resettable container.
+
+## Disabled quit paths
+
+In May 2026 we disabled every UI path that triggers `AppState.returnToLibrary()` mid-game. The function itself remains:
+
+- **In-game Quit toolbar button** - `PlayerMoreSheet.swift` hard-codes `quitEnabled = false`. We planned a `gameQuit` experimental feature, but it never landed. We later removed the experimental-features machinery (see the note in `AppSettings.swift`).
+- **Library "Quit and play" alert** - the "A game is paused" alert in `GameLibraryView.swift` is informational only. The "Quit and play" button is commented out.
+- **Long-press context-menu Quit** - commented out in `GameContextMenu.swift`.
+- **Loading-hang escape** - `GameLoadingView.swift` shows a static "close Empo from the app switcher" label. The old escape button also armed a programmatic force-quit helper. We deleted that helper because App Store guideline 2.5.1 forbids apps that terminate themselves.
+- **Error-alert OK while a game runs** - `RootView.swift` only dismisses the alert and tells the user to close the app from the app switcher.
+
+The engine-side cross-session cleanup machinery (`pokemon_session_reset.rb`, the session-2+ paths in `binding-mri.cpp`) stays in place but never triggers. The call sites have inline cross-references. Find them with `rg "cross-session Ruby state cleanup" ios/Empo/src/`.
 
 ## What still happens at engine shutdown
 
-Even though the user can't switch to another game in the same process, the engine still does session teardown when Ruby raises `SystemExit` / `Reset`:
+The user cannot switch to another game in the same process. The engine still does session teardown when Ruby raises `SystemExit` / `Reset`:
 
-1. `binding-mri.cpp` catches the exception, calls `mkxp_setEngineExitedCleanly()`.
+1. `binding-mri.cpp` catches the exception and calls `mkxp_setEngineExitedCleanly()`.
 2. `runSessions` waits for `rqTermAck`, then `eventThread.cleanup()`, framebuffer clear, "Game session ended."
 3. `mkxp_setEngineTerminated()` fires the iOS callback.
-4. `AppState`'s callback sets `errorMessage = cleanExitMessage`, the SwiftUI alert appears.
-5. User taps OK → alert dismissed but `phase` stays non-nil so SwiftUI doesn't try to navigate.
-6. User force-closes from app switcher.
-7. On next launch, `CrashTracker.consumeRecovery()` deletes the on-disk `.session-active` markers (a fix that landed alongside the alert UX - without it, the marker outlived the in-memory flag and re-triggered "didn't exit cleanly" on every launch).
+4. `AppState`'s callback sets `errorMessage = cleanExitMessage`. The SwiftUI alert appears.
+5. The user taps OK. The alert dismisses, but `phase` stays non-nil, so SwiftUI does not navigate.
+6. The user force-closes the app from the app switcher.
+7. On the next launch, `CrashTracker.consumeRecovery()` deletes the on-disk `.session-active` markers. This fix landed with the alert UX. Without it, the marker outlived the in-memory flag and re-triggered "didn't exit cleanly" on every launch.
 
 ## Quit-bypass shims
 
-Two `scripts/preload/platform_compat.rb` shims keep this flow working when game scripts try to skip the engine's catch:
+Two `scripts/preload/platform_compat.rb` shims keep this flow safe when game scripts try to skip the engine's catch:
 
-- **`Kernel.exit!` / `Process.exit!` redirect to `Kernel.exit`** - Pokemon Essentials' `pbExit` and various forks of it call `exit!` to skip `at_exit` handlers. On desktop that's harmless; on iOS `exit!` calls C `_exit(status)` directly and the app vanishes before the engine knows. Redirecting to `exit` raises `SystemExit` instead, which the engine catches. App Store guideline 2.5.1 also forbids programmatic process termination, so the redirect serves both correctness and policy.
-- **`Thread.critical` / `Thread.critical=` no-ops on Ruby 1.9+** - Vintage RGSS code wraps `Marshal.load` and save-file I/O in `Thread.critical = true` blocks (a Ruby 1.8 cooperative-scheduling idiom; both methods removed in 1.9). Without the shim, Ruby 1.9+ raises `NoMethodError` mid-quit, the error escapes the script-eval loop, and `SharedState::finiInstance()` segfaults on iOS while tearing down graphics with a pending exception.
+- **`Kernel.exit!` / `Process.exit!` redirect to `Kernel.exit`** - Pokemon Essentials' `pbExit` and many forks of it call `exit!` to skip `at_exit` handlers. On desktop, this is harmless. On iOS, `exit!` calls C `_exit(status)` directly, and the app vanishes before the engine knows. The redirect to `exit` raises `SystemExit` instead, which the engine catches. App Store guideline 2.5.1 also forbids programmatic process termination, so the redirect gives correct behavior and meets the policy.
+- **`Thread.critical` / `Thread.critical=` no-ops on Ruby 1.9+** - Vintage RGSS code wraps `Marshal.load` and save-file I/O in `Thread.critical = true` blocks. This is a Ruby 1.8 cooperative-scheduling idiom, and Ruby 1.9 removed both methods. Without the shim, Ruby 1.9+ raises `NoMethodError` mid-quit. The error escapes the script-eval loop, and `SharedState::finiInstance()` segfaults on iOS while it tears down graphics with a pending exception.
 
-See `docs/multi-ruby.md` for the broader picture.
+See `docs/multi-ruby.md` for the wider picture.
