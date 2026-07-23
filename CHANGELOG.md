@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.4.2 - 2026-07-23
+
+### Bug Fixes
+
+- Restore https support via single-source buildconfig header ([`2645e14`](https://github.com/mateo-m/empo-app/commit/2645e14d3b8834608c1541ba8eafd1500129fa7e))
+
+### Chores
+
+- Pin native-2026-07-23 native prebuilts ([`043bb12`](https://github.com/mateo-m/empo-app/commit/043bb122c1e24b6bc04ed96a3de09cebe20c4ef9))
+
+### Documentation
+
+- Reorganize documentation ([`9f49ce0`](https://github.com/mateo-m/empo-app/commit/9f49ce01e07516ee27ba14939e7e5d0e747c72b1))
+
+### Features
+
+- Parse config files with the engine's json5pp parser ([`42806c4`](https://github.com/mateo-m/empo-app/commit/42806c47d09884091b8133f8fb7f5a7aefdb7a02))
+
+### Other
+
+- Assert manifest round trip at the wire level ([`b5a2607`](https://github.com/mateo-m/empo-app/commit/b5a26078b6d3ece7a25a3db95b8cbcb956bb3602))
+- Compare json5pp-parsed coordinates with a tolerance ([`efd896b`](https://github.com/mateo-m/empo-app/commit/efd896bc0dbdd279686e9bc9a695b01bfcab2640))
+
+### Refactor
+
+- Remove the curated patch distribution ([`d0dd896`](https://github.com/mateo-m/empo-app/commit/d0dd896be8f7b257be016c73b3561a38b884a296))
+
+### UI
+
+- Cleanup comments & docs ([`b9960a7`](https://github.com/mateo-m/empo-app/commit/b9960a7e23f300314aa57e8427d4a59f5dfcb02c))
+
 ## 0.4.1 - 2026-07-22
 
 ### Bug Fixes
