@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.4.2",
+          "buildVersion": "548",
+          "date": "2026-07-23",
+          "localizedDescription": "### Bug Fixes\n\n- Restore https support via single-source buildconfig header ([`2645e14`](https://github.com/mateo-m/empo-app/commit/2645e14d3b8834608c1541ba8eafd1500129fa7e))\n\n### Chores\n\n- Pin native-2026-07-23 native prebuilts ([`043bb12`](https://github.com/mateo-m/empo-app/commit/043bb122c1e24b6bc04ed96a3de09cebe20c4ef9))\n\n### Documentation\n\n- Reorganize documentation ([`9f49ce0`](https://github.com/mateo-m/empo-app/commit/9f49ce01e07516ee27ba14939e7e5d0e747c72b1))\n\n### Features\n\n- Parse config files with the engine's json5pp parser ([`42806c4`](https://github.com/mateo-m/empo-app/commit/42806c47d09884091b8133f8fb7f5a7aefdb7a02))\n\n### Other\n\n- Assert manifest round trip at the wire level ([`b5a2607`](https://github.com/mateo-m/empo-app/commit/b5a26078b6d3ece7a25a3db95b8cbcb956bb3602))\n- Compare json5pp-parsed coordinates with a tolerance ([`efd896b`](https://github.com/mateo-m/empo-app/commit/efd896bc0dbdd279686e9bc9a695b01bfcab2640))\n\n### Refactor\n\n- Remove the curated patch distribution ([`d0dd896`](https://github.com/mateo-m/empo-app/commit/d0dd896be8f7b257be016c73b3561a38b884a296))\n\n### UI\n\n- Cleanup comments & docs ([`b9960a7`](https://github.com/mateo-m/empo-app/commit/b9960a7e23f300314aa57e8427d4a59f5dfcb02c))",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.4.2/Empo-0.4.2-unsigned.ipa",
+          "size": 18666065,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.4.1",
           "buildVersion": "538",
           "date": "2026-07-22",
