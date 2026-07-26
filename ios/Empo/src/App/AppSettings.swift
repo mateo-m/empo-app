@@ -111,9 +111,10 @@ enum AppTheme: String, CaseIterable {
 // We removed the `ExperimentalFeature` enum and its `isEnabled` /
 // `setEnabled` machinery in May 2026, after `gamePause` and
 // `cheats` graduated to always-on. No experimental toggles remain.
-// We also planned `gameQuit` as an experimental feature, but it
-// never landed (cross-session Ruby state cleanup blocks it, see
-// docs/multi-session.md).
+// The once-planned `gameQuit` feature landed as cross-session play
+// (July 2026): quit paths are gated on the compile-time flag in
+// `CrossSessionPlay.swift`, not an experimental toggle. See
+// docs/session-switching-plan.md.
 //
 // To bring back an opt-in experimental toggle later, restore:
 //   - this enum (cases + `label` + `description` + `id`)

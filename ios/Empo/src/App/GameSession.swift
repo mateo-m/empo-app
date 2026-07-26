@@ -17,6 +17,22 @@ enum GameSession {
         let debugLogsEnabled: Bool
     }
 
+    /// The Ruby interpreter this game's session dispatches to. Used
+    /// by `configureEngine` and by `CrossSessionPlay.launchBlocker`,
+    /// which asks the engine whether a fresh VM instance of this
+    /// version is available before offering "play".
+    static func resolveRubyVersion(
+        settings: GameSettings,
+        metadata: GameMetadata
+    ) -> MKXPRubyVersion {
+        switch settings.rubyVersionOverride ?? metadata.rubyVersion {
+        case 18?: return MKXP_RUBY_18
+        case 19?: return MKXP_RUBY_19
+        case 30?, 31?: return MKXP_RUBY_31
+        default: return MKXP_RUBY_UNSET
+        }
+    }
+
     /// Apply managed dirs, Ruby dispatch, syntax transform, patches,
     /// session logging, and bridge session config. Does not set
     /// `mkxp_setGamePath`. The caller awaits engine termination first.
@@ -36,15 +52,7 @@ enum GameSession {
             gameDirectory: gameDir,
             autoDetectedModern: metadata.modernRubyScriptsDetected
         )
-        let rubyVersionRaw = settings.rubyVersionOverride ?? metadata.rubyVersion
-        let rubyVer: MKXPRubyVersion = {
-            switch rubyVersionRaw {
-            case 18?: return MKXP_RUBY_18
-            case 19?: return MKXP_RUBY_19
-            case 30?, 31?: return MKXP_RUBY_31
-            default: return MKXP_RUBY_UNSET
-            }
-        }()
+        let rubyVer = resolveRubyVersion(settings: settings, metadata: metadata)
 
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
         let postload = settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts

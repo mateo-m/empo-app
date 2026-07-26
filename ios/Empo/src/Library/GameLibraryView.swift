@@ -1092,23 +1092,33 @@ private struct LibraryAlertPresentation: ViewModifier {
             }
             .alert("A game is paused", isPresented: $showPausedGameAlert) {
                 Button("OK", role: .cancel, action: onDismissPausedGameAlert)
-                // "Quit and play" disabled until cross-session Ruby
-                // state cleanup is reliable. See ExperimentalFeature
-                // comment in AppSettings.swift. Users have to resume
-                // the paused game (tapping its card) or force-close
-                // the app to play a different one.
-                // Button("Quit and play") {
-                //     guard let game = pendingGame else { return }
-                //     pendingGame = nil
-                //     appState.returnToLibrary()
-                //     appState.selectGame(game)
-                //     path.append(game)
-                // }
+                // Quit the paused game and start the tapped one in a
+                // fresh session. returnToLibrary() clears the pause
+                // state and asks the engine to terminate; selectGame
+                // hands the new path over once the termination
+                // coordinator sees the ack (launchGamePath awaits
+                // it), and the new session gets a fresh Ruby VM
+                // instance.
+                if CrossSessionPlay.enabled {
+                    Button("Quit and play") {
+                        guard let game = pendingGame else { return }
+                        pendingGame = nil
+                        appState.returnToLibrary()
+                        appState.selectGame(game)
+                        path.append(game)
+                    }
+                }
             } message: {
                 if let pausedGame {
-                    Text(
-                        "\"\(pausedGame.title)\" is still running. Resume it from its card, or force-close the app to play a different game."
-                    )
+                    if CrossSessionPlay.enabled {
+                        Text(
+                            "\"\(pausedGame.title)\" is still running. Resume it from its card, or quit it and play this game instead."
+                        )
+                    } else {
+                        Text(
+                            "\"\(pausedGame.title)\" is still running. Resume it from its card, or force-close the app to play a different game."
+                        )
+                    }
                 }
             }
     }

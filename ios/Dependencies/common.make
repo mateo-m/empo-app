@@ -533,6 +533,70 @@ mkxp18-merged: init_dirs ruby18   $(LIBDIR)/mkxp18-merged.o
 mkxp-merged: mkxp18-merged mkxp19-merged mkxp31-merged
 mkxp-core: init_dirs $(LIBDIR)/libmkxpz-core.a
 
+# ---- Ruby island dylibs (cross-session play) --------------------------
+# Each merged.o re-linked as a standalone dylib, the loadable form of
+# the same symbol island: one exported entry point, everything else
+# private. The app embeds each as RubyIsland<NN>.framework and the
+# engine's instance manager (mkxp-z-apple-mobile/src/ruby_instance.cpp)
+# dlopens a fresh image per game session - fresh image = pristine Ruby
+# VM globals, which is what makes unlimited game switching possible
+# (CRuby cannot re-init against used globals; see
+# docs/session-switching-plan.md).
+#
+# -undefined dynamic_lookup defers engine-core symbol resolution
+# (shState, Debug, bridge functions, ...) to load time against the
+# host executable. Two integration requirements on the Empo target:
+#   1. Link the app with -Wl,-export_dynamic and don't strip its
+#      global symbols, so the island's engine-core references bind.
+#   2. When the frameworks ship, swap the mkxpNN-merged.o link lines
+#      in project.yml for nullptr-returning stub entries (the same
+#      pre-build stub mechanism used for missing merged.o files);
+#      the instance manager prefers dylib islands and falls back to
+#      static entries only when no framework is present.
+# The known static-archive deps (openssl for 3.1's openssl ext, zlib,
+# iconv) are linked into each island directly so their symbols never
+# depend on the app's export table.
+mkxp31-island: init_dirs $(LIBDIR)/RubyIsland31.dylib
+mkxp19-island: init_dirs $(LIBDIR)/RubyIsland19.dylib
+mkxp18-island: init_dirs $(LIBDIR)/RubyIsland18.dylib
+mkxp-island: mkxp18-island mkxp19-island mkxp31-island
+
+$(LIBDIR)/RubyIsland31.dylib: $(LIBDIR)/mkxp31-merged.o
+	@echo "[mkxp31] Linking RubyIsland31.dylib..."
+	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) -dynamiclib \
+	    -install_name @rpath/RubyIsland31.framework/RubyIsland31 \
+	    -Wl,-undefined,dynamic_lookup \
+	    -Wl,-exported_symbol,_mkxp_get_script_binding_31 \
+	    $(LIBDIR)/mkxp31-merged.o \
+	    -L$(LIBDIR) -lssl -lcrypto -lz -liconv \
+	    -o $@
+	@echo "[mkxp31] Verifying island exports..."
+	@nm -gU $@ | awk '$$2 == "T"' | head -3
+
+$(LIBDIR)/RubyIsland19.dylib: $(LIBDIR)/mkxp19-merged.o
+	@echo "[mkxp19] Linking RubyIsland19.dylib..."
+	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) -dynamiclib \
+	    -install_name @rpath/RubyIsland19.framework/RubyIsland19 \
+	    -Wl,-undefined,dynamic_lookup \
+	    -Wl,-exported_symbol,_mkxp_get_script_binding_19 \
+	    $(LIBDIR)/mkxp19-merged.o \
+	    -L$(LIBDIR) -lz -liconv \
+	    -o $@
+	@echo "[mkxp19] Verifying island exports..."
+	@nm -gU $@ | awk '$$2 == "T"' | head -3
+
+$(LIBDIR)/RubyIsland18.dylib: $(LIBDIR)/mkxp18-merged.o
+	@echo "[mkxp18] Linking RubyIsland18.dylib..."
+	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) -dynamiclib \
+	    -install_name @rpath/RubyIsland18.framework/RubyIsland18 \
+	    -Wl,-undefined,dynamic_lookup \
+	    -Wl,-exported_symbol,_mkxp_get_script_binding_18 \
+	    $(LIBDIR)/mkxp18-merged.o \
+	    -L$(LIBDIR) -lz -liconv \
+	    -o $@
+	@echo "[mkxp18] Verifying island exports..."
+	@nm -gU $@ | awk '$$2 == "T"' | head -3
+
 # ---- Engine core static library --------------------------------------
 # Everything under $(ENGINE)/src compiled into libmkxpz-core.a. The
 # recipe lives in the engine repo (tools/build-core-ios.sh) so this

@@ -32,6 +32,11 @@ previous cross-session cleanup approach was abandoned.
   isolation failures. The blockers were app-size growth per island and the
   bounded session count — both addressed by this plan's single-island,
   many-instances design.
+- **Stage 3 (container reset) is a ship requirement, not optional R&D.**
+  The finished feature must leave memory clean after/before each session;
+  the `os_proc_available_memory` soft gate is temporary scaffolding that
+  exists only while copy-and-load can leak retired images, and it retires
+  with Stage 3.
 
 ## Ground truth (what constrains any design)
 

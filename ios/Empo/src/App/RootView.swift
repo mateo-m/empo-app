@@ -123,7 +123,7 @@ struct RootView: View {
             }
         }
         .alert(
-            (engineHung || appState.phase != nil) ? "Restart Empo" : "Something went wrong",
+            errorAlertTitle,
             isPresented: showErrorAlert
         ) {
             Button("OK") {
@@ -132,6 +132,12 @@ struct RootView: View {
                     return
                 }
                 if appState.phase != nil {
+                    // A session that already terminated (clean exit
+                    // with a parting message, or a crash) drops back
+                    // to the library here when cross-session play is
+                    // on. Mid-game errors (engine still running)
+                    // no-op inside and keep the session up.
+                    appState.finishEndedSession()
                     return
                 }
                 appState.dismissCrashRecovery()
@@ -139,7 +145,7 @@ struct RootView: View {
         } message: {
             if engineHung {
                 Text("The game stopped responding. Close Empo and reopen it.")
-            } else if appState.phase != nil {
+            } else if appState.phase != nil, !sessionEndedBehindAlert {
                 Text(
                     "\(appState.errorMessage ?? "An error occurred.") Close Empo from the app switcher and reopen it to continue."
                 )
@@ -249,6 +255,22 @@ struct RootView: View {
     /// We do not call `exit()`, per App Store guideline 2.5.1.
     private var engineHung: Bool {
         mkxp_isEngineHung() != 0
+    }
+
+    /// True when an error alert presents over a session whose engine
+    /// already terminated and parked in the session loop. The OK
+    /// button then returns to the library (finishEndedSession), so
+    /// the message must not tell the user to force-close the app.
+    private var sessionEndedBehindAlert: Bool {
+        CrossSessionPlay.enabled && mkxp_isEngineTerminated() != 0
+    }
+
+    private var errorAlertTitle: String {
+        if engineHung { return "Restart Empo" }
+        if appState.phase != nil {
+            return sessionEndedBehindAlert ? "Game ended" : "Restart Empo"
+        }
+        return "Something went wrong"
     }
 
     /// Wait (up to `scanGraceDuration`) for the initial library scan.

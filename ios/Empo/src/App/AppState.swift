@@ -70,6 +70,17 @@ class AppState {
 
         guard phase == nil, pauseManager.pausedGame == nil else { return }
         guard let container = game.container else { return }
+
+        // Cross-session gate: refuse to start a session that would
+        // reuse a dirty Ruby VM or push the app over its memory
+        // budget. Surfaces as the standard error alert (phase is
+        // still nil, so it's dismiss-to-library).
+        if let blocker = CrossSessionPlay.launchBlocker(for: game) {
+            errorMessage = blocker.message
+            return
+        }
+        CrossSessionPlay.sessionsStarted += 1
+
         SaveMigration.migrateLegacySavesIfNeeded(for: container)
         selectedGame = game
         sessionHadError = false
@@ -131,12 +142,9 @@ class AppState {
     /// (Ruby `SystemExit` / `Reset`) mid-session. Sources: the
     /// game's built-in "Exit to desktop" menu, or postload scripts
     /// that raise Reset after they compile data files.
-    /// Cross-session play is disabled (`docs/multi-session.md`), so
-    /// we cannot safely return to the library and launch another
-    /// game in the same process. The user has to force-close and
-    /// reopen. RootView appends "Close Empo from the app switcher
-    /// and reopen it to continue." so the body reads as one natural
-    /// sentence.
+    /// Only shown when `CrossSessionPlay.enabled` is false; with
+    /// cross-session play on, a clean exit returns to the library
+    /// silently and the user just picks the next game.
     private static let cleanExitMessage = "The game has ended or requested a restart."
 
     func consumeCrashRecovery() {
@@ -159,6 +167,20 @@ class AppState {
         tearDownSessionState()
         session.armHangWatchdogIfNeeded(engineWasRunning: engineWasRunning) { [weak self] message in
             self?.errorMessage = message
+        }
+    }
+
+    /// The user dismissed the alert for a session that already
+    /// terminated (clean exit with a parting message, or a crash).
+    /// With cross-session play on and the engine parked in
+    /// waitForGamePath, the library becomes live again; the
+    /// per-game capability gate decides whether the next launch is
+    /// actually possible. RootView's alert OK handler calls this.
+    func finishEndedSession() {
+        guard CrossSessionPlay.enabled, phase != nil else { return }
+        guard mkxp_isEngineTerminated() != 0, mkxp_isEngineHung() == 0 else { return }
+        withAnimation(Motion.snappy) {
+            tearDownSessionState()
         }
     }
 
@@ -305,18 +327,25 @@ extension AppState: EngineSessionCoordinatorDelegate {
     }
 
     func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool) {
-        // Both clean and crash exits surface an alert that routes
-        // through RootView's dismiss-only branch (phase != nil).
-        // Cross-session play is disabled (`docs/multi-session.md`),
-        // so we cannot safely return to the library and launch
-        // another game in the same process. To play again, the user
-        // must force-close from the app switcher.
-        //
-        // We intentionally do NOT set phase = nil here. If phase
-        // becomes nil while an error alert already presents, SwiftUI
-        // swallows the NavigationStack pop. Phase stays non-nil, so
-        // the alert OK button sees phase != nil and routes through
-        // the dismiss-only handler.
+        // Clean exit with cross-session play on and no alert in
+        // flight: the engine parked in waitForGamePath, so drop
+        // straight back to the library - the same UI teardown the
+        // toolbar quit path uses - and the user picks the next game.
+        // The errorMessage == nil guard keeps the boot-gate pattern
+        // working: a game that prints a parting message and exits
+        // already has the alert up, and setting phase = nil while an
+        // alert presents makes SwiftUI swallow the NavigationStack
+        // pop. That case routes through RootView's OK handler, which
+        // calls finishEndedSession() itself.
+        if cleanExit && CrossSessionPlay.enabled && errorMessage == nil {
+            withAnimation(Motion.snappy) {
+                tearDownSessionState()
+            }
+            return
+        }
+
+        // Alert path (crash exits, boot-gate parting messages, and
+        // every exit while the feature flag is off).
         if errorMessage == nil {
             errorMessage =
                 cleanExit ? Self.cleanExitMessage : EngineSessionCoordinator.crashMessage

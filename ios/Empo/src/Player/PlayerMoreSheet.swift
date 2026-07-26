@@ -119,10 +119,10 @@ struct PlayerMoreSheet: View {
                 // Pause: graduated from experimental in May 2026,
                 // always enabled now.
                 let pauseEnabled = true
-                // gameQuit is off. See the ExperimentalFeature comment
-                // in AppSettings.swift. We force it false so the
-                // in-game Quit toolbar button stays hidden.
-                let quitEnabled = false
+                // Quit: enabled with cross-session play. The engine
+                // tears the session down, parks in its session loop,
+                // and the next game gets a fresh Ruby VM instance.
+                let quitEnabled = CrossSessionPlay.enabled
                 if pauseEnabled || quitEnabled {
                     VStack(spacing: 0) {
                         InterleavedRows(

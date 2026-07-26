@@ -186,11 +186,13 @@ struct GameLoadingView: View {
             // returnToLibrary + a hard-deadline force-quit helper.
             // Replaced with a static label because:
             //
-            // 1. returnToLibrary triggers the cross-session Ruby
-            //    state cleanup machinery, which we no longer trust
-            //    after parking the mruby experiment (see
-            //    docs/multi-session.md). Lingering state from a hung
-            //    game would leak into the next session.
+            // 1. A stuck loading screen means the RGSS thread is
+            //    hung. It cannot ack a termination request, so its
+            //    Ruby instance never retires and the session loop
+            //    never parks for another game. A Quit button here
+            //    would only route to the hang alert with extra
+            //    steps; even with cross-session play, a hung engine
+            //    stays terminal.
             // 2. The force-quit helper called the system exit
             //    function, which violates App Store guideline 2.5.1
             //    ("Apps should not terminate themselves

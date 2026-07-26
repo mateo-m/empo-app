@@ -172,11 +172,16 @@ The same preload also restores `Thread.critical` / `Thread.critical=` as no-ops 
 
 ## Cross-session play
 
-Currently disabled. After a clean engine exit, the iOS host shows an alert ("The game has ended or requested a restart. Close Empo from the app switcher and reopen it to continue.") instead of returning to the library. Cross-session reuse of a Ruby VM with a different game's scripts is fragile: the previous session's class definitions leak into the next session and cause superclass-mismatch errors and weirder issues.
-
-A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method scrubbing, intrusive-list detachment for disposables, etc.). It worked for narrow game pairs but did not survive contact with a broader corpus, especially across different Ruby versions. Until that cleanup is reliable, the app asks the user to force-close and relaunch.
-
-Same-game re-entry is safe in principle (no class leak). But the iOS layer currently cannot tell it apart from a different-game pick. See `docs/multi-session.md` for the engine-side teardown sequence.
+Enabled. Each session runs on a factory-fresh instance of its Ruby island:
+the engine's instance manager (`src/ruby_instance.cpp`) dlopens the island
+dylib per session (with a verified-unload canary and a copy-and-load
+fallback), so a quit game's classes, monkey-patches, and globals can never
+leak into the next session — reuse of a dirty VM is structurally impossible
+rather than cleaned up after. Builds that still link the merged.o statically
+fall back to one session per Ruby version per process, with an honest alert
+beyond that (`mkxp_sessionCapability`). Same-game restart is the same path:
+a new session on a fresh instance. See `docs/multi-session.md` for the
+session lifecycle and `docs/session-switching-plan.md` for the design.
 
 ## Files
 

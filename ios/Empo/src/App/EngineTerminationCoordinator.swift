@@ -12,7 +12,7 @@ import Foundation
 @MainActor
 final class EngineTerminationCoordinator {
     static let hangMessage =
-        "The previous game stopped responding. The app will now close."
+        "The previous game stopped responding. Close Empo from the app switcher and reopen it."
 
     private static let hangWatchdogSeconds: UInt64 = 3
 
