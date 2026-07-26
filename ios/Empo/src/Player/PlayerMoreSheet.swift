@@ -17,12 +17,14 @@ struct PlayerMoreSheet: View {
     /// so the user sees exactly what they act on. Falls back to
     /// "Game" if `selectedGame` is nil at present time.
     let gameTitle: String
-    @Binding var showDebugOverlay: Bool
-    @Binding var fastForwardActive: Bool
     /// Capabilities declared by the running game's core. Gates the
     /// Quit row (`quitToLibrary`): mkxp declares false, so for now
     /// the row stays hidden for every game (docs/multi-session.md).
+    /// Declared here so the memberwise init's argument order keeps
+    /// matching `PlayerView`'s call site.
     let capabilities: CoreCapabilities
+    @Binding var showDebugOverlay: Bool
+    @Binding var fastForwardActive: Bool
     /// Multiplier the user configured in Game Settings. nil means
     /// fast-forward is off for this game, so the row stays hidden.
     let fastForwardMultiplier: Int?
