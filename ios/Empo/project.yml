@@ -2,6 +2,27 @@ name: Empo
 packages:
   GameProbe:
     path: ../GameProbe
+  # TODO(rmweb-activation): when the rmweb-core repo lands as a git
+  # submodule at <repo-root>/rmweb-core (the mkxp-z-apple-mobile
+  # precedent - see HEADER_SEARCH_PATHS below for how siblings are
+  # referenced), wire it up here. Three additions, all in this file:
+  #
+  #   1. Package reference (this `packages:` map):
+  #        RmWebHost:
+  #          path: ../../rmweb-core/host-apple
+  #   2. Target dependency (targets.Empo.dependencies):
+  #        - package: RmWebHost
+  #   3. Adapter sources compiled INTO the app target
+  #      (targets.Empo.sources) so the adapter can conform to
+  #      Empo's core contract without a circular package dep:
+  #        - path: ../../rmweb-core/adapters/empo
+  #          type: group
+  #
+  # Until then, every rmWeb source in src/Cores/RmWeb compiles to
+  # nothing behind `#if canImport(RmWebHost)`, and the registry /
+  # AppState branches that mention RmWebCore stay dormant. No
+  # functional change in this file is safe before the submodule
+  # exists, so this stays comment-only by design.
 options:
   bundleIdPrefix: sh.mateo
   deploymentTarget:

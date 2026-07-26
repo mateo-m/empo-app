@@ -125,7 +125,16 @@ class AppWindow: UIWindow {
             // permissive.
             let gameRect = EngineState.shared.gameRect
             if gameRect.isEmpty || gameRect.contains(point) {
-                return GameViewEmbedder.embeddedView
+                // SDL sessions route to the reparented SDL view;
+                // `.view` surface sessions (rmWeb, dormant) route
+                // to their hosted view instead - for mkxp the first
+                // operand is always non-nil during play, so this is
+                // the pre-cores behavior.
+                // TODO(rmweb-activation): rmWeb never publishes
+                // gameRect (it stays empty), so every non-chrome
+                // touch routes to the webview; verify chrome
+                // regions still win on device.
+                return GameViewEmbedder.embeddedView ?? CoreViewEmbedder.embeddedView
             }
             return hit
         }
@@ -297,9 +306,23 @@ class AppWindow: UIWindow {
             if let root = window.rootViewController?.view {
                 clearPassThroughBackdrop(in: root)
             }
-            GameViewEmbedder.embedWithRetry()
+            // Embed the active session's rendering surface.
+            // `.sdlHostedWindow` (mkxp) keeps the exact SDL
+            // reparenting dance; `.view` sessions (rmWeb, dormant
+            // until the submodule + import gate land) host their
+            // UIView at the same spot in the stack. A nil session
+            // falls back to the SDL path, preserving pre-cores
+            // behavior verbatim.
+            switch AppState.shared.activeSession?.surface {
+            case .view(let gameView):
+                CoreViewEmbedder.embed(gameView)
+            case .sdlHostedWindow, nil:
+                GameViewEmbedder.embedWithRetry()
+            }
         } else {
             GameViewEmbedder.detach()
+            // No-op unless a `.view` surface session was embedded.
+            CoreViewEmbedder.detach()
             window.isHidden = false
             window.isOpaque = false
             window.backgroundColor = .clear

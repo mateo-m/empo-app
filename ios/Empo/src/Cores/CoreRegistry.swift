@@ -8,9 +8,25 @@ struct CoreRegistry: Sendable {
     static let shared = CoreRegistry()
 
     /// Every core built into this binary, in registration order.
-    /// mkxp is the only core today; rmWeb joins in phase 3 of the
-    /// cores plan.
-    let allCores: [any GameCore] = [MkxpCore()]
+    /// Registration is conditional-compilation-friendly: a core
+    /// whose host package is absent from the build simply does not
+    /// register.
+    let allCores: [any GameCore]
+
+    init() {
+        var cores: [any GameCore] = [MkxpCore()]
+        #if canImport(RmWebHost)
+            // `RmWebCore` is the Empo adapter compiled from the
+            // rmweb-core submodule (adapters/empo/RmWebCore.swift);
+            // it only exists once the submodule + its XcodeGen
+            // entries land (see the TODO(rmweb-activation) block in
+            // project.yml). Registering it is still dormant even
+            // then: the importer rejects MV/MZ until the phase-2
+            // gate opens, so no game resolves to `.rmWeb`.
+            cores.append(RmWebCore())
+        #endif
+        allCores = cores
+    }
 
     /// The core registered for `kind`, or nil when this build has
     /// none (`.unsupported`, or a kind added by a future build).
