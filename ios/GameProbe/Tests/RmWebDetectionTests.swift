@@ -99,11 +99,42 @@ final class RmWebDetectionTests: XCTestCase {
         XCTAssertNil(RmWebDetection.detect(in: root))
     }
 
+    // The mixed-case tests are only discriminating on a
+    // case-sensitive filesystem (Linux CI): there the files
+    // genuinely differ from the canonical lowercase names, so
+    // they fail against exact-name lookups. On a case-insensitive
+    // macOS filesystem they still pass, just trivially.
+
+    func testMixedCaseBrowserMVExportDetectsAsMV() throws {
+        try touch([
+            "Index.HTML",
+            "JS/RPG_Core.js",
+        ])
+        XCTAssertEqual(RmWebDetection.detect(in: root), .mv)
+    }
+
+    func testMixedCaseWwwWrappedMZExportDetectsAsMZ() throws {
+        try touch([
+            "WWW/Index.html",
+            "WWW/js/RMMZ_CORE.JS",
+        ])
+        XCTAssertEqual(RmWebDetection.detect(in: root), .mz)
+    }
+
     func testIndexHtmlDirectoryIsNotClaimed() throws {
         // A directory literally named index.html must not count as
         // the marker file.
         try FileManager.default.createDirectory(
             at: root.appendingPathComponent("index.html"),
+            withIntermediateDirectories: true)
+        try touch(["js/rmmz_core.js"])
+        XCTAssertNil(RmWebDetection.detect(in: root))
+    }
+
+    func testMixedCaseIndexHtmlDirectoryIsNotClaimed() throws {
+        // The directory exclusion must survive case-folding too.
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("Index.HTML"),
             withIntermediateDirectories: true)
         try touch(["js/rmmz_core.js"])
         XCTAssertNil(RmWebDetection.detect(in: root))

@@ -22,33 +22,77 @@ public enum RmWebGameKind: String, Codable, Equatable, Sendable {
 /// Detection requires the engine core file, not just index.html, so
 /// random web pages are not claimed. MZ wins when both core files
 /// are present.
+///
+/// All name matching is case-insensitive (`Index.HTML`,
+/// `WWW/js/RPG_Core.js`, ...): games are authored on
+/// case-insensitive Windows/macOS filesystems, and the archive
+/// probe's marker matching (`GameImportValidator`'s
+/// `isRmWebMarker`) already case-folds, so on-disk detection must
+/// agree or mixed-case archives extract markers yet never detect.
+/// Each directory is listed once and its names case-folded - the
+/// same approach as rmweb-core's `CaseInsensitivePathResolver`, in
+/// miniature.
 public enum RmWebDetection {
 
     public static func detect(
         in gameDirectory: URL,
         fileManager: FileManager = .default
     ) -> RmWebGameKind? {
-        for component in ["", "www"] {
-            let webRoot =
-                component.isEmpty
-                ? gameDirectory
-                : gameDirectory.appendingPathComponent(component, isDirectory: true)
-            guard fileExists(webRoot.appendingPathComponent("index.html"), fileManager)
+        // Candidate web roots: the game directory itself, then a
+        // `www/` wrapper (desktop NW.js exports), both matched
+        // case-insensitively.
+        let rootListing = caseFoldedListing(of: gameDirectory, fileManager)
+        var webRoots: [(URL, [String: String])] = [(gameDirectory, rootListing)]
+        if let www = rootListing["www"] {
+            let wwwURL = gameDirectory.appendingPathComponent(www, isDirectory: true)
+            // A non-directory `www` yields an empty listing below
+            // and the candidate simply never matches.
+            webRoots.append((wwwURL, caseFoldedListing(of: wwwURL, fileManager)))
+        }
+
+        for (webRoot, listing) in webRoots {
+            // A directory literally named index.html doesn't count.
+            guard let indexName = listing["index.html"],
+                isFile(webRoot.appendingPathComponent(indexName), fileManager)
             else {
                 continue
             }
-            let js = webRoot.appendingPathComponent("js", isDirectory: true)
-            if fileExists(js.appendingPathComponent("rmmz_core.js"), fileManager) {
+            guard let jsName = listing["js"] else { continue }
+            let js = webRoot.appendingPathComponent(jsName, isDirectory: true)
+            let jsListing = caseFoldedListing(of: js, fileManager)
+            if let core = jsListing["rmmz_core.js"],
+                isFile(js.appendingPathComponent(core), fileManager)
+            {
                 return .mz
             }
-            if fileExists(js.appendingPathComponent("rpg_core.js"), fileManager) {
+            if let core = jsListing["rpg_core.js"],
+                isFile(js.appendingPathComponent(core), fileManager)
+            {
                 return .mv
             }
         }
         return nil
     }
 
-    private static func fileExists(_ url: URL, _ fm: FileManager) -> Bool {
+    /// One directory listing, case-folded: lowercased name ->
+    /// actual on-disk name. First writer wins on case-fold
+    /// collisions (matching `CaseInsensitivePathResolver`); a
+    /// missing or non-directory URL yields an empty map.
+    private static func caseFoldedListing(
+        of directory: URL, _ fm: FileManager
+    ) -> [String: String] {
+        guard let names = try? fm.contentsOfDirectory(atPath: directory.path) else {
+            return [:]
+        }
+        var map: [String: String] = [:]
+        for name in names {
+            let folded = name.lowercased()
+            if map[folded] == nil { map[folded] = name }
+        }
+        return map
+    }
+
+    private static func isFile(_ url: URL, _ fm: FileManager) -> Bool {
         var isDirectory: ObjCBool = false
         return fm.fileExists(atPath: url.path, isDirectory: &isDirectory)
             && !isDirectory.boolValue
