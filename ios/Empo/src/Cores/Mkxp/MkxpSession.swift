@@ -23,8 +23,12 @@ final class MkxpSession: CoreSession {
 
     init(launch: GameSession.LaunchInput) {
         self.launch = launch
-        self.capabilities = MkxpCore().capabilities(
-            for: launch.game, metadata: launch.metadata)
+        // Resolve through the registry so it stays the single
+        // source for core instances; the local fallback only
+        // covers the (unreachable) case of an unregistered core,
+        // and declares the identical capabilities.
+        self.capabilities = (CoreRegistry.shared.core(for: .mkxp) ?? MkxpCore())
+            .capabilities(for: launch.game, metadata: launch.metadata)
     }
 
     /// Exactly the sequence `AppState.selectGame` ran before the

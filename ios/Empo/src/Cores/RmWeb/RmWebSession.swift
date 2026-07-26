@@ -48,8 +48,12 @@
             }
             self.launch = launch
             self.delegate = delegate
-            self.capabilities = RmWebCore().capabilities(
-                for: launch.game, metadata: launch.metadata)
+            // Resolve through the registry so it stays the single
+            // source for core instances; the local fallback only
+            // covers the (unreachable) case of an unregistered
+            // core, and declares the identical capabilities.
+            self.capabilities = (CoreRegistry.shared.core(for: .rmWeb) ?? RmWebCore())
+                .capabilities(for: launch.game, metadata: launch.metadata)
             let descriptor = RmWebGameDescriptor(
                 gameRoot: launch.gameDir,
                 // Saves live in the container's `UserData/`, inside
@@ -100,6 +104,24 @@
             // host has flushed pending saves - `AppState` drops its
             // reference synchronously after this call, and the
             // host's 3s watchdog guarantees the completion runs.
+            //
+            // Retention audit (against rmweb-core's
+            // `RmWebHostController.terminate`): `host.delegate` is
+            // declared `public weak var`, so the session -> host ->
+            // delegate edge cannot cycle. The watchdog's
+            // `asyncAfter` captures the finish closure (and through
+            // `completion`, this session) for at most 3 seconds
+            // regardless of outcome, and the `terminateReady` and
+            // content-process-death paths both nil out
+            // `terminateContinuation` - so on those paths this
+            // self-retention is bounded, not a leak. One gap: the
+            // watchdog path does NOT clear `terminateContinuation`,
+            // so a page that never reports terminateReady (while
+            // its content process stays alive) leaves host ->
+            // continuation -> completion -> self cycling
+            // permanently. TODO(rmweb-activation): clear
+            // `terminateContinuation` after the watchdog fires
+            // (one-line host-side fix in rmweb-core) and re-verify.
             let retained = self
             host.terminate {
                 _ = retained
