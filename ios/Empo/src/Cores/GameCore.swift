@@ -3,19 +3,16 @@ import Foundation
 /// One per engine runtime. Stateless; `CoreRegistry` owns one
 /// instance per `CoreKind` (`docs/plans/emulator-cores.md`).
 ///
-/// Phase 1 of the cores plan keeps this contract minimal on
-/// purpose: identity plus a per-game capability declaration. The
-/// session half of the contract (`CoreSession` +
-/// `CoreSessionDelegate`, generalizing today's
-/// `EngineSessionCoordinator` / `EngineSessionCoordinatorDelegate`
-/// and `GameSession.LaunchInput`) is a later mechanical extraction
-/// - `EngineSessionCoordinator` is deeply wired into `AppState`
-/// (delegate conformance, pause/play-time/crash-marker plumbing),
-/// and moving it behind a protocol is exactly the kind of
-/// wide-blast-radius change the plan defers until the capability
-/// layer has proven out. `EngineSessionCoordinatorDelegate` is
-/// already engine-neutral, so it is the seam that extraction will
-/// formalize.
+/// This half of the contract stays minimal on purpose: identity
+/// plus a per-game capability declaration. The session half lives
+/// in `CoreSession.swift` (`CoreSession` + `CoreSessionDelegate`,
+/// generalizing today's `EngineSessionCoordinator` /
+/// `EngineSessionCoordinatorDelegate` and
+/// `GameSession.LaunchInput`); session construction is a separate
+/// factory protocol (`SessionProviding`) rather than a requirement
+/// here, so phase 1 conformances - including adapters that live in
+/// core repos, like rmweb-core's `RmWebCore` - keep compiling
+/// untouched.
 protocol GameCore: Sendable {
     var kind: CoreKind { get }
 
