@@ -327,9 +327,20 @@ enum GameImportValidator {
         return .notAnRPGMakerGame
     }
 
+    /// How deep `webEngineRejection` descends below the scanned
+    /// root. This walk runs for EVERY invalid container on every
+    /// library rescan (`GameCatalog` -> `validate`), so unlike
+    /// `discoverLikelyGameRoots` (import-time only, unbounded) it
+    /// must not recurse a whole asset tree. MV/MZ roots in real
+    /// archives sit at depth 0-2 (wrapper folder + optional
+    /// `www/`, which `RmWebDetection` itself looks into), so a
+    /// small constant loses nothing.
+    private static let webEngineRejectionMaxDepth = 4
+
     /// Scans `url` and its subdirectories (same walk as
-    /// `discoverLikelyGameRoots`) for an RPG Maker MV/MZ layout and
-    /// returns the specific "web engine" rejection when one is
+    /// `discoverLikelyGameRoots`, bounded to
+    /// `webEngineRejectionMaxDepth`) for an RPG Maker MV/MZ layout
+    /// and returns the specific "web engine" rejection when one is
     /// found. Callers use it only after no candidate root produced
     /// a choice or a meaningful error, so it never masks the
     /// existing errors for other invalid inputs.
@@ -337,11 +348,11 @@ enum GameImportValidator {
         in url: URL,
         fm: FileManager = .default
     ) -> ImportError? {
-        var queue = [url]
+        var queue: [(url: URL, depth: Int)] = [(url, 0)]
         var visited = Set<String>()
 
         while !queue.isEmpty {
-            let candidate = queue.removeFirst()
+            let (candidate, depth) = queue.removeFirst()
             let key = candidate.standardizedFileURL.path
             if !visited.insert(key).inserted { continue }
 
@@ -349,7 +360,7 @@ enum GameImportValidator {
                 return .unsupportedWebEngine(kind)
             }
 
-            guard
+            guard depth < webEngineRejectionMaxDepth,
                 let items = try? fm.contentsOfDirectory(
                     at: candidate,
                     includingPropertiesForKeys: [.isDirectoryKey],
@@ -361,7 +372,10 @@ enum GameImportValidator {
                 $0.lastPathComponent != "__MACOSX"
                     && (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
             }
-            queue.append(contentsOf: childDirectories.sorted { $0.path < $1.path })
+            queue.append(
+                contentsOf: childDirectories.sorted { $0.path < $1.path }
+                    .map { ($0, depth + 1) }
+            )
         }
 
         return nil
