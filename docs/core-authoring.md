@@ -91,6 +91,18 @@ Declare `false` for anything your MVP does not actually implement. mkxp declares
 ([`multi-session.md`](multi-session.md)) — honest declarations are what let the UI promise
 users only what works.
 
+### Designated extension point: core requirements
+
+Capabilities describe what a core **can do**. Some future cores will also have
+**requirements** — prerequisites a game needs before it can run: user-supplied console keys
+(3DS-class emulators), BIOS images, or shared runtime packages (the RGSS RTP alert is the
+existing proto-example). Requirements are deliberately not modeled yet: neither built-in core
+needs them, and the no-speculative-fields rule applies. When the first core with a
+prerequisite lands, add a `CoreRequirements` type next to `CoreCapabilities` and give the
+launcher the generic UX: an import slot, per-core (not per-game) storage, a validation hook,
+and a launch-time gate with a specific message. Never bundle or download such material — key
+and BIOS files must always be user-supplied imports, for the same legal reasons the RTP is.
+
 ### 5. Per-core UI surfaces
 
 The Info sheet, Settings sheet, and import errors render per-core content. Follow the
