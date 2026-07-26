@@ -26,5 +26,6 @@ Explanations of the trickier architecture, in rough reading order:
 | [`multi-session.md`](multi-session.md)               | Why cross-session play is disabled, and the neutralized quit paths.                |
 | [`pause-resume.md`](pause-resume.md)                 | Frozen-frame snapshots that bridge the SDL window into SwiftUI transitions.        |
 | [`import-pipeline.md`](import-pipeline.md)           | The game import pipeline: supported inputs, stage flow, invariants.                |
+| [`core-authoring.md`](core-authoring.md)             | Writing a core/adapter so Empo can run another engine's games.                     |
 
 `media/` holds the README screenshots and demo assets.
