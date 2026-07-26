@@ -27,7 +27,8 @@ struct CoreCapabilities: Equatable, Sendable {
     }
 
     /// Whether the core can enforce the per-game network toggle.
-    /// Consumer: the "Network access" row in `GameSettingsView`.
+    /// Intended consumer: the "Network access" row in
+    /// `GameSettingsView` (see `networkControl` below).
     enum NetworkControl: Equatable, Sendable {
         /// The core honors `GameSettings.networkEnabled`.
         case enforceable
@@ -60,8 +61,8 @@ struct CoreCapabilities: Equatable, Sendable {
     let sequentialSessions: Bool
 
     /// Pause with frozen-frame snapshot (hero-zoom transitions,
-    /// background pause). Consumers: `PauseManager` and the pause
-    /// row in `PlayerMoreSheet`.
+    /// background pause). Consumer: the Pause row in
+    /// `PlayerMoreSheet` (and its `hasContent` mirror).
     let pauseSnapshot: Bool
 
     /// Consumers: the fast-forward toggle in `PlayerMoreSheet` and
@@ -76,20 +77,33 @@ struct CoreCapabilities: Equatable, Sendable {
     let inputInjection: InputInjectionKind
 
     /// Whether the core supports an in-game text-entry keyboard.
-    /// Consumers: the player toolbar's keyboard toggle and the
-    /// "In-game keyboard" row in `GameSettingsView`.
+    /// Intended consumers: the player toolbar's keyboard toggle
+    /// and the "In-game keyboard" row in `GameSettingsView`.
+    /// Nothing gates on it yet - today the SDL text-input bridge
+    /// simply never fires for other cores (`PlayerView`).
+    /// TODO(rmweb-activation): gate those surfaces on this field.
     let inGameKeyboardText: Bool
 
-    /// Whether the core can map touches to mouse input. Consumer:
-    /// the "Touch acts as mouse" row in `GameSettingsView`.
+    /// Whether the core can map touches to mouse input. Intended
+    /// consumer: the "Touch acts as mouse" row in
+    /// `GameSettingsView`. Nothing gates on it yet.
+    /// TODO(rmweb-activation): hide that row for cores that
+    /// declare false.
     let touchMouse: Bool
 
     /// Whether the core can enforce the per-game network toggle.
+    /// Intended consumer: the "Network access" row in
+    /// `GameSettingsView` (see `NetworkControl` above). Nothing
+    /// gates on it yet. TODO(rmweb-activation): gate that row on
+    /// `.enforceable`.
     let networkControl: NetworkControl
 
     /// Whether the core surfaces in-game modal dialogs (Ruby
-    /// `msgbox` / `p`) to the host. Consumer: `RootView`'s
-    /// info/error alerts.
+    /// `msgbox` / `p`) to the host. Intended consumer: `RootView`'s
+    /// info/error alerts. Nothing gates on it yet - cores without
+    /// the bridge simply never deliver the callbacks.
+    /// TODO(rmweb-activation): decide whether the alert wiring
+    /// needs an explicit gate or the no-callback behavior stands.
     let modalDialogBridge: Bool
 
     /// Diagnostics-overlay fields the core can report (fps,

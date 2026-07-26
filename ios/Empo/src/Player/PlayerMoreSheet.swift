@@ -18,14 +18,14 @@ struct PlayerMoreSheet: View {
     /// "Game" if `selectedGame` is nil at present time.
     let gameTitle: String
     /// Capabilities declared by the running game's core. Gates the
-    /// Cheats, Fast forward, and Diagnostics rows (`cheats` /
-    /// `fastForward` / `diagnostics`; mkxp declares all of them, so
-    /// mkxp games render every row exactly as before cores existed)
-    /// and the Quit row (`quitToLibrary`: mkxp declares false, so
-    /// for now that row stays hidden for every game,
-    /// docs/multi-session.md). Declared here so the memberwise
-    /// init's argument order keeps matching `PlayerView`'s call
-    /// site.
+    /// Cheats, Fast forward, Diagnostics, and Pause rows (`cheats`
+    /// / `fastForward` / `diagnostics` / `pauseSnapshot`; mkxp
+    /// declares all of them, so mkxp games render every row exactly
+    /// as before cores existed) and the Quit row (`quitToLibrary`:
+    /// mkxp declares false, so for now that row stays hidden for
+    /// every game, docs/multi-session.md). Declared here so the
+    /// memberwise init's argument order keeps matching
+    /// `PlayerView`'s call site.
     let capabilities: CoreCapabilities
     @Binding var showDebugOverlay: Bool
     @Binding var fastForwardActive: Bool
@@ -71,7 +71,7 @@ struct PlayerMoreSheet: View {
         let cheats = capabilities.cheats
         let fastFwd = capabilities.fastForward && (fastForwardMultiplier ?? 0) >= 2
         let diag = !capabilities.diagnostics.isEmpty && settings.diagnosticsOverlay
-        let pause = true
+        let pause = capabilities.pauseSnapshot
         let quit = capabilities.quitToLibrary
         return cheats || fastFwd || diag || pause || quit || controllerRemapAvailable
     }
@@ -135,8 +135,12 @@ struct PlayerMoreSheet: View {
                 // the running game so it is clear which session
                 // they act on.
                 // Pause: graduated from experimental in May 2026,
-                // always enabled now.
-                let pauseEnabled = true
+                // always enabled where the core supports the
+                // snapshot-pause flow. Both real cores declare
+                // `pauseSnapshot: true` (mkxp's engine pause
+                // callback, rmWeb's WKWebView takeSnapshot), so
+                // this renders exactly the pre-cores row today.
+                let pauseEnabled = capabilities.pauseSnapshot
                 // Quit is gated on the running game's core
                 // capability. mkxp declares `quitToLibrary: false`
                 // (cross-session Ruby state cleanup is not reliable,
