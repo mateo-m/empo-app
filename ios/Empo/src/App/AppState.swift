@@ -61,23 +61,37 @@ class AppState {
         session.delegate = self
     }
 
-    func selectGame(_ game: GameEntry) {
+    /// Starts a session for `game` (or resumes it when it is the
+    /// paused one). Returns false when nothing was started - the
+    /// launch was blocked by the cross-session gate, or a session is
+    /// already active. Callers MUST NOT push the loading view on
+    /// false: a GameLoadingView pushed while `phase` stays nil has
+    /// no pop path (back button hidden, and the pop trigger is a
+    /// phase *change* that never comes) and strands the user.
+    ///
+    /// `bypassMemoryGate` is for the quit-and-play flow, where the
+    /// gate would measure available memory while the just-quit
+    /// game's footprint is still resident and spuriously block.
+    @discardableResult
+    func selectGame(_ game: GameEntry, bypassMemoryGate: Bool = false) -> Bool {
         let pauseManager = PauseManager.shared
         if let paused = pauseManager.pausedGame, paused.id == game.id {
             resumePausedGame()
-            return
+            return true
         }
 
-        guard phase == nil, pauseManager.pausedGame == nil else { return }
-        guard let container = game.container else { return }
+        guard phase == nil, pauseManager.pausedGame == nil else { return false }
+        guard let container = game.container else { return false }
 
         // Cross-session gate: refuse to start a session that would
         // reuse a dirty Ruby VM or push the app over its memory
         // budget. Surfaces as the standard error alert (phase is
         // still nil, so it's dismiss-to-library).
-        if let blocker = CrossSessionPlay.launchBlocker(for: game) {
+        if let blocker = CrossSessionPlay.launchBlocker(
+            for: game, includeMemoryGate: !bypassMemoryGate)
+        {
             errorMessage = blocker.message
-            return
+            return false
         }
         CrossSessionPlay.sessionsStarted += 1
 
@@ -132,6 +146,7 @@ class AppState {
         Task { @MainActor in
             await session.launchGamePath(game.path)
         }
+        return true
     }
 
     private var activeSessionGame: GameEntry? {
@@ -178,7 +193,11 @@ class AppState {
     /// actually possible. RootView's alert OK handler calls this.
     func finishEndedSession() {
         guard CrossSessionPlay.enabled, phase != nil else { return }
-        guard mkxp_isEngineTerminated() != 0, mkxp_isEngineHung() == 0 else { return }
+        // Recoverable = terminated, not hung, and no Ruby instance
+        // stranded checked-out by a crash. A non-recoverable end
+        // keeps phase set so the user gets the honest "close Empo"
+        // framing instead of a library where every tap is blocked.
+        guard mkxp_isSessionRecoverable() != 0 else { return }
         withAnimation(Motion.snappy) {
             tearDownSessionState()
         }
@@ -337,7 +356,13 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // alert presents makes SwiftUI swallow the NavigationStack
         // pop. That case routes through RootView's OK handler, which
         // calls finishEndedSession() itself.
-        if cleanExit && CrossSessionPlay.enabled && errorMessage == nil {
+        // The recoverable check covers the rare clean exit whose VM
+        // quiesce failed (at_exit escaped ruby_cleanup): the engine
+        // then holds the instance checked out and every next launch
+        // would be blocked, so the honest alert is the better exit.
+        if cleanExit && CrossSessionPlay.enabled && errorMessage == nil
+            && mkxp_isSessionRecoverable() != 0
+        {
             withAnimation(Motion.snappy) {
                 tearDownSessionState()
             }

@@ -863,8 +863,13 @@ struct GameLibraryView: View {
             rtpWarnedRequirement = requirement
             showRTPRequiredAlert = true
         } else {
-            appState.selectGame(game)
-            path.append(game)
+            // Only push the loading view when a session actually
+            // started: a GameLoadingView pushed with phase == nil is
+            // un-poppable (back button hidden, and the pop trigger
+            // is a phase change that never comes).
+            if appState.selectGame(game) {
+                path.append(game)
+            }
         }
     }
 
@@ -872,8 +877,9 @@ struct GameLibraryView: View {
         guard let game = rtpWarnedGame else { return }
         rtpWarnedGame = nil
         rtpWarnedRequirement = nil
-        appState.selectGame(game)
-        path.append(game)
+        if appState.selectGame(game) {
+            path.append(game)
+        }
     }
 
     private func refreshGameSizes() {
@@ -1093,19 +1099,32 @@ private struct LibraryAlertPresentation: ViewModifier {
             .alert("A game is paused", isPresented: $showPausedGameAlert) {
                 Button("OK", role: .cancel, action: onDismissPausedGameAlert)
                 // Quit the paused game and start the tapped one in a
-                // fresh session. returnToLibrary() clears the pause
-                // state and asks the engine to terminate; selectGame
-                // hands the new path over once the termination
-                // coordinator sees the ack (launchGamePath awaits
-                // it), and the new session gets a fresh Ruby VM
-                // instance.
+                // fresh session. Gate order matters: the launch
+                // blocker is evaluated for the NEW game *before*
+                // returnToLibrary() irreversibly terminates the
+                // paused one - the capability check predicts the
+                // post-retire state, so a same-version block on a
+                // static-island build refuses up front instead of
+                // killing the paused game and then failing. The
+                // memory gate is skipped here because the quit
+                // game's footprint is still resident at this point
+                // (selectGame runs before teardown finishes);
+                // launchGamePath awaits the termination ack before
+                // handing the engine the new path.
                 if CrossSessionPlay.enabled {
                     Button("Quit and play") {
                         guard let game = pendingGame else { return }
                         pendingGame = nil
+                        if let blocker = CrossSessionPlay.launchBlocker(
+                            for: game, includeMemoryGate: false)
+                        {
+                            appState.errorMessage = blocker.message
+                            return
+                        }
                         appState.returnToLibrary()
-                        appState.selectGame(game)
-                        path.append(game)
+                        if appState.selectGame(game, bypassMemoryGate: true) {
+                            path.append(game)
+                        }
                     }
                 }
             } message: {

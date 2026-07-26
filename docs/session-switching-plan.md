@@ -171,6 +171,23 @@ Posture, in order:
 - Stage 3 removes the problem class entirely; the watermark then becomes a
   should-never-fire assertion.
 
+Known bounds accepted until the Stage 3 completion work (from adversarial
+review):
+
+- **Quit-and-play skips the memory watermark.** The gate would otherwise
+  measure free memory while the just-quit game is still resident and block
+  spuriously. Residual risk: that one flow can launch a big game while the
+  previous one is mid-teardown; `ruby_cleanup` returns most of the heap
+  before the new session's path is handed over (`launchGamePath` awaits the
+  termination ack), and Stage 3 closes the gap for good.
+- **pthread-key ceiling.** Each 1.9/3.1 instance's `ruby_init` creates
+  pthread keys (NULL destructors) that nothing deletes, and the in-place
+  segment reset wipes the island's record of them. Darwin caps keys at 512,
+  so "unlimited" is really a few hundred sessions per app launch before
+  `pthread_key_create` fails and Ruby aborts. Fix planned with the arena
+  work: track keys created between acquire and retire and
+  `pthread_key_delete` them (safe - no destructors).
+
 ---
 
 ## Rejected approaches (and why)

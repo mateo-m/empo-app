@@ -36,6 +36,9 @@ enum CrossSessionPlay {
         /// version (static-island build, or a crashed session left
         /// its instance checked out).
         case dirtyRuby
+        /// The previous session's engine never acked termination;
+        /// nothing can run until the app restarts.
+        case engineHung
         /// Retired sessions have eaten too much of the app's memory
         /// budget for another game to launch safely.
         case lowMemory
@@ -46,6 +49,8 @@ enum CrossSessionPlay {
                 return "This game needs a Ruby engine that has already run a game "
                     + "this session. Close Empo from the app switcher and reopen "
                     + "it to play."
+            case .engineHung:
+                return EngineTerminationCoordinator.hangMessage
             case .lowMemory:
                 return "Empo is running low on memory after the previous game "
                     + "sessions. Close Empo from the app switcher and reopen it "
@@ -59,10 +64,27 @@ enum CrossSessionPlay {
     /// launch: with the flag off there is no session 2, and the
     /// engine-side capability is FRESH by construction on a cold
     /// process.
+    ///
+    /// `includeMemoryGate: false` is for the quit-and-play flow: it
+    /// runs while the just-quit game's memory is still resident, so
+    /// the reading would spuriously trip the watermark. The Ruby
+    /// capability check stays on - it predicts the post-retire state
+    /// and is valid mid-teardown.
     @MainActor
-    static func launchBlocker(for game: GameEntry) -> LaunchBlocker? {
+    static func launchBlocker(
+        for game: GameEntry,
+        includeMemoryGate: Bool = true
+    ) -> LaunchBlocker? {
         guard enabled, sessionsStarted > 0 else { return nil }
         guard let container = game.container else { return nil }
+
+        // A hung engine never terminates, so the capability check
+        // below would wrongly predict FRESH; nothing can run until
+        // the app restarts. Blocking here also keeps selectGame from
+        // calling mkxp_setGamePath, which would erase the hung flag.
+        if mkxp_isEngineHung() != 0 {
+            return .engineHung
+        }
 
         let settings = GameSettings.load(from: container.empoStateURL)
         let metadata = GameMetadata.load(from: container)
@@ -72,7 +94,9 @@ enum CrossSessionPlay {
         if mkxp_sessionCapability(rubyVersion) != MKXP_SESSION_CAP_FRESH {
             return .dirtyRuby
         }
-        if os_proc_available_memory() < minimumBytesForNextSession {
+        if includeMemoryGate,
+            os_proc_available_memory() < minimumBytesForNextSession
+        {
             return .lowMemory
         }
         return nil

@@ -258,17 +258,25 @@ struct RootView: View {
     }
 
     /// True when an error alert presents over a session whose engine
-    /// already terminated and parked in the session loop. The OK
-    /// button then returns to the library (finishEndedSession), so
-    /// the message must not tell the user to force-close the app.
+    /// terminated recoverably: parked in the session loop, not hung,
+    /// no Ruby instance stranded by a crash. The OK button then
+    /// returns to the library (finishEndedSession), so the message
+    /// must not tell the user to force-close the app. A crash that
+    /// stranded its instance is NOT recoverable - every next launch
+    /// would be blocked - so it keeps the restart framing.
     private var sessionEndedBehindAlert: Bool {
-        CrossSessionPlay.enabled && mkxp_isEngineTerminated() != 0
+        CrossSessionPlay.enabled && mkxp_isSessionRecoverable() != 0
     }
 
     private var errorAlertTitle: String {
         if engineHung { return "Restart Empo" }
         if appState.phase != nil {
-            return sessionEndedBehindAlert ? "Game ended" : "Restart Empo"
+            guard sessionEndedBehindAlert else { return "Restart Empo" }
+            // Recoverable, but distinguish a game that chose to end
+            // (clean exit, parting message) from one that failed
+            // before Ruby ran (load error, retired instance).
+            return mkxp_didEngineExitCleanly() != 0
+                ? "Game ended" : "Something went wrong"
         }
         return "Something went wrong"
     }
