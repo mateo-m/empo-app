@@ -1,7 +1,8 @@
 # Plan: engine cores and RPG Maker MV/MZ support
 
-Status: **draft for review**. Nothing in this document is implemented yet. It exists to be
-challenged before any code is written.
+Status: **v2 — decisions recorded, implementation authorized.** v1 of this document was a draft
+for review; the open questions below have been answered by the project owner and are now
+decisions.
 
 ## Goal
 
@@ -11,7 +12,17 @@ Empo's side. mkxp-z-apple-mobile becomes the first core. A new WKWebView-based r
 becomes the second. Future runtimes (Ren'Py, TyranoBuilder, HTML) become possible without
 touching the launcher's spine again.
 
-## Verdict up front: is MV/MZ support doable?
+Two structural requirements (owner decision):
+
+- **Cores live in their own repositories and are launcher-agnostic.** A core repo must be
+  usable by any iOS app without adopting Empo's API. Each core repo *may* ship an optional
+  Empo adapter — a thin folder of sources conforming the core to Empo's core contract — but
+  the core itself never imports Empo concepts.
+- **Empo's side is one generic contract** (protocols + a capabilities value) that every
+  adapter implements. Capability differences (e.g. "can quit without killing the app") drive
+  UI gating instead of hardcodes.
+
+## Verdict: is MV/MZ support doable?
 
 **Yes.** MV and MZ games are HTML5/JavaScript applications that ship wrapped in NW.js
 (Chromium + Node.js) on desktop. On iOS the proven approach is a `WKWebView` hosting the game's
@@ -29,24 +40,59 @@ Two properties make this a good fit for Empo specifically:
   the app does **not** apply. A web-core game can quit back to the library cleanly, and another
   game can start afterwards. This asymmetry is the founding use case for the capability API.
 
-## Terminology (a deliberate challenge to the prompt)
+### Researched dead end: vendoring NW.js itself
 
-The prompt calls these "emulator/interpreter cores" and describes mkxp-z as "an
-emulator/interpreter for games made with RPG Maker XP". Neither runtime is an emulator in the
-machine-emulation sense: mkxp-z is a **reimplementation of the RGSS runtime** (it runs the
-game's Ruby scripts against rebuilt Graphics/Audio/Input APIs), and the MV/MZ runtime is a
-**hosted browser environment** for the game's own JavaScript engine code. This matters for docs
-and App Review vocabulary more than for code.
+Can Empo run games' bundled NW.js instead of shimming it? **No.** NW.js is Chromium + Node.js
+fused at the event-loop level; there is no iOS port and the NW.js team has stated mobile
+support is not achievable (Apple requires the system WebKit engine for App Store-style
+distribution, and NW.js's multi-process Chromium architecture does not map onto iOS process
+rules). The community answers to every "NW.js on iOS?" request over a decade are consistent:
+impossible; the closest cousin (nodejs-mobile) ports only the Node half, which is the half RPG
+Maker games barely use. The WKWebView + shim approach is not a compromise pick — it is the only
+viable architecture, and it is the one every shipping MV/MZ player on iOS uses.
 
-Proposal: keep the word **core** (it is short, and the libretro precedent makes it instantly
-legible to contributors), but define it in docs as "an engine runtime adapter", not an emulator.
+### Researched dead end: distributing cores as downloadable binaries
 
-A second, more consequential correction: on iOS a core **cannot be a runtime-loadable plugin**.
-The platform forbids loading executable code at runtime (the sole exception being JavaScript
-inside WebKit). So "each core specifies its capabilities" is a **compile-time source contract**
-— a Swift protocol plus a capabilities value — and third-party core authors contribute by
-building Empo with their core linked in, exactly as mkxp-z-apple-mobile is linked in today.
-There will never be a "download more cores" screen.
+Owner asked: can users download a compiled core and drop it in a folder, like Delta? Research
+says no, and Delta itself does not work that way:
+
+- **Delta**: each Delta core lives in its own repo and is added to the app as a **git
+  submodule, compiled into the app** as a framework. Modularity is source-level, not
+  drop-a-binary. (This is exactly the model this plan adopts.)
+- **RetroArch on iOS**: cores are dylibs, but since iOS 10 they load **only from inside the
+  signed app bundle** — a dylib dropped into Documents fails code-sign checks and `dlopen`
+  refuses it. The App Store build ships only pre-approved cores; sideload builds bundle the
+  cores at signing time.
+- General rule: iOS forbids loading executable code that wasn't signed with the app. The sole
+  exception is JavaScript inside WebKit — which, notably, means the *web core's runtime shim*
+  is the one component that could be updated without an app update, but native cores cannot be.
+
+So cores are a **compile-time source contract**: a contributor adds a core by adding its repo
+as a submodule plus its Empo adapter to the build, exactly as mkxp-z-apple-mobile is built in
+today. There will never be a "download more cores" screen.
+
+### Researched decision: libretro — take inspiration, do not adopt the ABI
+
+Owner suggested implementing the libretro API outright, since it is battle-tested. Assessment
+after research: **not viable for either of our two cores; adopt its ideas, not its ABI.**
+
+- The libretro contract inverts control: the frontend owns the loop and calls the core's
+  `retro_run()` once per frame; the core renders into a frontend-provided framebuffer/GL
+  context and pushes audio through frontend callbacks. Both our runtimes own their *own* loops
+  and surfaces: mkxp-z runs a persistent SDL/GL/OpenAL/Ruby thread that owns a `UIWindow`
+  (re-architecting it into a passive per-frame callback is a rewrite of the engine; nobody has
+  ever produced an mkxp libretro core), and a `WKWebView` cannot exist inside a dylib at all —
+  it is an out-of-process system view whose pixels and event loop Apple owns. There is no
+  libretro path to WKWebView, and without WKWebView there is no MV/MZ on iOS.
+- libretro also cannot express the things Empo actually needs from the contract: UIKit view
+  embedding, per-game touch-control overlays, pause snapshots for SwiftUI transitions, and
+  asymmetric "can this core quit without killing the process" semantics (in libretro, core
+  unload is universal by design — the one capability we know differs).
+
+What we *do* borrow from libretro: a small stable versioned contract; a per-core static
+**info/manifest** describing identity and capabilities (libretro's `.info` files); negotiated
+optional features rather than assumed ones; and the frontend/core vocabulary split (Empo =
+frontend/launcher, core = runtime, adapter = glue).
 
 ## Where Empo stands today
 
@@ -75,8 +121,42 @@ Findings from the current tree that shape the design:
 - **Detection is well-factored already.** `ios/GameProbe` (Linux-testable SwiftPM package) owns
   "what does this game need"; `GameImportValidator.isLikelyGameRoot` / `validateResolvedGameRoot`
   own "is this a game". MV/MZ detection slots into both.
+- **The Info sheet, Settings sheet, and long-press context menu are XP-tailored.** A
+  classification pass (global vs core-specific vs generalizable) is part of this effort; its
+  inventory drives the phase-4 UI work.
 
-## Proposed architecture
+## Repository architecture (owner decision)
+
+```text
+mateo-m/empo-app                  The launcher. Owns the core contract (protocols +
+                                  capabilities), the registry, all UI, import pipeline.
+                                  Contains the mkxp *adapter* (pre-existing Swift layer,
+                                  refactored behind the contract in place).
+
+mateo-m/mkxp-z-apple-mobile       Existing core repo (C++ engine, prebuilt static libs).
+                                  Unchanged by this effort. Its Empo adapter stays in
+                                  empo-app for now; migrating it into the engine repo to
+                                  match the model below is future work.
+
+mateo-m/rmweb-core (new)          The MV/MZ core repo. Launcher-agnostic. Layout:
+  runtime/                        JS: NW.js shim, save bridge, input bridge, Vorbis decode
+                                  glue, boot script. Tested with bun on any OS.
+  host-apple/                     SwiftPM package "RmWebHost": WKWebView host, scheme
+                                  handler, message bridges, a host-delegate protocol.
+                                  Any iOS app can embed this without knowing about Empo.
+  adapters/empo/                  Optional. Swift sources conforming RmWebHost to Empo's
+                                  core contract. Compiled by Empo's Xcode project when the
+                                  repo is checked out as a submodule. Other launchers
+                                  ignore this folder and write their own adapter.
+  docs/                           Core docs: shim surface, host API, save format.
+```
+
+Empo consumes `rmweb-core` as a git submodule (the mkxp-z-apple-mobile precedent), with
+XcodeGen source paths for `adapters/empo/` and a package reference for `host-apple/`. The
+adapter compiles inside the app target, so it can conform to Empo's protocols without any
+circular package dependency, and the core repo never depends on Empo.
+
+## Proposed architecture (Empo side)
 
 ### CoreKind
 
@@ -131,8 +211,7 @@ options) move into a per-core payload rather than living as optional fields on a
 
 ### CoreCapabilities
 
-The heart of the prompt's idea. Declarative, data-first, consumed by UI gating and the import
-validator:
+Declarative, data-first, consumed by UI gating and the import validator:
 
 ```swift
 struct CoreCapabilities {
@@ -155,10 +234,9 @@ struct CoreCapabilities {
 }
 ```
 
-Design rule: **a capability is what the core *can do or enforce*; a setting is what the user
-*chooses per game*.** "Has network features" is not a capability of the core — `networkEnabled`
-stays a per-game setting; the capability is whether the core can honor it. (This is a deliberate
-push-back on the prompt's example.)
+Design rule (owner-confirmed): **a capability is what the core *can do or enforce*; a setting
+is what the user *chooses per game*.** "Has network features" is not a capability of the core —
+`networkEnabled` stays a per-game setting; the capability is whether the core can honor it.
 
 Design rule two: **no speculative capabilities.** Every field must have a consumer in the UI or
 import pipeline and differ between the two real cores (or plausibly differ for the next one).
@@ -170,6 +248,23 @@ context action, the clean-exit "force-close Empo" alert — every site `docs/mul
 lists. mkxp declares `false/false` and nothing changes; rmWeb declares `true/true` and those
 paths come back to life for web games only.
 
+### Settings, Info, and context-menu split (owner-requested)
+
+The current per-game surfaces assume XP/mkxp. The refactor classifies every item three ways:
+
+- **Global**: meaningful for any core (title/artwork, play time, saves location, network
+  toggle, vertical alignment, controls layout…). Stays in shared UI, backed by `GameSettings`.
+- **Core-specific**: meaningful only for one core (Ruby version override, syntax transform,
+  postload scripts, joiplayCompat, mkxp.json overlay fields; later: nw-shim options). Moves
+  into a per-core settings *section* the adapter contributes, shown only for that core's
+  games.
+- **Generalizable**: same user intent, different per-core mechanism (fast-forward, cheats,
+  in-game keyboard, touch-mouse). Stays global in UI but renders/enables per the core's
+  declared capability.
+
+A full item-by-item inventory of the Info sheet, Settings sheet, context menu, player toolbar,
+and app settings feeds the phase-4 work (kept as an appendix once compiled).
+
 ### Registry, detection, surfaces
 
 - `CoreRegistry`: ordered list of built-in cores; maps `CoreKind` → `GameCore`, and exposes the
@@ -178,7 +273,7 @@ paths come back to life for web games only.
   `js/rmmz_core.js` (MZ) + `package.json`.
 - Detection logic lives in `GameProbe` (Linux-testable), like `GameScriptProfile` today.
 - Surface hosting: `GameViewEmbedder` grows a sibling; `RootView`/`AppWindow` switch on
-  `CoreSurface`. SDL's window-reparenting dance stays isolated inside the mkxp core.
+  `CoreSurface`. SDL's window-reparenting dance stays isolated inside the mkxp adapter.
 
 ### What deliberately does *not* change
 
@@ -187,37 +282,36 @@ paths come back to life for web games only.
   final key-injection step), pause UX, crash tracking, play-time logging.
 - The mkxp core keeps its process-lifetime SDL/GL/OpenAL/Ruby state. The abstraction wraps it;
   it does not try to fix multi-session for mkxp.
+- mkxp-z-apple-mobile (the engine repo) is untouched.
 
 ## The rmWeb core (MV/MZ) — technical shape
 
 What the second core needs, in dependency order:
 
-1. **Serving game files.** A `WKURLSchemeHandler` (custom `empo-game://` scheme) rather than
-   `loadFileURL`, for three reasons: no `file://` CORS pain, streamable responses for large
-   assets, and — critically — **case-insensitive path resolution**. MV/MZ games authored on
-   Windows routinely reference assets with mismatched case; iOS APFS is case-sensitive. The
-   scheme handler resolves paths through a case-folding cache, the same problem mkxp's
-   `pathCache` solves.
+1. **Serving game files.** A `WKURLSchemeHandler` (custom `empo-game://`-style scheme; the
+   host names the scheme) rather than `loadFileURL`, for three reasons: no `file://` CORS
+   pain, streamable responses for large assets, and — critically — **case-insensitive path
+   resolution**. MV/MZ games authored on Windows routinely reference assets with mismatched
+   case; iOS APFS is case-sensitive. The scheme handler resolves paths through a case-folding
+   cache, the same problem mkxp's `pathCache` solves.
 2. **NW.js shim.** A `WKUserScript` injected at document start providing the slice of
    `require('fs')`, `require('path')`, `process`, and `nw` that `rpg_core.js`/`rmmz_core.js`
-   and common plugins touch. Decision needed (open question 6): report `Utils.isNwjs() ===
-   true` and emulate the fs-based code paths, or report `false` and ride the engines' built-in
-   browser fallbacks. Async fs bridges via `WKScriptMessageHandler`; the rare-but-real
-   `fs.readFileSync` calls in plugins need a synchronous bridge (sync XHR against the scheme
-   handler, or the classic synchronous `prompt()` interception) — flagged as the shim's riskiest
-   corner.
-3. **Saves.** Route `StorageManager` writes to `<container>/UserData/` through the native
-   bridge, instead of letting them sink into WKWebView's opaque website-data store. This keeps
-   saves inside the existing container contract (migration, deletion, future export/backup) and
-   survives webview data-store eviction. MZ's promise-based `StorageManager` makes this clean;
-   MV's sync localStorage path needs a write-through cache.
-4. **Audio: the OGG problem.** WebKit's `decodeAudioData` does not decode Ogg Vorbis, and
-   desktop-targeted MV/MZ games ship `.ogg` only (MV's `.m4a` fallbacks are only present when
-   the developer exported for mobile). Proposal: runtime decode via a small Vorbis WASM/JS
-   decoder (e.g. stbvorbis) patched into `WebAudio`/`AudioManager`, rather than transcoding at
-   import. Runtime decode keeps imports fast and byte-identical, and transparently composes
-   with encrypted audio (`.rpgmvo`/`.ogg_`), which the engine decrypts in-memory before
-   decoding.
+   and common plugins touch. Decision: the MVP reports `Utils.isNwjs() === false` (lean on the
+   engines' browser fallbacks, shim `StorageManager` directly) and revisits once vanilla games
+   run. Async fs bridges via `WKScriptMessageHandler`; the rare-but-real `fs.readFileSync`
+   calls in plugins need a synchronous bridge (sync XHR against the scheme handler, or
+   synchronous `prompt()` interception) — flagged as the shim's riskiest corner.
+3. **Saves (owner decision).** Route `StorageManager` writes to the host-provided save
+   directory (for Empo: `<container>/UserData/`) through the native bridge, instead of letting
+   them sink into WKWebView's opaque website-data store. This keeps saves inside the existing
+   container contract (migration, deletion, future export/backup) and survives webview
+   data-store eviction. MZ's promise-based `StorageManager` makes this clean; MV's sync
+   localStorage path needs a write-through cache.
+4. **Audio (owner decision).** WebKit's `decodeAudioData` does not decode Ogg Vorbis, and
+   desktop-targeted MV/MZ games ship `.ogg` only. Runtime decode via a small Vorbis WASM/JS
+   decoder (e.g. stbvorbis) patched into `WebAudio`/`AudioManager`. Imports stay fast and
+   byte-identical, and decoding composes transparently with encrypted audio
+   (`.rpgmvo`/`.ogg_`), which the engine decrypts in-memory before decoding.
 5. **Encrypted assets** (`.rpgmvp`/`.rpgmvo`/`.png_`/`.ogg_`): no work needed — the engines
    decrypt in JS with the key from `System.json`, as they do in browser deployments.
 6. **Lifecycle.** Terminate = tear down the webview (clean, repeatable → the capability
@@ -235,21 +329,29 @@ support is codec-dependent; verify on-device), exotic plugins reaching deep into
 
 ## Phasing
 
-Each phase lands independently shippable; mkxp behavior is bit-identical through phase 2.
+All phases are in scope (owner decision). Each lands independently shippable; mkxp behavior is
+bit-identical through phase 2.
 
-1. **Core abstraction refactor.** Introduce `CoreKind`, `GameCore`/`CoreSession`/delegate,
-   `CoreCapabilities`, `CoreRegistry`. Move `EngineSessionCoordinator` + `GameSession` behind
-   the mkxp core. Add `coreKind` to metadata with lazy backfill. Capability-gate the
-   multi-session UI sites (all still `false` for mkxp ⇒ zero visible change).
-2. **Detection + import.** rmWeb detector in GameProbe; validator accepts MV/MZ roots; imports
-   land with `coreKind = rmWeb`. Until phase 3 ships, MV/MZ imports are either rejected with a
-   friendlier "not supported yet" or accepted-but-unlaunchable behind a flag (open question).
-3. **rmWeb core MVP.** Scheme handler, shim, saves bridge, OGG decode, touch input. Target: a
-   vanilla, unencrypted MV game and a vanilla MZ game run start-to-save.
-4. **Capability-driven UX.** Quit-to-library + sequential sessions for web games; per-core
-   toolbar (hide fast-forward/cheats where undeclared); JGP MV/MZ acceptance.
-5. **Contributor docs.** `docs/core-authoring.md`: the contract, the capability semantics, a
-   checklist, and how the two built-in cores implement it.
+1. **Core abstraction refactor** (empo-app). Introduce `CoreKind`, `GameCore`/`CoreSession`/
+   delegate, `CoreCapabilities`, `CoreRegistry`. Move `EngineSessionCoordinator` +
+   `GameSession` behind the mkxp adapter. Add `coreKind` to metadata with lazy backfill.
+   Capability-gate the multi-session UI sites (all still `false` for mkxp ⇒ zero visible
+   change).
+2. **Detection + import** (empo-app). rmWeb detector in GameProbe; the validator recognizes
+   MV/MZ roots and rejects them with a specific "RPG Maker MV/MZ isn't supported yet" message
+   — shown **only** for actual MV/MZ imports; every other invalid input keeps today's errors.
+   The detector and message flip to acceptance when the core ships.
+3. **rmWeb core MVP** (rmweb-core repo). Scheme handler, shim, saves bridge, OGG decode,
+   DOM input, lifecycle. Target: a vanilla MV game and a vanilla MZ game run start-to-save
+   under any host embedding `RmWebHost`.
+4. **Capability-driven UX** (empo-app + adapter). Quit-to-library + sequential sessions for
+   web games; **mixed sessions allowed** (owner decision: after web games quit cleanly, an
+   mkxp game may start — it simply becomes the session's last game, since only the mkxp core
+   lacks quit); per-core Info/Settings/context-menu surfaces per the classification above;
+   JGP MV/MZ acceptance.
+5. **Contributor docs.** `docs/core-authoring.md`: the contract, capability semantics, the
+   separate-repo + optional-adapter model, a checklist, and how the two built-in cores
+   implement it.
 
 ## Risks
 
@@ -264,23 +366,20 @@ Each phase lands independently shippable; mkxp behavior is bit-identical through
 - **Sync-fs bridge fragility.** Documented as the shim's sharpest edge; a fallback is to
   preload small `data/*.json` synchronously into the shim's cache at boot, which covers the
   dominant `readFileSync` use.
+- **No on-device verification during initial development.** The implementation lands
+  compile-clean by inspection and Linux-testable where possible (GameProbe, runtime JS);
+  first-build fixes on a Mac are an expected follow-up step.
 
-## Open questions (to be answered before implementation)
+## Decision log (2026-07-26, project owner)
 
-1. **Branch scope.** Phase 1 only? Phases 1–2? Or drive toward the phase-3 MVP on this branch?
-2. **Where does the rmWeb core live** — `ios/Empo/src/Cores/RmWeb/` in-repo, or a separate
-   repo/submodule like mkxp-z-apple-mobile? (The shim JS assets need a tested home either way.)
-3. **Naming.** `core` / `CoreKind` / `rmWeb` — happy? Alternative: `runtime`.
-4. **Saves**: native-bridged into `UserData/` (recommended) vs. browser storage.
-5. **Audio**: runtime Vorbis decode (recommended) vs. import-time transcode.
-6. **`Utils.isNwjs()`**: `true` (bigger shim, better plugin compat) vs. `false` (lean on
-   browser fallbacks, smaller surface). Recommendation: start `false` for the MVP, measure.
-7. **Capability granularity**: is `capabilities(for game:)` (per-game refinement) the right
-   call, or should capabilities be static per core?
-8. **Mixed-session UX**: after a web game quits to the library, an mkxp game is technically
-   launchable (first mkxp session of the process). Allow it, or keep sessions
-   homogeneous-per-launch for predictability?
-9. **Phase-2 import posture** for MV/MZ before the core ships: reject with "coming soon" vs.
-   import-but-unlaunchable.
-10. **This document's fate**: keep (indexed in `docs/README.md`) as a living design doc, or
-    delete once `core-authoring.md` supersedes it?
+1. **Scope**: all phases, ambitious.
+2. **Core location**: separate launcher-agnostic repos; optional Empo adapter inside the core
+   repo; any developer can use a core without Empo's API.
+3. **Naming**: "core" confirmed. libretro: inspiration yes, ABI no (see research above).
+   Downloadable cores: ruled out by platform (see research above).
+4. **Capability vs setting split**: confirmed, including the Info/Settings/context-menu
+   classification work.
+5. **Saves**: native-bridged into the host-provided directory.
+6. **Audio**: runtime WASM Vorbis decode.
+7. **Mixed sessions**: allowed; expectation is that mkxp remains the only quit-incapable core.
+8. **Import posture**: reject MV/MZ with a friendly, MV/MZ-specific "not supported yet".
