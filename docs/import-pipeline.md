@@ -38,12 +38,14 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      `tmp/empo-import/staged-archives/<uuid>/`. Folders pass through untouched at this point.
    - `probe`: `GameImportValidator.importRootChoices` runs **one** selective walk of the archive
      (`ArchiveExtractor.extractSelective`). The walk pulls `.ini`, `mkxp.json`, `Data/Scripts.*`,
-     `.exe` files, and `Graphics/Titles/*` previews into a scratch dir. The probe validates every
+     `.exe` files, `Graphics/Titles/*` previews, and the RPG Maker MV/MZ markers (`index.html`,
+     `js/rpg_core.js`, `js/rmmz_core.js`) into a scratch dir. The probe validates every
      candidate root and returns `ImportRootChoice` values (relativePath, title, subtitle, preview
      artwork). It also returns an `ArchiveExtractor.Inventory` (entry count + uncompressed byte
      totals) that later drives byte-accurate extraction progress. The probe rejects invalid
-     sources (not an RPG Maker game, unsupported RGSS version, corrupt archive) here, before any
-     card exists.
+     sources (not an RPG Maker game, an RPG Maker MV/MZ game — recognized via
+     `RmWebDetection` in `GameProbe` and rejected with a specific "not supported yet" message —
+     unsupported RGSS version, corrupt archive) here, before any card exists.
    - When more than one valid root exists, the root-picker sheet appears. When exactly one
      exists, the import starts automatically.
 2. **Batch import** (`GameLibrary.pipelineImportGames`, `ImportPipeline.swift` ~line 509): one

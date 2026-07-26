@@ -7,6 +7,7 @@ enum GameImportValidator {
         case unzipFailed
         case corruptZip(String)
         case notAnRPGMakerGame
+        case unsupportedWebEngine(RmWebGameKind)
         case unsupportedRuntime(String)
         case missingScripts(String)
         case invalidScripts(String)
@@ -22,6 +23,10 @@ enum GameImportValidator {
             case .notAnRPGMakerGame:
                 return
                     "This does not look like an RPG Maker game. Empo found no known game configuration."
+            case .unsupportedWebEngine(let kind):
+                let label = kind == .mz ? "RPG Maker MZ" : "RPG Maker MV"
+                return
+                    "This is an \(label) game. Empo cannot play RPG Maker MV/MZ games yet, but support is planned."
             case .unsupportedRuntime(let detail):
                 return detail
             case .missingScripts(let path):
@@ -92,6 +97,19 @@ enum GameImportValidator {
             lowercaseName.hasSuffix(".exe")
         }
 
+        /// RPG Maker MV/MZ layout markers (`index.html`, plus
+        /// `rpg_core.js` / `rmmz_core.js` inside a `js/` folder).
+        /// Pulled during the probe walk so `RmWebDetection` can
+        /// recognize MV/MZ roots inside archives and reject them
+        /// with the specific "not supported yet" message, without a
+        /// second extraction pass.
+        var isRmWebMarker: Bool {
+            if lowercaseName == "index.html" { return true }
+            guard lowercaseName == "rpg_core.js" || lowercaseName == "rmmz_core.js"
+            else { return false }
+            return parentComponents.last?.lowercased() == "js"
+        }
+
         var isPreviewTitleArtwork: Bool {
             guard parentComponents.count >= 2 else { return false }
             guard parentComponents[parentComponents.count - 2].lowercased() == "graphics" else {
@@ -117,7 +135,7 @@ enum GameImportValidator {
     /// resolution probe before import starts.
     static func validate(_ url: URL) throws {
         guard let gameRoot = locateGameRoot(in: url) else {
-            throw ImportError.notAnRPGMakerGame
+            throw webEngineRejection(in: url) ?? ImportError.notAnRPGMakerGame
         }
         try validateResolvedGameRoot(at: gameRoot)
     }
@@ -248,7 +266,7 @@ enum GameImportValidator {
         if lowercaseItems.contains("mkxp.json") {
             customScriptPath = Self.customScriptPath(url)
             if scriptsPath == nil, customScriptPath == nil {
-                throw ImportError.notAnRPGMakerGame
+                throw rootRejectionError(at: url)
             }
             if scriptsPath == nil {
                 detectedVersion = rgssVersionFromMkxpJson(url)
@@ -256,7 +274,7 @@ enum GameImportValidator {
         }
 
         guard scriptsPath != nil || customScriptPath != nil else {
-            throw ImportError.notAnRPGMakerGame
+            throw rootRejectionError(at: url)
         }
 
         if let detectedVersion {
@@ -293,7 +311,60 @@ enum GameImportValidator {
             return
         }
 
-        throw ImportError.notAnRPGMakerGame
+        throw rootRejectionError(at: url)
+    }
+
+    /// The rejection for a root that offers no known RGSS game
+    /// configuration. When the root is actually an RPG Maker MV/MZ
+    /// (HTML5) game, the error names the engine instead of the
+    /// generic "not an RPG Maker game" message. No MV/MZ game ever
+    /// imports: this path only refines which error a root that
+    /// already failed RGSS validation surfaces.
+    private static func rootRejectionError(at url: URL) -> ImportError {
+        if let kind = RmWebDetection.detect(in: url) {
+            return .unsupportedWebEngine(kind)
+        }
+        return .notAnRPGMakerGame
+    }
+
+    /// Scans `url` and its subdirectories (same walk as
+    /// `discoverLikelyGameRoots`) for an RPG Maker MV/MZ layout and
+    /// returns the specific "web engine" rejection when one is
+    /// found. Callers use it only after no candidate root produced
+    /// a choice or a meaningful error, so it never masks the
+    /// existing errors for other invalid inputs.
+    private static func webEngineRejection(
+        in url: URL,
+        fm: FileManager = .default
+    ) -> ImportError? {
+        var queue = [url]
+        var visited = Set<String>()
+
+        while !queue.isEmpty {
+            let candidate = queue.removeFirst()
+            let key = candidate.standardizedFileURL.path
+            if !visited.insert(key).inserted { continue }
+
+            if let kind = RmWebDetection.detect(in: candidate) {
+                return .unsupportedWebEngine(kind)
+            }
+
+            guard
+                let items = try? fm.contentsOfDirectory(
+                    at: candidate,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                )
+            else { continue }
+
+            let childDirectories = items.filter {
+                $0.lastPathComponent != "__MACOSX"
+                    && (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+            }
+            queue.append(contentsOf: childDirectories.sorted { $0.path < $1.path })
+        }
+
+        return nil
     }
 
     private static func isLikelyGameRoot(
@@ -358,6 +429,9 @@ enum GameImportValidator {
                     return true
                 }
                 if entry.isExecutable {
+                    return true
+                }
+                if entry.isRmWebMarker {
                     return true
                 }
                 return entry.isPreviewTitleArtwork
@@ -467,6 +541,7 @@ enum GameImportValidator {
 
         if choices.isEmpty {
             throw firstMeaningfulValidationError
+                ?? webEngineRejection(in: directoryURL)
                 ?? firstValidationError
                 ?? ImportError.notAnRPGMakerGame
         }
