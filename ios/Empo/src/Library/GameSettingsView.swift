@@ -113,6 +113,19 @@ struct GameSettingsView: View {
     private let stateDirectory: URL
     private let initialSettings: GameSettings
     private let initialEngineSettings: EngineMkxpSettings
+    /// Core this game resolved to (`metadata.resolvedCoreKind`),
+    /// threaded in by the presenting view. Gates the mkxp-only
+    /// sections/rows below: the mkxp.json-overlay-backed Display
+    /// and Performance sections and the Engine section's mkxp rows
+    /// (docs/plans/emulator-cores-ui-inventory.md section 2). For
+    /// an mkxp game every gate passes, so the sheet renders exactly
+    /// as it did before cores existed.
+    private let coreKind: CoreKind
+    /// The core's per-game capability declaration. Gates the
+    /// generalizable rows (fast forward). Falls back to mkxp's
+    /// declaration when the registry has no core for `coreKind`,
+    /// mirroring `PlayerView.coreCapabilities`.
+    private let capabilities: CoreCapabilities
     /// Computed once at init: true if the game's `Game.ini` Title
     /// contains a Pokemon-family keyword. Used as the default for
     /// the In-game keyboard toggle when the user hasn't explicitly
@@ -120,14 +133,19 @@ struct GameSettingsView: View {
     /// doesn't re-read the file on every render.
     private let isPokemonEssentialsDefault: Bool
 
-    init(game: GameEntry) {
+    init(game: GameEntry, coreKind: CoreKind) {
         self.game = game
+        self.coreKind = coreKind
         // Per-game managed config (mkxp.json, game_settings.json)
         // lives at `<container>/EmpoState/`, alongside the imported
         // `Game/` subdir. Both paths come from the same
         // `GameContainer`. Settings UI assumes a non-synthetic
         // entry (one with a real container on disk).
         let container = game.container!
+        self.capabilities =
+            CoreRegistry.shared.core(for: coreKind)?
+            .capabilities(for: game, metadata: GameMetadata.load(from: container))
+            ?? MkxpCore.declaredCapabilities
         let dir = container.gameURL
         self.gameDirectory = dir
         let stateDir = container.empoStateURL
@@ -248,10 +266,24 @@ struct GameSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                gameplaySection
-                displaySection
+                // Per-core gating (docs/plans/emulator-cores-ui-inventory.md
+                // section 2): Gameplay only holds fast forward, a
+                // generalizable capability; Display and Performance
+                // are backed by the mkxp.json overlay, so they only
+                // exist for mkxp games. Portrait layout is global.
+                // The Engine section stays for every core because
+                // it also hosts the global touch-mouse and network
+                // rows; its mkxp-only rows are gated inside.
+                if capabilities.fastForward {
+                    gameplaySection
+                }
+                if coreKind == .mkxp {
+                    displaySection
+                }
                 verticalAlignmentSection
-                performanceSection
+                if coreKind == .mkxp {
+                    performanceSection
+                }
                 engineSection
 
                 if hasAnyCustomizations {
@@ -464,29 +496,38 @@ struct GameSettingsView: View {
     }
 
     private var engineSection: some View {
+        // mkxp-only rows (Ruby, RGSS shims, JoiPlay, mkxp.json
+        // overlay fields) are gated on the core; the touch-mouse
+        // and network rows between them are global intent
+        // (inventory: GPC/G), so they stay visible for every core.
+        // They stay inside this section rather than moving to a new
+        // one so mkxp games keep the exact row order they had
+        // before cores existed.
         Section {
-            SettingsToggle(
-                title: "Postload scripts",
-                isOn: postloadScriptsBinding,
-                description:
-                    "Run Empo's compatibility scripts after the game's own scripts have loaded. Includes generic RGSS shims (RGSS plugin stubs, cheat menu, nil-safe stubs) and Pokemon Essentials specific fixes (graphics, input, online stubs, session reset, tilemap, window skin)."
-            )
-
-            engineFieldRow(.pathCache) {
+            if coreKind == .mkxp {
                 SettingsToggle(
-                    title: "Path cache",
-                    isOn: pathCacheBinding,
+                    title: "Postload scripts",
+                    isOn: postloadScriptsBinding,
                     description:
-                        "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
+                        "Run Empo's compatibility scripts after the game's own scripts have loaded. Includes generic RGSS shims (RGSS plugin stubs, cheat menu, nil-safe stubs) and Pokemon Essentials specific fixes (graphics, input, online stubs, session reset, tilemap, window skin)."
+                )
+
+                engineFieldRow(.pathCache) {
+                    SettingsToggle(
+                        title: "Path cache",
+                        isOn: pathCacheBinding,
+                        description:
+                            "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
+                    )
+                }
+
+                SettingsToggle(
+                    title: "In-game keyboard",
+                    isOn: useInGameKeyboardBinding,
+                    description:
+                        "Use the game's built-in keyboard scene for name entry instead of the iOS soft keyboard. Enable for Pokemon Essentials games whose keyboard layout has custom keys."
                 )
             }
-
-            SettingsToggle(
-                title: "In-game keyboard",
-                isOn: useInGameKeyboardBinding,
-                description:
-                    "Use the game's built-in keyboard scene for name entry instead of the iOS soft keyboard. Enable for Pokemon Essentials games whose keyboard layout has custom keys."
-            )
 
             SettingsToggle(
                 title: "Touch acts as mouse",
@@ -495,12 +536,14 @@ struct GameSettingsView: View {
                     "Sends taps and drags on the game screen to the game as mouse input."
             )
 
-            SettingsToggle(
-                title: "JoiPlay compatibility",
-                isOn: joiplayCompatBinding,
-                description:
-                    "Tell the game it's running on JoiPlay ($joiplay). Some games then use mobile-friendly code paths, but games patched for JoiPlay's older engine may misbehave. Enable if the game errors on features its desktop version reserves for PC."
-            )
+            if coreKind == .mkxp {
+                SettingsToggle(
+                    title: "JoiPlay compatibility",
+                    isOn: joiplayCompatBinding,
+                    description:
+                        "Tell the game it's running on JoiPlay ($joiplay). Some games then use mobile-friendly code paths, but games patched for JoiPlay's older engine may misbehave. Enable if the game errors on features its desktop version reserves for PC."
+                )
+            }
 
             SettingsToggle(
                 title: "Network access",
@@ -509,39 +552,41 @@ struct GameSettingsView: View {
                     "Let this game use the internet for update checks, downloads, and online features. When off, the game behaves as if the device were in airplane mode."
             )
 
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Picker("Ruby version", selection: rubyVersionBinding) {
-                    Text(autoDetectLabel).tag(RubyVersionPick.auto)
-                    Text(RubyVersionPick.v18.displayLabel).tag(RubyVersionPick.v18)
-                    Text(RubyVersionPick.v19.displayLabel).tag(RubyVersionPick.v19)
-                    Text(RubyVersionPick.v31.displayLabel).tag(RubyVersionPick.v31)
-                }
-                .pickerStyle(.navigationLink)
-
-                Text(
-                    "Auto-detect inspects the game's scripts and picks the matching Ruby interpreter. Override only if the game fails to launch with a script error or behaves incorrectly."
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, Spacing.xxs)
-
-            if effectiveRubyVersionInt >= 30 {
+            if coreKind == .mkxp {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Picker("Compatibility mode", selection: compatibilityBinding) {
-                        Text(autoDetectCompatLabel).tag(CompatibilityPick.auto)
-                        Text(CompatibilityPick.modern.displayLabel).tag(CompatibilityPick.modern)
-                        Text(CompatibilityPick.legacy.displayLabel).tag(CompatibilityPick.legacy)
+                    Picker("Ruby version", selection: rubyVersionBinding) {
+                        Text(autoDetectLabel).tag(RubyVersionPick.auto)
+                        Text(RubyVersionPick.v18.displayLabel).tag(RubyVersionPick.v18)
+                        Text(RubyVersionPick.v19.displayLabel).tag(RubyVersionPick.v19)
+                        Text(RubyVersionPick.v31.displayLabel).tag(RubyVersionPick.v31)
                     }
                     .pickerStyle(.navigationLink)
 
                     Text(
-                        "Controls whether the engine rewrites Ruby 1.x grammar (case labels, hash rockets, kwarg shorthand) into a form Ruby 3 accepts. The 1.8 / 1.9 builds parse legacy syntax natively, so the picker is hidden when those interpreters are active. Switch to Legacy if a Pokemon Essentials game errors with `private method called for Kernel:Module` or similar."
+                        "Auto-detect inspects the game's scripts and picks the matching Ruby interpreter. Override only if the game fails to launch with a script error or behaves incorrectly."
                     )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, Spacing.xxs)
+
+                if effectiveRubyVersionInt >= 30 {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Picker("Compatibility mode", selection: compatibilityBinding) {
+                            Text(autoDetectCompatLabel).tag(CompatibilityPick.auto)
+                            Text(CompatibilityPick.modern.displayLabel).tag(CompatibilityPick.modern)
+                            Text(CompatibilityPick.legacy.displayLabel).tag(CompatibilityPick.legacy)
+                        }
+                        .pickerStyle(.navigationLink)
+
+                        Text(
+                            "Controls whether the engine rewrites Ruby 1.x grammar (case labels, hash rockets, kwarg shorthand) into a form Ruby 3 accepts. The 1.8 / 1.9 builds parse legacy syntax natively, so the picker is hidden when those interpreters are active. Switch to Legacy if a Pokemon Essentials game errors with `private method called for Kernel:Module` or similar."
+                        )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, Spacing.xxs)
+                }
             }
         } header: {
             Text("Engine")

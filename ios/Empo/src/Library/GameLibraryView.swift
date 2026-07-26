@@ -997,7 +997,16 @@ private struct LibrarySheetPresentation: ViewModifier {
                 }
             }
             .sheet(item: $gameForSettings) { game in
-                GameSettingsView(game: game)
+                // The sheet's mkxp-only sections gate on the game's
+                // resolved core. Settings only opens for ready
+                // entries with a committed container; the `.mkxp`
+                // fallback covers the impossible nil-container case
+                // with the pre-cores behavior.
+                GameSettingsView(
+                    game: game,
+                    coreKind: game.container
+                        .map { GameMetadata.load(from: $0).resolvedCoreKind } ?? .mkxp
+                )
             }
             .sheet(item: $gameForInfo) { game in
                 GameInfoView(game: game)
