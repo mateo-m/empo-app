@@ -54,22 +54,34 @@ struct PlayerView: View {
 
     /// Capabilities of the running game's core, resolved through
     /// the metadata's `resolvedCoreKind`. Gates the Menu sheet's
-    /// rows (cheats / fast forward / diagnostics / quit) and, via
-    /// `PlayerMoreSheet.hasContent`, whether the toolbar shows the
-    /// Menu button at all. `selectedGame` can be nil for a moment
+    /// rows (pause / cheats / fast forward / diagnostics / quit)
+    /// and, via `PlayerMoreSheet.hasContent`, whether the toolbar
+    /// shows the Menu button at all.
+    ///
+    /// Cached `@State`, refreshed once per selected game
+    /// (`.onChange(of:)` with `initial: true` below), NOT computed
+    /// per body evaluation: resolving means `GameMetadata.load`,
+    /// synchronous disk I/O that `hasContent` would otherwise run
+    /// on every render. `selectedGame` can be nil for a moment
     /// during teardown (the same window where `gameTitle` falls
-    /// back to "Game"); mkxp's declaration is the safe stand-in
-    /// there - it gates everything exactly the way the app behaved
-    /// before cores existed.
-    private var coreCapabilities: CoreCapabilities {
+    /// back to "Game"); the refresh keeps the last resolved value
+    /// then, which matches the pre-memoization mkxp fallback
+    /// (mkxp is the only resolvable core today) and is also this
+    /// state's initial value.
+    @State private var coreCapabilities: CoreCapabilities = MkxpCore.declaredCapabilities
+
+    /// Re-resolves `coreCapabilities` for the currently selected
+    /// game. No-op while `selectedGame` is nil (teardown window).
+    private func refreshCoreCapabilities() {
         guard let game = appState.selectedGame, let container = game.container else {
-            return MkxpCore.declaredCapabilities
+            return
         }
         let metadata = GameMetadata.load(from: container)
         guard let core = CoreRegistry.shared.core(for: metadata.resolvedCoreKind) else {
-            return MkxpCore.declaredCapabilities
+            coreCapabilities = MkxpCore.declaredCapabilities
+            return
         }
-        return core.capabilities(for: game, metadata: metadata)
+        coreCapabilities = core.capabilities(for: game, metadata: metadata)
     }
 
     var body: some View {
@@ -321,6 +333,13 @@ struct PlayerView: View {
         }
         .onChange(of: layout.currentContainer) { _, container in
             ControllerMapBindings.applyRuntimeMap(to: controllerInput, container: container)
+        }
+        // `initial: true` resolves capabilities on first appear;
+        // the id-keyed onChange re-resolves only when the selected
+        // game actually changes (never per body evaluation - see
+        // the `coreCapabilities` comment).
+        .onChange(of: appState.selectedGame?.id, initial: true) { _, _ in
+            refreshCoreCapabilities()
         }
         .onReceive(NotificationCenter.default.publisher(for: .controllerMapDidChange)) { _ in
             ControllerMapBindings.applyRuntimeMap(
