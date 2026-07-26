@@ -43,6 +43,17 @@ private struct LicenseEntry: Identifiable {
 }
 
 // Keep entries alphabetical.
+//
+// TODO(rmweb-activation): several entries here (mkxp-z, Ruby, SDL2*,
+// ANGLE, ...) belong to the mkxp core, not to Empo itself. When a
+// second core actually links (rmweb-core brings its own third-party
+// notices, e.g. a WASM Vorbis decoder), this hardcoded list should
+// become registry-derived: each core contributes its license entries
+// (alongside the app-level ones like Smallbits) so a build that
+// omits a core also omits that core's notices. Per-core license
+// assembly is activation work for the cores plan
+// (docs/plans/emulator-cores.md), not worth the indirection while
+// mkxp is the only core in the binary.
 private let licenses: [LicenseEntry] = [
     LicenseEntry(
         "ANGLE", license: "BSD 3-Clause",
