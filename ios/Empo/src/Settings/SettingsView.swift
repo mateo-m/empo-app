@@ -78,7 +78,7 @@ struct SettingsView: View {
                         title: "Diagnostics overlay",
                         isOn: $settings.diagnosticsOverlay,
                         description:
-                            "Adds a button to the in-game toolbar. The button toggles a draggable overlay with the title, Ruby version, renderer, and FPS."
+                            "Adds a button to the in-game toolbar. The button toggles a draggable overlay with the title, engine details, renderer, and FPS."
                     )
 
                     SettingsToggle(
