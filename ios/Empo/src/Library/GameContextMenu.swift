@@ -37,6 +37,11 @@ struct GameContextMenuModifier: ViewModifier {
                     // Context-menu Quit disabled until cross-session
                     // Ruby state cleanup is reliable. See
                     // ExperimentalFeature comment in AppSettings.swift.
+                    // When it comes back (cores plan, phase 4), the
+                    // gate is the game's core capability
+                    // (`CoreCapabilities.quitToLibrary`), not an
+                    // app-wide flag: mkxp keeps it false, quit-capable
+                    // cores get the row.
                     // if isPaused {
                     //     Button(role: .destructive) {
                     //         appState.returnToLibrary()

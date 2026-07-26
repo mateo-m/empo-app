@@ -52,6 +52,24 @@ struct PlayerView: View {
     /// mid-session.
     @State private var fastForwardMultiplier: Int?
 
+    /// Capabilities of the running game's core, resolved through
+    /// the metadata's `resolvedCoreKind`. Gates the Menu sheet's
+    /// Quit row. `selectedGame` can be nil for a moment during
+    /// teardown (the same window where `gameTitle` falls back to
+    /// "Game"); mkxp's declaration is the safe stand-in there - it
+    /// gates everything exactly the way the app behaved before
+    /// cores existed.
+    private var coreCapabilities: CoreCapabilities {
+        guard let game = appState.selectedGame, let container = game.container else {
+            return MkxpCore.declaredCapabilities
+        }
+        let metadata = GameMetadata.load(from: container)
+        guard let core = CoreRegistry.shared.core(for: metadata.resolvedCoreKind) else {
+            return MkxpCore.declaredCapabilities
+        }
+        return core.capabilities(for: game, metadata: metadata)
+    }
+
     var body: some View {
         GeometryReader { geo in
             let isPortrait = geo.size.height > geo.size.width
@@ -323,6 +341,7 @@ struct PlayerView: View {
         .sheet(isPresented: $showMoreSheet) {
             PlayerMoreSheet(
                 gameTitle: appState.selectedGame?.title ?? "Game",
+                capabilities: coreCapabilities,
                 showDebugOverlay: $showDebugOverlay,
                 fastForwardActive: $fastForwardActive,
                 fastForwardMultiplier: fastForwardMultiplier,

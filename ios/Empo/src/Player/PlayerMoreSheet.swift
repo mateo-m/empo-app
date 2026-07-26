@@ -19,6 +19,10 @@ struct PlayerMoreSheet: View {
     let gameTitle: String
     @Binding var showDebugOverlay: Bool
     @Binding var fastForwardActive: Bool
+    /// Capabilities declared by the running game's core. Gates the
+    /// Quit row (`quitToLibrary`): mkxp declares false, so for now
+    /// the row stays hidden for every game (docs/multi-session.md).
+    let capabilities: CoreCapabilities
     /// Multiplier the user configured in Game Settings. nil means
     /// fast-forward is off for this game, so the row stays hidden.
     let fastForwardMultiplier: Int?
@@ -58,8 +62,10 @@ struct PlayerMoreSheet: View {
         let fastFwd = (fastForwardMultiplier ?? 0) >= 2
         let diag = settings.diagnosticsOverlay
         let pause = true
-        // gameQuit is currently forced off in `body`. If/when it
-        // returns, mirror its gate here.
+        // Quit is gated in `body` on the core's `quitToLibrary`
+        // capability; every registered core declares false today.
+        // When a quit-capable core lands (cores plan, phase 4),
+        // mirror its gate here.
         return cheats || fastFwd || diag || pause || controllerRemapAvailable
     }
 
@@ -119,10 +125,14 @@ struct PlayerMoreSheet: View {
                 // Pause: graduated from experimental in May 2026,
                 // always enabled now.
                 let pauseEnabled = true
-                // gameQuit is off. See the ExperimentalFeature comment
-                // in AppSettings.swift. We force it false so the
-                // in-game Quit toolbar button stays hidden.
-                let quitEnabled = false
+                // Quit is gated on the running game's core
+                // capability. mkxp declares `quitToLibrary: false`
+                // (cross-session Ruby state cleanup is not reliable,
+                // docs/multi-session.md), so the row stays hidden for
+                // every game today, exactly like the old hardcode.
+                // See also the ExperimentalFeature comment in
+                // AppSettings.swift.
+                let quitEnabled = capabilities.quitToLibrary
                 if pauseEnabled || quitEnabled {
                     VStack(spacing: 0) {
                         InterleavedRows(

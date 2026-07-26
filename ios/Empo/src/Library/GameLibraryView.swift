@@ -1097,6 +1097,11 @@ private struct LibraryAlertPresentation: ViewModifier {
                 // comment in AppSettings.swift. Users have to resume
                 // the paused game (tapping its card) or force-close
                 // the app to play a different one.
+                // When it comes back (cores plan, phase 4), the gate
+                // is the paused game's core capability
+                // (`CoreCapabilities.quitToLibrary` +
+                // `.sequentialSessions`): mkxp keeps both false, so
+                // this alert stays informational for mkxp games.
                 // Button("Quit and play") {
                 //     guard let game = pendingGame else { return }
                 //     pendingGame = nil
