@@ -4,8 +4,11 @@ import SwiftUI
 // Liquid Glass material.
 //
 // Touch-dispatch semantics:
-//   - `EngineSessionCoordinator.shared.injectKey(scancode:, pressed:)`
-//     on press-down and release.
+//   - `SessionInputRouter.injectKey(scancode:, pressed:)` on
+//     press-down and release. The router branches on the running
+//     core's `inputInjection` capability: SDL-scancode cores (mkxp)
+//     take the exact pre-cores `EngineSessionCoordinator` path;
+//     DOM-key cores (rmWeb) go through the session's input entry.
 //   - Action button: slide-off does NOT release the key.
 //   - D-pad: 8-wedge angular mapping, bitwise diff across moves,
 //     inner 20% dead zone, slide-off at radius+30pt releases all
@@ -105,7 +108,7 @@ struct ActionButton: View {
                 if !isPressed {
                     isPressed = true
                     Haptics.controllerTap()
-                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
+                    SessionInputRouter.injectKey(scancode: scancode, pressed: true)
                 }
             }
             .onEnded { _ in
@@ -116,7 +119,7 @@ struct ActionButton: View {
     private func releaseIfHeld() {
         guard isPressed else { return }
         isPressed = false
-        EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+        SessionInputRouter.injectKey(scancode: scancode, pressed: false)
     }
 }
 
@@ -315,8 +318,8 @@ struct DPad: View {
         if newSet == activeDirections { return }
         let toRelease = activeDirections.subtracting(newSet)
         let toPress = newSet.subtracting(activeDirections)
-        toRelease.forEach { EngineSessionCoordinator.shared.injectKey(scancode: $0.scancode, pressed: false) }
-        toPress.forEach { EngineSessionCoordinator.shared.injectKey(scancode: $0.scancode, pressed: true) }
+        toRelease.forEach { SessionInputRouter.injectKey(scancode: $0.scancode, pressed: false) }
+        toPress.forEach { SessionInputRouter.injectKey(scancode: $0.scancode, pressed: true) }
         if !toPress.isEmpty {
             Haptics.controllerTap()
         }
@@ -325,7 +328,7 @@ struct DPad: View {
 
     private func releaseAll() {
         activeDirections.forEach {
-            EngineSessionCoordinator.shared.injectKey(scancode: $0.scancode, pressed: false)
+            SessionInputRouter.injectKey(scancode: $0.scancode, pressed: false)
         }
         activeDirections = []
     }

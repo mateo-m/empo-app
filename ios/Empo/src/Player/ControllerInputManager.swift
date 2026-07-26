@@ -290,7 +290,10 @@ final class ControllerInputManager {
                     let holders = heldScancodes[scancode, default: 0]
                     heldScancodes[scancode] = holders + 1
                     if holders == 0 {
-                        EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
+                        // Routed per the core's `inputInjection`
+                        // capability (mkxp: same coordinator call as
+                        // before the cores seam).
+                        SessionInputRouter.injectKey(scancode: scancode, pressed: true)
                     }
                 case .action(let name):
                     switch name {
@@ -311,7 +314,7 @@ final class ControllerInputManager {
                 let holders = heldScancodes[scancode, default: 0]
                 if holders <= 1 {
                     heldScancodes.removeValue(forKey: scancode)
-                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+                    SessionInputRouter.injectKey(scancode: scancode, pressed: false)
                 } else {
                     heldScancodes[scancode] = holders - 1
                 }
@@ -339,7 +342,7 @@ final class ControllerInputManager {
 
     private func releaseAllHeldKeys() {
         for scancode in heldScancodes.keys {
-            EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+            SessionInputRouter.injectKey(scancode: scancode, pressed: false)
         }
         heldScancodes.removeAll()
         elementPressScancode.removeAll()

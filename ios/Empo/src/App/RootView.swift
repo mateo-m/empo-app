@@ -215,6 +215,8 @@ struct RootView: View {
     }
 
     /// Unblocks any engine thread waiting in `mkxp_presentErrorAndWait()`.
+    /// mkxp-specific; a harmless no-op when no engine thread waits
+    /// (e.g. errors reported by a rmWeb session).
     private func dismissErrorAlert() {
         mkxp_signalErrorDismissed()
         appState.errorMessage = nil
@@ -236,7 +238,8 @@ struct RootView: View {
     }
 
     /// Unblocks the engine thread that waits in `mkxp_presentInfoAndWait()`.
-    /// The game resumes right where it called `msgbox`.
+    /// The game resumes right where it called `msgbox`. mkxp-specific
+    /// (capability `modalDialogBridge`); a no-op otherwise.
     private func dismissInfoAlert() {
         mkxp_signalInfoDismissed()
         appState.infoMessage = nil

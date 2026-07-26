@@ -6,6 +6,12 @@ import SwiftUI
 /// controls (D-pad, action buttons) are plain SwiftUI now - see
 /// `GameControls.swift` - so this is the only UIViewRepresentable
 /// the player still needs.
+///
+/// The injection below stays on the direct mkxp path (not
+/// `SessionInputRouter`): the whole keyboard feature is tied to the
+/// SDL text-input bridge (capability `inGameKeyboardText`, mkxp
+/// only today; rmWeb declares false, so this view never mounts for
+/// its games once the toggle is capability-gated in phase 4).
 struct KeyboardFieldRepresentable: UIViewRepresentable {
     var isActive: Bool
     var onActivate: (() -> Void)?

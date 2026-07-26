@@ -36,6 +36,15 @@ class AppState {
 
     private let session = EngineSessionCoordinator.shared
 
+    /// The live `CoreSession` for the selected game, instantiated
+    /// per launch by the game's `resolvedCoreKind` (`selectGame`).
+    /// mkxp's is a thin adapter over the process-global
+    /// `EngineSessionCoordinator` (same calls as before the cores
+    /// seam); rmWeb's owns a disposable WKWebView. Nil outside a
+    /// session. Survives pause (the session keeps running); cleared
+    /// by `tearDownSessionState` and unexpected termination.
+    private(set) var activeSession: (any CoreSession)?
+
     var pendingCrashRecovery: Bool { session.pendingCrashRecovery }
 
     func checkForUpdatesIfStale() async {
@@ -105,22 +114,66 @@ class AppState {
             forceRefresh: true
         )
 
-        session.configureEngine(
-            GameSession.LaunchInput(
-                game: game,
-                container: container,
-                gameDir: gameDir,
-                stateDir: stateDir,
-                userDataDir: userDataDir,
-                settings: settings,
-                metadata: metadata,
-                debugLogsEnabled: AppSettings.shared.debugLogs
-            )
+        let input = GameSession.LaunchInput(
+            game: game,
+            container: container,
+            gameDir: gameDir,
+            stateDir: stateDir,
+            userDataDir: userDataDir,
+            settings: settings,
+            metadata: metadata,
+            debugLogsEnabled: AppSettings.shared.debugLogs
         )
 
-        Task { @MainActor in
-            await session.launchGamePath(game.path)
+        // Launch through the session type registered for this
+        // game's core (docs/plans/emulator-cores.md).
+        switch metadata.resolvedCoreKind {
+        case .rmWeb:
+            #if canImport(RmWebHost)
+                // DORMANT: the importer still rejects MV/MZ (phase
+                // 2), so no library entry resolves to `.rmWeb` yet.
+                // This branch activates when the import gate opens
+                // after on-device validation.
+                guard
+                    let provider = CoreRegistry.shared.core(for: .rmWeb)
+                        as? any SessionProviding,
+                    let newSession = provider.makeSession(launch: input, delegate: self)
+                else {
+                    failLaunchOfUnplayableGame()
+                    return
+                }
+                activeSession = newSession
+                newSession.start()
+            #else
+                // The rmweb-core submodule is not in this build, so
+                // there is no runtime for this game. Unreachable
+                // while the import gate rejects MV/MZ; fail like an
+                // invalid game rather than feeding it to the mkxp
+                // engine.
+                failLaunchOfUnplayableGame()
+            #endif
+        case .mkxp, .unsupported:
+            // `MkxpSession.start()` is the exact
+            // configureEngine + launchGamePath sequence this method
+            // ran inline before the cores seam - same calls, same
+            // order, same threads (mkxp stays bit-identical).
+            // `.unsupported` keeps the pre-cores behavior: builds
+            // before `coreKind` existed ran every import through
+            // the mkxp engine.
+            let newSession = MkxpSession(launch: input)
+            activeSession = newSession
+            newSession.start()
         }
+    }
+
+    /// Launch-time analogue of the import validator's "can't play
+    /// this" surface: unwind the just-started session state so
+    /// `phase` is nil again, then show a plain library-level alert
+    /// (RootView's dismiss-only "Something went wrong" copy, with
+    /// no force-close framing).
+    private func failLaunchOfUnplayableGame() {
+        tearDownSessionState()
+        errorMessage = "This game can't be played by this version of Empo."
     }
 
     private var activeSessionGame: GameEntry? {
@@ -153,6 +206,24 @@ class AppState {
     }
 
     func returnToLibrary() {
+        // Capability branch (`quitToLibrary`): a session whose core
+        // can end a game without killing the process (rmWeb)
+        // terminates cleanly and frees the app for another game -
+        // no "close Empo from the app switcher" alert, no hang
+        // watchdog. mkxp declares `quitToLibrary: false` and keeps
+        // the exact pre-cores path below (docs/multi-session.md).
+        if let activeSession, activeSession.capabilities.quitToLibrary {
+            // Same play-time bookkeeping the mkxp path gets from
+            // beginReturnToLibrary, flushed before the session
+            // object goes away.
+            session.recordSessionPlayTime(for: activeSessionGame)
+            activeSession.requestTerminate()
+            tearDownSessionState()
+            return
+        }
+        // mkxp-specific: crash markers, play time, the termination
+        // handshake, and the hang watchdog all live in the
+        // process-global coordinator.
         let engineWasRunning = session.beginReturnToLibrary(
             selectedContainer: selectedGame?.container
         )
@@ -169,6 +240,11 @@ class AppState {
     /// then drop back to the library through the same transition.
     private func tearDownSessionState() {
         selectedGame = nil
+        // Drop the per-launch session object. mkxp's adapter holds
+        // no engine state, so releasing it cannot affect the engine
+        // (the coordinator stays process-global); a terminating
+        // rmWeb session keeps itself alive until its saves flush.
+        activeSession = nil
         // Unbind the controls layout. Library-screen UI that reads
         // it then sees a neutral default, and mutations (they should
         // not occur, but still) do not write to the last-played
@@ -200,7 +276,15 @@ class AppState {
         // totals update even though the engine keeps running.
         session.recordSessionPlayTime(for: activeSessionGame)
         EngineState.shared.isBackgroundPause = false
-        session.requestPause()
+        // Route through the live session: mkxp's adapter makes the
+        // same mkxp_requestPause call this method made directly
+        // before the cores seam. The no-session fallback preserves
+        // the pre-cores behavior verbatim.
+        if let activeSession {
+            activeSession.requestPause()
+        } else {
+            session.requestPause()
+        }
     }
 
     /// The bridge's paused callback calls this on the main thread.
@@ -232,13 +316,24 @@ class AppState {
         guard pm.pausedGame != nil else { return }
         pm.pausedGame = nil
         pm.snapshotCanFade = false
-        session.requestResume()
+        // Same routing note as requestPause: mkxp's adapter is a
+        // mechanical indirection over the identical coordinator
+        // call.
+        if let activeSession {
+            activeSession.requestResume()
+        } else {
+            session.requestResume()
+        }
         session.resumeSessionTiming(for: activeSessionGame)
 
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
             guard let self, pm.pausedGame == nil else { return }
             self.phase = .playing
+            // mkxp-specific: hands UIKit key-window status back to
+            // SDL's window. Harmless for `.view` surface sessions
+            // (there is a non-SDL window to make key, but keyboard
+            // routing for those is a rmweb-activation follow-up).
             AppWindow.resignKeyToSDL()
             // The frame-rendered callback in EngineSessionCoordinator
             // also flips `snapshotCanFade` once the engine has drawn
@@ -325,6 +420,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
             sessionHadError = true
         }
         selectedGame = nil
+        activeSession = nil
         ControlsLayout.shared.switchGame(id: nil, container: nil)
         engineReady = false
         PauseManager.shared.reset()
@@ -346,6 +442,58 @@ extension AppState: EngineSessionCoordinatorDelegate {
     }
 
     func coordinatorEngineDidPause(snapshot: UIImage?) {
+        handlePause(snapshot: snapshot)
+    }
+}
+
+// MARK: - CoreSessionDelegate
+
+/// Events from sessions created through the `CoreSession` seam.
+/// Today only rmWeb delivers here - mkxp's events keep arriving
+/// through the `EngineSessionCoordinatorDelegate` conformance above
+/// (unchanged wiring, bit-identical behavior) - so each method
+/// funnels into the same handler its coordinator twin uses.
+extension AppState: CoreSessionDelegate {
+    func sessionFrameRendered() {
+        coordinatorFrameRendered()
+    }
+
+    func sessionTerminated(cleanExit: Bool) {
+        // Capability branch (`sequentialSessions`): a core whose
+        // sessions are disposable (rmWeb - the WKWebView is gone,
+        // the process is healthy) resets phase/pause state so the
+        // library can start another game, instead of the mkxp-only
+        // "close Empo from the app switcher" alert flow
+        // (docs/multi-session.md, "What still happens at engine
+        // shutdown").
+        guard let activeSession, activeSession.capabilities.sequentialSessions else {
+            coordinatorEngineTerminatedUnexpectedly(cleanExit: cleanExit)
+            return
+        }
+        // Reset phase (and pause state) BEFORE any alert appears,
+        // so RootView's error alert takes the phase == nil branch
+        // (plain dismiss, no force-close framing) and the library
+        // is ready for the next launch.
+        tearDownSessionState()
+        if !cleanExit, errorMessage == nil {
+            errorMessage =
+                "The game ended unexpectedly. You can start it again from the library."
+        }
+    }
+
+    func sessionGameRectDidChange(_ rect: CGRect) {
+        coordinatorGameRectDidChange(rect)
+    }
+
+    func sessionDidReportError(_ message: String) {
+        coordinatorDidReportEngineError(message)
+    }
+
+    func sessionDidReportInfo(_ message: String) {
+        coordinatorDidReportEngineInfo(message)
+    }
+
+    func sessionDidPause(snapshot: UIImage?) {
         handlePause(snapshot: snapshot)
     }
 }

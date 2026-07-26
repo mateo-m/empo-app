@@ -14,6 +14,13 @@ class EngineState {
 
     private init() {}
 
+    // Background pause/resume talk to the mkxp bridge directly.
+    // For a `.view` surface session (rmWeb, dormant) these calls
+    // hit an idle engine parked in waitForGamePath and do nothing.
+    // TODO(rmweb-activation): route background pause through the
+    // active `CoreSession` (WKWebView largely self-suspends, but
+    // audio/rAF freezing should go through the session's pause).
+
     /// The caller must guard `phase == .playing` before the call.
     func requestBackgroundPause() {
         isBackgroundPause = true

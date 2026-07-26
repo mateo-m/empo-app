@@ -268,7 +268,9 @@ struct PlayerView: View {
             // The engine fires SDL_StartTextInput / SDL_StopTextInput
             // when the game toggles `Input.text_input`. Auto-flip
             // keyboard mode so the soft keyboard appears without user
-            // action.
+            // action. mkxp-specific (capability
+            // `inGameKeyboardText`); the handler simply never fires
+            // for cores without the SDL text-input bridge.
             EngineSessionCoordinator.shared.setTextInputModeHandler { active in
                 if active != keyboardMode {
                     keyboardMode = active
@@ -495,6 +497,9 @@ struct PlayerView: View {
     /// hook fires immediately. The second tap disarms $CHEATS again.
     /// The Ruby-side poller the engine installs keeps $CHEATS in
     /// sync with the bridge flag each Input.update.
+    /// mkxp-specific by design (capability `cheats`; rmWeb declares
+    /// false, so `PlayerMoreSheet` never offers the row for it once
+    /// the row is capability-gated in phase 4).
     private func toggleCheats() {
         cheatsEnabled.toggle()
         mkxp_setCheatsEnabled(cheatsEnabled)
