@@ -18,10 +18,14 @@ struct PlayerMoreSheet: View {
     /// "Game" if `selectedGame` is nil at present time.
     let gameTitle: String
     /// Capabilities declared by the running game's core. Gates the
-    /// Quit row (`quitToLibrary`): mkxp declares false, so for now
-    /// the row stays hidden for every game (docs/multi-session.md).
-    /// Declared here so the memberwise init's argument order keeps
-    /// matching `PlayerView`'s call site.
+    /// Cheats, Fast forward, and Diagnostics rows (`cheats` /
+    /// `fastForward` / `diagnostics`; mkxp declares all of them, so
+    /// mkxp games render every row exactly as before cores existed)
+    /// and the Quit row (`quitToLibrary`: mkxp declares false, so
+    /// for now that row stays hidden for every game,
+    /// docs/multi-session.md). Declared here so the memberwise
+    /// init's argument order keeps matching `PlayerView`'s call
+    /// site.
     let capabilities: CoreCapabilities
     @Binding var showDebugOverlay: Bool
     @Binding var fastForwardActive: Bool
@@ -53,22 +57,23 @@ struct PlayerMoreSheet: View {
     /// disable all the experimental features in app settings.
     static func hasContent(
         settings: AppSettings,
+        capabilities: CoreCapabilities,
         fastForwardMultiplier: Int?,
         controllerRemapAvailable: Bool = false
     ) -> Bool {
         // Cheats and pause graduated from experimental in May 2026
-        // and are now always enabled. Diagnostics overlay and
-        // fast-forward remain user-gated (the former via app
-        // settings, the latter per-game).
-        let cheats = true
-        let fastFwd = (fastForwardMultiplier ?? 0) >= 2
-        let diag = settings.diagnosticsOverlay
+        // and are always enabled where the core supports them.
+        // Diagnostics overlay and fast-forward additionally remain
+        // user-gated (the former via app settings, the latter
+        // per-game). Each row consults the core's capability first,
+        // mirroring `body`: mkxp declares everything true, so mkxp
+        // games render exactly the pre-cores sheet.
+        let cheats = capabilities.cheats
+        let fastFwd = capabilities.fastForward && (fastForwardMultiplier ?? 0) >= 2
+        let diag = !capabilities.diagnostics.isEmpty && settings.diagnosticsOverlay
         let pause = true
-        // Quit is gated in `body` on the core's `quitToLibrary`
-        // capability; every registered core declares false today.
-        // When a quit-capable core lands (cores plan, phase 4),
-        // mirror its gate here.
-        return cheats || fastFwd || diag || pause || controllerRemapAvailable
+        let quit = capabilities.quitToLibrary
+        return cheats || fastFwd || diag || pause || quit || controllerRemapAvailable
     }
 
     var body: some View {
@@ -82,19 +87,24 @@ struct PlayerMoreSheet: View {
                         separator: { rowSeparator },
                         content: {
                             // Cheats: graduated from experimental in
-                            // May 2026, always enabled now.
-                            MenuRow(icon: "wand.and.stars", label: "Cheats") {
-                                onCheats()
-                                dismiss()
+                            // May 2026, always enabled for cores
+                            // that declare the capability (mkxp's
+                            // Scene_Cheat injection; nothing
+                            // comparable exists for a web core yet).
+                            if capabilities.cheats {
+                                MenuRow(icon: "wand.and.stars", label: "Cheats") {
+                                    onCheats()
+                                    dismiss()
+                                }
                             }
-                            if fastForwardEnabled {
+                            if capabilities.fastForward, fastForwardEnabled {
                                 MenuToggleRow(
                                     icon: "hare.fill",
                                     label: "Fast forward (\(fastForwardMultiplier ?? 2)x)",
                                     isOn: $fastForwardActive
                                 )
                             }
-                            if settings.diagnosticsOverlay {
+                            if !capabilities.diagnostics.isEmpty, settings.diagnosticsOverlay {
                                 MenuToggleRow(
                                     icon: "ladybug.fill",
                                     label: "Diagnostics overlay",

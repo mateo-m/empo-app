@@ -54,11 +54,13 @@ struct PlayerView: View {
 
     /// Capabilities of the running game's core, resolved through
     /// the metadata's `resolvedCoreKind`. Gates the Menu sheet's
-    /// Quit row. `selectedGame` can be nil for a moment during
-    /// teardown (the same window where `gameTitle` falls back to
-    /// "Game"); mkxp's declaration is the safe stand-in there - it
-    /// gates everything exactly the way the app behaved before
-    /// cores existed.
+    /// rows (cheats / fast forward / diagnostics / quit) and, via
+    /// `PlayerMoreSheet.hasContent`, whether the toolbar shows the
+    /// Menu button at all. `selectedGame` can be nil for a moment
+    /// during teardown (the same window where `gameTitle` falls
+    /// back to "Game"); mkxp's declaration is the safe stand-in
+    /// there - it gates everything exactly the way the app behaved
+    /// before cores existed.
     private var coreCapabilities: CoreCapabilities {
         guard let game = appState.selectedGame, let container = game.container else {
             return MkxpCore.declaredCapabilities
@@ -185,6 +187,7 @@ struct PlayerView: View {
                         onShowMore: { showMoreSheet = true },
                         menuVisible: PlayerMoreSheet.hasContent(
                             settings: settings,
+                            capabilities: coreCapabilities,
                             fastForwardMultiplier: fastForwardMultiplier,
                             controllerRemapAvailable: controllerInput.hasHadControllerThisSession
                         ),
