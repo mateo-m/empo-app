@@ -199,10 +199,14 @@ Posture, in order:
   dlclose-unload success (canary), dyld image count, per-session RSS delta;
   Stage 1 + Stage 2 composition wired; roll to 1.9/1.8. **Unlimited switching
   ships here.**
-- **Phase C — container reset.** Stage 3 prototype behind the same harness;
-  soak test 50+ sessions cycling a corpus of real games (A→B→A→C…), asserting
-  flat RSS and zero cross-session Ruby symptoms; retire the memory watermark
-  to an assertion.
+- **Phase C — container reset.** The Stage 3 *core* — pristine-segment
+  snapshot at first load, factory reset of the resident image at retire —
+  is implemented in `ruby_instance.cpp` and preferred over copy-and-load
+  whenever the canary reports the image did not unload. Remaining Stage 3
+  work: the per-session arena allocator (reclaims the heap remainder that
+  `ruby_cleanup` doesn't return), then the 50+ session soak cycling a
+  corpus of real games (A→B→A→C…) asserting flat RSS, after which the
+  memory watermark retires to an assertion.
 - Keep `MKXP_RUBY_UNSET` legacy direct-link path working for desktop/test
   builds throughout (dylib-ification is iOS-only build plumbing).
 - On-device matrix throughout: 1.8→3.1, 3.1→1.8, 1.9→3.1, same-game restart,

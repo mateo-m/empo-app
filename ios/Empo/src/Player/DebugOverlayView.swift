@@ -52,6 +52,9 @@ struct DebugOverlayView: View {
             gameTitleBlock
 
             debugText(rubyLine)
+            if let line = rubyInstanceLine {
+                debugText(line)
+            }
             if let line = syntaxTransformLine {
                 debugText(line)
             }
@@ -248,6 +251,17 @@ struct DebugOverlayView: View {
 
     private var rubyLine: String {
         "Ruby \(String(cString: mkxp_getRubyVersion()))"
+    }
+
+    /// Cross-session play: which island instance this session runs
+    /// on and via which freshness mechanism (canonical dlopen,
+    /// reset-in-place, copy-and-load, or the single-shot static
+    /// fallback). This is the field view of the instance manager's
+    /// unload canary — the on-device answer to "does dlclose
+    /// actually unload our islands". Hidden while the flag is off.
+    private var rubyInstanceLine: String? {
+        guard CrossSessionPlay.enabled else { return nil }
+        return String(cString: mkxp_getRubyInstanceDiagnostics())
     }
 
     /// Reports the active syntax-transform mode set via

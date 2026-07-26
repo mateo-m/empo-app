@@ -393,6 +393,26 @@ targets:
           # member (ObjC impls and constructors included) so behavior
           # matches the old compile-into-app layout exactly.
           - -Wl,-force_load,$(DEPENDENCY_SEARCH_PATH)/lib/libmkxpz-core.a
+          # Cross-session play: keep the app's global symbols in the
+          # export trie (and out of dead-strip) so dlopen'd Ruby
+          # island dylibs (RubyIslandNN.framework, built by the
+          # mkxpNN-island targets in ../Dependencies/common.make) can
+          # resolve engine-core references (shState, Debug, bridge
+          # functions) against the executable at load time via
+          # -undefined dynamic_lookup. Harmless while the islands
+          # still link statically below; required the moment they
+          # ship as frameworks.
+          - -Wl,-export_dynamic
+          # Static Ruby islands. To switch a version to its dlopen'd
+          # framework form (unlimited sessions): remove its merged.o
+          # line here, add a nullptr-returning
+          # mkxp_get_script_binding_NN stub (same pre-build stub
+          # mechanism used when a merged.o is missing), and embed
+          # RubyIslandNN.framework under `dependencies:` with
+          # `embed: true, codeSign: true`. The engine's instance
+          # manager (mkxp-z-apple-mobile/src/ruby_instance.cpp)
+          # prefers the framework and falls back to these entries
+          # only when no framework is present.
           - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp18-merged.o
           - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp19-merged.o
           - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp31-merged.o
