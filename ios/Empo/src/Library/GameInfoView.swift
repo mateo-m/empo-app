@@ -13,6 +13,7 @@ struct GameInfoView: View {
     @State private var diskSize: Int64?
     @State private var rgssVersion: Int?
     @State private var rubyVersion: String?
+    @State private var rmWebKind: RmWebGameKind?
     @State private var runtimeProbeFinished = false
     @State private var showArtworkPicker = false
     @State private var showBannerPicker = false
@@ -83,6 +84,35 @@ struct GameInfoView: View {
         metadata.customTitle ?? originalTitle
     }
 
+    /// Label for the Details section's "Engine" row: the game's
+    /// core plus the detected engine variant. nil while the probe
+    /// task is still running (the row shows a spinner). Once the
+    /// probe finishes without a variant signal, falls back to the
+    /// core's display name so the row never renders "Unknown" for
+    /// a game that demonstrably imported under some core.
+    private var engineDisplayName: String? {
+        switch metadata.resolvedCoreKind {
+        case .mkxp:
+            // Variant from the same RGSS detection the debug
+            // Runtime section uses (probe task below); RGSS1/2/3
+            // map to XP / VX / VX Ace.
+            switch rgssVersion {
+            case 1: return "RPG Maker XP (RGSS1)"
+            case 2: return "RPG Maker VX (RGSS2)"
+            case 3: return "RPG Maker VX Ace (RGSS3)"
+            default: return runtimeProbeFinished ? CoreKind.mkxp.displayName : nil
+            }
+        case .rmWeb:
+            switch rmWebKind {
+            case .mv: return "RPG Maker MV"
+            case .mz: return "RPG Maker MZ"
+            case nil: return runtimeProbeFinished ? CoreKind.rmWeb.displayName : nil
+            }
+        case .unsupported(let raw):
+            return raw
+        }
+    }
+
     var body: some View {
         NavigationStack {
             GeometryReader { geo in
@@ -134,6 +164,23 @@ struct GameInfoView: View {
                             DetailRow("Size on disk") {
                                 if let size = diskSize {
                                     Text(GameMetadata.formatDiskSize(size))
+                                } else {
+                                    ProgressView()
+                                }
+                            }
+
+                            Divider().padding(.leading, Spacing.xl)
+
+                            // Engine identity: which core runs this
+                            // game and which engine variant the game
+                            // targets. Deliberately outside the
+                            // debugLogs gate - "what engine is this
+                            // game" is user-facing info, unlike the
+                            // internal API versions in the Runtime
+                            // section below.
+                            DetailRow("Engine") {
+                                if let name = engineDisplayName {
+                                    Text(name)
                                 } else {
                                     ProgressView()
                                 }
@@ -316,24 +363,38 @@ struct GameInfoView: View {
                 }
             }
             .task {
-                // Runtime probe: scan game folder for RGSS version
-                // and bundled Ruby version. Off-main-thread because
-                // the Ruby scan opens DLLs (5-15 MB each, a few in
-                // a typical PE-derived game) and runs an
-                // NSRegularExpression over the ASCII-decoded bytes.
-                guard let container, settings.debugLogs else {
+                // Engine/runtime probe: scan the game folder for the
+                // per-core engine variant (RGSS version for mkxp,
+                // MV/MZ for rmWeb) and the bundled Ruby version.
+                // The variant feeds the always-visible "Engine" row,
+                // so it runs regardless of debugLogs; both detectors
+                // are cheap file/INI checks. The Ruby DLL scan stays
+                // gated on debugLogs because it opens DLLs (5-15 MB
+                // each, a few in a typical PE-derived game) and runs
+                // an NSRegularExpression over the ASCII-decoded
+                // bytes, and only the debug Runtime section shows it.
+                // Off-main-thread either way.
+                guard let container else {
                     runtimeProbeFinished = true
                     return
                 }
                 let gameURL = container.gameURL
-                let result: (Int?, String?) = await Task.detached(priority: .utility) {
-                    (
-                        GameMetadata.detectRGSSVersion(in: gameURL),
-                        GameMetadata.detectBundledRubyVersion(in: gameURL)
-                    )
-                }.value
+                let coreKind = metadata.resolvedCoreKind
+                let scanBundledRuby = settings.debugLogs
+                let result: (Int?, String?, RmWebGameKind?) =
+                    await Task.detached(priority: .utility) {
+                        (
+                            coreKind == .mkxp
+                                ? GameMetadata.detectRGSSVersion(in: gameURL) : nil,
+                            coreKind == .mkxp && scanBundledRuby
+                                ? GameMetadata.detectBundledRubyVersion(in: gameURL) : nil,
+                            coreKind == .rmWeb
+                                ? RmWebDetection.detect(in: gameURL) : nil
+                        )
+                    }.value
                 rgssVersion = result.0
                 rubyVersion = result.1
+                rmWebKind = result.2
                 runtimeProbeFinished = true
             }
             .onDisappear {
