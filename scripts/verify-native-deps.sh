@@ -64,6 +64,16 @@ for ver in 18 19 31; do
     sym="_mkxp_get_script_binding_${ver}"
     nm "$merged" 2>/dev/null | awk -v sym="$sym" '$3 == sym {found=1} END {exit !found}' ||
         fail "mkxp${ver}-merged.o missing ${sym}"
+
+    # Cross-session play ships the islands as dlopen'd frameworks
+    # (built from the merged.o by `make mkxp-island`); the app embeds
+    # them per session. Verify the framework binary exists, targets
+    # the right platform, and exports the entry point.
+    island="$LIB/RubyIsland${ver}.framework/RubyIsland${ver}"
+    require_file_min "$island" 1000000 "RubyIsland${ver}.framework binary"
+    require_platform "$island" "$EXPECTED_PLATFORM" "RubyIsland${ver}"
+    nm -gU "$island" 2>/dev/null | awk -v sym="$sym" '$3 == sym {found=1} END {exit !found}' ||
+        fail "RubyIsland${ver} missing exported ${sym} (rebuild: make -f ${PLATFORM}.make mkxp-island)"
 done
 
 # Networking: every VM must carry the statically-linked socket ext.

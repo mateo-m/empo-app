@@ -171,22 +171,22 @@ Posture, in order:
 - Stage 3 removes the problem class entirely; the watermark then becomes a
   should-never-fire assertion.
 
-Known bounds accepted until the Stage 3 completion work (from adversarial
-review):
+Both review-found bounds are now closed by the island allocation zone
+(Stage 3 completion):
 
-- **Quit-and-play skips the memory watermark.** The gate would otherwise
-  measure free memory while the just-quit game is still resident and block
-  spuriously. Residual risk: that one flow can launch a big game while the
-  previous one is mid-teardown; `ruby_cleanup` returns most of the heap
-  before the new session's path is handed over (`launchGamePath` awaits the
-  termination ack), and Stage 3 closes the gap for good.
-- **pthread-key ceiling.** Each 1.9/3.1 instance's `ruby_init` creates
-  pthread keys (NULL destructors) that nothing deletes, and the in-place
-  segment reset wipes the island's record of them. Darwin caps keys at 512,
-  so "unlimited" is really a few hundred sessions per app launch before
-  `pthread_key_create` fails and Ruby aborts. Fix planned with the arena
-  work: track keys created between acquire and retire and
-  `pthread_key_delete` them (safe - no destructors).
+- Every Ruby allocation entry point is routed into one named Darwin malloc
+  zone (`multiruby/alloc_redirect.h`, force-included into the libruby + ext
+  builds only). Darwin's `free`/`realloc` dispatch on the owning zone, so
+  cross-boundary frees stay correct with no registry. pthread keys and
+  mmap'd GC pages are recorded as magic-tagged allocations inside the zone
+  (`src/island_alloc_abi.h`); mmap tombstones handle unmaps.
+- At retire (before dlclose / segment restore, skipped when poisoned) the
+  engine walks the zone once, `pthread_key_delete`s the recorded keys
+  (killing the 512-key "unlimited is really a few hundred" ceiling),
+  munmaps unmatched mappings, and `malloc_destroy_zone`s the remainder -
+  the retired VM's entire footprint returned in O(1), including in the
+  quit-and-play flow. The `os_proc_available_memory` watermark remains as
+  a should-never-fire safety net.
 
 ---
 
@@ -216,14 +216,24 @@ review):
   dlclose-unload success (canary), dyld image count, per-session RSS delta;
   Stage 1 + Stage 2 composition wired; roll to 1.9/1.8. **Unlimited switching
   ships here.**
-- **Phase C — container reset.** The Stage 3 *core* — pristine-segment
-  snapshot at first load, factory reset of the resident image at retire —
-  is implemented in `ruby_instance.cpp` and preferred over copy-and-load
-  whenever the canary reports the image did not unload. Remaining Stage 3
-  work: the per-session arena allocator (reclaims the heap remainder that
-  `ruby_cleanup` doesn't return), then the 50+ session soak cycling a
-  corpus of real games (A→B→A→C…) asserting flat RSS, after which the
-  memory watermark retires to an assertion.
+- **Phase C — container reset: implemented.** Pristine-segment snapshot at
+  first load + factory reset of the resident image at retire
+  (`ruby_instance.cpp`, preferred over copy-and-load whenever the canary
+  reports no unload), plus the island allocation zone (heap remainder,
+  pthread keys, GC page mappings — see "Memory posture" above). The
+  engine's terminate/reset dispatch points are disarmed during the VM
+  quiesce (`mkxp_isVMQuiescing`), so at_exit/END procs that touch the
+  engine run harmlessly instead of poisoning the instance. Remaining
+  validation (on-device only): the 50+ session soak cycling a corpus of
+  real games (A→B→A→C…) asserting flat RSS.
+- **Tests.** The instance manager's lifecycle state machine is extracted
+  into the OS-free `src/island_state.h` and driven by an executed,
+  mutation-checked suite (`tests/island_state_test.cpp`, run by
+  `tests/run-tests.sh`, wired into the engine's pre-commit hook and a
+  Linux CI workflow). The iOS launch-gate and alert-framing decisions are
+  extracted into `CrossSessionPolicy.swift` and covered by the
+  `EmpoTests` truth-table suite (standalone unit-test bundle, no host
+  app).
 - Keep `MKXP_RUBY_UNSET` legacy direct-link path working for desktop/test
   builds throughout (dylib-ification is iOS-only build plumbing).
 - On-device matrix throughout: 1.8→3.1, 3.1→1.8, 1.9→3.1, same-game restart,

@@ -192,12 +192,17 @@ class AppState {
     /// per-game capability gate decides whether the next launch is
     /// actually possible. RootView's alert OK handler calls this.
     func finishEndedSession() {
-        guard CrossSessionPlay.enabled, phase != nil else { return }
         // Recoverable = terminated, not hung, and no Ruby instance
         // stranded checked-out by a crash. A non-recoverable end
         // keeps phase set so the user gets the honest "close Empo"
         // framing instead of a library where every tap is blocked.
-        guard mkxp_isSessionRecoverable() != 0 else { return }
+        guard
+            CrossSessionPolicy.canFinishEndedSession(
+                enabled: CrossSessionPlay.enabled,
+                phaseActive: phase != nil,
+                recoverable: mkxp_isSessionRecoverable() != 0
+            )
+        else { return }
         withAnimation(Motion.snappy) {
             tearDownSessionState()
         }
@@ -356,12 +361,16 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // alert presents makes SwiftUI swallow the NavigationStack
         // pop. That case routes through RootView's OK handler, which
         // calls finishEndedSession() itself.
-        // The recoverable check covers the rare clean exit whose VM
+        // The recoverable input covers the rare clean exit whose VM
         // quiesce failed (at_exit escaped ruby_cleanup): the engine
         // then holds the instance checked out and every next launch
         // would be blocked, so the honest alert is the better exit.
-        if cleanExit && CrossSessionPlay.enabled && errorMessage == nil
-            && mkxp_isSessionRecoverable() != 0
+        if cleanExit,
+            CrossSessionPolicy.cleanExitReturnsToLibrary(
+                enabled: CrossSessionPlay.enabled,
+                errorAlertActive: errorMessage != nil,
+                recoverable: mkxp_isSessionRecoverable() != 0
+            )
         {
             withAnimation(Motion.snappy) {
                 tearDownSessionState()

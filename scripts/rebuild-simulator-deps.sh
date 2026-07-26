@@ -48,6 +48,9 @@ make -f iphonesimulator.make ruby-stdlib
 echo "==> building mkxp{18,19,31}-merged.o"
 make -f iphonesimulator.make mkxp-merged
 
+echo "==> building RubyIsland{18,19,31}.framework (dlopen'd per-session islands)"
+make -f iphonesimulator.make mkxp-island
+
 echo "==> building libmkxpz-core.a"
 make -f iphonesimulator.make mkxp-core
 

@@ -20,50 +20,25 @@ enum CrossSessionPlay {
     /// regression on low-memory devices.
     @MainActor static var sessionsStarted = 0
 
-    /// TEMPORARY soft gate, active only while retired Ruby instances
-    /// can leak their memory (the copy-and-load fallback keeps the
-    /// previous image resident; see the plan's Stage 2). Once the
-    /// Stage 3 container reset lands, retired sessions cost nothing
-    /// and this gate becomes a should-never-fire assertion. Without
-    /// the gate, iOS would jetsam Empo mid-game with no warning,
-    /// which reads as a crash - strictly worse than an honest alert.
-    /// 500 MB clears the biggest known Pokemon Essentials forks with
-    /// headroom; calibrate against the on-device soak matrix.
+    /// Safety-net watermark. With the island allocation zone
+    /// (engine: multiruby/alloc_redirect.h + the retire-time
+    /// reclaimer), a retired session returns its entire footprint -
+    /// heap, pthread keys, GC page mappings - so this gate should
+    /// never fire; it exists so a reclaim regression degrades to an
+    /// honest alert instead of iOS jetsamming Empo mid-game (which
+    /// reads as a crash). The only flow that can still accumulate is
+    /// copy-and-load with a failed snapshot, which the soak matrix
+    /// treats as a bug. 500 MB clears the biggest known Pokemon
+    /// Essentials forks with headroom.
     private static let minimumBytesForNextSession = 500 * 1024 * 1024
 
-    enum LaunchBlocker {
-        /// Only an already-used Ruby VM remains for this game's Ruby
-        /// version (static-island build, or a crashed session left
-        /// its instance checked out).
-        case dirtyRuby
-        /// The previous session's engine never acked termination;
-        /// nothing can run until the app restarts.
-        case engineHung
-        /// Retired sessions have eaten too much of the app's memory
-        /// budget for another game to launch safely.
-        case lowMemory
-
-        var message: String {
-            switch self {
-            case .dirtyRuby:
-                return "This game needs a Ruby engine that has already run a game "
-                    + "this session. Close Empo from the app switcher and reopen "
-                    + "it to play."
-            case .engineHung:
-                return EngineTerminationCoordinator.hangMessage
-            case .lowMemory:
-                return "Empo is running low on memory after the previous game "
-                    + "sessions. Close Empo from the app switcher and reopen it "
-                    + "to keep playing."
-            }
-        }
-    }
+    typealias LaunchBlocker = CrossSessionPolicy.Blocker
 
     /// Returns why `game` cannot start a session right now, or nil
-    /// when launching is safe. Never blocks the first session of a
-    /// launch: with the flag off there is no session 2, and the
-    /// engine-side capability is FRESH by construction on a cold
-    /// process.
+    /// when launching is safe. The decision logic (gate order,
+    /// short-circuits) lives in `CrossSessionPolicy.launchBlocker`,
+    /// unit-tested in EmpoTests; this wrapper supplies the live
+    /// inputs from the engine bridge and the per-game settings.
     ///
     /// `includeMemoryGate: false` is for the quit-and-play flow: it
     /// runs while the just-quit game's memory is still resident, so
@@ -75,30 +50,45 @@ enum CrossSessionPlay {
         for game: GameEntry,
         includeMemoryGate: Bool = true
     ) -> LaunchBlocker? {
-        guard enabled, sessionsStarted > 0 else { return nil }
         guard let container = game.container else { return nil }
-
-        // A hung engine never terminates, so the capability check
-        // below would wrongly predict FRESH; nothing can run until
-        // the app restarts. Blocking here also keeps selectGame from
-        // calling mkxp_setGamePath, which would erase the hung flag.
-        if mkxp_isEngineHung() != 0 {
-            return .engineHung
-        }
-
-        let settings = GameSettings.load(from: container.empoStateURL)
-        let metadata = GameMetadata.load(from: container)
-        let rubyVersion = GameSession.resolveRubyVersion(
-            settings: settings, metadata: metadata
+        return CrossSessionPolicy.launchBlocker(
+            enabled: enabled,
+            sessionsStarted: sessionsStarted,
+            engineHung: mkxp_isEngineHung() != 0,
+            includeMemoryGate: includeMemoryGate,
+            minimumBytesForNextSession: minimumBytesForNextSession,
+            capability: {
+                let settings = GameSettings.load(from: container.empoStateURL)
+                let metadata = GameMetadata.load(from: container)
+                let rubyVersion = GameSession.resolveRubyVersion(
+                    settings: settings, metadata: metadata
+                )
+                switch mkxp_sessionCapability(rubyVersion) {
+                case MKXP_SESSION_CAP_FRESH: return .fresh
+                case MKXP_SESSION_CAP_DIRTY: return .dirty
+                default: return .unavailable
+                }
+            },
+            availableMemoryBytes: { os_proc_available_memory() }
         )
-        if mkxp_sessionCapability(rubyVersion) != MKXP_SESSION_CAP_FRESH {
-            return .dirtyRuby
+    }
+}
+
+extension CrossSessionPolicy.Blocker {
+    /// User-facing alert body. Lives outside the pure policy because
+    /// the hung message is shared with the termination coordinator.
+    @MainActor var message: String {
+        switch self {
+        case .dirtyRuby:
+            return "This game needs a Ruby engine that has already run a game "
+                + "this session. Close Empo from the app switcher and reopen "
+                + "it to play."
+        case .engineHung:
+            return EngineTerminationCoordinator.hangMessage
+        case .lowMemory:
+            return "Empo is running low on memory after the previous game "
+                + "sessions. Close Empo from the app switcher and reopen it "
+                + "to keep playing."
         }
-        if includeMemoryGate,
-            os_proc_available_memory() < minimumBytesForNextSession
-        {
-            return .lowMemory
-        }
-        return nil
     }
 }

@@ -473,7 +473,7 @@ $(SOURCES)/ruby/.configured-$(SDK_TAG): $(SOURCES)/ruby/configure $(LIBDIR)/libc
 	cd $(SOURCES)/ruby; $(MAKE) distclean 2>/dev/null || true
 	cd $(SOURCES)/ruby; \
 	export $(CONFIGURE_ENV); \
-	export CFLAGS="-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__ $$CFLAGS"; \
+	export CFLAGS="-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__ $(MKXPZ_ISLAND_ALLOC_CFLAGS) $$CFLAGS"; \
 	export LDFLAGS="$$LDFLAGS"; \
 	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) \
 	--with-baseruby=/usr/bin/ruby \
@@ -519,6 +519,17 @@ $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 # Pokemon Essentials forks. Auto-detect routes 3.0-bundling games
 # to 3.1 + Legacy.
 
+# Ruby island allocation redirect: force-included into every
+# libruby + bundled-ext compile (and configure test - the header is
+# self-contained by design, see its comment). Routes every VM
+# allocation into one named malloc zone and records pthread keys +
+# mmap'd GC pages inside it, so the engine's instance manager can
+# return a retired session's entire footprint in O(1)
+# (src/ruby_instance.cpp reclaimIslandAllocations). Applies ONLY to
+# Ruby island code - never to binding/*.cpp or engine core, whose
+# heap objects legitimately cross the island boundary.
+MKXPZ_ISLAND_ALLOC_CFLAGS := -include $(ENGINE)/multiruby/alloc_redirect.h
+
 # Suppress the same warnings project.yml suppresses, so the per-Ruby
 # binding compile is no noisier than the in-Xcode build.
 MKXPZ_WARNFLAGS := \
@@ -556,46 +567,46 @@ mkxp-core: init_dirs $(LIBDIR)/libmkxpz-core.a
 # The known static-archive deps (openssl for 3.1's openssl ext, zlib,
 # iconv) are linked into each island directly so their symbols never
 # depend on the app's export table.
-mkxp31-island: init_dirs $(LIBDIR)/RubyIsland31.dylib
-mkxp19-island: init_dirs $(LIBDIR)/RubyIsland19.dylib
-mkxp18-island: init_dirs $(LIBDIR)/RubyIsland18.dylib
+mkxp31-island: init_dirs $(LIBDIR)/RubyIsland31.framework/RubyIsland31
+mkxp19-island: init_dirs $(LIBDIR)/RubyIsland19.framework/RubyIsland19
+mkxp18-island: init_dirs $(LIBDIR)/RubyIsland18.framework/RubyIsland18
 mkxp-island: mkxp18-island mkxp19-island mkxp31-island
 
-$(LIBDIR)/RubyIsland31.dylib: $(LIBDIR)/mkxp31-merged.o
-	@echo "[mkxp31] Linking RubyIsland31.dylib..."
-	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) -dynamiclib \
-	    -install_name @rpath/RubyIsland31.framework/RubyIsland31 \
-	    -Wl,-undefined,dynamic_lookup \
-	    -Wl,-exported_symbol,_mkxp_get_script_binding_31 \
-	    $(LIBDIR)/mkxp31-merged.o \
-	    -L$(LIBDIR) -lssl -lcrypto -lz -liconv \
-	    -o $@
-	@echo "[mkxp31] Verifying island exports..."
-	@nm -gU $@ | awk '$$2 == "T"' | head -3
+# Minimal shallow-framework Info.plist (iOS layout: binary + plist at
+# the framework root). $(1) = version suffix (18/19/31).
+define ISLAND_INFO_PLIST
+<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n\t<key>CFBundleDevelopmentRegion</key><string>en</string>\n\t<key>CFBundleExecutable</key><string>RubyIsland$(1)</string>\n\t<key>CFBundleIdentifier</key><string>sh.mateo.empo.RubyIsland$(1)</string>\n\t<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n\t<key>CFBundleName</key><string>RubyIsland$(1)</string>\n\t<key>CFBundlePackageType</key><string>FMWK</string>\n\t<key>CFBundleShortVersionString</key><string>1.0</string>\n\t<key>CFBundleVersion</key><string>1</string>\n\t<key>MinimumOSVersion</key><string>$(MINIMUM_REQUIRED)</string>\n</dict>\n</plist>
+endef
 
-$(LIBDIR)/RubyIsland19.dylib: $(LIBDIR)/mkxp19-merged.o
-	@echo "[mkxp19] Linking RubyIsland19.dylib..."
+# Link one island framework binary from its merged.o. $(1) = version
+# suffix, $(2) = extra static libs.
+define LINK_ISLAND
+	@echo "[mkxp$(1)] Linking RubyIsland$(1).framework..."
+	@mkdir -p $(LIBDIR)/RubyIsland$(1).framework
 	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) -dynamiclib \
-	    -install_name @rpath/RubyIsland19.framework/RubyIsland19 \
+	    -install_name @rpath/RubyIsland$(1).framework/RubyIsland$(1) \
 	    -Wl,-undefined,dynamic_lookup \
-	    -Wl,-exported_symbol,_mkxp_get_script_binding_19 \
-	    $(LIBDIR)/mkxp19-merged.o \
-	    -L$(LIBDIR) -lz -liconv \
-	    -o $@
-	@echo "[mkxp19] Verifying island exports..."
-	@nm -gU $@ | awk '$$2 == "T"' | head -3
+	    -Wl,-exported_symbol,_mkxp_get_script_binding_$(1) \
+	    $(LIBDIR)/mkxp$(1)-merged.o \
+	    -L$(LIBDIR) $(2) \
+	    -o $(LIBDIR)/RubyIsland$(1).framework/RubyIsland$(1)
+	@printf '$(ISLAND_INFO_PLIST_$(1))' > $(LIBDIR)/RubyIsland$(1).framework/Info.plist
+	@echo "[mkxp$(1)] Verifying island exports..."
+	@nm -gU $(LIBDIR)/RubyIsland$(1).framework/RubyIsland$(1) | awk '$$2 == "T"' | head -3
+endef
 
-$(LIBDIR)/RubyIsland18.dylib: $(LIBDIR)/mkxp18-merged.o
-	@echo "[mkxp18] Linking RubyIsland18.dylib..."
-	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) -dynamiclib \
-	    -install_name @rpath/RubyIsland18.framework/RubyIsland18 \
-	    -Wl,-undefined,dynamic_lookup \
-	    -Wl,-exported_symbol,_mkxp_get_script_binding_18 \
-	    $(LIBDIR)/mkxp18-merged.o \
-	    -L$(LIBDIR) -lz -liconv \
-	    -o $@
-	@echo "[mkxp18] Verifying island exports..."
-	@nm -gU $@ | awk '$$2 == "T"' | head -3
+ISLAND_INFO_PLIST_31 := $(call ISLAND_INFO_PLIST,31)
+ISLAND_INFO_PLIST_19 := $(call ISLAND_INFO_PLIST,19)
+ISLAND_INFO_PLIST_18 := $(call ISLAND_INFO_PLIST,18)
+
+$(LIBDIR)/RubyIsland31.framework/RubyIsland31: $(LIBDIR)/mkxp31-merged.o
+	$(call LINK_ISLAND,31,-lssl -lcrypto -lz -liconv)
+
+$(LIBDIR)/RubyIsland19.framework/RubyIsland19: $(LIBDIR)/mkxp19-merged.o
+	$(call LINK_ISLAND,19,-lz -liconv)
+
+$(LIBDIR)/RubyIsland18.framework/RubyIsland18: $(LIBDIR)/mkxp18-merged.o
+	$(call LINK_ISLAND,18,-lz -liconv)
 
 # ---- Engine core static library --------------------------------------
 # Everything under $(ENGINE)/src compiled into libmkxpz-core.a. The
@@ -970,7 +981,7 @@ ruby18: init_dirs $(LIBDIR)/libruby18-static.a $(LIBDIR)/libruby18-ext.a
 # vendor case.
 ruby19: init_dirs $(LIBDIR)/libruby19-static.a $(LIBDIR)/libruby19-ext.a
 
-RUBY19_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
+RUBY19_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 $(MKXPZ_ISLAND_ALLOC_CFLAGS) \
 	-Wno-implicit-function-declaration \
 	-Wno-implicit-int \
 	-Wno-incompatible-pointer-types \
@@ -1127,7 +1138,7 @@ SOCKET18_DEFS = -DINET6 \
 	-DHAVE_SYS_SELECT_H -DHAVE_SYS_TIME_H -DHAVE_SYS_TYPES_H \
 	-DHAVE_SYS_UIO_H -DHAVE_SYS_UN_H -DHAVE_UNISTD_H
 
-RUBY18_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 \
+RUBY18_CFLAGS = $(TARGETFLAGS) -std=gnu89 -O2 $(MKXPZ_ISLAND_ALLOC_CFLAGS) \
 	-fno-stack-protector \
 	-fno-strict-aliasing \
 	-fwrapv \

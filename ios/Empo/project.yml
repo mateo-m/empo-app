@@ -210,6 +210,38 @@ targets:
             exit 1
           fi
           rsync -a --delete "$STDLIB_SRC/" "${PROJECT_DIR}/Ruby/"
+      - name: Embed Ruby island frameworks
+        # RubyIsland{18,19,31}.framework from the prebuilt dep tree,
+        # copied into the app's Frameworks/ and re-signed with the
+        # app's identity. Done as a script phase (not xcodegen
+        # `dependencies`) because the source path varies per SDK via
+        # DEPENDENCY_SEARCH_PATH, which xcodegen cannot resolve at
+        # project-generation time. The engine dlopens these per game
+        # session (fresh Ruby VM instance each time); without them,
+        # the app builds and runs but every session fails at acquire
+        # with a clear engine error - hence the loud warning.
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          DEST="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          mkdir -p "${DEST}"
+          missing=0
+          for VER in 18 19 31; do
+            FW="${DEPENDENCY_SEARCH_PATH}/lib/RubyIsland${VER}.framework"
+            if [ ! -d "${FW}" ]; then
+              echo "warning: ${FW} missing - run 'make -f <platform>.make mkxp-island' in ios/Dependencies (game sessions will fail to acquire a Ruby instance)"
+              missing=1
+              continue
+            fi
+            rsync -a --delete "${FW}" "${DEST}/"
+            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+              /usr/bin/codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
+                --preserve-metadata=identifier,entitlements \
+                "${DEST}/RubyIsland${VER}.framework/RubyIsland${VER}"
+            fi
+          done
+          [ "${missing}" = "1" ] && echo "warning: one or more Ruby island frameworks were not embedded" || true
+
       - name: Generate Git Info
         # Force this script to run every build. Without this, Xcode sees
         # the declared output file already on disk and skips the script,
@@ -403,19 +435,18 @@ targets:
           # still link statically below; required the moment they
           # ship as frameworks.
           - -Wl,-export_dynamic
-          # Static Ruby islands. To switch a version to its dlopen'd
-          # framework form (unlimited sessions): remove its merged.o
-          # line here, add a nullptr-returning
-          # mkxp_get_script_binding_NN stub (same pre-build stub
-          # mechanism used when a merged.o is missing), and embed
-          # RubyIslandNN.framework under `dependencies:` with
-          # `embed: true, codeSign: true`. The engine's instance
-          # manager (mkxp-z-apple-mobile/src/ruby_instance.cpp)
-          # prefers the framework and falls back to these entries
-          # only when no framework is present.
-          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp18-merged.o
-          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp19-merged.o
-          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp31-merged.o
+          # Ruby islands ship as dlopen'd frameworks
+          # (RubyIslandNN.framework, built by the mkxpNN-island
+          # targets in ../Dependencies/common.make and embedded by
+          # the "Embed Ruby island frameworks" build phase below) -
+          # a fresh dyld image per game session is what makes
+          # unlimited cross-session play possible. The merged.o
+          # files are no longer linked statically; the entry-point
+          # symbols the engine's static fallback references come
+          # from src/App/RubyIslandStaticStubs.c (all NULL, so the
+          # instance manager in
+          # mkxp-z-apple-mobile/src/ruby_instance.cpp uses the
+          # frameworks exclusively).
           - -lssl
           - -lcrypto
           - -ldl
@@ -439,6 +470,24 @@ targets:
           - -lGLESv2_static
     dependencies:
       - package: GameProbe
+  EmpoTests:
+    # Standalone unit-test bundle (no host app): compiles the pure
+    # cross-session decision core alongside its truth-table tests, so
+    # `xcodebuild test -scheme EmpoTests` runs without building Empo
+    # or its native dependency tree. Add further pure decision logic
+    # here rather than growing bridge-coupled code.
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: src/App/CrossSessionPolicy.swift
+      - path: Tests
+    settings:
+      base:
+        PRODUCT_NAME: EmpoTests
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+
 schemes:
   Empo:
     build:
@@ -452,3 +501,11 @@ schemes:
       config: Debug
     archive:
       config: Release
+  EmpoTests:
+    build:
+      targets:
+        EmpoTests: all
+    test:
+      config: Debug
+      targets:
+        - EmpoTests

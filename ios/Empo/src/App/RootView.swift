@@ -145,7 +145,11 @@ struct RootView: View {
         } message: {
             if engineHung {
                 Text("The game stopped responding. Close Empo and reopen it.")
-            } else if appState.phase != nil, !sessionEndedBehindAlert {
+            } else if CrossSessionPolicy.appendsForceCloseGuidance(
+                engineHung: engineHung,
+                phaseActive: appState.phase != nil,
+                sessionEndedBehindAlert: sessionEndedBehindAlert)
+            {
                 Text(
                     "\(appState.errorMessage ?? "An error occurred.") Close Empo from the app switcher and reopen it to continue."
                 )
@@ -263,22 +267,22 @@ struct RootView: View {
     /// returns to the library (finishEndedSession), so the message
     /// must not tell the user to force-close the app. A crash that
     /// stranded its instance is NOT recoverable - every next launch
-    /// would be blocked - so it keeps the restart framing.
+    /// would be blocked - so it keeps the restart framing. Decision
+    /// logic in CrossSessionPolicy (unit-tested); live inputs here.
     private var sessionEndedBehindAlert: Bool {
-        CrossSessionPlay.enabled && mkxp_isSessionRecoverable() != 0
+        CrossSessionPolicy.sessionEndedBehindAlert(
+            enabled: CrossSessionPlay.enabled,
+            recoverable: mkxp_isSessionRecoverable() != 0
+        )
     }
 
     private var errorAlertTitle: String {
-        if engineHung { return "Restart Empo" }
-        if appState.phase != nil {
-            guard sessionEndedBehindAlert else { return "Restart Empo" }
-            // Recoverable, but distinguish a game that chose to end
-            // (clean exit, parting message) from one that failed
-            // before Ruby ran (load error, retired instance).
-            return mkxp_didEngineExitCleanly() != 0
-                ? "Game ended" : "Something went wrong"
-        }
-        return "Something went wrong"
+        CrossSessionPolicy.errorAlertTitle(
+            engineHung: engineHung,
+            phaseActive: appState.phase != nil,
+            sessionEndedBehindAlert: sessionEndedBehindAlert,
+            cleanExit: mkxp_didEngineExitCleanly() != 0
+        )
     }
 
     /// Wait (up to `scanGraceDuration`) for the initial library scan.

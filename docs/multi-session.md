@@ -58,14 +58,18 @@ points at the same game directory, on a fresh instance.
 
 ## Memory
 
-A retired instance that truly unloaded costs nothing. Under copy-and-load,
-the retired image stays resident (minus what `ruby_cleanup` returned), and
-iOS jetsams over-budget apps with no warning. While that mechanism is
-active, `CrossSessionPlay.launchBlocker` also gates on
-`os_proc_available_memory()` and degrades to the restart alert below a
-headroom watermark — a temporary posture until the planned container reset
-(plan Stage 3) makes retired sessions free and the watermark a
-should-never-fire assertion.
+Retired sessions return their entire footprint. Every Ruby allocation
+entry point is routed into one named malloc zone
+(`mkxp-z-apple-mobile/multiruby/alloc_redirect.h`, force-included into the
+libruby + ext builds only — never the binding or engine core, whose heap
+objects legitimately cross the island boundary). Darwin's `free`/`realloc`
+dispatch on the pointer's owning zone, so cross-boundary frees stay
+correct. pthread keys and mmap'd GC heap pages are recorded as tagged
+allocations inside the zone; at retire the engine deletes the keys (no
+512-key ceiling), munmaps unmatched pages, and destroys the zone in one
+call. The `os_proc_available_memory()` watermark in
+`CrossSessionPlay.launchBlocker` remains as a should-never-fire safety
+net; the on-device soak matrix asserts flat RSS across A→B→A→C cycles.
 
 ## Quit paths
 
