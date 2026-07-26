@@ -210,38 +210,6 @@ targets:
             exit 1
           fi
           rsync -a --delete "$STDLIB_SRC/" "${PROJECT_DIR}/Ruby/"
-      - name: Embed Ruby island frameworks
-        # RubyIsland{18,19,31}.framework from the prebuilt dep tree,
-        # copied into the app's Frameworks/ and re-signed with the
-        # app's identity. Done as a script phase (not xcodegen
-        # `dependencies`) because the source path varies per SDK via
-        # DEPENDENCY_SEARCH_PATH, which xcodegen cannot resolve at
-        # project-generation time. The engine dlopens these per game
-        # session (fresh Ruby VM instance each time); without them,
-        # the app builds and runs but every session fails at acquire
-        # with a clear engine error - hence the loud warning.
-        basedOnDependencyAnalysis: false
-        script: |
-          set -e
-          DEST="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
-          mkdir -p "${DEST}"
-          missing=0
-          for VER in 18 19 31; do
-            FW="${DEPENDENCY_SEARCH_PATH}/lib/RubyIsland${VER}.framework"
-            if [ ! -d "${FW}" ]; then
-              echo "warning: ${FW} missing - run 'make -f <platform>.make mkxp-island' in ios/Dependencies (game sessions will fail to acquire a Ruby instance)"
-              missing=1
-              continue
-            fi
-            rsync -a --delete "${FW}" "${DEST}/"
-            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
-              /usr/bin/codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
-                --preserve-metadata=identifier,entitlements \
-                "${DEST}/RubyIsland${VER}.framework/RubyIsland${VER}"
-            fi
-          done
-          [ "${missing}" = "1" ] && echo "warning: one or more Ruby island frameworks were not embedded" || true
-
       - name: Generate Git Info
         # Force this script to run every build. Without this, Xcode sees
         # the declared output file already on disk and skips the script,
@@ -308,6 +276,63 @@ targets:
           if [ ! -f "$OUT" ] || [ "$(cat "$OUT")" != "$NEW" ]; then
             echo "$NEW" > "$OUT"
           fi
+    postBuildScripts:
+      - name: Embed Ruby island frameworks
+        # RubyIsland{18,19,31}.framework from the prebuilt dep tree,
+        # copied into the app's Frameworks/ and re-signed with the
+        # app's identity. A POST-build phase: the app wrapper must
+        # exist before frameworks land in it, and the closure check
+        # below needs the linked executable. A script phase (not
+        # xcodegen `dependencies`) because the source path varies per
+        # SDK via DEPENDENCY_SEARCH_PATH, which xcodegen cannot
+        # resolve at project-generation time. The engine dlopens
+        # these per game session (fresh Ruby VM instance each time);
+        # without them, the app builds and runs but every session
+        # fails at acquire with a clear engine error - hence the loud
+        # warnings.
+        basedOnDependencyAnalysis: false
+        shell: /bin/bash
+        script: |
+          set -e
+          DEST="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          APP_BIN="${TARGET_BUILD_DIR}/${EXECUTABLE_PATH}"
+          mkdir -p "${DEST}"
+          missing=0
+          for VER in 18 19 31; do
+            FW="${DEPENDENCY_SEARCH_PATH}/lib/RubyIsland${VER}.framework"
+            if [ ! -d "${FW}" ]; then
+              echo "warning: ${FW} missing - run 'make -f <platform>.make mkxp-island' in ios/Dependencies (game sessions will fail to acquire a Ruby instance)"
+              missing=1
+              continue
+            fi
+            rsync -a --delete "${FW}" "${DEST}/"
+
+            # dlopen closure check: every engine/SDL-namespace symbol
+            # the island imports must exist in the app's export
+            # table, or dlopen (RTLD_NOW) fails at the first game
+            # launch. System/libc imports resolve from dyld's shared
+            # cache and are excluded by the prefix filter.
+            if [ -f "${APP_BIN}" ]; then
+              UNRESOLVED=$(comm -23 \
+                <(nm -u "${DEST}/RubyIsland${VER}.framework/RubyIsland${VER}" 2>/dev/null | sed 's/^ *//' | grep -E '^_(SDL_|mkxp)' | sort -u) \
+                <(nm -gU "${APP_BIN}" 2>/dev/null | awk '{print $NF}' | sort -u) || true)
+              if [ -n "${UNRESOLVED}" ]; then
+                echo "error: RubyIsland${VER} imports symbols the app does not export - dlopen will fail:"
+                echo "${UNRESOLVED}"
+                exit 1
+              fi
+            fi
+
+            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+              # Sign the framework BUNDLE (seals Info.plist via
+              # CodeResources), not just the Mach-O inside.
+              /usr/bin/codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
+                --preserve-metadata=identifier,entitlements \
+                "${DEST}/RubyIsland${VER}.framework"
+            fi
+          done
+          [ "${missing}" = "1" ] && echo "warning: one or more Ruby island frameworks were not embedded" || true
+
     sources:
       # The mkxp-z engine is NOT compiled here.
       #
@@ -374,7 +399,15 @@ targets:
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/Empo-Bridging-Header.h
         OTHER_LDFLAGS:
-          - -lSDL2
+          # force_load, not -lSDL2: the dlopen'd Ruby islands resolve
+          # their SDL references (SDL_GetPowerInfo, SDL_GetSystemRAM,
+          # ...) against the app's export table at load time, and a
+          # plain archive link only pulls members the app itself
+          # references. A binding-only SDL symbol missing from the
+          # executable would fail every island dlopen (RTLD_NOW).
+          # The post-build "Embed Ruby island frameworks" phase
+          # verifies the closure per build.
+          - -Wl,-force_load,$(DEPENDENCY_SEARCH_PATH)/lib/libSDL2.a
           - -lSDL2main
           - -lSDL2_image
           - -lSDL2_sound
