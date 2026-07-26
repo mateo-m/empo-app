@@ -143,6 +143,16 @@ class AppState {
                     return
                 }
                 activeSession = newSession
+                // TODO(rmweb-activation): begin a SessionLogger
+                // session here so play time / session history work
+                // for web games (see the note in
+                // `returnToLibrary`). Not a safe one-liner today:
+                // `SessionLogger.beginSession` is only reachable
+                // through `GameSession.configureEngine`, and its
+                // `configureDebugLog` side effect redirects the
+                // process-global mkxp debug log
+                // (`mkxp_setDebugLogPath`) - it needs an
+                // mkxp-neutral entry point first.
                 newSession.start()
             #else
                 // The rmweb-core submodule is not in this build, so
@@ -152,17 +162,28 @@ class AppState {
                 // engine.
                 failLaunchOfUnplayableGame()
             #endif
-        case .mkxp, .unsupported:
+        case .mkxp:
             // `MkxpSession.start()` is the exact
             // configureEngine + launchGamePath sequence this method
             // ran inline before the cores seam - same calls, same
             // order, same threads (mkxp stays bit-identical).
-            // `.unsupported` keeps the pre-cores behavior: builds
-            // before `coreKind` existed ran every import through
-            // the mkxp engine.
+            // Pre-cores libraries are unaffected by the
+            // `.unsupported` branch below: metadata with no stored
+            // `coreKind` resolves to `.mkxp` (`resolvedCoreKind`
+            // backfills the default), so every game an older build
+            // could import still lands here.
             let newSession = MkxpSession(launch: input)
             activeSession = newSession
             newSession.start()
+        case .unsupported:
+            // Downgrade scenario: the metadata's `coreKind` was
+            // written by a newer build with a core this build does
+            // not know about. Feeding such a game to the Ruby VM
+            // would fail with crash framing ("close Empo from the
+            // app switcher"); surface the graceful "can't play
+            // this" alert instead, matching the import validator's
+            // rejection surface.
+            failLaunchOfUnplayableGame()
         }
     }
 
@@ -213,9 +234,17 @@ class AppState {
         // watchdog. mkxp declares `quitToLibrary: false` and keeps
         // the exact pre-cores path below (docs/multi-session.md).
         if let activeSession, activeSession.capabilities.quitToLibrary {
-            // Same play-time bookkeeping the mkxp path gets from
-            // beginReturnToLibrary, flushed before the session
-            // object goes away.
+            // Flush play time before the session object goes away.
+            // For a fresh rmWeb launch this is currently a no-op:
+            // `SessionLogger.sessionStartTime` is only set by
+            // `beginSession`, reached via
+            // `GameSession.configureEngine`, which only
+            // `MkxpSession.start` runs - so nothing has accrued to
+            // flush. Segments after a pause/resume cycle DO get
+            // recorded (`resumePausedGame` restarts the timer
+            // core-neutrally via `resumeSessionTiming`). See the
+            // TODO(rmweb-activation) at the rmWeb launch site in
+            // `selectGame`.
             session.recordSessionPlayTime(for: activeSessionGame)
             activeSession.requestTerminate()
             tearDownSessionState()
