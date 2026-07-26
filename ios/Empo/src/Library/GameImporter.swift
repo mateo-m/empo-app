@@ -51,9 +51,19 @@ enum GameImporter {
         case .rpgmxp, .rpgmvx, .rpgmvxace, .mkxpZ:
             break
         case .unsupported(let raw):
+            // The supported-engine list derives from the registered
+            // cores, so registering a new core updates this copy for
+            // free. Each core contributes a self-contained phrase
+            // (mkxp's is "RPG Maker XP, VX, VX Ace, and mkxp-z", so
+            // with one core the sentence matches the pre-cores
+            // string exactly); additional cores chain on with
+            // ", as well as ".
+            let supported = CoreRegistry.shared.allCores
+                .map { $0.supportedGamesDescription }
+                .joined(separator: ", as well as ")
             throw GameImportValidator.ImportError.unsupportedRuntime(
                 "This JoiPlay archive uses '\(raw)', which Empo does not support. "
-                    + "Empo currently supports only RPG Maker XP, VX, VX Ace, and mkxp-z games."
+                    + "Empo currently supports only \(supported) games."
             )
         }
 

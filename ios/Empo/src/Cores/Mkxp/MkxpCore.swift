@@ -7,6 +7,13 @@ import Foundation
 struct MkxpCore: GameCore {
     let kind: CoreKind = .mkxp
 
+    /// The full RGSS family, not just the engine name: "mkxp-z"
+    /// alone would tell an importing user nothing about which RPG
+    /// Maker generations run here. Trailing "and mkxp-z" keeps the
+    /// pre-cores rejection sentence byte-identical (mkxp-z-native
+    /// games are a real JGP runtime type of their own).
+    let supportedGamesDescription = "RPG Maker XP, VX, VX Ace, and mkxp-z"
+
     /// mkxp-z's capability declaration.
     ///
     /// `quitToLibrary` and `sequentialSessions` are false because
