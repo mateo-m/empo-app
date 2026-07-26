@@ -46,8 +46,9 @@ struct GameMetadata: Codable {
     // correct per-version `_mkxp_get_script_binding_NN()` entry point.
     //
     // Stored as Int so unknown values from a future Empo build
-    // don't break decoding of older metadata.json (compare to the
-    // coreKind String pattern, same idea, different type).
+    // don't break decoding of older metadata.json (compare to
+    // `coreKind`, whose unknown raw strings survive decoding as
+    // `.unsupported` - same idea, different type).
     var rubyVersion: Int?
 
     // Identifier (raw value of `RubyVersionDetection.Schema`) for
@@ -76,6 +77,20 @@ struct GameMetadata: Codable {
     // `modernRubyScriptsDetected`. Same forward-compat pattern as
     // `rubyVersionDetectedSchema`.
     var modernRubyScriptsDetectedSchema: String?
+
+    // Which engine core runs this game (docs/plans/emulator-cores.md).
+    // Populated by import-time detection once per-core detectors
+    // land (phase 2 of the cores plan). nil for every library
+    // imported before cores existed; read through
+    // `resolvedCoreKind`, which backfills the mkxp default.
+    // `CoreKind` itself decodes unknown raw strings as
+    // `.unsupported`, so metadata written by a future build with a
+    // core this build doesn't know about still decodes.
+    var coreKind: CoreKind?
+
+    // Schema id for the heuristic that produced `coreKind`. Same
+    // forward-compat pattern as `rubyVersionDetectedSchema`.
+    var coreKindDetectedSchema: String?
 
     init() {}
 
@@ -110,6 +125,20 @@ struct GameMetadata: Codable {
             (try? c.decodeIfPresent(Bool.self, forKey: .modernRubyScriptsDetected))
         modernRubyScriptsDetectedSchema =
             (try? c.decodeIfPresent(String.self, forKey: .modernRubyScriptsDetectedSchema))
+        coreKind = (try? c.decodeIfPresent(CoreKind.self, forKey: .coreKind))
+        coreKindDetectedSchema =
+            (try? c.decodeIfPresent(String.self, forKey: .coreKindDetectedSchema))
+    }
+
+    /// The core this game runs on, with the pre-cores default
+    /// backfilled lazily. Libraries imported before `coreKind`
+    /// existed have no stored value, but every game those builds
+    /// could import passed RGSS detection - which implies the mkxp
+    /// core - so absent metadata resolves to `.mkxp` with no
+    /// migration pass. Import-time detection (phase 2 of the cores
+    /// plan) persists the field for new imports.
+    var resolvedCoreKind: CoreKind {
+        coreKind ?? .mkxp
     }
 
     static func load(from container: GameContainer) -> GameMetadata {
