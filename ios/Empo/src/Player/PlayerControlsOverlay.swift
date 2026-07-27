@@ -44,14 +44,20 @@ struct PlayerControlsOverlay: View {
             .animation(Motion.snappy, value: draggingDPad)
             .position(pos)
             .transition(.controlAppear(anchor: anchor))
-            // Tap-to-edit only fires in edit mode. Tapping the D-pad
-            // during normal play falls through to the DPad's own
-            // gesture for direction input.
-            .onTapGesture {
-                guard editMode else { return }
-                editingDPad = true
-            }
-            .gesture(dpadDragGesture, including: editMode ? .all : .none)
+            // Tap-to-edit and drag-to-reposition are edit-mode
+            // affordances, so mask them out entirely during play.
+            // An always-live tap recognizer here (even one whose
+            // action no-ops) forces SwiftUI's tap-vs-drag
+            // disambiguation onto every touch aimed at the control
+            // below, deferring its touch-down until the finger moves
+            // or lifts. `.subviews` (not `.none`, which also disables
+            // the subview hierarchy's gestures) keeps the control's
+            // own input path untouched.
+            .gesture(
+                TapGesture().onEnded { editingDPad = true },
+                including: editMode ? .all : .subviews
+            )
+            .gesture(dpadDragGesture, including: editMode ? .all : .subviews)
     }
 
     private var dpadDragGesture: some Gesture {
@@ -96,10 +102,12 @@ struct PlayerControlsOverlay: View {
         )
         .frame(width: button.size, height: button.size)
         .opacity(button.opacity)
-        .onTapGesture {
-            guard editMode else { return }
-            editingButton = button
-        }
+        // Edit-mode-only, same masking rationale as the D-pad's
+        // tap-to-edit gesture above.
+        .gesture(
+            TapGesture().onEnded { editingButton = button },
+            including: editMode ? .all : .subviews
+        )
         .overlay(alignment: .topTrailing) {
             if editMode && !isDragging {
                 Button {
@@ -117,7 +125,9 @@ struct PlayerControlsOverlay: View {
         .animation(Motion.snappy, value: isDragging)
         .position(pos)
         .transition(.controlAppear(anchor: anchor))
-        .gesture(buttonDragGesture(id: button.id, size: button.size), including: editMode ? .all : .none)
+        .gesture(
+            buttonDragGesture(id: button.id, size: button.size),
+            including: editMode ? .all : .subviews)
     }
 
     private func buttonDragGesture(id: UUID, size: CGFloat) -> some Gesture {

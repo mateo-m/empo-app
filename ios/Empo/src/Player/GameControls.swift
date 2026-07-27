@@ -6,15 +6,130 @@ import SwiftUI
 // Touch-dispatch semantics:
 //   - `EngineSessionCoordinator.shared.injectKey(scancode:, pressed:)`
 //     on press-down and release.
+//   - Touches are captured by a UIKit `ControlTouchCapture` overlay
+//     (raw touchesBegan/Moved/Ended), NOT by SwiftUI gestures. A
+//     `DragGesture(minimumDistance: 0)` is subject to the gesture
+//     graph's tap-vs-drag arbitration, which defers touch-down
+//     delivery until the finger moves or lifts — so a quick tap
+//     injected keydown+keyup in the same engine event batch and
+//     `Input.update` never observed the press at all (see the
+//     `injectKeyTap` comment in PlayerView). UIKit touch handling
+//     has no arbitration: down fires the instant the finger lands.
 //   - Action button: slide-off does NOT release the key.
 //   - D-pad: 8-wedge angular mapping, bitwise diff across moves,
 //     inner 20% dead zone, slide-off at radius+30pt releases all
-//     directions without cancelling the gesture.
-//   - Edit mode blocks input entirely (the parent's drag gesture
-//     wins for repositioning).
+//     directions without cancelling the touch sequence.
+//   - Edit mode removes the capture layer entirely (the parent's
+//     drag gesture wins for repositioning).
 //   - Explicit release-all on disappear / edit-mode transition so
 //     keys never get stuck at the engine when SwiftUI reclaims the
 //     view or the user enters edit mode mid-press.
+
+// MARK: - Touch capture
+
+/// UIKit-backed touch layer the on-screen controls read input from.
+///
+/// The controls previously used `DragGesture(minimumDistance: 0)`,
+/// which sits in SwiftUI's gesture graph alongside the overlay's
+/// edit-mode tap/drag recognizers. The graph resolves competing
+/// recognizers by deferring touch delivery until it can tell a tap
+/// from a drag — the finger moving past the tap tolerance or lifting.
+/// For game input that deferral is fatal: a tap became keydown+keyup
+/// in the same engine event batch (invisible to RGSS `Input.update`),
+/// and a motionless hold didn't engage until the finger drifted.
+///
+/// Raw `touchesBegan/Moved/Ended` overrides have no arbitration:
+/// `onBegan` fires the moment the finger lands. UIKit also keeps
+/// routing a touch sequence to the view that received its begin even
+/// after the finger leaves its bounds, which is exactly the
+/// slide-off contract the D-pad documents.
+private struct ControlTouchCapture: UIViewRepresentable {
+    var onBegan: (CGPoint) -> Void
+    var onMoved: (CGPoint) -> Void
+    var onEnded: () -> Void
+
+    func makeUIView(context: Context) -> ControlTouchCaptureView {
+        let view = ControlTouchCaptureView()
+        apply(to: view)
+        return view
+    }
+
+    func updateUIView(_ view: ControlTouchCaptureView, context: Context) {
+        // Reassign on every update so the callbacks never capture a
+        // stale copy of the owning view's state.
+        apply(to: view)
+    }
+
+    private func apply(to view: ControlTouchCaptureView) {
+        view.onBegan = onBegan
+        view.onMoved = onMoved
+        view.onEnded = onEnded
+    }
+}
+
+private final class ControlTouchCaptureView: UIView {
+    var onBegan: ((CGPoint) -> Void)?
+    var onMoved: ((CGPoint) -> Void)?
+    var onEnded: (() -> Void)?
+
+    /// The single touch this control tracks. Extra fingers landing on
+    /// the same control are ignored so a stray second finger can't
+    /// restart or hijack the sequence. Multi-touch ACROSS controls
+    /// (hold a direction + press A) still works: each control owns its
+    /// own capture view and UIKit routes every touch to the view under
+    /// it independently.
+    private var trackedTouch: UITouch?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isMultipleTouchEnabled = false
+        // The SwiftUI content underneath carries the accessibility
+        // label and traits; this layer is invisible plumbing.
+        isAccessibilityElement = false
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    /// Match the `.contentShape(Circle())` the controls declare: only
+    /// the inscribed circle is hit-testable, so the frame's corners
+    /// stay transparent to whatever sits below. Slide-off handling is
+    /// unaffected — once a touch begins inside, UIKit delivers the
+    /// whole sequence here regardless of where the finger goes.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let r = min(bounds.width, bounds.height) / 2
+        let dx = point.x - bounds.midX
+        let dy = point.y - bounds.midY
+        return dx * dx + dy * dy <= r * r
+    }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard trackedTouch == nil, let touch = touches.first else { return }
+        trackedTouch = touch
+        onBegan?(touch.location(in: self))
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = trackedTouch, touches.contains(touch) else { return }
+        onMoved?(touch.location(in: self))
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        endIfTracked(touches)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        endIfTracked(touches)
+    }
+
+    private func endIfTracked(_ touches: Set<UITouch>) {
+        guard let touch = trackedTouch, touches.contains(touch) else { return }
+        trackedTouch = nil
+        onEnded?()
+    }
+}
 
 // MARK: - Action button
 
@@ -81,11 +196,21 @@ struct ActionButton: View {
         // by the layout's edit-mode container.
         .accessibilityLabel("\(label) button")
         .accessibilityAddTraits(.isButton)
-        // Touch dispatch. minimumDistance=0 makes this a press-tracking
-        // gesture that fires on touch-down (not after a drag threshold).
-        // Only install when NOT editing so the parent's drag-to-reposition
-        // gesture wins in edit mode.
-        .gesture(editing ? nil : pressGesture)
+        // Touch dispatch via the UIKit capture layer so the keydown
+        // reaches the engine on touch-down, never deferred by gesture
+        // arbitration. Only install when NOT editing so the parent's
+        // drag-to-reposition gesture wins in edit mode.
+        .overlay {
+            if !editing {
+                ControlTouchCapture(
+                    onBegan: { _ in press() },
+                    // Slide-off keeps the key held by design: no
+                    // location tracking while the finger moves.
+                    onMoved: { _ in },
+                    onEnded: { releaseIfHeld() }
+                )
+            }
+        }
         // If the user enters edit mode while this button is pressed, or
         // the button is removed from the layout while pressed, release
         // the key explicitly.
@@ -99,18 +224,11 @@ struct ActionButton: View {
         }
     }
 
-    private var pressGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { _ in
-                if !isPressed {
-                    isPressed = true
-                    Haptics.controllerTap()
-                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
-                }
-            }
-            .onEnded { _ in
-                releaseIfHeld()
-            }
+    private func press() {
+        guard !isPressed else { return }
+        isPressed = true
+        Haptics.controllerTap()
+        EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
     }
 
     private func releaseIfHeld() {
@@ -128,7 +246,7 @@ struct ActionButton: View {
 /// pivot (and the dead zone).
 ///
 /// Diagonals press two scancodes at once. The bitwise diff across
-/// `onChanged` ticks means a steady hold emits zero events, and a
+/// touch-move updates means a steady hold emits zero events, and a
 /// straight slide from NE to SE releases UP and presses DOWN while
 /// RIGHT stays held throughout (no stutter).
 ///
@@ -144,8 +262,8 @@ struct DPad: View {
     @State private var activeDirections: DPadDirectionSet = []
 
     /// When the finger drags more than `slideOffMargin` past the D-pad
-    /// edge, the view releases all directions. The gesture stays alive,
-    /// so a slide back in re-engages.
+    /// edge, the view releases all directions. The touch sequence stays
+    /// alive, so a slide back in re-engages.
     @State private var slideOff: Bool = false
 
     private var radius: CGFloat { size / 2 }
@@ -245,7 +363,26 @@ struct DPad: View {
         .accessibilityLabel("Directional pad")
         .accessibilityHint("Touch and drag to move the character")
         .accessibilityAddTraits(.allowsDirectInteraction)
-        .gesture(editing ? nil : dpadGesture)
+        // Touch dispatch via the UIKit capture layer: a tap must press
+        // its direction on touch-down (a whole down/up pair delivered
+        // at lift lands in one engine event batch and moves the
+        // character zero tiles), and a motionless hold must engage
+        // without the finger having to travel first. UIKit keeps
+        // delivering the touch sequence to this layer after the finger
+        // leaves its bounds, which is exactly the slide-off contract
+        // documented on `updateDirections`.
+        .overlay {
+            if !editing {
+                ControlTouchCapture(
+                    onBegan: { updateDirections(at: $0) },
+                    onMoved: { updateDirections(at: $0) },
+                    onEnded: {
+                        releaseAll()
+                        slideOff = false
+                    }
+                )
+            }
+        }
         .onChange(of: editing) { _, newValue in
             if newValue {
                 releaseAll()
@@ -256,21 +393,10 @@ struct DPad: View {
         }
     }
 
-    private var dpadGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                updateDirections(at: value.location)
-            }
-            .onEnded { _ in
-                releaseAll()
-                slideOff = false
-            }
-    }
-
     private func updateDirections(at location: CGPoint) {
-        // DragGesture.location is in the gesture's view space, so the
-        // view's own center is at (size/2, size/2). Compute the offset
-        // from center to map the touch into the directional wedges.
+        // The capture layer fills the D-pad's frame, so the view's own
+        // center is at (size/2, size/2). Compute the offset from
+        // center to map the touch into the directional wedges.
         let cx = radius
         let cy = radius
         let dx = location.x - cx
@@ -278,8 +404,8 @@ struct DPad: View {
         let distance = sqrt(dx * dx + dy * dy)
 
         // Slide-off: release everything but stay engaged. If the user
-        // drags their thumb back inside the D-pad, the next onChanged
-        // picks up again.
+        // drags their thumb back inside the D-pad, the next move
+        // update picks up again.
         if distance > radius + DPadConstants.slideOffMargin {
             if !slideOff {
                 slideOff = true
