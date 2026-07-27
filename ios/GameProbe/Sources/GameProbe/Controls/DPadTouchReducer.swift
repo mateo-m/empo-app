@@ -1,0 +1,157 @@
+import Foundation
+
+/// Pure touch-to-directions reducer for the on-screen D-pad: maps a
+/// touch location in the D-pad's own square coordinate space to the
+/// set of held directions and emits press / release edges for the
+/// bits that changed. Framework-independent so the exact state
+/// machine the app ships is what the Linux test suite exercises.
+///
+/// Geometry, ported verbatim from the UIKit-era implementation:
+///   - 8-wedge angular map with pi/8 thresholds (cardinals plus
+///     two-direction diagonals).
+///   - Inner dead zone at `deadZoneRatio` of the radius so tiny
+///     wobbles near the pivot emit nothing.
+///   - Slide-off: past `radius + slideOffMargin` every direction
+///     releases, but the touch stays engaged so sliding back inside
+///     re-presses. The release batch emits once — the diff against
+///     `active` swallows repeats while the finger stays parked
+///     beyond the edge.
+///
+/// Edge-order contract: every returned array lists ALL releases
+/// before ANY press. Callers must inject edges in array order so a
+/// wedge transition never momentarily holds opposing directions.
+public struct DPadTouchReducer: Sendable {
+    public enum Direction: CaseIterable, Hashable, Sendable {
+        case up, down, left, right
+    }
+
+    /// Bitset-style container for direction state. Supports OR
+    /// composition so the angular map can return "up | right" for
+    /// diagonal input.
+    public struct DirectionSet: OptionSet, Hashable, Sendable {
+        public let rawValue: UInt8
+
+        public static let up = DirectionSet(rawValue: 1 << 0)
+        public static let down = DirectionSet(rawValue: 1 << 1)
+        public static let left = DirectionSet(rawValue: 1 << 2)
+        public static let right = DirectionSet(rawValue: 1 << 3)
+
+        public init(rawValue: UInt8) {
+            self.rawValue = rawValue
+        }
+
+        /// Build a direction set from an atan2 angle (radians, -pi to
+        /// pi, +y down as in view coordinate space). Produces cardinal
+        /// or diagonal pairs based on pi/8 wedge thresholds.
+        public init(angle: Double) {
+            // Normalize to [0, 2pi).
+            let a = (angle + 2 * .pi).truncatingRemainder(dividingBy: 2 * .pi)
+            // The 8 wedges, each pi/4 wide, centered on the cardinal
+            // and diagonal directions. Using >= on the low edge and <
+            // on the high edge keeps transitions deterministic at
+            // exactly pi/8.
+            let s = Double.pi / 8
+            switch a {
+            case (15 * s)..<(2 * .pi), 0..<s: self = .right
+            case s..<(3 * s): self = [.right, .down]
+            case (3 * s)..<(5 * s): self = .down
+            case (5 * s)..<(7 * s): self = [.down, .left]
+            case (7 * s)..<(9 * s): self = .left
+            case (9 * s)..<(11 * s): self = [.left, .up]
+            case (11 * s)..<(13 * s): self = .up
+            case (13 * s)..<(15 * s): self = [.up, .right]
+            default: self = []
+            }
+        }
+
+        /// Check whether a logical `Direction` is currently set.
+        /// Routes to the underlying OptionSet flag member for that
+        /// direction.
+        public func contains(_ direction: Direction) -> Bool {
+            switch direction {
+            case .up: return rawValue & DirectionSet.up.rawValue != 0
+            case .down: return rawValue & DirectionSet.down.rawValue != 0
+            case .left: return rawValue & DirectionSet.left.rawValue != 0
+            case .right: return rawValue & DirectionSet.right.rawValue != 0
+            }
+        }
+
+        /// Member directions in the fixed emission order (up, down,
+        /// left, right) so edge arrays are deterministic.
+        public var directions: [Direction] {
+            Direction.allCases.filter { contains($0) }
+        }
+    }
+
+    public struct Edge: Equatable, Sendable {
+        public let direction: Direction
+        public let pressed: Bool
+
+        public init(direction: Direction, pressed: Bool) {
+            self.direction = direction
+            self.pressed = pressed
+        }
+    }
+
+    public static let defaultDeadZoneRatio = 0.2
+    public static let defaultSlideOffMargin = 30.0
+
+    /// Directions currently held — the reducer's ONLY state. The
+    /// host renders arm highlights from this and MUST have injected
+    /// exactly these keys if it applied every returned edge in order.
+    public private(set) var active: DirectionSet = []
+
+    public init() {}
+
+    /// Applies a touch-down or touch-move sample. `x`/`y` are in the
+    /// D-pad's own coordinate space (center at `size/2`, +y down);
+    /// `size` is the D-pad's bounding-box side length, passed per
+    /// sample so a mid-session resize never leaves the reducer with
+    /// stale geometry.
+    public mutating func touchChanged(
+        x: Double,
+        y: Double,
+        size: Double,
+        deadZoneRatio: Double = defaultDeadZoneRatio,
+        slideOffMargin: Double = defaultSlideOffMargin
+    ) -> [Edge] {
+        let radius = size / 2
+        let dx = x - radius
+        let dy = y - radius
+        let distance = (dx * dx + dy * dy).squareRoot()
+
+        // Slide-off: release everything but stay engaged. If the
+        // finger comes back inside the D-pad, the next sample picks
+        // up again.
+        if distance > radius + slideOffMargin {
+            return diff(to: [])
+        }
+
+        // Inner dead zone: don't emit events for tiny wobbles near
+        // the center.
+        if distance < radius * deadZoneRatio {
+            return diff(to: [])
+        }
+
+        // 8-wedge angular mapping. atan2(dy, dx) with +y down means
+        // "up" is -y, an angle near -pi/2.
+        return diff(to: DirectionSet(angle: atan2(dy, dx)))
+    }
+
+    /// Touch lifted or cancelled: releases every held direction.
+    public mutating func touchEnded() -> [Edge] {
+        diff(to: [])
+    }
+
+    /// Diff `newSet` against `active` and emit edges for ONLY the
+    /// bits that changed, releases before presses. Holding a
+    /// direction steady emits zero edges.
+    private mutating func diff(to newSet: DirectionSet) -> [Edge] {
+        guard newSet != active else { return [] }
+        let released = active.subtracting(newSet).directions
+        let pressed = newSet.subtracting(active).directions
+        active = newSet
+        return released.map { Edge(direction: $0, pressed: false) }
+            + pressed.map { Edge(direction: $0, pressed: true) }
+    }
+}

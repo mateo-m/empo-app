@@ -1,3 +1,4 @@
+import GameProbe
 import SwiftUI
 
 // On-screen action button and D-pad, rendered with SwiftUI + the
@@ -16,9 +17,11 @@ import SwiftUI
 //     `injectKeyTap` comment in PlayerView). UIKit touch handling
 //     has no arbitration: down fires the instant the finger lands.
 //   - Action button: slide-off does NOT release the key.
-//   - D-pad: 8-wedge angular mapping, bitwise diff across moves,
-//     inner 20% dead zone, slide-off at radius+30pt releases all
-//     directions without cancelling the touch sequence.
+//   - D-pad: `DPadTouchReducer` (GameProbe) owns the 8-wedge angular
+//     mapping, inner 20% dead zone, slide-off release, and edge
+//     diffing, so the exact shipped state machine is covered by the
+//     Linux test suite. This file only renders its `active` set and
+//     injects the edges it returns, in order.
 //   - Edit mode removes the capture layer entirely (the parent's
 //     drag gesture wins for repositioning).
 //   - Explicit release-all on disappear / edit-mode transition so
@@ -72,13 +75,13 @@ private final class ControlTouchCaptureView: UIView {
     var onMoved: ((CGPoint) -> Void)?
     var onEnded: (() -> Void)?
 
-    /// The single touch this control tracks. Extra fingers landing on
-    /// the same control are ignored so a stray second finger can't
-    /// restart or hijack the sequence. Multi-touch ACROSS controls
-    /// (hold a direction + press A) still works: each control owns its
-    /// own capture view and UIKit routes every touch to the view under
-    /// it independently.
-    private var trackedTouch: UITouch?
+    /// Single-touch tracking (GameProbe, tested on Linux): the first
+    /// touch to land owns the control until it ends, so a stray
+    /// second finger can't restart or hijack the sequence.
+    /// Multi-touch ACROSS controls (hold a direction + press A) still
+    /// works: each control owns its own capture view and UIKit routes
+    /// every touch to the view under it independently.
+    private var gate = SingleTouchGate<ObjectIdentifier>()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -99,20 +102,19 @@ private final class ControlTouchCaptureView: UIView {
     /// unaffected — once a touch begins inside, UIKit delivers the
     /// whole sequence here regardless of where the finger goes.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        let r = min(bounds.width, bounds.height) / 2
-        let dx = point.x - bounds.midX
-        let dy = point.y - bounds.midY
-        return dx * dx + dy * dy <= r * r
+        ControlHitShape.circleContains(
+            width: bounds.width, height: bounds.height, x: point.x, y: point.y)
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard trackedTouch == nil, let touch = touches.first else { return }
-        trackedTouch = touch
+        guard let touch = touches.first, gate.begin(ObjectIdentifier(touch)) else { return }
         onBegan?(touch.location(in: self))
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = trackedTouch, touches.contains(touch) else { return }
+        guard let touch = touches.first(where: { gate.isTracking(ObjectIdentifier($0)) }) else {
+            return
+        }
         onMoved?(touch.location(in: self))
     }
 
@@ -125,8 +127,7 @@ private final class ControlTouchCaptureView: UIView {
     }
 
     private func endIfTracked(_ touches: Set<UITouch>) {
-        guard let touch = trackedTouch, touches.contains(touch) else { return }
-        trackedTouch = nil
+        guard touches.contains(where: { gate.end(ObjectIdentifier($0)) }) else { return }
         onEnded?()
     }
 }
@@ -259,14 +260,12 @@ struct DPad: View {
     let size: CGFloat
     let editing: Bool
 
-    @State private var activeDirections: DPadDirectionSet = []
-
-    /// When the finger drags more than `slideOffMargin` past the D-pad
-    /// edge, the view releases all directions. The touch sequence stays
-    /// alive, so a slide back in re-engages.
-    @State private var slideOff: Bool = false
-
-    private var radius: CGFloat { size / 2 }
+    /// Touch-to-directions state machine (GameProbe, tested on
+    /// Linux): 8-wedge angular map, inner dead zone, slide-off
+    /// release, and press/release edge diffing. The view renders
+    /// `dpadState.active` and injects whatever edges the reducer
+    /// returns, in order.
+    @State private var dpadState = DPadTouchReducer()
 
     /// Width of each arm of the plus, as a fraction of the total
     /// bounding box. 0.36 gives balanced proportions where the center
@@ -293,7 +292,7 @@ struct DPad: View {
             innerCornerFraction: innerCornerFraction
         )
 
-        let pressed = !activeDirections.isEmpty
+        let pressed = !dpadState.active.isEmpty
 
         // Everything here lives inside a single scaled ZStack so the
         // glass plus, per-arm highlights, chevrons, and center dot all
@@ -333,8 +332,8 @@ struct DPad: View {
                         )
                         .frame(width: arm.width, height: arm.height)
                         .position(x: arm.midX, y: arm.midY)
-                        .opacity(activeDirections.contains(dir) ? 1 : 0)
-                        .animation(Motion.instant, value: activeDirections)
+                        .opacity(dpadState.active.contains(dir) ? 1 : 0)
+                        .animation(Motion.instant, value: dpadState.active)
                 }
             }
             .clipShape(plus)
@@ -342,7 +341,7 @@ struct DPad: View {
             ForEach(DPadDirection.allCases, id: \.self) { dir in
                 Image(systemName: dir.symbolName)
                     .font(.system(size: size * 0.14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(activeDirections.contains(dir) ? 1.0 : 0.55))
+                    .foregroundStyle(.white.opacity(dpadState.active.contains(dir) ? 1.0 : 0.55))
                     .offset(dir.glyphOffset(size: size, armFraction: armFraction))
             }
 
@@ -370,103 +369,51 @@ struct DPad: View {
         // without the finger having to travel first. UIKit keeps
         // delivering the touch sequence to this layer after the finger
         // leaves its bounds, which is exactly the slide-off contract
-        // documented on `updateDirections`.
+        // `DPadTouchReducer` documents.
         .overlay {
             if !editing {
                 ControlTouchCapture(
-                    onBegan: { updateDirections(at: $0) },
-                    onMoved: { updateDirections(at: $0) },
-                    onEnded: {
-                        releaseAll()
-                        slideOff = false
-                    }
+                    onBegan: { apply(dpadState.touchChanged(x: $0.x, y: $0.y, size: size)) },
+                    onMoved: { apply(dpadState.touchChanged(x: $0.x, y: $0.y, size: size)) },
+                    onEnded: { apply(dpadState.touchEnded()) }
                 )
             }
         }
         .onChange(of: editing) { _, newValue in
             if newValue {
-                releaseAll()
+                apply(dpadState.touchEnded())
             }
         }
         .onDisappear {
-            releaseAll()
+            apply(dpadState.touchEnded())
         }
     }
 
-    private func updateDirections(at location: CGPoint) {
-        // The capture layer fills the D-pad's frame, so the view's own
-        // center is at (size/2, size/2). Compute the offset from
-        // center to map the touch into the directional wedges.
-        let cx = radius
-        let cy = radius
-        let dx = location.x - cx
-        let dy = location.y - cy
-        let distance = sqrt(dx * dx + dy * dy)
-
-        // Slide-off: release everything but stay engaged. If the user
-        // drags their thumb back inside the D-pad, the next move
-        // update picks up again.
-        if distance > radius + DPadConstants.slideOffMargin {
-            if !slideOff {
-                slideOff = true
-                diffAndEmit(newSet: [])
-            }
-            return
-        }
-        slideOff = false
-
-        // Inner dead zone. The UIKit impl used 20% of radius to avoid
-        // sending events for tiny wobbles near the center.
-        let deadZone = radius * DPadConstants.deadZoneRatio
-        if distance < deadZone {
-            diffAndEmit(newSet: [])
-            return
-        }
-
-        // 8-wedge angular mapping with pi/8 thresholds. The UIKit impl
-        // uses atan2 with the same math, ported verbatim.
-        // atan2(dy, dx) in SwiftUI's view coordinate space has +y down,
-        // so "up" is -y which corresponds to an angle near -pi/2.
-        let angle = atan2(dy, dx)
-        let newSet = DPadDirectionSet(angle: angle)
-        diffAndEmit(newSet: newSet)
-    }
-
-    /// Diff `newSet` against the current `activeDirections` and emit
-    /// up/down events for ONLY the bits that changed. Holding a
-    /// direction steady emits zero events. Fires a haptic tap when a
-    /// new direction enters the active set (one buzz per wedge
+    /// Inject the reducer's edges in array order — the reducer lists
+    /// releases before presses so a wedge transition never
+    /// momentarily holds opposing directions — and fire a haptic tap
+    /// when a new direction enters the active set (one buzz per wedge
     /// transition rather than one continuous buzz while held).
-    private func diffAndEmit(newSet: DPadDirectionSet) {
-        if newSet == activeDirections { return }
-        let toRelease = activeDirections.subtracting(newSet)
-        let toPress = newSet.subtracting(activeDirections)
-        toRelease.forEach { EngineSessionCoordinator.shared.injectKey(scancode: $0.scancode, pressed: false) }
-        toPress.forEach { EngineSessionCoordinator.shared.injectKey(scancode: $0.scancode, pressed: true) }
-        if !toPress.isEmpty {
+    private func apply(_ edges: [DPadTouchReducer.Edge]) {
+        for edge in edges {
+            EngineSessionCoordinator.shared.injectKey(
+                scancode: edge.direction.scancode, pressed: edge.pressed)
+        }
+        if edges.contains(where: { $0.pressed }) {
             Haptics.controllerTap()
         }
-        activeDirections = newSet
-    }
-
-    private func releaseAll() {
-        activeDirections.forEach {
-            EngineSessionCoordinator.shared.injectKey(scancode: $0.scancode, pressed: false)
-        }
-        activeDirections = []
     }
 }
 
 // MARK: - D-pad supporting types
 
-private enum DPadConstants {
-    static let slideOffMargin: CGFloat = 30
-    static let deadZoneRatio: CGFloat = 0.2
-}
+/// The reducer's direction enum doubles as the app-side D-pad
+/// direction: scancode mapping and rendering geometry attach here as
+/// extensions, so the view and the tested state machine share one
+/// direction vocabulary instead of maintaining a parallel enum.
+typealias DPadDirection = DPadTouchReducer.Direction
 
-enum DPadDirection: CaseIterable, Hashable {
-    case up, down, left, right
-
+extension DPadDirection {
     var scancode: Int32 {
         switch self {
         case .up: Int32(MKXP_SCANCODE_UP)
@@ -521,62 +468,6 @@ enum DPadDirection: CaseIterable, Hashable {
         case .left: return .trailing
         case .right: return .leading
         }
-    }
-}
-
-/// Bitset-style container for direction state. Supports OR
-/// composition so angular mapping can return "up | right" for
-/// diagonal input.
-struct DPadDirectionSet: OptionSet {
-    let rawValue: UInt8
-
-    static let up = DPadDirectionSet(rawValue: 1 << 0)
-    static let down = DPadDirectionSet(rawValue: 1 << 1)
-    static let left = DPadDirectionSet(rawValue: 1 << 2)
-    static let right = DPadDirectionSet(rawValue: 1 << 3)
-
-    init(rawValue: UInt8) { self.rawValue = rawValue }
-
-    /// Build a direction set from an atan2 angle (radians, -pi to pi,
-    /// +y down as in SwiftUI's coordinate system). Produces cardinal
-    /// or diagonal pairs based on pi/8 wedge thresholds.
-    init(angle: Double) {
-        // Normalize to [0, 2pi).
-        let a = (angle + 2 * .pi).truncatingRemainder(dividingBy: 2 * .pi)
-        // The 8 wedges, each pi/4 wide, centered on the cardinal and
-        // diagonal directions. Using >= on the low edge and < on the
-        // high edge keeps transitions deterministic at exactly pi/8.
-        let s = Double.pi / 8
-        switch a {
-        case (15 * s)..<(2 * .pi), 0..<s: self = .right
-        case s..<(3 * s): self = [.right, .down]
-        case (3 * s)..<(5 * s): self = .down
-        case (5 * s)..<(7 * s): self = [.down, .left]
-        case (7 * s)..<(9 * s): self = .left
-        case (9 * s)..<(11 * s): self = [.left, .up]
-        case (11 * s)..<(13 * s): self = .up
-        case (13 * s)..<(15 * s): self = [.up, .right]
-        default: self = []
-        }
-    }
-
-    /// Check whether a logical `DPadDirection` is currently set.
-    /// Routes to the underlying OptionSet flag member for that
-    /// direction.
-    func contains(_ direction: DPadDirection) -> Bool {
-        switch direction {
-        case .up: return rawValue & DPadDirectionSet.up.rawValue != 0
-        case .down: return rawValue & DPadDirectionSet.down.rawValue != 0
-        case .left: return rawValue & DPadDirectionSet.left.rawValue != 0
-        case .right: return rawValue & DPadDirectionSet.right.rawValue != 0
-        }
-    }
-
-    func forEach(_ body: (DPadDirection) -> Void) {
-        if contains(.up) { body(.up) }
-        if contains(.down) { body(.down) }
-        if contains(.left) { body(.left) }
-        if contains(.right) { body(.right) }
     }
 }
 
