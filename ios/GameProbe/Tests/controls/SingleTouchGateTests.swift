@@ -4,8 +4,18 @@ import XCTest
 
 final class SingleTouchGateTests: XCTestCase {
 
+    /// An idle gate tracks NOTHING — `isTracking` must not default to
+    /// permissive when no touch holds the gate, or late move samples
+    /// from a lifted finger would keep flowing after touch-end.
+    func testIdleGateTracksNothing() {
+        let gate = SingleTouchGate<String>()
+        XCTAssertNil(gate.tracked)
+        XCTAssertFalse(gate.isTracking("a"))
+    }
+
     func testFirstTouchClaimsTheGate() {
         var gate = SingleTouchGate<String>()
+        XCTAssertFalse(gate.isTracking("a"))
         XCTAssertTrue(gate.begin("a"))
         XCTAssertEqual(gate.tracked, "a")
         XCTAssertTrue(gate.isTracking("a"))
@@ -48,6 +58,8 @@ final class SingleTouchGateTests: XCTestCase {
         XCTAssertTrue(gate.begin("a"))
         XCTAssertTrue(gate.end("a"))
         XCTAssertNil(gate.tracked)
+        // The lifted finger's late move samples must be rejected too.
+        XCTAssertFalse(gate.isTracking("a"))
         // touchesEnded and touchesCancelled can both arrive for one
         // touch; the second must be a no-op, not a second release.
         XCTAssertFalse(gate.end("a"))
@@ -96,13 +108,22 @@ final class ControlHitShapeTests: XCTestCase {
     }
 
     /// Non-square bounds use the SHORTER side for the radius, still
-    /// centered in the full box.
+    /// centered in the full box. Both aspect ratios are pinned —
+    /// "shorter side" implemented as either fixed axis passes the
+    /// other orientation.
     func testNonSquareBoundsUseShorterSide() {
-        // 100x60: radius 30, center (50, 30).
+        // 100x60 (wide): radius 30, center (50, 30).
         XCTAssertTrue(ControlHitShape.circleContains(width: 100, height: 60, x: 80, y: 30))
         XCTAssertFalse(ControlHitShape.circleContains(width: 100, height: 60, x: 81, y: 30))
         XCTAssertTrue(ControlHitShape.circleContains(width: 100, height: 60, x: 50, y: 0))
         XCTAssertTrue(ControlHitShape.circleContains(width: 100, height: 60, x: 50, y: 60))
         XCTAssertFalse(ControlHitShape.circleContains(width: 100, height: 60, x: 20, y: 8))
+
+        // 60x100 (tall): radius 30, center (30, 50).
+        XCTAssertTrue(ControlHitShape.circleContains(width: 60, height: 100, x: 30, y: 80))
+        XCTAssertFalse(ControlHitShape.circleContains(width: 60, height: 100, x: 30, y: 81))
+        XCTAssertTrue(ControlHitShape.circleContains(width: 60, height: 100, x: 0, y: 50))
+        XCTAssertTrue(ControlHitShape.circleContains(width: 60, height: 100, x: 60, y: 50))
+        XCTAssertFalse(ControlHitShape.circleContains(width: 60, height: 100, x: 8, y: 20))
     }
 }

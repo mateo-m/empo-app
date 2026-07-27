@@ -125,6 +125,62 @@ final class DPadTouchReducerTests: XCTestCase {
         XCTAssertEqual(DPadTouchReducer.DirectionSet(angle: Double.pi), .left)
     }
 
+    /// The switch's `default` arm is the total-function fallback for
+    /// inputs atan2 never produces: `truncatingRemainder` keeps the
+    /// dividend's sign, so an angle below -2pi that is not an exact
+    /// multiple of 2pi is still negative after the +2pi
+    /// normalization and matches no wedge, as does NaN. Both must
+    /// yield the EMPTY set — any direction here would be a phantom
+    /// press from garbage input.
+    func testOutOfRangeAndNonFiniteAnglesYieldNoDirections() {
+        XCTAssertEqual(DPadTouchReducer.DirectionSet(angle: -9 * Double.pi / 4), [])
+        XCTAssertEqual(DPadTouchReducer.DirectionSet(angle: .nan), [])
+    }
+
+    /// A non-finite sample (garbage coordinates) fails every range
+    /// comparison and falls through to the empty wedge set: the
+    /// reducer must RELEASE everything rather than stick or press
+    /// opposing directions.
+    func testNaNSampleReleasesEverything() {
+        var reducer = DPadTouchReducer()
+        XCTAssertEqual(reducer.touchChanged(x: 75, y: 20, size: size), [press(.up)])
+        XCTAssertEqual(
+            reducer.touchChanged(x: .nan, y: .nan, size: size),
+            [release(.up)])
+        XCTAssertEqual(reducer.active, [])
+    }
+
+    // MARK: Geometry scaling
+
+    /// Every threshold derives from `size` — a reducer that hardcodes
+    /// the 150-point geometry the rest of this file uses would pass
+    /// every other test. At size 300 the dead zone ends at 30, the
+    /// radius is 150, and slide-off releases past 180.
+    func testGeometryScalesWithSize() {
+        var reducer = DPadTouchReducer()
+        // Distance 20 from the (150, 150) center: pressable under the
+        // default 150-point geometry, dead-zoned at size 300.
+        XCTAssertEqual(reducer.touchChanged(x: 150, y: 130, size: 300), [])
+        XCTAssertEqual(reducer.touchChanged(x: 150, y: 30, size: 300), [press(.up)])
+        // Distance exactly 180 = radius + margin: still inside.
+        XCTAssertEqual(reducer.touchChanged(x: 150, y: -30, size: 300), [])
+        XCTAssertEqual(reducer.active, .up)
+        XCTAssertEqual(reducer.touchChanged(x: 150, y: -31, size: 300), [release(.up)])
+    }
+
+    /// `size` is read per sample, not cached from the first one: an
+    /// edit-dialog resize mid-session must move the center and
+    /// thresholds immediately. The same physical point is an UP press
+    /// under a 200-point pad (center 100) and a RIGHT press under an
+    /// 80-point pad (center 40).
+    func testMidTouchResizeUsesTheNewGeometry() {
+        var reducer = DPadTouchReducer()
+        XCTAssertEqual(reducer.touchChanged(x: 100, y: 40, size: 200), [press(.up)])
+        XCTAssertEqual(
+            reducer.touchChanged(x: 100, y: 40, size: 80),
+            [release(.up), press(.right)])
+    }
+
     // MARK: Dead zone
 
     func testDeadZoneSwallowsCenterTouches() {
@@ -318,12 +374,17 @@ final class DPadTouchReducerTests: XCTestCase {
     // MARK: DirectionSet
 
     /// Emission order is fixed (up, down, left, right) regardless of
-    /// construction order, so edge arrays are deterministic.
+    /// construction order, so edge arrays are deterministic. Pinned
+    /// for the full set too: the reducer never produces opposing
+    /// pairs, but `DirectionSet` is public API.
     func testDirectionsIterationOrderIsStable() {
         XCTAssertEqual(
             DPadTouchReducer.DirectionSet([.right, .up]).directions, [.up, .right])
         XCTAssertEqual(
             DPadTouchReducer.DirectionSet([.left, .down]).directions, [.down, .left])
         XCTAssertEqual(DPadTouchReducer.DirectionSet().directions, [])
+        XCTAssertEqual(
+            DPadTouchReducer.DirectionSet([.up, .down, .left, .right]).directions,
+            [.up, .down, .left, .right])
     }
 }
