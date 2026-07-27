@@ -22,8 +22,9 @@ import SwiftUI
 //     diffing, so the exact shipped state machine is covered by the
 //     Linux test suite. This file only renders its `active` set and
 //     injects the edges it returns, in order.
-//   - Edit mode removes the capture layer entirely (the parent's
-//     drag gesture wins for repositioning).
+//   - Edit mode disables the capture layer in place — an instant,
+//     unanimated cutoff that also cancels any in-flight touch — so
+//     the parent's drag gesture wins for repositioning.
 //   - Explicit release-all on disappear / edit-mode transition so
 //     keys never get stuck at the engine when SwiftUI reclaims the
 //     view or the user enters edit mode mid-press.
@@ -47,6 +48,16 @@ import SwiftUI
 /// after the finger leaves its bounds, which is exactly the
 /// slide-off contract the D-pad documents.
 private struct ControlTouchCapture: UIViewRepresentable {
+    /// The layer stays installed permanently and is gated by this
+    /// flag instead of being inserted/removed with an `if` branch.
+    /// Edit mode toggles inside `withAnimation`, and a conditionally
+    /// removed overlay would leave with an animated opacity
+    /// transition — touchable for the whole fade, injecting game
+    /// input AFTER the edit-mode release-all, and able to strand a
+    /// mid-transition touch's keys when SwiftUI dismantles the view
+    /// without delivering touchesEnded. `isUserInteractionEnabled`
+    /// is not animatable, so this cutoff is instant.
+    var enabled: Bool
     var onBegan: (CGPoint) -> Void
     var onMoved: (CGPoint) -> Void
     var onEnded: () -> Void
@@ -67,6 +78,7 @@ private struct ControlTouchCapture: UIViewRepresentable {
         view.onBegan = onBegan
         view.onMoved = onMoved
         view.onEnded = onEnded
+        view.setEnabled(enabled)
     }
 }
 
@@ -94,6 +106,34 @@ private final class ControlTouchCaptureView: UIView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    /// Turning the layer off must also abandon any in-flight touch:
+    /// UIKit does not promise a touchesCancelled to a view that
+    /// stops receiving events mid-sequence, and a silently dropped
+    /// sequence would leave the engine holding keys.
+    func setEnabled(_ enabled: Bool) {
+        guard isUserInteractionEnabled != enabled else { return }
+        isUserInteractionEnabled = enabled
+        if !enabled {
+            cancelActiveTouch()
+        }
+    }
+
+    /// If the view is torn out of the hierarchy while a touch is
+    /// live (SwiftUI reclaiming the control mid-press), end the
+    /// sequence so held keys release even when UIKit never delivers
+    /// the touch's end to the detached view.
+    override func willMove(toWindow newWindow: UIWindow?) {
+        super.willMove(toWindow: newWindow)
+        if newWindow == nil {
+            cancelActiveTouch()
+        }
+    }
+
+    private func cancelActiveTouch() {
+        guard gate.reset() else { return }
+        onEnded?()
     }
 
     /// Match the `.contentShape(Circle())` the controls declare: only
@@ -199,18 +239,20 @@ struct ActionButton: View {
         .accessibilityAddTraits(.isButton)
         // Touch dispatch via the UIKit capture layer so the keydown
         // reaches the engine on touch-down, never deferred by gesture
-        // arbitration. Only install when NOT editing so the parent's
-        // drag-to-reposition gesture wins in edit mode.
+        // arbitration. Disabled (not removed) while editing: touches
+        // then fall through to the parent's tap-to-edit and
+        // drag-to-reposition gestures, and the instant interaction
+        // cutoff closes the animated-removal window described on
+        // `ControlTouchCapture.enabled`.
         .overlay {
-            if !editing {
-                ControlTouchCapture(
-                    onBegan: { _ in press() },
-                    // Slide-off keeps the key held by design: no
-                    // location tracking while the finger moves.
-                    onMoved: { _ in },
-                    onEnded: { releaseIfHeld() }
-                )
-            }
+            ControlTouchCapture(
+                enabled: !editing,
+                onBegan: { _ in press() },
+                // Slide-off keeps the key held by design: no
+                // location tracking while the finger moves.
+                onMoved: { _ in },
+                onEnded: { releaseIfHeld() }
+            )
         }
         // If the user enters edit mode while this button is pressed, or
         // the button is removed from the layout while pressed, release
@@ -371,13 +413,12 @@ struct DPad: View {
         // leaves its bounds, which is exactly the slide-off contract
         // `DPadTouchReducer` documents.
         .overlay {
-            if !editing {
-                ControlTouchCapture(
-                    onBegan: { apply(dpadState.touchChanged(x: $0.x, y: $0.y, size: size)) },
-                    onMoved: { apply(dpadState.touchChanged(x: $0.x, y: $0.y, size: size)) },
-                    onEnded: { apply(dpadState.touchEnded()) }
-                )
-            }
+            ControlTouchCapture(
+                enabled: !editing,
+                onBegan: { apply(dpadState.touchChanged(x: $0.x, y: $0.y, size: size)) },
+                onMoved: { apply(dpadState.touchChanged(x: $0.x, y: $0.y, size: size)) },
+                onEnded: { apply(dpadState.touchEnded()) }
+            )
         }
         .onChange(of: editing) { _, newValue in
             if newValue {

@@ -33,6 +33,18 @@ public struct SingleTouchGate<TouchID: Hashable & Sendable>: Sendable {
         tracked = nil
         return true
     }
+
+    /// Unconditionally abandons the tracked touch, for host-driven
+    /// cancellation (the control was disabled or torn down
+    /// mid-sequence and UIKit may never deliver the touch's end).
+    /// Returns true when a touch was actually being tracked — the
+    /// caller should emit its touch-ended side effects on that true,
+    /// exactly as for `end`.
+    public mutating func reset() -> Bool {
+        guard tracked != nil else { return false }
+        tracked = nil
+        return true
+    }
 }
 
 /// Hit-shape math for the on-screen controls, kept next to the gate

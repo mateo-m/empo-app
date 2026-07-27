@@ -79,6 +79,36 @@ final class SingleTouchGateTests: XCTestCase {
         XCTAssertTrue(gate.isTracking("b"))
         XCTAssertFalse(gate.isTracking("a"))
     }
+
+    /// Host-driven cancellation (control disabled or torn down
+    /// mid-touch): reset abandons the tracked touch and reports
+    /// whether one existed, so the caller fires its touch-ended side
+    /// effects exactly once.
+    func testResetAbandonsTheTrackedTouchExactlyOnce() {
+        var gate = SingleTouchGate<String>()
+        XCTAssertTrue(gate.begin("a"))
+        XCTAssertTrue(gate.reset())
+        XCTAssertNil(gate.tracked)
+        XCTAssertFalse(gate.isTracking("a"))
+        // No touch tracked anymore: repeat resets are no-ops, and the
+        // dead touch's own late end must not fire a second release.
+        XCTAssertFalse(gate.reset())
+        XCTAssertFalse(gate.end("a"))
+    }
+
+    func testResetWhileIdleReportsNothingToCancel() {
+        var gate = SingleTouchGate<String>()
+        XCTAssertFalse(gate.reset())
+        XCTAssertNil(gate.tracked)
+    }
+
+    func testGateIsReusableAfterReset() {
+        var gate = SingleTouchGate<String>()
+        XCTAssertTrue(gate.begin("a"))
+        XCTAssertTrue(gate.reset())
+        XCTAssertTrue(gate.begin("b"))
+        XCTAssertTrue(gate.isTracking("b"))
+    }
 }
 
 final class ControlHitShapeTests: XCTestCase {
