@@ -88,7 +88,10 @@ class AppState {
         // the per-game tree.
         try? container.ensureSubdirs()
         let gameDir = container.gameURL
-        let userDataDir = container.userDataURL
+        // Honors mkxp-z's dataPathOrg/dataPathApp: games declaring
+        // them get a shared Documents/SaveData/<org>/<app>/ data
+        // directory instead of the per-game UserData/.
+        let userDataDir = GameDataDirectory.resolveAndPrepare(for: container)
         let stateDir = container.empoStateURL
 
         GameSettings.migrateLegacyEngineSettingsIfNeeded(

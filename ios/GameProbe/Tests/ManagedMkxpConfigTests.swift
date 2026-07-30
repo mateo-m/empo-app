@@ -442,6 +442,73 @@ final class ManagedMkxpConfigTests: XCTestCase {
         )
     }
 
+    func testReadDataPathAbsentByDefault() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+
+        let dataPath = ManagedMkxpConfig.readDataPath(
+            stateDirectory: stateDir, gameDirectory: gameDir)
+        XCTAssertNil(dataPath.org)
+        XCTAssertNil(dataPath.app)
+        XCTAssertFalse(dataPath.isDeclared)
+    }
+
+    func testReadDataPathFromBaseConfig() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+
+        try """
+            {
+                // JSON5-style comment must not break the read
+                "dataPathOrg": ".",
+                "dataPathApp": "reborn",
+            }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        let dataPath = ManagedMkxpConfig.readDataPath(
+            stateDirectory: stateDir, gameDirectory: gameDir)
+        XCTAssertEqual(dataPath.org, ".")
+        XCTAssertEqual(dataPath.app, "reborn")
+        XCTAssertTrue(dataPath.isDeclared)
+    }
+
+    func testReadDataPathOverlayWinsOverBase() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "dataPathOrg": "dev", "dataPathApp": "game" }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try """
+            { "dataPathApp": "game-v2" }
+            """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        let dataPath = ManagedMkxpConfig.readDataPath(
+            stateDirectory: stateDir, gameDirectory: gameDir)
+        XCTAssertEqual(dataPath.org, "dev")
+        XCTAssertEqual(dataPath.app, "game-v2")
+    }
+
+    func testReadDataPathBlankAndNonStringValuesReadAsAbsent() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+
+        try """
+            { "dataPathOrg": "   ", "dataPathApp": 42 }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        let dataPath = ManagedMkxpConfig.readDataPath(
+            stateDirectory: stateDir, gameDirectory: gameDir)
+        XCTAssertNil(dataPath.org)
+        XCTAssertNil(dataPath.app)
+        XCTAssertFalse(dataPath.isDeclared)
+    }
+
     func testRemoveLegacyEngineConfigDirectory() throws {
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         let engineDir = stateDir.appendingPathComponent(".engine", isDirectory: true)

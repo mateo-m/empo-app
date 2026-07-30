@@ -85,6 +85,25 @@ public struct MkxpGameDefaults: Equatable, Sendable {
     }
 }
 
+/// mkxp-z's `dataPathOrg` / `dataPathApp` config values. On desktop
+/// mkxp-z feeds these to `SDL_GetPrefPath(org, app)` to place the
+/// game's writable data directory, so two releases of a game that
+/// declare the same pair share saves. Empo mirrors that by mapping
+/// them to a shared save location outside the per-game container
+/// (see `GameDataDirectory` in the app target).
+public struct MkxpDataPath: Equatable, Sendable {
+    public var org: String?
+    public var app: String?
+
+    public init(org: String? = nil, app: String? = nil) {
+        self.org = org
+        self.app = app
+    }
+
+    /// True when the game (or the user overlay) declares either key.
+    public var isDeclared: Bool { org != nil || app != nil }
+}
+
 public enum MkxpEngineField: String, CaseIterable, Sendable {
     case smoothScaling
     case fixedAspectRatio
@@ -213,6 +232,29 @@ public enum ManagedMkxpConfig {
 
     public static func readManaged(from stateDirectory: URL) -> MkxpEngineValues {
         readOverlay(from: stateDirectory)
+    }
+
+    /// `dataPathOrg` / `dataPathApp` after the usual merge of
+    /// `Game/mkxp.json` and the `EmpoState/mkxp.json` overlay
+    /// (overlay wins). Blank or non-string values read as absent.
+    public static func readDataPath(
+        stateDirectory: URL,
+        gameDirectory: URL
+    ) -> MkxpDataPath {
+        var merged = loadBaseDict(from: gameDirectory) ?? [:]
+        for (key, value) in loadOverlayDict(from: stateDirectory) ?? [:] {
+            merged[key] = value
+        }
+        return MkxpDataPath(
+            org: nonEmptyString(merged["dataPathOrg"]),
+            app: nonEmptyString(merged["dataPathApp"])
+        )
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let raw = value as? String else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     public static func readGameDefaults(from gameDirectory: URL) -> MkxpGameDefaults {

@@ -45,6 +45,23 @@ offline. The host provides the TLS trust store (`mkxp_setCABundlePath`,
 exported to Ruby as `SSL_CERT_FILE`). The launcher refreshes the store
 silently.
 
+## Data directory keys (`dataPathOrg`, `dataPathApp`)
+
+mkxp-z's `dataPathOrg` / `dataPathApp` keys control where the game's writable data directory
+(`System.data_directory`) lives. On desktop they feed `SDL_GetPrefPath(org, app)`. Empo mirrors
+that:
+
+- Neither key declared: the per-game `Documents/Games/<title>/UserData/` directory.
+- Either key declared (in `Game/mkxp.json` or the per-game `EmpoState/mkxp.json` overlay, overlay
+  wins): a shared `Documents/SaveData/<org>/<app>/` directory. An org of `.` (or blank)
+  contributes no path component, and a missing `dataPathApp` falls back to the game's INI title,
+  then `mkxp-z`. Any two game releases declaring the same pair see the same directory, so
+  re-importing a newer version of a game keeps its saves.
+
+On the first launch after a game starts declaring these keys, the contents of its `UserData/`
+directory move into the (freshly created) shared directory so existing saves carry over. An
+already-populated shared directory is left untouched.
+
 ## Related
 
 - [controls-format.md](controls-format.md): the `empo/controls.json` manifest

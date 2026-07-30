@@ -11,6 +11,10 @@ enum GameSession {
         let container: GameContainer
         let gameDir: URL
         let stateDir: URL
+        /// Engine-writable data directory (`System.data_directory`),
+        /// resolved by `GameDataDirectory`: the per-game `UserData/`
+        /// or, for games declaring `dataPathOrg`/`dataPathApp`, the
+        /// shared `Documents/SaveData/<org>/<app>/`.
         let userDataDir: URL
         var settings: GameSettings
         var metadata: GameMetadata
