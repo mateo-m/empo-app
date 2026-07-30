@@ -45,6 +45,12 @@ enum GameImporter {
     /// only lists `Games/` itself) and from casual Files browsing.
     static let updateStagingDirectoryName = ".game-update-staging"
 
+    /// Name `replaceItemAt` uses for the displaced original tree
+    /// during the swap. Naming it explicitly (instead of letting
+    /// Foundation pick an anonymous temp name) means a crash inside
+    /// the swap window leaves a leftover we can recognize and sweep.
+    static let updateBackupDirectoryName = ".game-update-backup"
+
     /// Transactional in-place update of an installed game.
     ///
     /// Builds the merged tree in a staging directory next to
@@ -64,10 +70,17 @@ enum GameImporter {
         over gameURL: URL,
         fm: FileManager = .default
     ) throws {
-        let staging = gameURL.deletingLastPathComponent()
+        let containerURL = gameURL.deletingLastPathComponent()
+        let staging = containerURL
             .appendingPathComponent(updateStagingDirectoryName, isDirectory: true)
+        let backup = containerURL
+            .appendingPathComponent(updateBackupDirectoryName, isDirectory: true)
         try? fm.removeItem(at: staging)
-        defer { try? fm.removeItem(at: staging) }
+        try? fm.removeItem(at: backup)
+        defer {
+            try? fm.removeItem(at: staging)
+            try? fm.removeItem(at: backup)
+        }
 
         try fm.copyItem(at: gameURL, to: staging)
         // The clone carries the original's POSIX bits; Windows-origin
@@ -75,23 +88,29 @@ enum GameImporter {
         // Normalizing the clone leaves the live tree untouched.
         try GameContainer.prepareForFileReplacement(at: staging)
         try mergeMoveGameTree(from: source, into: staging, fm: fm)
-        _ = try fm.replaceItemAt(gameURL, withItemAt: staging)
+        _ = try fm.replaceItemAt(
+            gameURL,
+            withItemAt: staging,
+            backupItemName: updateBackupDirectoryName
+        )
     }
 
-    /// Remove staging leftovers from an update that a crash or
-    /// force-quit interrupted. Called by the library scan for
+    /// Remove staging/backup leftovers from an update that a crash
+    /// or force-quit interrupted. Called by the library scan for
     /// containers with no import in flight.
     nonisolated static func cleanupStaleUpdateStaging(
         in container: GameContainer,
         fm: FileManager = .default
     ) {
-        let staging = container.url
-            .appendingPathComponent(updateStagingDirectoryName, isDirectory: true)
-        guard fm.fileExists(atPath: staging.path) else { return }
-        NSLog(
-            "[GameImporter] Removing stale update staging in %@",
-            container.folderName)
-        try? fm.removeItem(at: staging)
+        for name in [updateStagingDirectoryName, updateBackupDirectoryName] {
+            let leftover = container.url.appendingPathComponent(name, isDirectory: true)
+            guard fm.fileExists(atPath: leftover.path) else { continue }
+            NSLog(
+                "[GameImporter] Removing stale update leftover %@ in %@",
+                name,
+                container.folderName)
+            try? fm.removeItem(at: leftover)
+        }
     }
 
     /// Move the freshly imported tree at `source` into `destination`,
