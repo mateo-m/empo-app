@@ -1073,14 +1073,29 @@ private struct ImportReplaceAlert: ViewModifier {
 
     private func message(for prompt: ImportReplacePrompt) -> String {
         let names = prompt.titles.map { "\"\($0)\"" }.joined(separator: ", ")
+        var message: String
         if prompt.titles.count == 1 {
-            return "\(names) is already in your library. "
+            message =
+                "\(names) is already in your library. "
                 + "Importing overwrites game files the new version also ships. "
                 + "Saves, settings, and everything else are kept."
+        } else {
+            message =
+                "\(names) are already in your library. "
+                + "Importing overwrites game files the new versions also ship. "
+                + "Saves, settings, and everything else are kept."
         }
-        return "\(names) are already in your library. "
-            + "Importing overwrites game files the new versions also ship. "
-            + "Saves, settings, and everything else are kept."
+        if let unaffected = prompt.unaffectedGamesSentence {
+            message += " " + unaffected
+        }
+        return message
+    }
+
+    /// When fresh games ride in the same batch, "Cancel" would read
+    /// as aborting them too - it doesn't, so say what it does.
+    private func cancelLabel(for prompt: ImportReplacePrompt?) -> String {
+        guard let prompt, prompt.freshCount > 0 else { return "Cancel" }
+        return "Skip Update"
     }
 
     func body(content: Content) -> some View {
@@ -1088,9 +1103,9 @@ private struct ImportReplaceAlert: ViewModifier {
             title,
             isPresented: isPresented,
             presenting: prompt
-        ) { _ in
+        ) { prompt in
             Button("Update", role: .destructive, action: onReplace)
-            Button("Cancel", role: .cancel, action: onCancel)
+            Button(cancelLabel(for: prompt), role: .cancel, action: onCancel)
         } message: { prompt in
             Text(message(for: prompt))
         }

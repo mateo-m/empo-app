@@ -70,9 +70,27 @@ struct ImportReplacePrompt: Identifiable {
 
     let requestID: UUID
     let items: [Item]
+    /// Non-conflicting selections riding in the same batch. They
+    /// import in full no matter how the user answers; the copy on
+    /// both surfaces says so when this is non-zero.
+    let freshCount: Int
 
     var titles: [String] { items.map(\.folderName) }
     var id: UUID { requestID }
+
+    /// Sentence appended to the confirmation copy when the batch
+    /// also contains games that aren't installed yet. nil when the
+    /// whole batch is updates.
+    var unaffectedGamesSentence: String? {
+        switch freshCount {
+        case 0:
+            return nil
+        case 1:
+            return "The other game in this import isn't affected and will still be added."
+        default:
+            return "The other \(freshCount) games in this import aren't affected and will still be added."
+        }
+    }
 }
 
 struct ImportPipelineAlert: Identifiable {
@@ -134,7 +152,8 @@ final class ImportPipeline {
                     folderName: plan.folderName,
                     iconPNG: plan.selection.iconPNG
                 )
-            }
+            },
+            freshCount: plans.filter { $0.replacing == nil }.count
         )
     }
 

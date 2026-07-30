@@ -50,6 +50,23 @@ struct ImportUpdatePickerSheet: View {
         headerHeight + listHeight
     }
 
+    private var explainer: String {
+        var text =
+            "Choose which installed games to update with the imported files. "
+            + "Deselected games keep their current files. "
+            + "Saves and settings are always kept."
+        if let unaffected = prompt.unaffectedGamesSentence {
+            text += " " + unaffected
+        }
+        return text
+    }
+
+    /// When fresh games ride in the same batch, "Cancel" would read
+    /// as aborting them too - it doesn't, so say what it does.
+    private var cancelLabel: String {
+        prompt.freshCount > 0 ? "Skip Updates" : "Cancel"
+    }
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 0) {
@@ -58,13 +75,9 @@ struct ImportUpdatePickerSheet: View {
                         text: "These games are already in your library",
                         systemImage: "arrow.triangle.2.circlepath"
                     )
-                    Text(
-                        "Choose which installed games to update with the imported files. "
-                            + "Deselected games keep their current files. "
-                            + "Saves and settings are always kept."
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    Text(explainer)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, Spacing._2xl)
                 .padding(.top, Spacing.md)
@@ -88,7 +101,7 @@ struct ImportUpdatePickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
+                    Button(cancelLabel, action: onCancel)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Update") {
