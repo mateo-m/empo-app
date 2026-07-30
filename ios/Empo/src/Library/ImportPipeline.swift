@@ -95,7 +95,11 @@ struct ImportPipelineSession {
             [GameImportValidator.ImportRootChoice],
             updatingChoiceIDs: Set<String>
         )
-        case awaitingReplaceConfirmation([PlannedImport])
+        /// `approvedUpdateIDs` carries the choice ids (relative
+        /// paths) the user already approved in the picker's Update
+        /// step - the alert asks only about the others, and
+        /// declining drops only the others.
+        case awaitingReplaceConfirmation([PlannedImport], approvedUpdateIDs: Set<String>)
         case launching
     }
 
@@ -127,13 +131,21 @@ final class ImportPipeline {
 
     var activeReplacePrompt: ImportReplacePrompt? {
         guard let currentSession else { return nil }
-        guard case .awaitingReplaceConfirmation(let plans) = currentSession.state else {
+        guard
+            case .awaitingReplaceConfirmation(let plans, let approvedUpdateIDs) =
+                currentSession.state
+        else {
             return nil
         }
+        // Ask only about updates the user has NOT already approved
+        // in the picker's Update step.
         return ImportReplacePrompt(
             requestID: currentSession.request.id,
             titles: plans.compactMap { plan in
-                plan.replacing != nil ? plan.folderName : nil
+                guard plan.replacing != nil,
+                    !approvedUpdateIDs.contains(plan.selection.relativePath)
+                else { return nil }
+                return plan.folderName
             }
         )
     }
@@ -202,21 +214,28 @@ final class ImportPipeline {
     /// every planned selection proceeds, replacements included.
     func confirmReplace() {
         guard let currentSession else { return }
-        guard case .awaitingReplaceConfirmation(let plans) = currentSession.state else {
+        guard case .awaitingReplaceConfirmation(let plans, _) = currentSession.state else {
             return
         }
         proceed(with: plans, for: currentSession.request.id)
     }
 
-    /// User declined: the conflicting selections are dropped, any
-    /// non-conflicting selections from the same batch still import.
+    /// User declined: only the UNAPPROVED conflicting selections
+    /// are dropped. Fresh selections and updates the user already
+    /// approved in the picker's Update step still import.
     func cancelReplace() {
         guard let currentSession else { return }
-        guard case .awaitingReplaceConfirmation(let plans) = currentSession.state else {
+        guard
+            case .awaitingReplaceConfirmation(let plans, let approvedUpdateIDs) =
+                currentSession.state
+        else {
             return
         }
 
-        let remaining = plans.filter { $0.replacing == nil }
+        let remaining = plans.filter { plan in
+            plan.replacing == nil
+                || approvedUpdateIDs.contains(plan.selection.relativePath)
+        }
         guard !remaining.isEmpty else {
             currentSession.preparedSource?.cleanup()
             self.currentSession = nil
@@ -341,7 +360,8 @@ final class ImportPipeline {
                 && !approvedUpdateIDs.contains(plan.selection.relativePath)
         }
         if needsConfirmation {
-            currentSession.state = .awaitingReplaceConfirmation(plans)
+            currentSession.state = .awaitingReplaceConfirmation(
+                plans, approvedUpdateIDs: approvedUpdateIDs)
             self.currentSession = currentSession
             resolutionTask = nil
             return
@@ -1029,6 +1049,16 @@ extension GameLibrary {
                     guard active.contains(where: { $0.importID == sel.importID }) else { continue }
                     guard let container = containers[sel.importID] else { continue }
                     let isReplacement = sel.replacing != nil
+                    // A genuine prior install finalized its import
+                    // and wrote metadata.json. Without it, the
+                    // "installed game" being updated is a broken
+                    // remnant (invalid card, crash orphan) - then
+                    // finalize must run the fresh seeding path so
+                    // settings and metadata exist, instead of
+                    // preserving state that was never written.
+                    let preserveExistingState =
+                        isReplacement
+                        && fm.fileExists(atPath: container.metadataJSONURL.path)
 
                     var committed = false
                     defer {
@@ -1102,20 +1132,20 @@ extension GameLibrary {
                             GameImporter.finalizeJgpImport(
                                 container: container,
                                 bundle: bundle,
-                                preservingExistingState: isReplacement
+                                preservingExistingState: preserveExistingState
                             )
                         } else if isArchive {
                             if !fm.fileExists(atPath: container.exeIconSidecarURL.path) {
                                 _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
                             }
-                            if isReplacement {
+                            if preserveExistingState {
                                 GameImporter.refreshMetadataAfterReplacement(in: container)
                             } else {
                                 GameImporter.createMetadata(in: container)
                             }
                         } else {
                             _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
-                            if isReplacement {
+                            if preserveExistingState {
                                 GameImporter.refreshMetadataAfterReplacement(in: container)
                             } else {
                                 GameImporter.seedFolderImport(in: container)

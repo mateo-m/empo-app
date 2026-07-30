@@ -126,7 +126,15 @@ class GameLibrary {
             initialLoad
             ? UserDefaults.standard.bool(forKey: DefaultsKey.cleanupInvalidGames)
             : false
-        let skipIDs = inFlightImports.withLock { Set($0) }
+        // Live membership check, NOT a snapshot: the scan can take
+        // seconds, and an import (in particular an in-place update
+        // of an existing container) registered after this reload
+        // started must still be skipped by the loop when it reaches
+        // that container.
+        let inFlight = inFlightImports
+        let isImportInFlight: @Sendable (String) -> Bool = { id in
+            inFlight.withLock { $0.contains(id) }
+        }
         // .userInitiated: the initial scan gates first meaningful
         // paint (library vs empty state), and later reloads refresh
         // what's on screen. The default detached priority gets
@@ -140,7 +148,7 @@ class GameLibrary {
                 // the emptiness answer) on screen quickly. The full
                 // pass below corrects status and artwork in place.
                 let quick = ImportSignpost.interval("library-quick-scan", id: "reload") {
-                    GameCatalog.quickScanGames(skipIDs: skipIDs)
+                    GameCatalog.quickScanGames(isImportInFlight: isImportInFlight)
                 }
                 await MainActor.run {
                     GameLibrary.shared.applyScanResults(quick)
@@ -150,7 +158,7 @@ class GameLibrary {
             let scanned = ImportSignpost.interval("library-scan", id: "reload") {
                 GameCatalog.scanGames(
                     cleanupInvalid: cleanupInvalid,
-                    skipIDs: skipIDs
+                    isImportInFlight: isImportInFlight
                 )
             }
             await MainActor.run {
@@ -164,6 +172,15 @@ class GameLibrary {
     /// append newcomers. Marks the initial scan complete since any
     /// applied pass answers the emptiness question.
     private func applyScanResults(_ scanned: [GameEntry]) {
+        // A scan that raced an import registration can still carry
+        // an entry for a container whose import task now owns it
+        // (an in-place update's container exists on disk for the
+        // scan to see). Applying it would clobber the progress card
+        // with a Play-able entry - or append a duplicate-id card -
+        // so drop those results; the import's own merge step
+        // publishes the final entry.
+        let inFlight = inFlightImports.withLock { Set($0) }
+        let scanned = scanned.filter { !inFlight.contains($0.id) }
         let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
         withAnimation {
             var updatedIDs = Set<String>()

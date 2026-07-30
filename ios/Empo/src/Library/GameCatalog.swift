@@ -14,12 +14,12 @@ enum GameCatalog {
     /// status and artwork in place.
     nonisolated static func quickScanGames(
         fm: FileManager = .default,
-        skipIDs: Set<String> = []
+        isImportInFlight: @Sendable (String) -> Bool = { _ in false }
     ) -> [GameEntry] {
         var entries: [GameEntry] = []
 
         for container in GameContainer.discover() {
-            if skipIDs.contains(container.id) { continue }
+            if isImportInFlight(container.id) { continue }
             // Skip orphaned containers (no Game/ subdir) instead of
             // deleting them. The full pass owns cleanup.
             guard fm.fileExists(atPath: container.gameURL.path) else { continue }
@@ -32,19 +32,25 @@ enum GameCatalog {
         return entries
     }
 
+    /// `isImportInFlight` must read LIVE state (not a snapshot from
+    /// when the scan was scheduled): the scan takes seconds, and an
+    /// in-place update registered mid-scan would otherwise have its
+    /// staging directory swept - and its container surfaced - while
+    /// the import task is still working on it.
     nonisolated static func scanGames(
         fm: FileManager = .default,
         cleanupInvalid: Bool,
-        skipIDs: Set<String> = []
+        isImportInFlight: @Sendable (String) -> Bool = { _ in false }
     ) -> [GameEntry] {
         var entries: [GameEntry] = []
 
         for container in GameContainer.discover() {
-            if skipIDs.contains(container.id) { continue }
+            if isImportInFlight(container.id) { continue }
 
-            // No import is in flight for this container (skipIDs
-            // covers those), so any update-staging directory is a
-            // leftover from a crashed in-place update.
+            // No import is in flight for this container (checked
+            // live above), so any update-staging directory is a
+            // leftover from a crashed in-place update - restore
+            // and/or sweep it.
             GameImporter.cleanupStaleUpdateStaging(in: container)
 
             // A container without a `Game/` subdirectory never finished

@@ -240,6 +240,67 @@ final class GameTreeUpdateTests: XCTestCase {
                 atPath: parent.appendingPathComponent(GameTreeUpdate.backupDirectoryName).path))
     }
 
+    // MARK: - sweepInterruptedUpdate
+
+    func testSweepRestoresMergedTreeWhenSwapDiedBetweenRenames() throws {
+        // replaceItemAt = rename target->backup, rename
+        // staging->target, delete backup. A kill between the
+        // renames leaves NO target; the staging tree (fully merged)
+        // must be restored, never swept.
+        let parent = tempRoot.appendingPathComponent("container", isDirectory: true)
+        let target = parent.appendingPathComponent("Game", isDirectory: true)
+        _ = try makeTree(
+            "container/\(GameTreeUpdate.stagingDirectoryName)",
+            files: ["Game.exe": "v2 merged", "Save01.rxdata": "precious save"])
+        _ = try makeTree(
+            "container/\(GameTreeUpdate.backupDirectoryName)",
+            files: ["Game.exe": "v1", "Save01.rxdata": "precious save"])
+
+        let outcome = GameTreeUpdate.sweepInterruptedUpdate(target: target)
+
+        XCTAssertEqual(outcome.restoredFrom, GameTreeUpdate.stagingDirectoryName)
+        XCTAssertEqual(outcome.removed, [GameTreeUpdate.backupDirectoryName])
+        XCTAssertEqual(contents(target, "Game.exe"), "v2 merged")
+        XCTAssertEqual(contents(target, "Save01.rxdata"), "precious save")
+    }
+
+    func testSweepFallsBackToBackupWhenStagingIsGone() throws {
+        let parent = tempRoot.appendingPathComponent("container", isDirectory: true)
+        let target = parent.appendingPathComponent("Game", isDirectory: true)
+        _ = try makeTree(
+            "container/\(GameTreeUpdate.backupDirectoryName)",
+            files: ["Game.exe": "v1", "Save01.rxdata": "precious save"])
+
+        let outcome = GameTreeUpdate.sweepInterruptedUpdate(target: target)
+
+        XCTAssertEqual(outcome.restoredFrom, GameTreeUpdate.backupDirectoryName)
+        XCTAssertEqual(outcome.removed, [])
+        XCTAssertEqual(contents(target, "Game.exe"), "v1")
+        XCTAssertEqual(contents(target, "Save01.rxdata"), "precious save")
+    }
+
+    func testSweepWithHealthyTargetOnlyRemovesLeftovers() throws {
+        let target = try makeTree("container/Game", files: ["Game.exe": "live"])
+        _ = try makeTree(
+            "container/\(GameTreeUpdate.stagingDirectoryName)",
+            files: ["Game.exe": "stale"])
+
+        let outcome = GameTreeUpdate.sweepInterruptedUpdate(target: target)
+
+        XCTAssertNil(outcome.restoredFrom)
+        XCTAssertEqual(outcome.removed, [GameTreeUpdate.stagingDirectoryName])
+        XCTAssertEqual(contents(target, "Game.exe"), "live")
+    }
+
+    func testSweepWithNothingToDoIsANoOp() throws {
+        let target = try makeTree("container/Game", files: ["Game.exe": "live"])
+
+        let outcome = GameTreeUpdate.sweepInterruptedUpdate(target: target)
+
+        XCTAssertEqual(outcome, GameTreeUpdate.SweepOutcome(restoredFrom: nil, removed: []))
+        XCTAssertEqual(contents(target, "Game.exe"), "live")
+    }
+
     // MARK: - removeStaleArtifacts
 
     func testRemoveStaleArtifactsSweepsBothNamesAndReportsThem() throws {

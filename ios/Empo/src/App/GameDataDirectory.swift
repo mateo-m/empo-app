@@ -73,7 +73,13 @@ enum GameDataDirectory {
         }
 
         let fm = FileManager.default
-        let firstUse = !fm.fileExists(atPath: resolved.path)
+        // "First use" also covers an EMPTY existing directory: a
+        // crash between creating the directory and moving the
+        // UserData contents over would otherwise mark adoption as
+        // done forever, stranding the old saves in UserData/ while
+        // the game reads an empty data dir.
+        let existingEntries = try? fm.contentsOfDirectory(atPath: resolved.path)
+        let firstUse = existingEntries?.isEmpty ?? true
         try? fm.createDirectory(at: resolved, withIntermediateDirectories: true)
         if firstUse {
             adoptUserDataContents(of: container, into: resolved, fm: fm)

@@ -56,14 +56,26 @@ enum GameImporter {
         try GameTreeUpdate.stageAndSwap(newTree: source, over: gameURL, fm: fm)
     }
 
-    /// Remove staging/backup leftovers from an update that a crash
-    /// or force-quit interrupted. Called by the library scan for
-    /// containers with no import in flight.
+    /// Recover from an update that a crash or force-quit
+    /// interrupted, then remove its leftovers. If the crash hit the
+    /// swap between its two renames (no `Game/` on disk), the tree
+    /// is restored from the staged/backup artifacts BEFORE anything
+    /// is swept - otherwise the scan's orphan cleanup would delete
+    /// the container, saves included. Called by the library scan
+    /// for containers with no import in flight.
     nonisolated static func cleanupStaleUpdateStaging(
         in container: GameContainer,
         fm: FileManager = .default
     ) {
-        for name in GameTreeUpdate.removeStaleArtifacts(in: container.url, fm: fm) {
+        let outcome = GameTreeUpdate.sweepInterruptedUpdate(target: container.gameURL, fm: fm)
+        if let restoredFrom = outcome.restoredFrom {
+            NSLog(
+                "[GameImporter] Restored %@ of %@ from interrupted update artifact %@",
+                container.gameURL.lastPathComponent,
+                container.folderName,
+                restoredFrom)
+        }
+        for name in outcome.removed {
             NSLog(
                 "[GameImporter] Removed stale update leftover %@ in %@",
                 name,

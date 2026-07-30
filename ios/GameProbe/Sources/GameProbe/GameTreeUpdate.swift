@@ -138,9 +138,53 @@ public enum GameTreeUpdate {
         )
     }
 
-    /// Remove staging/backup leftovers from an update that a crash
-    /// or force-quit interrupted. Returns the names it removed so
-    /// the caller can log them.
+    /// Outcome of `sweepInterruptedUpdate`, for caller logging.
+    public struct SweepOutcome: Equatable, Sendable {
+        /// Artifact name the missing target tree was restored from,
+        /// or nil when no restore was needed (or possible).
+        public let restoredFrom: String?
+        /// Artifact names removed after any restore.
+        public let removed: [String]
+    }
+
+    /// Crash recovery for `stageAndSwap`. `replaceItemAt` is two
+    /// renames (target -> backup, then staging -> target) plus a
+    /// backup delete; a kill between the renames leaves NO tree at
+    /// `target` while both artifacts survive. Sweeping blindly at
+    /// that point would destroy the only copies of the game, so
+    /// this restores first: the staging tree (which is fully merged
+    /// - the swap only starts after the merge completes) wins, the
+    /// backup (the pre-update tree) is the fallback. Only then are
+    /// remaining artifacts removed. With a healthy target this is a
+    /// plain sweep.
+    @discardableResult
+    public static func sweepInterruptedUpdate(
+        target: URL,
+        fm: FileManager = .default
+    ) -> SweepOutcome {
+        let parent = target.deletingLastPathComponent()
+        var restoredFrom: String?
+
+        if !fm.fileExists(atPath: target.path) {
+            for candidate in [stagingDirectoryName, backupDirectoryName] {
+                let url = parent.appendingPathComponent(candidate, isDirectory: true)
+                guard fm.fileExists(atPath: url.path) else { continue }
+                if (try? fm.moveItem(at: url, to: target)) != nil {
+                    restoredFrom = candidate
+                    break
+                }
+            }
+        }
+
+        return SweepOutcome(
+            restoredFrom: restoredFrom,
+            removed: removeStaleArtifacts(in: parent, fm: fm)
+        )
+    }
+
+    /// Remove staging/backup leftovers. Callers recovering from a
+    /// possible crash must use `sweepInterruptedUpdate` instead,
+    /// which restores a missing target tree before sweeping.
     @discardableResult
     public static func removeStaleArtifacts(
         in parent: URL,

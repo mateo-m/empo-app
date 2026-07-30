@@ -67,9 +67,12 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      confirmed updates merge the new files into an APFS-cloned staging copy of `Game/` and swap
      in atomically (`GameImporter.stageAndSwapGameTree`), overwriting same-path files and
      keeping everything else (saves, settings, metadata, and game files the new version doesn't
-     ship); any failure before the swap leaves the installed tree untouched, and the scan
-     sweeps crash-orphaned staging dirs (`cleanupStaleUpdateStaging`). Declining an update
-     drops just that selection. Suffixed names are never minted (one container per title): a
+     ship); any failure before the swap leaves the installed tree untouched. The scan recovers
+     crash leftovers (`cleanupStaleUpdateStaging` → `GameTreeUpdate.sweepInterruptedUpdate`): a
+     kill between the swap's two renames leaves no `Game/`, so the sweep RESTORES the merged
+     staging tree (or the backup) before removing artifacts - never sweep-then-orphan-delete.
+     Declining an update drops just that selection, and updates already approved in the picker
+     survive a decline of the fallback alert. Suffixed names are never minted (one container per title): a
      second same-title selection in one batch is refused with an alert, as is an update that
      targets the currently open (playing/paused) game.
 2. **Batch import** (`GameLibrary.pipelineImportGames`, `ImportPipeline.swift` ~line 509): one
