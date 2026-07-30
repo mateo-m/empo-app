@@ -16,6 +16,9 @@ final class GameTreeUpdateTests: XCTestCase {
     }
 
     override func tearDown() {
+        // Fixtures set read-only modes; restore owner-write so the
+        // temp root always deletes cleanly.
+        try? GameTreeUpdate.normalizeOwnerWritable(at: tempRoot)
         try? fm.removeItem(at: tempRoot)
         super.tearDown()
     }
@@ -51,6 +54,18 @@ final class GameTreeUpdateTests: XCTestCase {
 
         XCTAssertEqual(contents(destination, "Game.exe"), "new")
         XCTAssertFalse(fm.fileExists(atPath: source.path))
+    }
+
+    func testMergeReplacesTopLevelFileDestination() throws {
+        // The destination path itself exists but is a FILE (not a
+        // directory): the new tree replaces it wholesale.
+        let source = try makeTree("source", files: ["Game.exe": "new"])
+        let destination = tempRoot.appendingPathComponent("dest")
+        try "just a file".write(to: destination, atomically: true, encoding: .utf8)
+
+        try GameTreeUpdate.mergeMove(from: source, into: destination)
+
+        XCTAssertEqual(contents(destination, "Game.exe"), "new")
     }
 
     func testMergeOverwritesSamePathFiles() throws {
@@ -148,16 +163,57 @@ final class GameTreeUpdateTests: XCTestCase {
                 atPath: parent.appendingPathComponent(GameTreeUpdate.backupDirectoryName).path))
     }
 
-    func testStageAndSwapOverwritesReadOnlyFiles() throws {
-        let target = try makeTree("container/Game", files: ["Game.exe": "v1"])
+    func testStageAndSwapOverwritesInsideReadOnlyDirectories() throws {
+        // The overwrite unlinks the old file, which needs write
+        // permission on the PARENT DIRECTORY (a read-only file in a
+        // writable directory deletes fine) - so the fixture locks
+        // the directory. Windows-origin archives commonly land like
+        // this; without the staging tree's permission
+        // normalization, the merge fails with EACCES.
+        let target = try makeTree(
+            "container/Game",
+            files: [
+                "Data/Scripts.rxdata": "v1",
+                "Save01.rxdata": "precious save",
+            ])
         try fm.setAttributes(
             [.posixPermissions: 0o444],
-            ofItemAtPath: target.appendingPathComponent("Game.exe").path)
+            ofItemAtPath: target.appendingPathComponent("Data/Scripts.rxdata").path)
+        try fm.setAttributes(
+            [.posixPermissions: 0o555],
+            ofItemAtPath: target.appendingPathComponent("Data").path)
+        let source = try makeTree("incoming", files: ["Data/Scripts.rxdata": "v2"])
+
+        try GameTreeUpdate.stageAndSwap(newTree: source, over: target)
+
+        XCTAssertEqual(contents(target, "Data/Scripts.rxdata"), "v2")
+        XCTAssertEqual(contents(target, "Save01.rxdata"), "precious save")
+    }
+
+    func testStageAndSwapRecoversFromCrashLeftoverArtifacts() throws {
+        // A previous update that crashed mid-way leaves staging
+        // and/or backup siblings behind. The next update must clear
+        // them and succeed instead of failing on the copy into an
+        // already-existing staging path.
+        let target = try makeTree("container/Game", files: ["Game.exe": "v1"])
+        let parent = target.deletingLastPathComponent()
+        _ = try makeTree(
+            "container/\(GameTreeUpdate.stagingDirectoryName)",
+            files: ["Game.exe": "stale half-merged"])
+        _ = try makeTree(
+            "container/\(GameTreeUpdate.backupDirectoryName)",
+            files: ["Game.exe": "stale backup"])
         let source = try makeTree("incoming", files: ["Game.exe": "v2"])
 
         try GameTreeUpdate.stageAndSwap(newTree: source, over: target)
 
         XCTAssertEqual(contents(target, "Game.exe"), "v2")
+        XCTAssertFalse(
+            fm.fileExists(
+                atPath: parent.appendingPathComponent(GameTreeUpdate.stagingDirectoryName).path))
+        XCTAssertFalse(
+            fm.fileExists(
+                atPath: parent.appendingPathComponent(GameTreeUpdate.backupDirectoryName).path))
     }
 
     func testStageAndSwapFailureLeavesTargetUntouched() throws {

@@ -16,6 +16,27 @@ final class MkxpDataPathComponentsTests: XCTestCase {
             ["fangame-dev", "reborn"])
     }
 
+    func testAbsentOrgContributesNothing() {
+        let dataPath = MkxpDataPath(app: "reborn")
+        XCTAssertEqual(dataPath.sharedDirectoryComponents(iniTitleFallback: nil), ["reborn"])
+    }
+
+    func testDegenerateValuesContributeNothing() {
+        // Values that sanitize down to nothing ("...", "///") must
+        // not become a literal "Unknown Game" path component; they
+        // fall out of the chain like absent values.
+        let dotsOrg = MkxpDataPath(org: "...", app: "reborn")
+        XCTAssertEqual(dotsOrg.sharedDirectoryComponents(iniTitleFallback: nil), ["reborn"])
+
+        let slashesApp = MkxpDataPath(org: "dev", app: "///")
+        XCTAssertEqual(
+            slashesApp.sharedDirectoryComponents(iniTitleFallback: "Testing"),
+            ["dev", "Testing"])
+        XCTAssertEqual(
+            slashesApp.sharedDirectoryComponents(iniTitleFallback: nil),
+            ["dev", "mkxp-z"])
+    }
+
     func testDotOrgContributesNothing() {
         let dataPath = MkxpDataPath(org: ".", app: "reborn")
         XCTAssertEqual(dataPath.sharedDirectoryComponents(iniTitleFallback: nil), ["reborn"])

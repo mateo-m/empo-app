@@ -18,8 +18,13 @@ public enum ImportNameResolution {
         public let installedNamesByKey: [String: String]
         /// Lowercased names of imports currently in flight.
         public let inFlightKeys: Set<String>
-        /// Folder name of the currently open (playing/paused) game.
-        public let openGameName: String?
+        /// Lowercased folder name of the currently open
+        /// (playing/paused) game. Compared case-insensitively like
+        /// every other name in this policy - the strings all come
+        /// from the same folder listing today, but the guard that
+        /// keeps a running game's files from being swapped must not
+        /// depend on that staying true.
+        public let openGameKey: String?
 
         public init(
             installedFolderNames: [String],
@@ -31,7 +36,7 @@ public enum ImportNameResolution {
                 uniquingKeysWith: { first, _ in first }
             )
             self.inFlightKeys = Set(inFlightNames.map { $0.lowercased() })
-            self.openGameName = openGameName
+            self.openGameKey = openGameName?.lowercased()
         }
     }
 
@@ -62,7 +67,7 @@ public enum ImportNameResolution {
         if !reservedBatchKeys.contains(key),
             let installed = context.installedNamesByKey[key]
         {
-            if installed == context.openGameName {
+            if installed.lowercased() == context.openGameKey {
                 return .refusedOpenGame
             }
             reservedBatchKeys.insert(key)

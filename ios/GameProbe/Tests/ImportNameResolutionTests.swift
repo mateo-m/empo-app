@@ -109,6 +109,18 @@ final class ImportNameResolutionTests: XCTestCase {
             .fresh(folderName: "Another Game"))
     }
 
+    func testOpenGameRefusalIsCaseInsensitive() {
+        // The running game's files must never be swapped, even if
+        // the open-game name reaches us with different casing than
+        // the installed folder listing.
+        var batch = Set<String>()
+        let outcome = ImportNameResolution.resolve(
+            title: "Testing",
+            context: context(installed: ["Testing"], open: "TESTING"),
+            reservedBatchKeys: &batch)
+        XCTAssertEqual(outcome, .refusedOpenGame)
+    }
+
     func testOpenGameOnlyBlocksItsOwnUpdate() {
         // A DIFFERENT installed game being open must not block this
         // update.

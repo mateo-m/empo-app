@@ -120,10 +120,17 @@ public enum GameTreeUpdate {
 
         try fm.copyItem(at: target, to: staging)
         // The copy carries the original's POSIX bits; normalizing
-        // the staging tree (never the live one) lets the merge
-        // overwrite read-only entries.
+        // the staging tree lets the merge overwrite read-only
+        // entries.
         try normalizeOwnerWritable(at: staging, fm: fm)
         try mergeMove(from: source, into: staging, fm: fm)
+        // The original tree becomes the swap's backup and is
+        // deleted as part of the swap - normalize it too so
+        // read-only bits can't fail the swap after the exchange
+        // already happened (or block the stale sweep after a
+        // crash). Metadata-only and the merge has already
+        // succeeded, so this can no longer strand a half-update.
+        try normalizeOwnerWritable(at: target, fm: fm)
         _ = try fm.replaceItemAt(
             target,
             withItemAt: staging,

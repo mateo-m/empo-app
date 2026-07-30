@@ -134,7 +134,16 @@ extension MkxpDataPath {
             !trimmed.isEmpty,
             trimmed != "."
         else { return nil }
-        return GameFolderName.sanitize(trimmed)
+        let sanitized = GameFolderName.sanitize(trimmed)
+        // A value that sanitizes down to nothing ("...", "///")
+        // contributes no component instead of the sanitizer's
+        // literal fallback name; the fallback chain (INI title,
+        // then "mkxp-z") picks the actual directory.
+        guard
+            sanitized != GameFolderName.fallback
+                || trimmed.caseInsensitiveCompare(GameFolderName.fallback) == .orderedSame
+        else { return nil }
+        return sanitized
     }
 }
 

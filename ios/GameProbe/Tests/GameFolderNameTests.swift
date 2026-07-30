@@ -48,9 +48,15 @@ final class GameFolderNameTests: XCTestCase {
         XCTAssertEqual(GameFolderName.sanitize("."), GameFolderName.fallback)
     }
 
-    func testLongTitleCapped() {
-        let long = String(repeating: "a", count: 300)
-        XCTAssertEqual(GameFolderName.sanitize(long).count, GameFolderName.maxLength)
+    func testLongTitleCappedFromTheFront() {
+        // Distinct head/tail so keeping the wrong end (suffix
+        // instead of prefix) fails, not just a wrong length.
+        let long = "HEAD " + String(repeating: "a", count: 300) + " TAIL"
+        let sanitized = GameFolderName.sanitize(long)
+        XCTAssertEqual(sanitized.count, GameFolderName.maxLength)
+        XCTAssertEqual(
+            sanitized,
+            "HEAD " + String(repeating: "a", count: GameFolderName.maxLength - 5))
     }
 
     func testSanitizeIsIdempotent() {
