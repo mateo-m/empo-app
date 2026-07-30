@@ -99,6 +99,14 @@ class GameLibrary {
     /// scan/merge replace step in `reload()`.
     nonisolated let inFlightImports = Mutex(Set<String>())
 
+    /// IDs of in-flight imports that update an installed game in
+    /// place (user-confirmed replacement). `abandonImport` consults
+    /// this: a cancelled or failed replacement must never delete
+    /// the container - it still holds the user's saves, settings,
+    /// and the (possibly partially updated) installed game - so the
+    /// existing entry is re-surfaced instead.
+    nonisolated let replacingImports = Mutex(Set<String>())
+
     nonisolated static var gamesDirectory: URL { GameContainer.rootURL }
 
     private init() {

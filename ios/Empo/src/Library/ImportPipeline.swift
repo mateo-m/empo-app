@@ -52,8 +52,9 @@ struct PlannedImport: Hashable, Sendable {
     let replacing: GameContainer?
 }
 
-/// Replace-confirmation state surfaced to the library view. Lists
-/// the installed games the pending import batch would overwrite.
+/// Update-confirmation state surfaced to the library view. Lists
+/// the installed games the pending import batch would update in
+/// place (merge new files over the existing `Game/` tree).
 struct ImportReplacePrompt: Identifiable {
     let requestID: UUID
     let titles: [String]
@@ -170,8 +171,8 @@ final class ImportPipeline {
         cancelReplace()
     }
 
-    /// User confirmed overwriting the installed game(s): every
-    /// planned selection proceeds, replacements included.
+    /// User confirmed updating the installed game(s) in place:
+    /// every planned selection proceeds, replacements included.
     func confirmReplace() {
         guard let currentSession else { return }
         guard case .awaitingReplaceConfirmation(let plans) = currentSession.state else {
@@ -335,7 +336,11 @@ final class ImportPipeline {
             plans.append(
                 PlannedImport(
                     selection: selection,
-                    folderName: folderName,
+                    // A replacement adopts the installed container
+                    // wholesale (same folder name, same id, even if
+                    // the new title differs in case), so saves,
+                    // settings, and metadata stay attached.
+                    folderName: replacing?.folderName ?? folderName,
                     replacing: replacing
                 ))
         }
@@ -356,10 +361,9 @@ final class ImportPipeline {
         self.currentSession = currentSession
         resolutionTask = nil
 
-        // Confirmed replacements: drop the old entry from the
-        // visible library now, before an import card with the same
-        // id appears. The on-disk tree is deleted by the import
-        // task right before extraction.
+        // Confirmed replacements: swap the old entry for the import
+        // progress card (same id). The on-disk container stays; the
+        // import task merges the new files into it at move time.
         if let library {
             for plan in plans {
                 if let replaced = plan.replacing {
@@ -551,8 +555,9 @@ extension GameLibrary {
     /// One game to import. `importID` is the destination folder
     /// name under `Games/` (the sanitized game title), which is
     /// also the container id and the progress-card id. `replacing`
-    /// carries the installed container the user agreed to
-    /// overwrite; the import task deletes it before extraction.
+    /// carries the installed container the user agreed to update:
+    /// the import merges the new files into its `Game/` tree,
+    /// overwriting same-path files and keeping everything else.
     struct BatchSelection: Sendable {
         let importID: String
         let relativePath: String
@@ -628,6 +633,12 @@ extension GameLibrary {
     /// delete any partial container directory on disk. Shared when
     /// the user cancels and when the import pipeline errors out so
     /// orphans don't resurface as Invalid cards on the next scan.
+    ///
+    /// Replacements (see `replacingImports`) never delete: the
+    /// container is the installed game, holding the user's saves
+    /// and settings. Its entry is re-surfaced instead - possibly
+    /// with partially updated files if the merge had begun, which
+    /// the next scan re-validates.
     @MainActor
     func abandonImport(importID: String, container: GameContainer?) {
         _ = pendingImports.removeValue(forKey: importID)
@@ -635,6 +646,14 @@ extension GameLibrary {
         let resolvedContainer =
             container ?? entry?.container ?? Self.containerOnDisk(importID: importID)
         removeLibraryEntry(id: importID)
+
+        let isReplacement = replacingImports.withLock { $0.contains(importID) }
+        if isReplacement {
+            if let resolvedContainer {
+                mergeImportedGame(container: resolvedContainer)
+            }
+            return
+        }
         Self.deleteContainer(resolvedContainer)
     }
 
@@ -700,6 +719,9 @@ extension GameLibrary {
                 order: pendingOrder
             )
             inFlightImports.withLock { _ = $0.insert(selection.importID) }
+            if selection.replacing != nil {
+                replacingImports.withLock { _ = $0.insert(selection.importID) }
+            }
         }
 
         let batchID = UUID().uuidString
@@ -755,24 +777,25 @@ extension GameLibrary {
                 }
             }
 
-            do {
-                // Confirmed replacements: remove the old install
-                // before its folder name is reused. Runs inline (not
-                // via `deleteContainer`'s detached task) so the
-                // extract/move below can't race the rm -rf.
-                for sel in active {
-                    guard let replaced = sel.replacing else { continue }
-                    guard fm.fileExists(atPath: replaced.url.path) else { continue }
-                    do {
-                        try replaced.deleteAll()
-                    } catch {
-                        failSelection(sel, error)
+            // Batch epilogue on the main actor. Clears the
+            // replacement markers HERE (not in the detached defer):
+            // the main actor is serial, and every abandonImport hop
+            // enqueued by failSelection precedes this closure, so
+            // each of them still sees its marker and knows not to
+            // delete the installed game.
+            func finishBatch(_ failures: [(GameLibrary.BatchSelection, Error)]) async {
+                await MainActor.run {
+                    for selection in selections {
+                        self.replacingImports.withLock { _ = $0.remove(selection.importID) }
                     }
+                    completion(failures)
                 }
+            }
 
+            do {
                 checkCancellations()
                 guard !active.isEmpty else {
-                    await MainActor.run { completion(failures) }
+                    await finishBatch(failures)
                     return
                 }
 
@@ -854,7 +877,7 @@ extension GameLibrary {
                     }
                     checkCancellations()
                     guard !active.isEmpty else {
-                        await MainActor.run { completion(failures) }
+                        await finishBatch(failures)
                         return
                     }
 
@@ -898,10 +921,15 @@ extension GameLibrary {
                     checkCancellations()
                     guard active.contains(where: { $0.importID == sel.importID }) else { continue }
                     guard let container = containers[sel.importID] else { continue }
+                    let isReplacement = sel.replacing != nil
 
                     var committed = false
                     defer {
-                        if !committed {
+                        // Fresh imports only: a failed replacement
+                        // must never delete the container - it IS
+                        // the installed game, saves included. Its
+                        // entry is re-surfaced by abandonImport.
+                        if !committed && !isReplacement {
                             try? container.deleteAll()
                         }
                     }
@@ -932,7 +960,19 @@ extension GameLibrary {
                                 at: container.url,
                                 withIntermediateDirectories: true
                             )
-                            try fm.moveItem(at: gameRoot, to: container.gameURL)
+                            if isReplacement, fm.fileExists(atPath: container.gameURL.path) {
+                                // Update in place: same-path files are
+                                // overwritten by the new import, and
+                                // everything else in Game/ (saves
+                                // written beside the game files, mods,
+                                // assets the new version doesn't ship)
+                                // stays put.
+                                try GameContainer.prepareForFileReplacement(at: container.gameURL)
+                                try GameImporter.mergeMoveGameTree(
+                                    from: gameRoot, into: container.gameURL, fm: fm)
+                            } else {
+                                try fm.moveItem(at: gameRoot, to: container.gameURL)
+                            }
                             GameContainer.normalizeImportedGamePermissions(at: container.gameURL)
                         }
                     } catch {
@@ -950,15 +990,27 @@ extension GameLibrary {
 
                     ImportSignpost.interval("finalize", id: sel.importID) {
                         if let bundle = jgpBundle {
-                            GameImporter.finalizeJgpImport(container: container, bundle: bundle)
+                            GameImporter.finalizeJgpImport(
+                                container: container,
+                                bundle: bundle,
+                                preservingExistingState: isReplacement
+                            )
                         } else if isArchive {
                             if !fm.fileExists(atPath: container.exeIconSidecarURL.path) {
                                 _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
                             }
-                            GameImporter.createMetadata(in: container)
+                            if isReplacement {
+                                GameImporter.refreshMetadataAfterReplacement(in: container)
+                            } else {
+                                GameImporter.createMetadata(in: container)
+                            }
                         } else {
                             _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
-                            GameImporter.seedFolderImport(in: container)
+                            if isReplacement {
+                                GameImporter.refreshMetadataAfterReplacement(in: container)
+                            } else {
+                                GameImporter.seedFolderImport(in: container)
+                            }
                         }
                     }
 
@@ -972,17 +1024,17 @@ extension GameLibrary {
                     }
                 }
 
-                await MainActor.run { completion(failures) }
+                await finishBatch(failures)
             } catch is ImportCancelled {
                 failAllActive(ImportCancelled())
-                await MainActor.run { completion(failures) }
+                await finishBatch(failures)
             } catch ArchiveExtractor.Error.cancelled {
                 failAllActive(ImportCancelled())
-                await MainActor.run { completion(failures) }
+                await finishBatch(failures)
             } catch {
                 let surfaced: Error = Self.isOutOfSpace(error) ? ImportError.outOfSpace : error
                 failAllActive(surfaced)
-                await MainActor.run { completion(failures) }
+                await finishBatch(failures)
             }
         }
     }

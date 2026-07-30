@@ -50,10 +50,12 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      exists, the import starts automatically.
    - `planImports` then fixes each selection's destination folder name (the sanitized title). A
      name owned by another in-flight import or an earlier selection in the batch gets a numbered
-     suffix. A name owned by an installed game raises the replace-confirmation alert
-     (`ImportReplacePrompt`): confirming deletes the installed container before extraction,
-     declining drops just the conflicting selections. A replacement that targets the currently
-     open (playing/paused) game is refused outright.
+     suffix. A name owned by an installed game raises the update-confirmation alert
+     (`ImportReplacePrompt`): confirming updates the installed container in place - the new
+     files merge into `Game/` (`GameImporter.mergeMoveGameTree`), overwriting same-path files
+     and keeping everything else (saves, settings, metadata, and game files the new version
+     doesn't ship). Declining drops just the conflicting selections. A replacement that targets
+     the currently open (playing/paused) game is refused outright.
 2. **Batch import** (`GameLibrary.pipelineImportGames`, `ImportPipeline.swift` ~line 509): one
    detached task per **source** fans out per-selection state (`BatchSelection`). The main actor
    registers pending entries and `inFlightImports` membership before the task starts.
@@ -115,7 +117,10 @@ These invariants match the current code. Do not break them.
    drop the pending entry and never commit a card. `ImportPipeline.importButtonPhase` derives
    from `currentSession` + `pendingImports`. Keep it accurate.
 6. **Container hygiene**: after a selection's container exists, the `committed` flag +
-   `defer { container.deleteAll() }` pattern guarantees cleanup on any failure.
+   `defer { container.deleteAll() }` pattern guarantees cleanup on any failure - for **fresh
+   imports only**. A replacement (`GameLibrary.replacingImports`) never deletes its container on
+   failure or cancel: it is the installed game, saves included, so `abandonImport` re-surfaces
+   the existing entry instead and the next scan re-validates it.
    `GameContainer.normalizeImportedGamePermissions` runs after **every** move into `Game/`.
    `ensureGamesDirectory` / `ensureSubdirs` handle the iCloud-backup exclusion. Do not remove
    those calls.

@@ -1016,17 +1016,19 @@ private struct ImportReplaceAlert: ViewModifier {
     }
 
     private var title: String {
-        (prompt?.titles.count ?? 1) > 1 ? "Replace Games?" : "Replace Game?"
+        (prompt?.titles.count ?? 1) > 1 ? "Update Games?" : "Update Game?"
     }
 
     private func message(for prompt: ImportReplacePrompt) -> String {
         let names = prompt.titles.map { "\"\($0)\"" }.joined(separator: ", ")
         if prompt.titles.count == 1 {
             return "\(names) is already in your library. "
-                + "Replacing it deletes the installed game, including its save data."
+                + "Importing overwrites game files the new version also ships. "
+                + "Saves, settings, and everything else are kept."
         }
         return "\(names) are already in your library. "
-            + "Replacing them deletes the installed games, including their save data."
+            + "Importing overwrites game files the new versions also ship. "
+            + "Saves, settings, and everything else are kept."
     }
 
     func body(content: Content) -> some View {
@@ -1035,7 +1037,7 @@ private struct ImportReplaceAlert: ViewModifier {
             isPresented: isPresented,
             presenting: prompt
         ) { _ in
-            Button("Replace", role: .destructive, action: onReplace)
+            Button("Update", role: .destructive, action: onReplace)
             Button("Cancel", role: .cancel, action: onCancel)
         } message: { prompt in
             Text(message(for: prompt))

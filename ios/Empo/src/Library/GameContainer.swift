@@ -337,6 +337,15 @@ struct GameContainer: Equatable, Hashable {
         }
     }
 
+    /// Normalize owner-write over an existing `Game/` tree so a
+    /// replacement import can overwrite files inside it. Same
+    /// permission pass a delete uses: Windows-origin archives often
+    /// land with read-only POSIX bits that would block unlinking
+    /// the old copy of a conflicting file.
+    static func prepareForFileReplacement(at url: URL) throws {
+        try makeTreeDeletable(at: url, fm: FileManager.default)
+    }
+
     /// Imported game trees sometimes arrive with a read-only `Game/`
     /// root (archive metadata or macOS copyItem). Empo never needs
     /// that for immutability. File content stays untouched. We only
