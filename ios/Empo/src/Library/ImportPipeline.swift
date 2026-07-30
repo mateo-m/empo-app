@@ -636,9 +636,9 @@ extension GameLibrary {
     ///
     /// Replacements (see `replacingImports`) never delete: the
     /// container is the installed game, holding the user's saves
-    /// and settings. Its entry is re-surfaced instead - possibly
-    /// with partially updated files if the merge had begun, which
-    /// the next scan re-validates.
+    /// and settings - and thanks to the staged, atomic swap in
+    /// `stageAndSwapGameTree`, still exactly the pre-update files.
+    /// Its entry is re-surfaced instead.
     @MainActor
     func abandonImport(importID: String, container: GameContainer?) {
         _ = pendingImports.removeValue(forKey: importID)
@@ -961,15 +961,17 @@ extension GameLibrary {
                                 withIntermediateDirectories: true
                             )
                             if isReplacement, fm.fileExists(atPath: container.gameURL.path) {
-                                // Update in place: same-path files are
-                                // overwritten by the new import, and
-                                // everything else in Game/ (saves
-                                // written beside the game files, mods,
-                                // assets the new version doesn't ship)
-                                // stays put.
-                                try GameContainer.prepareForFileReplacement(at: container.gameURL)
-                                try GameImporter.mergeMoveGameTree(
-                                    from: gameRoot, into: container.gameURL, fm: fm)
+                                // Update in place, transactionally:
+                                // the new files merge into a staging
+                                // clone (same-path files overwritten,
+                                // everything else kept - saves beside
+                                // the game files, mods, assets the new
+                                // version doesn't ship), then the
+                                // staging tree swaps in atomically.
+                                // Any failure leaves the installed
+                                // Game/ untouched.
+                                try GameImporter.stageAndSwapGameTree(
+                                    newTree: gameRoot, over: container.gameURL, fm: fm)
                             } else {
                                 try fm.moveItem(at: gameRoot, to: container.gameURL)
                             }

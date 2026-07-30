@@ -103,8 +103,9 @@ class GameLibrary {
     /// place (user-confirmed replacement). `abandonImport` consults
     /// this: a cancelled or failed replacement must never delete
     /// the container - it still holds the user's saves, settings,
-    /// and the (possibly partially updated) installed game - so the
-    /// existing entry is re-surfaced instead.
+    /// and (the update swaps in atomically or not at all) the
+    /// intact installed game - so the existing entry is re-surfaced
+    /// instead.
     nonisolated let replacingImports = Mutex(Set<String>())
 
     nonisolated static var gamesDirectory: URL { GameContainer.rootURL }

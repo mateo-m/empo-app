@@ -42,6 +42,11 @@ enum GameCatalog {
         for container in GameContainer.discover() {
             if skipIDs.contains(container.id) { continue }
 
+            // No import is in flight for this container (skipIDs
+            // covers those), so any update-staging directory is a
+            // leftover from a crashed in-place update.
+            GameImporter.cleanupStaleUpdateStaging(in: container)
+
             // A container without a `Game/` subdirectory never finished
             // importing (e.g. the app was killed mid-extract, leaving only
             // the `Metadata/` sidecar dir behind). It can't become a real
