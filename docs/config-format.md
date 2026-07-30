@@ -53,7 +53,7 @@ that:
 
 - Neither key declared: the per-game `Documents/Games/<title>/UserData/` directory.
 - Either key declared (in `Game/mkxp.json` or the per-game `EmpoState/mkxp.json` overlay, overlay
-  wins): a shared `Documents/SaveData/<org>/<app>/` directory. An org of `.` (or blank)
+  wins): a shared `Documents/GameData/<org>/<app>/` directory. An org of `.` (or blank)
   contributes no path component, and a missing `dataPathApp` falls back to the game's INI title,
   then `mkxp-z`. Any two game releases declaring the same pair see the same directory, so
   re-importing a newer version of a game keeps its saves.

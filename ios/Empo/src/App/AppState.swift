@@ -89,7 +89,7 @@ class AppState {
         try? container.ensureSubdirs()
         let gameDir = container.gameURL
         // Honors mkxp-z's dataPathOrg/dataPathApp: games declaring
-        // them get a shared Documents/SaveData/<org>/<app>/ data
+        // them get a shared Documents/GameData/<org>/<app>/ data
         // directory instead of the per-game UserData/.
         let userDataDir = GameDataDirectory.resolveAndPrepare(for: container)
         let stateDir = container.empoStateURL

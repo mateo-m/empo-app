@@ -11,13 +11,14 @@ import GameProbe
 /// with the `EmpoState/mkxp.json` overlay) declares `dataPathOrg`
 /// and/or `dataPathApp`, the data directory instead lives at
 ///
-///     Documents/SaveData/<org>/<app>/
+///     Documents/GameData/<org>/<app>/
 ///
-/// shared across containers. That mirrors desktop mkxp-z, where the
-/// two keys feed `SDL_GetPrefPath(org, app)`: any two game releases
-/// declaring the same pair see the same save directory. Fan games
-/// rely on this to carry saves across versions - which matters more
-/// now that re-importing a new version replaces the old container.
+/// shared across containers and visible in the Files app next to
+/// `Games/`. That mirrors desktop mkxp-z, where the two keys feed
+/// `SDL_GetPrefPath(org, app)`: any two game releases declaring the
+/// same pair see the same data directory. Fan games rely on this to
+/// carry saves across versions - which matters more now that
+/// re-importing a new version replaces the old container.
 ///
 /// Defaults mirror mkxp-z's: an org of `"."` (or blank) contributes
 /// no path component, and a missing `dataPathApp` falls back to the
@@ -25,15 +26,15 @@ import GameProbe
 /// `SaveMigration.legacyDataPathDefaults` documents for the old
 /// engine builds.
 ///
-/// `SaveData/` is intentionally NOT excluded from backups (unlike
-/// `Games/`): it holds nothing but user save state, which is small
-/// and precious.
+/// `GameData/` is intentionally NOT excluded from backups (unlike
+/// `Games/`): it holds the data games choose to persist - saves,
+/// settings, mod state - which is small and precious.
 enum GameDataDirectory {
 
-    /// Parent of all shared data directories. `Documents/SaveData/`.
+    /// Parent of all shared data directories. `Documents/GameData/`.
     static let sharedRootURL: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("SaveData", isDirectory: true)
+        .appendingPathComponent("GameData", isDirectory: true)
 
     /// Pure resolution; no filesystem writes.
     static func resolve(for container: GameContainer) -> URL {
