@@ -353,19 +353,23 @@ final class ImportPipeline {
     /// Resolve each selection to its destination folder name (the
     /// sanitized game title from the import probe).
     ///
+    /// The library invariant is **one container per title** - some
+    /// games derive their data locations from the title in their
+    /// INI, so a suffixed duplicate (`Testing 2`) would still call
+    /// itself "Testing" and read the other copy's data. Suffixed
+    /// names are therefore never minted; every collision resolves
+    /// to an update or a refusal:
+    ///
     ///   - A name owned by another **in-flight** import is refused
     ///     with an alert: the user almost certainly re-imported the
-    ///     same game while its first import is still running, and a
-    ///     silently suffixed duplicate would just show two
-    ///     identical-looking cards.
+    ///     same game while its first import is still running.
     ///   - An exact match with an **installed** game becomes an
     ///     update-in-place plan, which the user must confirm. A
     ///     match with the currently open (playing/paused) game is
     ///     dropped outright: the engine holds its files.
-    ///   - Anything else is a fresh install. Its name dodges the
-    ///     batch, in-flight imports, AND installed games with a
-    ///     numbered suffix - a suffix must never silently land on
-    ///     an installed game and turn into an unintended update.
+    ///   - A second selection with the same title inside one batch
+    ///     is refused with an alert.
+    ///   - Anything else is a fresh install under the title itself.
     private func planImports(_ selections: [ImportSelection]) -> [PlannedImport] {
         let installedByLowercaseName = Dictionary(
             GameContainer.discover().map { ($0.folderName.lowercased(), $0) },
@@ -431,17 +435,23 @@ final class ImportPipeline {
                 continue
             }
 
-            let folderName = GameFolderName.uniqueName(preferring: preferred) { candidate in
-                let key = candidate.lowercased()
-                return batchKeys.contains(key)
-                    || inFlightKeys.contains(key)
-                    || installedByLowercaseName[key] != nil
+            if batchKeys.contains(preferredKey) {
+                NSLog(
+                    "[ImportPipeline] Refusing import of %@: duplicate title in batch",
+                    preferred)
+                presentError(
+                    title: "Couldn't import \(quoted(selection.displayName))",
+                    message: "Another game in this import has the same title, "
+                        + "so only one of them can be imported."
+                )
+                continue
             }
-            batchKeys.insert(folderName.lowercased())
+
+            batchKeys.insert(preferredKey)
             plans.append(
                 PlannedImport(
                     selection: selection,
-                    folderName: folderName,
+                    folderName: preferred,
                     replacing: nil
                 ))
         }

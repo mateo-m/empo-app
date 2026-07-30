@@ -3,10 +3,14 @@
 ## Overview
 
 There is no database: a game is a directory at `Documents/Games/<title>/`, named after the title
-the game declares in its INI file and sanitized by `GameFolderName` (see `GameContainer.swift`;
-before v0.5 the folder was `<uuid>-<slug>`, and `GameContainerMigration` renames legacy trees at
-launch). An import turns the user's pick in Files into one such container per selected game. The
-import seeds metadata and updates the library. It never shows a broken card and never leaves a
+the game declares in its INI file and sanitized by `GameFolderName` (see `GameContainer.swift`).
+The library holds **one container per title** - some games derive their data locations from
+their INI title, so a suffixed duplicate would read the other copy's data. Before v0.5 the
+folder was `<uuid>-<slug>`; `GameContainerMigration` renames legacy trees at launch and, when
+several resolve to the same title, keeps the most recently played one under the canonical name
+and moves the rest - whole, saves included - to the Files-visible `Documents/Duplicate Games/`.
+An import turns the user's pick in Files into one such container per selected game. The import
+seeds metadata and updates the library. It never shows a broken card and never leaves a
 half-imported container behind.
 
 The pipeline works in batches. It stages and extracts one source (archive or folder) **once**.
@@ -64,10 +68,9 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      keeping everything else (saves, settings, metadata, and game files the new version doesn't
      ship); any failure before the swap leaves the installed tree untouched, and the scan
      sweeps crash-orphaned staging dirs (`cleanupStaleUpdateStaging`). Declining an update
-     drops just that selection. Fresh installs pick a numbered-suffix name that dodges the
-     batch, in-flight imports, AND installed games - a suffix never silently lands on an
-     installed game. An update that targets the currently open (playing/paused) game is
-     refused outright.
+     drops just that selection. Suffixed names are never minted (one container per title): a
+     second same-title selection in one batch is refused with an alert, as is an update that
+     targets the currently open (playing/paused) game.
 2. **Batch import** (`GameLibrary.pipelineImportGames`, `ImportPipeline.swift` ~line 509): one
    detached task per **source** fans out per-selection state (`BatchSelection`). The main actor
    registers pending entries and `inFlightImports` membership before the task starts.
