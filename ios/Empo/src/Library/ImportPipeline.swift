@@ -39,6 +39,11 @@ struct ImportSelection: Hashable, Sendable {
 struct ImportRootPrompt: Identifiable {
     let request: QueuedImportRequest
     let choices: [GameImportValidator.ImportRootChoice]
+    /// Choice ids whose sanitized title matches an installed game:
+    /// importing them updates that install in place. Drives the
+    /// picker's "Update Games" step. Advisory for display only -
+    /// `planImports` re-checks at confirm time.
+    let updatingChoiceIDs: Set<String>
 
     var id: UUID { request.id }
 }
@@ -52,45 +57,18 @@ struct PlannedImport: Hashable, Sendable {
     let replacing: GameContainer?
 }
 
-/// Update-confirmation state surfaced to the library view. Lists
-/// the installed games the pending import batch would update in
-/// place (merge new files over the existing `Game/` tree). A single
-/// conflict presents as an alert; several present as the update
-/// picker sheet, where each game is individually selectable.
+/// Update-confirmation alert state. Only the single-choice import
+/// path reaches it (an archive or folder with exactly one game
+/// that matches an installed one) - multi-game sources confirm
+/// updates inside the root picker's "Update Games" step instead.
+/// The alert also serves as the fallback when a game's installed
+/// status changed while the picker was open (`updatesApprovedFor`
+/// in `launchImports`).
 struct ImportReplacePrompt: Identifiable {
-    struct Item: Identifiable, Hashable {
-        /// Installed container name - the row title and the key
-        /// `confirmReplace(updating:)` selects on.
-        let folderName: String
-        /// Probe icon of the *incoming* version, when it has one.
-        let iconPNG: Data?
-
-        var id: String { folderName }
-    }
-
     let requestID: UUID
-    let items: [Item]
-    /// Non-conflicting selections riding in the same batch. They
-    /// import in full no matter how the user answers; the copy on
-    /// both surfaces says so when this is non-zero.
-    let freshCount: Int
+    let titles: [String]
 
-    var titles: [String] { items.map(\.folderName) }
     var id: UUID { requestID }
-
-    /// Sentence appended to the confirmation copy when the batch
-    /// also contains games that aren't installed yet. nil when the
-    /// whole batch is updates.
-    var unaffectedGamesSentence: String? {
-        switch freshCount {
-        case 0:
-            return nil
-        case 1:
-            return "The other game in this import isn't affected and will still be added."
-        default:
-            return "The other \(freshCount) games in this import aren't affected and will still be added."
-        }
-    }
 }
 
 struct ImportPipelineAlert: Identifiable {
@@ -113,7 +91,10 @@ struct ImportPipelineSession {
     enum State {
         case staging
         case probing
-        case awaitingChoice([GameImportValidator.ImportRootChoice])
+        case awaitingChoice(
+            [GameImportValidator.ImportRootChoice],
+            updatingChoiceIDs: Set<String>
+        )
         case awaitingReplaceConfirmation([PlannedImport])
         case launching
     }
@@ -135,8 +116,13 @@ final class ImportPipeline {
 
     var activePrompt: ImportRootPrompt? {
         guard let currentSession else { return nil }
-        guard case .awaitingChoice(let choices) = currentSession.state else { return nil }
-        return ImportRootPrompt(request: currentSession.request, choices: choices)
+        guard case .awaitingChoice(let choices, let updatingChoiceIDs) = currentSession.state
+        else { return nil }
+        return ImportRootPrompt(
+            request: currentSession.request,
+            choices: choices,
+            updatingChoiceIDs: updatingChoiceIDs
+        )
     }
 
     var activeReplacePrompt: ImportReplacePrompt? {
@@ -146,14 +132,9 @@ final class ImportPipeline {
         }
         return ImportReplacePrompt(
             requestID: currentSession.request.id,
-            items: plans.compactMap { plan in
-                guard plan.replacing != nil else { return nil }
-                return ImportReplacePrompt.Item(
-                    folderName: plan.folderName,
-                    iconPNG: plan.selection.iconPNG
-                )
-            },
-            freshCount: plans.filter { $0.replacing == nil }.count
+            titles: plans.compactMap { plan in
+                plan.replacing != nil ? plan.folderName : nil
+            }
         )
     }
 
@@ -193,13 +174,21 @@ final class ImportPipeline {
         startNextResolutionIfPossible()
     }
 
-    func confirmChoice(_ choices: [GameImportValidator.ImportRootChoice]) {
+    /// Picker confirmation. `approvedUpdateIDs` is the subset of
+    /// choice ids the user explicitly selected in the picker's
+    /// "Update Games" step - updates among them proceed without a
+    /// second confirmation.
+    func confirmChoice(
+        _ choices: [GameImportValidator.ImportRootChoice],
+        approvedUpdateIDs: Set<String>
+    ) {
         guard let currentSession else { return }
         guard case .awaitingChoice = currentSession.state else { return }
 
         launchImports(
             choices.map(ImportSelection.init(choice:)),
-            for: currentSession.request.id
+            for: currentSession.request.id,
+            updatesApprovedFor: approvedUpdateIDs
         )
     }
 
@@ -217,28 +206,6 @@ final class ImportPipeline {
             return
         }
         proceed(with: plans, for: currentSession.request.id)
-    }
-
-    /// Update-picker confirmation: update only the chosen installed
-    /// games (keyed by folder name). Unchosen conflicting
-    /// selections are dropped; fresh selections in the batch always
-    /// proceed.
-    func confirmReplace(updating selectedFolderNames: Set<String>) {
-        guard let currentSession else { return }
-        guard case .awaitingReplaceConfirmation(let plans) = currentSession.state else {
-            return
-        }
-
-        let remaining = plans.filter { plan in
-            plan.replacing == nil || selectedFolderNames.contains(plan.folderName)
-        }
-        guard !remaining.isEmpty else {
-            currentSession.preparedSource?.cleanup()
-            self.currentSession = nil
-            startNextResolutionIfPossible()
-            return
-        }
-        proceed(with: remaining, for: currentSession.request.id)
     }
 
     /// User declined: the conflicting selections are dropped, any
@@ -299,10 +266,17 @@ final class ImportPipeline {
                 let choices = probeResult.choices
 
                 if choices.count > 1 {
-                    currentSession?.state = .awaitingChoice(choices)
+                    currentSession?.state = .awaitingChoice(
+                        choices,
+                        updatingChoiceIDs: Self.updatingChoiceIDs(for: choices)
+                    )
                     resolutionTask = nil
                 } else {
-                    launchImports(choices.map(ImportSelection.init(choice:)), for: request.id)
+                    launchImports(
+                        choices.map(ImportSelection.init(choice:)),
+                        for: request.id,
+                        updatesApprovedFor: []
+                    )
                 }
             } catch is CancellationError {
                 guard isCurrentSession(request.id) else { return }
@@ -325,7 +299,32 @@ final class ImportPipeline {
         }
     }
 
-    private func launchImports(_ selections: [ImportSelection], for requestID: UUID) {
+    /// Choices whose sanitized title matches an installed game.
+    /// Display classification for the picker's "Update Games" step;
+    /// `planImports` re-derives the authoritative answer at confirm
+    /// time.
+    private static func updatingChoiceIDs(
+        for choices: [GameImportValidator.ImportRootChoice]
+    ) -> Set<String> {
+        let installedNames = Set(
+            GameContainer.discover().map { $0.folderName.lowercased() }
+        )
+        let updating = choices.filter { choice in
+            installedNames.contains(GameFolderName.sanitize(choice.title).lowercased())
+        }
+        return Set(updating.map(\.id))
+    }
+
+    /// `updatesApprovedFor` carries the choice ids the user already
+    /// approved as in-place updates in the picker. A conflicting
+    /// plan outside that set (single-choice sources, or a game
+    /// whose installed status changed while the picker was open)
+    /// still raises the confirmation alert.
+    private func launchImports(
+        _ selections: [ImportSelection],
+        for requestID: UUID,
+        updatesApprovedFor approvedUpdateIDs: Set<String>
+    ) {
         guard var currentSession else { return }
         guard currentSession.request.id == requestID else { return }
         guard currentSession.preparedSource != nil else {
@@ -337,7 +336,11 @@ final class ImportPipeline {
 
         let plans = planImports(selections)
 
-        if plans.contains(where: { $0.replacing != nil }) {
+        let needsConfirmation = plans.contains { plan in
+            plan.replacing != nil
+                && !approvedUpdateIDs.contains(plan.selection.relativePath)
+        }
+        if needsConfirmation {
             currentSession.state = .awaitingReplaceConfirmation(plans)
             self.currentSession = currentSession
             resolutionTask = nil

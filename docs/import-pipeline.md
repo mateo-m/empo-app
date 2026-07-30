@@ -46,22 +46,28 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      totals) that later drives byte-accurate extraction progress. The probe rejects invalid
      sources (not an RPG Maker game, unsupported RGSS version, corrupt archive) here, before any
      card exists.
-   - When more than one valid root exists, the root-picker sheet appears. When exactly one
-     exists, the import starts automatically.
+   - When more than one valid root exists, the stepped root-picker sheet appears
+     (`ImportRootPickerSheet`): step one, **Add Games**, lists roots not in the library
+     (selection starts empty); step two, **Update Games**, lists roots whose sanitized title
+     matches an installed game (selection starts full - importing them updates that install in
+     place). A source with only one category shows only that step. The classification
+     (`ImportRootPrompt.updatingChoiceIDs`) is display-advisory; `planImports` re-derives it at
+     confirm time. When exactly one root exists, the import starts automatically - and if that
+     one game is installed, the plain "Update Game?" alert (`ImportReplacePrompt`) asks first.
+     The alert also serves as a fallback for updates the picker didn't approve (a game whose
+     installed status changed while the sheet was open).
    - `planImports` then fixes each selection's destination folder name (the sanitized title). A
      name owned by another **in-flight** import is refused with an alert (no silent suffixed
-     duplicate). A name owned by an **installed** game becomes an update-in-place plan the user
-     must confirm (`ImportReplacePrompt`): one conflict presents as a plain alert, several
-     present as the per-game picker sheet (`ImportUpdatePickerSheet`), where each installed
-     game is individually selectable. Confirmed updates merge the new files into an APFS-cloned
-     staging copy of `Game/` and swap in atomically (`GameImporter.stageAndSwapGameTree`),
-     overwriting same-path files and keeping everything else (saves, settings, metadata, and
-     game files the new version doesn't ship); any failure before the swap leaves the installed
-     tree untouched, and the scan sweeps crash-orphaned staging dirs
-     (`cleanupStaleUpdateStaging`). Declining drops just the conflicting selections. Fresh
-     installs pick a numbered-suffix name that dodges the batch, in-flight imports, AND
-     installed games - a suffix never silently lands on an installed game. An update that
-     targets the currently open (playing/paused) game is refused outright.
+     duplicate). A name owned by an **installed** game becomes an update-in-place plan:
+     confirmed updates merge the new files into an APFS-cloned staging copy of `Game/` and swap
+     in atomically (`GameImporter.stageAndSwapGameTree`), overwriting same-path files and
+     keeping everything else (saves, settings, metadata, and game files the new version doesn't
+     ship); any failure before the swap leaves the installed tree untouched, and the scan
+     sweeps crash-orphaned staging dirs (`cleanupStaleUpdateStaging`). Declining an update
+     drops just that selection. Fresh installs pick a numbered-suffix name that dodges the
+     batch, in-flight imports, AND installed games - a suffix never silently lands on an
+     installed game. An update that targets the currently open (playing/paused) game is
+     refused outright.
 2. **Batch import** (`GameLibrary.pipelineImportGames`, `ImportPipeline.swift` ~line 509): one
    detached task per **source** fans out per-selection state (`BatchSelection`). The main actor
    registers pending entries and `inFlightImports` membership before the task starts.

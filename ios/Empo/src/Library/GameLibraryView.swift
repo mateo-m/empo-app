@@ -179,13 +179,6 @@ struct GameLibraryView: View {
                 )
             )
             .modifier(
-                ImportUpdatePickerPresentation(
-                    prompt: importUpdatePickerBinding,
-                    onCancel: importPipeline.cancelReplace,
-                    onConfirm: { importPipeline.confirmReplace(updating: $0) }
-                )
-            )
-            .modifier(
                 LibrarySheetPresentation(
                     showSettings: $showSettings,
                     showImporter: $showImporter,
@@ -963,33 +956,9 @@ struct GameLibraryView: View {
         )
     }
 
-    /// A single conflicting game confirms via a plain alert.
     private var importReplaceAlertBinding: Binding<ImportReplacePrompt?> {
         Binding(
-            get: {
-                guard let prompt = importPipeline.activeReplacePrompt,
-                    prompt.items.count == 1
-                else { return nil }
-                return prompt
-            },
-            set: { newValue in
-                if newValue == nil {
-                    importPipeline.dismissReplacePrompt()
-                }
-            }
-        )
-    }
-
-    /// Several conflicting games confirm via the per-game picker
-    /// sheet.
-    private var importUpdatePickerBinding: Binding<ImportReplacePrompt?> {
-        Binding(
-            get: {
-                guard let prompt = importPipeline.activeReplacePrompt,
-                    prompt.items.count > 1
-                else { return nil }
-                return prompt
-            },
+            get: { importPipeline.activeReplacePrompt },
             set: { newValue in
                 if newValue == nil {
                     importPipeline.dismissReplacePrompt()
@@ -1024,30 +993,10 @@ private struct BulkDeleteAlert: ViewModifier {
     }
 }
 
-/// Sheet wrapper for the per-game update picker (an import batch
-/// collides with more than one installed game). Extracted for the
-/// same type-checker-budget reason as `BulkDeleteAlert`. Dismissal
-/// without a button routes through the binding's set-to-nil, which
-/// the pipeline treats as declining every update.
-private struct ImportUpdatePickerPresentation: ViewModifier {
-    @Binding var prompt: ImportReplacePrompt?
-    let onCancel: () -> Void
-    let onConfirm: (Set<String>) -> Void
-
-    func body(content: Content) -> some View {
-        content.sheet(item: $prompt) { prompt in
-            ImportUpdatePickerSheet(
-                prompt: prompt,
-                onCancel: onCancel,
-                onConfirm: onConfirm
-            )
-        }
-    }
-}
-
-/// Alert wrapper for the import update confirmation when exactly
-/// one selected import matches an installed game. Extracted for
-/// the same type-checker-budget reason as `BulkDeleteAlert`.
+/// Alert wrapper for the import update confirmation. Only the
+/// single-choice import path reaches it (multi-game sources confirm
+/// updates inside the root picker's "Update Games" step). Extracted
+/// for the same type-checker-budget reason as `BulkDeleteAlert`.
 ///
 /// Button actions run before SwiftUI resets the binding, and the
 /// pipeline consumes the prompt state in the action, so the
@@ -1073,29 +1022,14 @@ private struct ImportReplaceAlert: ViewModifier {
 
     private func message(for prompt: ImportReplacePrompt) -> String {
         let names = prompt.titles.map { "\"\($0)\"" }.joined(separator: ", ")
-        var message: String
         if prompt.titles.count == 1 {
-            message =
-                "\(names) is already in your library. "
+            return "\(names) is already in your library. "
                 + "Importing overwrites game files the new version also ships. "
                 + "Saves, settings, and everything else are kept."
-        } else {
-            message =
-                "\(names) are already in your library. "
-                + "Importing overwrites game files the new versions also ship. "
-                + "Saves, settings, and everything else are kept."
         }
-        if let unaffected = prompt.unaffectedGamesSentence {
-            message += " " + unaffected
-        }
-        return message
-    }
-
-    /// When fresh games ride in the same batch, "Cancel" would read
-    /// as aborting them too - it doesn't, so say what it does.
-    private func cancelLabel(for prompt: ImportReplacePrompt?) -> String {
-        guard let prompt, prompt.freshCount > 0 else { return "Cancel" }
-        return "Skip Update"
+        return "\(names) are already in your library. "
+            + "Importing overwrites game files the new versions also ship. "
+            + "Saves, settings, and everything else are kept."
     }
 
     func body(content: Content) -> some View {
@@ -1103,9 +1037,9 @@ private struct ImportReplaceAlert: ViewModifier {
             title,
             isPresented: isPresented,
             presenting: prompt
-        ) { prompt in
+        ) { _ in
             Button("Update", role: .destructive, action: onReplace)
-            Button(cancelLabel(for: prompt), role: .cancel, action: onCancel)
+            Button("Cancel", role: .cancel, action: onCancel)
         } message: { prompt in
             Text(message(for: prompt))
         }
@@ -1121,7 +1055,7 @@ private struct LibrarySheetPresentation: ViewModifier {
     @Binding var importRootPrompt: ImportRootPrompt?
     let onImportPicked: ([URL]) -> Void
     let onCancelImportChoice: () -> Void
-    let onConfirmImportChoice: ([GameImportValidator.ImportRootChoice]) -> Void
+    let onConfirmImportChoice: ([GameImportValidator.ImportRootChoice], Set<String>) -> Void
 
     func body(content: Content) -> some View {
         content
