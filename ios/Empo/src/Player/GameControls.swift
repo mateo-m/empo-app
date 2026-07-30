@@ -18,9 +18,11 @@ import SwiftUI
 //     has no arbitration: down fires the instant the finger lands.
 //   - Action button: slide-off does NOT release the key.
 //   - D-pad: `DPadTouchReducer` (GameProbe) owns the 8-wedge angular
-//     mapping, inner 20% dead zone, slide-off release, and edge
-//     diffing, so the exact shipped state machine is covered by the
-//     Linux test suite. This file only renders its `active` set and
+//     mapping, inner 20% dead zone, cardinal-only inner ring (no
+//     diagonals near the pivot, where thumb wobble would steer
+//     4-way games sideways), slide-off release, and edge diffing,
+//     so the exact shipped state machine is covered by the Linux
+//     test suite. This file only renders its `active` set and
 //     injects the edges it returns, in order.
 //   - Edit mode disables the capture layer in place — an instant,
 //     unanimated cutoff that also cancels any in-flight touch — so
@@ -303,10 +305,10 @@ struct DPad: View {
     let editing: Bool
 
     /// Touch-to-directions state machine (GameProbe, tested on
-    /// Linux): 8-wedge angular map, inner dead zone, slide-off
-    /// release, and press/release edge diffing. The view renders
-    /// `dpadState.active` and injects whatever edges the reducer
-    /// returns, in order.
+    /// Linux): 8-wedge angular map, inner dead zone, cardinal-only
+    /// inner ring, slide-off release, and press/release edge
+    /// diffing. The view renders `dpadState.active` and injects
+    /// whatever edges the reducer returns, in order.
     @State private var dpadState = DPadTouchReducer()
 
     /// Width of each arm of the plus, as a fraction of the total

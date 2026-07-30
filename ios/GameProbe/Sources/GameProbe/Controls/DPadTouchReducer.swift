@@ -6,11 +6,22 @@ import Foundation
 /// bits that changed. Framework-independent so the exact state
 /// machine the app ships is what the Linux test suite exercises.
 ///
-/// Geometry, ported verbatim from the UIKit-era implementation:
+/// Geometry:
 ///   - 8-wedge angular map with pi/8 thresholds (cardinals plus
-///     two-direction diagonals).
+///     two-direction diagonals), ported verbatim from the UIKit-era
+///     implementation.
 ///   - Inner dead zone at `deadZoneRatio` of the radius so tiny
 ///     wobbles near the pivot emit nothing.
+///   - Cardinal-only ring between the dead zone and
+///     `cardinalOnlyRadiusRatio` of the radius: touches there
+///     resolve to the nearest of the four main directions, never a
+///     diagonal. Close to the pivot a few points of thumb wobble is
+///     tens of degrees of angle, and an accidental diagonal is not
+///     benign — RGSS `Input.dir4` switches to the OTHER held
+///     direction, so grazing a diagonal wedge steers a 4-way game
+///     sideways. Deliberate diagonals pressed out on the pad are
+///     unaffected. (PPSSPP's D-pad and Lemuroid's RadialGamePad
+///     ship the same guard.)
 ///   - Slide-off: past `radius + slideOffMargin` every direction
 ///     releases, but the touch stays engaged so sliding back inside
 ///     re-presses. The release batch emits once — the diff against
@@ -64,6 +75,22 @@ public struct DPadTouchReducer: Sendable {
             }
         }
 
+        /// Build a cardinal-only set from an atan2 angle: the nearest
+        /// of the four main directions, with pi/4 boundaries. Same
+        /// normalization (and the same exact-boundary ulp caveat) as
+        /// `init(angle:)`.
+        public init(cardinalAngle angle: Double) {
+            let a = (angle + 2 * .pi).truncatingRemainder(dividingBy: 2 * .pi)
+            let s = Double.pi / 4
+            switch a {
+            case (7 * s)..<(2 * .pi), 0..<s: self = .right
+            case s..<(3 * s): self = .down
+            case (3 * s)..<(5 * s): self = .left
+            case (5 * s)..<(7 * s): self = .up
+            default: self = []
+            }
+        }
+
         /// Check whether a logical `Direction` is currently set.
         /// Routes to the underlying OptionSet flag member for that
         /// direction.
@@ -94,6 +121,7 @@ public struct DPadTouchReducer: Sendable {
     }
 
     public static let defaultDeadZoneRatio = 0.2
+    public static let defaultCardinalOnlyRadiusRatio = 0.5
     public static let defaultSlideOffMargin = 30.0
 
     /// Directions currently held — the reducer's ONLY state. The
@@ -113,6 +141,7 @@ public struct DPadTouchReducer: Sendable {
         y: Double,
         size: Double,
         deadZoneRatio: Double = defaultDeadZoneRatio,
+        cardinalOnlyRadiusRatio: Double = defaultCardinalOnlyRadiusRatio,
         slideOffMargin: Double = defaultSlideOffMargin
     ) -> [Edge] {
         let radius = size / 2
@@ -133,9 +162,19 @@ public struct DPadTouchReducer: Sendable {
             return diff(to: [])
         }
 
-        // 8-wedge angular mapping. atan2(dy, dx) with +y down means
-        // "up" is -y, an angle near -pi/2.
-        return diff(to: DirectionSet(angle: atan2(dy, dx)))
+        // atan2(dy, dx) with +y down means "up" is -y, an angle near
+        // -pi/2.
+        let angle = atan2(dy, dx)
+
+        // Cardinal-only ring: too close to the pivot for diagonal
+        // wedges to be trustworthy — resolve to the nearest main
+        // direction.
+        if distance < radius * cardinalOnlyRadiusRatio {
+            return diff(to: DirectionSet(cardinalAngle: angle))
+        }
+
+        // Full 8-wedge angular mapping.
+        return diff(to: DirectionSet(angle: angle))
     }
 
     /// Touch lifted or cancelled: releases every held direction.

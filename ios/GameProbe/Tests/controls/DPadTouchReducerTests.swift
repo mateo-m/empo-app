@@ -115,6 +115,49 @@ final class DPadTouchReducerTests: XCTestCase {
         }
     }
 
+    /// The four cardinal sectors of `init(cardinalAngle:)`, pinned
+    /// against a literal table for interior angles (well clear of the
+    /// pi/4 boundaries).
+    func testCardinalAngleInteriorsMapExactly() {
+        let dial: [DPadTouchReducer.DirectionSet] = [.right, .down, .left, .up]
+        for (i, expected) in dial.enumerated() {
+            for offset in [-0.9, -0.5, 0, 0.5, 0.9] {
+                let angle = Double(i) * .pi / 2 + offset * .pi / 4
+                XCTAssertEqual(
+                    DPadTouchReducer.DirectionSet(cardinalAngle: angle), expected,
+                    "cardinal angle \(angle) should map to sector \(i)")
+            }
+        }
+    }
+
+    /// Same adjacency contract at the pi/4 boundaries as the 8-wedge
+    /// map: normalization can perturb by one ulp, so an exact
+    /// boundary angle resolves to one of the two neighboring
+    /// cardinals — never a diagonal, never empty.
+    func testCardinalAngleBoundariesResolveToAnAdjacentCardinal() {
+        let dial: [DPadTouchReducer.DirectionSet] = [.right, .down, .left, .up]
+        let s = Double.pi / 4
+        for i in 0..<4 {
+            let boundary = Double(2 * i + 1) * s
+            let adjacent = [dial[i], dial[(i + 1) % 4]]
+            for angle in [
+                boundary.nextDown, boundary, boundary.nextUp,
+                (boundary - 2 * .pi).nextDown, boundary - 2 * .pi, (boundary - 2 * .pi).nextUp,
+            ] {
+                let set = DPadTouchReducer.DirectionSet(cardinalAngle: angle)
+                XCTAssertTrue(
+                    adjacent.contains(set),
+                    "cardinal angle \(angle) near boundary \(2 * i + 1) * pi/4 mapped to \(set)")
+            }
+        }
+    }
+
+    /// Total-function fallback, same contract as `init(angle:)`.
+    func testCardinalAngleGarbageInputYieldsNoDirections() {
+        XCTAssertEqual(DPadTouchReducer.DirectionSet(cardinalAngle: -9 * Double.pi / 4), [])
+        XCTAssertEqual(DPadTouchReducer.DirectionSet(cardinalAngle: .nan), [])
+    }
+
     /// atan2 output is negative for the whole upper half-plane; the
     /// normalization must land those in the same wedges as their
     /// positive equivalents.
@@ -207,6 +250,97 @@ final class DPadTouchReducerTests: XCTestCase {
             reducer.touchChanged(x: 75, y: 75, size: size),
             [release(.up), release(.right)])
         XCTAssertEqual(reducer.active, [])
+    }
+
+    // MARK: Cardinal-only inner ring
+
+    /// Between the dead zone (15) and half the radius (37.5), a
+    /// touch resolves to the nearest MAIN direction even at an angle
+    /// the 8-wedge map would call diagonal. Both points below sit at
+    /// distance 22.36, at angles deep inside the up+right diagonal
+    /// wedge; the ring picks the nearer axis instead.
+    func testInnerRingResolvesToNearestCardinal() {
+        var reducer = DPadTouchReducer()
+        // 26.6 degrees above the +x axis: right of the 45-degree line.
+        XCTAssertEqual(reducer.touchChanged(x: 95, y: 65, size: size), [press(.right)])
+        XCTAssertEqual(reducer.active, .right)
+
+        var reducer2 = DPadTouchReducer()
+        // 63.4 degrees above the +x axis: up side of the 45-degree line.
+        XCTAssertEqual(reducer2.touchChanged(x: 85, y: 55, size: size), [press(.up)])
+    }
+
+    /// The ring comparison is strict (`distance < ratio * radius`):
+    /// AT the boundary the full 8-wedge map applies. 3-4-5 triangle
+    /// at size 300 (ring radius 75): (195, 90) is at distance
+    /// exactly 75 -> diagonal allowed; (192, 94) is at 70 -> inside
+    /// the ring, cardinal only.
+    func testInnerRingBoundaryKeepsFullWedges() {
+        var reducer = DPadTouchReducer()
+        XCTAssertEqual(
+            reducer.touchChanged(x: 195, y: 90, size: 300),
+            [press(.up), press(.right)])
+
+        var inner = DPadTouchReducer()
+        XCTAssertEqual(inner.touchChanged(x: 192, y: 94, size: 300), [press(.up)])
+    }
+
+    /// Drifting inward across the ring at a diagonal angle drops
+    /// ONLY the off-axis component — the direction the cardinal map
+    /// keeps must never release and re-press (no stutter at the ring
+    /// boundary).
+    func testDriftIntoRingDropsOnlyTheOffAxisComponent() {
+        var reducer = DPadTouchReducer()
+        // Distance 49.2, angle 26.6 degrees into the up+right wedge.
+        XCTAssertEqual(reducer.touchChanged(x: 119, y: 53, size: size), [press(.up), press(.right)])
+        // Same angle, distance 22.4: inside the ring -> right only.
+        XCTAssertEqual(reducer.touchChanged(x: 95, y: 65, size: size), [release(.up)])
+        XCTAssertEqual(reducer.active, .right)
+    }
+
+    /// The ratio must actually be used: 0 disables the ring entirely
+    /// (diagonals available right outside the dead zone), 1 extends
+    /// it to the rim (diagonals unreachable).
+    func testCustomCardinalOnlyRadiusRatioIsRespected() {
+        var reducer = DPadTouchReducer()
+        XCTAssertEqual(
+            reducer.touchChanged(x: 95, y: 65, size: size, cardinalOnlyRadiusRatio: 0),
+            [press(.up), press(.right)])
+
+        var wide = DPadTouchReducer()
+        XCTAssertEqual(
+            wide.touchChanged(x: 119, y: 53, size: size, cardinalOnlyRadiusRatio: 1),
+            [press(.right)])
+    }
+
+    /// Sweep a full circle twice INSIDE the ring: exactly one
+    /// cardinal is held at every step, transitions are
+    /// release-then-press, and the edge stream stays consistent with
+    /// the active set.
+    func testInnerRingSweepHoldsExactlyOneDirection() {
+        var reducer = DPadTouchReducer()
+        var held = Set<DPadTouchReducer.Direction>()
+
+        for step in 0..<1440 {
+            let angle = Double(step) / 720.0 * 2 * .pi
+            let x = 75 + 25 * cos(angle)
+            let y = 75 + 25 * sin(angle)
+            let edges = reducer.touchChanged(x: x, y: y, size: size)
+
+            var sawPress = false
+            for edge in edges {
+                if edge.pressed {
+                    sawPress = true
+                    XCTAssertTrue(held.insert(edge.direction).inserted, "step \(step)")
+                } else {
+                    XCTAssertFalse(sawPress, "step \(step): release ordered after a press")
+                    XCTAssertNotNil(held.remove(edge.direction), "step \(step)")
+                }
+            }
+
+            XCTAssertEqual(held, Set(reducer.active.directions), "step \(step)")
+            XCTAssertEqual(held.count, 1, "step \(step): ring must hold exactly one cardinal")
+        }
     }
 
     // MARK: Slide-off
