@@ -110,12 +110,15 @@ struct ImportRootPickerSheet: View {
     }
 }
 
-private struct ImportRootHintBanner: View {
+/// Brand-tinted banner atop import sheets. Shared by the root
+/// picker and the update picker.
+struct ImportRootHintBanner: View {
     let text: String
+    var systemImage: String = "square.stack.3d.up.fill"
 
     var body: some View {
         HStack(spacing: Spacing.md) {
-            Image(systemName: "square.stack.3d.up.fill")
+            Image(systemName: systemImage)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.brand)
 
@@ -173,7 +176,9 @@ private struct ImportRootChoiceRow: View {
     }
 }
 
-private struct ImportRootChoiceArtworkView: View {
+/// Square artwork thumbnail for import sheet rows. Shared by the
+/// root picker and the update picker.
+struct ImportRootChoiceArtworkView: View {
     let artwork: ImportRootChoiceArtwork?
 
     var body: some View {

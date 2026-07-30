@@ -173,9 +173,16 @@ struct GameLibraryView: View {
             )
             .modifier(
                 ImportReplaceAlert(
-                    prompt: importReplacePromptBinding,
+                    prompt: importReplaceAlertBinding,
                     onReplace: importPipeline.confirmReplace,
                     onCancel: importPipeline.cancelReplace
+                )
+            )
+            .modifier(
+                ImportUpdatePickerPresentation(
+                    prompt: importUpdatePickerBinding,
+                    onCancel: importPipeline.cancelReplace,
+                    onConfirm: { importPipeline.confirmReplace(updating: $0) }
                 )
             )
             .modifier(
@@ -956,9 +963,33 @@ struct GameLibraryView: View {
         )
     }
 
-    private var importReplacePromptBinding: Binding<ImportReplacePrompt?> {
+    /// A single conflicting game confirms via a plain alert.
+    private var importReplaceAlertBinding: Binding<ImportReplacePrompt?> {
         Binding(
-            get: { importPipeline.activeReplacePrompt },
+            get: {
+                guard let prompt = importPipeline.activeReplacePrompt,
+                    prompt.items.count == 1
+                else { return nil }
+                return prompt
+            },
+            set: { newValue in
+                if newValue == nil {
+                    importPipeline.dismissReplacePrompt()
+                }
+            }
+        )
+    }
+
+    /// Several conflicting games confirm via the per-game picker
+    /// sheet.
+    private var importUpdatePickerBinding: Binding<ImportReplacePrompt?> {
+        Binding(
+            get: {
+                guard let prompt = importPipeline.activeReplacePrompt,
+                    prompt.items.count > 1
+                else { return nil }
+                return prompt
+            },
             set: { newValue in
                 if newValue == nil {
                     importPipeline.dismissReplacePrompt()
@@ -993,8 +1024,29 @@ private struct BulkDeleteAlert: ViewModifier {
     }
 }
 
-/// Alert wrapper for the import replace confirmation (a selected
-/// import's folder name matches an installed game). Extracted for
+/// Sheet wrapper for the per-game update picker (an import batch
+/// collides with more than one installed game). Extracted for the
+/// same type-checker-budget reason as `BulkDeleteAlert`. Dismissal
+/// without a button routes through the binding's set-to-nil, which
+/// the pipeline treats as declining every update.
+private struct ImportUpdatePickerPresentation: ViewModifier {
+    @Binding var prompt: ImportReplacePrompt?
+    let onCancel: () -> Void
+    let onConfirm: (Set<String>) -> Void
+
+    func body(content: Content) -> some View {
+        content.sheet(item: $prompt) { prompt in
+            ImportUpdatePickerSheet(
+                prompt: prompt,
+                onCancel: onCancel,
+                onConfirm: onConfirm
+            )
+        }
+    }
+}
+
+/// Alert wrapper for the import update confirmation when exactly
+/// one selected import matches an installed game. Extracted for
 /// the same type-checker-budget reason as `BulkDeleteAlert`.
 ///
 /// Button actions run before SwiftUI resets the binding, and the

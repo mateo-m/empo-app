@@ -54,11 +54,24 @@ struct PlannedImport: Hashable, Sendable {
 
 /// Update-confirmation state surfaced to the library view. Lists
 /// the installed games the pending import batch would update in
-/// place (merge new files over the existing `Game/` tree).
+/// place (merge new files over the existing `Game/` tree). A single
+/// conflict presents as an alert; several present as the update
+/// picker sheet, where each game is individually selectable.
 struct ImportReplacePrompt: Identifiable {
-    let requestID: UUID
-    let titles: [String]
+    struct Item: Identifiable, Hashable {
+        /// Installed container name - the row title and the key
+        /// `confirmReplace(updating:)` selects on.
+        let folderName: String
+        /// Probe icon of the *incoming* version, when it has one.
+        let iconPNG: Data?
 
+        var id: String { folderName }
+    }
+
+    let requestID: UUID
+    let items: [Item]
+
+    var titles: [String] { items.map(\.folderName) }
     var id: UUID { requestID }
 }
 
@@ -115,7 +128,13 @@ final class ImportPipeline {
         }
         return ImportReplacePrompt(
             requestID: currentSession.request.id,
-            titles: plans.compactMap { $0.replacing?.folderName }
+            items: plans.compactMap { plan in
+                guard plan.replacing != nil else { return nil }
+                return ImportReplacePrompt.Item(
+                    folderName: plan.folderName,
+                    iconPNG: plan.selection.iconPNG
+                )
+            }
         )
     }
 
@@ -179,6 +198,28 @@ final class ImportPipeline {
             return
         }
         proceed(with: plans, for: currentSession.request.id)
+    }
+
+    /// Update-picker confirmation: update only the chosen installed
+    /// games (keyed by folder name). Unchosen conflicting
+    /// selections are dropped; fresh selections in the batch always
+    /// proceed.
+    func confirmReplace(updating selectedFolderNames: Set<String>) {
+        guard let currentSession else { return }
+        guard case .awaitingReplaceConfirmation(let plans) = currentSession.state else {
+            return
+        }
+
+        let remaining = plans.filter { plan in
+            plan.replacing == nil || selectedFolderNames.contains(plan.folderName)
+        }
+        guard !remaining.isEmpty else {
+            currentSession.preparedSource?.cleanup()
+            self.currentSession = nil
+            startNextResolutionIfPossible()
+            return
+        }
+        proceed(with: remaining, for: currentSession.request.id)
     }
 
     /// User declined: the conflicting selections are dropped, any
@@ -288,60 +329,98 @@ final class ImportPipeline {
     }
 
     /// Resolve each selection to its destination folder name (the
-    /// sanitized game title from the import probe). A name owned by
-    /// another in-flight import - or an earlier selection in the
-    /// same batch - gets a numbered suffix silently. A name owned
-    /// by an installed game marks the plan as a replacement, which
-    /// the user must confirm. A replacement that targets the
-    /// currently open (playing or paused) game is dropped outright:
-    /// the engine holds its files.
+    /// sanitized game title from the import probe).
+    ///
+    ///   - A name owned by another **in-flight** import is refused
+    ///     with an alert: the user almost certainly re-imported the
+    ///     same game while its first import is still running, and a
+    ///     silently suffixed duplicate would just show two
+    ///     identical-looking cards.
+    ///   - An exact match with an **installed** game becomes an
+    ///     update-in-place plan, which the user must confirm. A
+    ///     match with the currently open (playing/paused) game is
+    ///     dropped outright: the engine holds its files.
+    ///   - Anything else is a fresh install. Its name dodges the
+    ///     batch, in-flight imports, AND installed games with a
+    ///     numbered suffix - a suffix must never silently land on
+    ///     an installed game and turn into an unintended update.
     private func planImports(_ selections: [ImportSelection]) -> [PlannedImport] {
         let installedByLowercaseName = Dictionary(
             GameContainer.discover().map { ($0.folderName.lowercased(), $0) },
             uniquingKeysWith: { first, _ in first }
         )
 
-        var reservedNames = Set<String>()
+        var inFlightKeys = Set<String>()
         if let library {
-            reservedNames.formUnion(library.pendingImports.keys.map { $0.lowercased() })
+            inFlightKeys.formUnion(library.pendingImports.keys.map { $0.lowercased() })
             for entry in library.games where entry.isImporting {
-                reservedNames.insert(entry.id.lowercased())
+                inFlightKeys.insert(entry.id.lowercased())
             }
         }
 
         let activeGameID =
             PauseManager.shared.pausedGame?.id ?? AppState.shared.selectedGame?.id
 
+        var batchKeys = Set<String>()
         var plans: [PlannedImport] = []
         for selection in selections {
             let preferred = GameFolderName.sanitize(selection.displayName)
-            let folderName = GameFolderName.uniqueName(preferring: preferred) {
-                reservedNames.contains($0.lowercased())
-            }
-            reservedNames.insert(folderName.lowercased())
+            let preferredKey = preferred.lowercased()
 
-            let replacing = installedByLowercaseName[folderName.lowercased()]
-            if let replacing, replacing.id == activeGameID {
+            if inFlightKeys.contains(preferredKey) {
                 NSLog(
-                    "[ImportPipeline] Dropping import of %@: it would replace the open game",
-                    folderName)
+                    "[ImportPipeline] Refusing import of %@: an import with that name is in flight",
+                    preferred)
                 presentError(
                     title: "Couldn't import \(quoted(selection.displayName))",
-                    message:
-                        "This game is currently open. Close it from the app switcher and import again."
+                    message: "This game is already being imported. "
+                        + "Wait for the current import to finish, then try again."
                 )
                 continue
             }
 
+            if !batchKeys.contains(preferredKey),
+                let replacing = installedByLowercaseName[preferredKey]
+            {
+                if replacing.id == activeGameID {
+                    NSLog(
+                        "[ImportPipeline] Dropping import of %@: it would replace the open game",
+                        preferred)
+                    presentError(
+                        title: "Couldn't import \(quoted(selection.displayName))",
+                        message:
+                            "This game is currently open. Close it from the app switcher and import again."
+                    )
+                    continue
+                }
+
+                batchKeys.insert(preferredKey)
+                plans.append(
+                    PlannedImport(
+                        selection: selection,
+                        // An update adopts the installed container
+                        // wholesale (same folder name, same id, even
+                        // if the new title differs in case), so
+                        // saves, settings, and metadata stay
+                        // attached.
+                        folderName: replacing.folderName,
+                        replacing: replacing
+                    ))
+                continue
+            }
+
+            let folderName = GameFolderName.uniqueName(preferring: preferred) { candidate in
+                let key = candidate.lowercased()
+                return batchKeys.contains(key)
+                    || inFlightKeys.contains(key)
+                    || installedByLowercaseName[key] != nil
+            }
+            batchKeys.insert(folderName.lowercased())
             plans.append(
                 PlannedImport(
                     selection: selection,
-                    // A replacement adopts the installed container
-                    // wholesale (same folder name, same id, even if
-                    // the new title differs in case), so saves,
-                    // settings, and metadata stay attached.
-                    folderName: replacing?.folderName ?? folderName,
-                    replacing: replacing
+                    folderName: folderName,
+                    replacing: nil
                 ))
         }
         return plans

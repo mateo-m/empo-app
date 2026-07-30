@@ -49,16 +49,19 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
    - When more than one valid root exists, the root-picker sheet appears. When exactly one
      exists, the import starts automatically.
    - `planImports` then fixes each selection's destination folder name (the sanitized title). A
-     name owned by another in-flight import or an earlier selection in the batch gets a numbered
-     suffix. A name owned by an installed game raises the update-confirmation alert
-     (`ImportReplacePrompt`): confirming updates the installed container in place - the new
-     files merge into an APFS-cloned staging copy of `Game/` and swap in atomically
-     (`GameImporter.stageAndSwapGameTree`), overwriting same-path files and keeping everything
-     else (saves, settings, metadata, and game files the new version doesn't ship). Any failure
-     before the swap leaves the installed tree untouched; the scan sweeps crash-orphaned
-     staging dirs (`cleanupStaleUpdateStaging`). Declining drops just the conflicting
-     selections. A replacement that targets the currently open (playing/paused) game is
-     refused outright.
+     name owned by another **in-flight** import is refused with an alert (no silent suffixed
+     duplicate). A name owned by an **installed** game becomes an update-in-place plan the user
+     must confirm (`ImportReplacePrompt`): one conflict presents as a plain alert, several
+     present as the per-game picker sheet (`ImportUpdatePickerSheet`), where each installed
+     game is individually selectable. Confirmed updates merge the new files into an APFS-cloned
+     staging copy of `Game/` and swap in atomically (`GameImporter.stageAndSwapGameTree`),
+     overwriting same-path files and keeping everything else (saves, settings, metadata, and
+     game files the new version doesn't ship); any failure before the swap leaves the installed
+     tree untouched, and the scan sweeps crash-orphaned staging dirs
+     (`cleanupStaleUpdateStaging`). Declining drops just the conflicting selections. Fresh
+     installs pick a numbered-suffix name that dodges the batch, in-flight imports, AND
+     installed games - a suffix never silently lands on an installed game. An update that
+     targets the currently open (playing/paused) game is refused outright.
 2. **Batch import** (`GameLibrary.pipelineImportGames`, `ImportPipeline.swift` ~line 509): one
    detached task per **source** fans out per-selection state (`BatchSelection`). The main actor
    registers pending entries and `inFlightImports` membership before the task starts.
