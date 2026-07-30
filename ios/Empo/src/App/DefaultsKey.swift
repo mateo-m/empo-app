@@ -33,6 +33,12 @@ enum DefaultsKey {
 
     // MARK: - Library
 
+    /// Folder names (inside `Duplicate Games/`) of legacy duplicate
+    /// imports the container migration moved out of the library.
+    /// `[String]`. Non-empty means the library owes the user a
+    /// one-time explanatory alert; cleared once it's shown.
+    static let pendingDuplicateGameNames = "pendingDuplicateGameNames"
+
     static let cleanupInvalidGames = "cleanupInvalidGames"
     static let libraryDisplayMode = "libraryDisplayMode"
     static let librarySortOption = "librarySortOption"

@@ -146,7 +146,9 @@ enum GameContainerMigration {
 
     /// Move a duplicate legacy import - whole, saves included - out
     /// of the library into `Duplicate Games/`. Nothing is merged or
-    /// deleted; the user resolves duplicates manually in Files.
+    /// deleted; the user resolves duplicates manually in Files. The
+    /// moved name is recorded so the library can show the one-time
+    /// explanatory alert (`pendingDuplicateNoticeNames`).
     private static func quarantineDuplicate(_ candidate: LegacyCandidate, fm: FileManager) {
         try? fm.createDirectory(at: duplicatesRootURL, withIntermediateDirectories: true)
         excludeFromBackup(duplicatesRootURL)
@@ -157,6 +159,7 @@ enum GameContainerMigration {
         let destination = duplicatesRootURL.appendingPathComponent(name, isDirectory: true)
         do {
             try fm.moveItem(at: candidate.url, to: destination)
+            recordQuarantinedName(name)
             NSLog(
                 "[GameContainerMigration] Moved duplicate %@ -> Duplicate Games/%@",
                 candidate.url.lastPathComponent,
@@ -167,6 +170,27 @@ enum GameContainerMigration {
                 candidate.url.lastPathComponent,
                 error.localizedDescription)
         }
+    }
+
+    // MARK: - Duplicate notice
+
+    /// Folder names (inside `Duplicate Games/`) moved by this or a
+    /// previous launch whose explanatory alert the user hasn't seen
+    /// yet. Persisted in UserDefaults so a force-quit before the
+    /// library appears doesn't swallow the notice.
+    static func pendingDuplicateNoticeNames() -> [String] {
+        UserDefaults.standard.stringArray(forKey: DefaultsKey.pendingDuplicateGameNames) ?? []
+    }
+
+    /// The user has seen the alert.
+    static func clearPendingDuplicateNotice() {
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.pendingDuplicateGameNames)
+    }
+
+    private static func recordQuarantinedName(_ name: String) {
+        var names = pendingDuplicateNoticeNames()
+        names.append(name)
+        UserDefaults.standard.set(names, forKey: DefaultsKey.pendingDuplicateGameNames)
     }
 
     /// Same backup policy as `Games/`: game trees are large and

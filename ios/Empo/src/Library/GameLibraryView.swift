@@ -63,6 +63,10 @@ struct GameLibraryView: View {
     @State private var selectionMode: Bool = false
     @State private var selectedIDs: Set<String> = []
     @State private var showBulkDeleteConfirm: Bool = false
+    /// Folder names the container migration moved to Duplicate
+    /// Games/ and hasn't told the user about yet. Non-empty
+    /// presents the one-time `DuplicateGamesNotice` alert.
+    @State private var duplicateNoticeNames: [String] = []
 
     // Derived filter/sort pipeline. A previous attempt cached this in
     // @State and re-derived via .onChange, but passing library.games
@@ -160,6 +164,9 @@ struct GameLibraryView: View {
             .task {
                 refreshGameSizes()
             }
+            .task {
+                duplicateNoticeNames = GameContainerMigration.pendingDuplicateNoticeNames()
+            }
     }
 
     private var libraryPresentedContent: some View {
@@ -178,6 +185,7 @@ struct GameLibraryView: View {
                     onCancel: importPipeline.cancelReplace
                 )
             )
+            .modifier(DuplicateGamesNotice(names: $duplicateNoticeNames))
             .modifier(
                 LibrarySheetPresentation(
                     showSettings: $showSettings,
@@ -989,6 +997,53 @@ private struct BulkDeleteAlert: ViewModifier {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will remove all files for the selected games. You can always re-import them later.")
+        }
+    }
+}
+
+/// One-time notice after the container migration moved duplicate
+/// legacy imports out of the library. Explains what happened, why
+/// (one container per title - games locate their data by their INI
+/// title), and where the copies went, listing each moved folder.
+/// Extracted for the same type-checker-budget reason as
+/// `BulkDeleteAlert`.
+private struct DuplicateGamesNotice: ViewModifier {
+    @Binding var names: [String]
+
+    private var isPresented: Binding<Bool> {
+        Binding(
+            get: { !names.isEmpty },
+            set: { presented in
+                if !presented { acknowledge() }
+            }
+        )
+    }
+
+    private var message: String {
+        let list = names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            .map { "\u{2022} \($0)" }
+            .joined(separator: "\n")
+        return "Empo now stores each game in a folder named after its title, "
+            + "and the library keeps one copy per title because games locate "
+            + "their data by that name. The most recently played copy of each "
+            + "game stayed in your library. These extra copies were moved, "
+            + "saves included, to \"Duplicate Games\" inside Empo's folder in "
+            + "the Files app:\n\n\(list)"
+    }
+
+    private func acknowledge() {
+        GameContainerMigration.clearPendingDuplicateNotice()
+        names = []
+    }
+
+    func body(content: Content) -> some View {
+        content.alert(
+            "Duplicate Games Moved",
+            isPresented: isPresented
+        ) {
+            Button("OK", action: acknowledge)
+        } message: {
+            Text(message)
         }
     }
 }

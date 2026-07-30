@@ -8,7 +8,8 @@ The library holds **one container per title** - some games derive their data loc
 their INI title, so a suffixed duplicate would read the other copy's data. Before v0.5 the
 folder was `<uuid>-<slug>`; `GameContainerMigration` renames legacy trees at launch and, when
 several resolve to the same title, keeps the most recently played one under the canonical name
-and moves the rest - whole, saves included - to the Files-visible `Documents/Duplicate Games/`.
+and moves the rest - whole, saves included - to the Files-visible `Documents/Duplicate Games/`,
+telling the user via a one-time library alert that lists the moved copies.
 An import turns the user's pick in Files into one such container per selected game. The import
 seeds metadata and updates the library. It never shows a broken card and never leaves a
 half-imported container behind.
