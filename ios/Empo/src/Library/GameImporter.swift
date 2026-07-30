@@ -40,59 +40,20 @@ enum GameImporter {
         metadata.refreshDetectedProfile(in: container, forceRefresh: true)
     }
 
-    /// Transient sibling of `Game/` used by `stageAndSwapGameTree`.
-    /// Dot-prefixed: hidden from `GameContainer.discover` (which
-    /// only lists `Games/` itself) and from casual Files browsing.
-    static let updateStagingDirectoryName = ".game-update-staging"
-
-    /// Name `replaceItemAt` uses for the displaced original tree
-    /// during the swap. Naming it explicitly (instead of letting
-    /// Foundation pick an anonymous temp name) means a crash inside
-    /// the swap window leaves a leftover we can recognize and sweep.
-    static let updateBackupDirectoryName = ".game-update-backup"
-
-    /// Transactional in-place update of an installed game.
-    ///
-    /// Builds the merged tree in a staging directory next to
-    /// `Game/`, then swaps it into place atomically
-    /// (`FileManager.replaceItemAt`). The staging copy of the
-    /// current tree is an APFS clone (`copyItem` on one volume
-    /// shares blocks), so the whole operation costs roughly the
-    /// size of the *new* files, not a second copy of the game.
-    ///
-    /// Failure at ANY point before the swap - extraction errors,
-    /// disk full mid-merge, a cancelled import - leaves the
-    /// installed `Game/` byte-for-byte untouched; the staging
-    /// leftovers are removed here (and `cleanupStaleUpdateStaging`
-    /// sweeps any that a hard crash orphaned).
+    /// Transactional in-place update of an installed game: the new
+    /// tree merges into a staging copy of `Game/` (same-path files
+    /// overwritten, everything else kept) and swaps in atomically.
+    /// Any failure before the swap leaves the installed `Game/`
+    /// byte-for-byte untouched. Semantics live in GameProbe's
+    /// `GameTreeUpdate` so the Linux CI tests exercise them; this
+    /// wrapper only exists so pipeline call sites read app-domain
+    /// language.
     nonisolated static func stageAndSwapGameTree(
         newTree source: URL,
         over gameURL: URL,
         fm: FileManager = .default
     ) throws {
-        let containerURL = gameURL.deletingLastPathComponent()
-        let staging = containerURL
-            .appendingPathComponent(updateStagingDirectoryName, isDirectory: true)
-        let backup = containerURL
-            .appendingPathComponent(updateBackupDirectoryName, isDirectory: true)
-        try? fm.removeItem(at: staging)
-        try? fm.removeItem(at: backup)
-        defer {
-            try? fm.removeItem(at: staging)
-            try? fm.removeItem(at: backup)
-        }
-
-        try fm.copyItem(at: gameURL, to: staging)
-        // The clone carries the original's POSIX bits; Windows-origin
-        // trees are often read-only, which would block overwrites.
-        // Normalizing the clone leaves the live tree untouched.
-        try GameContainer.prepareForFileReplacement(at: staging)
-        try mergeMoveGameTree(from: source, into: staging, fm: fm)
-        _ = try fm.replaceItemAt(
-            gameURL,
-            withItemAt: staging,
-            backupItemName: updateBackupDirectoryName
-        )
+        try GameTreeUpdate.stageAndSwap(newTree: source, over: gameURL, fm: fm)
     }
 
     /// Remove staging/backup leftovers from an update that a crash
@@ -102,67 +63,12 @@ enum GameImporter {
         in container: GameContainer,
         fm: FileManager = .default
     ) {
-        for name in [updateStagingDirectoryName, updateBackupDirectoryName] {
-            let leftover = container.url.appendingPathComponent(name, isDirectory: true)
-            guard fm.fileExists(atPath: leftover.path) else { continue }
+        for name in GameTreeUpdate.removeStaleArtifacts(in: container.url, fm: fm) {
             NSLog(
-                "[GameImporter] Removing stale update leftover %@ in %@",
+                "[GameImporter] Removed stale update leftover %@ in %@",
                 name,
                 container.folderName)
-            try? fm.removeItem(at: leftover)
         }
-    }
-
-    /// Move the freshly imported tree at `source` into `destination`,
-    /// upgrade-in-place: a file that exists at the same relative path
-    /// is overwritten by the new copy (a type conflict resolves to
-    /// the new entry), and anything only present in the destination
-    /// stays - saves written next to the game files, mods, and
-    /// assets the new version happens not to ship. Mirrors what
-    /// desktop players do when they extract a new version over an
-    /// existing install.
-    nonisolated static func mergeMoveGameTree(
-        from source: URL,
-        into destination: URL,
-        fm: FileManager = .default
-    ) throws {
-        var destinationIsDir: ObjCBool = false
-        let destinationExists = fm.fileExists(
-            atPath: destination.path, isDirectory: &destinationIsDir)
-        guard destinationExists, destinationIsDir.boolValue else {
-            if destinationExists {
-                try fm.removeItem(at: destination)
-            }
-            try fm.moveItem(at: source, to: destination)
-            return
-        }
-
-        let entries = try fm.contentsOfDirectory(
-            at: source,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: []
-        )
-        for entry in entries {
-            let target = destination.appendingPathComponent(entry.lastPathComponent)
-            let entryIsDir =
-                (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?
-                .isDirectory == true
-            var targetIsDir: ObjCBool = false
-            let targetExists = fm.fileExists(atPath: target.path, isDirectory: &targetIsDir)
-
-            if targetExists, targetIsDir.boolValue, entryIsDir {
-                try mergeMoveGameTree(from: entry, into: target, fm: fm)
-                continue
-            }
-            if targetExists {
-                try fm.removeItem(at: target)
-            }
-            try fm.moveItem(at: entry, to: target)
-        }
-
-        // The source directory is an empty husk now; its removal
-        // failing is harmless (it lives in the import tmp dir).
-        try? fm.removeItem(at: source)
     }
 
     nonisolated static func seedFolderImport(in container: GameContainer) {

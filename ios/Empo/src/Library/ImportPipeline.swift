@@ -371,89 +371,85 @@ final class ImportPipeline {
     ///     is refused with an alert.
     ///   - Anything else is a fresh install under the title itself.
     private func planImports(_ selections: [ImportSelection]) -> [PlannedImport] {
-        let installedByLowercaseName = Dictionary(
-            GameContainer.discover().map { ($0.folderName.lowercased(), $0) },
+        let installed = GameContainer.discover()
+        let installedByName = Dictionary(
+            installed.map { ($0.folderName, $0) },
             uniquingKeysWith: { first, _ in first }
         )
 
-        var inFlightKeys = Set<String>()
+        var inFlightNames: [String] = []
         if let library {
-            inFlightKeys.formUnion(library.pendingImports.keys.map { $0.lowercased() })
+            inFlightNames.append(contentsOf: library.pendingImports.keys)
             for entry in library.games where entry.isImporting {
-                inFlightKeys.insert(entry.id.lowercased())
+                inFlightNames.append(entry.id)
             }
         }
 
-        let activeGameID =
-            PauseManager.shared.pausedGame?.id ?? AppState.shared.selectedGame?.id
+        let context = ImportNameResolution.Context(
+            installedFolderNames: installed.map(\.folderName),
+            inFlightNames: inFlightNames,
+            openGameName: PauseManager.shared.pausedGame?.id ?? AppState.shared.selectedGame?.id
+        )
 
-        var batchKeys = Set<String>()
+        var reservedBatchKeys = Set<String>()
         var plans: [PlannedImport] = []
         for selection in selections {
-            let preferred = GameFolderName.sanitize(selection.displayName)
-            let preferredKey = preferred.lowercased()
+            let outcome = ImportNameResolution.resolve(
+                title: selection.displayName,
+                context: context,
+                reservedBatchKeys: &reservedBatchKeys
+            )
+            switch outcome {
+            case .fresh(let folderName):
+                plans.append(
+                    PlannedImport(
+                        selection: selection,
+                        folderName: folderName,
+                        replacing: nil
+                    ))
 
-            if inFlightKeys.contains(preferredKey) {
+            case .update(let installedFolderName):
+                // An update adopts the installed container wholesale
+                // (same folder name, same id, even if the new title
+                // differs in case), so saves, settings, and metadata
+                // stay attached.
+                plans.append(
+                    PlannedImport(
+                        selection: selection,
+                        folderName: installedFolderName,
+                        replacing: installedByName[installedFolderName]
+                    ))
+
+            case .refusedInFlight:
                 NSLog(
                     "[ImportPipeline] Refusing import of %@: an import with that name is in flight",
-                    preferred)
+                    selection.displayName)
                 presentError(
                     title: "Couldn't import \(quoted(selection.displayName))",
                     message: "This game is already being imported. "
                         + "Wait for the current import to finish, then try again."
                 )
-                continue
-            }
 
-            if !batchKeys.contains(preferredKey),
-                let replacing = installedByLowercaseName[preferredKey]
-            {
-                if replacing.id == activeGameID {
-                    NSLog(
-                        "[ImportPipeline] Dropping import of %@: it would replace the open game",
-                        preferred)
-                    presentError(
-                        title: "Couldn't import \(quoted(selection.displayName))",
-                        message:
-                            "This game is currently open. Close it from the app switcher and import again."
-                    )
-                    continue
-                }
-
-                batchKeys.insert(preferredKey)
-                plans.append(
-                    PlannedImport(
-                        selection: selection,
-                        // An update adopts the installed container
-                        // wholesale (same folder name, same id, even
-                        // if the new title differs in case), so
-                        // saves, settings, and metadata stay
-                        // attached.
-                        folderName: replacing.folderName,
-                        replacing: replacing
-                    ))
-                continue
-            }
-
-            if batchKeys.contains(preferredKey) {
+            case .refusedDuplicateInBatch:
                 NSLog(
                     "[ImportPipeline] Refusing import of %@: duplicate title in batch",
-                    preferred)
+                    selection.displayName)
                 presentError(
                     title: "Couldn't import \(quoted(selection.displayName))",
                     message: "Another game in this import has the same title, "
                         + "so only one of them can be imported."
                 )
-                continue
-            }
 
-            batchKeys.insert(preferredKey)
-            plans.append(
-                PlannedImport(
-                    selection: selection,
-                    folderName: preferred,
-                    replacing: nil
-                ))
+            case .refusedOpenGame:
+                NSLog(
+                    "[ImportPipeline] Dropping import of %@: it would replace the open game",
+                    selection.displayName)
+                presentError(
+                    title: "Couldn't import \(quoted(selection.displayName))",
+                    message:
+                        "This game is currently open. Close it from the app switcher and import again."
+                )
+            }
         }
         return plans
     }

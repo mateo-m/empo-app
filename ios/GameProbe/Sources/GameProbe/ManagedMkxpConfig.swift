@@ -104,6 +104,40 @@ public struct MkxpDataPath: Equatable, Sendable {
     public var isDeclared: Bool { org != nil || app != nil }
 }
 
+extension MkxpDataPath {
+    /// Path components of the shared data directory under the
+    /// shared root (`GameData/` in the app), or nil when neither
+    /// key is declared. Mirrors mkxp-z's `SDL_GetPrefPath`
+    /// semantics: an org of `"."` (or blank) contributes no
+    /// component, and a missing `dataPathApp` falls back to the
+    /// game's INI title, then to `"mkxp-z"` - the same defaults the
+    /// legacy engine builds used. Each component is sanitized into
+    /// a safe single path component.
+    public func sharedDirectoryComponents(iniTitleFallback: String?) -> [String]? {
+        guard isDeclared else { return nil }
+
+        var components: [String] = []
+        if let orgComponent = Self.folderComponent(org) {
+            components.append(orgComponent)
+        }
+        components.append(
+            Self.folderComponent(app)
+                ?? Self.folderComponent(iniTitleFallback)
+                ?? "mkxp-z"
+        )
+        return components
+    }
+
+    private static func folderComponent(_ raw: String?) -> String? {
+        guard
+            let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !trimmed.isEmpty,
+            trimmed != "."
+        else { return nil }
+        return GameFolderName.sanitize(trimmed)
+    }
+}
+
 public enum MkxpEngineField: String, CaseIterable, Sendable {
     case smoothScaling
     case fixedAspectRatio

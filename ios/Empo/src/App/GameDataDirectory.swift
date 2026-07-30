@@ -36,7 +36,10 @@ enum GameDataDirectory {
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("GameData", isDirectory: true)
 
-    /// Pure resolution; no filesystem writes.
+    /// Pure resolution; no filesystem writes. The component
+    /// derivation (org/app normalization, INI-title fallback) lives
+    /// on `MkxpDataPath.sharedDirectoryComponents` in GameProbe so
+    /// the Linux CI tests exercise it.
     static func resolve(for container: GameContainer) -> URL {
         let dataPath = ManagedMkxpConfig.readDataPath(
             stateDirectory: container.empoStateURL,
@@ -44,17 +47,16 @@ enum GameDataDirectory {
         )
         guard dataPath.isDeclared else { return container.userDataURL }
 
+        let iniTitle = GameINI.parseINIValue(
+            at: container.gameURL, section: "game", key: "title")
+        guard let components = dataPath.sharedDirectoryComponents(iniTitleFallback: iniTitle)
+        else { return container.userDataURL }
+
         var url = sharedRootURL
-        if let org = folderComponent(dataPath.org) {
-            url.appendPathComponent(org, isDirectory: true)
+        for component in components {
+            url.appendPathComponent(component, isDirectory: true)
         }
-        let app =
-            folderComponent(dataPath.app)
-            ?? folderComponent(
-                GameINI.parseINIValue(
-                    at: container.gameURL, section: "game", key: "title"))
-            ?? "mkxp-z"
-        return url.appendingPathComponent(app, isDirectory: true)
+        return url
     }
 
     /// Resolve and make the directory exist. On the first launch
@@ -77,18 +79,6 @@ enum GameDataDirectory {
             adoptUserDataContents(of: container, into: resolved, fm: fm)
         }
         return resolved
-    }
-
-    /// A declared org/app value as a single safe path component.
-    /// `"."` or blank means "contributes nothing" (mkxp-z treats a
-    /// `"."` org as the no-org default).
-    private static func folderComponent(_ raw: String?) -> String? {
-        guard
-            let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
-            !trimmed.isEmpty,
-            trimmed != "."
-        else { return nil }
-        return GameFolderName.sanitize(trimmed)
     }
 
     private static func adoptUserDataContents(

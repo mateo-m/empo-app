@@ -164,10 +164,7 @@ struct GameContainer: Equatable, Hashable {
     /// title-based names. `GameContainerMigration` uses this to
     /// recognize legacy trees.
     static func legacyUUIDPrefix(folderName: String) -> String? {
-        guard folderName.count >= 36 else { return nil }
-        let uuidPart = String(folderName.prefix(36))
-        guard UUID(uuidString: uuidPart) != nil else { return nil }
-        return uuidPart
+        ContainerMigrationPlanner.legacyUUIDPrefix(folderName: folderName)
     }
 
     // MARK: - Roots
@@ -323,27 +320,7 @@ struct GameContainer: Equatable, Hashable {
     /// Ensure every path under `url` is deletable by the app
     /// sandbox. Only touches owner-write. Leaves group/other as-is.
     private static func makeTreeDeletable(at url: URL, fm: FileManager) throws {
-        var isDir: ObjCBool = false
-        guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return }
-
-        if isDir.boolValue {
-            let children = try fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
-            for child in children {
-                try makeTreeDeletable(at: child, fm: fm)
-            }
-            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
-        } else {
-            try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
-        }
-    }
-
-    /// Normalize owner-write over an existing `Game/` tree so a
-    /// replacement import can overwrite files inside it. Same
-    /// permission pass a delete uses: Windows-origin archives often
-    /// land with read-only POSIX bits that would block unlinking
-    /// the old copy of a conflicting file.
-    static func prepareForFileReplacement(at url: URL) throws {
-        try makeTreeDeletable(at: url, fm: FileManager.default)
+        try GameTreeUpdate.normalizeOwnerWritable(at: url, fm: fm)
     }
 
     /// Imported game trees sometimes arrive with a read-only `Game/`
