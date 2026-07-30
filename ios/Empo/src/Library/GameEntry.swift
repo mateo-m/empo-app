@@ -17,13 +17,15 @@ enum GameStatus: Hashable {
 }
 
 struct GameEntry: Identifiable, Hashable {
-    /// Bare UUID (matches `container?.id`). Stable across renames
-    /// of the on-disk folder. Synthetic entries (in-flight imports
-    /// without a committed folder yet) keep their id but have no
-    /// `container`.
+    /// The container folder name - the sanitized game title
+    /// (matches `container?.id`). Fixed by the import planner
+    /// before any files land, so progress cards and the final
+    /// library entry share one id. Synthetic entries (in-flight
+    /// imports without a committed folder yet) keep their id but
+    /// have no `container`.
     let id: String
 
-    /// `Documents/Games/<uuid>-<slug>/` for ready entries.
+    /// `Documents/Games/<title>/` for ready entries.
     /// nil during pre-flight validation when nothing is on disk
     /// yet (the synthetic placeholder entry shown in the grid).
     let container: GameContainer?

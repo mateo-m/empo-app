@@ -57,6 +57,7 @@ class AppState {
     }
 
     private init() {
+        GameContainerMigration.migrateLegacyContainersIfNeeded()
         SaveMigration.migrateAllDiscoveredGamesIfNeeded()
         session.delegate = self
     }

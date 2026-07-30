@@ -43,6 +43,24 @@ struct ImportRootPrompt: Identifiable {
     var id: UUID { request.id }
 }
 
+/// An import selection resolved to its destination folder name (the
+/// sanitized game title), plus the installed container it would
+/// replace when that name is already taken.
+struct PlannedImport: Hashable, Sendable {
+    let selection: ImportSelection
+    let folderName: String
+    let replacing: GameContainer?
+}
+
+/// Replace-confirmation state surfaced to the library view. Lists
+/// the installed games the pending import batch would overwrite.
+struct ImportReplacePrompt: Identifiable {
+    let requestID: UUID
+    let titles: [String]
+
+    var id: UUID { requestID }
+}
+
 struct ImportPipelineAlert: Identifiable {
     let id = UUID()
     let title: String
@@ -64,6 +82,7 @@ struct ImportPipelineSession {
         case staging
         case probing
         case awaitingChoice([GameImportValidator.ImportRootChoice])
+        case awaitingReplaceConfirmation([PlannedImport])
         case launching
     }
 
@@ -86,6 +105,17 @@ final class ImportPipeline {
         guard let currentSession else { return nil }
         guard case .awaitingChoice(let choices) = currentSession.state else { return nil }
         return ImportRootPrompt(request: currentSession.request, choices: choices)
+    }
+
+    var activeReplacePrompt: ImportReplacePrompt? {
+        guard let currentSession else { return nil }
+        guard case .awaitingReplaceConfirmation(let plans) = currentSession.state else {
+            return nil
+        }
+        return ImportReplacePrompt(
+            requestID: currentSession.request.id,
+            titles: plans.compactMap { $0.replacing?.folderName }
+        )
     }
 
     var importButtonPhase: ImportButton.Phase {
@@ -132,6 +162,40 @@ final class ImportPipeline {
             choices.map(ImportSelection.init(choice:)),
             for: currentSession.request.id
         )
+    }
+
+    /// Replace-confirmation dismissed without an explicit button
+    /// (swipe / tap outside). Same outcome as declining.
+    func dismissReplacePrompt() {
+        cancelReplace()
+    }
+
+    /// User confirmed overwriting the installed game(s): every
+    /// planned selection proceeds, replacements included.
+    func confirmReplace() {
+        guard let currentSession else { return }
+        guard case .awaitingReplaceConfirmation(let plans) = currentSession.state else {
+            return
+        }
+        proceed(with: plans, for: currentSession.request.id)
+    }
+
+    /// User declined: the conflicting selections are dropped, any
+    /// non-conflicting selections from the same batch still import.
+    func cancelReplace() {
+        guard let currentSession else { return }
+        guard case .awaitingReplaceConfirmation(let plans) = currentSession.state else {
+            return
+        }
+
+        let remaining = plans.filter { $0.replacing == nil }
+        guard !remaining.isEmpty else {
+            currentSession.preparedSource?.cleanup()
+            self.currentSession = nil
+            startNextResolutionIfPossible()
+            return
+        }
+        proceed(with: remaining, for: currentSession.request.id)
     }
 
     func cancelValidation() {
@@ -203,6 +267,84 @@ final class ImportPipeline {
     private func launchImports(_ selections: [ImportSelection], for requestID: UUID) {
         guard var currentSession else { return }
         guard currentSession.request.id == requestID else { return }
+        guard currentSession.preparedSource != nil else {
+            self.currentSession = nil
+            resolutionTask = nil
+            startNextResolutionIfPossible()
+            return
+        }
+
+        let plans = planImports(selections)
+
+        if plans.contains(where: { $0.replacing != nil }) {
+            currentSession.state = .awaitingReplaceConfirmation(plans)
+            self.currentSession = currentSession
+            resolutionTask = nil
+            return
+        }
+
+        proceed(with: plans, for: requestID)
+    }
+
+    /// Resolve each selection to its destination folder name (the
+    /// sanitized game title from the import probe). A name owned by
+    /// another in-flight import - or an earlier selection in the
+    /// same batch - gets a numbered suffix silently. A name owned
+    /// by an installed game marks the plan as a replacement, which
+    /// the user must confirm. A replacement that targets the
+    /// currently open (playing or paused) game is dropped outright:
+    /// the engine holds its files.
+    private func planImports(_ selections: [ImportSelection]) -> [PlannedImport] {
+        let installedByLowercaseName = Dictionary(
+            GameContainer.discover().map { ($0.folderName.lowercased(), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        var reservedNames = Set<String>()
+        if let library {
+            reservedNames.formUnion(library.pendingImports.keys.map { $0.lowercased() })
+            for entry in library.games where entry.isImporting {
+                reservedNames.insert(entry.id.lowercased())
+            }
+        }
+
+        let activeGameID =
+            PauseManager.shared.pausedGame?.id ?? AppState.shared.selectedGame?.id
+
+        var plans: [PlannedImport] = []
+        for selection in selections {
+            let preferred = GameFolderName.sanitize(selection.displayName)
+            let folderName = GameFolderName.uniqueName(preferring: preferred) {
+                reservedNames.contains($0.lowercased())
+            }
+            reservedNames.insert(folderName.lowercased())
+
+            let replacing = installedByLowercaseName[folderName.lowercased()]
+            if let replacing, replacing.id == activeGameID {
+                NSLog(
+                    "[ImportPipeline] Dropping import of %@: it would replace the open game",
+                    folderName)
+                presentError(
+                    title: "Couldn't import \(quoted(selection.displayName))",
+                    message:
+                        "This game is currently open. Close it from the app switcher and import again."
+                )
+                continue
+            }
+
+            plans.append(
+                PlannedImport(
+                    selection: selection,
+                    folderName: folderName,
+                    replacing: replacing
+                ))
+        }
+        return plans
+    }
+
+    private func proceed(with plans: [PlannedImport], for requestID: UUID) {
+        guard var currentSession else { return }
+        guard currentSession.request.id == requestID else { return }
         guard let preparedSource = currentSession.preparedSource else {
             self.currentSession = nil
             resolutionTask = nil
@@ -214,11 +356,23 @@ final class ImportPipeline {
         self.currentSession = currentSession
         resolutionTask = nil
 
+        // Confirmed replacements: drop the old entry from the
+        // visible library now, before an import card with the same
+        // id appears. The on-disk tree is deleted by the import
+        // task right before extraction.
+        if let library {
+            for plan in plans {
+                if let replaced = plan.replacing {
+                    library.removeLibraryEntry(id: replaced.id)
+                }
+            }
+        }
+
         startImports(
             from: preparedSource,
             archiveName: currentSession.request.archiveName,
             inventory: currentSession.probeInventory,
-            selections: selections
+            plans: plans
         )
 
         self.currentSession = nil
@@ -229,9 +383,9 @@ final class ImportPipeline {
         from preparedSource: ImportPreparedSource,
         archiveName: String,
         inventory: ArchiveExtractor.Inventory?,
-        selections: [ImportSelection]
+        plans: [PlannedImport]
     ) {
-        guard !selections.isEmpty else {
+        guard !plans.isEmpty else {
             preparedSource.cleanup()
             return
         }
@@ -246,12 +400,13 @@ final class ImportPipeline {
         }
 
         let isArchive = ArchiveExtractor.Format(extension: preparedSource.workingURL.pathExtension) != nil
-        let batchSelections = selections.map { selection in
+        let batchSelections = plans.map { plan in
             GameLibrary.BatchSelection(
-                importID: UUID().uuidString,
-                relativePath: selection.relativePath,
-                displayName: selection.displayName,
-                iconPNG: selection.iconPNG
+                importID: plan.folderName,
+                relativePath: plan.selection.relativePath,
+                displayName: plan.selection.displayName,
+                iconPNG: plan.selection.iconPNG,
+                replacing: plan.replacing
             )
         }
 
@@ -393,11 +548,31 @@ extension NSLock {
 extension GameLibrary {
     struct ImportCancelled: Error {}
 
+    /// One game to import. `importID` is the destination folder
+    /// name under `Games/` (the sanitized game title), which is
+    /// also the container id and the progress-card id. `replacing`
+    /// carries the installed container the user agreed to
+    /// overwrite; the import task deletes it before extraction.
     struct BatchSelection: Sendable {
         let importID: String
         let relativePath: String
         let displayName: String
         let iconPNG: Data?
+        let replacing: GameContainer?
+
+        init(
+            importID: String,
+            relativePath: String,
+            displayName: String,
+            iconPNG: Data?,
+            replacing: GameContainer? = nil
+        ) {
+            self.importID = importID
+            self.relativePath = relativePath
+            self.displayName = displayName
+            self.iconPNG = iconPNG
+            self.replacing = replacing
+        }
     }
 
     /// Errors surfaced from the import pipeline with display-ready
@@ -581,6 +756,20 @@ extension GameLibrary {
             }
 
             do {
+                // Confirmed replacements: remove the old install
+                // before its folder name is reused. Runs inline (not
+                // via `deleteContainer`'s detached task) so the
+                // extract/move below can't race the rm -rf.
+                for sel in active {
+                    guard let replaced = sel.replacing else { continue }
+                    guard fm.fileExists(atPath: replaced.url.path) else { continue }
+                    do {
+                        try replaced.deleteAll()
+                    } catch {
+                        failSelection(sel, error)
+                    }
+                }
+
                 checkCancellations()
                 guard !active.isEmpty else {
                     await MainActor.run { completion(failures) }
@@ -596,10 +785,7 @@ extension GameLibrary {
                 let stagedBaseURL: URL
                 if isArchive {
                     for sel in active {
-                        let container = GameContainer(
-                            id: sel.importID,
-                            slug: GameContainer.slugify(sel.displayName)
-                        )
+                        let container = GameContainer(folderName: sel.importID)
                         containers[sel.importID] = container
                         let artworkPath = writeProbeIconSidecar(sel.iconPNG, to: container)
                         self.commitPendingToCard(
@@ -673,10 +859,7 @@ extension GameLibrary {
                     }
 
                     for sel in active {
-                        let container = GameContainer(
-                            id: sel.importID,
-                            slug: GameContainer.slugify(sel.displayName)
-                        )
+                        let container = GameContainer(folderName: sel.importID)
                         containers[sel.importID] = container
 
                         let root: URL

@@ -936,7 +936,7 @@ class ControlsLayout {
         let logsContainer = GameContainer(url: gameRoot.deletingLastPathComponent())
 
         if let note = outcome.note {
-            logsContainer?.appendLogLine(
+            logsContainer.appendLogLine(
                 Self.logLine(for: note),
                 fileName: Self.controlsManifestLogFile
             )
@@ -949,7 +949,7 @@ class ControlsLayout {
         }
 
         if result.ignoredNewerVersion {
-            logsContainer?.appendLogLine(
+            logsContainer.appendLogLine(
                 "controls.json: Ignored manifest with version > 1",
                 fileName: Self.controlsManifestLogFile
             )
@@ -966,7 +966,7 @@ class ControlsLayout {
             let severity = finding.severity == .error ? "error" : "warning"
             let line =
                 "\(logPrefix) [\(finding.code)] (\(severity)) \(finding.path): \(finding.message)"
-            logsContainer?.appendLogLine(line, fileName: Self.controlsManifestLogFile)
+            logsContainer.appendLogLine(line, fileName: Self.controlsManifestLogFile)
         }
 
         if let manifest = result.manifest {

@@ -104,6 +104,7 @@ class GameLibrary {
     private init() {
         ImportTemporaryDirectory.cleanupStaleDirectories()
         ensureGamesDirectory()
+        GameContainerMigration.migrateLegacyContainersIfNeeded()
         SaveMigration.migrateAllDiscoveredGamesIfNeeded()
         // Initial scan runs off-main via reload(). The library is
         // observable and empty until the scan completes, which keeps

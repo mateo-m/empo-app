@@ -112,7 +112,7 @@ final class SessionLogger {
             .replacingOccurrences(of: ":", with: "-")
         // The filename is just the timestamp. The parent dir
         // (`<container>/Logs/`) already lives inside
-        // `Games/<uuid>-<slug>/`, so an id or slug in the filename
+        // `Games/<title>/`, so a game name in the filename
         // would be redundant.
         let filename = "\(timestamp).log"
         let logPath = logsDir.appendingPathComponent(filename).path

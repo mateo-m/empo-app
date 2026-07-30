@@ -172,6 +172,13 @@ struct GameLibraryView: View {
                 )
             )
             .modifier(
+                ImportReplaceAlert(
+                    prompt: importReplacePromptBinding,
+                    onReplace: importPipeline.confirmReplace,
+                    onCancel: importPipeline.cancelReplace
+                )
+            )
+            .modifier(
                 LibrarySheetPresentation(
                     showSettings: $showSettings,
                     showImporter: $showImporter,
@@ -948,6 +955,17 @@ struct GameLibraryView: View {
             }
         )
     }
+
+    private var importReplacePromptBinding: Binding<ImportReplacePrompt?> {
+        Binding(
+            get: { importPipeline.activeReplacePrompt },
+            set: { newValue in
+                if newValue == nil {
+                    importPipeline.dismissReplacePrompt()
+                }
+            }
+        )
+    }
 }
 
 /// Alert wrapper for the bulk-delete confirmation. Inlining the
@@ -971,6 +989,56 @@ private struct BulkDeleteAlert: ViewModifier {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will remove all files for the selected games. You can always re-import them later.")
+        }
+    }
+}
+
+/// Alert wrapper for the import replace confirmation (a selected
+/// import's folder name matches an installed game). Extracted for
+/// the same type-checker-budget reason as `BulkDeleteAlert`.
+///
+/// Button actions run before SwiftUI resets the binding, and the
+/// pipeline consumes the prompt state in the action, so the
+/// trailing set-to-nil (also fired by swipe/outside dismissal)
+/// falls through to a guarded no-op after an explicit choice.
+private struct ImportReplaceAlert: ViewModifier {
+    @Binding var prompt: ImportReplacePrompt?
+    let onReplace: () -> Void
+    let onCancel: () -> Void
+
+    private var isPresented: Binding<Bool> {
+        Binding(
+            get: { prompt != nil },
+            set: { presented in
+                if !presented { prompt = nil }
+            }
+        )
+    }
+
+    private var title: String {
+        (prompt?.titles.count ?? 1) > 1 ? "Replace Games?" : "Replace Game?"
+    }
+
+    private func message(for prompt: ImportReplacePrompt) -> String {
+        let names = prompt.titles.map { "\"\($0)\"" }.joined(separator: ", ")
+        if prompt.titles.count == 1 {
+            return "\(names) is already in your library. "
+                + "Replacing it deletes the installed game, including its save data."
+        }
+        return "\(names) are already in your library. "
+            + "Replacing them deletes the installed games, including their save data."
+    }
+
+    func body(content: Content) -> some View {
+        content.alert(
+            title,
+            isPresented: isPresented,
+            presenting: prompt
+        ) { _ in
+            Button("Replace", role: .destructive, action: onReplace)
+            Button("Cancel", role: .cancel, action: onCancel)
+        } message: { prompt in
+            Text(message(for: prompt))
         }
     }
 }

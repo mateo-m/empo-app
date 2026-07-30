@@ -2,10 +2,12 @@
 
 ## Overview
 
-There is no database: a game is a directory at `Documents/Games/<uuid>-<slug>/` (see
-`GameContainer.swift`). An import turns the user's pick in Files into one such container per
-selected game. The import seeds metadata and updates the library. It never shows a broken card and
-never leaves a half-imported container behind.
+There is no database: a game is a directory at `Documents/Games/<title>/`, named after the title
+the game declares in its INI file and sanitized by `GameFolderName` (see `GameContainer.swift`;
+before v0.5 the folder was `<uuid>-<slug>`, and `GameContainerMigration` renames legacy trees at
+launch). An import turns the user's pick in Files into one such container per selected game. The
+import seeds metadata and updates the library. It never shows a broken card and never leaves a
+half-imported container behind.
 
 The pipeline works in batches. It stages and extracts one source (archive or folder) **once**.
 Then it moves each selected game root inside it into its own container. Probing, validation, and
@@ -46,6 +48,12 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      card exists.
    - When more than one valid root exists, the root-picker sheet appears. When exactly one
      exists, the import starts automatically.
+   - `planImports` then fixes each selection's destination folder name (the sanitized title). A
+     name owned by another in-flight import or an earlier selection in the batch gets a numbered
+     suffix. A name owned by an installed game raises the replace-confirmation alert
+     (`ImportReplacePrompt`): confirming deletes the installed container before extraction,
+     declining drops just the conflicting selections. A replacement that targets the currently
+     open (playing/paused) game is refused outright.
 2. **Batch import** (`GameLibrary.pipelineImportGames`, `ImportPipeline.swift` ~line 509): one
    detached task per **source** fans out per-selection state (`BatchSelection`). The main actor
    registers pending entries and `inFlightImports` membership before the task starts.
