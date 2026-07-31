@@ -26,5 +26,6 @@ Explanations of the trickier architecture, in rough reading order:
 | [`multi-session.md`](multi-session.md)               | Why cross-session play is disabled, and the neutralized quit paths.                |
 | [`pause-resume.md`](pause-resume.md)                 | Frozen-frame snapshots that bridge the SDL window into SwiftUI transitions.        |
 | [`import-pipeline.md`](import-pipeline.md)           | The game import pipeline: supported inputs, stage flow, invariants.                |
+| [`save-states.md`](save-states.md)                   | Research: what save states can mean for Empo, prior art, and the recommended design. |
 
 `media/` holds the README screenshots and demo assets.
