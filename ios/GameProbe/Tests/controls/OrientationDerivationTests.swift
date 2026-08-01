@@ -34,7 +34,31 @@ final class OrientationDerivationTests: XCTestCase {
         assertNoOverlaps(layout: landscape, isLandscape: true)
     }
 
+    // The landscape source is hand-authored, NOT produced by the unit
+    // under test: deriving from derivation output can only exercise
+    // whatever shapes derive itself emits, so a landscape-source bug
+    // could pass vacuously on well-formed derived input.
     func testLandscapeClusterDerivesPortraitPreservingSignsAndGaps() {
+        let landscape = sampleLandscapeLayout()
+        let derived = OrientationDerivation.derive(
+            from: landscape,
+            sourceIsLandscape: true,
+            metrics: metrics,
+            defaultDpad: nil
+        )
+
+        assertDerivationPreservesArrangement(
+            source: landscape,
+            derived: derived,
+            sourceIsLandscape: true
+        )
+        assertWithinZone(layout: derived, isLandscape: false)
+        assertNoOverlaps(layout: derived, isLandscape: false)
+    }
+
+    // Complementary round-trip property: deriving back from derived
+    // output must also hold the invariants.
+    func testPortraitDerivationRoundTripsThroughLandscape() {
         let portrait = samplePortraitLayout()
         let landscape = OrientationDerivation.derive(
             from: portrait,
@@ -108,9 +132,17 @@ final class OrientationDerivationTests: XCTestCase {
             section, metrics: metrics, defaultDpad: defaultDpad)
 
         XCTAssertTrue(involved)
-        XCTAssertNotNil(completed.landscape)
+        guard let landscape = completed.landscape else {
+            XCTFail("expected landscape")
+            return
+        }
+        // The equality below only pins the delegation plumbing (it
+        // holds no matter what derive produces), so the completed
+        // layout must independently satisfy the layout invariants.
+        assertWithinZone(layout: landscape, isLandscape: true)
+        assertNoOverlaps(layout: landscape, isLandscape: true)
         XCTAssertEqual(
-            completed.landscape,
+            landscape,
             OrientationDerivation.derive(
                 from: portrait,
                 sourceIsLandscape: false,
