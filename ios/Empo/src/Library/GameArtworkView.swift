@@ -22,6 +22,12 @@ struct GameArtworkView: View {
 
     @State private var shimmerPhase: CGFloat = -1
     @State private var loadedImage: UIImage?
+    /// The path `loadedImage` was decoded from. The fallback in
+    /// `displayedImage` checks it so a surface whose `artworkPath`
+    /// changed (hero card switching games, custom artwork removed)
+    /// can never render the previous path's image while the new
+    /// load is in flight.
+    @State private var loadedPath: String?
 
     var body: some View {
         content
@@ -35,10 +41,18 @@ struct GameArtworkView: View {
             .task(id: "\(reloadToken)|\(artworkPath ?? "")") {
                 guard let path = artworkPath else {
                     loadedImage = nil
+                    loadedPath = nil
                     return
                 }
-                loadedImage = await ImageCache.shared.thumbnail(
+                let image = await ImageCache.shared.thumbnail(
                     for: path, maxPixelSize: maxPixelSize)
+                // `thumbnail` awaits a detached task, which resumes
+                // even after `.task(id:)` cancels this run (a newer
+                // id took over). Without this guard, the superseded
+                // run's late resume would clobber the newer image.
+                guard !Task.isCancelled else { return }
+                loadedImage = image
+                loadedPath = path
             }
             .onAppear {
                 guard shimmer && artworkPath != nil else { return }
@@ -79,8 +93,12 @@ struct GameArtworkView: View {
     /// in the window before the reload lands.
     private var displayedImage: UIImage? {
         guard let path = artworkPath else { return nil }
-        return ImageCache.shared.cachedThumbnail(for: path, maxPixelSize: maxPixelSize)
-            ?? loadedImage
+        if let cached = ImageCache.shared.cachedThumbnail(
+            for: path, maxPixelSize: maxPixelSize)
+        {
+            return cached
+        }
+        return loadedPath == path ? loadedImage : nil
     }
 
     @ViewBuilder

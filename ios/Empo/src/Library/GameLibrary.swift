@@ -282,6 +282,13 @@ class GameLibrary {
         }
     }
 
+    /// Monotonic token per game, taken when a refresh is requested
+    /// and checked when its snapshot lands. Refreshes overlap (the
+    /// periodic play-time flush vs. the Game Info sheet's dismissal
+    /// refresh), and without the token a snapshot built before an
+    /// edit could apply after a newer one and resurface stale data.
+    private var refreshGenerations: [String: Int] = [:]
+
     /// Rebuild an entry's scan-time fields from disk (title,
     /// artwork, metadata) after something edited them, keeping the
     /// in-memory status. Runs the disk reads off-main; the previous
@@ -290,11 +297,15 @@ class GameLibrary {
         guard let model = games.first(where: { $0.id == id }),
             let container = model.container
         else { return }
+        let generation = (refreshGenerations[id] ?? 0) + 1
+        refreshGenerations[id] = generation
         Task.detached(priority: .userInitiated) {
             guard let snapshot = GameCatalog.buildSnapshot(from: container) else { return }
             await MainActor.run {
                 let lib = GameLibrary.shared
-                guard let model = lib.games.first(where: { $0.id == id }) else { return }
+                guard lib.refreshGenerations[id] == generation,
+                    let model = lib.games.first(where: { $0.id == id })
+                else { return }
                 withAnimation { model.apply(snapshot, preservingStatus: true) }
             }
         }

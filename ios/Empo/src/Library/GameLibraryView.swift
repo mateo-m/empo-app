@@ -182,10 +182,14 @@ struct GameLibraryView: View {
                 }
                 debouncedSearch = searchText
             }
-            .task {
+            .task(id: library.initialScanCompleted) {
                 // Size data is only consumed by the size sorts; the
                 // walk enumerates every file of every game, so don't
-                // pay for it while another sort is active.
+                // pay for it while another sort is active. Keyed on
+                // scan completion: at launch this view appears while
+                // the initial scan is still off-main and `games` is
+                // empty, so the appear-time run walks nothing — the
+                // refire when the scan lands does the real work.
                 if settings.librarySortOption.usesDiskSizes {
                     refreshGameSizes()
                 }

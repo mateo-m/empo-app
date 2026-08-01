@@ -573,10 +573,12 @@ struct GameInfoView: View {
         guard let filename = GameMetadata.saveImage(image, as: kind, in: container) else { return }
         filenameSetter(&metadata, filename)
         metadata.save(to: container)
-        // Prime the cache with the new contents. Library cards read
-        // cache-first under an unchanged path, so without this they
-        // would keep showing the stale decode after the refresh.
         if let path = pathGetter(metadata, container) {
+            // Second evict, now that the new bytes are on disk: the
+            // pre-write evict above can't cover a load that raced
+            // the gap and cached the old contents. Then prime the
+            // cache so cache-first readers pick up the new image.
+            ImageCache.shared.evict(path: path)
             Task.detached(priority: .userInitiated) {
                 ImageCache.shared.prewarmThumbnail(
                     for: path, maxPixelSize: ImageCache.PixelBudget.cell)
@@ -584,6 +586,11 @@ struct GameInfoView: View {
                     for: path, maxPixelSize: ImageCache.PixelBudget.hero)
             }
         }
+        // The media file lives at a fixed name, so a replacement
+        // changes no model field and `refreshGameEntry`'s guarded
+        // apply() notifies nobody. The revision bump is the explicit
+        // signal that refires the card/hero artwork load tasks.
+        game.artworkRevision += 1
         customImageRefreshToken += 1
         needsLibraryRefresh = true
     }
@@ -602,6 +609,7 @@ struct GameInfoView: View {
         }
         filenameSetter(&metadata, nil)
         metadata.save(to: container)
+        game.artworkRevision += 1
         customImageRefreshToken += 1
         needsLibraryRefresh = true
     }

@@ -1,5 +1,6 @@
 import CryptoKit
 import ImageIO
+import Synchronization
 import UIKit
 
 /// Two-layer (memory + disk) cache of downsampled artwork thumbnails.
@@ -24,10 +25,13 @@ final class ImageCache: @unchecked Sendable {
     /// grid card (about a third of the screen width) and the 48pt list
     /// artwork with retina headroom. `hero` covers the full-width
     /// "Continue playing" card, the Game Info banner, and the loading
-    /// view backdrop.
+    /// view backdrop — sized for the widest case, a 13" iPad in
+    /// landscape (~1334pt content width @2x). Only one hero-budget
+    /// image is typically alive at a time, so the larger decode
+    /// (~8 MB worst case) doesn't threaten the cache ceiling.
     enum PixelBudget {
         static let cell: CGFloat = 768
-        static let hero: CGFloat = 1600
+        static let hero: CGFloat = 2668
     }
 
     /// Sources at or below this byte size (exe-icon sidecars, small
@@ -38,6 +42,15 @@ final class ImageCache: @unchecked Sendable {
     private let cache = NSCache<NSString, UIImage>()
     private let diskDirectory: URL
     private let fm = FileManager.default
+
+    /// Per-path eviction generation. `loadThumbnail` snapshots the
+    /// generation before decoding and drops its result if an `evict`
+    /// landed mid-decode. Without this, an in-flight decode of
+    /// just-replaced bytes (the sidecar/custom-media files are
+    /// overwritten at fixed paths) could repopulate the cache
+    /// *after* the eviction that was meant to clear them, and the
+    /// stale image would then be served until process death.
+    private let generations = Mutex<[String: Int]>([:])
 
     private init() {
         // Thumbnails are bounded (a 16:9 cell thumbnail decodes to
@@ -74,17 +87,24 @@ final class ImageCache: @unchecked Sendable {
 
     /// Synchronous load for background contexts that want the cache
     /// primed before the UI reads it (import pipeline, exe-icon
-    /// surfacer). Never call on the main thread.
+    /// surfacer). Never call on the main thread. Bypasses the
+    /// memory-hit fast path so an evict-then-prewarm sequence always
+    /// decodes the fresh bytes, even if a stale in-flight load
+    /// slipped an old entry back in moments after the evict.
     func prewarmThumbnail(for path: String, maxPixelSize: CGFloat) {
-        _ = loadThumbnail(path: path, maxPixelSize: maxPixelSize)
+        _ = loadThumbnail(path: path, maxPixelSize: maxPixelSize, force: true)
     }
 
-    /// Drop every cached representation of `path`, memory and disk.
-    /// Callers overwrite artwork files in place (exe-icon sidecar,
-    /// custom artwork/banner), so eviction must be synchronous:
-    /// a background sweep could race a prewarm of the new contents
-    /// and delete the fresh entry.
+    /// Drop every cached representation of `path`, memory and disk,
+    /// and bump the path's generation so loads already mid-decode
+    /// discard their (stale) result instead of re-populating the
+    /// cache. Callers overwrite artwork files in place (exe-icon
+    /// sidecar, custom artwork/banner), so eviction must stay
+    /// synchronous: the disk names embed only second-granularity
+    /// mtimes, and a same-second overwrite reuses the stale entry's
+    /// filename unless it's removed before the next load.
     func evict(path: String) {
+        generations.withLock { $0[path, default: 0] += 1 }
         for budget in [PixelBudget.cell, PixelBudget.hero] {
             cache.removeObject(forKey: Self.memoryKey(path: path, maxPixelSize: budget))
         }
@@ -96,34 +116,49 @@ final class ImageCache: @unchecked Sendable {
         }
     }
 
-    private func loadThumbnail(path: String, maxPixelSize: CGFloat) -> UIImage? {
+    private func loadThumbnail(
+        path: String, maxPixelSize: CGFloat, force: Bool = false
+    ) -> UIImage? {
         let key = Self.memoryKey(path: path, maxPixelSize: maxPixelSize)
-        if let hit = cache.object(forKey: key) {
+        if !force, let hit = cache.object(forKey: key) {
             return hit
         }
+        let generation = generations.withLock { $0[path] ?? 0 }
 
         let sourceBytes =
             (try? fm.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
         let diskURL = diskCacheURL(path: path, maxPixelSize: maxPixelSize)
 
         var image: UIImage?
+        var freshlyDecoded = false
         if let diskURL, fm.fileExists(atPath: diskURL.path) {
             image = Self.decodeThumbnail(at: diskURL, maxPixelSize: maxPixelSize)
         }
         if image == nil {
             image = Self.decodeThumbnail(
                 at: URL(fileURLWithPath: path), maxPixelSize: maxPixelSize)
-            if let image, let diskURL, sourceBytes > Self.diskCacheThresholdBytes,
-                let png = image.pngData()
-            {
-                // PNG keeps the alpha channel PE-extracted icons rely
-                // on. Atomic write so concurrent loads of the same
-                // artwork can't interleave partial files.
-                try? png.write(to: diskURL, options: .atomic)
-            }
+            freshlyDecoded = image != nil
+        }
+        guard let image else { return nil }
+
+        // An evict landed while we were decoding: the bytes we read
+        // are superseded. Don't publish them to memory or disk;
+        // return whatever the eviction's follow-up prewarm cached
+        // (nil makes callers fall back to their placeholder until
+        // the next load).
+        let current = generations.withLock { $0[path] ?? 0 }
+        guard current == generation else {
+            return cache.object(forKey: key)
         }
 
-        guard let image else { return nil }
+        if freshlyDecoded, let diskURL, sourceBytes > Self.diskCacheThresholdBytes,
+            let png = image.pngData()
+        {
+            // PNG keeps the alpha channel PE-extracted icons rely
+            // on. Atomic write so concurrent loads of the same
+            // artwork can't interleave partial files.
+            try? png.write(to: diskURL, options: .atomic)
+        }
         cache.setObject(image, forKey: key, cost: decodedCost(image))
         return image
     }

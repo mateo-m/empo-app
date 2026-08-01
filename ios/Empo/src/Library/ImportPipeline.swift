@@ -1441,9 +1441,14 @@ extension GameLibrary {
 
     /// Updates the extraction progress on the already-committed
     /// progress card (not on `pendingImports`, which was cleared
-    /// once pre-flight passed). No throttling needed: only the
-    /// card's `GameStatusIndicator` subtree reads `importProgress`,
-    /// so a tick re-renders one progress ring, not the library.
+    /// once pre-flight passed). Ticks only re-render the card
+    /// bodies that read `importProgress`, not the library. The
+    /// monotonic guard matters twice over: unstructured tasks give
+    /// no FIFO guarantee onto the main actor (an out-of-order write
+    /// would snap the ring backwards), and the extractor degenerates
+    /// to one callback per entry once its byte-based percentage
+    /// saturates — those arrive as equal values and are dropped
+    /// here instead of notifying observers.
     ///
     /// Strictly an UPDATE: an entry that is not currently importing
     /// stays untouched. A cancelled replacement re-surfaces the
@@ -1459,6 +1464,7 @@ extension GameLibrary {
                 let model = GameLibrary.shared.games.first(where: { $0.id == importID }),
                 model.isImporting
             else { return }
+            guard progress > model.importProgress else { return }
             model.importProgress = progress
         }
     }
