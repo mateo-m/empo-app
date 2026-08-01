@@ -2,7 +2,8 @@ import Foundation
 import GameProbe
 
 /// Read model for the game library: scan containers on disk and
-/// build `GameEntry` values for the UI.
+/// build `GameSnapshot` values that the main actor merges into the
+/// live `GameEntry` models.
 enum GameCatalog {
 
     /// Fast first-pass scan for launch. Builds displayable entries
@@ -16,8 +17,8 @@ enum GameCatalog {
         fm: FileManager = .default,
         isImportInFlight: @Sendable (String) -> Bool = { _ in false },
         isDeletionInFlight: @Sendable (String) -> Bool = { _ in false }
-    ) -> [GameEntry] {
-        var entries: [GameEntry] = []
+    ) -> [GameSnapshot] {
+        var entries: [GameSnapshot] = []
 
         for container in GameContainer.discover() {
             if isImportInFlight(container.id) { continue }
@@ -25,7 +26,7 @@ enum GameCatalog {
             // Skip orphaned containers (no Game/ subdir) instead of
             // deleting them. The full pass owns cleanup.
             guard fm.fileExists(atPath: container.gameURL.path) else { continue }
-            if let entry = buildGameEntry(from: container, fm: fm, quick: true) {
+            if let entry = buildSnapshot(from: container, fm: fm, quick: true) {
                 entries.append(entry)
             }
         }
@@ -47,8 +48,8 @@ enum GameCatalog {
         cleanupInvalid: Bool,
         isImportInFlight: @Sendable (String) -> Bool = { _ in false },
         isDeletionInFlight: @Sendable (String) -> Bool = { _ in false }
-    ) -> [GameEntry] {
-        var entries: [GameEntry] = []
+    ) -> [GameSnapshot] {
+        var entries: [GameSnapshot] = []
 
         for container in GameContainer.discover() {
             if isImportInFlight(container.id) { continue }
@@ -64,7 +65,7 @@ enum GameCatalog {
             // importing (e.g. the app was killed mid-extract, leaving only
             // the `Metadata/` sidecar dir behind). It can't become a real
             // game, so drop it instead of surfacing an "Unknown Game" card.
-            // Live imports are excluded via `skipIDs` above, so anything
+            // Live imports are excluded by the checks above, so anything
             // reaching here with no `Game/` is a genuine orphan.
             let gameDirExists = fm.fileExists(atPath: container.gameURL.path)
             if !gameDirExists {
@@ -112,14 +113,14 @@ enum GameCatalog {
                         "[GameCatalog] Keeping invalid container %@: save rescue failed",
                         container.folderName)
                 }
-                if var entry = buildGameEntry(from: container, fm: fm) {
+                if var entry = buildSnapshot(from: container, fm: fm) {
                     entry.status = .invalid
                     entries.append(entry)
                 }
                 continue
             }
 
-            if let entry = buildGameEntry(from: container, fm: fm) {
+            if let entry = buildSnapshot(from: container, fm: fm) {
                 entries.append(entry)
             }
         }
@@ -132,11 +133,11 @@ enum GameCatalog {
     /// title, metadata.json, artwork that already exists on disk),
     /// skipping PE icon extraction and script-profile detection.
     /// Used by `quickScanGames` for the launch fast path.
-    nonisolated static func buildGameEntry(
+    nonisolated static func buildSnapshot(
         from container: GameContainer,
         fm: FileManager = .default,
         quick: Bool = false
-    ) -> GameEntry? {
+    ) -> GameSnapshot? {
         let iniTitle =
             GameINI.parseINIValue(at: container.gameURL, section: "game", key: "title")
             ?? "Unknown Game"
@@ -158,7 +159,7 @@ enum GameCatalog {
             return titlesMeaningfullyDiffer(title, iniTitle) ? iniTitle : nil
         }()
 
-        return GameEntry(
+        return GameSnapshot(
             id: container.id,
             container: container,
             title: title,

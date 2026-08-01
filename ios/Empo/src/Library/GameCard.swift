@@ -108,11 +108,15 @@ struct GameCard: View {
     private var centerOverlay: some View {
         // Dim the artwork a little for non-ready states so the
         // indicator stays readable on top of busy thumbnails.
-        if game.status.phase != .ready {
+        if game.status != .ready {
             Color.black.opacity(Scrim.light)
         }
+        // Reading `importProgress` here (inside this card's body,
+        // not the library's) is what keeps progress ticks scoped to
+        // one card.
         GameStatusIndicator(
-            kind: .resolve(status: game.status, paused: isPaused),
+            kind: .resolve(
+                status: game.status, progress: game.importProgress, paused: isPaused),
             onStopImport: onStopImport,
             size: 36
         )
@@ -122,7 +126,8 @@ struct GameCard: View {
     private var artworkView: some View {
         GameArtworkView(
             artworkPath: game.artworkPath,
-            importing: game.status.phase == .importing || game.status.phase == .deleting
+            importing: game.status == .importing || game.status == .deleting,
+            reloadToken: game.artworkRevision
         )
     }
 }
@@ -149,7 +154,8 @@ struct GameListRow: View {
                 placeholderIconSize: 16,
                 size: AppSize.listArtwork,
                 cornerRadius: Radius.sm,
-                importing: game.status.phase == .importing || game.status.phase == .deleting
+                importing: game.status == .importing || game.status == .deleting,
+                reloadToken: game.artworkRevision
             )
             .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) {
                 config in
@@ -177,7 +183,8 @@ struct GameListRow: View {
             Spacer()
 
             GameStatusIndicator(
-                kind: .resolve(status: game.status, paused: isPaused),
+                kind: .resolve(
+                    status: game.status, progress: game.importProgress, paused: isPaused),
                 onStopImport: onStopImport
             )
         }
@@ -326,12 +333,16 @@ struct GameStatusIndicator: View {
 }
 
 extension GameStatusIndicator.Kind {
-    /// Helper for the common call shape: feed the file-system status
-    /// and the session-paused flag, get the right visual kind.
-    /// Keeps the "paused only makes sense on ready" rule in one place.
-    static func resolve(status: GameStatus, paused: Bool) -> Self {
+    /// Helper for the common call shape: feed the file-system status,
+    /// the live extraction progress, and the session-paused flag, get
+    /// the right visual kind. Keeps the "paused only makes sense on
+    /// ready" rule in one place. `progress` is only consulted for
+    /// `.importing` — callers pass `game.importProgress` and the read
+    /// registers an Observation dependency precisely where the value
+    /// is displayed.
+    static func resolve(status: GameStatus, progress: Double, paused: Bool) -> Self {
         switch status {
-        case .importing(let progress): .importing(progress: progress)
+        case .importing: .importing(progress: progress)
         case .deleting: .deleting
         case .invalid: .invalid
         case .ready: paused ? .paused : .ready

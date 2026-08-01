@@ -533,7 +533,8 @@ struct GameInfoView: View {
             placeholderIconSize: 32,
             size: AppSize.infoArtwork,
             cornerRadius: Radius.md,
-            shimmer: false
+            shimmer: false,
+            reloadToken: customImageRefreshToken
         )
     }
 

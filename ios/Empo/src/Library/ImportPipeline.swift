@@ -699,15 +699,6 @@ extension NSLock {
     }
 }
 
-/// Last progress value committed to a library card, per import.
-/// Extraction callbacks fire far more often than the UI needs, and
-/// every commit replaces an element of `GameLibrary.games`, which
-/// invalidates the whole library view. `updateCardProgress` drops
-/// ticks until they move the bar by at least 1%. File-scoped because
-/// `GameLibrary`'s import surface lives in an extension, which can't
-/// hold stored properties.
-private let committedImportProgress = Mutex<[String: Double]>([:])
-
 extension GameLibrary {
     struct ImportCancelled: Error {}
 
@@ -853,7 +844,6 @@ extension GameLibrary {
     /// Remove a library card from memory (artwork cache + `games`).
     @MainActor
     func removeLibraryEntry(id: String) {
-        committedImportProgress.withLock { $0[id] = nil }
         if let artworkPath = games.first(where: { $0.id == id })?.artworkPath {
             ImageCache.shared.evict(path: artworkPath)
         }
@@ -1415,7 +1405,7 @@ extension GameLibrary {
                         container: container,
                         title: title,
                         artworkPath: artworkPath,
-                        status: .importing(progress: 0)
+                        status: .importing
                     ))
             }
         }
@@ -1428,48 +1418,32 @@ extension GameLibrary {
     /// get replaced by the final artwork pick. Can fire more than
     /// once per import: the first non-utility `.exe` is a
     /// tentative pick that a later `Game.exe` supersedes and
-    /// locks. Rebuilding the entry (rather than mutating
-    /// `artworkPath` on the existing one) goes through SwiftUI's
-    /// normal diffing so the card cross-fades the placeholder to
-    /// the real artwork.
+    /// locks.
     nonisolated func updateCardArtwork(_ importID: String, artworkPath: String) {
         Task { @MainActor in
             let lib = GameLibrary.shared
-            guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
-            // No early-return on same path. The mid-extract sidecar
-            // is at a fixed location (`<container>/Metadata/exe-icon.png`)
-            // and gets overwritten on disk when a later .exe in the
-            // archive supersedes the earlier pick (e.g. Reborn1950
-            // ships [Patcher.exe (skipped), Reborn.exe, Game.exe]:
-            // Reborn writes first, Game.exe overwrites). The path
-            // string is unchanged across those writes, so a guard
-            // here would skip the SwiftUI re-render. The card would
-            // keep showing the first icon decoded into the
-            // ImageCache until a reload-time view rebuild swaps it
-            // for the latest disk content. That produces a visible
-            // mid-import-vs-final mismatch. Always rebuilding the
-            // entry forces the body re-eval, which re-reads cache
-            // (already evicted at write time), so the displayed
-            // icon tracks disk state.
+            guard let model = lib.games.first(where: { $0.id == importID }) else { return }
+            // The mid-extract sidecar sits at a fixed location
+            // (`<container>/Metadata/exe-icon.png`) and gets
+            // overwritten on disk when a later .exe in the archive
+            // supersedes the earlier pick (e.g. Reborn1950 ships
+            // [Patcher.exe (skipped), Reborn.exe, Game.exe]: Reborn
+            // writes first, Game.exe overwrites). The path string is
+            // unchanged across those writes, so the revision bump is
+            // what tells GameArtworkView to reload the (already
+            // evicted + re-prewarmed) contents.
             withAnimation {
-                lib.games[idx] = GameEntry(
-                    id: importID,
-                    container: lib.games[idx].container,
-                    title: lib.games[idx].title,
-                    artworkPath: artworkPath,
-                    engineTitle: lib.games[idx].engineTitle,
-                    lastPlayed: lib.games[idx].lastPlayed,
-                    dateAdded: lib.games[idx].dateAdded,
-                    totalPlayTime: lib.games[idx].totalPlayTime,
-                    status: lib.games[idx].status
-                )
+                model.artworkPath = artworkPath
+                model.artworkRevision += 1
             }
         }
     }
 
     /// Updates the extraction progress on the already-committed
     /// progress card (not on `pendingImports`, which was cleared
-    /// once pre-flight passed).
+    /// once pre-flight passed). No throttling needed: only the
+    /// card's `GameStatusIndicator` subtree reads `importProgress`,
+    /// so a tick re-renders one progress ring, not the library.
     ///
     /// Strictly an UPDATE: an entry that is not currently importing
     /// stays untouched. A cancelled replacement re-surfaces the
@@ -1480,34 +1454,12 @@ extension GameLibrary {
     /// the installed game through the abandon path, whose
     /// replacement marker the first tap already consumed.
     nonisolated func updateCardProgress(_ importID: String, _ progress: Double) {
-        let shouldCommit = committedImportProgress.withLock { committed in
-            // Always let regressions through (a later pipeline stage
-            // may restart its own progress range); otherwise require
-            // a 1% step so per-file extractor callbacks don't flood
-            // the main actor.
-            if let last = committed[importID], progress >= last, progress - last < 0.01 {
-                return false
-            }
-            committed[importID] = progress
-            return true
-        }
-        guard shouldCommit else { return }
         Task { @MainActor in
-            let lib = GameLibrary.shared
-            guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
-            let entry = lib.games[idx]
-            guard entry.isImporting else { return }
-            lib.games[idx] = GameEntry(
-                id: entry.id,
-                container: entry.container,
-                title: entry.title,
-                artworkPath: entry.artworkPath,
-                engineTitle: entry.engineTitle,
-                lastPlayed: entry.lastPlayed,
-                dateAdded: entry.dateAdded,
-                totalPlayTime: entry.totalPlayTime,
-                status: .importing(progress: progress)
-            )
+            guard
+                let model = GameLibrary.shared.games.first(where: { $0.id == importID }),
+                model.isImporting
+            else { return }
+            model.importProgress = progress
         }
     }
 

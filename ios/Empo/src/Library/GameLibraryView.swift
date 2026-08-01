@@ -85,12 +85,13 @@ struct GameLibraryView: View {
     // the progress state forever). Keeping it computed means it
     // tracks library.games directly. Filter + sort on 10s of entries
     // is cheap, but NOT free: `gameContent` evaluates this exactly
-    // once per body pass and hands the snapshot down to the grid/
+    // once per body pass and hands the result down to the grid/
     // list builders and their animation keys, instead of every
-    // consumer re-running the pipeline. Animation on full
-    // `[GameEntry]` arrays (and their associated values like import
-    // progress) was the hot-loop offender. Lightweight id/phase keys
-    // replace those triggers.
+    // consumer re-running the pipeline. Because `GameEntry` is a
+    // reference model, this body only depends on membership and the
+    // fields the sort/filter/animation keys actually read — the
+    // high-frequency `importProgress` is read exclusively inside
+    // the cards.
     private var filteredGames: [GameEntry] {
         library.displayedCatalog(
             search: debouncedSearch,
@@ -487,7 +488,10 @@ struct GameLibraryView: View {
         // animation keys must all share these locals.
         let games = filteredGames
         let pending = pendingValidationEntries
-        let animationKey = games.map { "\($0.id):\($0.status.phase)" }
+        // Reading `status` (never `importProgress`) here means the
+        // library body re-evaluates when a card's lifecycle state
+        // flips, but not on every extraction tick.
+        let animationKey = games.map { "\($0.id):\($0.status)" }
         return ScrollView {
             if settings.libraryDisplayMode == .grid {
                 gridInner(games: games, pending: pending, animationKey: animationKey)
@@ -649,7 +653,7 @@ struct GameLibraryView: View {
 
     @ViewBuilder
     private func listRow(for game: GameEntry, index: Int) -> some View {
-        if game.status.phase == .deleting {
+        if game.isDeleting {
             // Inert while the delete runs: no tap, no context menu.
             GameListRow(game: game)
                 .transition(.cardAppear)
@@ -668,7 +672,7 @@ struct GameLibraryView: View {
                 game: game,
                 isPaused: isPaused,
                 heroNamespace: game.status == .ready ? heroNamespace : nil,
-                onStopImport: game.status.phase == .importing
+                onStopImport: game.status == .importing
                     ? {
                         gameToDelete = game
                         showDeleteConfirm = true
@@ -872,8 +876,11 @@ struct GameLibraryView: View {
         let ids = selectedIDs
         let games = library.games.filter { ids.contains($0.id) }
         for game in games {
+            // Capture the title, not the model: the error closure is
+            // @Sendable and may run after the model left the library.
+            let title = game.title
             library.deleteGame(game) { error in
-                errorTitle = "Couldn't delete \"\(game.title)\""
+                errorTitle = "Couldn't delete \"\(title)\""
                 errorMessage = error
                 showErrorAlert = true
             } onSaveRescueFailure: { failedGame in

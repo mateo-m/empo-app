@@ -14,6 +14,11 @@ struct GameArtworkView: View {
     /// list rows use the default; full-width surfaces (hero card)
     /// pass `ImageCache.PixelBudget.hero`.
     var maxPixelSize: CGFloat = ImageCache.PixelBudget.cell
+    /// Bump to force a reload when the artwork file is overwritten
+    /// in place under an unchanged path (exe-icon sidecar upgrades
+    /// mid-import, custom artwork replacement). Folded into the
+    /// load task's identity below.
+    var reloadToken: Int = 0
 
     @State private var shimmerPhase: CGFloat = -1
     @State private var loadedImage: UIImage?
@@ -27,7 +32,7 @@ struct GameArtworkView: View {
                     shimmerOverlay
                 }
             }
-            .task(id: artworkPath) {
+            .task(id: "\(reloadToken)|\(artworkPath ?? "")") {
                 guard let path = artworkPath else {
                     loadedImage = nil
                     return
@@ -66,14 +71,12 @@ struct GameArtworkView: View {
     }
 
     /// Cache-first, then the async task's result. The memory lookup
-    /// keeps two flows honest: cells recreated by the lazy grid/list
-    /// while scrolling paint immediately instead of flashing the
-    /// placeholder until the task lands, and artwork overwritten in
-    /// place under an unchanged path (exe-icon sidecar upgrades,
-    /// custom artwork replacement) shows the fresh contents because
-    /// the writer evicts + prewarms the cache while `loadedImage`
-    /// still holds the stale decode (`task(id:)` won't refire for
-    /// an unchanged path).
+    /// keeps cells recreated by the lazy grid/list while scrolling
+    /// painting immediately instead of flashing the placeholder
+    /// until the task lands. In-place overwrites under an unchanged
+    /// path are handled by `reloadToken` refiring the task, with the
+    /// writer's evict + prewarm keeping this cache-first read fresh
+    /// in the window before the reload lands.
     private var displayedImage: UIImage? {
         guard let path = artworkPath else { return nil }
         return ImageCache.shared.cachedThumbnail(for: path, maxPixelSize: maxPixelSize)
