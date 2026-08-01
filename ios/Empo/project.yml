@@ -247,15 +247,22 @@ targets:
           [ -z "$ORIGIN_URL" ] && ORIGIN_URL="https://github.com/mateo-m/empo-app"
           ISSUES_URL="$ORIGIN_URL/issues"
 
-          # Engine binding fingerprint for the active SDK. The debug log
-          # prints it next to the commit so a stale mkxp*-merged.o is
+          # Engine fingerprints for the active SDK. The debug log
+          # prints them next to the commit so stale engine code is
           # visible in bug reports: the app can be built from HEAD while
           # the prebuilt engine inside it is weeks older (the July 2026
-          # stale-msgbox bug). 12 hex chars is enough to compare against
-          # ios/Dependencies/tools/binding-fingerprint.sh output.
+          # stale-msgbox bug). The engine ships in two halves with
+          # separate stamps: the merged bindings (mkxp*-merged.o) and
+          # the core (libmkxpz-core.a). A core-only change moves only
+          # the core stamp, so the log must show both. 12 hex chars is
+          # enough to compare against the stamp files under
+          # ios/Dependencies/build-<sdk>-arm64/lib/.
           FP_FILE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib/.mkxp-binding-fingerprint"
           ENGINE_FP=$(head -c 12 "$FP_FILE" 2>/dev/null || true)
           [ -z "$ENGINE_FP" ] && ENGINE_FP="unstamped"
+          CORE_FP_FILE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib/.mkxp-core-fingerprint"
+          ENGINE_CORE_FP=$(head -c 12 "$CORE_FP_FILE" 2>/dev/null || true)
+          [ -z "$ENGINE_CORE_FP" ] && ENGINE_CORE_FP="unstamped"
 
           OUT="${PROJECT_DIR}/src/App/GitInfo.generated.swift"
           NEW=$(
@@ -268,6 +275,7 @@ targets:
             echo "    static let originURL = \"$ORIGIN_URL\""
             echo "    static let issuesURL = \"$ISSUES_URL\""
             echo "    static let engineFingerprint = \"$ENGINE_FP\""
+            echo "    static let engineCoreFingerprint = \"$ENGINE_CORE_FP\""
             echo "}"
           )
           # Only touch the file when the content actually changed so
