@@ -55,12 +55,47 @@ trick is to turn mkxp-z back into a console:
 
 Why Empo cannot just adopt it today:
 
-- It replaces the native multi-Ruby architecture (`docs/multi-ruby.md`). The sandbox work
-  targets modern Ruby; there is no Ruby 1.8 story, which Empo needs for RGSS1-era games.
-- The sandbox supports no external libraries, so the `win32_wrap.rb` shims and native
-  Win32 DLL emulation are out.
-- A WASM sandbox pays an interpreter-shaped performance tax that matters more on mobile.
+- **It replaces the native multi-Ruby architecture** (`docs/multi-ruby.md`). The port runs
+  everything on a single Ruby 3.3.10. This is not a gap in the PR — it is a toolchain
+  floor. Ruby's WASI/WebAssembly support only exists from Ruby 3.2 (the port's author
+  found even pre-3.3 WASI builds too buggy to use). No WASI port of Ruby 1.8 or 1.9
+  exists anywhere, and creating one is a research project: 1.8's green threads work by
+  copying the machine C stack, and its GC scans that stack — but a WASM sandbox's call
+  stack is deliberately not addressable, so 1.8's core execution machinery would need a
+  redesign, not a recompile. The sandbox world's practical answer for vintage games is
+  "one modern Ruby plus syntax-transform shims" — exactly the single-Ruby architecture
+  Empo already tried and moved away from as fragile.
+- **Performance is unmeasured.** See the honest accounting below — likely acceptable for
+  classic games, unproven for script-heavy Essentials forks on mobile.
 - The PR is unmerged and still moving.
+
+One earlier concern does **not** hold up: the sandbox's "no external libraries" rule does
+not break Win32 compatibility for Empo. `win32_wrap.rb` is pure Ruby and runs unchanged
+inside the sandbox — the PR author explicitly leans on that same preload-script approach.
+What the sandbox genuinely cannot do is load real native libraries via MiniFFI, and iOS
+cannot do that today either. Sandboxing would cost Empo nothing here.
+
+### Performance: what is actually known
+
+No one has published measurements of this port, and the PR discussion contains no fps
+numbers. What can be said honestly:
+
+- The tax lands on script execution, not (in this architecture) on native rendering and
+  audio. Boundary crossings between sandboxed Ruby and the engine add further cost.
+- Literature on wasm2c-style compiled-to-C sandboxing puts CPU overhead roughly in the
+  1.1x-1.5x range versus native ([WasmBoxC](https://kripken.github.io/blog/wasm/2020/07/27/wasmboxc.html):
+  14% with minor non-portable C, 42% fully portable; general WASM-vs-native studies
+  cluster around 1.3x-1.5x). Ruby's WASI builds additionally use Asyncify (for
+  setjmp/longjmp, fibers, GC stack scanning), which adds code size and slows
+  instrumented paths further.
+- Two mitigating factors for Empo specifically: iOS already forbids JIT, so no YJIT is
+  lost relative to the current native builds; and classic RGSS games are light (40-60fps
+  2D). The at-risk case is script-heavy modern Essentials forks, which are already the
+  slowest games on the current engine.
+
+Bottom line: plausibly fine for vintage games on modern iPhones, unproven where it
+matters most. Any real evaluation starts with benchmarking the libretro core on ARM
+against native mkxp-z on the same games.
 
 One point in its favor for the long term: `wasm2c` output is ahead-of-time-compiled C,
 so it does not hit the iOS no-JIT wall. If the PR merges upstream, a sandboxed backend
@@ -113,7 +148,7 @@ Ruby VM via the preload-script mechanism (`scripts/preload/`). The design:
 | Approach                        | Fidelity                  | Fits current engine | Cost                            |
 | ------------------------------- | ------------------------- | ------------------- | ------------------------------- |
 | Console-style memory snapshot   | Frame-exact               | No — no flat memory | Impossible as-is                |
-| wasm2c sandbox (libretro PR)    | Frame-exact deterministic | No — new backend    | Re-architecture; no 1.8, no DLLs |
+| wasm2c sandbox (libretro PR)    | Frame-exact deterministic | No — new backend    | Re-architecture; no Ruby < 3.2  |
 | RGSS-level save-anywhere        | Map-level, event state kept | Yes               | Preload hook + bridge + UI      |
 
 ## Recommendation
