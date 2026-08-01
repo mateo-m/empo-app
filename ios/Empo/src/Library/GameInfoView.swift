@@ -20,6 +20,11 @@ struct GameInfoView: View {
     @State private var titleScrollProgress: CGFloat = 0
     @State private var navBarBottomY: CGFloat = 0
     @State private var needsLibraryRefresh = false
+    /// Bumped whenever a custom image is saved or removed. Custom
+    /// media lives at fixed filenames ("artwork.jpg"/"banner.jpg"),
+    /// so a replacement leaves every path unchanged; this token is
+    /// the signal that makes image-loading tasks refire anyway.
+    @State private var customImageRefreshToken = 0
     @FocusState private var isTitleFocused: Bool
 
     private let originalTitle: String
@@ -48,11 +53,14 @@ struct GameInfoView: View {
 
     private var container: GameContainer? { game.container }
 
-    private var bannerImage: UIImage? {
-        guard let container,
-            let path = metadata.customBannerPath(in: container)
-        else { return nil }
-        return ImageCache.shared.image(for: path)
+    /// Decoded off-main via the banner `.task` below. Keyed on the
+    /// banner filename plus `customImageRefreshToken` so both a
+    /// newly-set banner and an in-place replacement (the filename is
+    /// the fixed "banner.jpg") reload it.
+    @State private var bannerImage: UIImage?
+
+    private var bannerTaskID: String {
+        "\(metadata.customBannerFilename ?? "none")|\(customImageRefreshToken)"
     }
 
     /// Path to the artwork to render: user-set custom override
@@ -64,11 +72,6 @@ struct GameInfoView: View {
     private var resolvedArtworkPath: String? {
         guard let container else { return game.artworkPath }
         return metadata.customArtworkPath(in: container) ?? game.artworkPath
-    }
-
-    private var artworkImage: UIImage? {
-        guard let path = resolvedArtworkPath else { return nil }
-        return ImageCache.shared.image(for: path)
     }
 
     private var hasCustomArtwork: Bool {
@@ -304,6 +307,16 @@ struct GameInfoView: View {
                 if let container {
                     metadata = GameMetadata.load(from: container)
                 }
+            }
+            .task(id: bannerTaskID) {
+                guard let container,
+                    let path = metadata.customBannerPath(in: container)
+                else {
+                    bannerImage = nil
+                    return
+                }
+                bannerImage = await ImageCache.shared.thumbnail(
+                    for: path, maxPixelSize: ImageCache.PixelBudget.hero)
             }
             .task {
                 if let container {
@@ -559,6 +572,18 @@ struct GameInfoView: View {
         guard let filename = GameMetadata.saveImage(image, as: kind, in: container) else { return }
         filenameSetter(&metadata, filename)
         metadata.save(to: container)
+        // Prime the cache with the new contents. Library cards read
+        // cache-first under an unchanged path, so without this they
+        // would keep showing the stale decode after the refresh.
+        if let path = pathGetter(metadata, container) {
+            Task.detached(priority: .userInitiated) {
+                ImageCache.shared.prewarmThumbnail(
+                    for: path, maxPixelSize: ImageCache.PixelBudget.cell)
+                ImageCache.shared.prewarmThumbnail(
+                    for: path, maxPixelSize: ImageCache.PixelBudget.hero)
+            }
+        }
+        customImageRefreshToken += 1
         needsLibraryRefresh = true
     }
 
@@ -576,6 +601,7 @@ struct GameInfoView: View {
         }
         filenameSetter(&metadata, nil)
         metadata.save(to: container)
+        customImageRefreshToken += 1
         needsLibraryRefresh = true
     }
 

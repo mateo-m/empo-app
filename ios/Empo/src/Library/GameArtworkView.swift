@@ -10,8 +10,13 @@ struct GameArtworkView: View {
     var cornerRadius: CGFloat = 0
     var importing: Bool = false
     var shimmer: Bool = true
+    /// Decode budget for the thumbnail (long-edge pixels). Cells and
+    /// list rows use the default; full-width surfaces (hero card)
+    /// pass `ImageCache.PixelBudget.hero`.
+    var maxPixelSize: CGFloat = ImageCache.PixelBudget.cell
 
     @State private var shimmerPhase: CGFloat = -1
+    @State private var loadedImage: UIImage?
 
     var body: some View {
         content
@@ -21,6 +26,14 @@ struct GameArtworkView: View {
                 if shimmer && artworkPath != nil && !importing {
                     shimmerOverlay
                 }
+            }
+            .task(id: artworkPath) {
+                guard let path = artworkPath else {
+                    loadedImage = nil
+                    return
+                }
+                loadedImage = await ImageCache.shared.thumbnail(
+                    for: path, maxPixelSize: maxPixelSize)
             }
             .onAppear {
                 guard shimmer && artworkPath != nil else { return }
@@ -45,11 +58,26 @@ struct GameArtworkView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let path = artworkPath, let uiImage = ImageCache.shared.image(for: path) {
+        if let path = artworkPath, let uiImage = displayedImage {
             sized(loadedArtwork(path: path, uiImage: uiImage))
         } else {
             sized(placeholderContent)
         }
+    }
+
+    /// Cache-first, then the async task's result. The memory lookup
+    /// keeps two flows honest: cells recreated by the lazy grid/list
+    /// while scrolling paint immediately instead of flashing the
+    /// placeholder until the task lands, and artwork overwritten in
+    /// place under an unchanged path (exe-icon sidecar upgrades,
+    /// custom artwork replacement) shows the fresh contents because
+    /// the writer evicts + prewarms the cache while `loadedImage`
+    /// still holds the stale decode (`task(id:)` won't refire for
+    /// an unchanged path).
+    private var displayedImage: UIImage? {
+        guard let path = artworkPath else { return nil }
+        return ImageCache.shared.cachedThumbnail(for: path, maxPixelSize: maxPixelSize)
+            ?? loadedImage
     }
 
     @ViewBuilder

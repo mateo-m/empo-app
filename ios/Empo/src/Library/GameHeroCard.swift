@@ -50,7 +50,8 @@ struct GameHeroCard: View {
                     GameArtworkView(
                         artworkPath: game.artworkPath,
                         importing: false,
-                        shimmer: false
+                        shimmer: false,
+                        maxPixelSize: ImageCache.PixelBudget.hero
                     )
                 }
                 .overlay(alignment: .bottom) {

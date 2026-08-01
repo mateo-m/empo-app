@@ -699,6 +699,15 @@ extension NSLock {
     }
 }
 
+/// Last progress value committed to a library card, per import.
+/// Extraction callbacks fire far more often than the UI needs, and
+/// every commit replaces an element of `GameLibrary.games`, which
+/// invalidates the whole library view. `updateCardProgress` drops
+/// ticks until they move the bar by at least 1%. File-scoped because
+/// `GameLibrary`'s import surface lives in an extension, which can't
+/// hold stored properties.
+private let committedImportProgress = Mutex<[String: Double]>([:])
+
 extension GameLibrary {
     struct ImportCancelled: Error {}
 
@@ -844,6 +853,7 @@ extension GameLibrary {
     /// Remove a library card from memory (artwork cache + `games`).
     @MainActor
     func removeLibraryEntry(id: String) {
+        committedImportProgress.withLock { $0[id] = nil }
         if let artworkPath = games.first(where: { $0.id == id })?.artworkPath {
             ImageCache.shared.evict(path: artworkPath)
         }
@@ -1156,7 +1166,8 @@ extension GameLibrary {
                             artworkPath = writeProbeIconSidecar(sel.iconPNG, to: container)
                         }
                         if let path = artworkPath {
-                            _ = ImageCache.shared.image(for: path)
+                            ImageCache.shared.prewarmThumbnail(
+                                for: path, maxPixelSize: ImageCache.PixelBudget.cell)
                         }
                         self.commitPendingToCard(
                             sel.importID,
@@ -1449,6 +1460,7 @@ extension GameLibrary {
                     engineTitle: lib.games[idx].engineTitle,
                     lastPlayed: lib.games[idx].lastPlayed,
                     dateAdded: lib.games[idx].dateAdded,
+                    totalPlayTime: lib.games[idx].totalPlayTime,
                     status: lib.games[idx].status
                 )
             }
@@ -1468,6 +1480,18 @@ extension GameLibrary {
     /// the installed game through the abandon path, whose
     /// replacement marker the first tap already consumed.
     nonisolated func updateCardProgress(_ importID: String, _ progress: Double) {
+        let shouldCommit = committedImportProgress.withLock { committed in
+            // Always let regressions through (a later pipeline stage
+            // may restart its own progress range); otherwise require
+            // a 1% step so per-file extractor callbacks don't flood
+            // the main actor.
+            if let last = committed[importID], progress >= last, progress - last < 0.01 {
+                return false
+            }
+            committed[importID] = progress
+            return true
+        }
+        guard shouldCommit else { return }
         Task { @MainActor in
             let lib = GameLibrary.shared
             guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
@@ -1481,6 +1505,7 @@ extension GameLibrary {
                 engineTitle: entry.engineTitle,
                 lastPlayed: entry.lastPlayed,
                 dateAdded: entry.dateAdded,
+                totalPlayTime: entry.totalPlayTime,
                 status: .importing(progress: progress)
             )
         }

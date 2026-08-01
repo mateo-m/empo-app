@@ -46,6 +46,11 @@ struct GameEntry: Identifiable, Hashable {
     var engineTitle: String?
     var lastPlayed: Date?  // from metadata, cached at scan time
     var dateAdded: Date?  // from metadata, cached at scan time
+    // Cached at scan time like the dates above. The most/least-played
+    // sorts read this; loading metadata.json inside a sort comparator
+    // (the previous approach) meant O(n log n) file reads on the main
+    // thread every time the library body re-evaluated.
+    var totalPlayTime: TimeInterval?
     var status: GameStatus = .ready
 
     /// Where the game's own files live. `<container>/Game/`. Empty
@@ -76,7 +81,7 @@ struct GameEntry: Identifiable, Hashable {
         lhs.id == rhs.id && lhs.status == rhs.status && lhs.title == rhs.title
             && lhs.container == rhs.container && lhs.artworkPath == rhs.artworkPath
             && lhs.engineTitle == rhs.engineTitle && lhs.lastPlayed == rhs.lastPlayed
-            && lhs.dateAdded == rhs.dateAdded
+            && lhs.dateAdded == rhs.dateAdded && lhs.totalPlayTime == rhs.totalPlayTime
     }
 
 }

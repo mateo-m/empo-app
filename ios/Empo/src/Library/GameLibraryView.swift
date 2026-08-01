@@ -35,6 +35,11 @@ struct GameLibraryView: View {
     @State private var showInvalidAlert = false
     @State private var path = NavigationPath()
     @State private var searchText = ""
+    /// Search text actually applied to the catalog. Trails
+    /// `searchText` by a debounce interval (see the `.task(id:)`
+    /// in `navigationContent`) so each keystroke doesn't re-filter,
+    /// re-sort, and re-render the whole grid.
+    @State private var debouncedSearch = ""
     @State private var gameForSettings: GameEntry?
     @State private var gameForInfo: GameEntry?
     @State private var pendingGame: GameEntry?
@@ -79,19 +84,19 @@ struct GameLibraryView: View {
     // entries stuck around after reload (an imported game stayed in
     // the progress state forever). Keeping it computed means it
     // tracks library.games directly. Filter + sort on 10s of entries
-    // is cheap. Animation on full `[GameEntry]` arrays (and their
-    // associated values like import progress) was the hot-loop
-    // offender. Lightweight id/phase keys replace those triggers.
+    // is cheap, but NOT free: `gameContent` evaluates this exactly
+    // once per body pass and hands the snapshot down to the grid/
+    // list builders and their animation keys, instead of every
+    // consumer re-running the pipeline. Animation on full
+    // `[GameEntry]` arrays (and their associated values like import
+    // progress) was the hot-loop offender. Lightweight id/phase keys
+    // replace those triggers.
     private var filteredGames: [GameEntry] {
         library.displayedCatalog(
-            search: searchText,
+            search: debouncedSearch,
             sort: settings.librarySortOption,
             sizes: gameSizes
         )
-    }
-
-    private var catalogAnimationKey: [String] {
-        filteredGames.map { "\($0.id):\($0.status.phase)" }
     }
 
     /// Synthetic cards for pre-flight validations, pinned to the top
@@ -116,7 +121,7 @@ struct GameLibraryView: View {
     private var recentlyPlayed: GameEntry? {
         library.recentlyPlayedCandidate(
             showContinuePlaying: settings.showContinuePlaying,
-            searchText: searchText
+            searchText: debouncedSearch
         )
     }
 
@@ -166,8 +171,23 @@ struct GameLibraryView: View {
             .task(id: ObjectIdentifier(library)) {
                 importPipeline.configure(library: library)
             }
+            .task(id: searchText) {
+                // Clearing applies instantly (the user expects the
+                // full library back the moment they hit the X);
+                // typing debounces.
+                if !searchText.isEmpty {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    guard !Task.isCancelled else { return }
+                }
+                debouncedSearch = searchText
+            }
             .task {
-                refreshGameSizes()
+                // Size data is only consumed by the size sorts; the
+                // walk enumerates every file of every game, so don't
+                // pay for it while another sort is active.
+                if settings.librarySortOption.usesDiskSizes {
+                    refreshGameSizes()
+                }
             }
             .task {
                 duplicateNoticeNames = GameContainerMigration.pendingDuplicateNoticeNames()
@@ -461,23 +481,32 @@ struct GameLibraryView: View {
     }
 
     private var gameContent: some View {
-        ScrollView {
+        // One catalog snapshot per body pass. Each access of
+        // `filteredGames` / `pendingValidationEntries` re-runs the
+        // filter + sort pipeline, so the grid/list builders and their
+        // animation keys must all share these locals.
+        let games = filteredGames
+        let pending = pendingValidationEntries
+        let animationKey = games.map { "\($0.id):\($0.status.phase)" }
+        return ScrollView {
             if settings.libraryDisplayMode == .grid {
-                gridInner
+                gridInner(games: games, pending: pending, animationKey: animationKey)
                     .transition(.viewModeSwitch)
             } else {
-                listInner
+                listInner(games: games, pending: pending, animationKey: animationKey)
                     .transition(.viewModeSwitch)
             }
         }
         .overlay {
-            if !searchText.isEmpty && filteredGames.isEmpty {
-                ContentUnavailableView.search(text: searchText)
+            if !debouncedSearch.isEmpty && games.isEmpty {
+                ContentUnavailableView.search(text: debouncedSearch)
             }
         }
     }
 
-    private var gridInner: some View {
+    private func gridInner(
+        games: [GameEntry], pending: [GameEntry], animationKey: [String]
+    ) -> some View {
         VStack(spacing: Spacing.lg) {
             if let hero = recentlyPlayed {
                 heroCard(for: hero)
@@ -487,14 +516,14 @@ struct GameLibraryView: View {
             }
 
             LazyVGrid(columns: columns, spacing: Spacing.lg) {
-                gridItems
+                gridItems(games: games, pending: pending)
             }
         }
         .padding(.horizontal)
         .padding(.top, Spacing.lg)
         .padding(.bottom)
-        .animation(Motion.standard, value: catalogAnimationKey)
-        .animation(Motion.standard, value: pendingValidationEntries.map(\.id))
+        .animation(Motion.standard, value: animationKey)
+        .animation(Motion.standard, value: pending.map(\.id))
     }
 
     private func heroCard(for game: GameEntry) -> some View {
@@ -546,7 +575,9 @@ struct GameLibraryView: View {
         .padding(.top, Spacing.sm)
     }
 
-    private var listInner: some View {
+    private func listInner(
+        games: [GameEntry], pending: [GameEntry], animationKey: [String]
+    ) -> some View {
         LazyVStack(spacing: 0) {
             if let hero = recentlyPlayed {
                 heroListRow(for: hero)
@@ -555,13 +586,13 @@ struct GameLibraryView: View {
                 librarySectionHeader
             }
 
-            ForEach(pendingValidationEntries, id: \.id) { pending in
+            ForEach(pending, id: \.id) { pendingEntry in
                 GameListRow(
-                    game: pending,
+                    game: pendingEntry,
                     onStopImport: { showCancelValidationAlert = true }
                 )
                 .gameContextMenu(
-                    game: pending,
+                    game: pendingEntry,
                     appState: appState,
                     onPlay: {},
                     onCancelImport: { showCancelValidationAlert = true },
@@ -570,14 +601,14 @@ struct GameLibraryView: View {
                     gameForSettings: $gameForSettings,
                     gameForInfo: $gameForInfo
                 )
-                .id("\(pending.id)-pending")
+                .id("\(pendingEntry.id)-pending")
                 .transition(.cardAppear)
             }
 
-            ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
+            ForEach(Array(games.enumerated()), id: \.element.id) { index, game in
                 listRow(for: game, index: index)
 
-                if index < filteredGames.count - 1 {
+                if index < games.count - 1 {
                     Divider()
                         .padding(.leading, AppSize.listArtwork + Spacing.lg * 2)
                 }
@@ -585,20 +616,20 @@ struct GameLibraryView: View {
         }
         .padding(.horizontal)
         .padding(.top, Spacing.lg)
-        .animation(Motion.standard, value: catalogAnimationKey)
-        .animation(Motion.standard, value: pendingValidationEntries.map(\.id))
+        .animation(Motion.standard, value: animationKey)
+        .animation(Motion.standard, value: pending.map(\.id))
     }
 
     @ViewBuilder
-    private var gridItems: some View {
-        ForEach(pendingValidationEntries, id: \.id) { pending in
+    private func gridItems(games: [GameEntry], pending: [GameEntry]) -> some View {
+        ForEach(pending, id: \.id) { pendingEntry in
             GameCard(
-                game: pending,
+                game: pendingEntry,
                 onStopImport: { showCancelValidationAlert = true }
             )
             .cardShadow()
             .gameContextMenu(
-                game: pending,
+                game: pendingEntry,
                 appState: appState,
                 onPlay: {},
                 onCancelImport: { showCancelValidationAlert = true },
@@ -607,11 +638,11 @@ struct GameLibraryView: View {
                 gameForSettings: $gameForSettings,
                 gameForInfo: $gameForInfo
             )
-            .id("\(pending.id)-pending")
+            .id("\(pendingEntry.id)-pending")
             .transition(.cardAppear)
         }
 
-        ForEach(Array(filteredGames.enumerated()), id: \.element.id) { index, game in
+        ForEach(Array(games.enumerated()), id: \.element.id) { index, game in
             gridItem(for: game, index: index)
         }
     }
@@ -955,13 +986,16 @@ struct GameLibraryView: View {
         if newPhase == nil && !path.isEmpty {
             path = NavigationPath()
         }
-        if newPhase == nil {
+        // A play session can grow saves/logs, but the walk visits
+        // every file of every game, so only re-run it when a size
+        // sort is actually consuming the data.
+        if newPhase == nil && settings.librarySortOption.usesDiskSizes {
             refreshGameSizes()
         }
     }
 
     private func handleSortOptionChange(_ newSort: LibrarySortOption) {
-        if newSort == .largestSize || newSort == .smallestSize {
+        if newSort.usesDiskSizes {
             refreshGameSizes()
         }
     }

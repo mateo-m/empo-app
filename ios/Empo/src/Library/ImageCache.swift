@@ -1,36 +1,178 @@
+import CryptoKit
+import ImageIO
 import UIKit
 
-final class ImageCache {
+/// Two-layer (memory + disk) cache of downsampled artwork thumbnails.
+///
+/// Library artwork is frequently a game's full title screen (PNG/BMP,
+/// often 1920x1080+). Decoding those at native size costs
+/// `width * height * 4` bytes and tens of milliseconds each, and doing
+/// it synchronously during a SwiftUI body evaluation was the primary
+/// source of scroll hitches in the library. Every decode now goes
+/// through ImageIO thumbnailing (`kCGImageSourceThumbnailMaxPixelSize`)
+/// so the bitmap is bounded by what the target surface can actually
+/// show, and `thumbnail(for:)` runs it off the caller's actor.
+///
+/// Large sources also persist their downsampled result under
+/// Caches/ArtworkThumbnails so later launches skip the full-size
+/// decode. The OS may purge that directory under storage pressure;
+/// entries are simply regenerated on demand.
+final class ImageCache: @unchecked Sendable {
     static let shared = ImageCache()
 
-    private let cache = NSCache<NSString, UIImage>()
-
-    private init() {
-        cache.countLimit = 50
-        // A 64 MB ceiling keeps steady-state memory bounded when a
-        // user imports many large banners. Typical libraries still
-        // hit the countLimit cap first. NSCache drains on memory
-        // warnings automatically.
-        cache.totalCostLimit = 64 * 1024 * 1024
+    /// Pixel budgets for the app's artwork surfaces. `cell` covers the
+    /// grid card (about a third of the screen width) and the 48pt list
+    /// artwork with retina headroom. `hero` covers the full-width
+    /// "Continue playing" card, the Game Info banner, and the loading
+    /// view backdrop.
+    enum PixelBudget {
+        static let cell: CGFloat = 768
+        static let hero: CGFloat = 1600
     }
 
-    func image(for path: String) -> UIImage? {
-        let key = path as NSString
-        if let cached = cache.object(forKey: key) {
-            return cached
+    /// Sources at or below this byte size (exe-icon sidecars, small
+    /// title screens) decode fast enough that a disk copy of the
+    /// thumbnail would only add write traffic.
+    private static let diskCacheThresholdBytes = 256 * 1024
+
+    private let cache = NSCache<NSString, UIImage>()
+    private let diskDirectory: URL
+    private let fm = FileManager.default
+
+    private init() {
+        // Thumbnails are bounded (a 16:9 cell thumbnail decodes to
+        // roughly half a megabyte), so the count limit can sit well
+        // above the old full-size limit while the cost ceiling keeps
+        // worst-case memory flat. NSCache drains on memory warnings
+        // automatically.
+        cache.countLimit = 150
+        cache.totalCostLimit = 64 * 1024 * 1024
+        diskDirectory = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ArtworkThumbnails", isDirectory: true)
+        try? fm.createDirectory(at: diskDirectory, withIntermediateDirectories: true)
+    }
+
+    /// Memory-only lookup, cheap enough for SwiftUI body evaluations.
+    /// Views use this as a fast path so cells recreated by the lazy
+    /// grid/list don't flash their placeholder while the async load
+    /// re-delivers an image that is already decoded.
+    func cachedThumbnail(for path: String, maxPixelSize: CGFloat) -> UIImage? {
+        cache.object(forKey: Self.memoryKey(path: path, maxPixelSize: maxPixelSize))
+    }
+
+    /// Async load: memory cache, then disk cache, then a downsampled
+    /// decode of the source. All I/O and decoding run off the
+    /// caller's actor.
+    func thumbnail(for path: String, maxPixelSize: CGFloat) async -> UIImage? {
+        if let hit = cachedThumbnail(for: path, maxPixelSize: maxPixelSize) {
+            return hit
         }
-        // `preparingForDisplay()` forces the full CGImage decode up
-        // front. Without it, the first draw pass triggers the decode
-        // on the main thread and produces a visible hitch when
-        // scrolling the library grid.
-        guard let raw = UIImage(contentsOfFile: path) else { return nil }
-        let image = raw.preparingForDisplay() ?? raw
+        return await Task.detached(priority: .userInitiated) { [self] in
+            loadThumbnail(path: path, maxPixelSize: maxPixelSize)
+        }.value
+    }
+
+    /// Synchronous load for background contexts that want the cache
+    /// primed before the UI reads it (import pipeline, exe-icon
+    /// surfacer). Never call on the main thread.
+    func prewarmThumbnail(for path: String, maxPixelSize: CGFloat) {
+        _ = loadThumbnail(path: path, maxPixelSize: maxPixelSize)
+    }
+
+    /// Drop every cached representation of `path`, memory and disk.
+    /// Callers overwrite artwork files in place (exe-icon sidecar,
+    /// custom artwork/banner), so eviction must be synchronous:
+    /// a background sweep could race a prewarm of the new contents
+    /// and delete the fresh entry.
+    func evict(path: String) {
+        for budget in [PixelBudget.cell, PixelBudget.hero] {
+            cache.removeObject(forKey: Self.memoryKey(path: path, maxPixelSize: budget))
+        }
+        let prefix = Self.pathDigest(path)
+        if let items = try? fm.contentsOfDirectory(atPath: diskDirectory.path) {
+            for item in items where item.hasPrefix(prefix) {
+                try? fm.removeItem(at: diskDirectory.appendingPathComponent(item))
+            }
+        }
+    }
+
+    private func loadThumbnail(path: String, maxPixelSize: CGFloat) -> UIImage? {
+        let key = Self.memoryKey(path: path, maxPixelSize: maxPixelSize)
+        if let hit = cache.object(forKey: key) {
+            return hit
+        }
+
+        let sourceBytes =
+            (try? fm.attributesOfItem(atPath: path)[.size] as? Int) ?? 0
+        let diskURL = diskCacheURL(path: path, maxPixelSize: maxPixelSize)
+
+        var image: UIImage?
+        if let diskURL, fm.fileExists(atPath: diskURL.path) {
+            image = Self.decodeThumbnail(at: diskURL, maxPixelSize: maxPixelSize)
+        }
+        if image == nil {
+            image = Self.decodeThumbnail(
+                at: URL(fileURLWithPath: path), maxPixelSize: maxPixelSize)
+            if let image, let diskURL, sourceBytes > Self.diskCacheThresholdBytes,
+                let png = image.pngData()
+            {
+                // PNG keeps the alpha channel PE-extracted icons rely
+                // on. Atomic write so concurrent loads of the same
+                // artwork can't interleave partial files.
+                try? png.write(to: diskURL, options: .atomic)
+            }
+        }
+
+        guard let image else { return nil }
         cache.setObject(image, forKey: key, cost: decodedCost(image))
         return image
     }
 
-    func evict(path: String) {
-        cache.removeObject(forKey: path as NSString)
+    /// ImageIO decode straight into a bitmap bounded by
+    /// `maxPixelSize` on the long edge. Never materializes the
+    /// full-size image, and does not upscale smaller sources.
+    private static func decodeThumbnail(at url: URL, maxPixelSize: CGFloat) -> UIImage? {
+        let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
+        guard
+            let source = CGImageSourceCreateWithURL(
+                url as CFURL, sourceOptions as CFDictionary)
+        else { return nil }
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ]
+        guard
+            let cgImage = CGImageSourceCreateThumbnailAtIndex(
+                source, 0, thumbnailOptions as CFDictionary)
+        else { return nil }
+        return UIImage(cgImage: cgImage)
+    }
+
+    /// Disk cache name embeds the source's mtime so an artwork file
+    /// replaced in place naturally misses the stale entry; `evict`
+    /// sweeps everything matching the path digest regardless of
+    /// mtime or budget.
+    private func diskCacheURL(path: String, maxPixelSize: CGFloat) -> URL? {
+        guard
+            let mtime = (try? fm.attributesOfItem(atPath: path)[.modificationDate])
+                as? Date
+        else { return nil }
+        let name =
+            "\(Self.pathDigest(path))-\(Int(mtime.timeIntervalSince1970))-\(Int(maxPixelSize)).png"
+        return diskDirectory.appendingPathComponent(name)
+    }
+
+    private static func pathDigest(_ path: String) -> String {
+        SHA256.hash(data: Data(path.utf8))
+            .prefix(10)
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    private static func memoryKey(path: String, maxPixelSize: CGFloat) -> NSString {
+        "\(Int(maxPixelSize))|\(path)" as NSString
     }
 
     private func decodedCost(_ image: UIImage) -> Int {

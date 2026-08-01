@@ -44,8 +44,13 @@ final class ExeIconSurfacer: @unchecked Sendable {
             container.ensureMetadataDirectory()
             let sidecarURL = container.exeIconSidecarURL
             guard (try? png.write(to: sidecarURL)) != nil else { return }
+            // Evict-then-prewarm before announcing the path: the
+            // sidecar is overwritten in place, and library cards read
+            // the cache first, so the fresh decode must already be
+            // cached when the card re-renders.
             ImageCache.shared.evict(path: sidecarURL.path)
-            _ = ImageCache.shared.image(for: sidecarURL.path)
+            ImageCache.shared.prewarmThumbnail(
+                for: sidecarURL.path, maxPixelSize: ImageCache.PixelBudget.cell)
 
             lock.withLock {
                 hasTentative = true

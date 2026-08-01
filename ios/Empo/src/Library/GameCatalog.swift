@@ -165,7 +165,8 @@ enum GameCatalog {
             artworkPath: artworkPath,
             engineTitle: engineTitle,
             lastPlayed: metadata.lastPlayed,
-            dateAdded: metadata.dateAdded
+            dateAdded: metadata.dateAdded,
+            totalPlayTime: metadata.totalPlayTime
         )
     }
 
