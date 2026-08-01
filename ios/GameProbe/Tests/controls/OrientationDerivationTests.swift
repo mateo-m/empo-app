@@ -226,12 +226,17 @@ final class OrientationDerivationTests: XCTestCase {
         )
     }
 
+    /// Every element sits fully inside the landscape touch zone
+    /// (center at least half a size away from every inset edge).
+    /// Gap preservation only holds for legal layouts: an element that
+    /// hangs into an inset gets pulled in by the target-side zone
+    /// clamp, which legitimately compresses its gaps.
     private func sampleLandscapeLayout() -> TouchLayout {
         TouchLayout(
-            dpad: DPadSpec(x: 0.10, y: 0.68, size: 140),
+            dpad: DPadSpec(x: 0.16, y: 0.68, size: 140),
             buttons: [
-                ButtonSpec(label: "OK", key: "KeyZ", x: 0.92, y: 0.72, size: 68),
-                ButtonSpec(label: "Back", key: "KeyX", x: 0.82, y: 0.84, size: 56),
+                ButtonSpec(label: "OK", key: "KeyZ", x: 0.88, y: 0.72, size: 68),
+                ButtonSpec(label: "Back", key: "KeyX", x: 0.78, y: 0.80, size: 56),
             ]
         )
     }
