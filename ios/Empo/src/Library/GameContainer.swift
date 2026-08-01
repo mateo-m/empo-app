@@ -7,10 +7,15 @@ import Foundation
 ///
 ///   ```
 ///   Documents/Games/<uuid>-<slug>/
-///   ├── Game/              Imported game files. NEVER written by Empo
-///   │                      after import - we treat it as read-only.
-///   ├── UserData/          Per-game writable payload (save files,
-///   │                      backups, plugin data), exposed via Files app.
+///   ├── Game/              Imported game files. Empo (the host) never
+///   │                      writes here after import. The GAME does:
+///   │                      self-updates, portable "Save Data/", and
+///   │                      working-directory saves all land here,
+///   │                      exactly as they would next to Game.exe.
+///   ├── UserData/          Stand-in for per-user Windows locations
+///   │                      (AppData, Saved Games). Holds files games
+///   │                      address via System.data_directory or the
+///   │                      faked env vars. Exposed via Files app.
 ///   ├── EmpoState/         Empo-managed state:
 ///   │                        - mkxp.json (generated config; merged
 ///   │                          from Game/mkxp.json + per-game settings)
@@ -254,7 +259,7 @@ struct GameContainer: Equatable, Hashable {
         // Older builds wrote a snapshot of the developer's
         // mkxp.json as `mkxp.original.json` here and used it as a
         // merge base. We now read directly from `Game/mkxp.json`
-        // (the imported folder is immutable after import), so the
+        // (the host never edits it; the game may), so the
         // snapshot is dead state. Clean it up opportunistically.
         let staleSnapshot = empoStateURL.appendingPathComponent("mkxp.original.json")
         try? FileManager.default.removeItem(at: staleSnapshot)
