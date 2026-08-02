@@ -48,6 +48,13 @@ if ! git -C "$SUBMODULE_PATH" merge-base --is-ancestor "$SUBMODULE_SHA" "origin/
     exit 1
 fi
 
+printf -- '-> engine pin freshness (scripts/check-engine-pin.sh)\n'
+if ! "$REPO_ROOT/scripts/check-engine-pin.sh"; then
+    printf 'pre-push failed: the engine prebuilt pin does not match the submodule\n' >&2
+    exit 1
+fi
+
+# shellcheck disable=SC1091
 . "$REPO_ROOT/scripts/hooks/ruby-env.sh"
 
 if ! command -v bundle >/dev/null 2>&1; then
