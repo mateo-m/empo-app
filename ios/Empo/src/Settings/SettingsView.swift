@@ -29,7 +29,7 @@ struct SettingsView: View {
                     }
 
                     SettingsPicker(
-                        title: "View mode",
+                        title: "Layout",
                         selection: $settings.libraryDisplayMode,
                         description: "Show games as a grid of cards or a compact list."
                     ) {
@@ -38,13 +38,18 @@ struct SettingsView: View {
                         }
                     }
 
-                    SettingsPicker(
-                        title: "Title position",
-                        selection: $settings.titlePosition,
-                        description: "Where game titles show up on your library cards."
-                    ) {
-                        ForEach(TitlePosition.allCases, id: \.self) { position in
-                            Text(position.label).tag(position)
+                    // Title position only affects grid cards; the
+                    // list layout always puts the title next to the
+                    // artwork. Hide the row when it would be a no-op.
+                    if settings.libraryDisplayMode == .grid {
+                        SettingsPicker(
+                            title: "Title position",
+                            selection: $settings.titlePosition,
+                            description: "Where game titles show up on your library cards."
+                        ) {
+                            ForEach(TitlePosition.allCases, id: \.self) { position in
+                                Text(position.label).tag(position)
+                            }
                         }
                     }
 
