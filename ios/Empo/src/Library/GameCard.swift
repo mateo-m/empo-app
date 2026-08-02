@@ -148,6 +148,8 @@ struct GameCard: View {
         GameArtworkView(
             artworkPath: game.artworkPath,
             importing: game.status == .importing || game.status == .deleting,
+            shimmer: game.justImported,
+            onShimmerFinished: { game.justImported = false },
             reloadToken: game.artworkRevision
         )
     }
@@ -176,6 +178,8 @@ struct GameListRow: View {
                 size: AppSize.listArtwork,
                 cornerRadius: Radius.sm,
                 importing: game.status == .importing || game.status == .deleting,
+                shimmer: game.justImported,
+                onShimmerFinished: { game.justImported = false },
                 reloadToken: game.artworkRevision
             )
             .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) {

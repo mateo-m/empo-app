@@ -82,6 +82,12 @@ final class GameEntry: Identifiable {
     /// forces the reload that a stable path string can't signal.
     var artworkRevision: Int = 0
 
+    /// Set when this session watches the entry finish an import
+    /// (importing -> ready in `apply`). Drives the one-shot shimmer
+    /// on the library artwork; the shimmer's completion clears it.
+    /// Session-only by design - a relaunch shows no shimmer.
+    var justImported = false
+
     init(
         id: String,
         container: GameContainer?,
@@ -135,7 +141,10 @@ final class GameEntry: Identifiable {
         if lastPlayed != snapshot.lastPlayed { lastPlayed = snapshot.lastPlayed }
         if dateAdded != snapshot.dateAdded { dateAdded = snapshot.dateAdded }
         if totalPlayTime != snapshot.totalPlayTime { totalPlayTime = snapshot.totalPlayTime }
-        if !preservingStatus && status != snapshot.status { status = snapshot.status }
+        if !preservingStatus && status != snapshot.status {
+            if status == .importing && snapshot.status == .ready { justImported = true }
+            status = snapshot.status
+        }
     }
 
     /// Where the game's own files live. `<container>/Game/`. Empty

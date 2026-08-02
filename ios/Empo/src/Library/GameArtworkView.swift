@@ -9,7 +9,14 @@ struct GameArtworkView: View {
     var size: CGFloat?
     var cornerRadius: CGFloat = 0
     var importing: Bool = false
-    var shimmer: Bool = true
+    /// One-shot highlight sweep. Off by default: the sweep re-fires
+    /// on every lazy-cell recreation, which puts an animated
+    /// full-surface overlay on each card entering the viewport
+    /// during a scroll. Library cards enable it only for a game
+    /// whose import just finished, and `onShimmerFinished` lets
+    /// them clear that flag after the single play.
+    var shimmer: Bool = false
+    var onShimmerFinished: (() -> Void)?
     /// Decode budget for the thumbnail (long-edge pixels). Cells and
     /// list rows use the default; full-width surfaces (hero card)
     /// pass `ImageCache.PixelBudget.hero`.
@@ -54,12 +61,25 @@ struct GameArtworkView: View {
                 loadedImage = image
                 loadedPath = path
             }
-            .onAppear {
-                guard shimmer && artworkPath != nil else { return }
-                withAnimation(.easeInOut(duration: 0.8).delay(0.3)) {
-                    shimmerPhase = 2
-                }
+            .onAppear { playShimmer() }
+            // The just-imported card is already on screen when its
+            // status flips to ready, so `onAppear` has long passed.
+            // React to the flag itself for that case.
+            .onChange(of: shimmer) { _, isOn in
+                if isOn { playShimmer() }
             }
+    }
+
+    private func playShimmer() {
+        guard shimmer && artworkPath != nil && !importing else { return }
+        var resetTransaction = Transaction()
+        resetTransaction.disablesAnimations = true
+        withTransaction(resetTransaction) { shimmerPhase = -1 }
+        withAnimation(.easeInOut(duration: 0.8).delay(0.3)) {
+            shimmerPhase = 2
+        } completion: {
+            onShimmerFinished?()
+        }
     }
 
     private var shimmerOverlay: some View {
