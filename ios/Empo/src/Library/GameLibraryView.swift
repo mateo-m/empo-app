@@ -135,7 +135,13 @@ struct GameLibraryView: View {
 
     private static func makeColumns(compact: Bool) -> [GridItem] {
         let count = compact ? 5 : 3
-        return Array(repeating: GridItem(.flexible(), spacing: Spacing.lg), count: count)
+        // Top alignment keeps the artwork squares of a row flush when
+        // the `.under` title layout gives cards different heights
+        // (one-line vs two-line titles). Rows of equal-height cards
+        // are unaffected.
+        return Array(
+            repeating: GridItem(.flexible(), spacing: Spacing.lg, alignment: .top),
+            count: count)
     }
 
     var body: some View {
@@ -787,22 +793,23 @@ struct GameLibraryView: View {
         return Button {
             handleCardTap(for: game)
         } label: {
-            GameCard(game: game, isPaused: isPaused)
-                .matchedTransitionSource(
-                    id: GameTapSource.item.transitionID(for: game.id),
-                    in: heroNamespace
-                ) { config in
-                    config
-                        .background(.black)
-                        .clipShape(.rect(cornerRadius: Radius.md))
+            GameCard(
+                game: game,
+                isPaused: isPaused,
+                // GameCard anchors the hero zoom on its artwork
+                // square. Anchoring here around the whole card
+                // paints the config's black backdrop through the
+                // transparent title zone of the `.under` layout.
+                heroTransitionID: GameTapSource.item.transitionID(for: game.id),
+                heroNamespace: heroNamespace
+            )
+            .cardShadow()
+            .overlay(alignment: .topTrailing) {
+                if selectionMode {
+                    selectionBadge(for: game.id)
+                        .padding(Spacing.sm)
                 }
-                .cardShadow()
-                .overlay(alignment: .topTrailing) {
-                    if selectionMode {
-                        selectionBadge(for: game.id)
-                            .padding(Spacing.sm)
-                    }
-                }
+            }
         }
         // NOTE: no .id("...-\(isPaused)") here on purpose.
         // Forcing a remount on pause toggle destroys the
