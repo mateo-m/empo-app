@@ -763,16 +763,16 @@ struct GameSettingsView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         let provenance = engineSettings.provenance(for: field)
-        let provenanceLabel: String = {
-            if provenance == .yours { return "yours" }
-            if engineSettings.gameDefaultsUnknown { return "unknown" }
-            return "game"
-        }()
         VStack(alignment: .leading, spacing: Spacing.xxs) {
             content()
-            Text(provenanceLabel)
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            // Annotate only the rows the user overrode. Rows that
+            // still follow the game's own mkxp.json stay unmarked -
+            // that is the normal state and needs no callout.
+            if provenance == .yours {
+                Text("Changed by you")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .contextMenu {
             if provenance == .yours {
