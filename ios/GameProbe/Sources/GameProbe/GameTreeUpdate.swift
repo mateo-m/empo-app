@@ -239,11 +239,7 @@ public enum GameTreeUpdate {
             // crash). Metadata-only and the merge has already
             // succeeded, so this can no longer strand a half-update.
             try normalizeOwnerWritable(at: target, fm: fm)
-            _ = try fm.replaceItemAt(
-                target,
-                withItemAt: staging,
-                backupItemName: backupDirectoryName
-            )
+            try swapStagedTree(target: target, staging: staging, backup: backup, fm: fm)
             try? fm.removeItem(at: staging)
             try? fm.removeItem(at: backup)
         } catch {
@@ -269,6 +265,37 @@ public enum GameTreeUpdate {
             }
             throw error
         }
+    }
+
+    /// Swap the merged staging tree into place. Darwin's
+    /// `replaceItemAt` performs the exchange natively. On Linux,
+    /// swift-corelibs-foundation implements the replace as a rename
+    /// onto the existing directory, and the kernel rejects that
+    /// with ENOTEMPTY. Perform the same exchange manually there:
+    /// the original moves to the backup name first, then the
+    /// staging tree takes its place. The artifact names match what
+    /// `sweepInterruptedUpdate` and the failure path expect.
+    private static func swapStagedTree(
+        target: URL, staging: URL, backup: URL, fm: FileManager
+    ) throws {
+        #if canImport(Darwin)
+            _ = try fm.replaceItemAt(
+                target,
+                withItemAt: staging,
+                backupItemName: backupDirectoryName
+            )
+        #else
+            try fm.moveItem(at: target, to: backup)
+            do {
+                try fm.moveItem(at: staging, to: target)
+            } catch {
+                // Put the original back so the catch in
+                // `stageAndSwap` sees a healthy tree and only
+                // removes genuinely redundant artifacts.
+                try? fm.moveItem(at: backup, to: target)
+                throw error
+            }
+        #endif
     }
 
     private static func healthyTreeExists(at target: URL, fm: FileManager) -> Bool {
