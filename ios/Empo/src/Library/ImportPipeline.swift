@@ -391,13 +391,21 @@ final class ImportPipeline {
     ///     is refused with an alert.
     ///   - Anything else is a fresh install under the title itself.
     private func planImports(_ selections: [ImportSelection]) -> [PlannedImport] {
-        let installed = GameContainer.discover()
+        // A container mid-deletion is still on disk (the delete
+        // runs detached and can take seconds on a large game).
+        // Planning against it would race the running rm -rf: the
+        // update path could finalize a replacement that the
+        // pending removeItem then unlinks. Treat those names as
+        // in-flight instead - the user retries once the delete
+        // lands.
+        let deleting = GameLibrary.shared.deletionsInFlight.withLock { $0 }
+        let installed = GameContainer.discover().filter { !deleting.contains($0.id) }
         let installedByName = Dictionary(
             installed.map { ($0.folderName, $0) },
             uniquingKeysWith: { first, _ in first }
         )
 
-        var inFlightNames: [String] = []
+        var inFlightNames: [String] = Array(deleting)
         if let library {
             inFlightNames.append(contentsOf: library.pendingImports.keys)
             for entry in library.games where entry.isImporting {
@@ -588,7 +596,22 @@ final class ImportPipeline {
     }
 
     private func presentError(title: String, message: String) {
-        alert = ImportPipelineAlert(title: title, message: message)
+        // One batch can refuse several selections in one pass. A
+        // plain overwrite would surface only the last refusal, so
+        // later errors fold into the pending alert instead.
+        guard let existing = alert else {
+            alert = ImportPipelineAlert(title: title, message: message)
+            return
+        }
+        let mergedTitle = "Some imports failed"
+        let existingBody =
+            existing.title == mergedTitle
+            ? existing.message
+            : "\(existing.title): \(existing.message)"
+        alert = ImportPipelineAlert(
+            title: mergedTitle,
+            message: "\(existingBody)\n\n\(title): \(message)"
+        )
     }
 }
 
@@ -768,13 +791,23 @@ extension GameLibrary {
     /// Its entry is re-surfaced instead.
     @MainActor
     func abandonImport(importID: String, container: GameContainer?) {
-        _ = pendingImports.removeValue(forKey: importID)
+        // Idempotence guard: the delete-an-importing-card path and
+        // the import task's own failure path both land here. The
+        // second call must be a no-op - after the first one
+        // consumed the replacement marker, a repeat would resolve
+        // the INSTALLED container from disk and delete it.
+        let hadPendingImport = pendingImports.removeValue(forKey: importID) != nil
         let entry = games.first(where: { $0.id == importID })
+        guard hadPendingImport || entry?.isImporting == true else { return }
+
         let resolvedContainer =
             container ?? entry?.container ?? Self.containerOnDisk(importID: importID)
         removeLibraryEntry(id: importID)
 
-        let isReplacement = replacingImports.withLock { $0.contains(importID) }
+        // Consume (not just read) the marker: this hop owns it for
+        // failed selections; `finishBatch` only clears markers of
+        // selections that succeeded.
+        let isReplacement = replacingImports.withLock { $0.remove(importID) != nil }
         if isReplacement {
             if let resolvedContainer {
                 mergeImportedGame(container: resolvedContainer)
@@ -790,6 +823,10 @@ extension GameLibrary {
         if let artworkPath = games.first(where: { $0.id == id })?.artworkPath {
             ImageCache.shared.evict(path: artworkPath)
         }
+        // Stamped so a scan that snapshotted this entry BEFORE the
+        // removal cannot append it back as a ghost card
+        // (`applyScanResults` compares against its start date).
+        localMutationDates[id] = Date()
         withAnimation {
             games.removeAll { $0.id == id }
         }
@@ -801,30 +838,94 @@ extension GameLibrary {
 
     /// Recursively delete a game container. `onError` is set for
     /// user-initiated deletes. Import abandon passes nil so a
-    /// failed cleanup stays silent.
+    /// failed cleanup stays silent. `rescueSaves` is set for
+    /// user-initiated deletes only: the delete alert promises that
+    /// saves survive, so a legacy `UserData/` drains into the
+    /// shared `Documents/Data/` tree before the tree goes away -
+    /// and a failed rescue ABORTS the delete instead of erasing
+    /// the only copy of the saves.
+    private enum DeleteOutcome {
+        case finished
+        case rescueFailed
+        case failed(String)
+    }
+
     nonisolated static func deleteContainer(
         _ container: GameContainer?,
-        onError: (@MainActor @Sendable (String) -> Void)? = nil
+        rescueSaves: Bool = false,
+        onError: (@MainActor @Sendable (String) -> Void)? = nil,
+        onRescueFailure: (@MainActor @Sendable () -> Void)? = nil
     ) {
         guard let container else { return }
         Task.detached(priority: .userInitiated) {
-            do {
-                let fm = FileManager.default
-                guard fm.fileExists(atPath: container.url.path) else { return }
-                // One rm -rf removes Game/, EmpoState/, Logs/, and
-                // Metadata/ together. Per-game saves, settings,
-                // logs, custom artwork, and crash markers all go
-                // in a single call.
-                try container.deleteAll()
-            } catch {
-                NSLog("[GameLibrary] Delete error: %@", "\(error)")
-                guard let onError else { return }
-                await MainActor.run {
+            let outcome = Self.performDelete(container, rescueSaves: rescueSaves)
+            // Release BEFORE any restore reload runs: the reload's
+            // scan consults `deletionsInFlight` live, and an id
+            // still registered would make the scan skip the very
+            // container the reload exists to bring back - the kept
+            // game would then stay missing from the library until
+            // some unrelated reload. (The id joined the set on the
+            // main actor before this task started, user-initiated
+            // deletes only; removing an unregistered id is a
+            // no-op.)
+            await MainActor.run {
+                GameLibrary.shared.deletionsInFlight.withLock {
+                    _ = $0.remove(container.id)
+                }
+                switch outcome {
+                case .finished:
+                    break
+                case .rescueFailed:
                     GameLibrary.shared.reload()
-                    onError(error.localizedDescription)
+                    if let onRescueFailure {
+                        onRescueFailure()
+                    } else {
+                        onError?(
+                            "Empo could not move this game's saves into the Data folder. "
+                                + "The game was not deleted.")
+                    }
+                case .failed(let message):
+                    GameLibrary.shared.reload()
+                    onError?(message)
                 }
             }
         }
+    }
+
+    private nonisolated static func performDelete(
+        _ container: GameContainer,
+        rescueSaves: Bool
+    ) -> DeleteOutcome {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: container.url.path) else { return .finished }
+
+        if rescueSaves, !DataDirectory.rescueUserDataBeforeDeletion(of: container) {
+            // Abort and let the UI offer the choice (keep the game,
+            // or delete anyway with eyes open). Deleting here would
+            // erase the only copy of the saves right after the
+            // delete alert promised they survive.
+            NSLog(
+                "[GameLibrary] Rescue of UserData failed for %@; delete aborted",
+                container.folderName)
+            return .rescueFailed
+        }
+
+        do {
+            // One rm -rf removes Game/, EmpoState/, Logs/, and
+            // Metadata/ together. Per-game settings, logs, custom
+            // artwork, and crash markers all go in a single call.
+            // Saves live in Documents/Data/ and stay.
+            try container.deleteAll()
+        } catch {
+            NSLog("[GameLibrary] Delete error: %@", "\(error)")
+            // A concurrent remover (the scan's cleanup of the same
+            // container) can win the race and make our own pass
+            // throw on a tree that is in fact gone. That is a
+            // successful delete, not an error to alert about.
+            guard fm.fileExists(atPath: container.url.path) else { return .finished }
+            return .failed(error.localizedDescription)
+        }
+        return .finished
     }
 
     func pipelineImportGames(
@@ -905,14 +1006,17 @@ extension GameLibrary {
             }
 
             // Batch epilogue on the main actor. Clears the
-            // replacement markers HERE (not in the detached defer):
-            // the main actor is serial, and every abandonImport hop
-            // enqueued by failSelection precedes this closure, so
-            // each of them still sees its marker and knows not to
-            // delete the installed game.
+            // replacement markers of SUCCESSFUL selections only.
+            // Each failed selection's marker belongs to its
+            // abandonImport hop, which consumes it - actors do not
+            // guarantee FIFO between independently enqueued jobs,
+            // so clearing a failed selection's marker here could
+            // run before its abandon hop and turn a re-surface
+            // into a container deletion.
             func finishBatch(_ failures: [(GameLibrary.BatchSelection, Error)]) async {
+                let failedIDs = Set(failures.map { $0.0.importID })
                 await MainActor.run {
-                    for selection in selections {
+                    for selection in selections where !failedIDs.contains(selection.importID) {
                         self.replacingImports.withLock { _ = $0.remove(selection.importID) }
                     }
                     completion(failures)
@@ -1060,13 +1164,20 @@ extension GameLibrary {
                         isReplacement
                         && fm.fileExists(atPath: container.metadataJSONURL.path)
 
+                    // Cleanup only ever removes a directory THIS
+                    // import created. A pre-existing item at the
+                    // container path (a stray file the user put in
+                    // Games/, a container discovery missed) is not
+                    // ours to delete, no matter how the import
+                    // ends.
+                    let containerExisted = fm.fileExists(atPath: container.url.path)
                     var committed = false
                     defer {
                         // Fresh imports only: a failed replacement
                         // must never delete the container - it IS
                         // the installed game, saves included. Its
                         // entry is re-surfaced by abandonImport.
-                        if !committed && !isReplacement {
+                        if !committed && !isReplacement && !containerExisted {
                             try? container.deleteAll()
                         }
                     }
@@ -1097,6 +1208,18 @@ extension GameLibrary {
                                 at: container.url,
                                 withIntermediateDirectories: true
                             )
+                            if isReplacement {
+                                // A crashed earlier update can have
+                                // left `Game/` displaced into the
+                                // staging/backup artifacts. Restore
+                                // it BEFORE branching on existence:
+                                // the plain-move branch below would
+                                // otherwise drop the new tree next
+                                // to artifacts holding the only
+                                // copies of the old one.
+                                _ = GameTreeUpdate.sweepInterruptedUpdate(
+                                    target: container.gameURL, fm: fm)
+                            }
                             if isReplacement, fm.fileExists(atPath: container.gameURL.path) {
                                 // Update in place, transactionally:
                                 // the new files merge into a staging
@@ -1120,7 +1243,12 @@ extension GameLibrary {
                         continue
                     }
 
-                    if self.isImportCancelled(sel.importID) {
+                    // Replacements are past the point of no return
+                    // here: the swap already applied the new files.
+                    // Honoring a late cancel would skip finalize and
+                    // leave a stale script profile over the new
+                    // tree, so replacements run finalize regardless.
+                    if !isReplacement, self.isImportCancelled(sel.importID) {
                         failSelection(sel, ImportCancelled())
                         continue
                     }
@@ -1293,11 +1421,21 @@ extension GameLibrary {
     /// Updates the extraction progress on the already-committed
     /// progress card (not on `pendingImports`, which was cleared
     /// once pre-flight passed).
+    ///
+    /// Strictly an UPDATE: an entry that is not currently importing
+    /// stays untouched. A cancelled replacement re-surfaces the
+    /// installed game's ready card while the import task keeps
+    /// running (replacements finish once past the swap); a late
+    /// progress hop flipping that card back to importing would
+    /// re-arm the stop button - and a second stop tap would delete
+    /// the installed game through the abandon path, whose
+    /// replacement marker the first tap already consumed.
     nonisolated func updateCardProgress(_ importID: String, _ progress: Double) {
         Task { @MainActor in
             let lib = GameLibrary.shared
             guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
             let entry = lib.games[idx]
+            guard entry.isImporting else { return }
             lib.games[idx] = GameEntry(
                 id: entry.id,
                 container: entry.container,
@@ -1311,15 +1449,47 @@ extension GameLibrary {
         }
     }
 
-    func deleteGame(_ entry: GameEntry, onError: (@MainActor @Sendable (String) -> Void)? = nil) {
-        if entry.isImporting {
-            cancelImport(entry.id)
-            abandonImport(importID: entry.id, container: entry.container)
+    /// `skipSaveRescue` is the user's explicit "Delete Anyway"
+    /// choice after a failed save rescue - the confirmed
+    /// destructive path. Never pass true on a first attempt.
+    func deleteGame(
+        _ entry: GameEntry,
+        skipSaveRescue: Bool = false,
+        onError: (@MainActor @Sendable (String) -> Void)? = nil,
+        onSaveRescueFailure: (@MainActor @Sendable (GameEntry) -> Void)? = nil
+    ) {
+        // Re-resolve against live library state. The caller's entry
+        // can be a snapshot from before an alert sat open (the
+        // Delete Anyway flow), and the game may have started an
+        // update import since - deleting under a running swap
+        // would tear the container the import owns.
+        let live = games.first(where: { $0.id == entry.id }) ?? entry
+        if live.isImporting {
+            cancelImport(live.id)
+            abandonImport(importID: live.id, container: live.container)
+            return
+        }
+        let importOwnsContainer = inFlightImports.withLock { $0.contains(live.id) }
+        if importOwnsContainer {
+            NSLog(
+                "[GameLibrary] Ignoring delete of %@: an import owns its container",
+                live.id)
             return
         }
 
-        let container = entry.container
-        removeLibraryEntry(id: entry.id)
-        Self.deleteContainer(container, onError: onError)
+        let container = live.container
+        removeLibraryEntry(id: live.id)
+        // Registered BEFORE the detached delete starts so
+        // `planImports` sees the id the moment the entry leaves
+        // the library; the delete task releases it when done.
+        deletionsInFlight.withLock { _ = $0.insert(live.id) }
+        Self.deleteContainer(
+            container,
+            rescueSaves: !skipSaveRescue,
+            onError: onError,
+            onRescueFailure: onSaveRescueFailure.map { handler in
+                { @MainActor @Sendable in handler(live) }
+            }
+        )
     }
 }

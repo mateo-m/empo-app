@@ -27,6 +27,11 @@ struct GameLibraryView: View {
     @State private var showCancelValidationAlert = false
     @State private var gameToDelete: GameEntry?
     @State private var showDeleteConfirm = false
+    /// Games whose delete aborted because their saves could not
+    /// move into `Data/`. A queue, not a slot: a bulk delete can
+    /// fail several rescues, and each game gets its own Delete
+    /// Anyway / Keep Game choice, one alert after another.
+    @State private var saveRescueFailures: [GameEntry] = []
     @State private var showInvalidAlert = false
     @State private var path = NavigationPath()
     @State private var searchText = ""
@@ -213,8 +218,10 @@ struct GameLibraryView: View {
                     rtpWarnedGame: rtpWarnedGame,
                     rtpWarnedRequirement: rtpWarnedRequirement,
                     importPipelineAlert: importPipelineAlertBinding,
+                    saveRescueFailures: $saveRescueFailures,
                     pausedGame: pauseManager.pausedGame,
                     onDeleteGame: deleteSelectedGame,
+                    onDeleteGameDiscardingSaves: deleteGameDiscardingSaves,
                     onDismissImportPipelineAlert: importPipeline.dismissAlert,
                     onCancelValidation: importPipeline.cancelValidation,
                     onDismissPausedGameAlert: { pendingGame = nil },
@@ -815,6 +822,8 @@ struct GameLibraryView: View {
                 errorTitle = "Couldn't delete \"\(game.title)\""
                 errorMessage = error
                 showErrorAlert = true
+            } onSaveRescueFailure: { failedGame in
+                enqueueSaveRescueFailure(failedGame)
             }
         }
         exitSelectionMode()
@@ -937,9 +946,27 @@ struct GameLibraryView: View {
     private func deleteSelectedGame() {
         guard let game = gameToDelete else { return }
         library.deleteGame(game) { error in
+            errorTitle = "Couldn't delete \"\(game.title)\""
+            errorMessage = error
+            showErrorAlert = true
+        } onSaveRescueFailure: { failedGame in
+            enqueueSaveRescueFailure(failedGame)
+        }
+    }
+
+    /// The user's explicit "Delete Anyway" after a failed save
+    /// rescue: delete without rescuing again.
+    private func deleteGameDiscardingSaves(_ game: GameEntry) {
+        library.deleteGame(game, skipSaveRescue: true) { error in
+            errorTitle = "Couldn't delete \"\(game.title)\""
             errorMessage = error
             showErrorAlert = true
         }
+    }
+
+    private func enqueueSaveRescueFailure(_ game: GameEntry) {
+        guard !saveRescueFailures.contains(where: { $0.id == game.id }) else { return }
+        saveRescueFailures.append(game)
     }
 
     private var importRootPromptBinding: Binding<ImportRootPrompt?> {
@@ -996,7 +1023,9 @@ private struct BulkDeleteAlert: ViewModifier {
             .keyboardShortcut(.defaultAction)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will remove all files for the selected games. You can always re-import them later.")
+            Text(
+                "This will remove the game files for the selected games. Empo moves their saves to the Data folder and keeps them, so you can re-import the games later and continue."
+            )
         }
     }
 }
@@ -1154,8 +1183,10 @@ private struct LibraryAlertPresentation: ViewModifier {
     let rtpWarnedGame: GameEntry?
     let rtpWarnedRequirement: GameRTPRequirement?
     @Binding var importPipelineAlert: ImportPipelineAlert?
+    @Binding var saveRescueFailures: [GameEntry]
     let pausedGame: GameEntry?
     let onDeleteGame: () -> Void
+    let onDeleteGameDiscardingSaves: (GameEntry) -> Void
     let onDismissImportPipelineAlert: () -> Void
     let onCancelValidation: () -> Void
     let onDismissPausedGameAlert: () -> Void
@@ -1181,10 +1212,45 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 if let game = gameToDelete {
-                    Text(
-                        "This will remove all files for \"\(game.title)\". You can always re-import it later."
-                    )
+                    if game.isImporting {
+                        // Deleting an importing card cancels the
+                        // import. For an update, the installed game
+                        // stays - promising file removal here would
+                        // be false.
+                        Text(
+                            "This stops the import of \"\(game.title)\". An update leaves the installed game as it was."
+                        )
+                    } else {
+                        Text(
+                            "This will remove the game files for \"\(game.title)\". Empo moves your saves to the Data folder and keeps them, so you can re-import the game later and continue."
+                        )
+                    }
                 }
+            }
+            .alert(
+                "Couldn't Move Saves",
+                isPresented: Binding(
+                    get: { !saveRescueFailures.isEmpty },
+                    set: { presented in
+                        // Dismissal pops the queue; the binding
+                        // then reads true again while more
+                        // failures wait, so the next game's
+                        // choice presents in turn.
+                        if !presented, !saveRescueFailures.isEmpty {
+                            saveRescueFailures.removeFirst()
+                        }
+                    }
+                ),
+                presenting: saveRescueFailures.first
+            ) { game in
+                Button("Delete Anyway", role: .destructive) {
+                    onDeleteGameDiscardingSaves(game)
+                }
+                Button("Keep Game", role: .cancel) {}
+            } message: { game in
+                Text(
+                    "Empo could not move the saves for \"\(game.title)\" into the Data folder. If you delete the game anyway, these saves are lost forever. You can also keep the game and try again."
+                )
             }
             .alert("Invalid Game", isPresented: $showInvalidAlert) {
                 Button("OK") {}

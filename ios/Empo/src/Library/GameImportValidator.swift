@@ -451,8 +451,15 @@ enum GameImportValidator {
             }
 
             let relativePath = relativePath(from: directoryURL, to: root)
+            // Title priority matches the migration's chain (INI
+            // title, then JGP manifest name, then folder name). A
+            // re-import of a .jgp whose game ships no INI must
+            // adopt the container the migration named after the
+            // manifest - an archive-name fallback here would mint
+            // a second container for the same game.
             let title =
                 GameINI.parseINIValue(at: root, section: "game", key: "title")
+                ?? jgpManifestName(at: root)
                 ?? (relativePath.isEmpty ? fallbackRootName : root.lastPathComponent)
             let subtitle = relativePath.isEmpty ? fallbackRootName : relativePath
             choices.append(
@@ -471,6 +478,12 @@ enum GameImportValidator {
                 ?? ImportError.notAnRPGMakerGame
         }
         return sortImportRootChoices(choices)
+    }
+
+    private static func jgpManifestName(at root: URL) -> String? {
+        guard let name = Jgp.parseBundle(at: root)?.manifest.name else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func sortImportRootChoices(_ choices: [ImportRootChoice]) -> [ImportRootChoice] {

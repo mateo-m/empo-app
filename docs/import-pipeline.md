@@ -121,7 +121,10 @@ These invariants match the current code. Do not break them.
    selection ends with `abandonImport` (it deletes the partial container and removes the pending
    entry and card). It never surfaces an alert, because `ImportPipeline.startImports`'s
    completion filters out `ImportCancelled` failures. Every exit path clears the cancellation
-   flag (`defer` in `pipelineImportGames`).
+   flag (`defer` in `pipelineImportGames`). One exception: a replacement checks the flag for
+   the last time before its swap. After the swap, the new files are already in place, so the
+   update finalizes even when a cancel arrives late - finalize keeps the script profile in
+   step with the new tree.
 3. **Out-of-space mapping**: any error that satisfies `GameLibrary.isOutOfSpace`
    (`NSFileWriteOutOfSpaceError` or POSIX `ENOSPC`) must surface as `ImportError.outOfSpace`. See
    the move catch and the outer catch in `pipelineImportGames`.
@@ -137,10 +140,14 @@ These invariants match the current code. Do not break them.
    from `currentSession` + `pendingImports`. Keep it accurate.
 6. **Container hygiene**: after a selection's container exists, the `committed` flag +
    `defer { container.deleteAll() }` pattern guarantees cleanup on any failure - for **fresh
-   imports only**. A replacement (`GameLibrary.replacingImports`) never deletes its container on
-   failure or cancel: it is the installed game, saves included, and the staged atomic swap
-   means its `Game/` tree is either fully updated or exactly as it was. `abandonImport`
-   re-surfaces the existing entry instead of deleting.
+   imports only**, and only when the import created the directory itself (a pre-existing item
+   at the container path is never deleted). A replacement (`GameLibrary.replacingImports`)
+   never deletes its container on failure or cancel: it is the installed game, saves included,
+   and the staged atomic swap means its `Game/` tree is either fully updated or exactly as it
+   was. `abandonImport` re-surfaces the existing entry instead of deleting; it also consumes
+   the replacement marker, and `finishBatch` clears markers only for selections that
+   succeeded - actors do not guarantee FIFO between independently enqueued jobs, so the
+   marker's owner is always the code path that acts on it.
    `GameContainer.normalizeImportedGamePermissions` runs after **every** move into `Game/`.
    `ensureGamesDirectory` / `ensureSubdirs` handle the iCloud-backup exclusion. Do not remove
    those calls.
