@@ -112,22 +112,51 @@ enum GameContainerMigration {
                 guard let context = contexts[candidate.id] else { continue }
 
                 if titleClaimed {
-                    quarantineDuplicate(context, preferredName: candidate.preferredName, fm: fm)
+                    // Quarantine folders are named for HUMANS, not
+                    // for games: nothing resolves data paths
+                    // through `Duplicate Games/`, and a later
+                    // re-import derives identity from the INI, not
+                    // the folder. So the user's custom title, when
+                    // set, beats the INI title - "Rejuv kirin
+                    // updated" identifies a copy in Files far
+                    // better than "Pokemon Rejuvenation 2".
+                    quarantineDuplicate(
+                        context,
+                        preferredName: GameFolderName.sanitize(context.displayTitle),
+                        fm: fm)
                     continue
                 }
 
                 let destination = GameContainer.rootURL
                     .appendingPathComponent(candidate.preferredName, isDirectory: true)
+                // Copy the per-game UserDefaults families BEFORE the
+                // rename: a crash between the two steps then leaves
+                // both key families present (harmless - the copy is
+                // idempotent and never overwrites), whereas the
+                // reverse order would orphan the old keys forever,
+                // because a renamed folder no longer parses as
+                // legacy and this code never sees it again.
+                let copiedKeys = copyUserDefaultsKeys(
+                    fromID: context.legacyID, toID: candidate.preferredName)
                 do {
                     try fm.moveItem(at: context.url, to: destination)
                 } catch {
                     // Leave the tree under its legacy name; the next
                     // launch retries. Discovery still surfaces it
                     // (any directory is a container), so the game
-                    // stays playable meanwhile. The title stays
-                    // unclaimed so the next-best duplicate can take
-                    // it rather than getting quarantined behind a
-                    // rename that never happened.
+                    // stays playable meanwhile - including its
+                    // controls, since the legacy keys are still in
+                    // place. The title stays unclaimed so the
+                    // next-best duplicate can take it rather than
+                    // getting quarantined behind a rename that
+                    // never happened - which is exactly why the
+                    // keys copied above must roll back NOW: left
+                    // in place, they would block that duplicate's
+                    // own key copy (new-id-wins) and donate this
+                    // copy's controls to a different game.
+                    for key in copiedKeys {
+                        UserDefaults.standard.removeObject(forKey: key)
+                    }
                     NSLog(
                         "[GameContainerMigration] Failed to rename %@ -> %@: %@",
                         candidate.id,
@@ -137,7 +166,7 @@ enum GameContainerMigration {
                 }
 
                 titleClaimed = true
-                migrateUserDefaultsKeys(fromID: context.legacyID, toID: candidate.preferredName)
+                removeUserDefaultsKeys(forID: context.legacyID)
                 NSLog(
                     "[GameContainerMigration] Renamed %@ -> %@",
                     candidate.id,
@@ -156,16 +185,34 @@ enum GameContainerMigration {
         preferredName: String,
         fm: FileManager
     ) {
+        // Deliberately NOT excluded from backup, unlike `Games/`:
+        // a quarantined copy can hold the user's only copy of its
+        // saves (it never launches, so the launch drain never
+        // reaches it), and the alert promised the copies were
+        // preserved. Small price in quota; irreplaceable data.
         try? fm.createDirectory(at: duplicatesRootURL, withIntermediateDirectories: true)
-        excludeFromBackup(duplicatesRootURL)
 
+        // Case-insensitive collision check, per `uniqueName`'s
+        // contract: case-variant duplicates would collide when the
+        // user copies `Duplicate Games/` to a case-insensitive
+        // volume.
+        let existingLowercased = Set(
+            ((try? fm.contentsOfDirectory(atPath: duplicatesRootURL.path)) ?? [])
+                .map { $0.lowercased() }
+        )
         let name = GameFolderName.uniqueName(preferring: preferredName) { proposed in
-            fm.fileExists(atPath: duplicatesRootURL.appendingPathComponent(proposed).path)
+            existingLowercased.contains(proposed.lowercased())
         }
         let destination = duplicatesRootURL.appendingPathComponent(name, isDirectory: true)
         do {
             try fm.moveItem(at: context.url, to: destination)
             recordQuarantine(displayTitle: context.displayTitle, folderName: name)
+            // The quarantined copy's per-game UserDefaults would
+            // never be read again (its id left the library), so
+            // they go now instead of leaking forever. A later
+            // re-import of the copy gets the canonical title and
+            // the canonical keys.
+            removeUserDefaultsKeys(forID: context.legacyID)
             NSLog(
                 "[GameContainerMigration] Moved duplicate %@ -> Duplicate Games/%@",
                 context.url.lastPathComponent,
@@ -205,15 +252,6 @@ enum GameContainerMigration {
         UserDefaults.standard.set(names, forKey: DefaultsKey.pendingDuplicateGameNames)
     }
 
-    /// Same backup policy as `Games/`: game trees are large and
-    /// re-importable, so keep them out of users' iCloud quota.
-    private static func excludeFromBackup(_ url: URL) {
-        var values = URLResourceValues()
-        values.isExcludedFromBackup = true
-        var mutableURL = url
-        try? mutableURL.setResourceValues(values)
-    }
-
     /// Title for a legacy container, in the same priority the
     /// import pipeline now uses for naming: the INI title, then the
     /// import-time base title (JGP manifest name), then the old
@@ -236,22 +274,38 @@ enum GameContainerMigration {
             ?? GameFolderName.fallback
     }
 
-    /// Move the per-game UserDefaults families over to the new id.
-    /// An existing value under the new id wins (it can only exist
-    /// if a same-named game already migrated, in which case the
-    /// newer state is already the user's active one).
-    private static func migrateUserDefaultsKeys(fromID oldID: String, toID newID: String) {
+    /// Copy the per-game UserDefaults families to the new id,
+    /// returning the keys this call actually WROTE (so a failed
+    /// rename can roll exactly those back). An existing value
+    /// under the new id wins - it belongs to a same-named game
+    /// that already migrated. The old keys stay until
+    /// `removeUserDefaultsKeys` runs after the rename lands, so a
+    /// game still under its legacy name keeps its controls.
+    @discardableResult
+    private static func copyUserDefaultsKeys(
+        fromID oldID: String, toID newID: String
+    )
+        -> [String]
+    {
         let defaults = UserDefaults.standard
         let keyPairs = [
             (DefaultsKey.controlsLayout(gameID: oldID), DefaultsKey.controlsLayout(gameID: newID)),
             (DefaultsKey.controllerMap(gameID: oldID), DefaultsKey.controllerMap(gameID: newID)),
         ]
+        var written: [String] = []
         for (oldKey, newKey) in keyPairs {
             guard let value = defaults.data(forKey: oldKey) else { continue }
             if defaults.data(forKey: newKey) == nil {
                 defaults.set(value, forKey: newKey)
+                written.append(newKey)
             }
-            defaults.removeObject(forKey: oldKey)
         }
+        return written
+    }
+
+    private static func removeUserDefaultsKeys(forID id: String) {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: DefaultsKey.controlsLayout(gameID: id))
+        defaults.removeObject(forKey: DefaultsKey.controllerMap(gameID: id))
     }
 }

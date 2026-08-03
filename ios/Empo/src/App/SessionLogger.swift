@@ -9,7 +9,8 @@ import Foundation
 ///     design needed one). Each line is a self-contained record.
 ///   - `<iso8601>.log`: per-session debug log when `debugLogs` is
 ///     on. Filename uses just the timestamp because the parent
-///     dir already encodes the game's UUID + slug.
+///     dir already sits inside the game's own container
+///     (`Games/<title>/Logs/`).
 ///
 /// All path math goes through `GameContainer`. The logger is
 /// stateless across games. A single instance lives on
