@@ -61,9 +61,18 @@ public enum GameTreeUpdate {
     /// mods, and assets the new version happens not to ship.
     /// Mirrors what desktop players do when they extract a new
     /// version over an existing install.
+    ///
+    /// `protecting` names root entries of `destination` that hold
+    /// player data (portable saves). A collision on a protected
+    /// entry never discards a byte: it follows the drain rules
+    /// instead of plain overwrite (see `mergeProtected`). Names
+    /// match case-insensitively, so an archive with a case-variant
+    /// name cannot slip past the protection on a case-insensitive
+    /// volume.
     public static func mergeMove(
         from source: URL,
         into destination: URL,
+        protecting protectedNames: Set<String> = [],
         fm: FileManager = .default
     ) throws {
         var destinationIsDir: ObjCBool = false
@@ -77,19 +86,27 @@ public enum GameTreeUpdate {
             return
         }
 
+        let protectedLowered = Set(protectedNames.map { $0.lowercased() })
         let entries = try fm.contentsOfDirectory(
             at: source,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: []
         )
         for entry in entries {
-            let target = destination.appendingPathComponent(entry.lastPathComponent)
+            let name = entry.lastPathComponent
+            let target = destination.appendingPathComponent(name)
             let entryIsDir =
                 (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?
                 .isDirectory == true
             var targetIsDir: ObjCBool = false
             let targetExists = fm.fileExists(atPath: target.path, isDirectory: &targetIsDir)
 
+            if targetExists, protectedLowered.contains(name.lowercased()) {
+                try mergeProtected(
+                    entry: entry, entryIsDir: entryIsDir,
+                    target: target, targetIsDir: targetIsDir.boolValue, fm: fm)
+                continue
+            }
             if targetExists, targetIsDir.boolValue, entryIsDir {
                 try mergeMove(from: entry, into: target, fm: fm)
                 continue
@@ -105,9 +122,90 @@ public enum GameTreeUpdate {
         try? fm.removeItem(at: source)
     }
 
+    /// Collision handling for a protected (portable-save) entry,
+    /// with the same rules as `LegacyDataDrain`: same-named
+    /// directories merge per file, the newer file wins the
+    /// canonical name (ties go to the incoming file), and the loser
+    /// stays beside it as `<name>.empo-displaced[-N].bak`. A type
+    /// conflict keeps the installed entry - it is the one the game
+    /// currently reads - and displaces the incoming entry whole.
+    /// An imported archive can therefore never destroy a player's
+    /// save, and a deliberate save transfer inside an update
+    /// archive still lands.
+    private static func mergeProtected(
+        entry: URL, entryIsDir: Bool,
+        target: URL, targetIsDir: Bool,
+        fm: FileManager
+    ) throws {
+        if entryIsDir, targetIsDir {
+            let children = try fm.contentsOfDirectory(
+                at: entry, includingPropertiesForKeys: [.isDirectoryKey], options: [])
+            for child in children {
+                let childTarget = target.appendingPathComponent(child.lastPathComponent)
+                let childIsDir =
+                    (try? child.resourceValues(forKeys: [.isDirectoryKey]))?
+                    .isDirectory == true
+                var childTargetIsDir: ObjCBool = false
+                guard fm.fileExists(atPath: childTarget.path, isDirectory: &childTargetIsDir)
+                else {
+                    try fm.moveItem(at: child, to: childTarget)
+                    continue
+                }
+                try mergeProtected(
+                    entry: child, entryIsDir: childIsDir,
+                    target: childTarget, targetIsDir: childTargetIsDir.boolValue, fm: fm)
+            }
+            if (try? fm.contentsOfDirectory(atPath: entry.path))?.isEmpty == true {
+                try? fm.removeItem(at: entry)
+            }
+            return
+        }
+        if entryIsDir != targetIsDir {
+            try displaceIncoming(entry, near: target, fm: fm)
+            return
+        }
+        // A byte-identical incoming file adds nothing: drop it
+        // instead of stacking a duplicate displaced copy.
+        if FileContentEquality.identical(entry, target, fm: fm) {
+            try fm.removeItem(at: entry)
+            return
+        }
+        if modificationDate(of: entry, fm: fm) >= modificationDate(of: target, fm: fm) {
+            let archived = displacedURL(near: target, fm: fm)
+            try fm.moveItem(at: target, to: archived)
+            try fm.moveItem(at: entry, to: target)
+        } else {
+            try displaceIncoming(entry, near: target, fm: fm)
+        }
+    }
+
+    private static func displaceIncoming(
+        _ entry: URL, near target: URL, fm: FileManager
+    ) throws {
+        try fm.moveItem(at: entry, to: displacedURL(near: target, fm: fm))
+    }
+
+    private static func displacedURL(near target: URL, fm: FileManager) -> URL {
+        let name = target.lastPathComponent
+        return UniqueFileName.firstAvailableURL(
+            in: target.deletingLastPathComponent(),
+            preferring: LegacyDataDrain.displacedName(for: name),
+            numbered: { LegacyDataDrain.displacedName(for: name, index: $0) },
+            fm: fm
+        )
+    }
+
+    private static func modificationDate(of url: URL, fm: FileManager) -> Date {
+        let attrs = try? fm.attributesOfItem(atPath: url.path)
+        return (attrs?[.modificationDate] as? Date) ?? .distantPast
+    }
+
     /// Transactional in-place update: build the merged tree in a
     /// staging copy next to `target`, then swap it into place
-    /// (`FileManager.replaceItemAt`). Failure at ANY point before
+    /// (`FileManager.replaceItemAt`). Portable saves detected in
+    /// the installed tree are protected during the merge - a
+    /// colliding entry in the archive cannot delete them (see
+    /// `mergeProtected`). Failure at ANY point before
     /// the swap - a merge error, disk full - leaves the tree at
     /// `target` byte-for-byte untouched. A failure DURING the swap
     /// can leave no tree at `target` (Foundation documents that a
@@ -132,7 +230,8 @@ public enum GameTreeUpdate {
             // normalizing the staging tree lets the merge overwrite
             // read-only entries.
             try normalizeOwnerWritable(at: staging, fm: fm)
-            try mergeMove(from: source, into: staging, fm: fm)
+            let saveEntries = Set(PortableGameSaves.entryNames(atGameRoot: staging, fm: fm))
+            try mergeMove(from: source, into: staging, protecting: saveEntries, fm: fm)
             // The original tree becomes the swap's backup and is
             // deleted as part of the swap - normalize it too so
             // read-only bits can't fail the swap after the exchange
@@ -190,7 +289,7 @@ public enum GameTreeUpdate {
         let displaced =
             (userInfo["NSFileOriginalItemLocationKey"] as? URL)
             ?? (userInfo["NSFileOriginalItemLocationKey"] as? String)
-                .map { URL(fileURLWithPath: $0) }
+            .map { URL(fileURLWithPath: $0) }
         guard let displaced, displaced.path != target.path,
             fm.fileExists(atPath: displaced.path)
         else { return }

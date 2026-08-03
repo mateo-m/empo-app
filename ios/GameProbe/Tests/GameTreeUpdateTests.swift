@@ -21,22 +21,22 @@ private final class SwapInterceptingFileManager: FileManager {
     private(set) var swapIntercepted = false
 
     #if canImport(Darwin)
-        override func replaceItem(
-            at originalItemURL: URL,
-            withItemAt newItemURL: URL,
-            backupItemName: String?,
-            options: FileManager.ItemReplacementOptions,
-            resultingItemURL: AutoreleasingUnsafeMutablePointer<NSURL?>?
-        ) throws {
-            swapIntercepted = true
-            try onSwap?(originalItemURL, newItemURL)
-            try super.replaceItem(
-                at: originalItemURL,
-                withItemAt: newItemURL,
-                backupItemName: backupItemName,
-                options: options,
-                resultingItemURL: resultingItemURL)
-        }
+    override func replaceItem(
+        at originalItemURL: URL,
+        withItemAt newItemURL: URL,
+        backupItemName: String?,
+        options: FileManager.ItemReplacementOptions,
+        resultingItemURL: AutoreleasingUnsafeMutablePointer<NSURL?>?
+    ) throws {
+        swapIntercepted = true
+        try onSwap?(originalItemURL, newItemURL)
+        try super.replaceItem(
+            at: originalItemURL,
+            withItemAt: newItemURL,
+            backupItemName: backupItemName,
+            options: options,
+            resultingItemURL: resultingItemURL)
+    }
     #endif
 }
 
@@ -186,6 +186,156 @@ final class GameTreeUpdateTests: XCTestCase {
         XCTAssertFalse(fm.fileExists(atPath: source.path))
     }
 
+    // MARK: - Protected save collisions
+
+    private func setModificationDate(_ root: URL, _ relativePath: String, _ date: Date) throws {
+        try fm.setAttributes(
+            [.modificationDate: date],
+            ofItemAtPath: root.appendingPathComponent(relativePath).path)
+    }
+
+    private func displaced(_ name: String) -> String {
+        LegacyDataDrain.displacedName(for: name)
+    }
+
+    func testProtectedCollisionKeepsTheNewerInstalledSave() throws {
+        let source = try makeTree("source", files: ["Save A.rxdata": "archive junk"])
+        let destination = try makeTree("dest", files: ["Save A.rxdata": "player save"])
+        try setModificationDate(source, "Save A.rxdata", Date(timeIntervalSince1970: 1000))
+        try setModificationDate(destination, "Save A.rxdata", Date(timeIntervalSince1970: 2000))
+
+        try GameTreeUpdate.mergeMove(
+            from: source, into: destination, protecting: ["Save A.rxdata"])
+
+        XCTAssertEqual(contents(destination, "Save A.rxdata"), "player save")
+        XCTAssertEqual(contents(destination, displaced("Save A.rxdata")), "archive junk")
+    }
+
+    func testProtectedCollisionLetsANewerIncomingSaveWinThePath() throws {
+        let source = try makeTree("source", files: ["Save A.rxdata": "transferred save"])
+        let destination = try makeTree("dest", files: ["Save A.rxdata": "stale save"])
+        try setModificationDate(source, "Save A.rxdata", Date(timeIntervalSince1970: 2000))
+        try setModificationDate(destination, "Save A.rxdata", Date(timeIntervalSince1970: 1000))
+
+        try GameTreeUpdate.mergeMove(
+            from: source, into: destination, protecting: ["Save A.rxdata"])
+
+        XCTAssertEqual(contents(destination, "Save A.rxdata"), "transferred save")
+        XCTAssertEqual(contents(destination, displaced("Save A.rxdata")), "stale save")
+    }
+
+    func testProtectedCollisionTieGoesToTheIncomingFile() throws {
+        let source = try makeTree("source", files: ["Save A.rxdata": "incoming"])
+        let destination = try makeTree("dest", files: ["Save A.rxdata": "installed"])
+        let date = Date(timeIntervalSince1970: 1500)
+        try setModificationDate(source, "Save A.rxdata", date)
+        try setModificationDate(destination, "Save A.rxdata", date)
+
+        try GameTreeUpdate.mergeMove(
+            from: source, into: destination, protecting: ["Save A.rxdata"])
+
+        XCTAssertEqual(contents(destination, "Save A.rxdata"), "incoming")
+        XCTAssertEqual(contents(destination, displaced("Save A.rxdata")), "installed")
+    }
+
+    func testProtectedCollisionNeverDeletesEitherCopy() throws {
+        // A second collision on the same name takes the numbered
+        // marker instead of overwriting the first displaced copy.
+        let source = try makeTree("source", files: ["Save A.rxdata": "second archive"])
+        let destination = try makeTree(
+            "dest",
+            files: [
+                "Save A.rxdata": "player save",
+                displaced("Save A.rxdata"): "first archive",
+            ])
+        try setModificationDate(source, "Save A.rxdata", Date(timeIntervalSince1970: 1000))
+        try setModificationDate(destination, "Save A.rxdata", Date(timeIntervalSince1970: 2000))
+
+        try GameTreeUpdate.mergeMove(
+            from: source, into: destination, protecting: ["Save A.rxdata"])
+
+        XCTAssertEqual(contents(destination, "Save A.rxdata"), "player save")
+        XCTAssertEqual(contents(destination, displaced("Save A.rxdata")), "first archive")
+        XCTAssertEqual(
+            contents(destination, LegacyDataDrain.displacedName(for: "Save A.rxdata", index: 2)),
+            "second archive")
+    }
+
+    func testProtectedCollisionWithIdenticalBytesLeavesNoDisplacedCopy() throws {
+        // An update that re-ships the exact same save bytes must
+        // not stack a duplicate .bak on every install.
+        let source = try makeTree("source", files: ["Save A.rxdata": "same bytes"])
+        let destination = try makeTree("dest", files: ["Save A.rxdata": "same bytes"])
+        try setModificationDate(source, "Save A.rxdata", Date(timeIntervalSince1970: 2000))
+        try setModificationDate(destination, "Save A.rxdata", Date(timeIntervalSince1970: 1000))
+
+        try GameTreeUpdate.mergeMove(
+            from: source, into: destination, protecting: ["Save A.rxdata"])
+
+        XCTAssertEqual(contents(destination, "Save A.rxdata"), "same bytes")
+        XCTAssertFalse(
+            fm.fileExists(
+                atPath: destination.appendingPathComponent(displaced("Save A.rxdata")).path))
+    }
+
+    func testProtectedNamesMatchCaseInsensitively() throws {
+        let source = try makeTree("source", files: ["Save A.rxdata": "archive junk"])
+        let destination = try makeTree("dest", files: ["Save A.rxdata": "player save"])
+        try setModificationDate(source, "Save A.rxdata", Date(timeIntervalSince1970: 1000))
+        try setModificationDate(destination, "Save A.rxdata", Date(timeIntervalSince1970: 2000))
+
+        try GameTreeUpdate.mergeMove(
+            from: source, into: destination, protecting: ["SAVE A.RXDATA"])
+
+        XCTAssertEqual(contents(destination, "Save A.rxdata"), "player save")
+        XCTAssertEqual(contents(destination, displaced("Save A.rxdata")), "archive junk")
+    }
+
+    func testProtectedDirectoryMergesPerFile() throws {
+        let source = try makeTree(
+            "source",
+            files: [
+                "save/slot1.rxdata": "archive slot1",
+                "save/slot2.rxdata": "new slot2",
+            ])
+        let destination = try makeTree("dest", files: ["save/slot1.rxdata": "player slot1"])
+        try setModificationDate(source, "save/slot1.rxdata", Date(timeIntervalSince1970: 1000))
+        try setModificationDate(
+            destination, "save/slot1.rxdata", Date(timeIntervalSince1970: 2000))
+
+        try GameTreeUpdate.mergeMove(from: source, into: destination, protecting: ["save"])
+
+        XCTAssertEqual(contents(destination, "save/slot1.rxdata"), "player slot1")
+        XCTAssertEqual(contents(destination, "save/" + displaced("slot1.rxdata")), "archive slot1")
+        XCTAssertEqual(contents(destination, "save/slot2.rxdata"), "new slot2")
+        XCTAssertFalse(fm.fileExists(atPath: source.appendingPathComponent("save").path))
+    }
+
+    func testProtectedTypeConflictKeepsTheInstalledEntry() throws {
+        let source = try makeTree("source", files: ["save": "a file named save"])
+        let destination = try makeTree("dest", files: ["save/slot1.rxdata": "player slot1"])
+
+        try GameTreeUpdate.mergeMove(from: source, into: destination, protecting: ["save"])
+
+        XCTAssertEqual(contents(destination, "save/slot1.rxdata"), "player slot1")
+        XCTAssertEqual(contents(destination, displaced("save")), "a file named save")
+    }
+
+    func testUnprotectedCollisionStillOverwritesInPlace() throws {
+        let source = try makeTree("source", files: ["notes.txt": "new"])
+        let destination = try makeTree("dest", files: ["notes.txt": "old"])
+        try setModificationDate(source, "notes.txt", Date(timeIntervalSince1970: 1000))
+        try setModificationDate(destination, "notes.txt", Date(timeIntervalSince1970: 2000))
+
+        try GameTreeUpdate.mergeMove(
+            from: source, into: destination, protecting: ["Save A.rxdata"])
+
+        XCTAssertEqual(contents(destination, "notes.txt"), "new")
+        XCTAssertFalse(
+            fm.fileExists(
+                atPath: destination.appendingPathComponent(displaced("notes.txt")).path))
+    }
+
     // MARK: - stageAndSwap
 
     func testStageAndSwapMergesAndCleansArtifacts() throws {
@@ -236,6 +386,103 @@ final class GameTreeUpdateTests: XCTestCase {
 
         XCTAssertEqual(contents(target, "Data/Scripts.rxdata"), "v2")
         XCTAssertEqual(contents(target, "Save01.rxdata"), "precious save")
+    }
+
+    func testStageAndSwapProtectsCollidingPortableSaves() throws {
+        // The archive ships a file at the installed save's path (a
+        // repack with the packer's own save). The swap must keep
+        // the player's copy on the save path and archive the
+        // incoming copy beside it - and still overwrite plain game
+        // files.
+        let target = try makeTree(
+            "container/Game",
+            files: [
+                "Game.exe": "v1",
+                "Save01.rxdata": "player save",
+            ])
+        let source = try makeTree(
+            "incoming",
+            files: [
+                "Game.exe": "v2",
+                "Save01.rxdata": "packer save",
+            ])
+        // Far in the past: even a staging copy that refreshes
+        // modification dates leaves the installed copy newer.
+        try setModificationDate(source, "Save01.rxdata", Date(timeIntervalSince1970: 0))
+
+        try GameTreeUpdate.stageAndSwap(newTree: source, over: target)
+
+        XCTAssertEqual(contents(target, "Game.exe"), "v2")
+        XCTAssertEqual(contents(target, "Save01.rxdata"), "player save")
+        XCTAssertEqual(contents(target, displaced("Save01.rxdata")), "packer save")
+    }
+
+    func testStageAndSwapLandsADeliberateSaveTransfer() throws {
+        // The opposite direction: the user packed a fresher save
+        // into the archive on purpose. The newer incoming copy
+        // wins the save path; the stale installed copy survives
+        // beside it.
+        let target = try makeTree("container/Game", files: ["Save01.rxdata": "stale save"])
+        let source = try makeTree("incoming", files: ["Save01.rxdata": "fresh save"])
+        try setModificationDate(
+            source, "Save01.rxdata", Date(timeIntervalSinceNow: 365 * 24 * 3600))
+
+        try GameTreeUpdate.stageAndSwap(newTree: source, over: target)
+
+        XCTAssertEqual(contents(target, "Save01.rxdata"), "fresh save")
+        XCTAssertEqual(contents(target, displaced("Save01.rxdata")), "stale save")
+    }
+
+    func testStageAndSwapProtectsMarshalMagicFilesWhateverTheirName() throws {
+        // A root file without a save extension counts when its
+        // first bytes are the Marshal magic - localized or renamed
+        // saves must get the same protection.
+        let target = try makeTree(
+            "container/Game", files: ["profil du joueur": "\u{04}\u{08}player"])
+        let source = try makeTree(
+            "incoming", files: ["profil du joueur": "\u{04}\u{08}packer"])
+        try setModificationDate(source, "profil du joueur", Date(timeIntervalSince1970: 0))
+
+        try GameTreeUpdate.stageAndSwap(newTree: source, over: target)
+
+        XCTAssertEqual(contents(target, "profil du joueur"), "\u{04}\u{08}player")
+        XCTAssertEqual(contents(target, displaced("profil du joueur")), "\u{04}\u{08}packer")
+    }
+
+    func testStageAndSwapStillOverwritesEngineDataFiles() throws {
+        // Data/ is an engine directory: its Marshal files are game
+        // assets, and an update must replace them without leaving
+        // displaced copies behind.
+        let target = try makeTree(
+            "container/Game", files: ["Data/Scripts.rxdata": "\u{04}\u{08}v1"])
+        let source = try makeTree(
+            "incoming", files: ["Data/Scripts.rxdata": "\u{04}\u{08}v2"])
+        try setModificationDate(source, "Data/Scripts.rxdata", Date(timeIntervalSince1970: 0))
+
+        try GameTreeUpdate.stageAndSwap(newTree: source, over: target)
+
+        XCTAssertEqual(contents(target, "Data/Scripts.rxdata"), "\u{04}\u{08}v2")
+        XCTAssertFalse(
+            fm.fileExists(
+                atPath: target.appendingPathComponent("Data/" + displaced("Scripts.rxdata")).path))
+    }
+
+    func testStageAndSwapProtectsSaveFoldersAutomatically() throws {
+        let target = try makeTree(
+            "container/Game", files: ["save/slot1.rxdata": "player slot1"])
+        let source = try makeTree(
+            "incoming",
+            files: [
+                "save/slot1.rxdata": "packer slot1",
+                "save/slot2.rxdata": "new slot2",
+            ])
+        try setModificationDate(source, "save/slot1.rxdata", Date(timeIntervalSince1970: 0))
+
+        try GameTreeUpdate.stageAndSwap(newTree: source, over: target)
+
+        XCTAssertEqual(contents(target, "save/slot1.rxdata"), "player slot1")
+        XCTAssertEqual(contents(target, "save/" + displaced("slot1.rxdata")), "packer slot1")
+        XCTAssertEqual(contents(target, "save/slot2.rxdata"), "new slot2")
     }
 
     func testStageAndSwapRecoversFromCrashLeftoverArtifacts() throws {

@@ -18,7 +18,11 @@ import Foundation
 ///     - the crash-then-retry case), and the loser is archived
 ///     beside it as `<name>.empo-displaced[-N].bak`. The `.bak`
 ///     tail keeps archived copies out of the `Save*.rxdata` globs
-///     game load menus run over the shared directory.
+///     game load menus run over the shared directory. A
+///     byte-identical incoming file is dropped instead of
+///     archived: its bytes already sit at the canonical name, and
+///     archiving it would stack duplicate displaced copies on
+///     every repeat merge.
 ///   - Type conflicts (file vs directory) keep the destination
 ///     entry - it is the live one the game currently reads - and
 ///     displace the incoming entry whole.
@@ -121,7 +125,19 @@ public enum LegacyDataDrain {
                 continue
             }
 
-            // File vs file: newer modification time wins the
+            // File vs file. A byte-identical incoming file drains
+            // by dropping it - the canonical name already holds
+            // those exact bytes.
+            if FileContentEquality.identical(entry, target, fm: fm) {
+                if (try? fm.removeItem(at: entry)) != nil {
+                    outcome.movedCount += 1
+                } else {
+                    outcome.failures.append(relative)
+                }
+                continue
+            }
+
+            // Otherwise the newer modification time wins the
             // canonical name; ties go to the incoming file.
             let entryDate = modificationDate(of: entry, fm: fm)
             let targetDate = modificationDate(of: target, fm: fm)

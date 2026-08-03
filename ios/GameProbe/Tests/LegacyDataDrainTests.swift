@@ -200,6 +200,38 @@ final class LegacyDataDrainTests: XCTestCase {
             ])
     }
 
+    func testIdenticalIncomingFileIsDroppedNotArchived() throws {
+        // Identical bytes at the canonical name: archiving would
+        // stack duplicate displaced copies on every repeat merge.
+        let source = try makeTree("UserData", files: ["Game.rxdata": "same bytes"])
+        let destination = try makeTree("dest", files: ["Game.rxdata": "same bytes"])
+        try setMtime(source, "Game.rxdata", 300)
+        try setMtime(destination, "Game.rxdata", 100)
+
+        let outcome = LegacyDataDrain.drain(from: source, into: destination)
+
+        XCTAssertEqual(outcome.movedCount, 1)
+        XCTAssertTrue(outcome.removedSource)
+        XCTAssertEqual(try snapshot(destination), ["Game.rxdata": "same bytes"])
+    }
+
+    func testSameSizeDifferentContentIsStillArchived() throws {
+        let source = try makeTree("UserData", files: ["Game.rxdata": "AAAA"])
+        let destination = try makeTree("dest", files: ["Game.rxdata": "BBBB"])
+        try setMtime(source, "Game.rxdata", 200)
+        try setMtime(destination, "Game.rxdata", 100)
+
+        let outcome = LegacyDataDrain.drain(from: source, into: destination)
+
+        XCTAssertEqual(outcome.movedCount, 1)
+        XCTAssertEqual(
+            try snapshot(destination),
+            [
+                "Game.rxdata": "AAAA",
+                "Game.rxdata.empo-displaced.bak": "BBBB",
+            ])
+    }
+
     func testSecondDrainNumbersTheSecondDisplacedCopy() throws {
         let destination = try makeTree("dest", files: ["Game.rxdata": "v1"])
         try setMtime(destination, "Game.rxdata", 100)
