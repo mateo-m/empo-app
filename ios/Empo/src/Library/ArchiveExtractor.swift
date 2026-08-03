@@ -184,6 +184,7 @@ enum ArchiveExtractor {
                 try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
             }
             _ = try writeEntry(reader: reader, to: outURL)
+            restoreEntryModificationDate(entry, at: outURL)
 
             if stopWhen?() == true { break }
         }
@@ -294,6 +295,7 @@ enum ArchiveExtractor {
             }
 
             let written = try writeEntry(reader: reader, to: outURL)
+            restoreEntryModificationDate(entry, at: outURL)
             uncompressedWritten += Int64(written)
             onFileWritten?(relative, outURL)
 
@@ -323,6 +325,18 @@ enum ArchiveExtractor {
         }
 
         progress?("", 1.0)
+    }
+
+    /// Extracted files keep the modification time the archive
+    /// recorded, like desktop unzip tools. The app's drains and
+    /// merges resolve same-name collisions by "newer file wins", so
+    /// a freshly extracted file must not look newer than a save the
+    /// player wrote last week.
+    private static func restoreEntryModificationDate(_ entry: OpaquePointer?, at outURL: URL) {
+        guard let entry, archive_entry_mtime_is_set(entry) != 0 else { return }
+        let date = Date(timeIntervalSince1970: TimeInterval(archive_entry_mtime(entry)))
+        try? FileManager.default.setAttributes(
+            [.modificationDate: date], ofItemAtPath: outURL.path)
     }
 
     @discardableResult
@@ -585,6 +599,9 @@ enum ArchiveExtractor {
                 try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
             }
             try reader.extract(entry, to: outURL)
+            if let date = entry.modificationDate {
+                try? fm.setAttributes([.modificationDate: date], ofItemAtPath: outURL.path)
+            }
 
             if stopWhen?() == true { break }
         }
@@ -637,6 +654,9 @@ enum ArchiveExtractor {
             }
 
             try reader.extract(entry, to: outURL)
+            if let date = entry.modificationDate {
+                try? fm.setAttributes([.modificationDate: date], ofItemAtPath: outURL.path)
+            }
             uncompressedWritten += entry.size
             onFileWritten?(relative, outURL)
 
@@ -735,6 +755,9 @@ private final class CabReader {
         /// Forward-slash normalised path, relative to the archive root.
         let relativePath: String
         let size: Int64
+        /// Cabinet-recorded modification time (DOS local time), when
+        /// the header carries a plausible one.
+        let modificationDate: Date?
         fileprivate let file: UnsafeMutablePointer<mscabd_file>
     }
 
@@ -777,6 +800,7 @@ private final class CabReader {
                         rawName: rawName,
                         relativePath: rawName.replacingOccurrences(of: "\\", with: "/"),
                         size: Int64(currentFile.pointee.length),
+                        modificationDate: CabReader.decodeDate(currentFile.pointee),
                         file: currentFile
                     )
                 )
@@ -801,6 +825,21 @@ private final class CabReader {
             throw ArchiveExtractor.Error.readFailed(
                 "Failed to extract \(entry.rawName): \(CabReader.describe(result))")
         }
+    }
+
+    /// CAB headers store DOS local time. Years below 1980 (the DOS
+    /// epoch) mean the field is junk; those entries keep their
+    /// extraction time.
+    private static func decodeDate(_ file: mscabd_file) -> Date? {
+        guard file.date_y >= 1980 else { return nil }
+        var components = DateComponents()
+        components.year = Int(file.date_y)
+        components.month = Int(file.date_m)
+        components.day = Int(file.date_d)
+        components.hour = Int(file.time_h)
+        components.minute = Int(file.time_m)
+        components.second = Int(file.time_s)
+        return Calendar.current.date(from: components)
     }
 
     /// Cabinet filenames are either UTF-8 or ISO-8859-1, flagged per
