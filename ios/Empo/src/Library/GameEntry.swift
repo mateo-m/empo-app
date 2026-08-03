@@ -3,14 +3,18 @@ import Foundation
 enum GameStatus: Hashable {
     case ready
     case importing(progress: Double)  // 0.0 to 1.0
+    /// A delete is running (save rescue + removal). The card stays
+    /// in place, inert, until the delete finishes or fails.
+    case deleting
     case invalid
 
     /// Strips associated values. Useful as an animation trigger.
-    enum Phase: Hashable { case ready, importing, invalid }
+    enum Phase: Hashable { case ready, importing, deleting, invalid }
     var phase: Phase {
         switch self {
         case .ready: .ready
         case .importing: .importing
+        case .deleting: .deleting
         case .invalid: .invalid
         }
     }
@@ -56,6 +60,10 @@ struct GameEntry: Identifiable, Hashable {
     var isImporting: Bool {
         if case .importing = status { return true }
         return false
+    }
+
+    var isDeleting: Bool {
+        status == .deleting
     }
 
     var importProgress: Double {

@@ -122,7 +122,7 @@ struct GameCard: View {
     private var artworkView: some View {
         GameArtworkView(
             artworkPath: game.artworkPath,
-            importing: game.status.phase == .importing
+            importing: game.status.phase == .importing || game.status.phase == .deleting
         )
     }
 }
@@ -149,7 +149,7 @@ struct GameListRow: View {
                 placeholderIconSize: 16,
                 size: AppSize.listArtwork,
                 cornerRadius: Radius.sm,
-                importing: game.status.phase == .importing
+                importing: game.status.phase == .importing || game.status.phase == .deleting
             )
             .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) {
                 config in
@@ -207,6 +207,7 @@ struct GameStatusIndicator: View {
         case importing(progress: Double)
         case ready
         case paused
+        case deleting
         case invalid
     }
 
@@ -250,7 +251,11 @@ struct GameStatusIndicator: View {
 
     @ViewBuilder
     private var indicatorBody: some View {
-        let isImporting = { if case .importing = kind { true } else { false } }()
+        // Deleting shares the importing look: an indeterminate ring
+        // (progress stays 0) around a glyph, inverted over the
+        // artwork - just without a stop control, because a running
+        // delete cannot be cancelled.
+        let showsRing = kind == .deleting || { if case .importing = kind { true } else { false } }()
         let core = ZStack {
             // Ring + stop render white and blend with `.difference`
             // so the indicator auto-inverts against whatever's behind
@@ -263,15 +268,15 @@ struct GameStatusIndicator: View {
                 tint: AnyShapeStyle(Color.white),
                 trackOpacity: 0.2
             )
-            .opacity(isImporting ? 1 : 0)
-            .scaleEffect(isImporting ? 1 : 0.5)
+            .opacity(showsRing ? 1 : 0)
+            .scaleEffect(showsRing ? 1 : 0.5)
 
             innerIcon
                 .transition(.blurReplace)
         }
 
         switch kind {
-        case .importing:
+        case .importing, .deleting:
             core.blendMode(.difference)
         case .paused:
             // Inverted scheme tint so the paused badge reads stronger
@@ -305,6 +310,13 @@ struct GameStatusIndicator: View {
             Image(systemName: "pause.fill")
                 .font(iconFont)
                 .foregroundStyle(pausedForeground)
+        case .deleting:
+            // White fill paired with the `.difference` wrap, like the
+            // stop square - but a glyph, not a button: no cancel.
+            Image(systemName: "trash.fill")
+                .font(.system(size: stopSize * 1.35, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .accessibilityLabel("Deleting")
         case .invalid:
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(iconFont)
@@ -320,6 +332,7 @@ extension GameStatusIndicator.Kind {
     static func resolve(status: GameStatus, paused: Bool) -> Self {
         switch status {
         case .importing(let progress): .importing(progress: progress)
+        case .deleting: .deleting
         case .invalid: .invalid
         case .ready: paused ? .paused : .ready
         }

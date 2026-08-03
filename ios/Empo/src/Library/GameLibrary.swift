@@ -235,7 +235,12 @@ class GameLibrary {
                 }
             }
 
-            games.removeAll { !$0.isImporting && !scannedByID.keys.contains($0.id) }
+            // Deleting entries survive too: their scanned twin was
+            // filtered out above (`deletionsInFlight`), and dropping
+            // the local entry here would vanish the card mid-delete.
+            games.removeAll {
+                !$0.isImporting && !$0.isDeleting && !scannedByID.keys.contains($0.id)
+            }
 
             for entry in scanned where !updatedIDs.contains(entry.id) {
                 games.append(entry)
