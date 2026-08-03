@@ -53,21 +53,26 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      card exists.
    - When more than one valid root exists, the stepped root-picker sheet appears
      (`ImportRootPickerSheet`): step one, **Add Games**, lists roots not in the library
-     (selection starts empty); step two, **Update Games**, lists roots whose sanitized title
-     matches an installed game (selection starts full - importing them updates that install in
-     place). A source with only one category shows only that step. The classification
-     (`ImportRootPrompt.updatingChoiceIDs`) is display-advisory; `planImports` re-derives it at
-     confirm time. When exactly one root exists, the import starts automatically - and if that
-     one game is installed, the plain "Update Game?" alert (`ImportReplacePrompt`) asks first.
-     The alert also serves as a fallback for updates the picker didn't approve (a game whose
-     installed status changed while the sheet was open).
+     (selection starts empty); step two, **Already in Library**, lists roots whose sanitized
+     title matches an installed game (selection starts full - importing them updates that
+     install in place). A source with only one category shows only that step. The
+     classification (`ImportRootPrompt.updatingChoiceIDs`) is display-advisory; `planImports`
+     re-derives it at confirm time. When exactly one root exists, the import starts
+     automatically - and if that one game is installed, the plain "Game Already in Library"
+     alert (`ImportReplacePrompt`) asks first. The alert also serves as a fallback for updates
+     the picker didn't approve (a game whose installed status changed while the sheet was
+     open).
    - `planImports` then fixes each selection's destination folder name (the sanitized title). A
      name owned by another **in-flight** import is refused with an alert (no silent suffixed
      duplicate). A name owned by an **installed** game becomes an update-in-place plan:
      confirmed updates merge the new files into an APFS-cloned staging copy of `Game/` and swap
      in atomically (`GameImporter.stageAndSwapGameTree`), overwriting same-path files and
      keeping everything else (saves, settings, metadata, and game files the new version doesn't
-     ship); any failure before the swap leaves the installed tree untouched. The scan recovers
+     ship); any failure before the swap leaves the installed tree untouched. Portable saves in
+     the installed tree (`PortableGameSaves`) are protected during the merge: when the import
+     also contains a file at a save's path, the newer file keeps the path and the other one is
+     archived beside it as `<name>.empo-displaced[-N].bak` (the `LegacyDataDrain` rules), so an
+     update can never delete a player's save and a deliberate save transfer still lands. The scan recovers
      crash leftovers (`cleanupStaleUpdateStaging` → `GameTreeUpdate.sweepInterruptedUpdate`): a
      kill between the swap's two renames leaves no `Game/`, so the sweep RESTORES the merged
      staging tree (or the backup) before removing artifacts - never sweep-then-orphan-delete.
@@ -93,7 +98,11 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
    - `finalize`: `finalizeJgpImport`, `createMetadata` (archives), or `seedFolderImport`
      (folders). All three run `GameScriptProfile.analyze` (in the `ios/GameProbe` package) to
      detect the Ruby version and modern scripts. If extraction surfaced no icon, archives also
-     get a fallback `ExecutableIconExtractor.writeSidecarIfPossible`. At progress 1.0, the
+     get a fallback `ExecutableIconExtractor.writeSidecarIfPossible`. After finalize, a fresh
+     (non-update) import restores rescued portable saves: `Rescued Saves/` buckets whose
+     identity marker (or, without one, whose name) matches the container's folder name drain
+     back into the new `Game/` tree with the `LegacyDataDrain` rules
+     (`DataDirectory.restoreRescuedSaves`). At progress 1.0, the
      selection leaves `inFlightImports`. Then `GameLibrary.mergeImportedGame(container:)`
      (`GameLibrary.swift` ~line 184) merges the single finished entry into `games`, with no full
      library rescan.

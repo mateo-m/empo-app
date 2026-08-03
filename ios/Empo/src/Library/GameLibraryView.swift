@@ -616,7 +616,19 @@ struct GameLibraryView: View {
         }
     }
 
+    @ViewBuilder
     private func listRow(for game: GameEntry, index: Int) -> some View {
+        if game.status.phase == .deleting {
+            // Inert while the delete runs: no tap, no context menu.
+            GameListRow(game: game)
+                .transition(.cardAppear)
+                .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
+        } else {
+            interactiveListRow(for: game, index: index)
+        }
+    }
+
+    private func interactiveListRow(for game: GameEntry, index: Int) -> some View {
         let isPaused = pauseManager.pausedGame?.id == game.id
         return Button {
             handleCardTap(for: game)
@@ -693,6 +705,17 @@ struct GameLibraryView: View {
             .id("\(game.id)-importing")
             .transition(.cardAppear)
             .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
+
+        case .deleting:
+            // Inert: no button, no context menu. The card sits in
+            // place with a spinner until the delete finishes (then
+            // it leaves) or the rescue fails (then it returns to
+            // ready alongside the failure alert).
+            GameCard(game: game)
+                .cardShadow()
+                .id("\(game.id)-deleting")
+                .transition(.cardAppear)
+                .staggered(index: index, trigger: staggerTrigger, initialDelay: entranceDelay)
 
         case .invalid:
             Button {
@@ -779,7 +802,7 @@ struct GameLibraryView: View {
         switch game.status {
         case .ready: handleGameTap(game, from: .item)
         case .invalid: showInvalidAlert = true
-        case .importing: break
+        case .importing, .deleting: break
         }
     }
 
@@ -1024,7 +1047,7 @@ private struct BulkDeleteAlert: ViewModifier {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "This will remove the game files for the selected games. Empo moves their saves to the Data folder and keeps them, so you can re-import the games later and continue."
+                "This deletes the game files for the selected games. Saves in the Data folder are kept. Empo moves the save files it finds in the game folders to Rescued Saves. If Empo does not recognize a save file, it is deleted with its game."
             )
         }
     }
@@ -1079,8 +1102,9 @@ private struct DuplicateGamesNotice: ViewModifier {
 
 /// Alert wrapper for the import update confirmation. Only the
 /// single-choice import path reaches it (multi-game sources confirm
-/// updates inside the root picker's "Update Games" step). Extracted
-/// for the same type-checker-budget reason as `BulkDeleteAlert`.
+/// updates inside the root picker's "Already in Library" step).
+/// Extracted for the same type-checker-budget reason as
+/// `BulkDeleteAlert`.
 ///
 /// Button actions run before SwiftUI resets the binding, and the
 /// pipeline consumes the prompt state in the action, so the
@@ -1101,18 +1125,15 @@ private struct ImportReplaceAlert: ViewModifier {
     }
 
     private var title: String {
-        (prompt?.titles.count ?? 1) > 1 ? "Update Games?" : "Update Game?"
+        (prompt?.titles.count ?? 1) > 1
+            ? "Games Already in Library" : "Game Already in Library"
     }
 
     private func message(for prompt: ImportReplacePrompt) -> String {
         let names = prompt.titles.map { "\"\($0)\"" }.joined(separator: ", ")
-        if prompt.titles.count == 1 {
-            return "\(names) is already in your library. "
-                + "Importing overwrites game files the new version also ships. "
-                + "Saves, settings, and everything else are kept."
-        }
-        return "\(names) are already in your library. "
-            + "Importing overwrites game files the new versions also ship. "
+        let verb = prompt.titles.count == 1 ? "is" : "are"
+        return "\(names) \(verb) already in your library. "
+            + "Importing overwrites the installed files that the import also contains. "
             + "Saves, settings, and everything else are kept."
     }
 
@@ -1122,7 +1143,7 @@ private struct ImportReplaceAlert: ViewModifier {
             isPresented: isPresented,
             presenting: prompt
         ) { _ in
-            Button("Update", role: .destructive, action: onReplace)
+            Button("Import", role: .destructive, action: onReplace)
             Button("Cancel", role: .cancel, action: onCancel)
         } message: { prompt in
             Text(message(for: prompt))
@@ -1222,7 +1243,7 @@ private struct LibraryAlertPresentation: ViewModifier {
                         )
                     } else {
                         Text(
-                            "This will remove the game files for \"\(game.title)\". Empo moves your saves to the Data folder and keeps them, so you can re-import the game later and continue."
+                            "This deletes the game files for \"\(game.title)\". Saves in the Data folder are kept. Empo moves the save files it finds in the game folder to Rescued Saves. If Empo does not recognize a save file, it is deleted with the game."
                         )
                     }
                 }
@@ -1249,7 +1270,7 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Button("Keep Game", role: .cancel) {}
             } message: { game in
                 Text(
-                    "Empo could not move the saves for \"\(game.title)\" into the Data folder. If you delete the game anyway, these saves are lost forever. You can also keep the game and try again."
+                    "Empo could not rescue the saves for \"\(game.title)\". If you delete the game anyway, these saves are lost forever. You can also keep the game and try again."
                 )
             }
             .alert("Invalid Game", isPresented: $showInvalidAlert) {

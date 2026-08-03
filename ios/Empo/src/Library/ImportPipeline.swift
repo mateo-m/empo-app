@@ -41,7 +41,7 @@ struct ImportRootPrompt: Identifiable {
     let choices: [GameImportValidator.ImportRootChoice]
     /// Choice ids whose sanitized title matches an installed game:
     /// importing them updates that install in place. Drives the
-    /// picker's "Update Games" step. Advisory for display only -
+    /// picker's "Already in Library" step. Advisory for display only -
     /// `planImports` re-checks at confirm time.
     let updatingChoiceIDs: Set<String>
 
@@ -60,7 +60,7 @@ struct PlannedImport: Hashable, Sendable {
 /// Update-confirmation alert state. Only the single-choice import
 /// path reaches it (an archive or folder with exactly one game
 /// that matches an installed one) - multi-game sources confirm
-/// updates inside the root picker's "Update Games" step instead.
+/// updates inside the root picker's "Already in Library" step instead.
 /// The alert also serves as the fallback when a game's installed
 /// status changed while the picker was open (`updatesApprovedFor`
 /// in `launchImports`).
@@ -188,7 +188,7 @@ final class ImportPipeline {
 
     /// Picker confirmation. `approvedUpdateIDs` is the subset of
     /// choice ids the user explicitly selected in the picker's
-    /// "Update Games" step - updates among them proceed without a
+    /// "Already in Library" step - updates among them proceed without a
     /// second confirmation.
     func confirmChoice(
         _ choices: [GameImportValidator.ImportRootChoice],
@@ -319,7 +319,7 @@ final class ImportPipeline {
     }
 
     /// Choices whose sanitized title matches an installed game.
-    /// Display classification for the picker's "Update Games" step;
+    /// Display classification for the picker's "Already in Library" step;
     /// `planImports` re-derives the authoritative answer at confirm
     /// time.
     private static func updatingChoiceIDs(
@@ -817,6 +817,30 @@ extension GameLibrary {
         Self.deleteContainer(resolvedContainer)
     }
 
+    /// Flip an entry into the inert `.deleting` state. The card
+    /// stays visible with a spinner while the rescue + delete run;
+    /// `removeLibraryEntry` (success) or
+    /// `restoreEntryAfterFailedDelete` (failure) resolves it.
+    @MainActor
+    func markEntryDeleting(id: String) {
+        guard let index = games.firstIndex(where: { $0.id == id }) else { return }
+        localMutationDates[id] = Date()
+        withAnimation {
+            games[index].status = .deleting
+        }
+    }
+
+    /// The delete did not happen (failed rescue, or an error): the
+    /// game is still installed, so its card goes back to ready.
+    @MainActor
+    func restoreEntryAfterFailedDelete(id: String) {
+        guard let index = games.firstIndex(where: { $0.id == id }) else { return }
+        localMutationDates[id] = Date()
+        withAnimation {
+            games[index].status = .ready
+        }
+    }
+
     /// Remove a library card from memory (artwork cache + `games`).
     @MainActor
     func removeLibraryEntry(id: String) {
@@ -839,11 +863,11 @@ extension GameLibrary {
     /// Recursively delete a game container. `onError` is set for
     /// user-initiated deletes. Import abandon passes nil so a
     /// failed cleanup stays silent. `rescueSaves` is set for
-    /// user-initiated deletes only: the delete alert promises that
-    /// saves survive, so a legacy `UserData/` drains into the
-    /// shared `Documents/Data/` tree before the tree goes away -
-    /// and a failed rescue ABORTS the delete instead of erasing
-    /// the only copy of the saves.
+    /// user-initiated deletes only: a legacy `UserData/` drains
+    /// into the shared `Documents/Data/` tree and portable saves
+    /// move into `Rescued Saves/` before the tree goes away - and
+    /// a failed rescue ABORTS the delete instead of erasing the
+    /// only copy of the saves.
     private enum DeleteOutcome {
         case finished
         case rescueFailed
@@ -874,17 +898,19 @@ extension GameLibrary {
                 }
                 switch outcome {
                 case .finished:
-                    break
+                    GameLibrary.shared.removeLibraryEntry(id: container.id)
                 case .rescueFailed:
+                    GameLibrary.shared.restoreEntryAfterFailedDelete(id: container.id)
                     GameLibrary.shared.reload()
                     if let onRescueFailure {
                         onRescueFailure()
                     } else {
                         onError?(
-                            "Empo could not move this game's saves into the Data folder. "
+                            "Empo could not rescue this game's saves. "
                                 + "The game was not deleted.")
                     }
                 case .failed(let message):
+                    GameLibrary.shared.restoreEntryAfterFailedDelete(id: container.id)
                     GameLibrary.shared.reload()
                     onError?(message)
                 }
@@ -914,7 +940,8 @@ extension GameLibrary {
             // One rm -rf removes Game/, EmpoState/, Logs/, and
             // Metadata/ together. Per-game settings, logs, custom
             // artwork, and crash markers all go in a single call.
-            // Saves live in Documents/Data/ and stay.
+            // Saves live in Documents/Data/ (or, rescued, in
+            // Documents/Rescued Saves/) and stay.
             try container.deleteAll()
         } catch {
             NSLog("[GameLibrary] Delete error: %@", "\(error)")
@@ -1281,6 +1308,16 @@ extension GameLibrary {
                         }
                     }
 
+                    if !isReplacement {
+                        // A fresh import of a game that was deleted
+                        // earlier gets its rescued portable saves
+                        // back: matching `Rescued Saves/` buckets
+                        // drain into the new `Game/` tree before
+                        // the first launch. Updates never ran the
+                        // rescue, so they have nothing to restore.
+                        DataDirectory.restoreRescuedSaves(for: container)
+                    }
+
                     committed = true
                     self.inFlightImports.withLock { _ = $0.remove(sel.importID) }
                     active.removeAll { $0.importID == sel.importID }
@@ -1469,6 +1506,10 @@ extension GameLibrary {
             abandonImport(importID: live.id, container: live.container)
             return
         }
+        if live.isDeleting {
+            // A delete for this entry is already running.
+            return
+        }
         let importOwnsContainer = inFlightImports.withLock { $0.contains(live.id) }
         if importOwnsContainer {
             NSLog(
@@ -1478,7 +1519,12 @@ extension GameLibrary {
         }
 
         let container = live.container
-        removeLibraryEntry(id: live.id)
+        // The card stays in place, inert, with a spinner: the
+        // rescue is disk I/O of unknown duration, and the entry
+        // leaves the library only when the delete really finished
+        // (so a failed rescue never makes the card blink out and
+        // back).
+        markEntryDeleting(id: live.id)
         // Registered BEFORE the detached delete starts so
         // `planImports` sees the id the moment the entry leaves
         // the library; the delete task releases it when done.

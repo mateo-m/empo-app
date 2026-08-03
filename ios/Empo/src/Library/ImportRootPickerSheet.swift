@@ -6,11 +6,11 @@ import UIKit
 ///
 ///   1. **Add Games** - games not in the library yet. Selection
 ///      starts empty: the user says what they want.
-///   2. **Update Games** - games whose title matches an installed
-///      game; importing them updates that install in place (files
-///      the new version ships are overwritten, saves and settings
-///      are kept). Selection starts full: updating is the
-///      expected default.
+///   2. **Already in Library** - games whose title matches an
+///      installed game; importing them updates that install in
+///      place (files the import contains are overwritten, saves
+///      and settings are kept). Selection starts full: updating
+///      is the expected default.
 ///
 /// A source with only one category shows only that step, so each
 /// screen carries exactly one verb. The final step's Import
@@ -20,8 +20,8 @@ struct ImportRootPickerSheet: View {
     let prompt: ImportRootPrompt
     let onCancel: () -> Void
     /// Selected choices, plus the subset of choice ids the user
-    /// explicitly approved as in-place updates (the "Update Games"
-    /// step's selection).
+    /// explicitly approved as in-place updates (the "Already in
+    /// Library" step's selection).
     let onConfirm: ([GameImportValidator.ImportRootChoice], Set<String>) -> Void
 
     private enum Step {
@@ -72,13 +72,13 @@ struct ImportRootPickerSheet: View {
     }
 
     private var navigationTitle: String {
-        step == .add ? "Add Games" : "Update Games"
+        step == .add ? "Add Games" : "Already in Library"
     }
 
     private var bannerText: String {
         step == .add
             ? "This import includes more than one game"
-            : "These games are already in your library"
+            : "Importing replaces installed game files"
     }
 
     private var bannerSystemImage: String {
@@ -92,9 +92,9 @@ struct ImportRootPickerSheet: View {
                 + "or cancel to go back without importing anything."
         case .add:
             return "Choose which new games to add to your library. "
-                + "Next, you'll pick which installed games to update."
+                + "Next, you'll review the games that are already in your library."
         case .update:
-            return "Choose which installed games to update with the imported files. "
+            return "Choose which installed games get the imported files. "
                 + "Deselected games keep their current files. "
                 + "Saves and settings are always kept."
         }
