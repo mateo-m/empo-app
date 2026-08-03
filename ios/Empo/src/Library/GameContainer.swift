@@ -12,8 +12,11 @@ import GameProbe
 ///   Documents/Games/<name>/
 ///   ├── Game/              Imported game files. NEVER written by Empo
 ///   │                      after import - we treat it as read-only.
-///   ├── UserData/          Per-game writable payload (save files,
-///   │                      backups, plugin data), exposed via Files app.
+///   ├── UserData/          Legacy staging area. `SaveMigration`
+///   │                      funnels old save locations into it, and
+///   │                      `DataDirectory` drains it into the shared
+///   │                      `Documents/Data/` tree at launch. Absent
+///   │                      on fresh containers.
 ///   ├── EmpoState/         Empo-managed state:
 ///   │                        - mkxp.json (generated config; merged
 ///   │                          from Game/mkxp.json + per-game settings)
@@ -206,7 +209,6 @@ struct GameContainer: Equatable, Hashable {
     func ensureSubdirs() throws {
         let fm = FileManager.default
         try fm.createDirectory(at: gameURL, withIntermediateDirectories: true)
-        try fm.createDirectory(at: userDataURL, withIntermediateDirectories: true)
         try fm.createDirectory(at: empoStateURL, withIntermediateDirectories: true)
         try fm.createDirectory(at: logsURL, withIntermediateDirectories: true)
         try fm.createDirectory(at: metadataURL, withIntermediateDirectories: true)
@@ -218,14 +220,11 @@ struct GameContainer: Equatable, Hashable {
     /// EmpoState/, Logs/, and Metadata/. iOS propagates the flag to
     /// a directory's contents.
     ///
-    /// Why we exclude everything for now: game trees are large and
+    /// Why we exclude everything: game trees are large and
     /// re-importable from the source archive at zero data cost, so
-    /// backing them up mostly bloats users' iCloud quota. Saves for
-    /// games that declare `dataPathOrg`/`dataPathApp` live outside
-    /// this tree (see `GameDataDirectory`) and stay backed up.
-    /// Revisiting per-subtree exclusion (keep UserData/, drop
-    /// Game/) is future work now that folder names are stable
-    /// across imports.
+    /// backing them up mostly bloats users' iCloud quota. Saves
+    /// live outside this tree in `Documents/Data/` (see
+    /// `DataDirectory`) and stay backed up.
     ///
     /// Idempotent: setting the flag on an already-excluded URL is
     /// a no-op. A missing URL is silently swallowed: a container
@@ -252,11 +251,6 @@ struct GameContainer: Equatable, Hashable {
             at: url, withIntermediateDirectories: true
         )
         return url
-    }
-
-    @discardableResult
-    func ensureUserDataDirectory() -> URL {
-        Self.ensureDirectory(userDataURL)
     }
 
     @discardableResult

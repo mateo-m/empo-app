@@ -49,18 +49,20 @@ silently.
 
 mkxp-z's `dataPathOrg` / `dataPathApp` keys control where the game's writable data directory
 (`System.data_directory`) lives. On desktop they feed `SDL_GetPrefPath(org, app)`. Empo mirrors
-that:
+that for every game: the data directory is the shared `Documents/Data/<org>/<app>/` tree, next
+to `Games/` in the Files app. The keys come from `Game/mkxp.json` merged with the per-game
+`EmpoState/mkxp.json` overlay (overlay wins). An org of `.` (or blank) contributes no path
+component. A missing `dataPathApp` falls back to the game's INI title, then to the game's
+library folder name. (Desktop mkxp-z falls back to the literal `mkxp-z` instead; on a device
+with many installed games that would pool every title-less game into one directory, where
+their save files collide.) Existing directories match case-insensitively, so a release whose
+title changed only in case keeps its saves. Any two game releases that resolve to the same
+pair see the same directory, so re-importing a newer version of a game keeps its saves.
 
-- Neither key declared: the per-game `Documents/Games/<title>/UserData/` directory.
-- Either key declared (in `Game/mkxp.json` or the per-game `EmpoState/mkxp.json` overlay, overlay
-  wins): a shared `Documents/GameData/<org>/<app>/` directory. An org of `.` (or blank)
-  contributes no path component, and a missing `dataPathApp` falls back to the game's INI title,
-  then `mkxp-z`. Any two game releases declaring the same pair see the same directory, so
-  re-importing a newer version of a game keeps its saves.
-
-On the first launch after a game starts declaring these keys, the contents of its `UserData/`
-directory move into the (freshly created) shared directory so existing saves carry over. An
-already-populated shared directory is left untouched.
+At each launch, Empo moves the contents of the game's legacy `UserData/` directory into its
+shared data directory, so saves written by older Empo versions carry over. When both sides
+have a file with the same name, the newer file keeps the name. The older file stays beside it
+as `<name>.empo-displaced.bak`. Deleting a game does not delete its shared data directory.
 
 ## Related
 

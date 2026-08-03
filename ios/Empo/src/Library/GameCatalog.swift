@@ -14,12 +14,14 @@ enum GameCatalog {
     /// status and artwork in place.
     nonisolated static func quickScanGames(
         fm: FileManager = .default,
-        isImportInFlight: @Sendable (String) -> Bool = { _ in false }
+        isImportInFlight: @Sendable (String) -> Bool = { _ in false },
+        isDeletionInFlight: @Sendable (String) -> Bool = { _ in false }
     ) -> [GameEntry] {
         var entries: [GameEntry] = []
 
         for container in GameContainer.discover() {
             if isImportInFlight(container.id) { continue }
+            if isDeletionInFlight(container.id) { continue }
             // Skip orphaned containers (no Game/ subdir) instead of
             // deleting them. The full pass owns cleanup.
             guard fm.fileExists(atPath: container.gameURL.path) else { continue }
@@ -32,20 +34,25 @@ enum GameCatalog {
         return entries
     }
 
-    /// `isImportInFlight` must read LIVE state (not a snapshot from
-    /// when the scan was scheduled): the scan takes seconds, and an
-    /// in-place update registered mid-scan would otherwise have its
-    /// staging directory swept - and its container surfaced - while
-    /// the import task is still working on it.
+    /// Both closures must read LIVE state (not a snapshot from
+    /// when the scan was scheduled): the scan takes seconds. An
+    /// in-place update registered mid-scan would otherwise have
+    /// its staging directory swept - and its container surfaced -
+    /// while the import task is still working on it. A delete
+    /// registered mid-scan looks like a half-removed orphan; the
+    /// cleanup below would then race the delete's own removal and
+    /// rescue-drain torn directories into `Data/`.
     nonisolated static func scanGames(
         fm: FileManager = .default,
         cleanupInvalid: Bool,
-        isImportInFlight: @Sendable (String) -> Bool = { _ in false }
+        isImportInFlight: @Sendable (String) -> Bool = { _ in false },
+        isDeletionInFlight: @Sendable (String) -> Bool = { _ in false }
     ) -> [GameEntry] {
         var entries: [GameEntry] = []
 
         for container in GameContainer.discover() {
             if isImportInFlight(container.id) { continue }
+            if isDeletionInFlight(container.id) { continue }
 
             // No import is in flight for this container (checked
             // live above), so any update-staging directory is a
@@ -61,10 +68,28 @@ enum GameCatalog {
             // reaching here with no `Game/` is a genuine orphan.
             let gameDirExists = fm.fileExists(atPath: container.gameURL.path)
             if !gameDirExists {
-                NSLog(
-                    "[GameCatalog] Removing incomplete import container: %@",
-                    container.folderName)
-                try? container.deleteAll()
+                // Re-check the live sets right before the delete:
+                // the loop-entry check can be minutes stale on a
+                // long scan, and this cleanup is the one delete
+                // that never registers itself.
+                if isImportInFlight(container.id) || isDeletionInFlight(container.id) {
+                    continue
+                }
+                // Same save promise as user-initiated deletes: a
+                // pre-0.5 orphan can still hold the only copy of
+                // its saves in UserData/. Rescue into Data/ first;
+                // a failed rescue keeps the container for the next
+                // scan instead of erasing the saves.
+                if DataDirectory.rescueUserDataBeforeDeletion(of: container) {
+                    NSLog(
+                        "[GameCatalog] Removing incomplete import container: %@",
+                        container.folderName)
+                    try? container.deleteAll()
+                } else {
+                    NSLog(
+                        "[GameCatalog] Keeping incomplete container %@: save rescue failed",
+                        container.folderName)
+                }
                 continue
             }
 
@@ -72,11 +97,19 @@ enum GameCatalog {
 
             if !isValid {
                 if cleanupInvalid {
+                    if isImportInFlight(container.id) || isDeletionInFlight(container.id) {
+                        continue
+                    }
+                    if DataDirectory.rescueUserDataBeforeDeletion(of: container) {
+                        NSLog(
+                            "[GameCatalog] Removing invalid game container: %@",
+                            container.folderName)
+                        try? container.deleteAll()
+                        continue
+                    }
                     NSLog(
-                        "[GameCatalog] Removing invalid game container: %@",
+                        "[GameCatalog] Keeping invalid container %@: save rescue failed",
                         container.folderName)
-                    try? container.deleteAll()
-                    continue
                 }
                 if var entry = buildGameEntry(from: container, fm: fm) {
                     entry.status = .invalid

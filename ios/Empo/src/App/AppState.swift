@@ -34,7 +34,14 @@ class AppState {
     /// Applies to this launch only.
     var updateBannerDismissed = false
 
-    private let session = EngineSessionCoordinator.shared
+    // Assigned in init AFTER the container migration runs:
+    // `EngineSessionCoordinator.init` builds a `CrashTracker`,
+    // which scans containers for `.session-active` markers.
+    // Initializing it at the declaration would run that scan over
+    // the un-migrated legacy tree - the marker's container gets
+    // renamed or quarantined a moment later and the recovery
+    // consume step then misses it.
+    private let session: EngineSessionCoordinator
 
     var pendingCrashRecovery: Bool { session.pendingCrashRecovery }
 
@@ -59,6 +66,7 @@ class AppState {
     private init() {
         GameContainerMigration.migrateLegacyContainersIfNeeded()
         SaveMigration.migrateAllDiscoveredGamesIfNeeded()
+        session = EngineSessionCoordinator.shared
         session.delegate = self
     }
 
@@ -88,10 +96,11 @@ class AppState {
         // the per-game tree.
         try? container.ensureSubdirs()
         let gameDir = container.gameURL
-        // Honors mkxp-z's dataPathOrg/dataPathApp: games declaring
-        // them get a shared Documents/GameData/<org>/<app>/ data
-        // directory instead of the per-game UserData/.
-        let userDataDir = GameDataDirectory.resolveAndPrepare(for: container)
+        // Every game gets a shared Documents/Data/<org>/<app>/ data
+        // directory. This mirrors how desktop mkxp-z resolves
+        // dataPathOrg/dataPathApp through SDL_GetPrefPath for every
+        // game, declared or not.
+        let userDataDir = DataDirectory.resolveAndPrepare(for: container)
         let stateDir = container.empoStateURL
 
         GameSettings.migrateLegacyEngineSettingsIfNeeded(

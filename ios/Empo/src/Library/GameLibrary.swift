@@ -86,6 +86,14 @@ class GameLibrary {
     var pendingImports: [String: PendingImport] = [:]
     var nextPendingImportOrder = 0
 
+    /// When each entry last changed locally: `mergeImportedGame`
+    /// publishes and `removeLibraryEntry` removals. Scans snapshot
+    /// the disk over seconds; a scan that started before a local
+    /// change must not overwrite it - or resurrect a deleted
+    /// entry's ghost card (`applyScanResults`). Internal because
+    /// `removeLibraryEntry` lives in another file.
+    var localMutationDates: [String: Date] = [:]
+
     private let fm = FileManager.default
     nonisolated let cancelledImports = Mutex(Set<String>())
 
@@ -98,6 +106,14 @@ class GameLibrary {
     /// would clobber the in-memory progress card via the
     /// scan/merge replace step in `reload()`.
     nonisolated let inFlightImports = Mutex(Set<String>())
+
+    /// IDs of containers a detached user-initiated delete is still
+    /// removing (a multi-GB rm -rf takes seconds). `planImports`
+    /// refuses matching titles and hides these containers from its
+    /// installed list so a fast re-import cannot race the running
+    /// delete. Registered in `deleteGame` before the task starts;
+    /// released by the task when it finishes, aborts, or fails.
+    nonisolated let deletionsInFlight = Mutex(Set<String>())
 
     /// IDs of in-flight imports that update an installed game in
     /// place (user-confirmed replacement). `abandonImport` consults
@@ -130,16 +146,20 @@ class GameLibrary {
         // seconds, and an import (in particular an in-place update
         // of an existing container) registered after this reload
         // started must still be skipped by the loop when it reaches
-        // that container.
-        let inFlight = inFlightImports
+        // that container. The closure reads the mutex through self
+        // because Mutex is noncopyable and cannot bind to a local.
         let isImportInFlight: @Sendable (String) -> Bool = { id in
-            inFlight.withLock { $0.contains(id) }
+            self.inFlightImports.withLock { $0.contains(id) }
+        }
+        let isDeletionInFlight: @Sendable (String) -> Bool = { id in
+            self.deletionsInFlight.withLock { $0.contains(id) }
         }
         // .userInitiated: the initial scan gates first meaningful
         // paint (library vs empty state), and later reloads refresh
         // what's on screen. The default detached priority gets
         // deprioritized under system load. That is exactly when the
         // scan is slowest and the priority matters most.
+        let scanStartedAt = Date()
         Task.detached(priority: .userInitiated) {
             if initialLoad {
                 // Fast pass: titles + metadata + already-extracted
@@ -148,21 +168,25 @@ class GameLibrary {
                 // the emptiness answer) on screen quickly. The full
                 // pass below corrects status and artwork in place.
                 let quick = ImportSignpost.interval("library-quick-scan", id: "reload") {
-                    GameCatalog.quickScanGames(isImportInFlight: isImportInFlight)
+                    GameCatalog.quickScanGames(
+                        isImportInFlight: isImportInFlight,
+                        isDeletionInFlight: isDeletionInFlight
+                    )
                 }
                 await MainActor.run {
-                    GameLibrary.shared.applyScanResults(quick)
+                    GameLibrary.shared.applyScanResults(quick, scanStartedAt: scanStartedAt)
                 }
             }
 
             let scanned = ImportSignpost.interval("library-scan", id: "reload") {
                 GameCatalog.scanGames(
                     cleanupInvalid: cleanupInvalid,
-                    isImportInFlight: isImportInFlight
+                    isImportInFlight: isImportInFlight,
+                    isDeletionInFlight: isDeletionInFlight
                 )
             }
             await MainActor.run {
-                GameLibrary.shared.applyScanResults(scanned)
+                GameLibrary.shared.applyScanResults(scanned, scanStartedAt: scanStartedAt)
             }
         }
     }
@@ -171,7 +195,7 @@ class GameLibrary {
     /// in place, drop non-importing entries the scan no longer sees,
     /// append newcomers. Marks the initial scan complete since any
     /// applied pass answers the emptiness question.
-    private func applyScanResults(_ scanned: [GameEntry]) {
+    private func applyScanResults(_ scanned: [GameEntry], scanStartedAt: Date) {
         // A scan that raced an import registration can still carry
         // an entry for a container whose import task now owns it
         // (an in-place update's container exists on disk for the
@@ -180,7 +204,24 @@ class GameLibrary {
         // so drop those results; the import's own merge step
         // publishes the final entry.
         let inFlight = inFlightImports.withLock { Set($0) }
-        let scanned = scanned.filter { !inFlight.contains($0.id) }
+        let deleting = deletionsInFlight.withLock { Set($0) }
+        // An update that registered, completed, AND published while
+        // this scan was running is invisible to the in-flight
+        // filter, but the scan's snapshot of that entry predates
+        // the update. Keep the fresher local entry. The same shape
+        // covers deletions: the scan saw the container before the
+        // delete removed it, and appending its entry now would put
+        // a ghost card over a gone directory - `deletionsInFlight`
+        // catches a delete still running, the mutation date one
+        // that already finished.
+        let scanned = scanned.filter { entry in
+            if inFlight.contains(entry.id) { return false }
+            if deleting.contains(entry.id) { return false }
+            if let mutated = localMutationDates[entry.id], mutated > scanStartedAt {
+                return false
+            }
+            return true
+        }
         let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
         withAnimation {
             var updatedIDs = Set<String>()
@@ -218,6 +259,7 @@ class GameLibrary {
                     lib.reload()
                     return
                 }
+                lib.localMutationDates[importID] = Date()
                 withAnimation {
                     if let idx = lib.games.firstIndex(where: { $0.id == importID }) {
                         lib.games[idx] = entry
