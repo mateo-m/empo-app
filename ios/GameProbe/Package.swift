@@ -5,7 +5,7 @@ let package = Package(
     name: "GameProbe",
     platforms: [
         .macOS(.v13),
-        .iOS(.v13),
+        .iOS(.v14),
     ],
     products: [
         .library(name: "GameProbe", targets: ["GameProbe"]),
