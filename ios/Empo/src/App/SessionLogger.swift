@@ -192,7 +192,7 @@ final class SessionLogger {
     private static func logHeader(title: String, extras: [String] = []) -> String {
         var header = "\(title)\n"
         header += "commit: \(GitInfo.commit)\(commitSuffix())\n"
-        header += "engine: \(GitInfo.engineFingerprint)\n"
+        header += "engine: bindings=\(GitInfo.engineFingerprint) core=\(GitInfo.engineCoreFingerprint)\n"
         for line in extras {
             header += "\(line)\n"
         }

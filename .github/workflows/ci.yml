@@ -261,6 +261,14 @@ jobs:
             echo "::error::mkxp-z-apple-mobile submodule points to $SUBMODULE_SHA, which is not reachable from origin/$SUBMODULE_BRANCH"
             exit 1
           fi
+          # The pinned engine prebuilt must match the gitlink's core
+          # sources. This catches a stale pin here, in seconds, not in
+          # the Simulator build.
+          if ! ENGINE_REPO_DIR="$TMP_REPO" GITLINK_SHA="$SUBMODULE_SHA" \
+              scripts/check-engine-pin.sh; then
+            echo "::error::the engine prebuilt pin is stale for this submodule commit (see scripts/check-engine-pin.sh output)"
+            exit 1
+          fi
 
   simulator:
     name: Simulator build

@@ -34,7 +34,31 @@ final class OrientationDerivationTests: XCTestCase {
         assertNoOverlaps(layout: landscape, isLandscape: true)
     }
 
+    // The landscape source is hand-authored, NOT produced by the unit
+    // under test: deriving from derivation output can only exercise
+    // whatever shapes derive itself emits, so a landscape-source bug
+    // could pass vacuously on well-formed derived input.
     func testLandscapeClusterDerivesPortraitPreservingSignsAndGaps() {
+        let landscape = sampleLandscapeLayout()
+        let derived = OrientationDerivation.derive(
+            from: landscape,
+            sourceIsLandscape: true,
+            metrics: metrics,
+            defaultDpad: nil
+        )
+
+        assertDerivationPreservesArrangement(
+            source: landscape,
+            derived: derived,
+            sourceIsLandscape: true
+        )
+        assertWithinZone(layout: derived, isLandscape: false)
+        assertNoOverlaps(layout: derived, isLandscape: false)
+    }
+
+    // Complementary round-trip property: deriving back from derived
+    // output must also hold the invariants.
+    func testPortraitDerivationRoundTripsThroughLandscape() {
         let portrait = samplePortraitLayout()
         let landscape = OrientationDerivation.derive(
             from: portrait,
@@ -108,9 +132,17 @@ final class OrientationDerivationTests: XCTestCase {
             section, metrics: metrics, defaultDpad: defaultDpad)
 
         XCTAssertTrue(involved)
-        XCTAssertNotNil(completed.landscape)
+        guard let landscape = completed.landscape else {
+            XCTFail("expected landscape")
+            return
+        }
+        // The equality below only pins the delegation plumbing (it
+        // holds no matter what derive produces), so the completed
+        // layout must independently satisfy the layout invariants.
+        assertWithinZone(layout: landscape, isLandscape: true)
+        assertNoOverlaps(layout: landscape, isLandscape: true)
         XCTAssertEqual(
-            completed.landscape,
+            landscape,
             OrientationDerivation.derive(
                 from: portrait,
                 sourceIsLandscape: false,
@@ -194,12 +226,17 @@ final class OrientationDerivationTests: XCTestCase {
         )
     }
 
+    /// Every element sits fully inside the landscape touch zone
+    /// (center at least half a size away from every inset edge).
+    /// Gap preservation only holds for legal layouts: an element that
+    /// hangs into an inset gets pulled in by the target-side zone
+    /// clamp, which legitimately compresses its gaps.
     private func sampleLandscapeLayout() -> TouchLayout {
         TouchLayout(
-            dpad: DPadSpec(x: 0.10, y: 0.68, size: 140),
+            dpad: DPadSpec(x: 0.16, y: 0.68, size: 140),
             buttons: [
-                ButtonSpec(label: "OK", key: "KeyZ", x: 0.92, y: 0.72, size: 68),
-                ButtonSpec(label: "Back", key: "KeyX", x: 0.82, y: 0.84, size: 56),
+                ButtonSpec(label: "OK", key: "KeyZ", x: 0.88, y: 0.72, size: 68),
+                ButtonSpec(label: "Back", key: "KeyX", x: 0.78, y: 0.80, size: 56),
             ]
         )
     }

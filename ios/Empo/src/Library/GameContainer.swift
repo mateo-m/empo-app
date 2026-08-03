@@ -10,8 +10,13 @@ import GameProbe
 ///
 ///   ```
 ///   Documents/Games/<name>/
-///   ├── Game/              Imported game files. NEVER written by Empo
-///   │                      after import - we treat it as read-only.
+///   ├── Game/              Imported game files. Empo (the host) never
+///   │                      writes here after import. The GAME does:
+///   │                      self-updates, portable "Save Data/", and
+///   │                      working-directory saves all land here,
+///   │                      exactly as they would next to Game.exe.
+///   │                      Portable saves move out only when the
+///   │                      game is deleted (`PortableGameSaves`).
 ///   ├── UserData/          Legacy staging area. `SaveMigration`
 ///   │                      funnels old save locations into it, and
 ///   │                      `DataDirectory` drains it into the shared
@@ -259,7 +264,7 @@ struct GameContainer: Equatable, Hashable {
         // Older builds wrote a snapshot of the developer's
         // mkxp.json as `mkxp.original.json` here and used it as a
         // merge base. We now read directly from `Game/mkxp.json`
-        // (the imported folder is immutable after import), so the
+        // (the host never edits it; the game may), so the
         // snapshot is dead state. Clean it up opportunistically.
         let staleSnapshot = empoStateURL.appendingPathComponent("mkxp.original.json")
         try? FileManager.default.removeItem(at: staleSnapshot)
