@@ -75,9 +75,10 @@ enum GameCatalog {
                 if isImportInFlight(container.id) || isDeletionInFlight(container.id) {
                     continue
                 }
-                // Same save promise as user-initiated deletes: a
+                // Same save rescue as user-initiated deletes: a
                 // pre-0.5 orphan can still hold the only copy of
-                // its saves in UserData/. Rescue into Data/ first;
+                // its saves in UserData/. Rescue first (UserData
+                // into Data/, portable saves into Rescued Saves/);
                 // a failed rescue keeps the container for the next
                 // scan instead of erasing the saves.
                 if DataDirectory.rescueUserDataBeforeDeletion(of: container) {

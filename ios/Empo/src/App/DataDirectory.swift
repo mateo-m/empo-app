@@ -45,6 +45,22 @@ enum DataDirectory {
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Data", isDirectory: true)
 
+    /// Parent of the portable-save rescue buckets.
+    /// `Documents/Rescued Saves/`. Portable saves must NOT go into
+    /// `Data/`: that tree replicates Windows paths OUTSIDE a game's
+    /// folder, and a re-imported game reads portable saves from
+    /// `Game/`, never from there.
+    static let rescuedSavesRootURL: URL = FileManager.default
+        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent(RescuedSaves.directoryName, isDirectory: true)
+
+    /// Transient sibling of `Game/` inside a container holding
+    /// portable saves pulled out during a deletion rescue, until
+    /// the drain lands them in the rescue bucket. Dot-prefixed:
+    /// hidden from library discovery. Non-empty means the rescue
+    /// did not finish - the delete must stay blocked.
+    static let rescueStagingDirectoryName = ".save-rescue-staging"
+
     /// Serializes every drain in the process. Two detached deletes
     /// (bulk delete) or a delete racing a launch could otherwise
     /// interleave their move-with-rename steps on one shared
@@ -128,118 +144,201 @@ enum DataDirectory {
     }
 
     /// Rescue path for game deletion. Two save locations sit
-    /// inside the doomed container tree:
+    /// inside the doomed container tree, and they go to DIFFERENT
+    /// homes:
     ///
-    ///   - `UserData/`, for a pre-0.5 container that never
-    ///     launched under the shared-data scheme.
+    ///   - `UserData/` (a pre-0.5 container that never launched
+    ///     under the shared-data scheme) holds env-derived saves:
+    ///     it drains into the shared `Data/` directory, where the
+    ///     engine serves them back to the game.
     ///   - "Portable mode" saves games keep NEXT TO their game
     ///     files (`Game/Game.rxdata`, a `Save Data/` folder - see
-    ///     `PortableGameSaves`). Only the deletion rescue may move
+    ///     `PortableGameSaves`) move into a
+    ///     `Rescued Saves/<title>/` bucket with their structure
+    ///     intact, so a later import of the same game can put them
+    ///     back into `Game/`. Only the deletion rescue may move
     ///     these: an installed game needs them exactly where they
     ///     are.
     ///
-    /// Both funnel through `UserData/` and drain into the shared
-    /// directory. Does nothing - and creates nothing - when there
-    /// is nothing to rescue.
+    /// Does nothing - and creates nothing - when there is nothing
+    /// to rescue.
     ///
     /// Returns false when anything failed to move, including when
-    /// the shared directory itself cannot exist (then the fallback
-    /// above IS `UserData/`, and draining a directory into itself
-    /// proves nothing). The caller must NOT delete the container
-    /// in that case: the delete alert promises the saves survive.
+    /// a destination itself cannot exist (for `UserData/`, the
+    /// fallback destination IS `UserData/`, and draining a
+    /// directory into itself proves nothing). The caller must NOT
+    /// delete the container in that case: silent save loss is
+    /// never on the table.
     static func rescueUserDataBeforeDeletion(of container: GameContainer) -> Bool {
         let fm = FileManager.default
+        let rescueStaging = container.url.appendingPathComponent(
+            rescueStagingDirectoryName, isDirectory: true)
 
         // What still needs rescuing is judged from disk, not from
         // what any step claims: a save whose move FAILED must
         // count as unrescued, not as nothing-to-do. Fails CLOSED:
-        // a `UserData/` that exists but cannot be listed counts as
+        // a directory that exists but cannot be listed counts as
         // something left - ambiguity must block the delete, not
         // wave it through.
-        func nothingLeftBehind() -> Bool {
+        func hasLeftoverContent(_ url: URL) -> Bool {
             var isDirectory: ObjCBool = false
-            if fm.fileExists(atPath: container.userDataURL.path, isDirectory: &isDirectory) {
-                guard
-                    let entries = try? fm.contentsOfDirectory(
-                        atPath: container.userDataURL.path),
-                    entries.isEmpty
-                else { return false }
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+                return false
             }
-            return PortableGameSaves.entryNames(
-                atGameRoot: container.gameURL, fm: fm
-            ).isEmpty
+            guard isDirectory.boolValue,
+                let entries = try? fm.contentsOfDirectory(atPath: url.path)
+            else { return true }
+            return !entries.isEmpty
+        }
+        func nothingLeftBehind() -> Bool {
+            !hasLeftoverContent(container.userDataURL)
+                && !hasLeftoverContent(rescueStaging)
+                && PortableGameSaves.entryNames(
+                    atGameRoot: container.gameURL, fm: fm
+                ).isEmpty
         }
 
         if nothingLeftBehind() { return true }
 
-        // Verify the shared destination exists BEFORE any staging
-        // move: staging pulls portable saves out of `Game/`, which
-        // is one-way - if the rescue then aborted, a KEPT
-        // portable-mode game would no longer see its own saves.
-        let resolved = resolveAndPrepare(for: container)
-        guard resolved.path != container.userDataURL.path else { return false }
-
-        stagePortableSaves(of: container, fm: fm)
-        drainLock.withLock { _ in
-            _ = LegacyDataDrain.drain(from: container.userDataURL, into: resolved, fm: fm)
+        var rescued = true
+        if hasLeftoverContent(container.userDataURL) {
+            // Verify the shared destination before draining; the
+            // fallback path means the destination could not exist.
+            let resolved = resolveAndPrepare(for: container)
+            if resolved.path == container.userDataURL.path {
+                rescued = false
+            } else {
+                drainLock.withLock { _ in
+                    _ = LegacyDataDrain.drain(
+                        from: container.userDataURL, into: resolved, fm: fm)
+                }
+            }
+        }
+        if rescued {
+            rescuePortableSaves(of: container, staging: rescueStaging, fm: fm)
         }
         return nothingLeftBehind()
     }
 
-    /// Move portable-mode saves out of `Game/` into the `UserData/`
-    /// staging directory, where the regular drain picks them up
-    /// (mtime merge, displaced-name conflicts, never a clobber).
-    /// Best-effort; `rescueUserDataBeforeDeletion` re-checks the
-    /// disk afterward.
+    /// Move portable-mode saves out of `Game/` into the rescue
+    /// bucket for this game, via a container-local staging
+    /// directory: entries first move (whole, structure intact)
+    /// into the staging directory, then `LegacyDataDrain` merges
+    /// the staging into the bucket (mtime merge, displaced-name
+    /// conflicts, never a clobber). A partial failure leaves the
+    /// remainder in the staging directory, which blocks the delete
+    /// and resumes on the next attempt.
     ///
-    /// Save FOLDERS flatten one level: the runtime save model is
-    /// flat (`Save Data/x.rxdata` resolves to `<data>/x.rxdata`),
-    /// so the folder's children stage individually. Moving the
-    /// folder whole would park the saves at
-    /// `Data/<bucket>/<folder>/` - a path no game ever reads
-    /// after a re-import.
-    private static func stagePortableSaves(
-        of container: GameContainer, fm: FileManager
+    /// The bucket is verified to exist BEFORE any entry leaves
+    /// `Game/`: pulling saves out is one-way, and if the rescue
+    /// then aborted, a KEPT portable-mode game would no longer see
+    /// its own saves.
+    ///
+    /// The bucket carries an identity marker with the container's
+    /// INI-derived folder name, so a later import can match it
+    /// even though the bucket itself is named by display title
+    /// (custom title first).
+    private static func rescuePortableSaves(
+        of container: GameContainer, staging: URL, fm: FileManager
     ) {
         let names = PortableGameSaves.entryNames(atGameRoot: container.gameURL, fm: fm)
-        guard !names.isEmpty else { return }
+        guard !names.isEmpty || hasContent(staging, fm: fm) else { return }
 
-        try? fm.createDirectory(at: container.userDataURL, withIntermediateDirectories: true)
+        let bucket = rescueBucket(for: container, fm: fm)
+        var isDirectory: ObjCBool = false
+        try? fm.createDirectory(at: bucket, withIntermediateDirectories: true)
+        guard fm.fileExists(atPath: bucket.path, isDirectory: &isDirectory),
+            isDirectory.boolValue
+        else {
+            NSLog(
+                "[DataDirectory] Cannot create rescue bucket %@; keeping saves in place",
+                bucket.path)
+            return
+        }
+        RescuedSaves.writeMarker(
+            .init(folderName: container.folderName), inBucket: bucket, fm: fm)
+
+        try? fm.createDirectory(at: staging, withIntermediateDirectories: true)
         for name in names {
             let source = container.gameURL.appendingPathComponent(name)
-            var isDirectory: ObjCBool = false
-            guard fm.fileExists(atPath: source.path, isDirectory: &isDirectory) else {
-                continue
-            }
-            if isDirectory.boolValue {
-                let children = (try? fm.contentsOfDirectory(atPath: source.path)) ?? []
-                for child in children {
-                    stageEntry(
-                        source.appendingPathComponent(child),
-                        as: child, of: container, fm: fm)
-                }
-                if (try? fm.contentsOfDirectory(atPath: source.path))?.isEmpty == true {
-                    try? fm.removeItem(at: source)
-                }
-            } else {
-                stageEntry(source, as: name, of: container, fm: fm)
+            let target = UniqueFileName.firstAvailableURL(
+                in: staging, preferring: name, fm: fm)
+            do {
+                try fm.moveItem(at: source, to: target)
+            } catch {
+                NSLog(
+                    "[DataDirectory] Failed to stage portable save %@ of %@: %@",
+                    name,
+                    container.folderName,
+                    error.localizedDescription)
             }
         }
+        let outcome = drainLock.withLock { _ in
+            LegacyDataDrain.drain(from: staging, into: bucket, fm: fm)
+        }
+        NSLog(
+            "[DataDirectory] Rescued portable saves of %@ into %@ (%ld moved, %ld failed)",
+            container.folderName,
+            bucket.path,
+            outcome.movedCount,
+            outcome.failures.count)
     }
 
-    private static func stageEntry(
-        _ source: URL, as name: String, of container: GameContainer, fm: FileManager
-    ) {
-        let target = UniqueFileName.firstAvailableURL(
-            in: container.userDataURL, preferring: name, fm: fm)
-        do {
-            try fm.moveItem(at: source, to: target)
-        } catch {
+    /// `Rescued Saves/<display title>/`, reusing an existing
+    /// bucket case-insensitively the way `resolve` does for
+    /// `Data/` components.
+    private static func rescueBucket(for container: GameContainer, fm: FileManager) -> URL {
+        let metadata = GameMetadata.load(from: container)
+        let iniTitle = GameINI.parseINIValue(
+            at: container.gameURL, section: "game", key: "title")
+        let title =
+            metadata.customTitle ?? metadata.baseTitle ?? iniTitle ?? container.folderName
+        let name = GameFolderName.sanitize(title)
+
+        let existingDirectories =
+            ((try? fm.contentsOfDirectory(atPath: rescuedSavesRootURL.path)) ?? [])
+            .filter { entry in
+                var isDirectory: ObjCBool = false
+                return fm.fileExists(
+                    atPath: rescuedSavesRootURL.appendingPathComponent(entry).path,
+                    isDirectory: &isDirectory) && isDirectory.boolValue
+            }
+        let chosen = DirectoryNameMatch.preferringExisting(name, among: existingDirectories)
+        return rescuedSavesRootURL.appendingPathComponent(chosen, isDirectory: true)
+    }
+
+    private static func hasContent(_ url: URL, fm: FileManager) -> Bool {
+        ((try? fm.contentsOfDirectory(atPath: url.path)) ?? []).isEmpty == false
+    }
+
+    /// Import-side restore: drain every rescue bucket that belongs
+    /// to `container` (marker identity first, bucket name as the
+    /// fallback) back into its fresh `Game/` tree. Called after a
+    /// fresh import lands, before the first launch, so the game
+    /// sees its saves on the first run. Complete restores remove
+    /// their emptied buckets; a partial restore keeps the rest for
+    /// the next import.
+    static func restoreRescuedSaves(for container: GameContainer) {
+        let fm = FileManager.default
+        let buckets = RescuedSaves.matchingBuckets(
+            in: rescuedSavesRootURL, folderName: container.folderName, fm: fm)
+        guard !buckets.isEmpty else { return }
+
+        for bucket in buckets {
+            let outcome = drainLock.withLock { _ in
+                RescuedSaves.restore(from: bucket, into: container.gameURL, fm: fm)
+            }
             NSLog(
-                "[DataDirectory] Failed to stage portable save %@ of %@: %@",
-                name,
+                "[DataDirectory] Restored rescued saves from %@ into %@ (%ld moved, %ld failed)",
+                bucket.lastPathComponent,
                 container.folderName,
-                error.localizedDescription)
+                outcome.movedCount,
+                outcome.failures.count)
+        }
+        // An emptied root is clutter in the Files app; remove it
+        // only when the LAST bucket is gone.
+        if ((try? fm.contentsOfDirectory(atPath: rescuedSavesRootURL.path)) ?? []).isEmpty {
+            try? fm.removeItem(at: rescuedSavesRootURL)
         }
     }
 

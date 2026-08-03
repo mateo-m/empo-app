@@ -62,7 +62,16 @@ pair see the same directory, so re-importing a newer version of a game keeps its
 At each launch, Empo moves the contents of the game's legacy `UserData/` directory into its
 shared data directory, so saves written by older Empo versions carry over. When both sides
 have a file with the same name, the newer file keeps the name. The older file stays beside it
-as `<name>.empo-displaced.bak`. Deleting a game does not delete its shared data directory.
+as `<name>.empo-displaced.bak`. When both files hold the same bytes, Empo keeps one copy.
+Deleting a game does not delete its shared data directory.
+
+Some games keep their saves next to their own files instead ("portable mode"). When you
+delete such a game, Empo moves the save files it finds inside `Game/` into
+`Documents/Rescued Saves/<title>/`, with their structure intact. The bucket is named by the
+game's display title; a marker file inside it records the game's library folder name. When
+you import the same game again, Empo matches the bucket by that marker and moves the saves
+back into the new `Game/` tree. If Empo does not recognize a save file, the deletion removes
+it with the game.
 
 ## Related
 
