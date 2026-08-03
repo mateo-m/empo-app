@@ -64,12 +64,17 @@ public enum ImportNameResolution {
             return .refusedInFlight
         }
 
+        // The open-game guard applies to fresh installs too: a
+        // running game whose container dropped out of the installed
+        // list (mid-scan, broken remnant) must not have its folder
+        // claimed while the engine holds files inside it.
+        if key == context.openGameKey {
+            return .refusedOpenGame
+        }
+
         if !reservedBatchKeys.contains(key),
             let installed = context.installedNamesByKey[key]
         {
-            if installed.lowercased() == context.openGameKey {
-                return .refusedOpenGame
-            }
             reservedBatchKeys.insert(key)
             return .update(installedFolderName: installed)
         }

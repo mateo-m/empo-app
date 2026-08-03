@@ -121,6 +121,55 @@ final class ImportNameResolutionTests: XCTestCase {
         XCTAssertEqual(outcome, .refusedOpenGame)
     }
 
+    func testOpenGameGuardFiresOnFreshPathToo() {
+        // A running game whose container dropped out of the
+        // installed list must not have its folder claimed by a
+        // fresh install.
+        var batch = Set<String>()
+        let outcome = ImportNameResolution.resolve(
+            title: "Testing",
+            context: context(installed: [], open: "Testing"),
+            reservedBatchKeys: &batch)
+        XCTAssertEqual(outcome, .refusedOpenGame)
+        XCTAssertTrue(batch.isEmpty)
+    }
+
+    func testSanitizedTitleMatchesInFlightName() {
+        var batch = Set<String>()
+        let outcome = ImportNameResolution.resolve(
+            title: "Fate/Another",
+            context: context(inFlight: ["Fate Another"]),
+            reservedBatchKeys: &batch)
+        XCTAssertEqual(outcome, .refusedInFlight)
+        XCTAssertTrue(batch.isEmpty)
+    }
+
+    func testDuplicateInstalledKeysResolveToTheFirstListing() {
+        // Two installed folders that collide case-insensitively:
+        // the first listing wins the update target.
+        var batch = Set<String>()
+        let outcome = ImportNameResolution.resolve(
+            title: "testing",
+            context: context(installed: ["Testing", "TESTING"]),
+            reservedBatchKeys: &batch)
+        XCTAssertEqual(outcome, .update(installedFolderName: "Testing"))
+    }
+
+    func testTwoDegenerateTitlesCollideInOneBatch() {
+        // Both titles sanitize to the fallback name, so they claim
+        // the same key.
+        var batch = Set<String>()
+        let ctx = context()
+        XCTAssertEqual(
+            ImportNameResolution.resolve(
+                title: "...", context: ctx, reservedBatchKeys: &batch),
+            .fresh(folderName: "Unknown Game"))
+        XCTAssertEqual(
+            ImportNameResolution.resolve(
+                title: "///", context: ctx, reservedBatchKeys: &batch),
+            .refusedDuplicateInBatch)
+    }
+
     func testOpenGameOnlyBlocksItsOwnUpdate() {
         // A DIFFERENT installed game being open must not block this
         // update.

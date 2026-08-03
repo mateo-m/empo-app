@@ -1,19 +1,23 @@
 import Foundation
 
 extension Data {
-    /// Decodes bytes as text with a UTF-8-then-Latin-1 fallback.
+    /// Decodes bytes as text: UTF-8, then Shift-JIS, then Latin-1.
     /// This applies to Game.ini, loose `.rb` scripts, and similar
-    /// files. RPG Maker tools write them in Windows-1252 / Latin-1,
-    /// but the files often open as UTF-8 too.
+    /// files.
     ///
-    /// Latin-1 maps every byte 0x00-0xFF to U+0000-U+00FF, so the
-    /// fallback always succeeds. The returned String just may not
-    /// match what a user typed in non-Western text. That is fine
-    /// for the parsing we do (ini key=value pairs, ASCII Ruby
-    /// keywords). Text that goes to the UI as-is should still pass
-    /// through a proper encoding detector.
+    /// Shift-JIS sits between the two because RPG Maker XP/VX ship
+    /// from Japan and Japanese fan games write their INI titles in
+    /// it - and the INI title now names both the game's container
+    /// and its shared data directory. The engine decodes the same
+    /// file with a real encoding detector (uchardet), so a
+    /// mojibake title here would put Empo's directories out of
+    /// step with what the game displays. ASCII content is valid
+    /// UTF-8 and never reaches the fallback; bytes that are
+    /// neither valid UTF-8 nor valid Shift-JIS land on Latin-1,
+    /// which maps every byte and therefore always succeeds.
     public func decodeAsLooseText() -> String? {
         String(data: self, encoding: .utf8)
+            ?? String(data: self, encoding: .shiftJIS)
             ?? String(data: self, encoding: .isoLatin1)
     }
 }

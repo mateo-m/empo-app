@@ -87,10 +87,11 @@ public struct MkxpGameDefaults: Equatable, Sendable {
 
 /// mkxp-z's `dataPathOrg` / `dataPathApp` config values. On desktop
 /// mkxp-z feeds these to `SDL_GetPrefPath(org, app)` to place the
-/// game's writable data directory, so two releases of a game that
-/// declare the same pair share saves. Empo mirrors that by mapping
-/// them to a shared save location outside the per-game container
-/// (see `GameDataDirectory` in the app target).
+/// game's writable data directory - for every game, with engine
+/// defaults when the keys are absent - so two releases that resolve
+/// to the same pair share saves. Empo mirrors that by mapping the
+/// pair to a shared save location outside the per-game container
+/// (see `DataDirectory` in the app target).
 public struct MkxpDataPath: Equatable, Sendable {
     public var org: String?
     public var app: String?
@@ -106,16 +107,24 @@ public struct MkxpDataPath: Equatable, Sendable {
 
 extension MkxpDataPath {
     /// Path components of the shared data directory under the
-    /// shared root (`GameData/` in the app), or nil when neither
-    /// key is declared. Mirrors mkxp-z's `SDL_GetPrefPath`
-    /// semantics: an org of `"."` (or blank) contributes no
+    /// shared root (`Data/` in the app). Mirrors mkxp-z's
+    /// `SDL_GetPrefPath` semantics for every game, declared keys
+    /// or not: an org of `"."` (or blank) contributes no
     /// component, and a missing `dataPathApp` falls back to the
-    /// game's INI title, then to `"mkxp-z"` - the same defaults the
-    /// legacy engine builds used. Each component is sanitized into
-    /// a safe single path component.
-    public func sharedDirectoryComponents(iniTitleFallback: String?) -> [String]? {
-        guard isDeclared else { return nil }
-
+    /// game's INI title. Each component is sanitized into a safe
+    /// single path component.
+    ///
+    /// Desktop mkxp-z's last resort is the literal `"mkxp-z"`,
+    /// which on Empo would pool every title-less game into ONE
+    /// shared directory - different games would then read and
+    /// overwrite each other's `Game.rxdata`. The container folder
+    /// name (unique per installed game, stable across updates of
+    /// the same title) takes that place instead; `"mkxp-z"`
+    /// remains only for callers with no folder name to give.
+    public func sharedDirectoryComponents(
+        iniTitleFallback: String?,
+        folderNameFallback: String? = nil
+    ) -> [String] {
         var components: [String] = []
         if let orgComponent = Self.folderComponent(org) {
             components.append(orgComponent)
@@ -123,6 +132,7 @@ extension MkxpDataPath {
         components.append(
             Self.folderComponent(app)
                 ?? Self.folderComponent(iniTitleFallback)
+                ?? Self.folderComponent(folderNameFallback)
                 ?? "mkxp-z"
         )
         return components

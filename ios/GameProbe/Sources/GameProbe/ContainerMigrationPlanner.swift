@@ -73,13 +73,21 @@ public enum ContainerMigrationPlanner {
         }
     }
 
-    /// The `<uuid>` prefix of a pre-v0.5 `<uuid>-<slug>` folder name
-    /// (the old container id), or nil for post-migration
-    /// title-based names.
+    /// The `<uuid>` prefix of a pre-v0.5 legacy folder name (the
+    /// old container id), or nil for post-migration title-based
+    /// names. The legacy importer wrote `<uuid>-<slug>`, or a bare
+    /// `<uuid>` when the slug was empty - so a valid prefix is
+    /// exactly one of those two shapes. Anything longer without
+    /// the `-` separator is a title that merely STARTS with a
+    /// UUID; matching it would classify the migrated name as
+    /// legacy on every launch and retry a self-rename forever.
     public static func legacyUUIDPrefix(folderName: String) -> String? {
         guard folderName.count >= 36 else { return nil }
         let uuidPart = String(folderName.prefix(36))
         guard UUID(uuidString: uuidPart) != nil else { return nil }
+        guard folderName.count == 36 || folderName.dropFirst(36).first == "-" else {
+            return nil
+        }
         return uuidPart
     }
 

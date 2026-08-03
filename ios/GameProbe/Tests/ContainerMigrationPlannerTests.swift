@@ -98,6 +98,42 @@ final class ContainerMigrationPlannerTests: XCTestCase {
         XCTAssertTrue(groups[0].titleAlreadyTaken)
     }
 
+    func testDatedBeatsUndatedAmongNeverPlayed() {
+        // Neither candidate was played; the one with a real
+        // dateAdded must rank above the one with none.
+        let groups = ContainerMigrationPlanner.plan(
+            candidates: [
+                candidate(id: "undated", name: "Testing"),
+                candidate(id: "dated", name: "Testing", added: 10),
+            ],
+            takenLowercasedNames: []
+        )
+        XCTAssertEqual(groups[0].candidates.map(\.id), ["dated", "undated"])
+    }
+
+    func testThreeWayOrderingAcrossTiers() {
+        // Tier order: last played, then date added, then id. The
+        // ids sort AGAINST the expected order, so an id-only sort
+        // fails this test.
+        let groups = ContainerMigrationPlanner.plan(
+            candidates: [
+                candidate(id: "a-nothing", name: "Testing"),
+                candidate(id: "b-added", name: "Testing", added: 100),
+                candidate(id: "c-played", name: "Testing", played: 50),
+            ],
+            takenLowercasedNames: []
+        )
+        XCTAssertEqual(
+            groups[0].candidates.map(\.id),
+            ["c-played", "b-added", "a-nothing"])
+    }
+
+    func testEmptyCandidatesYieldNoGroups() {
+        XCTAssertEqual(
+            ContainerMigrationPlanner.plan(candidates: [], takenLowercasedNames: ["testing"]),
+            [])
+    }
+
     func testDistinctTitlesStayIndependentAndSorted() {
         let groups = ContainerMigrationPlanner.plan(
             candidates: [
@@ -130,6 +166,28 @@ final class ContainerMigrationPlannerTests: XCTestCase {
                 folderName: "not-a-uuid-prefix-that-is-36-chars-x-rest"))
     }
 
+    func testLegacyPrefixRejectsUUIDFollowedByNonDash() {
+        // A migrated title that merely STARTS with a UUID is not a
+        // legacy name.
+        XCTAssertNil(
+            ContainerMigrationPlanner.legacyUUIDPrefix(folderName: "\(uuidA)xgarbage"))
+    }
+
+    func testLegacyPrefixAcceptsBothLetterCases() {
+        XCTAssertEqual(
+            ContainerMigrationPlanner.legacyUUIDPrefix(folderName: uuidA.lowercased()),
+            uuidA.lowercased())
+        XCTAssertEqual(
+            ContainerMigrationPlanner.legacyUUIDPrefix(folderName: uuidA.uppercased()),
+            uuidA.uppercased())
+    }
+
+    func testLegacyPrefixAcceptsEmptySlug() {
+        XCTAssertEqual(
+            ContainerMigrationPlanner.legacyUUIDPrefix(folderName: "\(uuidA)-"),
+            uuidA)
+    }
+
     // MARK: - slugTitle
 
     func testSlugTitleDeslugs() {
@@ -143,5 +201,18 @@ final class ContainerMigrationPlannerTests: XCTestCase {
         XCTAssertNil(ContainerMigrationPlanner.slugTitle(fromLegacyFolderName: uuidA))
         XCTAssertNil(ContainerMigrationPlanner.slugTitle(fromLegacyFolderName: "\(uuidA)-"))
         XCTAssertNil(ContainerMigrationPlanner.slugTitle(fromLegacyFolderName: "Pokémon Uranium"))
+    }
+
+    func testSlugTitleCollapsesConsecutiveDashes() {
+        XCTAssertEqual(
+            ContainerMigrationPlanner.slugTitle(
+                fromLegacyFolderName: "\(uuidA)-pokemon--uranium"),
+            "pokemon uranium")
+    }
+
+    func testSlugTitleAcceptsSingleCharacterSlug() {
+        XCTAssertEqual(
+            ContainerMigrationPlanner.slugTitle(fromLegacyFolderName: "\(uuidA)-x"),
+            "x")
     }
 }

@@ -30,6 +30,15 @@ public enum GameTreeUpdate {
         at url: URL,
         fm: FileManager = .default
     ) throws {
+        // Never follow symlinks: `setAttributes` resolves them, so
+        // a link inside an imported tree would chmod its TARGET -
+        // which a hostile archive can point anywhere the sandbox
+        // reaches. Links keep their own permissions.
+        if let type = try? fm.attributesOfItem(atPath: url.path)[.type] as? FileAttributeType,
+            type == .typeSymbolicLink
+        {
+            return
+        }
         var isDirectory: ObjCBool = false
         guard fm.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return }
 
@@ -98,11 +107,14 @@ public enum GameTreeUpdate {
 
     /// Transactional in-place update: build the merged tree in a
     /// staging copy next to `target`, then swap it into place
-    /// atomically (`FileManager.replaceItemAt`). Failure at ANY
-    /// point before the swap - a merge error, disk full - leaves
-    /// the tree at `target` byte-for-byte untouched; staging
-    /// leftovers are removed here, and `removeStaleArtifacts`
-    /// sweeps any that a hard crash orphaned.
+    /// (`FileManager.replaceItemAt`). Failure at ANY point before
+    /// the swap - a merge error, disk full - leaves the tree at
+    /// `target` byte-for-byte untouched. A failure DURING the swap
+    /// can leave no tree at `target` (Foundation documents that a
+    /// failed replace may strand the original at a temporary
+    /// location), so the failure path restores from the surviving
+    /// artifacts before it cleans anything up. Artifacts a hard
+    /// crash orphaned are handled by `sweepInterruptedUpdate`.
     public static func stageAndSwap(
         newTree source: URL,
         over target: URL,
@@ -113,29 +125,115 @@ public enum GameTreeUpdate {
         let backup = parent.appendingPathComponent(backupDirectoryName, isDirectory: true)
         try? fm.removeItem(at: staging)
         try? fm.removeItem(at: backup)
-        defer {
+
+        do {
+            try fm.copyItem(at: target, to: staging)
+            // The copy carries the original's POSIX bits;
+            // normalizing the staging tree lets the merge overwrite
+            // read-only entries.
+            try normalizeOwnerWritable(at: staging, fm: fm)
+            try mergeMove(from: source, into: staging, fm: fm)
+            // The original tree becomes the swap's backup and is
+            // deleted as part of the swap - normalize it too so
+            // read-only bits can't fail the swap after the exchange
+            // already happened (or block the stale sweep after a
+            // crash). Metadata-only and the merge has already
+            // succeeded, so this can no longer strand a half-update.
+            try normalizeOwnerWritable(at: target, fm: fm)
+            _ = try fm.replaceItemAt(
+                target,
+                withItemAt: staging,
+                backupItemName: backupDirectoryName
+            )
             try? fm.removeItem(at: staging)
             try? fm.removeItem(at: backup)
+        } catch {
+            // Never sweep blind on failure: after a failed swap the
+            // staging and backup trees can be the only copies of
+            // the game. Put a tree back at `target` first, then
+            // remove only what is genuinely redundant. The BACKUP
+            // (pre-update tree) is preferred here, unlike crash
+            // recovery: this update is FAILING, and promoting the
+            // merged staging tree would install the new files
+            // behind a failure report, with finalize never run -
+            // a stale script profile over a tree the user was told
+            // did not apply.
+            if !healthyTreeExists(at: target, fm: fm) {
+                restoreFromDisplacedOriginal(error: error, target: target, fm: fm)
+            }
+            _ = restoreMissingTarget(
+                target: target, parent: parent,
+                preferring: [backupDirectoryName, stagingDirectoryName], fm: fm)
+            if healthyTreeExists(at: target, fm: fm) {
+                try? fm.removeItem(at: staging)
+                try? fm.removeItem(at: backup)
+            }
+            throw error
         }
+    }
 
-        try fm.copyItem(at: target, to: staging)
-        // The copy carries the original's POSIX bits; normalizing
-        // the staging tree lets the merge overwrite read-only
-        // entries.
-        try normalizeOwnerWritable(at: staging, fm: fm)
-        try mergeMove(from: source, into: staging, fm: fm)
-        // The original tree becomes the swap's backup and is
-        // deleted as part of the swap - normalize it too so
-        // read-only bits can't fail the swap after the exchange
-        // already happened (or block the stale sweep after a
-        // crash). Metadata-only and the merge has already
-        // succeeded, so this can no longer strand a half-update.
-        try normalizeOwnerWritable(at: target, fm: fm)
-        _ = try fm.replaceItemAt(
-            target,
-            withItemAt: staging,
-            backupItemName: backupDirectoryName
-        )
+    private static func healthyTreeExists(at target: URL, fm: FileManager) -> Bool {
+        var isDirectory: ObjCBool = false
+        return fm.fileExists(atPath: target.path, isDirectory: &isDirectory)
+            && isDirectory.boolValue
+    }
+
+    /// A failed `replaceItemAt` may leave the original item at a
+    /// temporary location, recorded in the error's
+    /// `NSFileOriginalItemLocationKey`. Move it home when the
+    /// target is empty. Key looked up by name: the constant is not
+    /// exposed uniformly across Foundation implementations.
+    private static func restoreFromDisplacedOriginal(
+        error: Error, target: URL, fm: FileManager
+    ) {
+        let userInfo = (error as NSError).userInfo
+        let displaced =
+            (userInfo["NSFileOriginalItemLocationKey"] as? URL)
+            ?? (userInfo["NSFileOriginalItemLocationKey"] as? String)
+                .map { URL(fileURLWithPath: $0) }
+        guard let displaced, displaced.path != target.path,
+            fm.fileExists(atPath: displaced.path)
+        else { return }
+        try? fm.moveItem(at: displaced, to: target)
+    }
+
+    /// Shared restore step: when no directory sits at `target`, move
+    /// the best surviving artifact into place, in the caller's
+    /// preference order. Crash recovery prefers staging (fully
+    /// merged - the swap only starts after the merge completes);
+    /// the in-flight failure path prefers the backup (see the
+    /// catch in `stageAndSwap`). A stray non-directory at `target`
+    /// (a crash artifact of unknown origin) is moved aside first,
+    /// but only when an artifact exists to restore - otherwise the
+    /// file, whatever it is, stays untouched.
+    private static func restoreMissingTarget(
+        target: URL, parent: URL,
+        preferring order: [String] = [stagingDirectoryName, backupDirectoryName],
+        fm: FileManager
+    ) -> String? {
+        let candidates = order.filter {
+            fm.fileExists(atPath: parent.appendingPathComponent($0).path)
+        }
+        guard !candidates.isEmpty else { return nil }
+
+        var isDirectory: ObjCBool = false
+        if fm.fileExists(atPath: target.path, isDirectory: &isDirectory),
+            !isDirectory.boolValue
+        {
+            let aside = parent.appendingPathComponent(
+                target.lastPathComponent + ".empo-unexpected")
+            try? fm.removeItem(at: aside)
+            try? fm.moveItem(at: target, to: aside)
+        }
+        guard !fm.fileExists(atPath: target.path) else { return nil }
+
+        for candidate in candidates {
+            let url = parent.appendingPathComponent(candidate, isDirectory: true)
+            if (try? fm.moveItem(at: url, to: target)) != nil {
+                return candidate
+            }
+        }
+        return nil
     }
 
     /// Outcome of `sweepInterruptedUpdate`, for caller logging.
@@ -147,16 +245,16 @@ public enum GameTreeUpdate {
         public let removed: [String]
     }
 
-    /// Crash recovery for `stageAndSwap`. `replaceItemAt` is two
-    /// renames (target -> backup, then staging -> target) plus a
-    /// backup delete; a kill between the renames leaves NO tree at
-    /// `target` while both artifacts survive. Sweeping blindly at
-    /// that point would destroy the only copies of the game, so
-    /// this restores first: the staging tree (which is fully merged
-    /// - the swap only starts after the merge completes) wins, the
-    /// backup (the pre-update tree) is the fallback. Only then are
-    /// remaining artifacts removed. With a healthy target this is a
-    /// plain sweep.
+    /// Crash recovery for `stageAndSwap`. Apple documents no
+    /// internal sequence for `replaceItemAt`, only that a failure
+    /// can leave the original away from its home; a kill mid-swap
+    /// can therefore leave NO tree at `target` while the artifacts
+    /// survive. Sweeping blindly at that point would destroy the
+    /// only copies of the game, so this restores first (staging
+    /// wins, backup is the fallback - see `restoreMissingTarget`),
+    /// and only then removes the remaining artifacts. A stray
+    /// non-directory at `target` does not count as a healthy tree.
+    /// With a healthy target this is a plain sweep.
     @discardableResult
     public static func sweepInterruptedUpdate(
         target: URL,
@@ -165,17 +263,16 @@ public enum GameTreeUpdate {
         let parent = target.deletingLastPathComponent()
         var restoredFrom: String?
 
-        if !fm.fileExists(atPath: target.path) {
-            for candidate in [stagingDirectoryName, backupDirectoryName] {
-                let url = parent.appendingPathComponent(candidate, isDirectory: true)
-                guard fm.fileExists(atPath: url.path) else { continue }
-                if (try? fm.moveItem(at: url, to: target)) != nil {
-                    restoredFrom = candidate
-                    break
-                }
-            }
+        if !healthyTreeExists(at: target, fm: fm) {
+            restoredFrom = restoreMissingTarget(target: target, parent: parent, fm: fm)
         }
 
+        // Do not sweep while the target is still missing: a restore
+        // that failed (permissions, exotic filesystems) must leave
+        // the artifacts in place for the next attempt.
+        guard healthyTreeExists(at: target, fm: fm) else {
+            return SweepOutcome(restoredFrom: restoredFrom, removed: [])
+        }
         return SweepOutcome(
             restoredFrom: restoredFrom,
             removed: removeStaleArtifacts(in: parent, fm: fm)
