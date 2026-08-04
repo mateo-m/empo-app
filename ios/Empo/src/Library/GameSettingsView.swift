@@ -178,9 +178,6 @@ struct GameSettingsView: View {
     private var effectiveFontScale: Double {
         engineSettings.fontScale ?? defaults.fontScale ?? GameConfigDefaults.engineFontScale
     }
-    private var effectiveVsync: Bool {
-        engineSettings.vsync ?? defaults.vsync ?? GameConfigDefaults.engineVsync
-    }
     private var effectivePathCache: Bool {
         engineSettings.pathCache ?? defaults.pathCache ?? GameConfigDefaults.enginePathCache
     }
@@ -357,15 +354,6 @@ struct GameSettingsView: View {
                         isOn: fixedAspectRatioBinding,
                         description:
                             "Preserve the game's proportions instead of stretching to fill the screen."
-                    )
-                }
-
-                engineFieldRow(.vsync) {
-                    SettingsToggle(
-                        title: "VSync",
-                        isOn: vsyncBinding,
-                        description:
-                            "Synchronize rendering with the display refresh rate to reduce tearing."
                     )
                 }
 
@@ -640,13 +628,6 @@ struct GameSettingsView: View {
         Binding(
             get: { effectiveFontScale },
             set: { engineSettings.fontScale = $0 }
-        )
-    }
-
-    private var vsyncBinding: Binding<Bool> {
-        Binding(
-            get: { effectiveVsync },
-            set: { engineSettings.vsync = $0 }
         )
     }
 

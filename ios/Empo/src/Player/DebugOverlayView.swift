@@ -18,6 +18,11 @@ struct DebugOverlayHeightKey: PreferenceKey {
 @MainActor @Observable
 final class DebugOverlayState {
     var fps: Double = 0
+    /// The frame rate the game asks for (`Graphics.frame_rate`).
+    /// Games pick their own cap: RPG Maker XP games usually run at
+    /// 40, VX and VX Ace games at 60, and Pokemon Essentials games
+    /// anywhere between. 0 until the engine reports a value.
+    var targetFPS: Double = 0
     var gameTitle: String = "--"
     var rgssVersion: Int32 = 0
     var ringBuffer = FPSRingBuffer(capacity: 120)
@@ -38,7 +43,6 @@ final class DebugOverlayState {
 
 struct DebugOverlayView: View {
     let state: DebugOverlayState
-    private let maxFPS: Double = 70
 
     // Local aliases so the existing view body stays legible.
     private var fps: Double { state.fps }
@@ -80,12 +84,25 @@ struct DebugOverlayView: View {
                 // every available point and bloats the overlay
                 // vertically.
                 Canvas { context, size in
+                    // Dashed reference line at the game's own frame
+                    // cap. A trace that sits on this line runs at
+                    // full speed, whatever the cap is.
+                    let capY = size.height - (targetFPS / graphMaxFPS) * size.height
+                    var capLine = Path()
+                    capLine.move(to: CGPoint(x: 0, y: capY))
+                    capLine.addLine(to: CGPoint(x: size.width, y: capY))
+                    context.stroke(
+                        capLine,
+                        with: .color(.white.opacity(Alpha.indicatorStroke)),
+                        style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                    )
+
                     let samples = ringBuffer.samples
                     guard samples.count >= 2 else { return }
                     var path = Path()
                     for (i, sample) in samples.enumerated() {
                         let x = CGFloat(i) / CGFloat(ringBuffer.capacity - 1) * size.width
-                        let y = size.height - (sample / maxFPS) * size.height
+                        let y = size.height - (sample / graphMaxFPS) * size.height
                         let clamped = max(0, min(size.height, y))
                         if i == 0 {
                             path.move(to: CGPoint(x: x, y: clamped))
@@ -112,6 +129,7 @@ struct DebugOverlayView: View {
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
             guard mkxp_isEngineTerminated() == 0 else { return }
             state.fps = mkxp_getAverageFPS()
+            state.targetFPS = Double(mkxp_getTargetFPS())
             state.ringBuffer.append(state.fps)
             state.memoryMB = Self.currentMemoryMB()
             if state.memoryMB > 0 {
@@ -198,9 +216,29 @@ struct DebugOverlayView: View {
         return String(format: "Memory %.0f MB", memoryMB)
     }
 
+    /// The frame cap to measure against. Games set the cap
+    /// themselves, so a game that asks for 40 FPS and gets 40 FPS
+    /// runs at full speed. Before the engine reports a cap we assume
+    /// 60, the RGSS2 and RGSS3 default.
+    private var targetFPS: Double {
+        state.targetFPS > 0 ? state.targetFPS : 60
+    }
+
+    /// Top of the FPS graph. The headroom above the cap keeps the
+    /// trace off the ceiling, so a game that holds its cap still
+    /// draws a line you can read.
+    private var graphMaxFPS: Double {
+        targetFPS * 1.2
+    }
+
+    /// Color of the FPS number and its trace. The thresholds are a
+    /// share of the game's own cap, not fixed frame counts. A game
+    /// capped at 40 FPS that runs at 40 FPS is at full speed, so it
+    /// shows green.
     private var fpsColor: Color {
-        if fps >= 55 { return .success }
-        if fps >= 30 { return .warning }
+        let ratio = fps / targetFPS
+        if ratio >= 0.9 { return .success }
+        if ratio >= 0.5 { return .warning }
         return .destructive
     }
 
