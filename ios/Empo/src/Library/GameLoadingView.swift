@@ -36,13 +36,24 @@ struct GameLoadingView: View {
     @State private var bannerImage: UIImage?
 
     private func loadBannerImage() async {
-        guard let container = game.container else { return }
+        guard let container = game.container else {
+            bannerImage = nil
+            return
+        }
         let path = await Task.detached(priority: .userInitiated) {
             GameMetadata.load(from: container).customBannerPath(in: container)
         }.value
-        guard let path else { return }
-        bannerImage = await ImageCache.shared.thumbnail(
+        guard let path else {
+            bannerImage = nil
+            return
+        }
+        // thumbnail() awaits a detached task that survives task
+        // cancellation, so a cancelled run can resume late. Drop its
+        // result instead of clobbering a newer task's banner.
+        let image = await ImageCache.shared.thumbnail(
             for: path, maxPixelSize: ImageCache.PixelBudget.hero)
+        if Task.isCancelled { return }
+        bannerImage = image
     }
 
     /// Once gameplay starts, render nothing opaque. The banner/scrim

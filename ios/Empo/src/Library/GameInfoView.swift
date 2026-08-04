@@ -315,8 +315,14 @@ struct GameInfoView: View {
                     bannerImage = nil
                     return
                 }
-                bannerImage = await ImageCache.shared.thumbnail(
+                // thumbnail() awaits a detached task that survives
+                // task cancellation. Without the guard, a cancelled
+                // run resumes late and overwrites the newer task's
+                // result - removing a banner could resurrect it.
+                let image = await ImageCache.shared.thumbnail(
                     for: path, maxPixelSize: ImageCache.PixelBudget.hero)
+                if Task.isCancelled { return }
+                bannerImage = image
             }
             .task {
                 if let container {
