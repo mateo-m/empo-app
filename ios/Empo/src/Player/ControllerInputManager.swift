@@ -129,15 +129,18 @@ final class ControllerInputManager {
     }
 
     /// The player calls this when the user manually toggles overlay
-    /// visibility. Auto-hide then does not fight the user. The
-    /// override resets when the first controller connects or when
-    /// any controller disconnects; a controller that joins an
-    /// existing set keeps the user's choice in force.
+    /// visibility. Auto-hide then does not fight the user: the
+    /// override resets when an extended controller connects as the
+    /// first controller, and on every disconnect. Auto visibility is
+    /// re-applied on disconnect only when the disconnect changes the
+    /// auto answer (the set emptied, or extended-pad presence
+    /// changed), so a partial detach keeps the user's choice.
     func noteManualOverlayToggle() {
         overlayManualOverride = true
     }
 
     private func attach(_ controller: GCController) {
+        guard sessionActive else { return }
         guard Self.isMappable(controller) else { return }
         let id = ObjectIdentifier(controller)
         guard connectedControllers[id] == nil else {
@@ -150,25 +153,44 @@ final class ControllerInputManager {
         hasHadControllerThisSession = true
         installHandler(on: controller)
 
-        if priorCount == 0 {
+        // Reset the manual override only when an extended pad opens
+        // the session's controller set. A basic or micro pad does
+        // not auto-hide the overlay, so it must not cancel a hide
+        // the user chose by hand either.
+        if priorCount == 0, controller.extendedGamepad != nil {
             overlayManualOverride = false
         }
         applyAutoOverlayVisibility()
     }
 
     /// A controller is mappable when it has the extended profile, or
-    /// when its physical input profile has at least one named button or
-    /// dpad. This admits the basic and micro profiles without the
-    /// deprecated `GCController.gamepad` accessor.
+    /// when its physical input profile has at least one element the
+    /// profile path feeds (named button, trigger, dpad, or stick).
+    /// This admits the basic and micro profiles without the
+    /// deprecated `GCController.gamepad` accessor, and rejects
+    /// devices with only vendor-named elements the mapper cannot
+    /// use.
     private static func isMappable(_ controller: GCController) -> Bool {
         if controller.extendedGamepad != nil { return true }
         let profile = controller.physicalInputProfile
-        return !profile.buttons.isEmpty || !profile.dpads.isEmpty
+        if profileButtonElements.contains(where: { profile.buttons[$0.name] != nil }) {
+            return true
+        }
+        if profile.buttons[GCInputLeftTrigger] != nil
+            || profile.buttons[GCInputRightTrigger] != nil
+        {
+            return true
+        }
+        return profile.dpads[GCInputDirectionPad] != nil
+            || profile.dpads[GCInputLeftThumbstick] != nil
+            || profile.dpads[GCInputRightThumbstick] != nil
     }
 
     private func detach(_ controller: GCController) {
         let id = ObjectIdentifier(controller)
-        guard connectedControllers.removeValue(forKey: id) != nil else { return }
+        guard connectedControllers[id] != nil else { return }
+        let hadExtendedController = hasExtendedController
+        connectedControllers.removeValue(forKey: id)
 
         controller.extendedGamepad?.valueChangedHandler = nil
         controller.physicalInputProfile.valueDidChangeHandler = nil
@@ -176,7 +198,13 @@ final class ControllerInputManager {
         dispatch(edges: edges)
 
         overlayManualOverride = false
-        applyAutoOverlayVisibility()
+        if connectedControllers.isEmpty || hadExtendedController != hasExtendedController {
+            applyAutoOverlayVisibility()
+        }
+    }
+
+    private var hasExtendedController: Bool {
+        connectedControllers.values.contains { $0.extendedGamepad != nil }
     }
 
     private func installHandler(on controller: GCController) {
@@ -431,9 +459,6 @@ final class ControllerInputManager {
         guard editModeBinding?.wrappedValue != true else { return }
         guard let overlayHiddenBinding else { return }
 
-        let hasExtendedController = connectedControllers.values.contains {
-            $0.extendedGamepad != nil
-        }
         overlayHiddenBinding.wrappedValue = hasExtendedController
     }
 
