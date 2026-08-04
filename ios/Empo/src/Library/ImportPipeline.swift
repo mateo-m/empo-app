@@ -845,7 +845,11 @@ extension GameLibrary {
     @MainActor
     func removeLibraryEntry(id: String) {
         if let artworkPath = games.first(where: { $0.id == id })?.artworkPath {
-            ImageCache.shared.evict(path: artworkPath)
+            // The source files are being deleted, so the disk sweep
+            // can run off-main (see `DiskSweep`). Bulk deletes call
+            // this once per game; a synchronous walk here would put
+            // O(games x cache entries) disk I/O on the main actor.
+            ImageCache.shared.evict(path: artworkPath, diskSweep: .background)
         }
         // Stamped so a scan that snapshotted this entry BEFORE the
         // removal cannot append it back as a ghost card

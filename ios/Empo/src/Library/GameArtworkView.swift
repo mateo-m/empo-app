@@ -71,7 +71,14 @@ struct GameArtworkView: View {
     }
 
     private func playShimmer() {
-        guard shimmer && artworkPath != nil && !importing else { return }
+        guard shimmer else { return }
+        guard artworkPath != nil && !importing else {
+            // The shimmer cannot play (no artwork yet). Consume the
+            // one-shot flag anyway; a kept flag would survive the
+            // session and fire when artwork appears much later.
+            onShimmerFinished?()
+            return
+        }
         var resetTransaction = Transaction()
         resetTransaction.disablesAnimations = true
         withTransaction(resetTransaction) { shimmerPhase = -1 }

@@ -43,6 +43,7 @@ struct GameLoadingView: View {
         let path = await Task.detached(priority: .userInitiated) {
             GameMetadata.load(from: container).customBannerPath(in: container)
         }.value
+        if Task.isCancelled { return }
         guard let path else {
             bannerImage = nil
             return

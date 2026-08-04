@@ -95,23 +95,47 @@ final class ImageCache: @unchecked Sendable {
         _ = loadThumbnail(path: path, maxPixelSize: maxPixelSize, force: true)
     }
 
+    /// Where `evict` runs its disk sweep. Callers that overwrite
+    /// artwork files in place (exe-icon sidecar, custom
+    /// artwork/banner) need `.sync`: the disk names embed only
+    /// second-granularity mtimes, and a same-second overwrite reuses
+    /// the stale entry's filename unless it's removed before the
+    /// next load. Callers that DELETE the source (library entry
+    /// removal) can use `.background`: nothing overwrites that path
+    /// again, and a later re-import writes a fresh mtime, so the
+    /// sweep only reclaims space and need not block the main actor.
+    enum DiskSweep {
+        case sync
+        case background
+    }
+
     /// Drop every cached representation of `path`, memory and disk,
     /// and bump the path's generation so loads already mid-decode
     /// discard their (stale) result instead of re-populating the
-    /// cache. Callers overwrite artwork files in place (exe-icon
-    /// sidecar, custom artwork/banner), so eviction must stay
-    /// synchronous: the disk names embed only second-granularity
-    /// mtimes, and a same-second overwrite reuses the stale entry's
-    /// filename unless it's removed before the next load.
-    func evict(path: String) {
+    /// cache. The generation bump and memory purge are always
+    /// synchronous; `diskSweep` picks where the directory walk runs.
+    func evict(path: String, diskSweep: DiskSweep = .sync) {
         generations.withLock { $0[path, default: 0] += 1 }
         for budget in [PixelBudget.cell, PixelBudget.hero] {
             cache.removeObject(forKey: Self.memoryKey(path: path, maxPixelSize: budget))
         }
         let prefix = Self.pathDigest(path)
-        if let items = try? fm.contentsOfDirectory(atPath: diskDirectory.path) {
+        let directory = diskDirectory
+        switch diskSweep {
+        case .sync:
+            Self.sweepDisk(prefix: prefix, directory: directory)
+        case .background:
+            Task.detached(priority: .utility) {
+                Self.sweepDisk(prefix: prefix, directory: directory)
+            }
+        }
+    }
+
+    private static func sweepDisk(prefix: String, directory: URL) {
+        let fm = FileManager.default
+        if let items = try? fm.contentsOfDirectory(atPath: directory.path) {
             for item in items where item.hasPrefix(prefix) {
-                try? fm.removeItem(at: diskDirectory.appendingPathComponent(item))
+                try? fm.removeItem(at: directory.appendingPathComponent(item))
             }
         }
     }
@@ -160,6 +184,18 @@ final class ImageCache: @unchecked Sendable {
             try? png.write(to: diskURL, options: .atomic)
         }
         cache.setObject(image, forKey: key, cost: decodedCost(image))
+
+        // An evict can also land between the pre-publish check and
+        // the writes above. Re-verify and un-publish on mismatch so
+        // stale bytes cannot outlive the eviction. This can race a
+        // newer load of the same key and drop ITS fresh entry too;
+        // that only costs one extra decode on the next read.
+        let afterPublish = generations.withLock { $0[path] ?? 0 }
+        guard afterPublish == generation else {
+            cache.removeObject(forKey: key)
+            if let diskURL { try? fm.removeItem(at: diskURL) }
+            return nil
+        }
         return image
     }
 
