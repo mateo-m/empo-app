@@ -63,6 +63,86 @@ final class ImageCache: @unchecked Sendable {
         diskDirectory = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ArtworkThumbnails", isDirectory: true)
         try? fm.createDirectory(at: diskDirectory, withIntermediateDirectories: true)
+        schedulePruneDiskCache()
+    }
+
+    /// A disk entry older than this is deleted by the launch prune.
+    /// A live entry comes back with one decode on its next load, so
+    /// the cost of an over-eager deletion is small. The rule's real
+    /// target is entries whose source is gone (deleted games), which
+    /// no load or evict will ever touch again.
+    private static let maxDiskEntryAge: TimeInterval = 60 * 60 * 24 * 60
+
+    private func schedulePruneDiskCache() {
+        let directory = diskDirectory
+        Task.detached(priority: .utility) {
+            // Stay off the cold-launch disk bandwidth: the initial
+            // scan and the first-render decodes own the first
+            // seconds.
+            try? await Task.sleep(for: .seconds(10))
+            Self.pruneDiskCache(directory: directory)
+        }
+    }
+
+    /// Once-per-launch reclamation of the disk layer. Nothing else
+    /// deletes entries orphaned by in-place game updates (a new
+    /// source mtime changes the filename and strands the old one),
+    /// so without this the directory grows until the OS purges
+    /// Caches. Two rules bound it without knowing which paths are
+    /// live:
+    /// - Per digest and budget, at most the newest source-mtime
+    ///   token can match a live source. Older siblings are update
+    ///   leftovers and are deleted.
+    /// - An entry that was not rewritten for `maxDiskEntryAge` is
+    ///   deleted (see the constant's comment).
+    /// Deletions tolerate concurrent loads and evicts: writes are
+    /// atomic, and a load that loses its disk entry mid-flight
+    /// falls back to decoding the source.
+    static func pruneDiskCache(directory: URL, now: Date = Date()) {
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(atPath: directory.path) else { return }
+
+        // Filename shape: <digest>-<sourceMtime>-<budget>.png
+        // (see `diskCacheURL`). Files that do not match are left
+        // alone.
+        struct Newest {
+            let name: String
+            let mtimeToken: Int
+        }
+        var newestPerGroup: [String: Newest] = [:]
+        var doomed: [String] = []
+
+        for name in items {
+            let parts = name.split(separator: "-")
+            guard parts.count == 3, parts[2].hasSuffix(".png"),
+                let token = Int(parts[1])
+            else { continue }
+            let group = "\(parts[0])-\(parts[2])"
+            if let current = newestPerGroup[group] {
+                if token > current.mtimeToken {
+                    doomed.append(current.name)
+                    newestPerGroup[group] = Newest(name: name, mtimeToken: token)
+                } else {
+                    doomed.append(name)
+                }
+            } else {
+                newestPerGroup[group] = Newest(name: name, mtimeToken: token)
+            }
+        }
+
+        for survivor in newestPerGroup.values {
+            let url = directory.appendingPathComponent(survivor.name)
+            if let mtime = (try? fm.attributesOfItem(atPath: url.path)[.modificationDate])
+                as? Date,
+                now.timeIntervalSince(mtime) > maxDiskEntryAge
+            {
+                doomed.append(survivor.name)
+            }
+        }
+
+        for name in doomed {
+            try? fm.removeItem(at: directory.appendingPathComponent(name))
+        }
     }
 
     /// Memory-only lookup, cheap enough for SwiftUI body evaluations.
