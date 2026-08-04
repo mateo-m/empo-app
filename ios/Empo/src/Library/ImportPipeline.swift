@@ -845,7 +845,11 @@ extension GameLibrary {
     @MainActor
     func removeLibraryEntry(id: String) {
         if let artworkPath = games.first(where: { $0.id == id })?.artworkPath {
-            ImageCache.shared.evict(path: artworkPath)
+            // The source files are being deleted, so the disk sweep
+            // can run off-main (see `DiskSweep`). Bulk deletes call
+            // this once per game; a synchronous walk here would put
+            // O(games x cache entries) disk I/O on the main actor.
+            ImageCache.shared.evict(path: artworkPath, diskSweep: .background)
         }
         // Stamped so a scan that snapshotted this entry BEFORE the
         // removal cannot append it back as a ghost card
@@ -1156,7 +1160,8 @@ extension GameLibrary {
                             artworkPath = writeProbeIconSidecar(sel.iconPNG, to: container)
                         }
                         if let path = artworkPath {
-                            _ = ImageCache.shared.image(for: path)
+                            ImageCache.shared.prewarmThumbnail(
+                                for: path, maxPixelSize: ImageCache.PixelBudget.cell)
                         }
                         self.commitPendingToCard(
                             sel.importID,
@@ -1404,7 +1409,7 @@ extension GameLibrary {
                         container: container,
                         title: title,
                         artworkPath: artworkPath,
-                        status: .importing(progress: 0)
+                        status: .importing
                     ))
             }
         }
@@ -1417,47 +1422,37 @@ extension GameLibrary {
     /// get replaced by the final artwork pick. Can fire more than
     /// once per import: the first non-utility `.exe` is a
     /// tentative pick that a later `Game.exe` supersedes and
-    /// locks. Rebuilding the entry (rather than mutating
-    /// `artworkPath` on the existing one) goes through SwiftUI's
-    /// normal diffing so the card cross-fades the placeholder to
-    /// the real artwork.
+    /// locks.
     nonisolated func updateCardArtwork(_ importID: String, artworkPath: String) {
         Task { @MainActor in
             let lib = GameLibrary.shared
-            guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
-            // No early-return on same path. The mid-extract sidecar
-            // is at a fixed location (`<container>/Metadata/exe-icon.png`)
-            // and gets overwritten on disk when a later .exe in the
-            // archive supersedes the earlier pick (e.g. Reborn1950
-            // ships [Patcher.exe (skipped), Reborn.exe, Game.exe]:
-            // Reborn writes first, Game.exe overwrites). The path
-            // string is unchanged across those writes, so a guard
-            // here would skip the SwiftUI re-render. The card would
-            // keep showing the first icon decoded into the
-            // ImageCache until a reload-time view rebuild swaps it
-            // for the latest disk content. That produces a visible
-            // mid-import-vs-final mismatch. Always rebuilding the
-            // entry forces the body re-eval, which re-reads cache
-            // (already evicted at write time), so the displayed
-            // icon tracks disk state.
+            guard let model = lib.games.first(where: { $0.id == importID }) else { return }
+            // The mid-extract sidecar sits at a fixed location
+            // (`<container>/Metadata/exe-icon.png`) and gets
+            // overwritten on disk when a later .exe in the archive
+            // supersedes the earlier pick (e.g. Reborn1950 ships
+            // [Patcher.exe (skipped), Reborn.exe, Game.exe]: Reborn
+            // writes first, Game.exe overwrites). The path string is
+            // unchanged across those writes, so the revision bump is
+            // what tells GameArtworkView to reload the (already
+            // evicted + re-prewarmed) contents.
             withAnimation {
-                lib.games[idx] = GameEntry(
-                    id: importID,
-                    container: lib.games[idx].container,
-                    title: lib.games[idx].title,
-                    artworkPath: artworkPath,
-                    engineTitle: lib.games[idx].engineTitle,
-                    lastPlayed: lib.games[idx].lastPlayed,
-                    dateAdded: lib.games[idx].dateAdded,
-                    status: lib.games[idx].status
-                )
+                model.artworkPath = artworkPath
+                model.artworkRevision += 1
             }
         }
     }
 
     /// Updates the extraction progress on the already-committed
     /// progress card (not on `pendingImports`, which was cleared
-    /// once pre-flight passed).
+    /// once pre-flight passed). Ticks only re-render the card
+    /// bodies that read `importProgress`, not the library. The
+    /// monotonic guard matters twice over: unstructured tasks give
+    /// no FIFO guarantee onto the main actor (an out-of-order write
+    /// would snap the ring backwards), and the extractor degenerates
+    /// to one callback per entry once its byte-based percentage
+    /// saturates — those arrive as equal values and are dropped
+    /// here instead of notifying observers.
     ///
     /// Strictly an UPDATE: an entry that is not currently importing
     /// stays untouched. A cancelled replacement re-surfaces the
@@ -1469,20 +1464,12 @@ extension GameLibrary {
     /// replacement marker the first tap already consumed.
     nonisolated func updateCardProgress(_ importID: String, _ progress: Double) {
         Task { @MainActor in
-            let lib = GameLibrary.shared
-            guard let idx = lib.games.firstIndex(where: { $0.id == importID }) else { return }
-            let entry = lib.games[idx]
-            guard entry.isImporting else { return }
-            lib.games[idx] = GameEntry(
-                id: entry.id,
-                container: entry.container,
-                title: entry.title,
-                artworkPath: entry.artworkPath,
-                engineTitle: entry.engineTitle,
-                lastPlayed: entry.lastPlayed,
-                dateAdded: entry.dateAdded,
-                status: .importing(progress: progress)
-            )
+            guard
+                let model = GameLibrary.shared.games.first(where: { $0.id == importID }),
+                model.isImporting
+            else { return }
+            guard progress > model.importProgress else { return }
+            model.importProgress = progress
         }
     }
 

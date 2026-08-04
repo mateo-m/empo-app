@@ -27,17 +27,34 @@ struct GameLoadingView: View {
     @State private var cancelVisible = false
     private static let cancelAppearDelay: Duration = .seconds(7)
 
-    /// Looked up at body-time so the loading view shares the same
-    /// source image as the Game Info sheet's banner. By design
+    /// Same source image as the Game Info sheet's banner. By design
     /// banner == loading-view backdrop (just darker + blurred), so
     /// banner-less games show the placeholder on both surfaces and
-    /// banner-having games see their banner in both places.
-    private var bannerImage: UIImage? {
-        guard let container = game.container,
-            let path = GameMetadata.load(from: container)
-                .customBannerPath(in: container)
-        else { return nil }
-        return ImageCache.shared.image(for: path)
+    /// banner-having games see their banner in both places. Loaded
+    /// in `loadBannerImage` (metadata read + decode both touch disk,
+    /// which doesn't belong in a body evaluation).
+    @State private var bannerImage: UIImage?
+
+    private func loadBannerImage() async {
+        guard let container = game.container else {
+            bannerImage = nil
+            return
+        }
+        let path = await Task.detached(priority: .userInitiated) {
+            GameMetadata.load(from: container).customBannerPath(in: container)
+        }.value
+        if Task.isCancelled { return }
+        guard let path else {
+            bannerImage = nil
+            return
+        }
+        // thumbnail() awaits a detached task that survives task
+        // cancellation, so a cancelled run can resume late. Drop its
+        // result instead of clobbering a newer task's banner.
+        let image = await ImageCache.shared.thumbnail(
+            for: path, maxPixelSize: ImageCache.PixelBudget.hero)
+        if Task.isCancelled { return }
+        bannerImage = image
     }
 
     /// Once gameplay starts, render nothing opaque. The banner/scrim
@@ -63,6 +80,7 @@ struct GameLoadingView: View {
         .toolbar(.hidden, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
         .containerBackground(isPlayingPhase ? .clear : .black, for: .navigation)
+        .task(id: game.id) { await loadBannerImage() }
     }
 
     private var loadingContent: some View {

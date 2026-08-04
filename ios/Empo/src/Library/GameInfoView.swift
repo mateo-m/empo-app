@@ -20,6 +20,11 @@ struct GameInfoView: View {
     @State private var titleScrollProgress: CGFloat = 0
     @State private var navBarBottomY: CGFloat = 0
     @State private var needsLibraryRefresh = false
+    /// Bumped whenever a custom image is saved or removed. Custom
+    /// media lives at fixed filenames ("artwork.jpg"/"banner.jpg"),
+    /// so a replacement leaves every path unchanged; this token is
+    /// the signal that makes image-loading tasks refire anyway.
+    @State private var customImageRefreshToken = 0
     @FocusState private var isTitleFocused: Bool
 
     private let originalTitle: String
@@ -48,11 +53,14 @@ struct GameInfoView: View {
 
     private var container: GameContainer? { game.container }
 
-    private var bannerImage: UIImage? {
-        guard let container,
-            let path = metadata.customBannerPath(in: container)
-        else { return nil }
-        return ImageCache.shared.image(for: path)
+    /// Decoded off-main via the banner `.task` below. Keyed on the
+    /// banner filename plus `customImageRefreshToken` so both a
+    /// newly-set banner and an in-place replacement (the filename is
+    /// the fixed "banner.jpg") reload it.
+    @State private var bannerImage: UIImage?
+
+    private var bannerTaskID: String {
+        "\(metadata.customBannerFilename ?? "none")|\(customImageRefreshToken)"
     }
 
     /// Path to the artwork to render: user-set custom override
@@ -64,11 +72,6 @@ struct GameInfoView: View {
     private var resolvedArtworkPath: String? {
         guard let container else { return game.artworkPath }
         return metadata.customArtworkPath(in: container) ?? game.artworkPath
-    }
-
-    private var artworkImage: UIImage? {
-        guard let path = resolvedArtworkPath else { return nil }
-        return ImageCache.shared.image(for: path)
     }
 
     private var hasCustomArtwork: Bool {
@@ -305,6 +308,22 @@ struct GameInfoView: View {
                     metadata = GameMetadata.load(from: container)
                 }
             }
+            .task(id: bannerTaskID) {
+                guard let container,
+                    let path = metadata.customBannerPath(in: container)
+                else {
+                    bannerImage = nil
+                    return
+                }
+                // thumbnail() awaits a detached task that survives
+                // task cancellation. Without the guard, a cancelled
+                // run resumes late and overwrites the newer task's
+                // result - removing a banner could resurrect it.
+                let image = await ImageCache.shared.thumbnail(
+                    for: path, maxPixelSize: ImageCache.PixelBudget.hero)
+                if Task.isCancelled { return }
+                bannerImage = image
+            }
             .task {
                 if let container {
                     // Disk size of the entire container (Game/ +
@@ -520,7 +539,8 @@ struct GameInfoView: View {
             placeholderIconSize: 32,
             size: AppSize.infoArtwork,
             cornerRadius: Radius.md,
-            shimmer: false
+            shimmer: false,
+            reloadToken: customImageRefreshToken
         )
     }
 
@@ -559,6 +579,25 @@ struct GameInfoView: View {
         guard let filename = GameMetadata.saveImage(image, as: kind, in: container) else { return }
         filenameSetter(&metadata, filename)
         metadata.save(to: container)
+        if let path = pathGetter(metadata, container) {
+            // Second evict, now that the new bytes are on disk: the
+            // pre-write evict above can't cover a load that raced
+            // the gap and cached the old contents. Then prime the
+            // cache so cache-first readers pick up the new image.
+            ImageCache.shared.evict(path: path)
+            Task.detached(priority: .userInitiated) {
+                ImageCache.shared.prewarmThumbnail(
+                    for: path, maxPixelSize: ImageCache.PixelBudget.cell)
+                ImageCache.shared.prewarmThumbnail(
+                    for: path, maxPixelSize: ImageCache.PixelBudget.hero)
+            }
+        }
+        // The media file lives at a fixed name, so a replacement
+        // changes no model field and `refreshGameEntry`'s guarded
+        // apply() notifies nobody. The revision bump is the explicit
+        // signal that refires the card/hero artwork load tasks.
+        game.artworkRevision += 1
+        customImageRefreshToken += 1
         needsLibraryRefresh = true
     }
 
@@ -576,6 +615,8 @@ struct GameInfoView: View {
         }
         filenameSetter(&metadata, nil)
         metadata.save(to: container)
+        game.artworkRevision += 1
+        customImageRefreshToken += 1
         needsLibraryRefresh = true
     }
 

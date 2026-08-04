@@ -7,33 +7,40 @@ import UIKit
 
 /// In-flight import that's still in its pre-flight validation phase.
 /// Once the pre-flight passes, the matching `GameEntry` is appended
-/// to `games` with `.importing(progress:)` status and the pending
-/// entry is cleared. Progress from that point on lives on the real
-/// game card/row. On any pre-flight failure, the pending entry is
+/// to `games` with `.importing` status and the pending entry is
+/// cleared. Progress from that point on lives on the real game
+/// card/row. On any pre-flight failure, the pending entry is
 /// dropped without the user ever seeing a half-broken skeleton.
 ///
 /// Rendering of the validating state is delegated to the call site:
 /// when the library is empty the Import button hoists it onto its
 /// own label. When the library already has games the grid/list
-/// renders a synthetic card via `syntheticEntry` so the status
+/// renders the placeholder card via `entry` so the status
 /// feedback stays anchored where the user expects it.
 struct PendingImport: Identifiable, Hashable {
     let id: String
     let displayName: String
     let order: Int
 
-    /// Placeholder `GameEntry` used when rendering the pending
-    /// import inside the existing grid/list. Container is nil
-    /// because nothing is on disk yet. `progress: 0` renders as
-    /// the indeterminate spinner inside `GameStatusIndicator`,
-    /// which is the right visual read for the pre-flight phase.
-    var syntheticEntry: GameEntry {
-        GameEntry(
+    /// Placeholder model rendered in the grid/list while pre-flight
+    /// validation runs. Container is nil because nothing is on disk
+    /// yet. `importProgress` stays 0, which renders as the
+    /// indeterminate spinner inside `GameStatusIndicator` — the
+    /// right visual read for the pre-flight phase. Created once (not
+    /// per access) so SwiftUI sees one stable card identity across
+    /// body passes.
+    let entry: GameEntry
+
+    init(id: String, displayName: String, order: Int) {
+        self.id = id
+        self.displayName = displayName
+        self.order = order
+        self.entry = GameEntry(
             id: id,
             container: nil,
             title: displayName,
             artworkPath: nil,
-            status: .importing(progress: 0)
+            status: .importing
         )
     }
 }
@@ -191,11 +198,13 @@ class GameLibrary {
         }
     }
 
-    /// Merge a scan's results into `games`: refresh matching entries
-    /// in place, drop non-importing entries the scan no longer sees,
-    /// append newcomers. Marks the initial scan complete since any
-    /// applied pass answers the emptiness question.
-    private func applyScanResults(_ scanned: [GameEntry], scanStartedAt: Date) {
+    /// Merge a scan's results into `games`: apply snapshots to
+    /// matching models field-by-field (so views only invalidate for
+    /// fields that actually changed), drop non-importing entries the
+    /// scan no longer sees, append newcomers. Marks the initial scan
+    /// complete since any applied pass answers the emptiness
+    /// question.
+    private func applyScanResults(_ scanned: [GameSnapshot], scanStartedAt: Date) {
         // A scan that raced an import registration can still carry
         // an entry for a container whose import task now owns it
         // (an in-place update's container exists on disk for the
@@ -225,13 +234,10 @@ class GameLibrary {
         let scannedByID = Dictionary(uniqueKeysWithValues: scanned.map { ($0.id, $0) })
         withAnimation {
             var updatedIDs = Set<String>()
-            for i in games.indices {
-                let id = games[i].id
-                if let fresh = scannedByID[id] {
-                    if games[i] != fresh {
-                        games[i] = fresh
-                    }
-                    updatedIDs.insert(id)
+            for model in games {
+                if let fresh = scannedByID[model.id] {
+                    model.apply(fresh)
+                    updatedIDs.insert(model.id)
                 }
             }
 
@@ -242,8 +248,8 @@ class GameLibrary {
                 !$0.isImporting && !$0.isDeleting && !scannedByID.keys.contains($0.id)
             }
 
-            for entry in scanned where !updatedIDs.contains(entry.id) {
-                games.append(entry)
+            for snapshot in scanned where !updatedIDs.contains(snapshot.id) {
+                games.append(GameEntry(snapshot))
             }
         }
         if !initialScanCompleted {
@@ -253,36 +259,56 @@ class GameLibrary {
 
     /// Merge a single just-imported container into `games` without
     /// rescanning the whole library. Falls back to a full reload if
-    /// the entry can't be built (metadata missing, etc.).
+    /// the snapshot can't be built (metadata missing, etc.).
     func mergeImportedGame(container: GameContainer) {
         let importID = container.id
         Task.detached {
-            let entry = GameCatalog.buildGameEntry(from: container)
+            let snapshot = GameCatalog.buildSnapshot(from: container)
             await MainActor.run {
                 let lib = GameLibrary.shared
-                guard let entry else {
+                guard let snapshot else {
                     lib.reload()
                     return
                 }
                 lib.localMutationDates[importID] = Date()
                 withAnimation {
-                    if let idx = lib.games.firstIndex(where: { $0.id == importID }) {
-                        lib.games[idx] = entry
+                    if let model = lib.games.first(where: { $0.id == importID }) {
+                        model.apply(snapshot)
                     } else {
-                        lib.games.append(entry)
+                        lib.games.append(GameEntry(snapshot))
                     }
                 }
             }
         }
     }
 
+    /// Monotonic token per game, taken when a refresh is requested
+    /// and checked when its snapshot lands. Refreshes overlap (the
+    /// periodic play-time flush vs. the Game Info sheet's dismissal
+    /// refresh), and without the token a snapshot built before an
+    /// edit could apply after a newer one and resurface stale data.
+    private var refreshGenerations: [String: Int] = [:]
+
+    /// Rebuild an entry's scan-time fields from disk (title,
+    /// artwork, metadata) after something edited them, keeping the
+    /// in-memory status. Runs the disk reads off-main; the previous
+    /// version rebuilt synchronously on the main thread.
     func refreshGameEntry(id: String) {
-        guard let idx = games.firstIndex(where: { $0.id == id }),
-            let container = games[idx].container
+        guard let model = games.first(where: { $0.id == id }),
+            let container = model.container
         else { return }
-        guard var entry = GameCatalog.buildGameEntry(from: container) else { return }
-        entry.status = games[idx].status  // preserve current status
-        withAnimation { games[idx] = entry }
+        let generation = (refreshGenerations[id] ?? 0) + 1
+        refreshGenerations[id] = generation
+        Task.detached(priority: .userInitiated) {
+            guard let snapshot = GameCatalog.buildSnapshot(from: container) else { return }
+            await MainActor.run {
+                let lib = GameLibrary.shared
+                guard lib.refreshGenerations[id] == generation,
+                    let model = lib.games.first(where: { $0.id == id })
+                else { return }
+                withAnimation { model.apply(snapshot, preservingStatus: true) }
+            }
+        }
     }
 
     /// Filtered + sorted catalog for the library grid/list. Reads
@@ -305,7 +331,7 @@ class GameLibrary {
         guard !games.isEmpty else { return [] }
         return pendingImports.values
             .sorted { $0.order < $1.order }
-            .map(\.syntheticEntry)
+            .map(\.entry)
     }
 
     /// Hero card candidate for "Continue playing", or nil.

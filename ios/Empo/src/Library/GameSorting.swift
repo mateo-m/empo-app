@@ -22,14 +22,15 @@ extension LibrarySortOption {
         case .smallestSize:
             return games.sorted { (sizes[$0.id] ?? 0) < (sizes[$1.id] ?? 0) }
         case .mostPlayed:
-            return games.sorted { (Self.playTime(for: $0) ?? 0) > (Self.playTime(for: $1) ?? 0) }
+            return games.sorted { ($0.totalPlayTime ?? 0) > ($1.totalPlayTime ?? 0) }
         case .leastPlayed:
-            return games.sorted { (Self.playTime(for: $0) ?? 0) < (Self.playTime(for: $1) ?? 0) }
+            return games.sorted { ($0.totalPlayTime ?? 0) < ($1.totalPlayTime ?? 0) }
         }
     }
 
-    private static func playTime(for game: GameEntry) -> TimeInterval? {
-        guard let container = game.container else { return nil }
-        return GameMetadata.load(from: container).totalPlayTime
+    /// True for the sorts that need the on-disk size map. Callers
+    /// gate the (expensive) full-library directory walks on this.
+    var usesDiskSizes: Bool {
+        self == .largestSize || self == .smallestSize
     }
 }

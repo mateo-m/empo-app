@@ -103,6 +103,11 @@ extension View {
     /// shadow drawn earlier in the chain.
     func cardShadow() -> some View {
         self
+            // Without the compositing group, `.shadow` renders one
+            // shadow per drawing primitive in the subtree (artwork,
+            // scrim, text, badge - each separately). Flattening
+            // first computes the two layers once per card.
+            .compositingGroup()
             .shadow(color: .black.opacity(0.05), radius: 1, y: 1)
             .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
     }

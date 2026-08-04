@@ -9,9 +9,32 @@ struct GameArtworkView: View {
     var size: CGFloat?
     var cornerRadius: CGFloat = 0
     var importing: Bool = false
-    var shimmer: Bool = true
+    /// One-shot highlight sweep. Off by default: the sweep re-fires
+    /// on every lazy-cell recreation, which puts an animated
+    /// full-surface overlay on each card entering the viewport
+    /// during a scroll. Library cards enable it only for a game
+    /// whose import just finished, and `onShimmerFinished` lets
+    /// them clear that flag after the single play.
+    var shimmer: Bool = false
+    var onShimmerFinished: (() -> Void)?
+    /// Decode budget for the thumbnail (long-edge pixels). Cells and
+    /// list rows use the default; full-width surfaces (hero card)
+    /// pass `ImageCache.PixelBudget.hero`.
+    var maxPixelSize: CGFloat = ImageCache.PixelBudget.cell
+    /// Bump to force a reload when the artwork file is overwritten
+    /// in place under an unchanged path (exe-icon sidecar upgrades
+    /// mid-import, custom artwork replacement). Folded into the
+    /// load task's identity below.
+    var reloadToken: Int = 0
 
     @State private var shimmerPhase: CGFloat = -1
+    @State private var loadedImage: UIImage?
+    /// The path `loadedImage` was decoded from. The fallback in
+    /// `displayedImage` checks it so a surface whose `artworkPath`
+    /// changed (hero card switching games, custom artwork removed)
+    /// can never render the previous path's image while the new
+    /// load is in flight.
+    @State private var loadedPath: String?
 
     var body: some View {
         content
@@ -22,12 +45,48 @@ struct GameArtworkView: View {
                     shimmerOverlay
                 }
             }
-            .onAppear {
-                guard shimmer && artworkPath != nil else { return }
-                withAnimation(.easeInOut(duration: 0.8).delay(0.3)) {
-                    shimmerPhase = 2
+            .task(id: "\(reloadToken)|\(artworkPath ?? "")") {
+                guard let path = artworkPath else {
+                    loadedImage = nil
+                    loadedPath = nil
+                    return
                 }
+                let image = await ImageCache.shared.thumbnail(
+                    for: path, maxPixelSize: maxPixelSize)
+                // `thumbnail` awaits a detached task, which resumes
+                // even after `.task(id:)` cancels this run (a newer
+                // id took over). Without this guard, the superseded
+                // run's late resume would clobber the newer image.
+                guard !Task.isCancelled else { return }
+                loadedImage = image
+                loadedPath = path
             }
+            .onAppear { playShimmer() }
+            // The just-imported card is already on screen when its
+            // status flips to ready, so `onAppear` has long passed.
+            // React to the flag itself for that case.
+            .onChange(of: shimmer) { _, isOn in
+                if isOn { playShimmer() }
+            }
+    }
+
+    private func playShimmer() {
+        guard shimmer else { return }
+        guard artworkPath != nil && !importing else {
+            // The shimmer cannot play (no artwork yet). Consume the
+            // one-shot flag anyway; a kept flag would survive the
+            // session and fire when artwork appears much later.
+            onShimmerFinished?()
+            return
+        }
+        var resetTransaction = Transaction()
+        resetTransaction.disablesAnimations = true
+        withTransaction(resetTransaction) { shimmerPhase = -1 }
+        withAnimation(.easeInOut(duration: 0.8).delay(0.3)) {
+            shimmerPhase = 2
+        } completion: {
+            onShimmerFinished?()
+        }
     }
 
     private var shimmerOverlay: some View {
@@ -45,11 +104,28 @@ struct GameArtworkView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let path = artworkPath, let uiImage = ImageCache.shared.image(for: path) {
+        if let path = artworkPath, let uiImage = displayedImage {
             sized(loadedArtwork(path: path, uiImage: uiImage))
         } else {
             sized(placeholderContent)
         }
+    }
+
+    /// Cache-first, then the async task's result. The memory lookup
+    /// keeps cells recreated by the lazy grid/list while scrolling
+    /// painting immediately instead of flashing the placeholder
+    /// until the task lands. In-place overwrites under an unchanged
+    /// path are handled by `reloadToken` refiring the task, with the
+    /// writer's evict + prewarm keeping this cache-first read fresh
+    /// in the window before the reload lands.
+    private var displayedImage: UIImage? {
+        guard let path = artworkPath else { return nil }
+        if let cached = ImageCache.shared.cachedThumbnail(
+            for: path, maxPixelSize: maxPixelSize)
+        {
+            return cached
+        }
+        return loadedPath == path ? loadedImage : nil
     }
 
     @ViewBuilder
