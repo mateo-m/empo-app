@@ -118,6 +118,7 @@ final class ControllerInputManager {
 
         for controller in connectedControllers.values {
             controller.extendedGamepad?.valueChangedHandler = nil
+            controller.physicalInputProfile.valueDidChangeHandler = nil
         }
         connectedControllers.removeAll()
         reducer = ControllerStateReducer()
@@ -135,7 +136,7 @@ final class ControllerInputManager {
     }
 
     private func attach(_ controller: GCController) {
-        guard controller.extendedGamepad != nil else { return }
+        guard Self.isMappable(controller) else { return }
         let id = ObjectIdentifier(controller)
         guard connectedControllers[id] == nil else {
             installHandler(on: controller)
@@ -149,8 +150,18 @@ final class ControllerInputManager {
 
         if priorCount == 0 {
             overlayManualOverride = false
-            applyAutoOverlayVisibility()
         }
+        applyAutoOverlayVisibility()
+    }
+
+    /// A controller is mappable when it has the extended profile, or
+    /// when its physical input profile has at least one named button or
+    /// dpad. This admits the basic and micro profiles without the
+    /// deprecated `GCController.gamepad` accessor.
+    private static func isMappable(_ controller: GCController) -> Bool {
+        if controller.extendedGamepad != nil { return true }
+        let profile = controller.physicalInputProfile
+        return !profile.buttons.isEmpty || !profile.dpads.isEmpty
     }
 
     private func detach(_ controller: GCController) {
@@ -158,29 +169,43 @@ final class ControllerInputManager {
         guard connectedControllers.removeValue(forKey: id) != nil else { return }
 
         controller.extendedGamepad?.valueChangedHandler = nil
+        controller.physicalInputProfile.valueDidChangeHandler = nil
         let edges = reducer.removeController(String(id.hashValue))
         dispatch(edges: edges)
 
         overlayManualOverride = false
-        if connectedControllers.isEmpty {
-            applyAutoOverlayVisibility()
-        }
+        applyAutoOverlayVisibility()
     }
 
     private func installHandler(on controller: GCController) {
-        guard let gamepad = controller.extendedGamepad else { return }
         let controllerID = String(ObjectIdentifier(controller).hashValue)
 
-        gamepad.valueChangedHandler = { [weak self] pad, _ in
-            Task { @MainActor in
-                self?.pollGamepad(controllerID: controllerID, gamepad: pad)
+        if let gamepad = controller.extendedGamepad {
+            gamepad.valueChangedHandler = { [weak self] pad, _ in
+                Task { @MainActor in
+                    self?.pollGamepad(controllerID: controllerID, gamepad: pad)
+                }
             }
+            pollGamepad(controllerID: controllerID, gamepad: gamepad)
+        } else {
+            // Basic and micro profiles miss the typed extended API. Read
+            // them through the element dictionaries instead, which the
+            // framework keys with the same GCInput names on every
+            // profile. The profile handler reports each element change;
+            // per-frame polling is not necessary and GameController
+            // documents that handlers are the correct pattern.
+            let profile = controller.physicalInputProfile
+            profile.valueDidChangeHandler = { [weak self] profile, _ in
+                Task { @MainActor in
+                    self?.pollProfile(controllerID: controllerID, profile: profile)
+                }
+            }
+            pollProfile(controllerID: controllerID, profile: profile)
         }
-        pollGamepad(controllerID: controllerID, gamepad: gamepad)
     }
 
     private func pollGamepad(controllerID: String, gamepad: GCExtendedGamepad) {
-        guard sessionActive else { return }
+        guard sessionActive, isAttached(gamepad.controller) else { return }
 
         feedButton(controllerID: controllerID, element: "a", pressed: gamepad.buttonA.isPressed)
         feedButton(controllerID: controllerID, element: "b", pressed: gamepad.buttonB.isPressed)
@@ -227,6 +252,72 @@ final class ControllerInputManager {
         }
 
         feedOptionalPaddles(controllerID: controllerID, gamepad: gamepad)
+    }
+
+    /// Named elements the profile path maps to SDL element names. The
+    /// GCInput constants are the same strings on every profile, so the
+    /// reducer, the resolved map, and the remap UI see one vocabulary
+    /// for all controller classes.
+    private static let profileButtonElements: [(name: String, element: String)] = [
+        (GCInputButtonA, "a"), (GCInputButtonB, "b"),
+        (GCInputButtonX, "x"), (GCInputButtonY, "y"),
+        (GCInputLeftShoulder, "leftshoulder"), (GCInputRightShoulder, "rightshoulder"),
+        (GCInputButtonMenu, "start"), (GCInputButtonOptions, "back"),
+        (GCInputButtonHome, "guide"),
+        (GCInputLeftThumbstickButton, "leftstick"), (GCInputRightThumbstickButton, "rightstick"),
+    ]
+
+    /// Feeds a controller without the extended profile. Only the
+    /// elements the hardware exposes get fed; absent names stay
+    /// untouched so the reducer never sees false releases.
+    private func pollProfile(controllerID: String, profile: GCPhysicalInputProfile) {
+        guard sessionActive, isAttached(profile.device as? GCController) else { return }
+
+        for entry in Self.profileButtonElements {
+            if let button = profile.buttons[entry.name] {
+                feedButton(controllerID: controllerID, element: entry.element, pressed: button.isPressed)
+            }
+        }
+
+        // Triggers are analog. Feed the raw value so the reducer
+        // applies the same hysteresis as on the extended path.
+        if let trigger = profile.buttons[GCInputLeftTrigger] {
+            feedButton(controllerID: controllerID, element: "lefttrigger", value: trigger.value)
+        }
+        if let trigger = profile.buttons[GCInputRightTrigger] {
+            feedButton(controllerID: controllerID, element: "righttrigger", value: trigger.value)
+        }
+
+        if let dpad = profile.dpads[GCInputDirectionPad] {
+            feedButton(controllerID: controllerID, element: "dpup", pressed: dpad.up.isPressed)
+            feedButton(controllerID: controllerID, element: "dpdown", pressed: dpad.down.isPressed)
+            feedButton(controllerID: controllerID, element: "dpleft", pressed: dpad.left.isPressed)
+            feedButton(controllerID: controllerID, element: "dpright", pressed: dpad.right.isPressed)
+        }
+
+        if let stick = profile.dpads[GCInputLeftThumbstick] {
+            for sample in ControllerStickMapper.halfAxisSamples(
+                stick: "left", x: stick.xAxis.value, y: stick.yAxis.value)
+            {
+                feedAxis(controllerID: controllerID, element: sample.element, value: sample.value)
+            }
+        }
+        if let stick = profile.dpads[GCInputRightThumbstick] {
+            for sample in ControllerStickMapper.halfAxisSamples(
+                stick: "right", x: stick.xAxis.value, y: stick.yAxis.value)
+            {
+                feedAxis(controllerID: controllerID, element: sample.element, value: sample.value)
+            }
+        }
+    }
+
+    /// A poll task can still be queued on the main actor when a
+    /// controller detaches. This guard keeps such a late poll from
+    /// writing state for a removed controller back into the reducer,
+    /// which would hold its pressed keys down forever.
+    private func isAttached(_ controller: GCController?) -> Bool {
+        guard let controller else { return false }
+        return connectedControllers[ObjectIdentifier(controller)] != nil
     }
 
     private func feedOptionalPaddles(controllerID: String, gamepad: GCExtendedGamepad) {
@@ -325,16 +416,18 @@ final class ControllerInputManager {
         overlayHiddenBinding.wrappedValue.toggle()
     }
 
+    /// Auto-hide follows the extended controllers only. A basic or
+    /// micro pad has too few elements to replace the touch overlay, so
+    /// the overlay stays visible while only such pads are connected.
     private func applyAutoOverlayVisibility() {
         guard !overlayManualOverride else { return }
         guard editModeBinding?.wrappedValue != true else { return }
         guard let overlayHiddenBinding else { return }
 
-        if connectedControllers.isEmpty {
-            overlayHiddenBinding.wrappedValue = false
-        } else {
-            overlayHiddenBinding.wrappedValue = true
+        let hasExtendedController = connectedControllers.values.contains {
+            $0.extendedGamepad != nil
         }
+        overlayHiddenBinding.wrappedValue = hasExtendedController
     }
 
     private func releaseAllHeldKeys() {
