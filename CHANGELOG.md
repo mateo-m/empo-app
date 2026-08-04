@@ -1,5 +1,84 @@
 # Changelog
 
+## 0.5.0 - 2026-08-04
+
+### Bug Fixes
+
+- Name the swap backup so crash leftovers get swept ([`e474ca7`](https://github.com/mateo-m/empo-app/commit/e474ca783ec74b8e28d1803d8b6ab89946a087f0))
+- Update-confirmation copy acknowledges the rest of the batch ([`a48e6a2`](https://github.com/mateo-m/empo-app/commit/a48e6a2d475a85e85f684985b6792623b458662d))
+- Harden update swap and close adversarial test findings ([`a540dd7`](https://github.com/mateo-m/empo-app/commit/a540dd7a222a53e87792c33ef706c98fd8672536))
+- Close adversarial review findings on update safety ([`a95fbb5`](https://github.com/mateo-m/empo-app/commit/a95fbb5efcfd3e0a20cb33b170ddddfc6f07eefa))
+- Harden delete and update flows around shared saves ([`04305f5`](https://github.com/mateo-m/empo-app/commit/04305f510f9f91714254f57da531e51c4fdd233a))
+- Harden the container migration and quarantine naming ([`3384094`](https://github.com/mateo-m/empo-app/commit/3384094b9a1e71ff7989cff88ef141db799f7b42))
+- Deliver control presses on touch-down via UIKit capture ([`2ab9fd0`](https://github.com/mateo-m/empo-app/commit/2ab9fd0d1da6edaff3d850d162b5a6cd5340f032))
+- Disable the touch capture layer in place on edit entry ([`9b0917e`](https://github.com/mateo-m/empo-app/commit/9b0917eb0e6943360a48a93579fe944627cc81b8))
+- Show both engine fingerprints in the debug log header ([`8d0323c`](https://github.com/mateo-m/empo-app/commit/8d0323c515df1c6c816caf6b88fef74506f3bf1a))
+- Keep archive timestamps on extracted files ([`6399a6b`](https://github.com/mateo-m/empo-app/commit/6399a6bfc61aac74d918f0af53573193e530628d))
+- Pick up the postload mixin privacy fix for old Ruby games ([`8e435a8`](https://github.com/mateo-m/empo-app/commit/8e435a875010c74882394e3d719983a0bcb093e3))
+- Stop Thread.new from aborting the app in Ruby 1.8 games (#102) ([`3af8b05`](https://github.com/mateo-m/empo-app/commit/3af8b051e8e83f41c9c3671f6116398b3a66ba9a))
+- Pick up the Pokemon Essentials sprite, menu, and input fixes (#103) ([`ec7f8a1`](https://github.com/mateo-m/empo-app/commit/ec7f8a1744884558b1ea1cfc42413e9e9e7c1146))
+
+### CI
+
+- Fail fast when the engine pin does not match the submodule ([`29b5352`](https://github.com/mateo-m/empo-app/commit/29b53523ed8960c769c8a84d2c25bac2818eacf9))
+
+### Chores
+
+- Bump submodule with literal portable Save Data and savefs matrix ([`c8de4fe`](https://github.com/mateo-m/empo-app/commit/c8de4fe8479d308d65f5936bbbec712719d7512d))
+- Bump submodule with eager static extension load ([`311eba0`](https://github.com/mateo-m/empo-app/commit/311eba090a5bca47dc9b70db6634d490e9e1661b))
+- Bump submodule with write-mode case resolution ([`b680929`](https://github.com/mateo-m/empo-app/commit/b6809293ab4555b5440e5a8327b881e16e0ef6aa))
+- Bump submodule with reviewed case resolution ([`8dfe78b`](https://github.com/mateo-m/empo-app/commit/8dfe78b190e447bc9b73ea3bfbab0e8c1af0e46a))
+- Bump submodule with fully literal game folder ([`847b803`](https://github.com/mateo-m/empo-app/commit/847b803f0c55f6f6869c148303f9f79bba148068))
+- Bump submodule with Daybreak compatibility fixes ([`6dec691`](https://github.com/mateo-m/empo-app/commit/6dec691bba774c4400f4b6215801a126a632f67e))
+- Pin the core prebuilt to engine-2026-08-02 ([`cdc34aa`](https://github.com/mateo-m/empo-app/commit/cdc34aa414f1e1350f6a5b62e1e0b87ce2d8daea))
+- Bump submodule with the disposed-safe wrapper fix ([`d18be59`](https://github.com/mateo-m/empo-app/commit/d18be594a57c139d7d48a5675086ecbf5b911b74))
+- Pin the core prebuilt to engine-2026-08-03 ([`30fb782`](https://github.com/mateo-m/empo-app/commit/30fb78281f3e899a54a51e06633eb0828fb6dc21))
+- Pin native-2026-08-03 native prebuilts ([`9a01bdb`](https://github.com/mateo-m/empo-app/commit/9a01bdb9c4bf781485ea5f382a78703264d82709))
+- Pin native-2026-08-04 native prebuilts ([`9bd66fc`](https://github.com/mateo-m/empo-app/commit/9bd66fce36113dada08bb130cece0010d15e42f5))
+- Pin native-2026-08-04-r2 native prebuilts ([`4039c73`](https://github.com/mateo-m/empo-app/commit/4039c73b238d9838e1c7c5c96d72422722e9167f))
+
+### Documentation
+
+- Describe game-managed writes in the layout comment ([`d5738ad`](https://github.com/mateo-m/empo-app/commit/d5738ad33624530be39d9ca0f98d522d736b9ecb))
+- Pick up the RAISETRACE table wording fix ([`f6c677d`](https://github.com/mateo-m/empo-app/commit/f6c677d2ddce2813fd4565072099956323bc73b5))
+
+### Features
+
+- Name game containers after their INI title ([`c5ca5f4`](https://github.com/mateo-m/empo-app/commit/c5ca5f4d65d9537d4b58c71563859a36f28d5782))
+- Honor mkxp.json dataPathOrg/dataPathApp ([`fa90f3e`](https://github.com/mateo-m/empo-app/commit/fa90f3ebedd4209b700bf9520d291deff683947f))
+- Update installed games in place instead of deleting ([`d86bfe7`](https://github.com/mateo-m/empo-app/commit/d86bfe797640ef707ac1aa3a0a87ada0f4f3df4e))
+- Make in-place game updates transactional ([`dc54ef4`](https://github.com/mateo-m/empo-app/commit/dc54ef4ae5a5811520c75d0ada2f6b8e5e0083de))
+- Per-game update picker and no silent duplicate imports ([`f48e16b`](https://github.com/mateo-m/empo-app/commit/f48e16b3a73375cee361d617d176b7a8d8c17944))
+- Stepped import picker separates adding from updating ([`92a2b29`](https://github.com/mateo-m/empo-app/commit/92a2b2953fe72527b9e27d558d936904c890a2e2))
+- Enforce one container per title ([`cc6889f`](https://github.com/mateo-m/empo-app/commit/cc6889f2222d5c963eb44da37b6387d910444481))
+- Tell the user when duplicate games are moved ([`c5d547f`](https://github.com/mateo-m/empo-app/commit/c5d547f6a262d5a74c7a4d300502207f4ea90e9e))
+- Shared-data resolution, save rescue primitives, and hardened naming ([`e177d1a`](https://github.com/mateo-m/empo-app/commit/e177d1a1b9db29247a0ed45864be4338b5818646))
+- Store every game's saves in a shared Data directory ([`f4b99d2`](https://github.com/mateo-m/empo-app/commit/f4b99d2a5aa6bb3a4675148b8c89f82fe3ec4563))
+- Resolve d-pad input to cardinals near the center ([`5f8a38d`](https://github.com/mateo-m/empo-app/commit/5f8a38da3c3dfedc9d31db9b99edb752138458a1))
+- Protect portable saves and drop identical duplicates in merges ([`e8667f2`](https://github.com/mateo-m/empo-app/commit/e8667f2819e5e3b2861c449e07c85cac0b5e4cc5))
+- Rescue portable saves into a Rescued Saves tree ([`2164206`](https://github.com/mateo-m/empo-app/commit/216420635049dacc2db2e836e826067220840919))
+- Keep game cards visible while a delete runs ([`820378e`](https://github.com/mateo-m/empo-app/commit/820378e9bd79ff7a3acc931f2cd030310cefde48))
+- Restore rescued saves on import and rework the delete alerts ([`0eedf25`](https://github.com/mateo-m/empo-app/commit/0eedf254be8c0ad50f3b9eab7a7adefe494ab52c))
+- Pick up RAISETRACE dumps for silently-swallowed script errors ([`9dfa9ec`](https://github.com/mateo-m/empo-app/commit/9dfa9ececa61e81b04af80bbcb261ce2bb8e9e07))
+- Scale the FPS graph to the game's frame cap and drop the VSync toggle (#104) ([`6d84afa`](https://github.com/mateo-m/empo-app/commit/6d84afa74df9de2b7ec10cfe8a07b4859e5434c9))
+- Support basic and micro profile controllers (#105) ([`11dbd06`](https://github.com/mateo-m/empo-app/commit/11dbd063a7173e9fb2f05b791b257a4699635364))
+
+### Other
+
+- Extract pure import/migration logic and cover it ([`a5020f9`](https://github.com/mateo-m/empo-app/commit/a5020f9cec8822c5c9c6eeb3577fac7a2471846f))
+- Extract d-pad touch logic to GameProbe and cover it ([`5e5947e`](https://github.com/mateo-m/empo-app/commit/5e5947e7a4bd8b4096de98ba8d9346247a0f202f))
+- Close mutation gaps ([`eb7b9d1`](https://github.com/mateo-m/empo-app/commit/eb7b9d1fc423282f444a37695ff4714e39610beb))
+- Derive from a hand-authored landscape source ([`c8135ce`](https://github.com/mateo-m/empo-app/commit/c8135ce6a25f527be223a743301c71fbe7bef303))
+- Keep the landscape fixture inside the touch zone ([`9baf7f3`](https://github.com/mateo-m/empo-app/commit/9baf7f3ac1b477f210b9ee099b8957cbedd2c347))
+
+### Performance
+
+- Granular card invalidation and off-main artwork decodes (#106) ([`f323d02`](https://github.com/mateo-m/empo-app/commit/f323d0236744bd2466383c91c05564ec4ca8b821))
+
+### Refactor
+
+- Rename shared data directory SaveData to GameData ([`fb4527f`](https://github.com/mateo-m/empo-app/commit/fb4527f68025789f23674880640a400956051835))
+
 ## 0.4.2 - 2026-07-23
 
 ### Bug Fixes
