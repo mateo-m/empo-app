@@ -129,8 +129,10 @@ final class ControllerInputManager {
     }
 
     /// The player calls this when the user manually toggles overlay
-    /// visibility. Auto-hide then does not fight the user until the
-    /// connected controller set changes.
+    /// visibility. Auto-hide then does not fight the user. The
+    /// override resets when the first controller connects or when
+    /// any controller disconnects; a controller that joins an
+    /// existing set keeps the user's choice in force.
     func noteManualOverlayToggle() {
         overlayManualOverride = true
     }
@@ -179,6 +181,11 @@ final class ControllerInputManager {
 
     private func installHandler(on controller: GCController) {
         let controllerID = String(ObjectIdentifier(controller).hashValue)
+
+        // Clear both handler paths first so a reinstall is
+        // idempotent: exactly one path is active per controller.
+        controller.extendedGamepad?.valueChangedHandler = nil
+        controller.physicalInputProfile.valueDidChangeHandler = nil
 
         if let gamepad = controller.extendedGamepad {
             gamepad.valueChangedHandler = { [weak self] pad, _ in
