@@ -8,6 +8,12 @@ struct EngineMkxpSettings: Equatable {
     var fixedAspectRatio: Bool?
     var renderScale: RenderScale?
     var frameSkip: Bool?
+    /// No settings row shows this one. iOS composites every frame on
+    /// the display refresh, so the engine cannot turn VSync off and
+    /// a toggle would promise something it cannot do. The field
+    /// stays because overlays written by older builds and imported
+    /// JGP profiles still carry the value, and "Reset to Defaults"
+    /// must be able to clear it.
     var vsync: Bool?
     var pathCache: Bool?
     var fontScale: Double?
@@ -135,7 +141,6 @@ struct EngineMkxpSettings: Equatable {
         if fixedAspectRatio != other.fixedAspectRatio { changed.append("Fixed aspect ratio") }
         if renderScale != other.renderScale { changed.append("Render scale") }
         if frameSkip != other.frameSkip { changed.append("Frame skip") }
-        if vsync != other.vsync { changed.append("VSync") }
         if pathCache != other.pathCache { changed.append("Path cache") }
         if fontScale != other.fontScale { changed.append("Font scale") }
         if solidFonts != other.solidFonts { changed.append("Solid fonts") }

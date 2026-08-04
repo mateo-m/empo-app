@@ -441,7 +441,6 @@ struct GameConfigDefaults {
     static let engineSmoothScaling = false
     static let engineFixedAspectRatio = true
     static let engineFrameSkip = false
-    static let engineVsync = false
     static let enginePathCache = true
     static let engineFontScale = 1.0
     static let engineSolidFonts = false
