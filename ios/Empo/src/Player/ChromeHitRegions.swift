@@ -52,4 +52,16 @@ extension View {
     func chromeHitRegion(_ id: String) -> some View {
         modifier(ChromeHitRegionModifier(id: id))
     }
+
+    /// Disabled variant for previews: the profile editor renders the
+    /// controls overlay outside the player and must not leak regions
+    /// into the app's hit routing.
+    @ViewBuilder
+    func chromeHitRegion(_ id: String, enabled: Bool) -> some View {
+        if enabled {
+            modifier(ChromeHitRegionModifier(id: id))
+        } else {
+            self
+        }
+    }
 }

@@ -45,6 +45,7 @@ struct PlayerView: View {
     /// itself stays trimmed to keyboard / edit / hide / more.
     @State private var showMoreSheet = false
     @State private var showControllerRemap = false
+    @State private var showLayoutProfilePicker = false
 
     var body: some View {
         GeometryReader { geo in
@@ -104,11 +105,22 @@ struct PlayerView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         .padding(.bottom, safeArea.bottom + Spacing.md)
                         .allowsHitTesting(false)
-                    } else if layout.userControlsRejectionErrorCount > 0 {
-                        let errorCount = layout.userControlsRejectionErrorCount
+                    } else if layout.profileRejectionErrorCount > 0 {
+                        let errorCount = layout.profileRejectionErrorCount
                         let errorLabel = errorCount == 1 ? "error" : "errors"
                         Text(
-                            "Your saved controls file has \(errorCount) \(errorLabel). See Logs."
+                            "The pinned profile has \(errorCount) \(errorLabel). See Logs."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, Spacing.lg)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        .padding(.bottom, safeArea.bottom + Spacing.md)
+                        .allowsHitTesting(false)
+                    } else if layout.pinFellThrough {
+                        Text(
+                            "The pinned layout is missing. This game uses the next layout in line."
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -142,6 +154,7 @@ struct PlayerView: View {
                         geo: geo,
                         controlsMinY: controlsMinY,
                         editMode: editMode,
+                        safeArea: safeArea,
                         editingButton: $editingButton,
                         editingActionButton: $editingActionButton,
                         editingDPad: $editingDPad,
@@ -218,6 +231,61 @@ struct PlayerView: View {
                         rect: gameRect,
                         opacity: snapshotOpacity
                     )
+                }
+
+                // One-time heads-up: the game's own layout displaced
+                // the user's default profile.
+                if layout.gameLayoutNoticePending && !editMode && !layout.importOfferPending {
+                    VStack {
+                        Spacer()
+                        HStack(spacing: Spacing.lg) {
+                            Text("This game ships its own control layout; it is now active.")
+                                .font(.footnote)
+                                .foregroundStyle(.white)
+                            Button("OK") {
+                                layout.dismissGameLayoutNotice()
+                            }
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.brand)
+                        }
+                        .padding(.horizontal, Spacing.lg)
+                        .padding(.vertical, Spacing.md)
+                        .background(Color.black.opacity(Scrim.heavy))
+                        .clipShape(Capsule())
+                        // Without a hit region, taps inside gameRect
+                        // route to the engine instead of the button.
+                        .chromeHitRegion("gameLayoutNotice")
+                        .padding(.bottom, safeArea.bottom + Spacing.md)
+                    }
+                }
+
+                // A migrated-then-changed controls file in the game
+                // folder waits for the user's import decision.
+                if layout.importOfferPending && !editMode {
+                    VStack {
+                        Spacer()
+                        HStack(spacing: Spacing.lg) {
+                            Text("This game's folder has a controls file.")
+                                .font(.footnote)
+                                .foregroundStyle(.white)
+                            Button("Import as profile") {
+                                layout.acceptImportOffer()
+                            }
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.brand)
+                            Button("Not now") {
+                                layout.dismissImportOffer()
+                            }
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, Spacing.lg)
+                        .padding(.vertical, Spacing.md)
+                        .background(Color.black.opacity(Scrim.heavy))
+                        .clipShape(Capsule())
+                        .chromeHitRegion("importOffer")
+                        .padding(.bottom, safeArea.bottom + Spacing.md)
+                    }
                 }
             }
             // Push device orientation into ControlsLayout so it can
@@ -337,10 +405,16 @@ struct PlayerView: View {
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: controllerInput.hasHadControllerThisSession,
                 onControllerRemap: { showControllerRemap = true },
+                onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { appState.requestPause() },
                 onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) },
                 onQuit: { showQuitConfirm = true }
             )
+        }
+        .sheet(isPresented: $showLayoutProfilePicker) {
+            if let container = layout.currentContainer {
+                LayoutProfilePickerSheet(container: container)
+            }
         }
         .sheet(isPresented: $showControllerRemap) {
             ControllerRemapView(
@@ -418,8 +492,11 @@ struct PlayerView: View {
         if editMode {
             layout.beginEditSession()
         } else {
-            layout.endEditSession()
+            // Save BEFORE ending the session: the ambient auto-create
+            // branch only fires inside an edit session, and sheet-only
+            // edits commit exactly here.
             layout.save()
+            layout.endEditSession()
             resetToolbarIdleTimer()
         }
     }

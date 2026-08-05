@@ -114,26 +114,35 @@ struct PlayerEditToolbar: View {
             : max(safeArea.top, ControlsZone.minLandscapeInset) + ControlsZone.toolbarEdgePad
                 + ControlsZone.editToolbarHalfHeight
 
-        HStack(spacing: Spacing.xl) {
-            Button("+ Add") { showAddSheet = true }
-                .accessibilityLabel("Add button")
-                .foregroundStyle(.white)
+        VStack(spacing: Spacing.xs) {
+            // Blast-radius banner: a pinned profile's edits reach
+            // every game using it; ambient edits mint a new profile.
+            Text(editBannerText)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.7))
+                .lineLimit(1)
+
+            HStack(spacing: Spacing.xl) {
+                Button("+ Add") { showAddSheet = true }
+                    .accessibilityLabel("Add button")
+                    .foregroundStyle(.white)
+                    .font(.footnote.weight(.semibold))
+                Button {
+                    layout.undoLastEdit()
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .accessibilityLabel("Undo layout change")
+                .foregroundStyle(.white.opacity(layout.canUndo ? 1 : Alpha.disabled))
                 .font(.footnote.weight(.semibold))
-            Button {
-                layout.undoLastEdit()
-            } label: {
-                Label("Undo", systemImage: "arrow.uturn.backward")
+                .disabled(!layout.canUndo)
+                Button("Reset") { showResetConfirm = true }
+                    .foregroundStyle(.brand)
+                    .font(.footnote.weight(.semibold))
+                Button("Done") { onDone() }
+                    .foregroundStyle(.success)
+                    .font(.footnote.weight(.bold))
             }
-            .accessibilityLabel("Undo layout change")
-            .foregroundStyle(.white.opacity(layout.canUndo ? 1 : Alpha.disabled))
-            .font(.footnote.weight(.semibold))
-            .disabled(!layout.canUndo)
-            Button("Reset") { showResetConfirm = true }
-                .foregroundStyle(.brand)
-                .font(.footnote.weight(.semibold))
-            Button("Done") { onDone() }
-                .foregroundStyle(.success)
-                .font(.footnote.weight(.bold))
         }
         .padding(.horizontal, Spacing.xl)
         .padding(.vertical, Spacing.sm)
@@ -143,5 +152,14 @@ struct PlayerEditToolbar: View {
         // opacity 0 during play (its region would cover center screen),
         // and edit mode already publishes a full-screen region.
         .position(x: geoSize.width / 2, y: yPos)
+    }
+
+    private var editBannerText: String {
+        switch layout.provenance {
+        case .pinnedProfile(let name):
+            return "Editing profile \(name) — applies to every game using it"
+        case .gameLayout, .defaultProfile, .builtin:
+            return "Edits save as a new profile"
+        }
     }
 }
