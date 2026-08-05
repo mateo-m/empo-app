@@ -123,6 +123,11 @@ private struct PersistedLayout: Codable {
         /// 1.0, so older persisted layouts (without the key) still
         /// load without surprise transparency.
         var opacity: Double?
+        /// Optional ONLY for the legacy Codable boundary. Every
+        /// in-memory construction stores a concrete value, or the
+        /// nil-vs-.dpad mismatch makes `hasTouchCustomization` true
+        /// for every untouched game.
+        var style: MovementStyle?
     }
     struct Oriented: Codable, Equatable {
         var dpad: DPad
@@ -211,6 +216,7 @@ class ControlsLayout {
     var dpadRelativeCenter: CGPoint = ControlsLayout.defaultDPadCenterPortrait
     var dpadSize: CGFloat = ControlsLayout.defaultDPadSize
     var dpadOpacity: Double = 1.0
+    var dpadStyle: MovementStyle = .dpad
     var buttons: [ButtonModel] = []
     var actionButtons: [ActionButtonModel] = []
 
@@ -228,6 +234,7 @@ class ControlsLayout {
     private var inactiveDpadRelativeCenter: CGPoint = ControlsLayout.defaultDPadCenterLandscape
     private var inactiveDpadSize: CGFloat = ControlsLayout.defaultDPadSize
     private var inactiveDpadOpacity: Double = 1.0
+    private var inactiveDpadStyle: MovementStyle = .dpad
     private var inactiveButtons: [ButtonModel] = ControlsLayout.defaultButtonsLandscape
     private var inactiveActionButtons: [ActionButtonModel] = []
 
@@ -237,6 +244,7 @@ class ControlsLayout {
         var dpadRelativeCenter: CGPoint
         var dpadSize: CGFloat
         var dpadOpacity: Double
+        var dpadStyle: MovementStyle
         var buttons: [ButtonModel]
         var actionButtons: [ActionButtonModel]
     }
@@ -275,6 +283,7 @@ class ControlsLayout {
                 dpadRelativeCenter: dpadRelativeCenter,
                 dpadSize: dpadSize,
                 dpadOpacity: dpadOpacity,
+                dpadStyle: dpadStyle,
                 buttons: buttons,
                 actionButtons: actionButtons
             ))
@@ -290,6 +299,7 @@ class ControlsLayout {
             dpadRelativeCenter = snapshot.dpadRelativeCenter
             dpadSize = snapshot.dpadSize
             dpadOpacity = snapshot.dpadOpacity
+            dpadStyle = snapshot.dpadStyle
             buttons = snapshot.buttons
             actionButtons = snapshot.actionButtons
         }
@@ -339,6 +349,7 @@ class ControlsLayout {
         let leavingDpadCenter = dpadRelativeCenter
         let leavingDpadSize = dpadSize
         let leavingDpadOpacity = dpadOpacity
+        let leavingDpadStyle = dpadStyle
         let leavingButtons = buttons
         let leavingActionButtons = actionButtons
 
@@ -346,6 +357,7 @@ class ControlsLayout {
         dpadRelativeCenter = inactiveDpadRelativeCenter
         dpadSize = inactiveDpadSize
         dpadOpacity = inactiveDpadOpacity
+        dpadStyle = inactiveDpadStyle
         buttons = inactiveButtons
         actionButtons = inactiveActionButtons
 
@@ -353,6 +365,7 @@ class ControlsLayout {
         inactiveDpadRelativeCenter = leavingDpadCenter
         inactiveDpadSize = leavingDpadSize
         inactiveDpadOpacity = leavingDpadOpacity
+        inactiveDpadStyle = leavingDpadStyle
         inactiveButtons = leavingButtons
         inactiveActionButtons = leavingActionButtons
 
@@ -383,6 +396,7 @@ class ControlsLayout {
         dpadCenter: CGPoint,
         dpadSize: CGFloat,
         dpadOpacity: Double,
+        dpadStyle: MovementStyle,
         buttons: [ButtonModel],
         actionButtons: [ActionButtonModel] = []
     ) -> ControlsManifestSerializer.TouchOrientedInput {
@@ -391,6 +405,7 @@ class ControlsLayout {
             dpadY: Double(dpadCenter.y),
             dpadSize: Double(dpadSize),
             dpadOpacity: dpadOpacity,
+            dpadStyle: dpadStyle,
             buttons: buttons.map { button in
                 ControlsManifestSerializer.TouchButtonInput(
                     label: button.label,
@@ -504,6 +519,7 @@ class ControlsLayout {
             x: inactiveResolved.dpad.rx, y: inactiveResolved.dpad.ry)
         inactiveDpadSize = inactiveResolved.dpad.size
         inactiveDpadOpacity = inactiveResolved.dpad.opacity ?? 1.0
+        inactiveDpadStyle = inactiveResolved.dpad.style ?? .dpad
         inactiveButtons = inactiveResolved.buttons
         inactiveActionButtons = inactiveResolved.actionButtons ?? []
 
@@ -512,7 +528,8 @@ class ControlsLayout {
             toActionButtons: activeResolved.actionButtons ?? [],
             dpadCenter: CGPoint(x: activeResolved.dpad.rx, y: activeResolved.dpad.ry),
             targetDpadSize: activeResolved.dpad.size,
-            targetDpadOpacity: activeResolved.dpad.opacity ?? 1.0
+            targetDpadOpacity: activeResolved.dpad.opacity ?? 1.0,
+            targetDpadStyle: activeResolved.dpad.style ?? .dpad
         )
     }
 
@@ -530,6 +547,8 @@ class ControlsLayout {
         }
         inactiveDpadSize = Self.defaultDPadSize
         inactiveDpadOpacity = 1.0
+        dpadStyle = .dpad
+        inactiveDpadStyle = .dpad
         actionButtons = []
         inactiveActionButtons = []
     }
@@ -551,6 +570,8 @@ class ControlsLayout {
         dpadOpacity = 1.0
         inactiveDpadSize = Self.defaultDPadSize
         inactiveDpadOpacity = 1.0
+        dpadStyle = .dpad
+        inactiveDpadStyle = .dpad
         actionButtons = []
         inactiveActionButtons = []
     }
@@ -560,7 +581,8 @@ class ControlsLayout {
         toActionButtons targetActionButtons: [ActionButtonModel],
         dpadCenter: CGPoint,
         targetDpadSize: CGFloat,
-        targetDpadOpacity: Double
+        targetDpadOpacity: Double,
+        targetDpadStyle: MovementStyle
     ) {
         var matchedIDs = Set<UUID>()
         var matchedTargets = Set<Int>()
@@ -622,6 +644,7 @@ class ControlsLayout {
             dpadRelativeCenter = dpadCenter
             dpadSize = targetDpadSize
             dpadOpacity = targetDpadOpacity
+            dpadStyle = targetDpadStyle
         }
 
         let missingActions = targetActionButtons.enumerated()
@@ -764,7 +787,7 @@ class ControlsLayout {
         let active = PersistedLayout.Oriented(
             dpad: .init(
                 rx: dpadRelativeCenter.x, ry: dpadRelativeCenter.y,
-                size: dpadSize, opacity: dpadOpacity
+                size: dpadSize, opacity: dpadOpacity, style: dpadStyle
             ),
             buttons: buttons,
             actionButtons: actionButtons
@@ -774,7 +797,8 @@ class ControlsLayout {
                 rx: inactiveDpadRelativeCenter.x,
                 ry: inactiveDpadRelativeCenter.y,
                 size: inactiveDpadSize,
-                opacity: inactiveDpadOpacity
+                opacity: inactiveDpadOpacity,
+                style: inactiveDpadStyle
             ),
             buttons: inactiveButtons,
             actionButtons: inactiveActionButtons
@@ -845,11 +869,14 @@ class ControlsLayout {
     }
 
     private static func touchLayout(from oriented: PersistedLayout.Oriented) -> TouchLayout {
+        // The serializer omits the style line for .dpad, so passing
+        // the concrete value keeps existing files byte-stable.
         let dpad = DPadSpec(
             x: Double(oriented.dpad.rx),
             y: Double(oriented.dpad.ry),
             size: Double(oriented.dpad.size),
-            opacity: oriented.dpad.opacity
+            opacity: oriented.dpad.opacity,
+            style: oriented.dpad.style ?? .dpad
         )
         let buttons = oriented.buttons.compactMap { button -> ButtonSpec? in
             guard let key = KeyCodeTable.code(for: button.scancode) else { return nil }
@@ -937,7 +964,8 @@ class ControlsLayout {
                 rx: CGFloat(spec.x),
                 ry: CGFloat(spec.y),
                 size: CGFloat(spec.size ?? 140),
-                opacity: spec.opacity ?? 1.0
+                opacity: spec.opacity ?? 1.0,
+                style: spec.style ?? .dpad
             )
         } else {
             dpad = fallback.dpad
@@ -997,12 +1025,14 @@ class ControlsLayout {
                     dpadCenter: CGPoint(x: layout.portrait.dpad.rx, y: layout.portrait.dpad.ry),
                     dpadSize: layout.portrait.dpad.size,
                     dpadOpacity: layout.portrait.dpad.opacity ?? 1.0,
+                    dpadStyle: .dpad,
                     buttons: layout.portrait.buttons
                 ),
                 landscape: Self.orientedInput(
                     dpadCenter: CGPoint(x: layout.landscape.dpad.rx, y: layout.landscape.dpad.ry),
                     dpadSize: layout.landscape.dpad.size,
                     dpadOpacity: layout.landscape.dpad.opacity ?? 1.0,
+                    dpadStyle: .dpad,
                     buttons: layout.landscape.buttons
                 ),
                 onDroppedButton: { label, scancode in
@@ -1039,7 +1069,8 @@ class ControlsLayout {
                     rx: Self.defaultDPadCenterLandscape.x,
                     ry: Self.defaultDPadCenterLandscape.y,
                     size: Self.defaultDPadSize,
-                    opacity: 1.0
+                    opacity: 1.0,
+                    style: .dpad
                 ),
                 buttons: Self.defaultButtonsLandscape
             )
@@ -1270,14 +1301,16 @@ class ControlsLayout {
                 rx: CGFloat(spec.x),
                 ry: CGFloat(spec.y),
                 size: CGFloat(spec.size ?? 140),
-                opacity: spec.opacity ?? 1.0
+                opacity: spec.opacity ?? 1.0,
+                style: spec.style ?? .dpad
             )
         } else {
             dpad = PersistedLayout.DPad(
                 rx: builtinDpadCenter.x,
                 ry: builtinDpadCenter.y,
                 size: defaultDPadSize,
-                opacity: 1.0
+                opacity: 1.0,
+                style: .dpad
             )
         }
 
@@ -1318,7 +1351,8 @@ class ControlsLayout {
                 rx: dpadCenter.x,
                 ry: dpadCenter.y,
                 size: defaultDPadSize,
-                opacity: 1.0
+                opacity: 1.0,
+                style: .dpad
             ),
             buttons: buttons,
             actionButtons: nil
@@ -1339,11 +1373,13 @@ class ControlsLayout {
         dpadRelativeCenter = CGPoint(x: active.dpad.rx, y: active.dpad.ry)
         dpadSize = active.dpad.size
         dpadOpacity = active.dpad.opacity ?? 1.0
+        dpadStyle = active.dpad.style ?? .dpad
         buttons = active.buttons
         actionButtons = active.actionButtons ?? []
         inactiveDpadRelativeCenter = CGPoint(x: inactive.dpad.rx, y: inactive.dpad.ry)
         inactiveDpadSize = inactive.dpad.size
         inactiveDpadOpacity = inactive.dpad.opacity ?? 1.0
+        inactiveDpadStyle = inactive.dpad.style ?? .dpad
         inactiveButtons = inactive.buttons
         inactiveActionButtons = inactive.actionButtons ?? []
     }

@@ -47,7 +47,7 @@ public enum ControlsManifestLoader {
         "V000", "V001", "V002",
         "V010", "V011", "V012", "V013", "V014", "V015",
         "V020",
-        "W001", "W002", "W003", "W004", "W005",
+        "W001", "W002", "W003", "W004", "W005", "W006",
         "K001", "J001",
     ]
 
@@ -596,9 +596,26 @@ public enum ControlsManifestLoader {
         var y: Double?
         var size: Double?
         var opacity: Double?
+        var style: MovementStyle?
 
         for (key, value) in object {
             switch key {
+            case "style":
+                // Any junk value (unknown string, wrong type) falls
+                // back to the d-pad with a warning, never an error: a
+                // later style must not poison this version.
+                if let text = value as? String, let parsed = MovementStyle(rawValue: text) {
+                    style = parsed
+                } else {
+                    findings.append(
+                        Finding(
+                            severity: .warning,
+                            code: "W006",
+                            path: "\(path)/style",
+                            message: "Unknown movement style, using the d-pad: \(value)"
+                        )
+                    )
+                }
             case "x":
                 if let number = asDouble(value) {
                     x = number
@@ -640,7 +657,7 @@ public enum ControlsManifestLoader {
         }
 
         guard let x, let y else { return nil }
-        return DPadSpec(x: x, y: y, size: size, opacity: opacity)
+        return DPadSpec(x: x, y: y, size: size, opacity: opacity, style: style)
     }
 
     private static func parseButtons(

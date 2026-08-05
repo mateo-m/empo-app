@@ -348,6 +348,40 @@ final class ControlsManifestSerializerTests: XCTestCase {
         XCTAssertEqual(String(data: data ?? Data(), encoding: .utf8), expected)
     }
 
+    func testStickStyleRoundTrips() {
+        var touch = sampleTouch()
+        touch.portrait?.dpad?.style = .stick
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil)
+        else {
+            XCTFail("expected data")
+            return
+        }
+        XCTAssertTrue(String(data: data, encoding: .utf8)!.contains("\"style\": \"stick\""))
+        let result = parseSerialized(data)
+        XCTAssertNil(result.findings.first { $0.severity == .error })
+        XCTAssertEqual(result.manifest?.touch?.portrait?.dpad?.style, .stick)
+        // The untouched orientation stays style-less: no field, so
+        // every existing file serializes byte-identically.
+        XCTAssertNil(result.manifest?.touch?.landscape?.dpad?.style)
+        let reserialized = ControlsManifestSerializer.serialize(
+            touch: result.manifest?.touch, controller: nil)
+        XCTAssertEqual(reserialized, data)
+    }
+
+    func testDPadStyleInputOmitsField() {
+        let input = ControlsManifestSerializer.TouchOrientedInput(
+            dpadX: 0.25, dpadY: 0.75, dpadSize: 140, dpadOpacity: 1,
+            dpadStyle: .dpad, buttons: [])
+        let section = ControlsManifestSerializer.touchSection(portrait: input, landscape: input)
+        XCTAssertNil(section.portrait?.dpad?.style)
+
+        let stick = ControlsManifestSerializer.TouchOrientedInput(
+            dpadX: 0.25, dpadY: 0.75, dpadSize: 140, dpadOpacity: 1,
+            dpadStyle: .stick, buttons: [])
+        let stickSection = ControlsManifestSerializer.touchSection(portrait: stick, landscape: stick)
+        XCTAssertEqual(stickSection.portrait?.dpad?.style, .stick)
+    }
+
     func testTouchInputConvertsActionButtons() {
         let input = ControlsManifestSerializer.TouchOrientedInput(
             dpadX: 0.13, dpadY: 0.72, dpadSize: 140, dpadOpacity: 1,

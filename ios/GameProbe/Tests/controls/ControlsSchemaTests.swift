@@ -72,6 +72,13 @@ final class ControlsSchemaTests: XCTestCase {
         XCTAssertEqual(Set(touchActions), EmpoActionCatalog.touchIDs)
     }
 
+    func testSchemaMovementStyleEnumMatchesModel() throws {
+        let data = try loadRepoData("docs/schemas/empo-controls.v1.schema.json")
+        let schema = try jsonObject(from: data)
+        let styles = stringEnum(at: ["$defs", "dpad", "properties", "style"], in: schema)
+        XCTAssertEqual(styles, MovementStyle.allCases.map(\.rawValue))
+    }
+
     func testPublishedExampleParsesWithZeroFindings() throws {
         let data = try loadRepoData("docs/examples/controls.json")
         let result = ControlsManifestLoader.parse(data: data)

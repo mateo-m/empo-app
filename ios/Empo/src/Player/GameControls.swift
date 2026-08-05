@@ -534,6 +534,138 @@ struct DPad: View {
     }
 }
 
+// MARK: - Joystick
+
+/// Movement stick: the same reducer, direction math, and injection
+/// contract as the D-pad, rendered as a base ring with a thumb nub
+/// that follows the finger. Only the visuals and the tuning differ:
+/// the cardinal-only ring shrinks and the slide-off margin scales
+/// with the radius (`MovementStickTuning`).
+struct Joystick: View {
+    let size: CGFloat
+    let editing: Bool
+
+    @State private var stickState = DPadTouchReducer()
+    /// Clamped thumb offset from the center. View-side state: the
+    /// reducer does not expose the touch point.
+    @State private var thumbOffset: CGSize = .zero
+    /// True from touch-down to release. Drives the nub animation:
+    /// `stickState.active` is empty inside the dead zone and past
+    /// slide-off, and a spring there would lag the finger.
+    @State private var touching = false
+
+    private var nubSize: CGFloat { size * 0.42 }
+
+    var body: some View {
+        let pressed = !stickState.active.isEmpty
+
+        ZStack {
+            // Opaque backing under glass, same rationale as the
+            // D-pad: Liquid Glass samples the Metal layer otherwise.
+            Circle()
+                .fill(Color.black)
+
+            Circle()
+                .fill(.clear)
+                .glassEffect(.regular.interactive(), in: .circle)
+
+            // Direction chevrons on the base ring. The active one
+            // brightens, same visual language as the D-pad's arms.
+            ForEach(DPadDirection.allCases, id: \.self) { dir in
+                Image(systemName: dir.symbolName)
+                    .font(.system(size: size * 0.12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(stickState.active.contains(dir) ? 1.0 : 0.4))
+                    .offset(chevronOffset(dir))
+            }
+
+            // Thumb nub.
+            ZStack {
+                Circle()
+                    .fill(Color.black)
+                Circle()
+                    .fill(.white.opacity(pressed ? 0.35 : 0.2))
+                Circle()
+                    .strokeBorder(.white.opacity(0.5), lineWidth: 1.5)
+            }
+            .frame(width: nubSize, height: nubSize)
+            .offset(thumbOffset)
+            .animation(touching ? Motion.instant : Motion.snappy, value: thumbOffset)
+        }
+        .frame(width: size, height: size)
+        .darkGlass()
+        .contentShape(Circle())
+        .accessibilityLabel("Movement stick")
+        .accessibilityHint("Touch and drag to move the character")
+        .accessibilityAddTraits(.allowsDirectInteraction)
+        // Same UIKit capture rationale as the D-pad: touch-down must
+        // engage instantly, and the sequence keeps arriving after the
+        // finger leaves the bounds (the slide-off contract).
+        .overlay {
+            ControlTouchCapture(
+                enabled: !editing,
+                onBegan: { sample($0) },
+                onMoved: { sample($0) },
+                onEnded: { release() }
+            )
+        }
+        .onChange(of: editing) { _, newValue in
+            if newValue {
+                release()
+            }
+        }
+        .onDisappear {
+            release()
+        }
+    }
+
+    private func chevronOffset(_ dir: DPadDirection) -> CGSize {
+        let distance = size * 0.42
+        switch dir {
+        case .up: return CGSize(width: 0, height: -distance)
+        case .down: return CGSize(width: 0, height: distance)
+        case .left: return CGSize(width: -distance, height: 0)
+        case .right: return CGSize(width: distance, height: 0)
+        }
+    }
+
+    private func sample(_ point: CGPoint) {
+        touching = true
+        apply(
+            stickState.touchChanged(
+                x: point.x, y: point.y, size: size,
+                deadZoneRatio: MovementStickTuning.deadZoneRatio,
+                cardinalOnlyRadiusRatio: MovementStickTuning.cardinalOnlyRadiusRatio,
+                slideOffMargin: MovementStickTuning.slideOffMargin(size: size)
+            ))
+
+        // The nub tracks the finger inside the base circle.
+        let radius = size / 2
+        let dx = point.x - radius
+        let dy = point.y - radius
+        let travel = radius - nubSize / 2
+        let distance = (dx * dx + dy * dy).squareRoot()
+        let scale = distance > travel ? travel / distance : 1
+        thumbOffset = CGSize(width: dx * scale, height: dy * scale)
+    }
+
+    private func release() {
+        touching = false
+        apply(stickState.touchEnded())
+        thumbOffset = .zero
+    }
+
+    /// Same edge-order contract and haptic policy as the D-pad.
+    private func apply(_ edges: [DPadTouchReducer.Edge]) {
+        for edge in edges {
+            EngineSessionCoordinator.shared.injectKey(
+                scancode: edge.direction.scancode, pressed: edge.pressed)
+        }
+        if edges.contains(where: { $0.pressed }) {
+            Haptics.controllerTap()
+        }
+    }
+}
+
 // MARK: - D-pad supporting types
 
 /// The reducer's direction enum doubles as the app-side D-pad

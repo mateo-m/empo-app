@@ -386,9 +386,9 @@ struct ActionButtonEditSheet: View {
     }
 }
 
-/// Edit sheet specific to the D-pad. Unlike an action button, the
-/// D-pad has no label, no key assignment, and no delete option. So
-/// it gets its own smaller sheet with only size and opacity
+/// Edit sheet specific to the movement control. Unlike an action
+/// button, it has no label, no key assignment, and no delete option.
+/// So it gets its own smaller sheet with style, size, and opacity
 /// controls.
 struct DPadEditSheet: View {
     var layout: ControlsLayout
@@ -405,6 +405,17 @@ struct DPadEditSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Style") {
+                    // Applies to the ACTIVE orientation only, same
+                    // scope as size and opacity (and the same
+                    // single-orientation undo snapshot).
+                    Picker("Style", selection: styleBinding) {
+                        Text("D-pad").tag(MovementStyle.dpad)
+                        Text("Joystick").tag(MovementStyle.stick)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section("Size") {
                     ForEach(sizes, id: \.1) { name, size in
                         HStack {
@@ -445,7 +456,7 @@ struct DPadEditSheet: View {
                     }
                 }
             }
-            .navigationTitle("Edit D-pad")
+            .navigationTitle(layout.dpadStyle == .stick ? "Edit joystick" : "Edit D-pad")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -455,6 +466,17 @@ struct DPadEditSheet: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+    }
+
+    private var styleBinding: Binding<MovementStyle> {
+        Binding(
+            get: { layout.dpadStyle },
+            set: { newStyle in
+                guard newStyle != layout.dpadStyle else { return }
+                layout.recordEditSnapshot()
+                layout.dpadStyle = newStyle
+            }
+        )
     }
 }
 
