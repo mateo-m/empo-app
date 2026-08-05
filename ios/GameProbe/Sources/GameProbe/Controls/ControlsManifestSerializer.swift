@@ -12,6 +12,11 @@ public enum ControlsManifestSerializer {
         public var dpadOpacity: Double
         public var dpadStyle: MovementStyle
         public var buttons: [TouchButtonInput]
+        /// An empty list serializes as an OMITTED key on this input
+        /// path (see `orientedLayout`), which means "inherit". This
+        /// input feeds the legacy migration, where the user never
+        /// expressed a choice about action buttons. The live save
+        /// path builds `TouchLayout` directly and keeps `[]` = none.
         public var actionButtons: [TouchActionButtonInput]
 
         public init(
