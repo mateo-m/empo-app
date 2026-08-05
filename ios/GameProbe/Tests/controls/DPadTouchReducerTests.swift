@@ -2,6 +2,64 @@ import XCTest
 
 @testable import GameProbe
 
+final class MovementStickTuningTests: XCTestCase {
+
+    func testConstantsArePinned() {
+        XCTAssertEqual(MovementStickTuning.deadZoneRatio, 0.2)
+        XCTAssertEqual(MovementStickTuning.cardinalOnlyRadiusRatio, 0.3)
+        XCTAssertEqual(MovementStickTuning.slideOffMarginRatio, 0.6)
+        XCTAssertEqual(MovementStickTuning.slideOffMargin(size: 140), 42)
+    }
+
+    private func stickEdges(
+        _ reducer: inout DPadTouchReducer, x: Double, y: Double, size: Double
+    ) -> [DPadTouchReducer.Edge] {
+        reducer.touchChanged(
+            x: x, y: y, size: size,
+            deadZoneRatio: MovementStickTuning.deadZoneRatio,
+            cardinalOnlyRadiusRatio: MovementStickTuning.cardinalOnlyRadiusRatio,
+            slideOffMargin: MovementStickTuning.slideOffMargin(size: size)
+        )
+    }
+
+    func testDiagonalUnlocksEarlierThanDPad() {
+        // At 0.4 x radius, 45 degrees: the stick's 0.3 cardinal ring
+        // is behind us (diagonal allowed); the d-pad's 0.5 ring would
+        // still force a cardinal.
+        let size = 140.0
+        let offset = 0.4 * size / 2 * (0.5.squareRoot())
+
+        var stick = DPadTouchReducer()
+        _ = stickEdges(&stick, x: size / 2 + offset, y: size / 2 + offset, size: size)
+        XCTAssertEqual(stick.active, [.down, .right])
+
+        var dpad = DPadTouchReducer()
+        _ = dpad.touchChanged(x: size / 2 + offset, y: size / 2 + offset, size: size)
+        XCTAssertEqual(dpad.active.directions.count, 1)
+    }
+
+    func testCardinalOnlyInsideStickRing() {
+        // 25% of the radius, slightly angled: still cardinal.
+        let size = 140.0
+        var stick = DPadTouchReducer()
+        _ = stickEdges(&stick, x: size / 2 + 0.25 * size / 2, y: size / 2 + 6, size: size)
+        XCTAssertEqual(stick.active, .right)
+    }
+
+    func testProportionalSlideOffReleasesAndReengages() {
+        let size = 140.0
+        var stick = DPadTouchReducer()
+        _ = stickEdges(&stick, x: size, y: size / 2, size: size)
+        XCTAssertEqual(stick.active, .right)
+        // Past radius x 1.6: everything releases.
+        _ = stickEdges(&stick, x: size / 2 + size * 0.85, y: size / 2, size: size)
+        XCTAssertEqual(stick.active, [])
+        // Back inside: re-presses.
+        _ = stickEdges(&stick, x: size, y: size / 2, size: size)
+        XCTAssertEqual(stick.active, .right)
+    }
+}
+
 /// Coordinate conventions in these tests: the D-pad is a 150x150 box,
 /// so the center is (75, 75), the radius is 75, the dead zone ends at
 /// 15 (0.2 * 75), and the slide-off release boundary is 105 (75 + 30).

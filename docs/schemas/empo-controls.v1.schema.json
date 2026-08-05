@@ -215,6 +215,14 @@
         },
         "opacity": {
           "$ref": "#/$defs/opacity"
+        },
+        "style": {
+          "description": "Movement control style. stick draws a joystick with the same key mapping.",
+          "type": "string",
+          "enum": [
+            "dpad",
+            "stick"
+          ]
         }
       }
     },

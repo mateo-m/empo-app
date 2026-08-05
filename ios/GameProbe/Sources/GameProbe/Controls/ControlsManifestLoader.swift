@@ -63,6 +63,7 @@ public enum ControlsManifestLoader {
         case w003 = "W003"
         case w004 = "W004"
         case w005 = "W005"
+        case w006 = "W006"
         case k001 = "K001"
         case j001 = "J001"
     }
@@ -516,17 +517,39 @@ public enum ControlsManifestLoader {
         path: String,
         findings: inout [Finding]
     ) -> DPadSpec? {
+        var style: MovementStyle?
         var placement = PlacementFields(sizeRule: .dpad)
 
         for (key, value) in object {
-            _ = placement.consume(
+            if placement.consume(
                 field: key, value: value, path: path, findings: &findings)
+            {
+                continue
+            }
+            if key == "style" {
+                // Any junk value (unknown string, wrong type) falls
+                // back to the d-pad with a warning, never an error: a
+                // later style must not poison this version.
+                if let text = value as? String, let parsed = MovementStyle(rawValue: text) {
+                    style = parsed
+                } else {
+                    findings.append(
+                        Finding(
+                            severity: .warning,
+                            code: .w006,
+                            path: "\(path)/style",
+                            message: "Unknown movement style, using the d-pad: \(value)"
+                        )
+                    )
+                }
+            }
         }
 
         guard let coords = placement.requireCoordinates(path: path, findings: &findings)
         else { return nil }
         return DPadSpec(
-            x: coords.x, y: coords.y, size: placement.size, opacity: placement.opacity)
+            x: coords.x, y: coords.y, size: placement.size, opacity: placement.opacity,
+            style: style)
     }
 
     private static func parseButtons(

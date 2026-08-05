@@ -10,6 +10,7 @@ public enum ControlsManifestSerializer {
         public var dpadY: Double
         public var dpadSize: Double
         public var dpadOpacity: Double
+        public var dpadStyle: MovementStyle
         public var buttons: [TouchButtonInput]
         public var actionButtons: [TouchActionButtonInput]
 
@@ -18,6 +19,7 @@ public enum ControlsManifestSerializer {
             dpadY: Double,
             dpadSize: Double,
             dpadOpacity: Double,
+            dpadStyle: MovementStyle = .dpad,
             buttons: [TouchButtonInput],
             actionButtons: [TouchActionButtonInput] = []
         ) {
@@ -25,6 +27,7 @@ public enum ControlsManifestSerializer {
             self.dpadY = dpadY
             self.dpadSize = dpadSize
             self.dpadOpacity = dpadOpacity
+            self.dpadStyle = dpadStyle
             self.buttons = buttons
             self.actionButtons = actionButtons
         }
@@ -132,7 +135,8 @@ public enum ControlsManifestSerializer {
             x: clampCoordinate(input.dpadX),
             y: clampCoordinate(input.dpadY),
             size: clampDPadSize(input.dpadSize),
-            opacity: clampOpacity(input.dpadOpacity)
+            opacity: clampOpacity(input.dpadOpacity),
+            style: input.dpadStyle == .dpad ? nil : input.dpadStyle
         )
 
         var buttons: [ButtonSpec] = []
@@ -288,6 +292,11 @@ public enum ControlsManifestSerializer {
         }
         if let opacity = dpad.opacity {
             lines.append("\(pad),\"opacity\": \(formatNumber(opacity))")
+        }
+        // Absent and "dpad" mean the same thing; only "stick" is
+        // worth a line. Keeps every existing file byte-stable.
+        if let style = dpad.style, style != .dpad {
+            lines.append("\(pad),\"style\": \(jsonString(style.rawValue))")
         }
     }
 
