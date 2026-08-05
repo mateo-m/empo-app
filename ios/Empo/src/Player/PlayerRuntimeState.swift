@@ -1,5 +1,6 @@
 import Foundation
 import GameProbe
+import Observation
 import SwiftUI
 
 /// Session runtime state the player actions act on: fast forward and
