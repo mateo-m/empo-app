@@ -247,6 +247,7 @@ struct GameSettingsView: View {
             Form {
                 gameplaySection
                 displaySection
+                layoutProfileSection
                 verticalAlignmentSection
                 performanceSection
                 engineSection
@@ -411,6 +412,62 @@ struct GameSettingsView: View {
         } footer: {
             Text("Control how the game looks on screen.")
         }
+    }
+
+    @State private var showLayoutProfilePicker = false
+    @State private var savedProfileName: String?
+
+    private var layoutProfileSection: some View {
+        Section {
+            Button {
+                showLayoutProfilePicker = true
+            } label: {
+                HStack {
+                    Text("Layout profile")
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text(currentPinLabel)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .sheet(isPresented: $showLayoutProfilePicker) {
+                LayoutProfilePickerSheet(container: game.container!)
+            }
+
+            Button {
+                saveLayoutAsProfile()
+            } label: {
+                Text(
+                    savedProfileName.map { "Saved as \($0)" }
+                        ?? "Save this game's layout as a profile")
+            }
+            .disabled(savedProfileName != nil)
+        } header: {
+            Text("Touch controls")
+        } footer: {
+            Text("Profiles live in Settings and work for any game.")
+        }
+    }
+
+    private var currentPinLabel: String {
+        guard let container = game.container else { return "" }
+        switch LayoutProfilesManager.store.loadPin(forGameFolder: container.url).pin {
+        case .followChain: return "Automatic"
+        case .profile(let name): return name
+        case .gameLayout: return "Game layout"
+        case .defaultProfile: return "Default profile"
+        }
+    }
+
+    private func saveLayoutAsProfile() {
+        guard let container = game.container else { return }
+        let store = LayoutProfilesManager.store
+        let name = store.uniqueName(base: game.title)
+        let section = LayoutProfilesManager.materializedLayout(for: container)
+        guard store.createProfile(name, touch: section) else { return }
+        store.writePin(.profile(name), forGameFolder: container.url)
+        LayoutProfilesManager.postPinChange(gameID: container.id, from: nil)
+        savedProfileName = name
     }
 
     private var verticalAlignmentSection: some View {

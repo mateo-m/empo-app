@@ -12,6 +12,12 @@ struct PlayerControlsOverlay: View {
     let geo: GeometryProxy
     let controlsMinY: CGFloat
     let editMode: Bool
+    /// Injected so the profile editor can fake per-orientation
+    /// insets; the player passes the live window value.
+    let safeArea: EdgeInsets
+    /// The out-of-player editor: every action renders as
+    /// available and no hit regions are published.
+    var isPreview = false
     @Binding var editingButton: ButtonModel?
     @Binding var editingActionButton: ActionButtonModel?
     @Binding var editingDPad: Bool
@@ -20,8 +26,8 @@ struct PlayerControlsOverlay: View {
 
     var body: some View {
         let separatedPositions = layout.separatedDisplayPositions(
-            for: geo.size, safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY,
-            includeActionButton: { editMode || actions.isAvailable($0.action) })
+            for: geo.size, safeArea: safeArea, controlsMinY: controlsMinY,
+            includeActionButton: { isPreview || editMode || actions.isAvailable($0.action) })
         ZStack {
             dpadView
             ForEach(Array(layout.buttons.enumerated()), id: \.element.id) { index, button in
@@ -31,7 +37,7 @@ struct PlayerControlsOverlay: View {
                 // Unavailable actions (fast forward in a game with no
                 // multiplier) hide during play. Edit mode keeps them
                 // visible with a badge so they can move or delete.
-                if editMode || actions.isAvailable(button.action) {
+                if isPreview || editMode || actions.isAvailable(button.action) {
                     functionButton(button: button, displayPosition: separatedPositions[button.id])
                 }
             }
@@ -43,14 +49,14 @@ struct PlayerControlsOverlay: View {
         let size = layout.dpadSize
         let pos = ControlsZone.absolutePosition(
             for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size),
-            safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY)
+            safeArea: safeArea, controlsMinY: controlsMinY)
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
         movementControl(size: size)
             .frame(width: size, height: size)
             // Measure the region BEFORE .position: position()
             // expands to the full proposed space, so a region attached
             // after it would cover the whole screen.
-            .chromeHitRegion("controls.dpad")
+            .chromeHitRegion("controls.dpad", enabled: !isPreview)
             .opacity(layout.dpadOpacity)
             .scaleEffect(draggingDPad ? ControlsZone.dragScaleFactor : 1.0)
             .animation(Motion.snappy, value: draggingDPad)
@@ -93,7 +99,7 @@ struct PlayerControlsOverlay: View {
                 }
                 let clamped = ControlsZone.clampToSafeArea(
                     value.location, controlSize: layout.dpadSize, geoSize: geo.size,
-                    safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY)
+                    safeArea: safeArea, controlsMinY: controlsMinY)
                 layout.dpadRelativeCenter = CGPoint(
                     x: clamped.x / geo.size.width,
                     y: clamped.y / geo.size.height
@@ -141,7 +147,7 @@ struct PlayerControlsOverlay: View {
                     onRelease: { actions.handle(button.action, pressed: false) }
                 )
                 .overlay(alignment: .bottom) {
-                    if editMode && !actions.isAvailable(button.action) {
+                    if editMode && !isPreview && !actions.isAvailable(button.action) {
                         Text("Unavailable in this game")
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(.secondary)
@@ -175,7 +181,7 @@ struct PlayerControlsOverlay: View {
             ?? ControlsZone.absolutePosition(
                 for: center, in: geo.size,
                 controlSize: CGSize(width: size, height: size),
-                safeArea: AppWindow.currentSafeArea,
+                safeArea: safeArea,
                 controlsMinY: controlsMinY)
     }
 
@@ -219,7 +225,7 @@ struct PlayerControlsOverlay: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .chromeHitRegion(hitRegionKey)
+            .chromeHitRegion(hitRegionKey, enabled: !isPreview)
             .scaleEffect(isDragging ? ControlsZone.dragScaleFactor : 1.0)
             .animation(Motion.snappy, value: isDragging)
             .position(position)
@@ -240,7 +246,7 @@ struct PlayerControlsOverlay: View {
                 }
                 let clamped = ControlsZone.clampToSafeArea(
                     value.location, controlSize: size, geoSize: geo.size,
-                    safeArea: AppWindow.currentSafeArea,
+                    safeArea: safeArea,
                     controlsMinY: controlsMinY)
                 update(
                     CGPoint(

@@ -24,6 +24,7 @@ struct PlayerMoreSheet: View {
     let fastForwardMultiplier: Int?
     let showControllerRemap: Bool
     let onControllerRemap: () -> Void
+    let onLayoutProfile: () -> Void
     let onPause: () -> Void
     let onCheats: () -> Void
     let onQuit: () -> Void
@@ -98,6 +99,10 @@ struct PlayerMoreSheet: View {
                                     onControllerRemap()
                                     dismiss()
                                 }
+                            }
+                            MenuRow(icon: "square.on.square", label: "Layout profile") {
+                                onLayoutProfile()
+                                dismiss()
                             }
                         }
                     )

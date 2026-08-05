@@ -379,9 +379,18 @@ bindings win. Base your map on your bindings instead of on this table.
 
 Touch layout, first match wins:
 
-1. The player's own edits on their device
+1. A layout profile the player pinned to your game
 2. Your `touch` section
-3. Empo's defaults
+3. The player's default layout profile
+4. Empo's defaults
+
+Layout profiles are named layouts the player manages in Empo's
+settings and can apply to any game. A profile's file uses this same
+format, so players can share one as a single `controls.json`. Your
+`touch` section outranks the player's default profile, but a profile
+pinned to your game outranks your section. Empo's edit mode saves the
+player's edits into profiles; the old per-game copy in `EmpoState/`
+still imports, but Empo no longer writes it.
 
 When your file provides layer 2, the Reset button in Empo's edit mode
 returns players to it. The button label is then "Reset to game
