@@ -38,9 +38,17 @@ public enum ControlsManifestLoader {
         }
     }
 
-    private static let knownActions: Set<String> = [
-        "$pauseMenu",
-        "$toggleOverlay",
+    private static let maxButtonsPerOrientation = 21
+
+    /// Every finding code this loader can emit, for the docs table
+    /// and the uniqueness test. V021 is absent on purpose: W005
+    /// superseded it.
+    public static let emittedFindingCodes: [String] = [
+        "V000", "V001", "V002",
+        "V010", "V011", "V012", "V013", "V014", "V015",
+        "V020",
+        "W001", "W002", "W003", "W004", "W005",
+        "K001", "J001",
     ]
 
     public struct Result: Sendable {
@@ -446,12 +454,137 @@ public enum ControlsManifestLoader {
                 } else {
                     appendTypeError(findings: &findings, path: "\(path)/buttons", expected: "array")
                 }
+            case "actionButtons":
+                if let actionsArray = value as? [Any] {
+                    layout.actionButtons = parseActionButtons(
+                        actionsArray, path: "\(path)/actionButtons", findings: &findings)
+                } else {
+                    appendTypeError(
+                        findings: &findings, path: "\(path)/actionButtons", expected: "array")
+                }
             default:
                 continue
             }
         }
 
+        let combinedCount = (layout.buttons?.count ?? 0) + (layout.actionButtons?.count ?? 0)
+        if combinedCount > maxButtonsPerOrientation {
+            findings.append(
+                Finding(
+                    severity: .error,
+                    code: "V015",
+                    path: path,
+                    message: "More than 21 buttons and action buttons combined in one orientation"
+                )
+            )
+        }
+
         return layout
+    }
+
+    private static func parseActionButtons(
+        _ array: [Any],
+        path: String,
+        findings: inout [Finding]
+    ) -> [ActionButtonSpec] {
+        var buttons: [ActionButtonSpec] = []
+
+        for (index, element) in array.enumerated() {
+            let buttonPath = "\(path)/\(index)"
+            guard let object = element as? [String: Any] else {
+                findings.append(
+                    Finding(
+                        severity: .error,
+                        code: "V000",
+                        path: buttonPath,
+                        message: "Action button must be an object"
+                    )
+                )
+                continue
+            }
+
+            if let button = parseActionButton(object, path: buttonPath, findings: &findings) {
+                buttons.append(button)
+            }
+        }
+
+        return buttons
+    }
+
+    private static func parseActionButton(
+        _ object: [String: Any],
+        path: String,
+        findings: inout [Finding]
+    ) -> ActionButtonSpec? {
+        var action: String?
+        var x: Double?
+        var y: Double?
+        var size: Double?
+        var opacity: Double?
+
+        for (field, value) in object {
+            switch field {
+            case "action":
+                if let text = value as? String {
+                    action = text
+                } else {
+                    appendTypeError(findings: &findings, path: "\(path)/action", expected: "string")
+                }
+            case "x":
+                if let number = asDouble(value) {
+                    x = number
+                    validateCoordinate(number, path: "\(path)/x", findings: &findings)
+                } else {
+                    appendCoordinateError(findings: &findings, path: "\(path)/x")
+                }
+            case "y":
+                if let number = asDouble(value) {
+                    y = number
+                    validateCoordinate(number, path: "\(path)/y", findings: &findings)
+                } else {
+                    appendCoordinateError(findings: &findings, path: "\(path)/y")
+                }
+            case "size":
+                if let number = asDouble(value) {
+                    size = number
+                    validateButtonSize(number, path: "\(path)/size", findings: &findings)
+                } else {
+                    appendRangeError(findings: &findings, path: "\(path)/size")
+                }
+            case "opacity":
+                if let number = asDouble(value) {
+                    opacity = number
+                    validateOpacity(number, path: "\(path)/opacity", findings: &findings)
+                } else {
+                    appendRangeError(findings: &findings, path: "\(path)/opacity")
+                }
+            default:
+                continue
+            }
+        }
+
+        // An action this Empo version does not know skips only this
+        // button. This is the documented exception to the
+        // no-partial-application rule, scoped to actionButtons, so a
+        // file written for a newer vocabulary still loads.
+        guard let action, EmpoActionCatalog.touchIDs.contains(action) else {
+            findings.append(
+                Finding(
+                    severity: .warning,
+                    code: "W004",
+                    path: "\(path)/action",
+                    message: "Unknown action, button skipped: \(action ?? "(missing)")"
+                )
+            )
+            return nil
+        }
+        // Same rule as plain buttons: a missing coordinate is a V011
+        // error, never a silent drop.
+        if x == nil { appendCoordinateError(findings: &findings, path: "\(path)/x") }
+        if y == nil { appendCoordinateError(findings: &findings, path: "\(path)/y") }
+        guard let x, let y else { return nil }
+
+        return ActionButtonSpec(action: action, x: x, y: y, size: size, opacity: opacity)
     }
 
     private static func parseDPad(
@@ -654,6 +787,11 @@ public enum ControlsManifestLoader {
             )
             return nil
         }
+        // A missing coordinate is an error (documented V011 meaning),
+        // never a silent drop: a silently dropped button would vanish
+        // from disk on the next load-modify-save cycle.
+        if x == nil { appendCoordinateError(findings: &findings, path: "\(path)/x") }
+        if y == nil { appendCoordinateError(findings: &findings, path: "\(path)/y") }
         guard let x, let y else { return nil }
 
         return ButtonSpec(label: label, key: key, x: x, y: y, size: size, opacity: opacity)
@@ -700,18 +838,21 @@ public enum ControlsManifestLoader {
             }
 
             if text.hasPrefix("$") {
-                if knownActions.contains(text) {
-                    entries[element] = .action(text)
-                } else {
+                // Unknown actions warn and KEEP the entry. Every
+                // load-modify-save path rewrites this file, so a
+                // skipped entry would be stripped from disk. A kept
+                // entry stays inert at dispatch and survives saves.
+                if !EmpoActionCatalog.allIDs.contains(text) {
                     findings.append(
                         Finding(
-                            severity: .error,
-                            code: "V021",
+                            severity: .warning,
+                            code: "W005",
                             path: elementPath,
-                            message: "Unknown action: \(text)"
+                            message: "Unknown action, binding does nothing: \(text)"
                         )
                     )
                 }
+                entries[element] = .action(text)
             } else if KeyCodeTable.scancode(for: text) != nil {
                 entries[element] = .key(text)
             } else {
@@ -738,7 +879,7 @@ public enum ControlsManifestLoader {
                     severity: .error,
                     code: "V014",
                     path: path,
-                    message: "Action strings are not allowed in touch buttons: \(key)"
+                    message: "Actions do not go in buttons. Use actionButtons for: \(key)"
                 )
             )
             return

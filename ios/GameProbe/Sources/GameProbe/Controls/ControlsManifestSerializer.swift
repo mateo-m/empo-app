@@ -11,19 +11,44 @@ public enum ControlsManifestSerializer {
         public var dpadSize: Double
         public var dpadOpacity: Double
         public var buttons: [TouchButtonInput]
+        public var actionButtons: [TouchActionButtonInput]
 
         public init(
             dpadX: Double,
             dpadY: Double,
             dpadSize: Double,
             dpadOpacity: Double,
-            buttons: [TouchButtonInput]
+            buttons: [TouchButtonInput],
+            actionButtons: [TouchActionButtonInput] = []
         ) {
             self.dpadX = dpadX
             self.dpadY = dpadY
             self.dpadSize = dpadSize
             self.dpadOpacity = dpadOpacity
             self.buttons = buttons
+            self.actionButtons = actionButtons
+        }
+    }
+
+    public struct TouchActionButtonInput: Equatable, Sendable {
+        public var action: String
+        public var x: Double
+        public var y: Double
+        public var size: Double
+        public var opacity: Double
+
+        public init(
+            action: String,
+            x: Double,
+            y: Double,
+            size: Double,
+            opacity: Double
+        ) {
+            self.action = action
+            self.x = x
+            self.y = y
+            self.size = size
+            self.opacity = opacity
         }
     }
 
@@ -129,7 +154,24 @@ public enum ControlsManifestSerializer {
             )
         }
 
-        return TouchLayout(dpad: dpad, buttons: buttons)
+        var actionButtons: [ActionButtonSpec] = []
+        for button in input.actionButtons {
+            actionButtons.append(
+                ActionButtonSpec(
+                    action: button.action,
+                    x: clampCoordinate(button.x),
+                    y: clampCoordinate(button.y),
+                    size: clampButtonSize(button.size),
+                    opacity: clampOpacity(button.opacity)
+                )
+            )
+        }
+
+        return TouchLayout(
+            dpad: dpad,
+            buttons: buttons,
+            actionButtons: actionButtons.isEmpty ? nil : actionButtons
+        )
     }
 
     // MARK: - JSON emission
@@ -190,7 +232,47 @@ public enum ControlsManifestSerializer {
                 appendButton(button, into: &lines, indent: indent + 4)
             }
             lines.append("\(pad)]")
+            wroteField = true
         }
+
+        // Empty emits as [] on purpose: nil means "inherit the
+        // game-shipped action buttons" at load, so collapsing [] to
+        // an omitted key would resurrect buttons the user deleted.
+        if let actionButtons = layout.actionButtons {
+            if wroteField {
+                lines.append("\(pad),\"actionButtons\": [")
+            } else {
+                lines.append("\(pad)\"actionButtons\": [")
+            }
+            for (index, button) in actionButtons.enumerated() {
+                if index > 0 {
+                    lines.append("\(pad)  ,")
+                } else {
+                    lines.append("\(pad)  ")
+                }
+                appendActionButton(button, into: &lines, indent: indent + 4)
+            }
+            lines.append("\(pad)]")
+        }
+    }
+
+    private static func appendActionButton(
+        _ button: ActionButtonSpec,
+        into lines: inout [String],
+        indent: Int
+    ) {
+        let pad = String(repeating: " ", count: indent)
+        lines.append("\(pad){")
+        lines.append("\(pad)  \"action\": \(jsonString(button.action))")
+        lines.append("\(pad)  ,\"x\": \(formatNumber(button.x))")
+        lines.append("\(pad)  ,\"y\": \(formatNumber(button.y))")
+        if let size = button.size {
+            lines.append("\(pad)  ,\"size\": \(formatNumber(size))")
+        }
+        if let opacity = button.opacity {
+            lines.append("\(pad)  ,\"opacity\": \(formatNumber(opacity))")
+        }
+        lines.append("\(pad)}")
     }
 
     private static func appendDPad(

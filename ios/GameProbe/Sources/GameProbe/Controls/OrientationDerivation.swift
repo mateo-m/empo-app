@@ -60,32 +60,48 @@ public enum OrientationDerivation {
         }
 
         var derivedButtons: [ButtonSpec]?
+        var derivedActionButtons: [ActionButtonSpec]?
         var buttonInputs: [(x: Double, y: Double, size: Double)] = []
         var buttonSpecs: [ButtonSpec] = []
+        var actionButtonSpecs: [ActionButtonSpec] = []
+
+        func mappedCenter(x: Double, y: Double, size: Double) -> (x: Double, y: Double) {
+            mapCenter(
+                fractionX: x,
+                fractionY: y,
+                sourceWidth: sourceWidth,
+                sourceHeight: sourceHeight,
+                sourceLeading: sourceLeading,
+                sourceTrailing: sourceTrailing,
+                sourceTop: sourceTop,
+                sourceBottom: sourceBottom,
+                targetWidth: targetWidth,
+                targetHeight: targetHeight,
+                targetLeading: targetLeading,
+                targetTrailing: targetTrailing,
+                targetTop: targetTop,
+                targetBottom: targetBottom,
+                elementSize: size
+            )
+        }
 
         if let buttons = source.buttons {
             derivedButtons = []
             for spec in buttons {
                 let size = spec.size ?? 56
-                let center = mapCenter(
-                    fractionX: spec.x,
-                    fractionY: spec.y,
-                    sourceWidth: sourceWidth,
-                    sourceHeight: sourceHeight,
-                    sourceLeading: sourceLeading,
-                    sourceTrailing: sourceTrailing,
-                    sourceTop: sourceTop,
-                    sourceBottom: sourceBottom,
-                    targetWidth: targetWidth,
-                    targetHeight: targetHeight,
-                    targetLeading: targetLeading,
-                    targetTrailing: targetTrailing,
-                    targetTop: targetTop,
-                    targetBottom: targetBottom,
-                    elementSize: size
-                )
+                let center = mappedCenter(x: spec.x, y: spec.y, size: size)
                 buttonInputs.append((center.x, center.y, size))
                 buttonSpecs.append(spec)
+            }
+        }
+
+        if let actionButtons = source.actionButtons {
+            derivedActionButtons = []
+            for spec in actionButtons {
+                let size = spec.size ?? 56
+                let center = mappedCenter(x: spec.x, y: spec.y, size: size)
+                buttonInputs.append((center.x, center.y, size))
+                actionButtonSpecs.append(spec)
             }
         }
 
@@ -98,6 +114,7 @@ public enum OrientationDerivation {
                 obstacles: obstacles
             )
 
+            // Separation input order is buttons, then action buttons.
             var separatedButtons: [ButtonSpec] = []
             for (index, spec) in buttonSpecs.enumerated() {
                 let point = separated.positions[index]
@@ -113,7 +130,27 @@ public enum OrientationDerivation {
                     )
                 )
             }
-            derivedButtons = separatedButtons
+            if source.buttons != nil {
+                derivedButtons = separatedButtons
+            }
+
+            var separatedActionButtons: [ActionButtonSpec] = []
+            for (index, spec) in actionButtonSpecs.enumerated() {
+                let point = separated.positions[buttonSpecs.count + index]
+                let size = spec.size ?? 56
+                separatedActionButtons.append(
+                    ActionButtonSpec(
+                        action: spec.action,
+                        x: clampFraction(point.x / targetWidth),
+                        y: clampFraction(point.y / targetHeight),
+                        size: size,
+                        opacity: spec.opacity
+                    )
+                )
+            }
+            if source.actionButtons != nil {
+                derivedActionButtons = separatedActionButtons
+            }
         }
 
         if var dpad = derivedDpad, let obstacle = dpadObstacle {
@@ -122,7 +159,11 @@ public enum OrientationDerivation {
             derivedDpad = dpad
         }
 
-        return TouchLayout(dpad: derivedDpad, buttons: derivedButtons)
+        return TouchLayout(
+            dpad: derivedDpad,
+            buttons: derivedButtons,
+            actionButtons: derivedActionButtons
+        )
     }
 
     private static func mapCenter(

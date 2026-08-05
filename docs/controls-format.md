@@ -120,8 +120,8 @@ name, or out-of-range number rejects the file. See
 
 ```jsonc
 "touch": {
-  "portrait":  { "dpad": { ... }, "buttons": [ ... ] },
-  "landscape": { "dpad": { ... }, "buttons": [ ... ] }
+  "portrait":  { "dpad": { ... }, "buttons": [ ... ], "actionButtons": [ ... ] },
+  "landscape": { "dpad": { ... }, "buttons": [ ... ], "actionButtons": [ ... ] }
 }
 ```
 
@@ -175,7 +175,7 @@ d-pad, because these games need arrow keys.
 
 ### `buttons`
 
-Up to 21 per orientation.
+Up to 21 per orientation, counted together with `actionButtons`.
 
 | Field | Required | Range | Default |
 |---|---|---|---|
@@ -194,6 +194,42 @@ real keyboard scancodes to the engine. If a desktop keyboard press
 triggers something in your game, a touch button bound to that key
 triggers it too. That includes F-key script hotkeys and custom Input
 module bindings.
+
+### `actionButtons`
+
+A separate list for buttons that trigger Empo features instead of
+game keys. Empo added this list in version 0.6. Older Empo versions
+ignore the list and show the rest of your layout.
+
+```jsonc
+"actionButtons": [
+  { "action": "$toggleFastForward", "x": 0.92, "y": 0.30, "size": 56 }
+]
+```
+
+| Field | Required | Range | Default |
+|---|---|---|---|
+| `action` | yes | an [action](#actions) marked touch-valid | |
+| `x`, `y` | yes | 0.0 to 1.0 | |
+| `size` | no | 40 to 100 (points) | 56 |
+| `opacity` | no | 0.2 to 1.0 | 1.0 |
+
+Action buttons have no `label` field. Empo draws a fixed icon for
+each action. The 21-button cap counts `buttons` and `actionButtons`
+together.
+
+`"actionButtons": []` means no action buttons. An omitted key means
+the same in your file today, but in a player's saved layout an
+explicit `[]` records "the player deleted them all". The same
+omitted-vs-empty distinction `buttons` has.
+
+An unknown `action` value skips only that button, with a warning. The
+rest of the file loads. This lets a file written for a newer Empo
+degrade cleanly.
+
+Note: fast-forward buttons work only in games where the player set a
+speed multiplier in Game Settings. In other games the button hides
+during play.
 
 ## Controller reference
 
@@ -248,12 +284,26 @@ Notes:
 ### Actions
 
 Values that start with `$` trigger Empo features instead of keys.
-Only controller maps can use them. Touch buttons cannot bind actions.
+Controller maps can bind every action. The touch `actionButtons` list
+can bind the touch-valid ones. A normal touch button's `key` field
+can never hold an action.
 
-| Action | Effect |
-|---|---|
-| `$pauseMenu` | Open and close Empo's pause menu |
-| `$toggleOverlay` | Show and hide the touch controls |
+| Action | Effect | Touch-valid |
+|---|---|---|
+| `$fastForward` | Speed the game up while held | yes |
+| `$toggleFastForward` | Turn fast forward on or off | yes |
+| `$pauseMenu` | Open and close Empo's pause menu | yes |
+| `$toggleCheats` | Turn the cheats screen on or off | yes |
+| `$toggleTouchControls` | Show and hide the touch controls | no |
+
+The fast-forward actions work only in games where the player set a
+speed multiplier. A controller binding to them does nothing in other
+games.
+
+`$toggleTouchControls` replaces the old name `$toggleOverlay`. Empo
+rewrites the old name in the player's own files once. Update your
+manifest to the new name; the old name now parses as an unknown
+action (a warning, and the binding does nothing).
 
 ### Built-in map
 
@@ -270,7 +320,7 @@ The base your file patches:
 | `leftshoulder` / `rightshoulder` | `KeyQ` / `KeyW` |
 | `leftstick` / `rightstick` | `KeyS` / `KeyD` |
 | `start` | `$pauseMenu` |
-| `back` | `$toggleOverlay` |
+| `back` | `$toggleTouchControls` |
 
 Triggers, the right stick, `guide`, paddles, and touchpad start
 unbound.
@@ -347,6 +397,12 @@ file. The game then falls back to the defaults, as if the file did not
 exist. There is no partial application: players get either your exact
 layout or Empo's, never a mix you did not test.
 
+Two documented exceptions exist, both for forward compatibility with
+future actions. An unknown action in `actionButtons` skips that one
+button (W004). An unknown action in `controller` keeps the entry but
+makes it do nothing (W005). Both are warnings, and the rest of the
+file loads.
+
 A rejected file is loud on purpose. Empo writes every finding to the
 game's log folder (`Logs/controls.json.log` inside the game's
 container). Empo also shows a notice in the edit-controls screen:
@@ -361,13 +417,16 @@ controls did not show up, ask a tester for that log line.
 | V010 | Unknown key code (the message echoes the bad string) |
 | V011 | Coordinate missing or outside 0.0 to 1.0 |
 | V012 | Size or opacity out of range |
-| V013 | More than 21 buttons in one orientation |
-| V014 | `$action` on a touch button |
+| V013 | More than 21 entries in `buttons` |
+| V014 | `$action` in a normal touch button's `key` |
+| V015 | More than 21 `buttons` + `actionButtons` combined in one orientation |
 | V020 | Unknown controller element |
-| V021 | Unknown `$action` |
+| V021 | Superseded by W005 (older Empo versions still reject the file with it) |
 | W001 | Neither `touch` nor `controller` present (warning) |
 | W002 | Label truncated to 8 characters (warning) |
 | W003 | Two buttons share one key (warning) |
+| W004 | Unknown action in `actionButtons`; that button is skipped (warning) |
+| W005 | Unknown action in `controller`; the binding stays but does nothing (warning) |
 
 Warnings never reject the file.
 
@@ -386,6 +445,15 @@ editor or a validator like `ajv` works.
 - Version 1 files work forever. If a version 2 ever exists, every
   future Empo will read version 1 files exactly as this document
   describes. It is safe to ship a `controls.json` today.
+
+Two compatibility notes for the action features:
+
+- `actionButtons` needs Empo 0.6 or later. Older versions ignore the
+  list and show the rest of your layout. Safe to ship.
+- A `controller` entry bound to one of the new actions makes Empo
+  0.5 and older reject the whole file (their V021 was a hard error).
+  If you must support older versions, keep new actions out of your
+  `controller` section for now.
 
 ## Before you ship
 

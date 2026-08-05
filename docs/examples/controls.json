@@ -25,6 +25,9 @@
           "size": 44,
           "opacity": 0.5
         }
+      ],
+      "actionButtons": [
+        { "action": "$toggleFastForward", "x": 0.94, "y": 0.06, "size": 44, "opacity": 0.6 }
       ]
     },
     "landscape": {
