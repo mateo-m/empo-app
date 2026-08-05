@@ -60,13 +60,19 @@ struct LayoutProfilePickerSheet: View {
         gameShipsLayout =
             ControlsManifestLoader.load(gameRoot: container.gameURL)?
             .result.manifest?.touch != nil
-        // What Automatic yields, ignoring any pin.
+        // What Automatic yields, ignoring any pin. Validity means a
+        // readable profile with a touch section, not just a set name.
+        let defaultName = LayoutProfilesManager.defaultProfileName
+        let defaultValid: Bool? = defaultName.map { name in
+            let read = store.readProfile(name)
+            return read?.invalid == false && read?.touch != nil
+        }
         let ambient = LayoutChainResolver.resolve(
             pin: .followChain,
             levels: LayoutChainResolver.Levels(
                 pinnedProfileValid: nil,
                 gameLayoutOccupied: gameShipsLayout,
-                defaultProfileValid: LayoutProfilesManager.defaultProfileName != nil
+                defaultProfileValid: defaultValid
             ))
         switch ambient.level {
         case .gameLayout:
