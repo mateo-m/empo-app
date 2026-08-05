@@ -1119,8 +1119,13 @@ class ControlsLayout {
         let builtins = LayoutProfilesManager.builtins()
 
         // An invalid per-game file yields no touch section here and
-        // stays on disk untouched.
-        let userTouch = UserControlsFile.load(in: container)?.manifest?.touch
+        // stays on disk untouched — but its findings still reach the
+        // game's log, like the old per-game load path.
+        let userLoad = UserControlsFile.load(in: container)
+        if let findings = userLoad?.findings, !findings.isEmpty {
+            UserControlsFile.logFindings(findings, container: container)
+        }
+        let userTouch = userLoad?.manifest?.touch
         let pinExists = FileManager.default.fileExists(
             atPath: store.pinURL(forGameFolder: container.url).path)
 
@@ -1185,7 +1190,11 @@ class ControlsLayout {
         importOfferPending = false
         let store = LayoutProfilesManager.store
         let builtins = LayoutProfilesManager.builtins()
-        guard let userTouch = UserControlsFile.load(in: container)?.manifest?.touch else { return }
+        let importLoad = UserControlsFile.load(in: container)
+        if let findings = importLoad?.findings, !findings.isEmpty {
+            UserControlsFile.logFindings(findings, container: container)
+        }
+        guard let userTouch = importLoad?.manifest?.touch else { return }
         let materialized = ProfileMaterializer.materialize(
             user: userTouch, manifest: activeManifest?.touch,
             builtins: builtins, metrics: .reference)
