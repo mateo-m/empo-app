@@ -99,6 +99,7 @@ struct PlayerControlsOverlay: View {
                 if !draggingDPad {
                     layout.recordEditSnapshot()
                     draggingDPad = true
+                    lastDragResolved = nil
                 }
                 let resolved = resolvedDragPosition(
                     value.location, draggedID: nil, draggedIsDPad: true,
@@ -110,6 +111,7 @@ struct PlayerControlsOverlay: View {
             }
             .onEnded { _ in
                 draggingDPad = false
+                lastDragResolved = nil
                 layout.save()
             }
     }
@@ -249,22 +251,34 @@ struct PlayerControlsOverlay: View {
         }
     }
 
-    /// Shared drag pipeline: zone clamp, then rigid collision
-    /// against the other controls, then a re-clamp (the push-out
-    /// can leave the zone at its edges).
+    /// Last resolved center of the drag in flight. The collision
+    /// solve uses it as side memory (no tunneling through an
+    /// obstacle's center), and the clamp+collide loop keeps a
+    /// control squeezed between a wall and a neighbor on its own
+    /// side instead of re-clamping into overlap.
+    @State private var lastDragResolved: CGPoint?
+
+    /// Shared drag pipeline: alternate the zone clamp and the rigid
+    /// collision until stable — either alone can undo the other at
+    /// the zone edges.
     private func resolvedDragPosition(
         _ location: CGPoint, draggedID: UUID?, draggedIsDPad: Bool, size: CGFloat
     ) -> CGPoint {
-        let clamped = ControlsZone.clampToSafeArea(
+        var center = ControlsZone.clampToSafeArea(
             location, controlSize: size, geoSize: geo.size, safeArea: safeArea,
             controlsMinY: controlsMinY)
-        let collided = layout.collisionResolvedCenter(
-            clamped, draggedID: draggedID, draggedIsDPad: draggedIsDPad,
-            controlSize: size, geoSize: geo.size, safeArea: safeArea,
-            controlsMinY: controlsMinY)
-        return ControlsZone.clampToSafeArea(
-            collided, controlSize: size, geoSize: geo.size, safeArea: safeArea,
-            controlsMinY: controlsMinY)
+        for _ in 0..<3 {
+            center = layout.collisionResolvedCenter(
+                center, previous: lastDragResolved, draggedID: draggedID,
+                draggedIsDPad: draggedIsDPad,
+                controlSize: size, geoSize: geo.size, safeArea: safeArea,
+                controlsMinY: controlsMinY)
+            center = ControlsZone.clampToSafeArea(
+                center, controlSize: size, geoSize: geo.size, safeArea: safeArea,
+                controlsMinY: controlsMinY)
+        }
+        lastDragResolved = center
+        return center
     }
 
     private func actionButtonDragGesture(id: UUID, size: CGFloat) -> some Gesture {
@@ -273,6 +287,7 @@ struct PlayerControlsOverlay: View {
                 if draggingButtonID != id {
                     layout.recordEditSnapshot()
                     draggingButtonID = id
+                    lastDragResolved = nil
                 }
                 let resolved = resolvedDragPosition(
                     value.location, draggedID: id, draggedIsDPad: false, size: size)
@@ -285,6 +300,7 @@ struct PlayerControlsOverlay: View {
             }
             .onEnded { _ in
                 draggingButtonID = nil
+                lastDragResolved = nil
                 layout.save()
             }
     }
@@ -295,6 +311,7 @@ struct PlayerControlsOverlay: View {
                 if draggingButtonID != id {
                     layout.recordEditSnapshot()
                     draggingButtonID = id
+                    lastDragResolved = nil
                 }
                 let resolved = resolvedDragPosition(
                     value.location, draggedID: id, draggedIsDPad: false, size: size)
@@ -307,6 +324,7 @@ struct PlayerControlsOverlay: View {
             }
             .onEnded { _ in
                 draggingButtonID = nil
+                lastDragResolved = nil
                 layout.save()
             }
     }

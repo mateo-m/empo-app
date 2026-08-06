@@ -999,9 +999,12 @@ class ControlsLayout {
     /// enter its neighbors — they act as walls and the drag slides
     /// along their rims. Circle push-out, iterated a few times so
     /// settling between two obstacles converges. No momentum, no
-    /// physics engine: neighbors never move.
+    /// physics engine: neighbors never move. `previous` (the last
+    /// resolved center this drag) keeps the control on its approach
+    /// side: without it, the pointer crossing an obstacle's center
+    /// pops the control through to the far side.
     func collisionResolvedCenter(
-        _ desired: CGPoint, draggedID: UUID?, draggedIsDPad: Bool,
+        _ desired: CGPoint, previous: CGPoint?, draggedID: UUID?, draggedIsDPad: Bool,
         controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
         controlsMinY: CGFloat
     ) -> CGPoint {
@@ -1028,12 +1031,29 @@ class ControlsLayout {
         for _ in 0..<3 {
             var moved = false
             for obstacle in obstacles {
-                let dx = center.x - obstacle.center.x
-                let dy = center.y - obstacle.center.y
+                var dx = center.x - obstacle.center.x
+                var dy = center.y - obstacle.center.y
                 let minDistance = radius + obstacle.radius
                 let distanceSquared = dx * dx + dy * dy
                 guard distanceSquared < minDistance * minDistance else { continue }
-                let distance = sqrt(max(distanceSquared, 0.000001))
+                if let previous {
+                    // The pointer reached or crossed the obstacle's
+                    // center: push out toward the side the drag came
+                    // from, not toward the pointer's side. <= covers
+                    // the pointer sitting exactly ON the center —
+                    // the up-push fallback there would hand the side
+                    // memory a stray direction and let the control
+                    // tunnel through.
+                    let approachX = previous.x - obstacle.center.x
+                    let approachY = previous.y - obstacle.center.y
+                    if approachX != 0 || approachY != 0,
+                        dx * approachX + dy * approachY <= 0
+                    {
+                        dx = approachX
+                        dy = approachY
+                    }
+                }
+                let distance = sqrt(max(dx * dx + dy * dy, 0.000001))
                 if distance < 0.001 {
                     // Dead center: push straight up, any stable
                     // direction works.
