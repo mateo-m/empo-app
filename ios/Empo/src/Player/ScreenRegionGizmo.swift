@@ -8,6 +8,11 @@ import SwiftUI
 /// works in the player and on the profile editor's mock canvas.
 struct ScreenRegionGizmo: View {
     let canvasSize: CGSize
+    /// Where the region may live, in canvas points. The parent
+    /// passes the safe-area rect (matching the applier's clamp
+    /// policy), so the outline can never disagree with the clamped
+    /// region the engine draws.
+    let allowedRect: CGRect
     /// The rect to draw when no drag is in flight, in canvas points.
     /// The parent derives it from the pending edit, the resolved
     /// region, or the automatic placement.
@@ -22,6 +27,12 @@ struct ScreenRegionGizmo: View {
 
     @State private var draft: CGRect?
     @State private var anchorRect: CGRect?
+    /// GestureState resets when the system CANCELS a drag (an edge
+    /// swipe near the notification shade, an incoming call). The
+    /// onChange below then finishes the drag, because a stuck
+    /// `screenDragActive` would leave the edit toolbar disabled for
+    /// the rest of the session.
+    @GestureState private var gestureActive = false
 
     private var rect: CGRect { draft ?? baseRect }
     private var minW: CGFloat { canvasSize.width * ScreenRegionGizmo.minFraction }
@@ -106,12 +117,18 @@ struct ScreenRegionGizmo: View {
         // continuous signal only adds lag. The editor's reset
         // animates through its withAnimation transaction instead.
         .darkGlass()
+        .onChange(of: gestureActive) { _, active in
+            if !active, anchorRect != nil {
+                finishDrag()
+            }
+        }
     }
 
     private static let grabberSide: CGFloat = 22
 
     private var moveGesture: some Gesture {
         DragGesture(minimumDistance: 2)
+            .updating($gestureActive) { _, state, _ in state = true }
             .onChanged { value in
                 if anchorRect == nil {
                     anchorRect = rect
@@ -120,8 +137,10 @@ struct ScreenRegionGizmo: View {
                 guard let anchor = anchorRect else { return }
                 var moved = anchor.offsetBy(
                     dx: value.translation.width, dy: value.translation.height)
-                moved.origin.x = min(max(0, moved.origin.x), canvasSize.width - moved.width)
-                moved.origin.y = min(max(0, moved.origin.y), canvasSize.height - moved.height)
+                moved.origin.x = min(
+                    max(allowedRect.minX, moved.origin.x), allowedRect.maxX - moved.width)
+                moved.origin.y = min(
+                    max(allowedRect.minY, moved.origin.y), allowedRect.maxY - moved.height)
                 draft = moved
                 onDragChanged(region(from: moved))
             }
@@ -131,6 +150,7 @@ struct ScreenRegionGizmo: View {
     /// The dragged corner moves; the opposite corner anchors.
     private func resizeGesture(for corner: Corner) -> some Gesture {
         DragGesture(minimumDistance: 2)
+            .updating($gestureActive) { _, state, _ in state = true }
             .onChanged { value in
                 if anchorRect == nil {
                     anchorRect = rect
@@ -155,12 +175,12 @@ struct ScreenRegionGizmo: View {
                     maxX += value.translation.width
                     maxY += value.translation.height
                 }
-                // Canvas clamp first, then the minimum size pushes
+                // Bounds clamp first, then the minimum size pushes
                 // the MOVING edges back inward.
-                minX = max(0, minX)
-                minY = max(0, minY)
-                maxX = min(canvasSize.width, maxX)
-                maxY = min(canvasSize.height, maxY)
+                minX = max(allowedRect.minX, minX)
+                minY = max(allowedRect.minY, minY)
+                maxX = min(allowedRect.maxX, maxX)
+                maxY = min(allowedRect.maxY, maxY)
                 switch corner {
                 case .topLeft:
                     minX = min(minX, maxX - minW)

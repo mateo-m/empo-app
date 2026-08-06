@@ -477,18 +477,32 @@ struct PlayerView: View {
     ) -> some View {
         let resolved = ScreenRegionApplier.resolvedRegion(isPortrait: isPortrait)
         let effective: ScreenRegion? = layout.pendingScreenEdit ?? resolved
+        // The outline draws the CLAMPED region — the same rect the
+        // applier sends — so it can never disagree with the picture
+        // when stored fractions fall outside this device's safe
+        // area.
         let baseRect: CGRect = {
             if let region = effective {
+                let clamped = ScreenRegionApplier.clampToSafeArea(region)
                 return CGRect(
-                    x: region.x * geoSize.width,
-                    y: region.y * geoSize.height,
-                    width: region.w * geoSize.width,
-                    height: region.h * geoSize.height)
+                    x: clamped.x * geoSize.width,
+                    y: clamped.y * geoSize.height,
+                    width: clamped.w * geoSize.width,
+                    height: clamped.h * geoSize.height)
             }
             return gameRect.isEmpty
                 ? CGRect(origin: .zero, size: geoSize)
                 : gameRect
         }()
+        // Same inset policy as the applier's clamp: landscape keeps
+        // only the left/right insets.
+        let safeArea = AppWindow.currentSafeArea
+        let allowedRect = CGRect(
+            x: safeArea.leading,
+            y: isPortrait ? safeArea.top : 0,
+            width: geoSize.width - safeArea.leading - safeArea.trailing,
+            height: isPortrait
+                ? geoSize.height - safeArea.top - safeArea.bottom : geoSize.height)
         let autoRegion = ScreenRegion(
             x: gameRect.minX / max(geoSize.width, 1),
             y: gameRect.minY / max(geoSize.height, 1),
@@ -498,6 +512,7 @@ struct PlayerView: View {
         GeometryReader { _ in
             ScreenRegionGizmo(
                 canvasSize: geoSize,
+                allowedRect: allowedRect,
                 baseRect: baseRect,
                 showsReset: effective != nil,
                 onDragBegan: {

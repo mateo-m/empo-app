@@ -572,6 +572,18 @@ struct LayoutProfileEditorView: View {
             // inside the region rect.
             ScreenRegionGizmo(
                 canvasSize: size,
+                allowedRect: {
+                    // Same inset policy as the applier's clamp:
+                    // landscape keeps only the left/right insets.
+                    let safeArea = canvasSafeArea
+                    let isPortrait = editingOrientation == .portrait
+                    return CGRect(
+                        x: safeArea.leading,
+                        y: isPortrait ? safeArea.top : 0,
+                        width: size.width - safeArea.leading - safeArea.trailing,
+                        height: isPortrait
+                            ? size.height - safeArea.top - safeArea.bottom : size.height)
+                }(),
                 baseRect: screenRegionRect ?? gameRect,
                 showsReset: screenRegion != nil,
                 onDragBegan: {
