@@ -47,21 +47,29 @@ struct ScreenRegionGizmo: View {
                 .foregroundStyle(Color.brand)
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, 2)
-                .background(Color.black.opacity(Scrim.heavy))
-                .clipShape(Capsule())
+                .glassEffect(.regular, in: .capsule)
                 .position(x: rect.midX, y: rect.minY + 14)
                 .allowsHitTesting(false)
 
-            // Corner resize handle.
-            Circle()
-                .fill(Color.brand)
-                .overlay(
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.black)
+            // Crop-style corner grabber: reads as "drag to resize"
+            // where the small circle did not. The gesture surface is
+            // a larger invisible square so the target stays easy to
+            // hit.
+            CornerGrabber()
+                .stroke(
+                    Color.brand,
+                    style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
                 )
-                .frame(width: Self.handleSize, height: Self.handleSize)
-                .position(x: rect.maxX, y: rect.maxY)
+                .frame(width: Self.grabberSide, height: Self.grabberSide)
+                .position(
+                    x: rect.maxX - Self.grabberSide / 2 - 3,
+                    y: rect.maxY - Self.grabberSide / 2 - 3
+                )
+                .allowsHitTesting(false)
+            Color.clear
+                .frame(width: Self.handleSize + 16, height: Self.handleSize + 16)
+                .contentShape(Rectangle())
+                .position(x: rect.maxX - 6, y: rect.maxY - 6)
                 .gesture(resizeGesture)
                 .accessibilityLabel("Resize game screen")
 
@@ -73,18 +81,25 @@ struct ScreenRegionGizmo: View {
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, Spacing.xs)
-                        .background(Color.black.opacity(Scrim.heavy))
                         .foregroundStyle(.white)
-                        .clipShape(Capsule())
+                        .glassEffect(.regular.interactive(), in: .capsule)
                 }
                 // Top area, below the "Screen" label: the bottom
-                // corner belongs to the resize handle, and at the
+                // corner belongs to the resize grabber, and at the
                 // minimum region size a bottom chip would overlap it.
                 .position(x: rect.midX, y: rect.minY + 44)
                 .accessibilityLabel("Reset screen to automatic placement")
             }
         }
+        // Pin the glass pieces to the dark variant like the rest of
+        // the player chrome. Animate rect changes only while no drag
+        // is in flight (a reset glides; a finger never lags).
+        .darkGlass()
+        .animation(
+            draft == nil ? .easeInOut(duration: 0.25) : nil, value: rect)
     }
+
+    private static let grabberSide: CGFloat = 22
 
     private var moveGesture: some Gesture {
         DragGesture(minimumDistance: 2)
@@ -142,6 +157,22 @@ struct ScreenRegionGizmo: View {
     }
 }
 
+/// Crop-style L bracket for the resize corner: a rounded corner
+/// stroke that opens toward the region's inside.
+private struct CornerGrabber: Shape {
+    func path(in rect: CGRect) -> Path {
+        let radius = min(8, rect.width / 2)
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.maxY - radius),
+            control: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        return path
+    }
+}
+
 /// The gizmo border. A plain dashed rounded-rect stroke starts its
 /// pattern at one corner, so only that corner gets a dash that
 /// follows the curve. Here the four corner arcs draw SOLID and each
@@ -184,14 +215,17 @@ private struct GizmoOutline: View {
                 }
             }
 
-            // Edges: scale the dash pattern so a whole number of
-            // dash+gap cycles fits, with a half-gap at both ends.
+            // Edges: n dashes with FULL gaps between and at both
+            // ends (n dashes, n+1 gaps), scaled to fit exactly. The
+            // corner arcs read as dashes, so the gap next to a
+            // corner must equal the gap between plain dashes.
             func dashedLine(from: CGPoint, to: CGPoint) {
                 let length = hypot(to.x - from.x, to.y - from.y)
                 guard length > 1 else { return }
                 let unit = Self.dashUnit + Self.gapUnit
-                let cycles = max(1, (length / unit).rounded())
-                let scale = length / (cycles * unit)
+                let count = max(1, ((length - Self.gapUnit) / unit).rounded())
+                let units = count * Self.dashUnit + (count + 1) * Self.gapUnit
+                let scale = length / units
                 let dash = Self.dashUnit * scale
                 let gap = Self.gapUnit * scale
                 var path = Path()
@@ -201,7 +235,7 @@ private struct GizmoOutline: View {
                     path, with: .color(.brand),
                     style: StrokeStyle(
                         lineWidth: Self.lineWidth, dash: [dash, gap],
-                        dashPhase: dash + gap / 2))
+                        dashPhase: dash))
             }
             dashedLine(
                 from: CGPoint(x: frame.minX + r, y: frame.minY),

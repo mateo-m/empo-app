@@ -101,14 +101,48 @@ enum ScreenRegionApplier {
     /// Live gizmo feed: overrides the resolved region during a drag.
     /// nil previews automatic placement.
     static func preview(_ region: ScreenRegion?, isPortrait: Bool) {
+        animationTask?.cancel()
         previewActive = true
         send(region, isPortrait: isPortrait)
+    }
+
+    private static var animationTask: Task<Void, Never>?
+
+    /// "Reset screen" glide: tween from the active region to the
+    /// app-side ESTIMATE of automatic placement, then hand off to
+    /// the engine's real auto (a sub-pixel correction at most). The
+    /// engine cannot animate its own relayout; interpolated preview
+    /// regions at ~60 Hz do it from here.
+    static func animateResetToAuto(
+        from start: ScreenRegion, toEstimate end: ScreenRegion, isPortrait: Bool
+    ) {
+        animationTask?.cancel()
+        previewActive = true
+        animationTask = Task { @MainActor in
+            let steps = 15
+            for step in 1...steps {
+                guard !Task.isCancelled else { return }
+                let t = Double(step) / Double(steps)
+                let eased = t * t * (3 - 2 * t)
+                send(
+                    ScreenRegion(
+                        x: start.x + (end.x - start.x) * eased,
+                        y: start.y + (end.y - start.y) * eased,
+                        w: start.w + (end.w - start.w) * eased,
+                        h: start.h + (end.h - start.h) * eased),
+                    isPortrait: isPortrait)
+                try? await Task.sleep(nanoseconds: 16_000_000)
+            }
+            guard !Task.isCancelled else { return }
+            send(nil, isPortrait: isPortrait)
+        }
     }
 
     /// Drag ended (committed or cancelled): back to the resolved
     /// state. A save may have just written files, so the cache
     /// drops first.
     static func endPreview() {
+        animationTask?.cancel()
         previewActive = false
         resolutionCache = nil
         apply()

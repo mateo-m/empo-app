@@ -126,11 +126,15 @@ struct PlayerEditToolbar: View {
                 .padding(.vertical, Spacing.xs)
                 .glassEffect(.regular, in: .capsule)
 
-            HStack(spacing: Spacing.xl) {
-                Button("+ Add") { showAddSheet = true }
-                    .accessibilityLabel("Add button")
-                    .foregroundStyle(.white)
-                    .font(.footnote.weight(.semibold))
+            HStack(spacing: Spacing.lg) {
+                Button {
+                    showAddSheet = true
+                } label: {
+                    Label("Add", systemImage: "plus")
+                }
+                .accessibilityLabel("Add button")
+                .foregroundStyle(.white)
+
                 Button {
                     layout.undoLastEdit()
                 } label: {
@@ -138,17 +142,33 @@ struct PlayerEditToolbar: View {
                 }
                 .accessibilityLabel("Undo layout change")
                 .foregroundStyle(.white.opacity(layout.canUndo ? 1 : Alpha.disabled))
-                .font(.footnote.weight(.semibold))
                 .disabled(!layout.canUndo)
-                Button("Reset") { showResetConfirm = true }
-                    .foregroundStyle(.brand)
-                    .font(.footnote.weight(.semibold))
-                Button("Done") { onDone() }
-                    .foregroundStyle(.success)
-                    .font(.footnote.weight(.bold))
+
+                Button {
+                    showResetConfirm = true
+                } label: {
+                    Label("Reset", systemImage: "arrow.counterclockwise")
+                }
+                .foregroundStyle(.brand)
+
+                // Done is the primary action of the whole mode: a
+                // small tinted capsule inside the bar makes it read
+                // as such (the iOS 26 prominent-toolbar-button
+                // idiom).
+                Button {
+                    onDone()
+                } label: {
+                    Text("Done")
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, Spacing.md)
+                        .padding(.vertical, Spacing.xs)
+                        .glassEffect(.regular.tint(.success).interactive(), in: .capsule)
+                }
             }
-            .padding(.horizontal, Spacing.xl)
-            .padding(.vertical, Spacing.sm)
+            .font(.footnote.weight(.semibold))
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.xs)
             .glassEffect(.regular, in: .capsule)
         }
         // Pin the glass to the dark variant, matching the play

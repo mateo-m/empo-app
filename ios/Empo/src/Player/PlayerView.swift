@@ -526,11 +526,61 @@ struct PlayerView: View {
                 },
                 onReset: {
                     layout.resetScreenEdit()
-                    ScreenRegionApplier.preview(nil, isPortrait: isPortrait)
+                    if let current = effective,
+                        let target = estimatedAutoRegion(
+                            geoSize: geoSize, isPortrait: isPortrait,
+                            aspect: gameRect.height > 0
+                                ? gameRect.width / gameRect.height : 4.0 / 3.0)
+                    {
+                        ScreenRegionApplier.animateResetToAuto(
+                            from: current, toEstimate: target, isPortrait: isPortrait)
+                    } else {
+                        ScreenRegionApplier.preview(nil, isPortrait: isPortrait)
+                    }
                 }
             )
         }
         .ignoresSafeArea()
+    }
+
+    /// Where the engine's automatic placement will land, in window
+    /// fractions — the reset animation's target. Mirrors the fit in
+    /// `recalculateScreenSize`: aspect-fit inside the safe-area
+    /// container, vertical alignment in portrait, centered in
+    /// landscape (top/bottom insets ignored there).
+    private func estimatedAutoRegion(
+        geoSize: CGSize, isPortrait: Bool, aspect: CGFloat
+    ) -> ScreenRegion? {
+        guard geoSize.width > 0, geoSize.height > 0, aspect > 0 else { return nil }
+        let safeArea = AppWindow.currentSafeArea
+        let availW = geoSize.width - safeArea.leading - safeArea.trailing
+        let availH =
+            isPortrait ? geoSize.height - safeArea.top - safeArea.bottom : geoSize.height
+        guard availW > 1, availH > 1 else { return nil }
+
+        var width = availW
+        var height = width / aspect
+        if height > availH {
+            height = availH
+            width = height * aspect
+        }
+        let x = safeArea.leading + (availW - width) / 2
+
+        let y: CGFloat
+        if isPortrait {
+            let topY = safeArea.top
+            let centerY = safeArea.top + (availH - height) / 2
+            switch mkxp_getVerticalAlignment() {
+            case MKXP_VALIGN_TOP: y = topY
+            case MKXP_VALIGN_CENTER: y = centerY
+            default: y = (topY + centerY) / 2
+            }
+        } else {
+            y = (availH - height) / 2
+        }
+        return ScreenRegion(
+            x: x / geoSize.width, y: y / geoSize.height,
+            w: width / geoSize.width, h: height / geoSize.height)
     }
 
     @ViewBuilder

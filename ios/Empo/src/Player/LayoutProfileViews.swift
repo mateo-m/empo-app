@@ -588,7 +588,12 @@ struct LayoutProfileEditorView: View {
                     layout.endScreenDrag(region: region)
                 },
                 onReset: {
-                    layout.resetScreenEdit()
+                    // The mock canvas has no engine: the SwiftUI
+                    // animation on the placeholder IS the reset
+                    // animation.
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        layout.resetScreenEdit()
+                    }
                 }
             )
 
