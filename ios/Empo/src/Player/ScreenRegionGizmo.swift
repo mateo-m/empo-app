@@ -58,6 +58,10 @@ struct ScreenRegionGizmo: View {
             // it separates from bright game content. The gesture
             // surface is a larger invisible square so the target
             // stays easy to hit.
+            // Fully INSIDE the frame (crop-UI convention), so the
+            // viewport edge can never trim it when the region spans
+            // the full screen: the bracket's outer stroke edge sits
+            // flush on the border line.
             CornerGrabber()
                 .stroke(
                     Color.brand,
@@ -66,14 +70,14 @@ struct ScreenRegionGizmo: View {
                 .frame(width: Self.grabberSide, height: Self.grabberSide)
                 .shadow(color: .black.opacity(0.45), radius: 2)
                 .position(
-                    x: rect.maxX - Self.grabberSide / 2,
-                    y: rect.maxY - Self.grabberSide / 2
+                    x: rect.maxX - Self.grabberSide / 2 - 2,
+                    y: rect.maxY - Self.grabberSide / 2 - 2
                 )
                 .allowsHitTesting(false)
             Color.clear
-                .frame(width: Self.handleSize + 16, height: Self.handleSize + 16)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
-                .position(x: rect.maxX - 6, y: rect.maxY - 6)
+                .position(x: rect.maxX - 16, y: rect.maxY - 16)
                 .gesture(resizeGesture)
                 .accessibilityLabel("Resize game screen")
 

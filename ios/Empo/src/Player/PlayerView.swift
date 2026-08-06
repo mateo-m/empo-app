@@ -193,8 +193,7 @@ struct PlayerView: View {
                     .allowsHitTesting(!editMode)
 
                     PlayerEditToolbar(
-                        isPortrait: isPortrait,
-                        gameRect: gameRect,
+                        controlsMinY: controlsMinY,
                         safeArea: safeArea,
                         geoSize: geo.size,
                         layout: layout,

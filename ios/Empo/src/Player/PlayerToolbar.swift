@@ -95,8 +95,7 @@ struct PlayerToolbar: View {
 }
 
 struct PlayerEditToolbar: View {
-    let isPortrait: Bool
-    let gameRect: CGRect
+    let controlsMinY: CGFloat
     let safeArea: EdgeInsets
     let geoSize: CGSize
     var layout: ControlsLayout
@@ -104,17 +103,25 @@ struct PlayerEditToolbar: View {
     @Binding var showResetConfirm: Bool
     let onDone: () -> Void
 
-    var body: some View {
-        let overlay = ControlsZone.useOverlayLayout(
-            isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoSize.height)
-        let yPos: CGFloat =
-            isPortrait && gameRect.height > 0 && !overlay
-            ? gameRect.origin.y + gameRect.height + ControlsZone.toolbarGap
-                + ControlsZone.editToolbarHalfHeight
-            : max(safeArea.top, ControlsZone.minLandscapeInset) + ControlsZone.toolbarEdgePad
-                + ControlsZone.editToolbarHalfHeight
+    /// Half-heights for `.position` anchoring, same idiom as
+    /// `ControlsZone.editToolbarHalfHeight`: caption2 + 2x4 padding
+    /// for the pill; footnote capsule + 2x4 container padding for
+    /// the row.
+    private static let bannerHalfHeight: CGFloat = 11
+    private static let actionsHalfHeight: CGFloat = 15
+    /// The pill's gap above the zone border equals the action row's
+    /// gap below it (user ruling: symmetric around the border).
+    private static let borderGap: CGFloat = Spacing.md
 
-        VStack(spacing: Spacing.xs) {
+    var body: some View {
+        // Anchor both pieces to the controls-zone border, not the
+        // game rect: the pill floats above the border line by the
+        // same distance the action row sits below it.
+        let zoneTop = ControlsZone.bounds(
+            controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize
+        ).minY
+
+        ZStack {
             // Blast-radius banner: a pinned profile's edits reach
             // every game using it; ambient edits mint a new profile.
             // Its own small pill, so the button capsule stays clean.
@@ -125,67 +132,76 @@ struct PlayerEditToolbar: View {
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.xs)
                 .glassEffect(.regular, in: .capsule)
-                // Nudged up for a little more air above the button
-                // row (user request: a few pixels).
-                .offset(y: -3)
+                .position(
+                    x: geoSize.width / 2,
+                    y: max(
+                        safeArea.top + Self.bannerHalfHeight,
+                        zoneTop - Self.borderGap - Self.bannerHalfHeight)
+                )
 
-            HStack(spacing: Spacing.lg) {
-                Button {
-                    showAddSheet = true
-                } label: {
-                    Label("Add", systemImage: "plus")
-                }
-                .accessibilityLabel("Add button")
-                .foregroundStyle(.white)
-
-                Button {
-                    layout.undoLastEdit()
-                } label: {
-                    Label("Undo", systemImage: "arrow.uturn.backward")
-                }
-                .accessibilityLabel("Undo layout change")
-                .foregroundStyle(.white.opacity(layout.canUndo ? 1 : Alpha.disabled))
-                .disabled(!layout.canUndo)
-
-                Button {
-                    showResetConfirm = true
-                } label: {
-                    Label("Reset", systemImage: "arrow.counterclockwise")
-                }
-                .foregroundStyle(.brand)
-
-                // Done is the primary action of the whole mode: a
-                // small tinted capsule inside the bar makes it read
-                // as such (the iOS 26 prominent-toolbar-button
-                // idiom).
-                Button {
-                    onDone()
-                } label: {
-                    Text("Done")
-                        .font(.footnote.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, Spacing.md)
-                        .padding(.vertical, Spacing.xs)
-                        .glassEffect(.regular.tint(.success).interactive(), in: .capsule)
-                }
-            }
-            .font(.footnote.weight(.semibold))
-            // Concentric capsules: the Done capsule's gap to the
-            // container edge must match its vertical gap, so the
-            // trailing inset equals the vertical inset. The leading
-            // side keeps room for the plain text buttons.
-            .padding(.leading, Spacing.lg)
-            .padding(.trailing, Spacing.xs)
-            .padding(.vertical, Spacing.xs)
-            .glassEffect(.regular, in: .capsule)
+            actionsRow
+                .position(
+                    x: geoSize.width / 2,
+                    y: zoneTop + Self.borderGap + Self.actionsHalfHeight)
         }
+    }
+
+    private var actionsRow: some View {
+        HStack(spacing: Spacing.lg) {
+            Button {
+                showAddSheet = true
+            } label: {
+                Label("Add", systemImage: "plus")
+            }
+            .accessibilityLabel("Add button")
+            .foregroundStyle(.white)
+
+            Button {
+                layout.undoLastEdit()
+            } label: {
+                Label("Undo", systemImage: "arrow.uturn.backward")
+            }
+            .accessibilityLabel("Undo layout change")
+            .foregroundStyle(.white.opacity(layout.canUndo ? 1 : Alpha.disabled))
+            .disabled(!layout.canUndo)
+
+            Button {
+                showResetConfirm = true
+            } label: {
+                Label("Reset", systemImage: "arrow.counterclockwise")
+            }
+            .foregroundStyle(.brand)
+
+            // Done is the primary action of the whole mode: a
+            // small tinted capsule inside the bar makes it read
+            // as such (the iOS 26 prominent-toolbar-button
+            // idiom).
+            Button {
+                onDone()
+            } label: {
+                Text("Done")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.xs)
+                    .glassEffect(.regular.tint(.success).interactive(), in: .capsule)
+            }
+        }
+        .font(.footnote.weight(.semibold))
+        // Concentric capsules: the Done capsule's gap to the
+        // container edge must match its vertical gap, so the
+        // trailing inset equals the vertical inset. The leading
+        // side keeps room for the plain text buttons.
+        .padding(.leading, Spacing.lg)
+        .padding(.trailing, Spacing.xs)
+        .padding(.vertical, Spacing.xs)
+        .glassEffect(.regular, in: .capsule)
         // Pin the glass to the dark variant, matching the play
-        // toolbar and the on-screen controls.
+        // toolbar and the on-screen controls. No chromeHitRegion:
+        // PlayerEditToolbar stays mounted at opacity 0 during play
+        // (its region would cover center screen), and edit mode
+        // already publishes a full-screen region.
         .darkGlass()
-        // No chromeHitRegion here: PlayerEditToolbar stays mounted at
-        // opacity 0 during play (its region would cover center screen),
-        // and edit mode already publishes a full-screen region.
-        .position(x: geoSize.width / 2, y: yPos)
     }
 
     private var editBannerText: String {
