@@ -27,6 +27,9 @@ struct PlayerControlsOverlay: View {
     var body: some View {
         let separatedPositions = layout.separatedDisplayPositions(
             for: geo.size, safeArea: safeArea, controlsMinY: controlsMinY,
+            // Editing shows raw positions: the separation pass would
+            // push neighbors around live while a control drags.
+            separate: !(editMode || isPreview),
             includeActionButton: { isPreview || editMode || actions.isAvailable($0.action) })
         ZStack {
             dpadView

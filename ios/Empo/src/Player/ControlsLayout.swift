@@ -1003,8 +1003,12 @@ class ControlsLayout {
     /// brings back (e.g. rows that collapse onto controlsMinY). Covers
     /// manifest, translated, user, and builtin layouts alike, and never
     /// persists adjusted positions. Returns final absolute positions.
+    /// `separate: false` returns the clamped centers WITHOUT the
+    /// overlap pass: edit mode renders positions raw, or dragging
+    /// one control would push its neighbors around live.
     func separatedDisplayPositions(
         for geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat,
+        separate: Bool = true,
         includeActionButton: (ActionButtonModel) -> Bool = { _ in true }
     ) -> [UUID: CGPoint] {
         // Hidden action buttons (unavailable during play) must not
@@ -1028,6 +1032,15 @@ class ControlsLayout {
                 safeArea: safeArea, controlsMinY: controlsMinY
             )
             return (x: Double(clamped.x), y: Double(clamped.y), size: Double(circle.size))
+        }
+
+        if !separate {
+            var centers: [UUID: CGPoint] = [:]
+            for (index, circle) in allCircles.enumerated() {
+                centers[circle.id] = CGPoint(
+                    x: CGFloat(inputs[index].x), y: CGFloat(inputs[index].y))
+            }
+            return centers
         }
 
         let dpadClamped = ControlsZone.absolutePosition(
