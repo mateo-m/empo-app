@@ -32,17 +32,25 @@ enum ControlsZone {
         return CGRect(x: leading, y: top, width: trailing - leading, height: bottom - top)
     }
 
+    /// The physical display corner radius never changes, and this
+    /// lookup (scene walk + KVC) sits on the hot layout path:
+    /// `absolutePosition` runs per control per frame while the zone
+    /// animates, and the uncached call cost hundreds of main-thread
+    /// UIKit round trips a second. Resolved once.
+    private static let deviceCornerRadius: CGFloat = {
+        let screen = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.screen }
+            .first
+        return (screen?.value(forKey: "displayCornerRadius") as? CGFloat)
+            ?? fallbackDeviceCornerRadius
+    }()
+
     static func cornerRadii(safeArea: EdgeInsets) -> (top: CGFloat, bottom: CGFloat) {
         let pad = padding
-        let screen = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.screen
-        let deviceCorner =
-            (screen?.value(forKey: "displayCornerRadius") as? CGFloat) ?? fallbackDeviceCornerRadius
         let horizontalGap = safeArea.leading + pad
         let bottomGap = safeArea.bottom + pad
         let minGap = min(horizontalGap, bottomGap)
-        let bottom = max(deviceCorner - minGap, Radius.sm)
+        let bottom = max(deviceCornerRadius - minGap, Radius.sm)
         let top = Radius.xl
         return (top, bottom)
     }
