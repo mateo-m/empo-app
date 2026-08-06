@@ -71,10 +71,6 @@ struct PlayerView: View {
                 isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
                 btnSize: toolbarBtnSize,
                 geoHeight: geo.size.height, forcedOverlay: forcedOverlay)
-            // Edit mode reserves the header strip, so controls can
-            // never clamp underneath the action row.
-            let controlsClampMinY =
-                editMode ? controlsMinY + ControlsZone.editHeaderStrip : controlsMinY
 
             ZStack {
                 // Debug visualization of the touch-mouse zone: the
@@ -170,7 +166,7 @@ struct PlayerView: View {
                         layout: layout,
                         actions: actions,
                         geo: geo,
-                        controlsMinY: controlsClampMinY,
+                        controlsMinY: controlsMinY,
                         editMode: editMode,
                         safeArea: safeArea,
                         editingButton: $editingButton,

@@ -48,17 +48,13 @@ enum ControlsZone {
     }
 
     /// Zone height a below-the-game layout needs in edit mode: the
-    /// header strip plus the taller of the d-pad and the 2x2 button
-    /// cluster, with the zone paddings. The screen drag blocks at
-    /// this limit unless the profile opts into overlay mode.
+    /// edit header (~48 pt with headroom) plus the taller of the
+    /// d-pad and the 2x2 button cluster, with the zone paddings.
+    /// The screen drag blocks at this limit unless the profile opts
+    /// into overlay mode. Controls keep the full zone for their own
+    /// drags — the header floats above them and only auto-squeeze
+    /// could force an overlap, which this limit prevents.
     static let requiredEditZoneHeight: CGFloat = 320
-
-    /// Vertical space the edit header (banner pill + action row)
-    /// reserves at the top of the controls zone. The controls clamp
-    /// by CENTER, so the strip includes headroom for half a large
-    /// button above its center — otherwise a wide control still
-    /// pokes over the action row.
-    static let editHeaderStrip: CGFloat = 96
 
     static func useOverlayLayout(
         isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat,
