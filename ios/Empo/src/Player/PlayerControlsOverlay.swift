@@ -258,12 +258,44 @@ struct PlayerControlsOverlay: View {
     /// side instead of re-clamping into overlap.
     @State private var lastDragResolved: CGPoint?
 
+    /// The dragged control's stored center in absolute space; the
+    /// side memory seeds from it so the drag's FIRST event already
+    /// knows its approach side.
+    private func currentAbsoluteCenter(
+        draggedID: UUID?, draggedIsDPad: Bool
+    ) -> CGPoint? {
+        let relative: CGPoint
+        let size: CGFloat
+        if draggedIsDPad {
+            relative = layout.dpadRelativeCenter
+            size = layout.dpadSize
+        } else if let button = layout.buttons.first(where: { $0.id == draggedID }) {
+            relative = button.relativeCenter
+            size = button.size
+        } else if let button = layout.actionButtons.first(where: { $0.id == draggedID }) {
+            relative = button.relativeCenter
+            size = button.size
+        } else {
+            return nil
+        }
+        return ControlsZone.absolutePosition(
+            for: relative, in: geo.size, controlSize: CGSize(width: size, height: size),
+            safeArea: safeArea, controlsMinY: controlsMinY)
+    }
+
     /// Shared drag pipeline: alternate the zone clamp and the rigid
     /// collision until stable — either alone can undo the other at
-    /// the zone edges.
+    /// the zone edges. An update that STILL collides after the
+    /// solve (no free space on the approach side) is rejected: the
+    /// control holds its last valid position instead of entering
+    /// the obstacle.
     private func resolvedDragPosition(
         _ location: CGPoint, draggedID: UUID?, draggedIsDPad: Bool, size: CGFloat
     ) -> CGPoint {
+        if lastDragResolved == nil {
+            lastDragResolved = currentAbsoluteCenter(
+                draggedID: draggedID, draggedIsDPad: draggedIsDPad)
+        }
         var center = ControlsZone.clampToSafeArea(
             location, controlSize: size, geoSize: geo.size, safeArea: safeArea,
             controlsMinY: controlsMinY)
@@ -276,6 +308,14 @@ struct PlayerControlsOverlay: View {
             center = ControlsZone.clampToSafeArea(
                 center, controlSize: size, geoSize: geo.size, safeArea: safeArea,
                 controlsMinY: controlsMinY)
+        }
+        if layout.dragPositionCollides(
+            center, draggedID: draggedID, draggedIsDPad: draggedIsDPad,
+            controlSize: size, geoSize: geo.size, safeArea: safeArea,
+            controlsMinY: controlsMinY),
+            let held = lastDragResolved
+        {
+            return held
         }
         lastDragResolved = center
         return center

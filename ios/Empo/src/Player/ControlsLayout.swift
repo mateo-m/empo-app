@@ -1003,12 +1003,10 @@ class ControlsLayout {
     /// resolved center this drag) keeps the control on its approach
     /// side: without it, the pointer crossing an obstacle's center
     /// pops the control through to the far side.
-    func collisionResolvedCenter(
-        _ desired: CGPoint, previous: CGPoint?, draggedID: UUID?, draggedIsDPad: Bool,
-        controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
-        controlsMinY: CGFloat
-    ) -> CGPoint {
-        let radius = controlSize / 2
+    private func dragObstacles(
+        draggedID: UUID?, draggedIsDPad: Bool, geoSize: CGSize,
+        safeArea: EdgeInsets, controlsMinY: CGFloat
+    ) -> [(center: CGPoint, radius: CGFloat)] {
         var obstacles: [(center: CGPoint, radius: CGFloat)] = []
         func append(_ relativeCenter: CGPoint, _ size: CGFloat) {
             let absolute = ControlsZone.absolutePosition(
@@ -1026,6 +1024,42 @@ class ControlsLayout {
         if !draggedIsDPad {
             append(dpadRelativeCenter, dpadSize)
         }
+        return obstacles
+    }
+
+    /// True when a center intersects any non-dragged control. The
+    /// drag pipeline REJECTS updates that still collide after the
+    /// solve: a wall never admits the dragged control, no matter how
+    /// the clamp and the push-out fight at the zone edges.
+    func dragPositionCollides(
+        _ center: CGPoint, draggedID: UUID?, draggedIsDPad: Bool,
+        controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
+        controlsMinY: CGFloat
+    ) -> Bool {
+        let radius = controlSize / 2
+        // A hair of tolerance: the push-out lands exactly on the rim
+        // and float noise must not read as a collision.
+        let slack: CGFloat = 0.5
+        return dragObstacles(
+            draggedID: draggedID, draggedIsDPad: draggedIsDPad, geoSize: geoSize,
+            safeArea: safeArea, controlsMinY: controlsMinY
+        ).contains { obstacle in
+            let dx = center.x - obstacle.center.x
+            let dy = center.y - obstacle.center.y
+            let minDistance = radius + obstacle.radius - slack
+            return dx * dx + dy * dy < minDistance * minDistance
+        }
+    }
+
+    func collisionResolvedCenter(
+        _ desired: CGPoint, previous: CGPoint?, draggedID: UUID?, draggedIsDPad: Bool,
+        controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
+        controlsMinY: CGFloat
+    ) -> CGPoint {
+        let radius = controlSize / 2
+        let obstacles = dragObstacles(
+            draggedID: draggedID, draggedIsDPad: draggedIsDPad, geoSize: geoSize,
+            safeArea: safeArea, controlsMinY: controlsMinY)
 
         var center = desired
         for _ in 0..<3 {
