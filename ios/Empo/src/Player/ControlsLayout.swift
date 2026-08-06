@@ -955,6 +955,12 @@ class ControlsLayout {
         applyProfileSection(touch)
     }
 
+    /// The editor renamed its profile (the store rename already ran).
+    func editorRenamed(to name: String) {
+        guard isEditorInstance else { return }
+        editorProfileName = name
+    }
+
     // MARK: - Chain resolution
 
     private func resolveChain(container: GameContainer) {

@@ -14,6 +14,13 @@ struct LayoutProfilePickerSheet: View {
     @State private var profiles: [String] = []
     @State private var gameShipsLayout = false
     @State private var automaticResolution = ""
+    @State private var searchText = ""
+
+    private var visibleProfiles: [String] {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return profiles }
+        return profiles.filter { $0.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -34,12 +41,13 @@ struct LayoutProfilePickerSheet: View {
 
                 if !profiles.isEmpty {
                     Section("Profiles") {
-                        ForEach(profiles, id: \.self) { name in
+                        ForEach(visibleProfiles, id: \.self) { name in
                             row(label: name, detail: nil, target: .profile(name))
                         }
                     }
                 }
             }
+            .searchable(text: $searchText, prompt: "Search profiles")
             .navigationTitle("Layout profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -121,7 +129,15 @@ struct LayoutProfilesSettingsView: View {
     @State private var renameText = ""
     @State private var deleting: String?
     @State private var showCreateDialog = false
+    @State private var createText = ""
     @State private var showNameError = false
+    @State private var searchText = ""
+
+    private var visibleProfiles: [String] {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return profiles }
+        return profiles.filter { $0.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
         List {
@@ -133,7 +149,7 @@ struct LayoutProfilesSettingsView: View {
                 }
             }
 
-            ForEach(profiles, id: \.self) { name in
+            ForEach(visibleProfiles, id: \.self) { name in
                 Section {
                     NavigationLink {
                         LayoutProfileEditorView(profileName: name)
@@ -176,9 +192,11 @@ struct LayoutProfilesSettingsView: View {
             }
         }
         .navigationTitle("Layout profiles")
+        .searchable(text: $searchText, prompt: "Search profiles")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
+                    createText = LayoutProfilesManager.store.uniqueName(base: "Layout")
                     showCreateDialog = true
                 } label: {
                     Image(systemName: "plus")
@@ -187,11 +205,13 @@ struct LayoutProfilesSettingsView: View {
             }
         }
         .onAppear(perform: reload)
-        .confirmationDialog("Create profile", isPresented: $showCreateDialog) {
-            Button("Blank profile") { createBlank() }
+        .alert("New profile", isPresented: $showCreateDialog) {
+            TextField("Name", text: $createText)
+            Button("Create") { createBlank() }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "A blank profile starts from the Empo default layout. You can also save a game's current layout as a profile from its Settings sheet."
+                "A new profile starts from the Empo default layout. You can also save a game's current layout as a profile from its Settings sheet."
             )
         }
         .alert("Rename profile", isPresented: renameBinding) {
@@ -249,10 +269,15 @@ struct LayoutProfilesSettingsView: View {
 
     private func createBlank() {
         let store = LayoutProfilesManager.store
+        guard let name = LayoutProfileStore.validatedName(createText),
+            !store.profileExists(name)
+        else {
+            showNameError = true
+            return
+        }
         let materialized = ProfileMaterializer.materialize(
             user: nil, manifest: nil,
             builtins: LayoutProfilesManager.builtins(), metrics: .reference)
-        let name = store.uniqueName(base: "Layout")
         _ = store.createProfile(name, touch: materialized)
         reload()
     }
@@ -293,6 +318,10 @@ struct LayoutProfilesSettingsView: View {
 struct LayoutProfileEditorView: View {
     let profileName: String
 
+    @State private var currentName: String
+    @State private var renameText = ""
+    @State private var showRename = false
+    @State private var showRenameError = false
     @State private var layout: ControlsLayout
     @State private var actions = PlayerActionRegistry()
     @State private var editingOrientation: ControlsOrientation = .portrait
@@ -305,6 +334,7 @@ struct LayoutProfileEditorView: View {
 
     init(profileName: String) {
         self.profileName = profileName
+        _currentName = State(initialValue: profileName)
         _layout = State(
             initialValue: ControlsLayout(
                 editorForProfile: profileName, metrics: .reference))
@@ -385,8 +415,31 @@ struct LayoutProfileEditorView: View {
             .font(.footnote.weight(.semibold))
             .padding(.bottom, Spacing.md)
         }
-        .navigationTitle(profileName)
+        .navigationTitle(currentName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    renameText = currentName
+                    showRename = true
+                } label: {
+                    Image(systemName: "pencil")
+                }
+                .accessibilityLabel("Rename profile")
+            }
+        }
+        .alert("Rename profile", isPresented: $showRename) {
+            TextField("Name", text: $renameText)
+            Button("Rename") { performRename() }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Name not allowed", isPresented: $showRenameError) {
+            Button("OK") {}
+        } message: {
+            Text(
+                "Profile names cannot be empty, start with $ or a dot, contain slashes, or repeat an existing name."
+            )
+        }
         .onAppear {
             layout.setOrientation(editingOrientation)
             layout.beginEditSession()
@@ -406,6 +459,20 @@ struct LayoutProfileEditorView: View {
             editingActionButton: $editingActionButton,
             editingDPad: $editingDPad
         )
+    }
+
+    private func performRename() {
+        guard let newName = LayoutProfileStore.validatedName(renameText),
+            newName != currentName,
+            LayoutProfilesManager.renameProfile(from: currentName, to: newName)
+        else {
+            if LayoutProfileStore.validatedName(renameText) != currentName {
+                showRenameError = true
+            }
+            return
+        }
+        currentName = newName
+        layout.editorRenamed(to: newName)
     }
 
     private var canvas: some View {
