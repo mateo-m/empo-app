@@ -332,6 +332,9 @@ final class LayoutProfilesTests: XCTestCase {
                         ProfileMaterializer.materialize(
                             user: touch, manifest: nil, builtins: self.builtins(),
                             metrics: .reference))
+                },
+                profileHasScreen: { name in
+                    FileManager.default.fileExists(atPath: self.store.screenURL(name).path)
                 }
             ),
             builtins: builtins()

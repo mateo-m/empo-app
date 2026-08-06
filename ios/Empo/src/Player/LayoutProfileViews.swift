@@ -548,7 +548,8 @@ struct LayoutProfileEditorView: View {
             gameRect: gameRect,
             safeArea: canvasSafeArea,
             btnSize: IconButtonSize.sm.points,
-            geoHeight: size.height)
+            geoHeight: size.height,
+            forcedOverlay: screenRegion?.overlay)
 
         return ZStack {
             RoundedRectangle(cornerRadius: Radius.sm)
@@ -606,7 +607,11 @@ struct LayoutProfileEditorView: View {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         layout.resetScreenEdit()
                     }
-                }
+                },
+                // The flag must ride through editor drags too, or a
+                // one-point nudge in the editor silently strips
+                // "overlay": true from the profile.
+                overlayOn: screenRegion?.overlay ?? false
             )
 
             GeometryReader { geo in

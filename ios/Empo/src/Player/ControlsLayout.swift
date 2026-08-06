@@ -516,6 +516,17 @@ class ControlsLayout {
         }
         if storedEntry != nil {
             screenEdits[currentOrientation] = .some(nil)
+        } else if targetName == nil, !isEditorInstance,
+            ScreenRegionApplier.resolvedRegion(
+                isPortrait: currentOrientation == .portrait) != nil
+        {
+            // The region resolves from the DEFAULT profile (ambient
+            // provenance): nothing to delete in place, so the reset
+            // must dirty the commit — Done then mints a terminal
+            // pinned profile without a screen entry, which IS
+            // engine-auto. A silent drop would snap the default's
+            // region back after Done.
+            screenEdits[currentOrientation] = .some(nil)
         } else {
             screenEdits.removeValue(forKey: currentOrientation)
         }
@@ -1338,16 +1349,24 @@ class ControlsLayout {
             let base = currentGameTitle ?? container.url.lastPathComponent
             let name = store.uniqueName(base: base)
             guard store.createProfile(name, touch: materializedTouchSection()) else { return }
-            if screenEditsDirty {
-                // Only the orientations dragged this session; the
-                // ambient source's own region is derive-only and
-                // never copies into the minted profile.
-                store.writeScreen(
-                    name,
-                    portrait: screenEdits[.portrait].flatMap { $0 },
-                    landscape: screenEdits[.landscape].flatMap { $0 })
-                screenEdits.removeAll()
+            // Screen entries for the minted profile: this session's
+            // edits (drags AND resets) win per orientation, and
+            // UNTOUCHED orientations inherit the currently resolved
+            // region. The new pin is terminal — without the copy, a
+            // controls-only edit under a default-profile region
+            // would silently snap the screen to automatic.
+            let resolvedScreen = ScreenResolution.resolve(
+                pin: store.loadPin(forGameFolder: container.url).pin,
+                defaultProfileName: LayoutProfilesManager.defaultProfileName,
+                readScreen: { store.readScreen($0) })
+            let portrait =
+                screenEdits[.portrait] ?? resolvedScreen.portrait.region
+            let landscape =
+                screenEdits[.landscape] ?? resolvedScreen.landscape.region
+            if portrait != nil || landscape != nil {
+                store.writeScreen(name, portrait: portrait, landscape: landscape)
             }
+            screenEdits.removeAll()
             store.writePin(.profile(name), forGameFolder: container.url)
             provenance = .pinnedProfile(name)
             pinFellThrough = false

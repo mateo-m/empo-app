@@ -191,7 +191,7 @@ public enum ProfileMigration {
             record: MigrationRecord,
             existingProfiles: [String],
             profileCanonicalBytes: @escaping (String) -> Data?,
-            profileHasScreen: @escaping (String) -> Bool = { _ in false }
+            profileHasScreen: @escaping (String) -> Bool
         ) {
             self.gameID = gameID
             self.gameTitle = gameTitle

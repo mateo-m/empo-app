@@ -430,9 +430,14 @@ struct GameSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .sheet(isPresented: $showLayoutProfilePicker) {
-                LayoutProfilePickerSheet(container: game.container!)
-            }
+            .sheet(
+                isPresented: $showLayoutProfilePicker,
+                onDismiss: { reloadResolvedScreen() },
+                content: {
+                    LayoutProfilePickerSheet(container: game.container!)
+                }
+            )
+            .onAppear { reloadResolvedScreen() }
 
             Button {
                 saveLayoutAsProfile()
@@ -457,10 +462,14 @@ struct GameSettingsView: View {
 
     /// Whether the resolved screen region for an orientation comes
     /// from a profile (named pin, $default, or chain default).
-    private var resolvedScreen: ScreenResolution.Result? {
-        guard let container = game.container else { return nil }
+    /// Cached: Form bodies re-render on every control interaction,
+    /// and the resolve reads two files.
+    @State private var resolvedScreen: ScreenResolution.Result?
+
+    private func reloadResolvedScreen() {
+        guard let container = game.container else { return }
         let store = LayoutProfilesManager.store
-        return ScreenResolution.resolve(
+        resolvedScreen = ScreenResolution.resolve(
             pin: store.loadPin(forGameFolder: container.url).pin,
             defaultProfileName: LayoutProfilesManager.defaultProfileName,
             readScreen: { store.readScreen($0) }
@@ -487,6 +496,9 @@ struct GameSettingsView: View {
 
     private func saveLayoutAsProfile() {
         guard let container = game.container else { return }
+        if resolvedScreen == nil {
+            reloadResolvedScreen()
+        }
         let store = LayoutProfilesManager.store
         let name = store.uniqueName(base: game.title)
         let section = LayoutProfilesManager.materializedLayout(for: container)

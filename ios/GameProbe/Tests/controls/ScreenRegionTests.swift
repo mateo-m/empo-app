@@ -189,6 +189,29 @@ final class ScreenRegionTests: XCTestCase {
         XCTAssertFalse(String(decoding: serialized, as: UTF8.self).contains("overlay"))
     }
 
+    func testOverlayFlagPerOrientationThroughTheStore() throws {
+        store.createProfile("P", touch: sampleTouch())
+        let portrait = ScreenRegion(x: 0, y: 0.5, w: 1, h: 0.5, overlay: true)
+        let landscape = ScreenRegion(x: 0, y: 0, w: 1, h: 1)
+        XCTAssertTrue(store.writeScreen("P", portrait: portrait, landscape: landscape))
+
+        let read = try XCTUnwrap(store.readScreen("P"))
+        XCTAssertEqual(read.portrait?.overlay, true)
+        XCTAssertEqual(read.landscape?.overlay, false)
+        XCTAssertEqual(read.portrait, portrait)
+        XCTAssertEqual(read.landscape, landscape)
+    }
+
+    func testSerializeRoundTripIsByteStableWithOverlay() throws {
+        let portrait = ScreenRegion(x: 0.1, y: 0.4, w: 0.9, h: 0.6, overlay: true)
+        let first = try XCTUnwrap(
+            ScreenRegionFile.serialize(portrait: portrait, landscape: nil))
+        let reparsed = ScreenRegionFile.parse(first)
+        let second = try XCTUnwrap(
+            ScreenRegionFile.serialize(portrait: reparsed.portrait, landscape: nil))
+        XCTAssertEqual(first, second)
+    }
+
     func testParseAcceptsFloatVersionOne() {
         // 1.0 is exactly representable: Int(exactly:) admits it.
         let result = ScreenRegionFile.parse(
