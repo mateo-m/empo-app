@@ -172,6 +172,13 @@ struct PlayerEditToolbar: View {
             }
             .foregroundStyle(.brand)
 
+            // Divider between the tool group and the primary
+            // action, so Done reads as its own group and cannot be
+            // mistaken for one more edit tool.
+            Rectangle()
+                .fill(.white.opacity(Alpha.border))
+                .frame(width: 1, height: 18)
+
             // Done is the primary action of the whole mode: a
             // small tinted capsule inside the bar makes it read
             // as such (the iOS 26 prominent-toolbar-button

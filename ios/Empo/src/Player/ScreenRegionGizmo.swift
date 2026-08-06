@@ -166,77 +166,50 @@ struct ScreenRegionGizmo: View {
     }
 }
 
-/// Crop-style L bracket for the resize corner: a rounded corner
-/// stroke that opens toward the region's inside. Its corner radius
-/// matches the gizmo outline, so placed on the border it reads as
-/// part of the frame.
+/// Crop-style L bracket for the resize corner: a square corner
+/// stroke (matching the square outline) that opens toward the
+/// region's inside. The round line caps and join keep it soft
+/// without lying about the corner shape.
 private struct CornerGrabber: Shape {
     func path(in rect: CGRect) -> Path {
-        let radius = min(6, rect.width / 2)
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY))
-        path.addQuadCurve(
-            to: CGPoint(x: rect.maxX, y: rect.maxY - radius),
-            control: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
         return path
     }
 }
 
-/// The gizmo border. A plain dashed rounded-rect stroke starts its
-/// pattern at one corner, so only that corner gets a dash that
-/// follows the curve. Here the four corner arcs draw SOLID and each
-/// edge fits a whole number of dashes with a half-gap at both ends,
-/// so every corner looks the same at any size.
+/// The gizmo border. SQUARE corners — the game picture has square
+/// edges, so a rounded frame would lie about the content. Each edge
+/// starts and ends with a HALF dash, so adjacent edges meet in a
+/// crisp L-shaped corner dash and all four corners look identical
+/// at any size (a plain dashed stroke starts its pattern at one
+/// corner only).
 private struct GizmoOutline: View {
     private static let lineWidth: CGFloat = 2
-    private static let cornerRadius: CGFloat = 6
     private static let dashUnit: CGFloat = 8
     private static let gapUnit: CGFloat = 5
 
     var body: some View {
         Canvas { context, size in
             let inset = Self.lineWidth / 2
-            let r = Self.cornerRadius
             let frame = CGRect(origin: .zero, size: size).insetBy(dx: inset, dy: inset)
-            guard frame.width > 2 * r, frame.height > 2 * r else {
+            guard frame.width > 8, frame.height > 8 else {
                 context.stroke(
                     Path(frame), with: .color(.brand), lineWidth: Self.lineWidth)
                 return
             }
 
-            // Solid corners: stroke the rounded rect clipped to four
-            // corner squares. No arc-angle math to get wrong.
-            let rounded = Path(roundedRect: frame, cornerRadius: r)
-            let cornerSide = r + Self.lineWidth
-            let corners = [
-                CGRect(x: 0, y: 0, width: cornerSide, height: cornerSide),
-                CGRect(x: size.width - cornerSide, y: 0, width: cornerSide, height: cornerSide),
-                CGRect(
-                    x: size.width - cornerSide, y: size.height - cornerSide,
-                    width: cornerSide, height: cornerSide),
-                CGRect(
-                    x: 0, y: size.height - cornerSide, width: cornerSide, height: cornerSide),
-            ]
-            for corner in corners {
-                context.drawLayer { layer in
-                    layer.clip(to: Path(corner))
-                    layer.stroke(rounded, with: .color(.brand), lineWidth: Self.lineWidth)
-                }
-            }
-
-            // Edges: n dashes with FULL gaps between and at both
-            // ends (n dashes, n+1 gaps), scaled to fit exactly. The
-            // corner arcs read as dashes, so the gap next to a
-            // corner must equal the gap between plain dashes.
+            // Half-dash at both ends: the sequence half-dash, gap,
+            // dash, ..., gap, half-dash spans (n+1) x (dash+gap)
+            // exactly, so scale the pattern to a whole cycle count.
             func dashedLine(from: CGPoint, to: CGPoint) {
                 let length = hypot(to.x - from.x, to.y - from.y)
                 guard length > 1 else { return }
                 let unit = Self.dashUnit + Self.gapUnit
-                let count = max(1, ((length - Self.gapUnit) / unit).rounded())
-                let units = count * Self.dashUnit + (count + 1) * Self.gapUnit
-                let scale = length / units
+                let cycles = max(1, (length / unit).rounded())
+                let scale = length / (cycles * unit)
                 let dash = Self.dashUnit * scale
                 let gap = Self.gapUnit * scale
                 var path = Path()
@@ -246,20 +219,20 @@ private struct GizmoOutline: View {
                     path, with: .color(.brand),
                     style: StrokeStyle(
                         lineWidth: Self.lineWidth, dash: [dash, gap],
-                        dashPhase: dash))
+                        dashPhase: dash / 2))
             }
             dashedLine(
-                from: CGPoint(x: frame.minX + r, y: frame.minY),
-                to: CGPoint(x: frame.maxX - r, y: frame.minY))
+                from: CGPoint(x: frame.minX, y: frame.minY),
+                to: CGPoint(x: frame.maxX, y: frame.minY))
             dashedLine(
-                from: CGPoint(x: frame.maxX, y: frame.minY + r),
-                to: CGPoint(x: frame.maxX, y: frame.maxY - r))
+                from: CGPoint(x: frame.maxX, y: frame.minY),
+                to: CGPoint(x: frame.maxX, y: frame.maxY))
             dashedLine(
-                from: CGPoint(x: frame.maxX - r, y: frame.maxY),
-                to: CGPoint(x: frame.minX + r, y: frame.maxY))
+                from: CGPoint(x: frame.maxX, y: frame.maxY),
+                to: CGPoint(x: frame.minX, y: frame.maxY))
             dashedLine(
-                from: CGPoint(x: frame.minX, y: frame.maxY - r),
-                to: CGPoint(x: frame.minX, y: frame.minY + r))
+                from: CGPoint(x: frame.minX, y: frame.maxY),
+                to: CGPoint(x: frame.minX, y: frame.minY))
         }
         .allowsHitTesting(false)
     }
