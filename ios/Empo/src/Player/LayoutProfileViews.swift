@@ -149,6 +149,26 @@ struct LayoutProfilesSettingsView: View {
                 }
             }
 
+            if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                Section {
+                    NavigationLink {
+                        BuiltinLayoutViewerView()
+                    } label: {
+                        HStack {
+                            Text("Empo default")
+                            Spacer()
+                            Image(systemName: "lock.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Built in")
+                } footer: {
+                    Text("The layout Empo ships with. Games use it when nothing else applies.")
+                }
+            }
+
             ForEach(visibleProfiles, id: \.self) { name in
                 Section {
                     NavigationLink {
@@ -308,6 +328,48 @@ struct LayoutProfilesSettingsView: View {
     }
 }
 
+// MARK: - Canvas geometry
+
+/// Mock-canvas geometry shared by the profile editor and the
+/// built-in viewer. Device-stable: everything derives from the
+/// reference metrics, so clamping matches the player exactly.
+enum EditorCanvas {
+    /// Canvas size in device points per orientation.
+    static func size(for orientation: ControlsOrientation) -> CGSize {
+        let metrics = TouchZoneMetrics.reference
+        let isLandscape = orientation == .landscape
+        return CGSize(
+            width: metrics.width(isLandscape: isLandscape),
+            height: metrics.height(isLandscape: isLandscape))
+    }
+
+    /// Synthetic WINDOW safe-area insets (notch and home indicator),
+    /// not the zone metrics — those already contain the game height
+    /// and toolbar line, and stacking them again empties the clamp
+    /// band. The values match the reference device.
+    static func safeArea(for orientation: ControlsOrientation) -> EdgeInsets {
+        if orientation == .portrait {
+            return EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
+        }
+        return EdgeInsets(top: 0, leading: 59, bottom: 21, trailing: 59)
+    }
+
+    /// The placeholder stands in for the game picture: a 4:3 fit at
+    /// the top of the safe area, like a typical RPG Maker viewport.
+    static func fakeGameRect(for orientation: ControlsOrientation) -> CGRect {
+        let size = size(for: orientation)
+        let safeArea = safeArea(for: orientation)
+        if orientation == .portrait {
+            let width = size.width
+            let height = width * 3 / 4
+            return CGRect(x: 0, y: safeArea.top, width: width, height: height)
+        }
+        let height = size.height
+        let width = height * 4 / 3
+        return CGRect(x: (size.width - width) / 2, y: 0, width: width, height: height)
+    }
+}
+
 // MARK: - Editor
 
 /// Out-of-player profile editor: the real overlay components on a
@@ -340,41 +402,9 @@ struct LayoutProfileEditorView: View {
                 editorForProfile: profileName, metrics: .reference))
     }
 
-    /// Canvas size in device points per orientation, from the
-    /// reference metrics so the editor is device-stable.
-    private var canvasSize: CGSize {
-        let metrics = TouchZoneMetrics.reference
-        let isLandscape = editingOrientation == .landscape
-        return CGSize(
-            width: metrics.width(isLandscape: isLandscape),
-            height: metrics.height(isLandscape: isLandscape))
-    }
-
-    /// Synthetic WINDOW safe-area insets (notch and home indicator),
-    /// not the zone metrics — those already contain the game height
-    /// and toolbar line, and stacking them again empties the clamp
-    /// band. The values match the reference device.
-    private var canvasSafeArea: EdgeInsets {
-        if editingOrientation == .portrait {
-            return EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
-        }
-        return EdgeInsets(top: 0, leading: 59, bottom: 21, trailing: 59)
-    }
-
-    /// The placeholder stands in for the game picture: a 4:3 fit at
-    /// the top of the safe area, like a typical RPG Maker viewport.
-    private var fakeGameRect: CGRect {
-        let size = canvasSize
-        let safeArea = canvasSafeArea
-        if editingOrientation == .portrait {
-            let width = size.width
-            let height = width * 3 / 4
-            return CGRect(x: 0, y: safeArea.top, width: width, height: height)
-        }
-        let height = size.height
-        let width = height * 4 / 3
-        return CGRect(x: (size.width - width) / 2, y: 0, width: width, height: height)
-    }
+    private var canvasSize: CGSize { EditorCanvas.size(for: editingOrientation) }
+    private var canvasSafeArea: EdgeInsets { EditorCanvas.safeArea(for: editingOrientation) }
+    private var fakeGameRect: CGRect { EditorCanvas.fakeGameRect(for: editingOrientation) }
 
     var body: some View {
         VStack(spacing: Spacing.md) {
@@ -516,6 +546,145 @@ struct LayoutProfileEditorView: View {
                     draggingButtonID: $draggingButtonID
                 )
             }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+    }
+}
+
+// MARK: - Built-in viewer
+
+/// Read-only view of the built-in layout on the same mock canvas the
+/// editor uses. The overlay is display-only (hit testing off), so no
+/// touch reaches the controls and nothing can write.
+struct BuiltinLayoutViewerView: View {
+    @State private var layout = ControlsLayout(viewerForBuiltins: .reference)
+    @State private var actions = PlayerActionRegistry()
+    @State private var orientation: ControlsOrientation = .portrait
+    @State private var showCreateDialog = false
+    @State private var createText = ""
+    @State private var showNameError = false
+
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            Picker("Orientation", selection: $orientation) {
+                Text("Portrait").tag(ControlsOrientation.portrait)
+                Text("Landscape").tag(ControlsOrientation.landscape)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, Spacing.xl)
+            .onChange(of: orientation) { _, new in
+                layout.setOrientation(new)
+            }
+
+            GeometryReader { outer in
+                let size = EditorCanvas.size(for: orientation)
+                let scale = min(
+                    outer.size.width / size.width, outer.size.height / size.height)
+                canvas
+                    .frame(width: size.width, height: size.height)
+                    .scaleEffect(scale)
+                    .frame(
+                        width: size.width * scale, height: size.height * scale
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text(
+                    "This is the layout Empo ships with. A game uses it when the game has no layout of its own and no profile applies."
+                )
+                Text(
+                    "You cannot edit this layout. It stays unchanged so a working layout is always available. To make your own version, duplicate it as a profile and edit the copy."
+                )
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, Spacing.xl)
+
+            Button("Duplicate as a profile") {
+                createText = LayoutProfilesManager.store.uniqueName(base: "My layout")
+                showCreateDialog = true
+            }
+            .font(.footnote.weight(.semibold))
+            .padding(.bottom, Spacing.md)
+        }
+        .navigationTitle("Empo default")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            layout.setOrientation(orientation)
+        }
+        .alert("New profile", isPresented: $showCreateDialog) {
+            TextField("Name", text: $createText)
+            Button("Create") { duplicateAsProfile() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The new profile starts as a copy of the Empo default layout.")
+        }
+        .alert("Name not allowed", isPresented: $showNameError) {
+            Button("OK") {}
+        } message: {
+            Text(
+                "Profile names cannot be empty, start with $ or a dot, contain slashes, or repeat an existing name."
+            )
+        }
+    }
+
+    private func duplicateAsProfile() {
+        let store = LayoutProfilesManager.store
+        guard let name = LayoutProfileStore.validatedName(createText),
+            !store.profileExists(name)
+        else {
+            showNameError = true
+            return
+        }
+        let materialized = ProfileMaterializer.materialize(
+            user: nil, manifest: nil,
+            builtins: LayoutProfilesManager.builtins(), metrics: .reference)
+        _ = store.createProfile(name, touch: materialized)
+    }
+
+    private var canvas: some View {
+        let size = EditorCanvas.size(for: orientation)
+        let safeArea = EditorCanvas.safeArea(for: orientation)
+        let gameRect = EditorCanvas.fakeGameRect(for: orientation)
+        let controlsMinY = ControlsZone.toolbarBottomY(
+            isPortrait: orientation == .portrait,
+            gameRect: gameRect,
+            safeArea: safeArea,
+            btnSize: IconButtonSize.sm.points,
+            geoHeight: size.height)
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: Radius.sm)
+                .fill(Color.black)
+
+            Rectangle()
+                .fill(Color.white.opacity(0.08))
+                .overlay(
+                    Text("Game")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.3))
+                )
+                .frame(width: gameRect.width, height: gameRect.height)
+                .position(x: gameRect.midX, y: gameRect.midY)
+
+            GeometryReader { geo in
+                PlayerControlsOverlay(
+                    layout: layout,
+                    actions: actions,
+                    geo: geo,
+                    controlsMinY: controlsMinY,
+                    editMode: false,
+                    safeArea: safeArea,
+                    isPreview: true,
+                    editingButton: .constant(nil),
+                    editingActionButton: .constant(nil),
+                    editingDPad: .constant(false),
+                    draggingDPad: .constant(false),
+                    draggingButtonID: .constant(nil)
+                )
+            }
+            .allowsHitTesting(false)
         }
         .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
     }

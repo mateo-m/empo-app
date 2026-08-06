@@ -348,6 +348,15 @@ class ControlsLayout {
         reloadEditorProfile()
     }
 
+    /// Read-only viewer for the built-in layout: an editor instance
+    /// with no backing profile, so every write path is inert. The
+    /// built-ins never change, so it observes nothing.
+    init(viewerForBuiltins metrics: TouchZoneMetrics) {
+        isEditorInstance = true
+        metricsOverride = metrics
+        applyDefaultsForCurrentOrientation()
+    }
+
     // nonisolated(unsafe): written once on the main actor at init,
     // read in deinit (which is nonisolated by definition).
     private nonisolated(unsafe) var notificationTokens: [NSObjectProtocol] = []
