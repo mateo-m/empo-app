@@ -494,7 +494,11 @@ struct PlayerView: View {
         geoSize: CGSize, isPortrait: Bool, gameRect: CGRect, chipsOnly: Bool = false
     ) -> some View {
         let resolved = ScreenRegionApplier.resolvedRegion(isPortrait: isPortrait)
-        let effective: ScreenRegion? = layout.pendingScreenEdit ?? resolved
+        // The live drag region feeds BOTH gizmo copies, so the
+        // chips instance above the controls follows the outline
+        // mid-drag (each instance has its own local draft state).
+        let effective: ScreenRegion? =
+            layout.liveScreenDragRegion ?? (layout.pendingScreenEdit ?? resolved)
         // The outline draws the CLAMPED region — the same rect the
         // applier sends — so it can never disagree with the picture
         // when stored fractions fall outside this device's safe
@@ -522,7 +526,7 @@ struct PlayerView: View {
         let safeBottom = isPortrait ? geoSize.height - safeArea.bottom : geoSize.height
         let maxBottom =
             isPortrait && !overlayOn
-            ? safeBottom - ControlsZone.requiredEditZoneHeight
+            ? safeBottom - layout.requiredEditZoneHeight
             : safeBottom
         let allowedRect = CGRect(
             x: safeArea.leading,
@@ -551,9 +555,11 @@ struct PlayerView: View {
                             ? autoRegion : nil)
                 },
                 onDragChanged: { region in
+                    layout.liveScreenDragRegion = region
                     ScreenRegionApplier.preview(region, isPortrait: isPortrait)
                 },
                 onDragEnded: { region in
+                    layout.liveScreenDragRegion = nil
                     layout.endScreenDrag(region: region)
                     if let pending = layout.pendingScreenEdit {
                         ScreenRegionApplier.preview(pending, isPortrait: isPortrait)
@@ -565,6 +571,7 @@ struct PlayerView: View {
                     }
                 },
                 onReset: {
+                    layout.liveScreenDragRegion = nil
                     withAnimation(.easeInOut(duration: 0.25)) {
                         layout.resetScreenEdit()
                     }
@@ -593,7 +600,7 @@ struct PlayerView: View {
                     if !region.overlay, isPortrait, geoSize.height > 0 {
                         let safeBottom = geoSize.height - AppWindow.currentSafeArea.bottom
                         let limit = Double(
-                            (safeBottom - ControlsZone.requiredEditZoneHeight)
+                            (safeBottom - layout.requiredEditZoneHeight)
                                 / geoSize.height)
                         let top = Double(AppWindow.currentSafeArea.top / geoSize.height)
                         if region.y + region.h > limit {

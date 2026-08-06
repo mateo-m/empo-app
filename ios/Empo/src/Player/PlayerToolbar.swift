@@ -116,10 +116,23 @@ struct PlayerEditToolbar: View {
     var body: some View {
         // Anchor both pieces to the controls-zone border, not the
         // game rect: the pill floats above the border line by the
-        // same distance the action row sits below it.
-        let zoneTop = ControlsZone.bounds(
-            controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize
-        ).minY
+        // same distance the action row sits below it. A CRUSHED
+        // zone (fit-then-block leaves just the tallest control)
+        // has no room for the header, so both pieces dodge above
+        // the border and the controls keep the zone to themselves.
+        let zoneBounds = ControlsZone.bounds(
+            controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
+        let zoneTop = zoneBounds.minY
+        let crushed =
+            zoneBounds.height < layout.requiredEditZoneHeight + Self.actionsHalfHeight * 2 * 2
+        let actionsY =
+            crushed
+            ? zoneTop - Self.borderGap - Self.actionsHalfHeight
+            : zoneTop + Self.borderGap + Self.actionsHalfHeight
+        let bannerY =
+            crushed
+            ? actionsY - Self.actionsHalfHeight - Spacing.xs - Self.bannerHalfHeight
+            : zoneTop - Self.borderGap - Self.bannerHalfHeight
 
         ZStack {
             // Blast-radius banner: a pinned profile's edits reach
@@ -132,18 +145,43 @@ struct PlayerEditToolbar: View {
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.xs)
                 .glassEffect(.regular, in: .capsule)
+                .onGeometryChange(
+                    for: CGRect.self, of: { $0.frame(in: .global) },
+                    action: {
+                        bannerFrame = $0
+                        publishChromeFrames()
+                    }
+                )
                 .position(
                     x: geoSize.width / 2,
-                    y: max(
-                        safeArea.top + Self.bannerHalfHeight,
-                        zoneTop - Self.borderGap - Self.bannerHalfHeight)
+                    y: max(safeArea.top + Self.bannerHalfHeight, bannerY)
                 )
 
             actionsRow
-                .position(
-                    x: geoSize.width / 2,
-                    y: zoneTop + Self.borderGap + Self.actionsHalfHeight)
+                .onGeometryChange(
+                    for: CGRect.self, of: { $0.frame(in: .global) },
+                    action: {
+                        actionsFrame = $0
+                        publishChromeFrames()
+                    }
+                )
+                .position(x: geoSize.width / 2, y: actionsY)
         }
+        // Dark variant for BOTH pieces: the banner sits outside the
+        // action row's own darkGlass and would fall back to the
+        // system scheme.
+        .darkGlass()
+        .animation(.easeInOut(duration: 0.2), value: crushed)
+    }
+
+    @State private var bannerFrame: CGRect = .zero
+    @State private var actionsFrame: CGRect = .zero
+
+    /// The header pieces are rigid walls for control drags, so a
+    /// control cannot park underneath them. Window space matches
+    /// the overlay's full-window geometry.
+    private func publishChromeFrames() {
+        layout.editChromeFrames = [bannerFrame, actionsFrame].filter { !$0.isEmpty }
     }
 
     /// Four actions: symbols, per the HIG rule for bars past three

@@ -429,6 +429,7 @@ class ControlsLayout {
         // session, so its edits must survive here.
         if !isEditorInstance {
             screenEdits.removeAll()
+            liveScreenDragRegion = nil
             ScreenRegionApplier.endPreview()
         }
     }
@@ -582,6 +583,7 @@ class ControlsLayout {
         screenEdits.removeAll()
         screenDragActive = false
         screenAutoReference = nil
+        liveScreenDragRegion = nil
         clearEditUndoStack()
         staggerGeneration += 1
         currentGameID = newGameID
@@ -622,6 +624,7 @@ class ControlsLayout {
         if screenDragActive {
             screenDragActive = false
             screenAutoReference = nil
+            liveScreenDragRegion = nil
             if !isEditorInstance {
                 ScreenRegionApplier.endPreview()
             }
@@ -787,6 +790,7 @@ class ControlsLayout {
             screenEdits.removeAll()
             screenDragActive = false
             screenAutoReference = nil
+            liveScreenDragRegion = nil
             ScreenRegionApplier.endPreview()
         }
 
@@ -995,6 +999,50 @@ class ControlsLayout {
 
     // MARK: - Edit-drag collision
 
+    /// Edit-chrome frames (banner pill, action row) in window
+    /// space, measured by PlayerEditToolbar. They join the drag
+    /// collision as rectangular walls, so a control cannot park
+    /// underneath the header. Never persisted.
+    var editChromeFrames: [CGRect] = []
+
+    /// The region under the finger during a screen drag, so the
+    /// chips copy above the controls tracks the outline live (its
+    /// own gizmo instance never sees the dragging instance's
+    /// draft). Transient.
+    var liveScreenDragRegion: ScreenRegion?
+
+    /// The zone height the screen drag blocks at: the tallest
+    /// control plus the zone paddings (fit-then-block, user ruling
+    /// 2026-08-06). The zone stays crushable down to this height.
+    var requiredEditZoneHeight: CGFloat {
+        let tallestButton =
+            (buttons.map(\.size) + actionButtons.map(\.size)).max() ?? 0
+        return max(dpadSize, tallestButton) + 2 * ControlsZone.padding
+    }
+
+    /// Circle-vs-rect push-out. nil when there is no collision.
+    /// Inside the inflated rect, the exit side prefers where the
+    /// drag came from, matching the circle obstacles' side memory.
+    private static func rectPushOut(
+        center: CGPoint, radius: CGFloat, rect: CGRect, previous: CGPoint?
+    ) -> CGPoint? {
+        let inflated = rect.insetBy(dx: -radius, dy: -radius)
+        guard inflated.contains(center) else { return nil }
+        if let previous, !inflated.contains(previous) {
+            if previous.x <= inflated.minX { return CGPoint(x: inflated.minX, y: center.y) }
+            if previous.x >= inflated.maxX { return CGPoint(x: inflated.maxX, y: center.y) }
+            if previous.y <= inflated.minY { return CGPoint(x: center.x, y: inflated.minY) }
+            return CGPoint(x: center.x, y: inflated.maxY)
+        }
+        let exits: [(distance: CGFloat, point: CGPoint)] = [
+            (center.x - inflated.minX, CGPoint(x: inflated.minX, y: center.y)),
+            (inflated.maxX - center.x, CGPoint(x: inflated.maxX, y: center.y)),
+            (center.y - inflated.minY, CGPoint(x: center.x, y: inflated.minY)),
+            (inflated.maxY - center.y, CGPoint(x: center.x, y: inflated.maxY)),
+        ]
+        return exits.min { $0.distance < $1.distance }?.point
+    }
+
     /// Rigid collision for edit drags: the dragged control cannot
     /// enter its neighbors — they act as walls and the drag slides
     /// along their rims. Circle push-out, iterated a few times so
@@ -1040,7 +1088,7 @@ class ControlsLayout {
         // A hair of tolerance: the push-out lands exactly on the rim
         // and float noise must not read as a collision.
         let slack: CGFloat = 0.5
-        return dragObstacles(
+        let circleHit = dragObstacles(
             draggedID: draggedID, draggedIsDPad: draggedIsDPad, geoSize: geoSize,
             safeArea: safeArea, controlsMinY: controlsMinY
         ).contains { obstacle in
@@ -1048,6 +1096,10 @@ class ControlsLayout {
             let dy = center.y - obstacle.center.y
             let minDistance = radius + obstacle.radius - slack
             return dx * dx + dy * dy < minDistance * minDistance
+        }
+        if circleHit { return true }
+        return editChromeFrames.contains { frame in
+            frame.insetBy(dx: -(radius - slack), dy: -(radius - slack)).contains(center)
         }
     }
 
@@ -1099,6 +1151,14 @@ class ControlsLayout {
                         y: obstacle.center.y + dy / distance * minDistance)
                 }
                 moved = true
+            }
+            for frame in editChromeFrames {
+                if let pushed = Self.rectPushOut(
+                    center: center, radius: radius, rect: frame, previous: previous)
+                {
+                    center = pushed
+                    moved = true
+                }
             }
             if !moved { break }
         }

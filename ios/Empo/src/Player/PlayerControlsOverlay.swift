@@ -27,9 +27,12 @@ struct PlayerControlsOverlay: View {
     var body: some View {
         let separatedPositions = layout.separatedDisplayPositions(
             for: geo.size, safeArea: safeArea, controlsMinY: controlsMinY,
-            // Editing shows raw positions: the separation pass would
-            // push neighbors around live while a control drags.
-            separate: !(editMode || isPreview),
+            // The separation pass stays off ONLY while a CONTROL
+            // drags (neighbors must not move under the finger; the
+            // rigid collision owns that case). Everywhere else it
+            // runs, so a crushed zone rearranges its controls
+            // instead of clamping them into a stack.
+            separate: draggingButtonID == nil && !draggingDPad,
             includeActionButton: { isPreview || editMode || actions.isAvailable($0.action) })
         ZStack {
             dpadView
