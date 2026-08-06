@@ -430,6 +430,12 @@ class ControlsLayout {
         if !isEditorInstance {
             screenEdits.removeAll()
             liveScreenDragRegion = nil
+            // Done can arrive MID-drag (the toolbar stays tappable
+            // by design). The gizmo unmounts with edit mode, so its
+            // own recovery never runs — a stuck flag would fade the
+            // next session's toolbar.
+            screenDragActive = false
+            screenAutoReference = nil
             ScreenRegionApplier.endPreview()
         }
     }
@@ -1032,6 +1038,7 @@ class ControlsLayout {
             (buttons.map(\.size) + actionButtons.map(\.size)).max() ?? 0
         return max(dpadSize, tallestButton)
             + 2 * (ControlsZone.padding + ControlsZone.innerPadding)
+            + ControlsZone.toolbarGap
     }
 
     /// Circle-vs-rect push-out. nil when there is no collision.
@@ -1278,10 +1285,16 @@ class ControlsLayout {
         }
 
         var centers: [UUID: CGPoint] = [:]
+        // A collapsed band (deep controlsMinY from a cross-device
+        // or editor-authored region) must not strand controls below
+        // the safe bottom: floor every center against the window.
+        let maxBottom = Double(geoSize.height - safeArea.bottom) - Double(pad)
         for (index, circle) in allCircles.enumerated() {
             let point = result.positions[index]
+            let half = Double(circle.size) / 2
             centers[circle.id] = CGPoint(
-                x: CGFloat(point.x + bandMinX), y: CGFloat(point.y + bandMinY))
+                x: CGFloat(point.x + bandMinX),
+                y: CGFloat(min(point.y + bandMinY, maxBottom - half)))
         }
         return centers
     }

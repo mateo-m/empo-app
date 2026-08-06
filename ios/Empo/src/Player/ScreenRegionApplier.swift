@@ -37,6 +37,7 @@ enum ScreenRegionApplier {
     /// region and before the engine boots (the boot-time recalc
     /// already consumes the bridge statics).
     static func beginSession(container: GameContainer) {
+        animationTask?.cancel()
         activeContainer = container
         previewActive = false
         resolutionCache = nil
@@ -46,6 +47,10 @@ enum ScreenRegionApplier {
     }
 
     static func endSession() {
+        // A reset glide in flight must die with the session, or it
+        // keeps writing the old game's regions into the bridge
+        // after the clear below.
+        animationTask?.cancel()
         activeContainer = nil
         previewActive = false
         resolutionCache = nil

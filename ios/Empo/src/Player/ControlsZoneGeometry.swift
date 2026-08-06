@@ -36,14 +36,24 @@ enum ControlsZone {
     /// lookup (scene walk + KVC) sits on the hot layout path:
     /// `absolutePosition` runs per control per frame while the zone
     /// animates, and the uncached call cost hundreds of main-thread
-    /// UIKit round trips a second. Resolved once.
-    private static let deviceCornerRadius: CGFloat = {
-        let screen = UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.screen }
-            .first
-        return (screen?.value(forKey: "displayCornerRadius") as? CGFloat)
+    /// UIKit round trips a second. Cached on the first access that
+    /// actually finds a screen — an early pre-scene access must not
+    /// freeze the fallback for the whole process.
+    private static var cachedDeviceCornerRadius: CGFloat?
+
+    private static var deviceCornerRadius: CGFloat {
+        if let cachedDeviceCornerRadius { return cachedDeviceCornerRadius }
+        guard
+            let screen = UIApplication.shared.connectedScenes
+                .compactMap({ ($0 as? UIWindowScene)?.screen })
+                .first
+        else { return fallbackDeviceCornerRadius }
+        let radius =
+            (screen.value(forKey: "displayCornerRadius") as? CGFloat)
             ?? fallbackDeviceCornerRadius
-    }()
+        cachedDeviceCornerRadius = radius
+        return radius
+    }
 
     static func cornerRadii(safeArea: EdgeInsets) -> (top: CGFloat, bottom: CGFloat) {
         let pad = padding

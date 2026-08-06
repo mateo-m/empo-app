@@ -42,8 +42,14 @@ struct ScreenRegionGizmo: View {
     /// swipe near the notification shade, an incoming call). The
     /// onChange below then finishes the drag, because a stuck
     /// `screenDragActive` would leave the edit toolbar disabled for
-    /// the rest of the session.
-    @GestureState private var gestureActive = false
+    /// the rest of the session. Move and resize track separately,
+    /// so one gesture ending cannot finish the other's drag; the
+    /// owner token stops a second finger from clobbering the
+    /// in-flight anchor.
+    @GestureState private var moveGestureActive = false
+    @GestureState private var resizeGestureActive = false
+    @State private var dragOwner: Int?
+    private var gestureActive: Bool { moveGestureActive || resizeGestureActive }
 
     private var rect: CGRect { draft ?? baseRect }
     private var minW: CGFloat { canvasSize.width * ScreenRegionGizmo.minFraction }
@@ -68,6 +74,27 @@ struct ScreenRegionGizmo: View {
                 finishDrag()
             }
         }
+    }
+
+    /// Captures the anchor on the first event of a drag, shrunk
+    /// into `allowedRect` — a stored rect that violates the limits
+    /// (cross-device restore, controls grown after authoring) must
+    /// not invert the clamps. Returns false for events from a
+    /// gesture that does not own the in-flight drag.
+    private func claimDrag(owner: Int) -> Bool {
+        if anchorRect == nil {
+            var anchor = rect
+            anchor.size.width = min(anchor.width, allowedRect.width)
+            anchor.size.height = min(anchor.height, allowedRect.height)
+            anchor.origin.x = min(
+                max(allowedRect.minX, anchor.origin.x), allowedRect.maxX - anchor.width)
+            anchor.origin.y = min(
+                max(allowedRect.minY, anchor.origin.y), allowedRect.maxY - anchor.height)
+            anchorRect = anchor
+            dragOwner = owner
+            onDragBegan()
+        }
+        return dragOwner == owner
     }
 
     private var surfaces: some View {
@@ -171,13 +198,9 @@ struct ScreenRegionGizmo: View {
 
     private var moveGesture: some Gesture {
         DragGesture(minimumDistance: 2)
-            .updating($gestureActive) { _, state, _ in state = true }
+            .updating($moveGestureActive) { _, state, _ in state = true }
             .onChanged { value in
-                if anchorRect == nil {
-                    anchorRect = rect
-                    onDragBegan()
-                }
-                guard let anchor = anchorRect else { return }
+                guard claimDrag(owner: 0), let anchor = anchorRect else { return }
                 var moved = anchor.offsetBy(
                     dx: value.translation.width, dy: value.translation.height)
                 moved.origin.x = min(
@@ -193,13 +216,10 @@ struct ScreenRegionGizmo: View {
     /// The dragged corner moves; the opposite corner anchors.
     private func resizeGesture(for corner: Corner) -> some Gesture {
         DragGesture(minimumDistance: 2)
-            .updating($gestureActive) { _, state, _ in state = true }
+            .updating($resizeGestureActive) { _, state, _ in state = true }
             .onChanged { value in
-                if anchorRect == nil {
-                    anchorRect = rect
-                    onDragBegan()
-                }
-                guard let anchor = anchorRect else { return }
+                guard claimDrag(owner: 1 + corner.ownerIndex), let anchor = anchorRect
+                else { return }
                 var minX = anchor.minX
                 var minY = anchor.minY
                 var maxX = anchor.maxX
@@ -248,6 +268,15 @@ struct ScreenRegionGizmo: View {
     private enum Corner: CaseIterable {
         case topLeft, topRight, bottomLeft, bottomRight
 
+        var ownerIndex: Int {
+            switch self {
+            case .topLeft: 0
+            case .topRight: 1
+            case .bottomLeft: 2
+            case .bottomRight: 3
+            }
+        }
+
         /// Rotation that maps the bottom-right bracket path onto
         /// this corner (positive degrees turn clockwise on screen).
         var bracketRotation: Double {
@@ -275,6 +304,7 @@ struct ScreenRegionGizmo: View {
         }
         anchorRect = nil
         draft = nil
+        dragOwner = nil
     }
 
     private func region(from rect: CGRect) -> ScreenRegion {

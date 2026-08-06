@@ -574,16 +574,25 @@ struct LayoutProfileEditorView: View {
             ScreenRegionGizmo(
                 canvasSize: size,
                 allowedRect: {
-                    // Same inset policy as the applier's clamp:
-                    // landscape keeps only the left/right insets.
+                    // Same inset policy AND the same fit-then-block
+                    // rule as the player: without the block, the
+                    // editor could author an overlay-off region that
+                    // leaves the play zone no room for its controls.
                     let safeArea = canvasSafeArea
                     let isPortrait = editingOrientation == .portrait
+                    let overlayOn = screenRegion?.overlay ?? false
+                    let safeBottom =
+                        isPortrait ? size.height - safeArea.bottom : size.height
+                    let maxBottom =
+                        isPortrait && !overlayOn
+                        ? safeBottom - layout.requiredEditZoneHeight
+                        : safeBottom
+                    let top = isPortrait ? safeArea.top : 0
                     return CGRect(
                         x: safeArea.leading,
-                        y: isPortrait ? safeArea.top : 0,
+                        y: top,
                         width: size.width - safeArea.leading - safeArea.trailing,
-                        height: isPortrait
-                            ? size.height - safeArea.top - safeArea.bottom : size.height)
+                        height: maxBottom - top)
                 }(),
                 baseRect: screenRegionRect ?? gameRect,
                 showsReset: screenRegion != nil,
