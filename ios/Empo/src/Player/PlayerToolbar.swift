@@ -108,7 +108,7 @@ struct PlayerEditToolbar: View {
     /// for the pill; footnote capsule + 2x4 container padding for
     /// the row.
     private static let bannerHalfHeight: CGFloat = 11
-    private static let actionsHalfHeight: CGFloat = 15
+    private static let actionsHalfHeight: CGFloat = IconButtonSize.sm.points / 2
     /// The pill's gap above the zone border equals the action row's
     /// gap below it (user ruling: symmetric around the border).
     private static let borderGap: CGFloat = Spacing.md
@@ -146,68 +146,48 @@ struct PlayerEditToolbar: View {
         }
     }
 
+    /// Four actions: symbols, per the HIG rule for bars past three
+    /// buttons. The tools are the SAME circular glass buttons as
+    /// the play toolbar, so edit mode reads as a variant of it;
+    /// Done keeps the tinted capsule and its shape alone marks it
+    /// as the primary action. No chromeHitRegion: PlayerEditToolbar
+    /// stays mounted at opacity 0 during play (its region would
+    /// cover center screen), and edit mode already publishes a
+    /// full-screen region.
     private var actionsRow: some View {
-        HStack(spacing: Spacing.lg) {
-            Button {
+        HStack(spacing: Spacing.md) {
+            IconButton("plus", style: .outline, size: .sm, tint: .white) {
                 showAddSheet = true
-            } label: {
-                Label("Add", systemImage: "plus")
             }
             .accessibilityLabel("Add button")
-            .foregroundStyle(.white)
 
-            Button {
+            IconButton(
+                "arrow.uturn.backward", style: .outline, size: .sm,
+                tint: .white.opacity(layout.canUndo ? 1 : Alpha.disabled)
+            ) {
                 layout.undoLastEdit()
-            } label: {
-                Label("Undo", systemImage: "arrow.uturn.backward")
             }
             .accessibilityLabel("Undo layout change")
-            .foregroundStyle(.white.opacity(layout.canUndo ? 1 : Alpha.disabled))
             .disabled(!layout.canUndo)
 
-            Button {
+            IconButton("arrow.counterclockwise", style: .outline, size: .sm, tint: .brand) {
                 showResetConfirm = true
-            } label: {
-                Label("Reset", systemImage: "arrow.counterclockwise")
             }
-            .foregroundStyle(.brand)
+            .accessibilityLabel("Reset layout")
 
-            // Divider between the tool group and the primary
-            // action, so Done reads as its own group and cannot be
-            // mistaken for one more edit tool.
-            Rectangle()
-                .fill(.white.opacity(Alpha.border))
-                .frame(width: 1, height: 18)
-
-            // Done is the primary action of the whole mode: a
-            // small tinted capsule inside the bar makes it read
-            // as such (the iOS 26 prominent-toolbar-button
-            // idiom).
             Button {
                 onDone()
             } label: {
                 Text("Done")
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, Spacing.md)
-                    .padding(.vertical, Spacing.xs)
+                    .padding(.horizontal, Spacing.lg)
+                    .frame(height: IconButtonSize.sm.points)
                     .glassEffect(.regular.tint(.success).interactive(), in: .capsule)
             }
         }
-        .font(.footnote.weight(.semibold))
-        // Concentric capsules: the Done capsule's gap to the
-        // container edge must match its vertical gap, so the
-        // trailing inset equals the vertical inset. The leading
-        // side keeps room for the plain text buttons.
-        .padding(.leading, Spacing.lg)
-        .padding(.trailing, Spacing.xs)
-        .padding(.vertical, Spacing.xs)
-        .glassEffect(.regular, in: .capsule)
         // Pin the glass to the dark variant, matching the play
-        // toolbar and the on-screen controls. No chromeHitRegion:
-        // PlayerEditToolbar stays mounted at opacity 0 during play
-        // (its region would cover center screen), and edit mode
-        // already publishes a full-screen region.
+        // toolbar and the on-screen controls.
         .darkGlass()
     }
 

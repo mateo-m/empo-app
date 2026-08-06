@@ -58,28 +58,28 @@ struct ScreenRegionGizmo: View {
             // it separates from bright game content. The gesture
             // surface is a larger invisible square so the target
             // stays easy to hit.
-            // Fully INSIDE the frame (crop-UI convention), so the
-            // viewport edge can never trim it when the region spans
-            // the full screen: the bracket's outer stroke edge sits
-            // flush on the border line.
-            CornerGrabber()
-                .stroke(
-                    Color.brand,
-                    style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
-                )
-                .frame(width: Self.grabberSide, height: Self.grabberSide)
-                .shadow(color: .black.opacity(0.45), radius: 2)
-                .position(
-                    x: rect.maxX - Self.grabberSide / 2 - 2,
-                    y: rect.maxY - Self.grabberSide / 2 - 2
-                )
-                .allowsHitTesting(false)
-            Color.clear
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-                .position(x: rect.maxX - 16, y: rect.maxY - 16)
-                .gesture(resizeGesture)
-                .accessibilityLabel("Resize game screen")
+            // Brackets on ALL FOUR corners, all draggable — the
+            // photo-crop convention users already know. Each one
+            // sits fully inside the frame (the viewport edge can
+            // never trim it) with an invisible 44 pt touch square.
+            ForEach(Corner.allCases, id: \.self) { corner in
+                CornerGrabber()
+                    .stroke(
+                        Color.brand,
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+                    )
+                    .frame(width: Self.grabberSide, height: Self.grabberSide)
+                    .rotationEffect(.degrees(corner.bracketRotation))
+                    .shadow(color: .black.opacity(0.45), radius: 2)
+                    .position(corner.point(in: rect, inset: Self.grabberSide / 2 + 2))
+                    .allowsHitTesting(false)
+                Color.clear
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+                    .position(corner.point(in: rect, inset: 16))
+                    .gesture(resizeGesture(for: corner))
+                    .accessibilityLabel("Resize game screen")
+            }
 
             if showsReset {
                 Button {
@@ -128,7 +128,8 @@ struct ScreenRegionGizmo: View {
             .onEnded { _ in finishDrag() }
     }
 
-    private var resizeGesture: some Gesture {
+    /// The dragged corner moves; the opposite corner anchors.
+    private func resizeGesture(for corner: Corner) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
                 if anchorRect == nil {
@@ -136,17 +137,73 @@ struct ScreenRegionGizmo: View {
                     onDragBegan()
                 }
                 guard let anchor = anchorRect else { return }
-                var resized = anchor
-                resized.size.width = min(
-                    max(minW, anchor.width + value.translation.width),
-                    canvasSize.width - anchor.minX)
-                resized.size.height = min(
-                    max(minH, anchor.height + value.translation.height),
-                    canvasSize.height - anchor.minY)
+                var minX = anchor.minX
+                var minY = anchor.minY
+                var maxX = anchor.maxX
+                var maxY = anchor.maxY
+                switch corner {
+                case .topLeft:
+                    minX += value.translation.width
+                    minY += value.translation.height
+                case .topRight:
+                    maxX += value.translation.width
+                    minY += value.translation.height
+                case .bottomLeft:
+                    minX += value.translation.width
+                    maxY += value.translation.height
+                case .bottomRight:
+                    maxX += value.translation.width
+                    maxY += value.translation.height
+                }
+                // Canvas clamp first, then the minimum size pushes
+                // the MOVING edges back inward.
+                minX = max(0, minX)
+                minY = max(0, minY)
+                maxX = min(canvasSize.width, maxX)
+                maxY = min(canvasSize.height, maxY)
+                switch corner {
+                case .topLeft:
+                    minX = min(minX, maxX - minW)
+                    minY = min(minY, maxY - minH)
+                case .topRight:
+                    maxX = max(maxX, minX + minW)
+                    minY = min(minY, maxY - minH)
+                case .bottomLeft:
+                    minX = min(minX, maxX - minW)
+                    maxY = max(maxY, minY + minH)
+                case .bottomRight:
+                    maxX = max(maxX, minX + minW)
+                    maxY = max(maxY, minY + minH)
+                }
+                let resized = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
                 draft = resized
                 onDragChanged(region(from: resized))
             }
             .onEnded { _ in finishDrag() }
+    }
+
+    private enum Corner: CaseIterable {
+        case topLeft, topRight, bottomLeft, bottomRight
+
+        /// Rotation that maps the bottom-right bracket path onto
+        /// this corner (positive degrees turn clockwise on screen).
+        var bracketRotation: Double {
+            switch self {
+            case .bottomRight: 0
+            case .bottomLeft: 90
+            case .topLeft: 180
+            case .topRight: 270
+            }
+        }
+
+        func point(in rect: CGRect, inset: CGFloat) -> CGPoint {
+            switch self {
+            case .topLeft: CGPoint(x: rect.minX + inset, y: rect.minY + inset)
+            case .topRight: CGPoint(x: rect.maxX - inset, y: rect.minY + inset)
+            case .bottomLeft: CGPoint(x: rect.minX + inset, y: rect.maxY - inset)
+            case .bottomRight: CGPoint(x: rect.maxX - inset, y: rect.maxY - inset)
+            }
+        }
     }
 
     private func finishDrag() {
