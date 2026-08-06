@@ -218,10 +218,13 @@ struct PlayerView: View {
                     )
                     // Fade while the screen gizmo drags, so the
                     // toolbar never hides the region or its handle
-                    // mid-drag.
+                    // mid-drag. VISUAL only: hit-testing stays on,
+                    // because any state that left the drag flag
+                    // set (a system-cancelled gesture) would
+                    // otherwise silence the header's buttons.
                     .opacity(editMode ? (layout.screenDragActive ? 0.15 : 1) : 0)
                     .animation(.easeInOut(duration: 0.15), value: layout.screenDragActive)
-                    .allowsHitTesting(editMode && !layout.screenDragActive)
+                    .allowsHitTesting(editMode)
                 }
 
                 DraggableDebugOverlay(
