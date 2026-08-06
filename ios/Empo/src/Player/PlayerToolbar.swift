@@ -125,6 +125,9 @@ struct PlayerEditToolbar: View {
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.xs)
                 .glassEffect(.regular, in: .capsule)
+                // Nudged up for a little more air above the button
+                // row (user request: a few pixels).
+                .offset(y: -3)
 
             HStack(spacing: Spacing.lg) {
                 Button {
@@ -167,7 +170,12 @@ struct PlayerEditToolbar: View {
                 }
             }
             .font(.footnote.weight(.semibold))
-            .padding(.horizontal, Spacing.lg)
+            // Concentric capsules: the Done capsule's gap to the
+            // container edge must match its vertical gap, so the
+            // trailing inset equals the vertical inset. The leading
+            // side keeps room for the plain text buttons.
+            .padding(.leading, Spacing.lg)
+            .padding(.trailing, Spacing.xs)
             .padding(.vertical, Spacing.xs)
             .glassEffect(.regular, in: .capsule)
         }

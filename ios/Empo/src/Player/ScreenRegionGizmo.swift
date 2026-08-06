@@ -52,18 +52,22 @@ struct ScreenRegionGizmo: View {
                 .allowsHitTesting(false)
 
             // Crop-style corner grabber: reads as "drag to resize"
-            // where the small circle did not. The gesture surface is
-            // a larger invisible square so the target stays easy to
-            // hit.
+            // where the small circle did not. It sits ON the border
+            // corner (like a photo-crop handle on its frame), a
+            // touch thicker than the dashes, with a soft shadow so
+            // it separates from bright game content. The gesture
+            // surface is a larger invisible square so the target
+            // stays easy to hit.
             CornerGrabber()
                 .stroke(
                     Color.brand,
-                    style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+                    style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
                 )
                 .frame(width: Self.grabberSide, height: Self.grabberSide)
+                .shadow(color: .black.opacity(0.45), radius: 2)
                 .position(
-                    x: rect.maxX - Self.grabberSide / 2 - 3,
-                    y: rect.maxY - Self.grabberSide / 2 - 3
+                    x: rect.maxX - Self.grabberSide / 2,
+                    y: rect.maxY - Self.grabberSide / 2
                 )
                 .allowsHitTesting(false)
             Color.clear
@@ -92,11 +96,12 @@ struct ScreenRegionGizmo: View {
             }
         }
         // Pin the glass pieces to the dark variant like the rest of
-        // the player chrome. Animate rect changes only while no drag
-        // is in flight (a reset glides; a finger never lags).
+        // the player chrome. No implicit animation on rect: in the
+        // player the outline follows the engine's ~60 Hz rect
+        // stream (the reset tween included), and easing on top of a
+        // continuous signal only adds lag. The editor's reset
+        // animates through its withAnimation transaction instead.
         .darkGlass()
-        .animation(
-            draft == nil ? .easeInOut(duration: 0.25) : nil, value: rect)
     }
 
     private static let grabberSide: CGFloat = 22
@@ -158,10 +163,12 @@ struct ScreenRegionGizmo: View {
 }
 
 /// Crop-style L bracket for the resize corner: a rounded corner
-/// stroke that opens toward the region's inside.
+/// stroke that opens toward the region's inside. Its corner radius
+/// matches the gizmo outline, so placed on the border it reads as
+/// part of the frame.
 private struct CornerGrabber: Shape {
     func path(in rect: CGRect) -> Path {
-        let radius = min(8, rect.width / 2)
+        let radius = min(6, rect.width / 2)
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
         path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY))
