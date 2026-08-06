@@ -214,7 +214,7 @@ struct PlayerEditToolbar: View {
     private var editBannerText: String {
         switch layout.provenance {
         case .pinnedProfile(let name):
-            return "Editing profile \(name) — applies to every game using it"
+            return "Editing \(name). Changes apply to every game that uses it."
         case .gameLayout, .defaultProfile, .builtin:
             return "Edits save as a new profile"
         }

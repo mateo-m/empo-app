@@ -165,7 +165,7 @@ struct LayoutProfilesSettingsView: View {
                 } header: {
                     Text("Built in")
                 } footer: {
-                    Text("The layout Empo ships with. Games use it when nothing else applies.")
+                    Text("Empo ships this layout. Games use it when nothing else applies.")
                 }
             }
 
@@ -658,10 +658,10 @@ struct BuiltinLayoutViewerView: View {
 
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text(
-                    "This is the layout Empo ships with. A game uses it when the game has no layout of its own and no profile applies."
+                    "Empo ships this layout. A game uses it when the game ships no layout and no profile applies."
                 )
                 Text(
-                    "You cannot edit this layout. It stays unchanged so a working layout is always available. To make your own version, duplicate it as a profile and edit the copy."
+                    "You cannot edit this layout. Empo keeps it unchanged as a fallback that works for every game. To make your own version, duplicate it as a profile and edit the copy."
                 )
             }
             .font(.footnote)
