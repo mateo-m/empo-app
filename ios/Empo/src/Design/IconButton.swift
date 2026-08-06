@@ -70,6 +70,10 @@ struct IconButton: View {
                 }
             }
             .modifier(IconGlassModifier(style: style, hasAction: action != nil))
+            // 44 pt minimum touch target: the small sizes render at
+            // 32-38 pt, and a real finger (or a mouse tap with
+            // drift) misses or cancels on the visible circle alone.
+            .contentShape(Circle().inset(by: min(0, (size.points - 44) / 2)))
     }
 }
 
