@@ -31,15 +31,16 @@ struct ScreenRegionGizmo: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(Color.brand, style: StrokeStyle(lineWidth: 2, dash: [8, 5]))
-                .background(Color.brand.opacity(0.06))
-                .frame(width: rect.width, height: rect.height)
-                .position(x: rect.midX, y: rect.midY)
-                .contentShape(Rectangle())
-                .gesture(moveGesture)
-                .accessibilityLabel("Game screen position")
-                .accessibilityHint("Drag to move the game picture")
+            ZStack {
+                Rectangle().fill(Color.brand.opacity(0.06))
+                GizmoOutline()
+            }
+            .frame(width: rect.width, height: rect.height)
+            .position(x: rect.midX, y: rect.midY)
+            .contentShape(Rectangle())
+            .gesture(moveGesture)
+            .accessibilityLabel("Game screen position")
+            .accessibilityHint("Drag to move the game picture")
 
             Text("Screen")
                 .font(.caption2.weight(.semibold))
@@ -138,5 +139,83 @@ struct ScreenRegionGizmo: View {
             y: rect.minY / canvasSize.height,
             w: rect.width / canvasSize.width,
             h: rect.height / canvasSize.height)
+    }
+}
+
+/// The gizmo border. A plain dashed rounded-rect stroke starts its
+/// pattern at one corner, so only that corner gets a dash that
+/// follows the curve. Here the four corner arcs draw SOLID and each
+/// edge fits a whole number of dashes with a half-gap at both ends,
+/// so every corner looks the same at any size.
+private struct GizmoOutline: View {
+    private static let lineWidth: CGFloat = 2
+    private static let cornerRadius: CGFloat = 6
+    private static let dashUnit: CGFloat = 8
+    private static let gapUnit: CGFloat = 5
+
+    var body: some View {
+        Canvas { context, size in
+            let inset = Self.lineWidth / 2
+            let r = Self.cornerRadius
+            let frame = CGRect(origin: .zero, size: size).insetBy(dx: inset, dy: inset)
+            guard frame.width > 2 * r, frame.height > 2 * r else {
+                context.stroke(
+                    Path(frame), with: .color(.brand), lineWidth: Self.lineWidth)
+                return
+            }
+
+            // Solid corners: stroke the rounded rect clipped to four
+            // corner squares. No arc-angle math to get wrong.
+            let rounded = Path(roundedRect: frame, cornerRadius: r)
+            let cornerSide = r + Self.lineWidth
+            let corners = [
+                CGRect(x: 0, y: 0, width: cornerSide, height: cornerSide),
+                CGRect(x: size.width - cornerSide, y: 0, width: cornerSide, height: cornerSide),
+                CGRect(
+                    x: size.width - cornerSide, y: size.height - cornerSide,
+                    width: cornerSide, height: cornerSide),
+                CGRect(
+                    x: 0, y: size.height - cornerSide, width: cornerSide, height: cornerSide),
+            ]
+            for corner in corners {
+                context.drawLayer { layer in
+                    layer.clip(to: Path(corner))
+                    layer.stroke(rounded, with: .color(.brand), lineWidth: Self.lineWidth)
+                }
+            }
+
+            // Edges: scale the dash pattern so a whole number of
+            // dash+gap cycles fits, with a half-gap at both ends.
+            func dashedLine(from: CGPoint, to: CGPoint) {
+                let length = hypot(to.x - from.x, to.y - from.y)
+                guard length > 1 else { return }
+                let unit = Self.dashUnit + Self.gapUnit
+                let cycles = max(1, (length / unit).rounded())
+                let scale = length / (cycles * unit)
+                let dash = Self.dashUnit * scale
+                let gap = Self.gapUnit * scale
+                var path = Path()
+                path.move(to: from)
+                path.addLine(to: to)
+                context.stroke(
+                    path, with: .color(.brand),
+                    style: StrokeStyle(
+                        lineWidth: Self.lineWidth, dash: [dash, gap],
+                        dashPhase: dash + gap / 2))
+            }
+            dashedLine(
+                from: CGPoint(x: frame.minX + r, y: frame.minY),
+                to: CGPoint(x: frame.maxX - r, y: frame.minY))
+            dashedLine(
+                from: CGPoint(x: frame.maxX, y: frame.minY + r),
+                to: CGPoint(x: frame.maxX, y: frame.maxY - r))
+            dashedLine(
+                from: CGPoint(x: frame.maxX - r, y: frame.maxY),
+                to: CGPoint(x: frame.minX + r, y: frame.maxY))
+            dashedLine(
+                from: CGPoint(x: frame.minX, y: frame.maxY - r),
+                to: CGPoint(x: frame.minX, y: frame.minY + r))
+        }
+        .allowsHitTesting(false)
     }
 }

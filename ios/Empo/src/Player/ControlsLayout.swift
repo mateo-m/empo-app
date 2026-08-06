@@ -446,11 +446,10 @@ class ControlsLayout {
     /// draw the dragged region before any save.
     var pendingScreenEdit: ScreenRegion?? { screenEdits[currentOrientation] }
 
-    /// The gameRect the chrome (controlsMinY, overlay-mode
-    /// decision, edit toolbar) uses during a screen drag. Frozen at
-    /// drag start so the controls do not re-clamp or flip layout
-    /// under the user's finger while the engine republishes rects.
-    private(set) var frozenChromeGameRect: CGRect?
+    /// True while a screen-gizmo drag is in flight. The chrome
+    /// follows the engine's republished rects LIVE during the drag
+    /// (user ruling 2026-08-06, overriding the freeze-at-drag-start
+    /// plan); the edit toolbar fades on this flag instead.
     private(set) var screenDragActive = false
 
     /// Auto-placement reference captured at drag start when the
@@ -460,17 +459,15 @@ class ControlsLayout {
     /// path back.
     private var screenAutoReference: ScreenRegion?
 
-    func beginScreenDrag(chromeGameRect: CGRect, autoReference: ScreenRegion?) {
+    func beginScreenDrag(autoReference: ScreenRegion?) {
         guard editSessionActive else { return }
         screenDragActive = true
-        frozenChromeGameRect = chromeGameRect
         screenAutoReference = autoReference
     }
 
     func endScreenDrag(region: ScreenRegion?) {
         guard screenDragActive else { return }
         screenDragActive = false
-        frozenChromeGameRect = nil
         var snappedBack = false
         var final = region
         if let region, let auto = screenAutoReference,
@@ -493,10 +490,26 @@ class ControlsLayout {
     }
 
     /// "Reset screen": back to engine-auto for the active
-    /// orientation. Commits like any other screen edit.
+    /// orientation. Dirties the commit only when a stored entry
+    /// exists to delete — resetting a drag that never saved is a
+    /// no-change and must not mint a profile on Done.
     func resetScreenEdit() {
         guard editSessionActive else { return }
-        screenEdits[currentOrientation] = .some(nil)
+        var targetName: String?
+        if let editorProfileName {
+            targetName = editorProfileName
+        } else if case .pinnedProfile(let name) = provenance {
+            targetName = name
+        }
+        let storedRead = targetName.flatMap { LayoutProfilesManager.store.readScreen($0) }
+        let storedEntry = storedRead.flatMap {
+            currentOrientation == .portrait ? $0.portrait : $0.landscape
+        }
+        if storedEntry != nil {
+            screenEdits[currentOrientation] = .some(nil)
+        } else {
+            screenEdits.removeValue(forKey: currentOrientation)
+        }
     }
 
     /// Disk regions overlaid with this session's edits — what a
@@ -560,7 +573,6 @@ class ControlsLayout {
         // not leak into the next game's first save.
         screenEdits.removeAll()
         screenDragActive = false
-        frozenChromeGameRect = nil
         screenAutoReference = nil
         clearEditUndoStack()
         staggerGeneration += 1
@@ -597,11 +609,10 @@ class ControlsLayout {
         guard new != currentOrientation else { return }
 
         // Abort an in-flight screen drag: its rect lives in the OLD
-        // orientation's canvas space and must not commit (or keep
-        // freezing chrome) under the new orientation.
+        // orientation's canvas space and must not commit under the
+        // new orientation.
         if screenDragActive {
             screenDragActive = false
-            frozenChromeGameRect = nil
             screenAutoReference = nil
             if !isEditorInstance {
                 ScreenRegionApplier.endPreview()
@@ -767,7 +778,6 @@ class ControlsLayout {
         if !screenEdits.isEmpty || screenDragActive {
             screenEdits.removeAll()
             screenDragActive = false
-            frozenChromeGameRect = nil
             screenAutoReference = nil
             ScreenRegionApplier.endPreview()
         }

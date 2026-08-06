@@ -117,10 +117,14 @@ struct PlayerEditToolbar: View {
         VStack(spacing: Spacing.xs) {
             // Blast-radius banner: a pinned profile's edits reach
             // every game using it; ambient edits mint a new profile.
+            // Its own small pill, so the button capsule stays clean.
             Text(editBannerText)
                 .font(.caption2)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(.white.opacity(0.85))
                 .lineLimit(1)
+                .padding(.horizontal, Spacing.md)
+                .padding(.vertical, Spacing.xs)
+                .glassEffect(.regular, in: .capsule)
 
             HStack(spacing: Spacing.xl) {
                 Button("+ Add") { showAddSheet = true }
@@ -143,11 +147,13 @@ struct PlayerEditToolbar: View {
                     .foregroundStyle(.success)
                     .font(.footnote.weight(.bold))
             }
+            .padding(.horizontal, Spacing.xl)
+            .padding(.vertical, Spacing.sm)
+            .glassEffect(.regular, in: .capsule)
         }
-        .padding(.horizontal, Spacing.xl)
-        .padding(.vertical, Spacing.sm)
-        .background(Color.black.opacity(Scrim.heavy))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        // Pin the glass to the dark variant, matching the play
+        // toolbar and the on-screen controls.
+        .darkGlass()
         // No chromeHitRegion here: PlayerEditToolbar stays mounted at
         // opacity 0 during play (its region would cover center screen),
         // and edit mode already publishes a full-screen region.

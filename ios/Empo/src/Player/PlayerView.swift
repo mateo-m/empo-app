@@ -57,13 +57,12 @@ struct PlayerView: View {
             // the toolbar was cramped in the zone below the game) no
             // longer applies.
             let toolbarBtnSize = IconButtonSize.sm.points
-            // During a screen drag the chrome keeps the drag-start
-            // rect: the engine republishes gameRect live, and
-            // re-clamping controls or flipping the overlay decision
-            // mid-drag would shove the layout under the finger.
-            let chromeGameRect = layout.frozenChromeGameRect ?? gameRect
+            // The chrome follows the engine's republished gameRect
+            // LIVE during a screen drag, so the controls zone tracks
+            // the moving screen. The edit toolbar fades during the
+            // drag instead of holding still.
             let controlsMinY = ControlsZone.toolbarBottomY(
-                isPortrait: isPortrait, gameRect: chromeGameRect, safeArea: safeArea,
+                isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
                 btnSize: toolbarBtnSize,
                 geoHeight: geo.size.height)
 
@@ -195,7 +194,7 @@ struct PlayerView: View {
 
                     PlayerEditToolbar(
                         isPortrait: isPortrait,
-                        gameRect: chromeGameRect,
+                        gameRect: gameRect,
                         safeArea: safeArea,
                         geoSize: geo.size,
                         layout: layout,
@@ -203,8 +202,12 @@ struct PlayerView: View {
                         showResetConfirm: $showResetConfirm,
                         onDone: { toggleEditMode() }
                     )
-                    .opacity(editMode ? 1 : 0)
-                    .allowsHitTesting(editMode)
+                    // Fade while the screen gizmo drags, so the
+                    // toolbar never hides the region or its handle
+                    // mid-drag.
+                    .opacity(editMode ? (layout.screenDragActive ? 0.15 : 1) : 0)
+                    .animation(.easeInOut(duration: 0.15), value: layout.screenDragActive)
+                    .allowsHitTesting(editMode && !layout.screenDragActive)
                 }
 
                 DraggableDebugOverlay(
@@ -499,12 +502,11 @@ struct PlayerView: View {
                 baseRect: baseRect,
                 showsReset: effective != nil,
                 onDragBegan: {
+                    // Snap-to-auto only when the orientation had no
+                    // entry: with an entry active, the engine
+                    // publishes region-derived rects and there is no
+                    // live auto rect to compare against.
                     layout.beginScreenDrag(
-                        chromeGameRect: layout.frozenChromeGameRect ?? gameRect,
-                        // Snap-to-auto only when the orientation had
-                        // no entry: with an entry active, the engine
-                        // publishes region-derived rects and there is
-                        // no live auto rect to compare against.
                         autoReference: effective == nil && !gameRect.isEmpty
                             ? autoRegion : nil)
                 },

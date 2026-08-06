@@ -577,7 +577,6 @@ struct LayoutProfileEditorView: View {
                 onDragBegan: {
                     let auto = EditorCanvas.fakeGameRect(for: editingOrientation)
                     layout.beginScreenDrag(
-                        chromeGameRect: gameRect,
                         autoReference: screenRegion == nil
                             ? ScreenRegion(
                                 x: auto.minX / size.width, y: auto.minY / size.height,
