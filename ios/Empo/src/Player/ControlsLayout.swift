@@ -1012,12 +1012,15 @@ class ControlsLayout {
     var liveScreenDragRegion: ScreenRegion?
 
     /// The zone height the screen drag blocks at: the tallest
-    /// control plus the zone paddings (fit-then-block, user ruling
-    /// 2026-08-06). The zone stays crushable down to this height.
+    /// control plus the clamp-band insets (fit-then-block, user
+    /// ruling 2026-08-06). The band insets by padding PLUS
+    /// innerPadding on each side; using the zone padding alone
+    /// left the d-pad 12 pt short and it overflowed the border.
     var requiredEditZoneHeight: CGFloat {
         let tallestButton =
             (buttons.map(\.size) + actionButtons.map(\.size)).max() ?? 0
-        return max(dpadSize, tallestButton) + 2 * ControlsZone.padding
+        return max(dpadSize, tallestButton)
+            + 2 * (ControlsZone.padding + ControlsZone.innerPadding)
     }
 
     /// Circle-vs-rect push-out. nil when there is no collision.
@@ -1220,14 +1223,34 @@ class ControlsLayout {
             controlSize: CGSize(width: dpadSize, height: dpadSize),
             safeArea: safeArea, controlsMinY: controlsMinY
         )
+
+        // Separation must stay inside the clamp BAND, not the full
+        // window — pushed against the window box, a crushed zone
+        // squeezed controls straight past its borders. Translate
+        // into band space, separate, translate back.
+        let pad = ControlsZone.padding + ControlsZone.innerPadding
+        let bandMinX = Double(safeArea.leading + pad)
+        let bandMinY = Double(max(safeArea.top + pad, controlsMinY + pad))
+        let bandWidth = max(
+            1, Double(geoSize.width - safeArea.trailing - pad) - bandMinX)
+        let bandHeight = max(
+            1, Double(geoSize.height - safeArea.bottom - pad) - bandMinY)
+
+        let bandInputs = inputs.map { input in
+            (x: input.x - bandMinX, y: input.y - bandMinY, size: input.size)
+        }
         let obstacles = [
-            (x: Double(dpadClamped.x), y: Double(dpadClamped.y), size: Double(dpadSize))
+            (
+                x: Double(dpadClamped.x) - bandMinX,
+                y: Double(dpadClamped.y) - bandMinY,
+                size: Double(dpadSize)
+            )
         ]
 
         let result = ButtonSeparation.separate(
-            inputs,
-            width: Double(geoSize.width),
-            height: Double(geoSize.height),
+            bandInputs,
+            width: bandWidth,
+            height: bandHeight,
             obstacles: obstacles
         )
 
@@ -1246,7 +1269,8 @@ class ControlsLayout {
         var centers: [UUID: CGPoint] = [:]
         for (index, circle) in allCircles.enumerated() {
             let point = result.positions[index]
-            centers[circle.id] = CGPoint(x: CGFloat(point.x), y: CGFloat(point.y))
+            centers[circle.id] = CGPoint(
+                x: CGFloat(point.x + bandMinX), y: CGFloat(point.y + bandMinY))
         }
         return centers
     }
