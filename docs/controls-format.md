@@ -396,6 +396,10 @@ When your file provides layer 2, the Reset button in Empo's edit mode
 returns players to it. The button label is then "Reset to game
 default."
 
+Screen placement is not part of this format. Where the game picture
+sits on screen belongs to the player's layout profiles, so a game
+cannot set it. Your `touch` section positions controls only.
+
 Controller bindings merge per element. Later layers override earlier
 ones:
 

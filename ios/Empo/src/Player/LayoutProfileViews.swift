@@ -565,25 +565,11 @@ struct LayoutProfileEditorView: View {
                 .frame(width: gameRect.width, height: gameRect.height)
                 .position(x: gameRect.midX, y: gameRect.midY)
 
-            GeometryReader { geo in
-                PlayerControlsOverlay(
-                    layout: layout,
-                    actions: actions,
-                    geo: geo,
-                    controlsMinY: controlsMinY,
-                    editMode: true,
-                    safeArea: canvasSafeArea,
-                    isPreview: true,
-                    editingButton: $editingButton,
-                    editingActionButton: $editingActionButton,
-                    editingDPad: $editingDPad,
-                    draggingDPad: $draggingDPad,
-                    draggingButtonID: $draggingButtonID
-                )
-            }
-
             // Screen gizmo on the mock canvas: no live engine, so
-            // drags stay local until editorSave merges them.
+            // drags stay local until editorSave merges them. It sits
+            // BELOW the controls overlay (same order as the player),
+            // or its move surface would steal drags from any control
+            // inside the region rect.
             ScreenRegionGizmo(
                 canvasSize: size,
                 baseRect: screenRegionRect ?? gameRect,
@@ -606,6 +592,23 @@ struct LayoutProfileEditorView: View {
                     layout.resetScreenEdit()
                 }
             )
+
+            GeometryReader { geo in
+                PlayerControlsOverlay(
+                    layout: layout,
+                    actions: actions,
+                    geo: geo,
+                    controlsMinY: controlsMinY,
+                    editMode: true,
+                    safeArea: canvasSafeArea,
+                    isPreview: true,
+                    editingButton: $editingButton,
+                    editingActionButton: $editingActionButton,
+                    editingDPad: $editingDPad,
+                    draggingDPad: $draggingDPad,
+                    draggingButtonID: $draggingButtonID
+                )
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
     }

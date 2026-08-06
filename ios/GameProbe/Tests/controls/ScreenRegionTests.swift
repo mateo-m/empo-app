@@ -136,11 +136,35 @@ final class ScreenRegionTests: XCTestCase {
         XCTAssertTrue(result.findings.isEmpty)
     }
 
-    func testParseUnknownKeyIsWS1() {
+    func testParseUnknownKeyIsWS1AndDropsOnRewrite() throws {
         let result = ScreenRegionFile.parse(
             data(#"{ "version": 1, "zoom": 2, "portrait": { "x": 0, "y": 0, "w": 1, "h": 1 } }"#))
         XCTAssertNotNil(result.portrait)
         XCTAssertTrue(result.findings.contains { $0.hasPrefix("W-S1") })
+
+        let rewritten = try XCTUnwrap(
+            ScreenRegionFile.serialize(portrait: result.portrait, landscape: result.landscape))
+        XCTAssertFalse(String(decoding: rewritten, as: UTF8.self).contains("zoom"))
+    }
+
+    func testParseRejectsBooleanAndStringNumbers() {
+        // JSON booleans bridge to Int/Double via NSNumber on both
+        // platforms; the objCType guard must reject them.
+        for json in [#"{ "version": true }"#, #"{ "version": "1" }"#] {
+            let result = ScreenRegionFile.parse(data(json))
+            XCTAssertTrue(result.findings.contains { $0.hasPrefix("S002") }, json)
+        }
+        let result = ScreenRegionFile.parse(
+            data(#"{ "version": 1, "portrait": { "x": true, "y": 0, "w": 1, "h": 1 } }"#))
+        XCTAssertNil(result.portrait)
+        XCTAssertTrue(result.findings.contains { $0.hasPrefix("S004") })
+    }
+
+    func testParseAcceptsFloatVersionOne() {
+        // 1.0 is exactly representable: Int(exactly:) admits it.
+        let result = ScreenRegionFile.parse(
+            data(#"{ "version": 1.0, "portrait": { "x": 0, "y": 0, "w": 1, "h": 1 } }"#))
+        XCTAssertNotNil(result.portrait)
     }
 
     // MARK: - Serialize

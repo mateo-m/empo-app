@@ -306,7 +306,15 @@ struct PlayerView: View {
                 // Rotation re-sends the region for the new
                 // orientation; the engine draws automatic placement
                 // until this call lands (orientation-tag guard).
-                ScreenRegionApplier.geometryChanged()
+                // Mid-edit-session, the new orientation's pending
+                // edit outranks the resolved state; with nothing
+                // pending, leaving preview mode re-applies from disk
+                // in both the preview and the normal case.
+                if let pending = layout.pendingScreenEdit {
+                    ScreenRegionApplier.preview(pending, isPortrait: nowPortrait)
+                } else {
+                    ScreenRegionApplier.endPreview()
+                }
             }
             // `initial: true`: the engine usually publishes gameRect
             // during the loading transition, BEFORE PlayerView mounts.
@@ -505,10 +513,14 @@ struct PlayerView: View {
                 },
                 onDragEnded: { region in
                     layout.endScreenDrag(region: region)
-                    // The snap decision may have discarded the edit;
-                    // preview whatever is pending now.
-                    ScreenRegionApplier.preview(
-                        layout.pendingScreenEdit.flatMap { $0 }, isPortrait: isPortrait)
+                    if let pending = layout.pendingScreenEdit {
+                        ScreenRegionApplier.preview(pending, isPortrait: isPortrait)
+                    } else {
+                        // Snapped back with no prior edit: nothing is
+                        // pending, so leave preview mode — a stuck
+                        // preview would freeze the applier.
+                        ScreenRegionApplier.endPreview()
+                    }
                 },
                 onReset: {
                     layout.resetScreenEdit()

@@ -19,6 +19,16 @@ enum ScreenRegionApplier {
     private static var tokens: [NSObjectProtocol] = []
     /// A gizmo drag overrides the resolved region until it ends.
     private static var previewActive = false
+    /// Resolution cache: the player's body reads `resolvedRegion`
+    /// per render, and a drag re-renders at frame rate — without
+    /// the cache that is main-thread file IO at up to 120 Hz.
+    /// Invalidated on the notifications, session boundaries, and
+    /// `endPreview` (a save may have just written files).
+    private static var resolutionCache: ScreenResolution.Result?
+    /// Log-once guard: an invalid file in the chain would otherwise
+    /// re-append identical findings on every rotation and pin
+    /// change, unbounded. Cleared per session.
+    private static var loggedFindingSignatures: Set<String> = []
 
     // MARK: - Session lifecycle
 
@@ -29,6 +39,8 @@ enum ScreenRegionApplier {
     static func beginSession(container: GameContainer) {
         activeContainer = container
         previewActive = false
+        resolutionCache = nil
+        loggedFindingSignatures.removeAll()
         observeIfNeeded()
         apply()
     }
@@ -36,6 +48,7 @@ enum ScreenRegionApplier {
     static func endSession() {
         activeContainer = nil
         previewActive = false
+        resolutionCache = nil
         mkxp_clearHostViewportRegion()
     }
 
@@ -45,38 +58,44 @@ enum ScreenRegionApplier {
     /// The bridge holds one region; rotation re-applies through the
     /// player's geometry change hook.
     static func apply() {
-        guard let container = activeContainer, !previewActive else { return }
-        let store = LayoutProfilesManager.store
-        let pin = store.loadPin(forGameFolder: container.url).pin
-        let resolved = ScreenResolution.resolve(
-            pin: pin,
-            defaultProfileName: LayoutProfilesManager.defaultProfileName,
-            readScreen: { name in
-                let read = store.readScreen(name)
-                if let findings = read?.findings, !findings.isEmpty {
-                    for line in findings {
-                        store.appendLog(name, file: ScreenRegionFile.fileName, line: line)
-                    }
-                }
-                return read
-            }
-        )
+        guard activeContainer != nil, !previewActive else { return }
+        guard let resolved = resolve() else { return }
         let portrait = currentWindowIsPortrait
         let outcome = portrait ? resolved.portrait : resolved.landscape
         send(outcome.region, isPortrait: portrait)
     }
 
     /// The region the chain resolves to right now, for the gizmo's
-    /// base rect. No logging: apply() owns the findings path.
+    /// base rect. Served from the cache.
     static func resolvedRegion(isPortrait: Bool) -> ScreenRegion? {
+        guard let resolved = resolve() else { return nil }
+        return (isPortrait ? resolved.portrait : resolved.landscape).region
+    }
+
+    private static func resolve() -> ScreenResolution.Result? {
         guard let container = activeContainer else { return nil }
+        if let cached = resolutionCache { return cached }
         let store = LayoutProfilesManager.store
-        let resolved = ScreenResolution.resolve(
+        let result = ScreenResolution.resolve(
             pin: store.loadPin(forGameFolder: container.url).pin,
             defaultProfileName: LayoutProfilesManager.defaultProfileName,
-            readScreen: { store.readScreen($0) }
+            readScreen: { name in
+                let read = store.readScreen(name)
+                if let findings = read?.findings, !findings.isEmpty {
+                    let signature = name + "|" + findings.joined(separator: ";")
+                    if !loggedFindingSignatures.contains(signature) {
+                        loggedFindingSignatures.insert(signature)
+                        for line in findings {
+                            store.appendLog(
+                                name, file: ScreenRegionFile.fileName, line: line)
+                        }
+                    }
+                }
+                return read
+            }
         )
-        return (isPortrait ? resolved.portrait : resolved.landscape).region
+        resolutionCache = result
+        return result
     }
 
     /// Live gizmo feed: overrides the resolved region during a drag.
@@ -87,9 +106,11 @@ enum ScreenRegionApplier {
     }
 
     /// Drag ended (committed or cancelled): back to the resolved
-    /// state.
+    /// state. A save may have just written files, so the cache
+    /// drops first.
     static func endPreview() {
         previewActive = false
+        resolutionCache = nil
         apply()
     }
 
@@ -123,17 +144,23 @@ enum ScreenRegionApplier {
         return bounds.width < bounds.height
     }
 
-    /// Shift-then-shrink into the safe area, in fraction space.
+    /// Shift-then-shrink into the safe area, in fraction space. In
+    /// landscape only the left/right insets apply — the engine's
+    /// auto path ignores top/bottom there (the home indicator
+    /// auto-hides), and clamping harder than auto would make a
+    /// full-height region impossible to author.
     static func clampToSafeArea(_ region: ScreenRegion) -> ScreenRegion {
         guard let window else { return region }
         let bounds = window.bounds
         guard bounds.width > 0, bounds.height > 0 else { return region }
         let insets = window.safeAreaInsets
+        let isPortrait = bounds.width < bounds.height
 
         let safeX = Double(insets.left / bounds.width)
-        let safeY = Double(insets.top / bounds.height)
+        let safeY = isPortrait ? Double(insets.top / bounds.height) : 0
         let safeMaxX = Double((bounds.width - insets.right) / bounds.width)
-        let safeMaxY = Double((bounds.height - insets.bottom) / bounds.height)
+        let safeMaxY =
+            isPortrait ? Double((bounds.height - insets.bottom) / bounds.height) : 1
 
         var w = min(region.w, safeMaxX - safeX)
         var h = min(region.h, safeMaxY - safeY)
@@ -159,6 +186,7 @@ enum ScreenRegionApplier {
                         // Cheap full re-resolve; origin filtering is
                         // unnecessary because apply() is idempotent
                         // and never writes files or posts back.
+                        resolutionCache = nil
                         apply()
                     }
                 })

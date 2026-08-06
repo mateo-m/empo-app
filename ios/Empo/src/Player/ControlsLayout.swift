@@ -231,18 +231,39 @@ class ControlsLayout {
     }
 
     var resetConfirmationMessage: String {
-        let screenActive =
-            !screenEdits.isEmpty
-            || ScreenRegionApplier.resolvedRegion(
-                isPortrait: currentOrientation == .portrait) != nil
         if case .pinnedProfile(let name) = provenance {
             let base = "This game stops using the profile \(name). The profile keeps its layout."
-            return screenActive
+            return screenChangesOnReset
                 ? base + " The screen returns to automatic placement." : base
         }
-        return screenActive
+        return screenChangesOnReset
             ? "This removes your custom layout. The screen returns to automatic placement."
             : "This removes your custom layout."
+    }
+
+    /// The reset clause must only promise "automatic placement" when
+    /// the reset actually delivers it: a region is active now, and
+    /// the post-reset chain (unpinned for pinned provenance, session
+    /// edits dropped) resolves to none.
+    private var screenChangesOnReset: Bool {
+        let isPortrait = currentOrientation == .portrait
+        let current =
+            pendingScreenEdit.flatMap { $0 }
+            ?? ScreenRegionApplier.resolvedRegion(isPortrait: isPortrait)
+        guard current != nil else { return false }
+
+        let store = LayoutProfilesManager.store
+        var postResetPin: LayoutPin = .followChain
+        if case .pinnedProfile = provenance {
+            postResetPin = .followChain
+        } else if let container = currentContainer {
+            postResetPin = store.loadPin(forGameFolder: container.url).pin
+        }
+        let postReset = ScreenResolution.resolve(
+            pin: postResetPin,
+            defaultProfileName: LayoutProfilesManager.defaultProfileName,
+            readScreen: { store.readScreen($0) })
+        return (isPortrait ? postReset.portrait : postReset.landscape).region == nil
     }
 
     private static let controlsManifestLogFile = "controls.json.log"
@@ -399,12 +420,14 @@ class ControlsLayout {
 
     func endEditSession() {
         editSessionActive = false
-        // Abandoned screen edits (save() commits before this in the
-        // player flow, so leftovers mean the session was torn down):
-        // drop them and let the applier re-resolve from disk. The
-        // profile editor saves AFTER ending its session, so its
-        // edits must survive here.
-        if !isEditorInstance, !screenEdits.isEmpty {
+        // Player path: drop abandoned screen edits (save() commits
+        // before this in the player flow, so leftovers mean the
+        // session was torn down) and ALWAYS end the preview — a
+        // snapped-back drag previews without leaving an edit behind,
+        // and a stuck preview would freeze the applier for the rest
+        // of the session. The profile editor saves AFTER ending its
+        // session, so its edits must survive here.
+        if !isEditorInstance {
             screenEdits.removeAll()
             ScreenRegionApplier.endPreview()
         }
@@ -448,15 +471,25 @@ class ControlsLayout {
         guard screenDragActive else { return }
         screenDragActive = false
         frozenChromeGameRect = nil
+        var snappedBack = false
         var final = region
         if let region, let auto = screenAutoReference,
             abs(region.x - auto.x) < 0.01, abs(region.y - auto.y) < 0.01,
             abs(region.w - auto.w) < 0.01, abs(region.h - auto.h) < 0.01
         {
             final = nil
+            snappedBack = true
         }
         screenAutoReference = nil
-        screenEdits[currentOrientation] = .some(final)
+        if snappedBack {
+            // The auto reference only exists when the orientation had
+            // no entry, so a snapped-back drag is NO change. A stored
+            // `.some(nil)` would count as dirty and mint a profile on
+            // Done.
+            screenEdits.removeValue(forKey: currentOrientation)
+        } else {
+            screenEdits[currentOrientation] = .some(final)
+        }
     }
 
     /// "Reset screen": back to engine-auto for the active
@@ -523,6 +556,12 @@ class ControlsLayout {
             save()
         }
         editSessionActive = false
+        // A failed save() can leave screen edits behind; they must
+        // not leak into the next game's first save.
+        screenEdits.removeAll()
+        screenDragActive = false
+        frozenChromeGameRect = nil
+        screenAutoReference = nil
         clearEditUndoStack()
         staggerGeneration += 1
         currentGameID = newGameID
@@ -556,6 +595,18 @@ class ControlsLayout {
     /// device rotation in real time.
     func setOrientation(_ new: ControlsOrientation) {
         guard new != currentOrientation else { return }
+
+        // Abort an in-flight screen drag: its rect lives in the OLD
+        // orientation's canvas space and must not commit (or keep
+        // freezing chrome) under the new orientation.
+        if screenDragActive {
+            screenDragActive = false
+            frozenChromeGameRect = nil
+            screenAutoReference = nil
+            if !isEditorInstance {
+                ScreenRegionApplier.endPreview()
+            }
+        }
 
         clearEditUndoStack()
         staggerGeneration += 1

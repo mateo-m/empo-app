@@ -61,7 +61,9 @@ public enum ScreenRegionFile {
         else {
             return ReadResult(findings: ["S001: screen.json is not a JSON object"])
         }
-        guard let version = object["version"] as? Int, version == 1 else {
+        guard let rawVersion = object["version"], let version = asInt(rawVersion),
+            version == 1
+        else {
             return ReadResult(findings: ["S002: version is missing or not 1"])
         }
 
@@ -84,7 +86,7 @@ public enum ScreenRegionFile {
             return nil
         }
         func number(_ field: String) -> Double? {
-            (entry[field] as? NSNumber)?.doubleValue
+            entry[field].flatMap(asDouble)
         }
         guard let x = number("x"), let y = number("y"),
             let w = number("w"), let h = number("h")
@@ -124,5 +126,30 @@ public enum ScreenRegionFile {
 
     private static func format(_ value: Double) -> String {
         String(format: "%.4f", value)
+    }
+
+    // JSON booleans must not pass as numbers. Type casts cannot
+    // tell them apart on either platform, but JSONSerialization
+    // encodes booleans with objCType "c". Same guard as the
+    // controls loader.
+    private static func isJSONBool(_ value: Any) -> Bool {
+        guard let number = value as? NSNumber else { return value is Bool }
+        return String(cString: number.objCType) == "c"
+    }
+
+    private static func asDouble(_ value: Any) -> Double? {
+        guard !isJSONBool(value) else { return nil }
+        if let number = value as? NSNumber { return number.doubleValue }
+        if let double = value as? Double { return double }
+        if let int = value as? Int { return Double(int) }
+        return nil
+    }
+
+    private static func asInt(_ value: Any) -> Int? {
+        guard !isJSONBool(value) else { return nil }
+        if let number = value as? NSNumber { return Int(exactly: number) }
+        if let int = value as? Int { return int }
+        if let double = value as? Double { return Int(exactly: double) }
+        return nil
     }
 }

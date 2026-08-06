@@ -76,7 +76,10 @@ struct ScreenRegionGizmo: View {
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                 }
-                .position(x: rect.midX, y: rect.maxY - 18)
+                // Top area, below the "Screen" label: the bottom
+                // corner belongs to the resize handle, and at the
+                // minimum region size a bottom chip would overlap it.
+                .position(x: rect.midX, y: rect.minY + 44)
                 .accessibilityLabel("Reset screen to automatic placement")
             }
         }
