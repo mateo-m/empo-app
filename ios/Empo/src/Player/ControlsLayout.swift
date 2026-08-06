@@ -231,10 +231,18 @@ class ControlsLayout {
     }
 
     var resetConfirmationMessage: String {
+        let screenActive =
+            !screenEdits.isEmpty
+            || ScreenRegionApplier.resolvedRegion(
+                isPortrait: currentOrientation == .portrait) != nil
         if case .pinnedProfile(let name) = provenance {
-            return "This game stops using the profile \(name). The profile keeps its layout."
+            let base = "This game stops using the profile \(name). The profile keeps its layout."
+            return screenActive
+                ? base + " The screen returns to automatic placement." : base
         }
-        return "This removes your custom layout."
+        return screenActive
+            ? "This removes your custom layout. The screen returns to automatic placement."
+            : "This removes your custom layout."
     }
 
     private static let controlsManifestLogFile = "controls.json.log"
@@ -391,6 +399,84 @@ class ControlsLayout {
 
     func endEditSession() {
         editSessionActive = false
+        // Abandoned screen edits (save() commits before this in the
+        // player flow, so leftovers mean the session was torn down):
+        // drop them and let the applier re-resolve from disk. The
+        // profile editor saves AFTER ending its session, so its
+        // edits must survive here.
+        if !isEditorInstance, !screenEdits.isEmpty {
+            screenEdits.removeAll()
+            ScreenRegionApplier.endPreview()
+        }
+    }
+
+    // MARK: - Screen region editing
+
+    /// Pending screen edits for this edit session, keyed by
+    /// orientation. `.some(nil)` = reset to engine-auto; absent key
+    /// = untouched. Cleared when a save commits them.
+    private var screenEdits: [ControlsOrientation: ScreenRegion?] = [:]
+    var screenEditsDirty: Bool { !screenEdits.isEmpty }
+
+    /// The pending edit for the active orientation, or nil when the
+    /// orientation is untouched this session. The gizmo reads it to
+    /// draw the dragged region before any save.
+    var pendingScreenEdit: ScreenRegion?? { screenEdits[currentOrientation] }
+
+    /// The gameRect the chrome (controlsMinY, overlay-mode
+    /// decision, edit toolbar) uses during a screen drag. Frozen at
+    /// drag start so the controls do not re-clamp or flip layout
+    /// under the user's finger while the engine republishes rects.
+    private(set) var frozenChromeGameRect: CGRect?
+    private(set) var screenDragActive = false
+
+    /// Auto-placement reference captured at drag start when the
+    /// orientation had no entry. Ending a drag within 1% of it
+    /// discards the edit (snap back to engine-auto). nil when an
+    /// entry already existed — then the explicit reset is the only
+    /// path back.
+    private var screenAutoReference: ScreenRegion?
+
+    func beginScreenDrag(chromeGameRect: CGRect, autoReference: ScreenRegion?) {
+        guard editSessionActive else { return }
+        screenDragActive = true
+        frozenChromeGameRect = chromeGameRect
+        screenAutoReference = autoReference
+    }
+
+    func endScreenDrag(region: ScreenRegion?) {
+        guard screenDragActive else { return }
+        screenDragActive = false
+        frozenChromeGameRect = nil
+        var final = region
+        if let region, let auto = screenAutoReference,
+            abs(region.x - auto.x) < 0.01, abs(region.y - auto.y) < 0.01,
+            abs(region.w - auto.w) < 0.01, abs(region.h - auto.h) < 0.01
+        {
+            final = nil
+        }
+        screenAutoReference = nil
+        screenEdits[currentOrientation] = .some(final)
+    }
+
+    /// "Reset screen": back to engine-auto for the active
+    /// orientation. Commits like any other screen edit.
+    func resetScreenEdit() {
+        guard editSessionActive else { return }
+        screenEdits[currentOrientation] = .some(nil)
+    }
+
+    /// Disk regions overlaid with this session's edits — what a
+    /// commit writes for the named profile.
+    private func mergedScreenRegions(
+        profile name: String, store: LayoutProfileStore
+    ) -> (portrait: ScreenRegion?, landscape: ScreenRegion?) {
+        let disk = store.readScreen(name)
+        var portrait = disk?.portrait
+        var landscape = disk?.landscape
+        if let edit = screenEdits[.portrait] { portrait = edit }
+        if let edit = screenEdits[.landscape] { landscape = edit }
+        return (portrait, landscape)
     }
 
     private func clearEditUndoStack() {
@@ -623,6 +709,17 @@ class ControlsLayout {
     func resetToResolvedDefault() {
         guard !isEditorInstance else { return }
         recordEditSnapshot()
+
+        // Screen edits from this session drop with the reset. The
+        // unpin below re-resolves the screen through the applier's
+        // pin-change observer; ambient resets re-apply from disk.
+        if !screenEdits.isEmpty || screenDragActive {
+            screenEdits.removeAll()
+            screenDragActive = false
+            frozenChromeGameRect = nil
+            screenAutoReference = nil
+            ScreenRegionApplier.endPreview()
+        }
 
         if case .pinnedProfile = provenance, let container = currentContainer {
             LayoutProfilesManager.store.writePin(.followChain, forGameFolder: container.url)
@@ -919,18 +1016,34 @@ class ControlsLayout {
 
         switch provenance {
         case .pinnedProfile(let name):
+            var changed = false
             let section = materializedTouchSection()
-            if let existing = store.readProfile(name)?.touch {
-                let disk = ProfileMaterializer.canonicalBytes(
+            let controlsOnDisk = store.readProfile(name)?.touch.map { existing in
+                ProfileMaterializer.canonicalBytes(
                     ProfileMaterializer.materialize(
                         user: existing, manifest: nil,
                         builtins: LayoutProfilesManager.builtins(), metrics: layoutMetrics()))
-                if ProfileMaterializer.canonicalBytes(section) == disk {
-                    return
-                }
             }
-            store.writeProfile(name, touch: section)
-            LayoutProfilesManager.postProfileChange(name: name, from: self)
+            if controlsOnDisk != ProfileMaterializer.canonicalBytes(section) {
+                store.writeProfile(name, touch: section)
+                changed = true
+            }
+            // Per-file skip: the screen write runs only when the
+            // merged regions differ from disk.
+            if screenEditsDirty {
+                let merged = mergedScreenRegions(profile: name, store: store)
+                let disk = store.readScreen(name)
+                if merged.portrait != disk?.portrait || merged.landscape != disk?.landscape {
+                    store.writeScreen(
+                        name, portrait: merged.portrait, landscape: merged.landscape)
+                    changed = true
+                }
+                screenEdits.removeAll()
+                ScreenRegionApplier.endPreview()
+            }
+            if changed {
+                LayoutProfilesManager.postProfileChange(name: name, from: self)
+            }
 
         case .gameLayout, .defaultProfile, .builtin:
             // Auto-create fires only from edit-session commits, so a
@@ -938,19 +1051,31 @@ class ControlsLayout {
             guard editSessionActive else { return }
             guard let baseline = ambientBaseline else { return }
             let current = currentPersistedLayout()
-            if Self.layoutsEquivalent(current.portrait, baseline.portrait),
-                Self.layoutsEquivalent(current.landscape, baseline.landscape)
-            {
-                return
-            }
+            let layoutsChanged =
+                !Self.layoutsEquivalent(current.portrait, baseline.portrait)
+                || !Self.layoutsEquivalent(current.landscape, baseline.landscape)
+            // A screen drag is a committed change too: it must mint
+            // the profile even when no control moved.
+            guard layoutsChanged || screenEditsDirty else { return }
             let base = currentGameTitle ?? container.url.lastPathComponent
             let name = store.uniqueName(base: base)
             guard store.createProfile(name, touch: materializedTouchSection()) else { return }
+            if screenEditsDirty {
+                // Only the orientations dragged this session; the
+                // ambient source's own region is derive-only and
+                // never copies into the minted profile.
+                store.writeScreen(
+                    name,
+                    portrait: screenEdits[.portrait].flatMap { $0 },
+                    landscape: screenEdits[.landscape].flatMap { $0 })
+                screenEdits.removeAll()
+            }
             store.writePin(.profile(name), forGameFolder: container.url)
             provenance = .pinnedProfile(name)
             pinFellThrough = false
             LayoutProfilesManager.postPinChange(gameID: gameID, from: self)
             LayoutProfilesManager.postProfileChange(name: name, from: self)
+            ScreenRegionApplier.endPreview()
         }
     }
 
@@ -965,10 +1090,18 @@ class ControlsLayout {
         )
     }
 
-    /// Editor instances write straight to the profile file.
+    /// Editor instances write straight to the profile file. Screen
+    /// edits merge into the existing entries — opening and closing
+    /// the editor never mints a `screen.json`.
     func editorSave() {
         guard let name = editorProfileName else { return }
-        LayoutProfilesManager.store.writeProfile(name, touch: materializedTouchSection())
+        let store = LayoutProfilesManager.store
+        store.writeProfile(name, touch: materializedTouchSection())
+        if screenEditsDirty {
+            let merged = mergedScreenRegions(profile: name, store: store)
+            store.writeScreen(name, portrait: merged.portrait, landscape: merged.landscape)
+            screenEdits.removeAll()
+        }
         LayoutProfilesManager.postProfileChange(name: name, from: self)
     }
 
@@ -1159,6 +1292,9 @@ class ControlsLayout {
                         ProfileMaterializer.materialize(
                             user: touch, manifest: nil, builtins: builtins,
                             metrics: .reference))
+                },
+                profileHasScreen: { name in
+                    FileManager.default.fileExists(atPath: store.screenURL(name).path)
                 }
             ),
             builtins: builtins

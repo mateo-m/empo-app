@@ -177,6 +177,10 @@ public enum ProfileMigration {
         public var existingProfiles: [String]
         /// Canonical bytes per profile; nil when unreadable.
         public var profileCanonicalBytes: (String) -> Data?
+        /// Screen-bearing profiles never dedupe-match: a migrated
+        /// game's layout has no screen data, so pinning to one would
+        /// silently move the game's screen.
+        public var profileHasScreen: (String) -> Bool
 
         public init(
             gameID: String,
@@ -186,7 +190,8 @@ public enum ProfileMigration {
             pinFileExists: Bool,
             record: MigrationRecord,
             existingProfiles: [String],
-            profileCanonicalBytes: @escaping (String) -> Data?
+            profileCanonicalBytes: @escaping (String) -> Data?,
+            profileHasScreen: @escaping (String) -> Bool = { _ in false }
         ) {
             self.gameID = gameID
             self.gameTitle = gameTitle
@@ -196,6 +201,7 @@ public enum ProfileMigration {
             self.record = record
             self.existingProfiles = existingProfiles
             self.profileCanonicalBytes = profileCanonicalBytes
+            self.profileHasScreen = profileHasScreen
         }
     }
 
@@ -236,9 +242,12 @@ public enum ProfileMigration {
             return .recordOnly(hash: hash)
         }
 
-        // Dedupe: hash is only a shortcut; bytes decide.
+        // Dedupe: hash is only a shortcut; bytes decide. Profiles
+        // with a screen region are skipped — equal controls bytes do
+        // not make them true duplicates of screen-less game content.
         let migrationProfiles = Set(context.record.games.values.compactMap(\.profile))
         for profile in context.existingProfiles {
+            guard !context.profileHasScreen(profile) else { continue }
             guard let bytes = context.profileCanonicalBytes(profile), bytes == canonical else {
                 continue
             }

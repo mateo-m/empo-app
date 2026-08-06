@@ -57,8 +57,14 @@ struct PlayerView: View {
             // the toolbar was cramped in the zone below the game) no
             // longer applies.
             let toolbarBtnSize = IconButtonSize.sm.points
+            // During a screen drag the chrome keeps the drag-start
+            // rect: the engine republishes gameRect live, and
+            // re-clamping controls or flipping the overlay decision
+            // mid-drag would shove the layout under the finger.
+            let chromeGameRect = layout.frozenChromeGameRect ?? gameRect
             let controlsMinY = ControlsZone.toolbarBottomY(
-                isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize,
+                isPortrait: isPortrait, gameRect: chromeGameRect, safeArea: safeArea,
+                btnSize: toolbarBtnSize,
                 geoHeight: geo.size.height)
 
             ZStack {
@@ -130,6 +136,9 @@ struct PlayerView: View {
                         .padding(.bottom, safeArea.bottom + Spacing.md)
                         .allowsHitTesting(false)
                     }
+
+                    screenRegionGizmo(
+                        geoSize: geo.size, isPortrait: isPortrait, gameRect: gameRect)
                 }
                 // Invisible tap layer that dismisses the keyboard when
                 // it's open. Placed below controls + toolbar so those
@@ -186,7 +195,7 @@ struct PlayerView: View {
 
                     PlayerEditToolbar(
                         isPortrait: isPortrait,
-                        gameRect: gameRect,
+                        gameRect: chromeGameRect,
                         safeArea: safeArea,
                         geoSize: geo.size,
                         layout: layout,
@@ -294,6 +303,10 @@ struct PlayerView: View {
             // as soon as PlayerView appears, not just on rotation.
             .onChange(of: isPortrait, initial: true) { _, nowPortrait in
                 layout.setOrientation(nowPortrait ? .portrait : .landscape)
+                // Rotation re-sends the region for the new
+                // orientation; the engine draws automatic placement
+                // until this call lands (orientation-tag guard).
+                ScreenRegionApplier.geometryChanged()
             }
             // `initial: true`: the engine usually publishes gameRect
             // during the loading transition, BEFORE PlayerView mounts.
@@ -443,6 +456,67 @@ struct PlayerView: View {
             editingActionButton: $editingActionButton,
             editingDPad: $editingDPad
         )
+    }
+
+    /// Edit-mode screen gizmo. Base rect precedence: this session's
+    /// pending edit, then the resolved region, then the engine's
+    /// automatic placement (the live gameRect).
+    @ViewBuilder
+    private func screenRegionGizmo(
+        geoSize: CGSize, isPortrait: Bool, gameRect: CGRect
+    ) -> some View {
+        let resolved = ScreenRegionApplier.resolvedRegion(isPortrait: isPortrait)
+        let effective: ScreenRegion? = layout.pendingScreenEdit ?? resolved
+        let baseRect: CGRect = {
+            if let region = effective {
+                return CGRect(
+                    x: region.x * geoSize.width,
+                    y: region.y * geoSize.height,
+                    width: region.w * geoSize.width,
+                    height: region.h * geoSize.height)
+            }
+            return gameRect.isEmpty
+                ? CGRect(origin: .zero, size: geoSize)
+                : gameRect
+        }()
+        let autoRegion = ScreenRegion(
+            x: gameRect.minX / max(geoSize.width, 1),
+            y: gameRect.minY / max(geoSize.height, 1),
+            w: gameRect.width / max(geoSize.width, 1),
+            h: gameRect.height / max(geoSize.height, 1))
+
+        GeometryReader { _ in
+            ScreenRegionGizmo(
+                canvasSize: geoSize,
+                baseRect: baseRect,
+                showsReset: effective != nil,
+                onDragBegan: {
+                    layout.beginScreenDrag(
+                        chromeGameRect: layout.frozenChromeGameRect ?? gameRect,
+                        // Snap-to-auto only when the orientation had
+                        // no entry: with an entry active, the engine
+                        // publishes region-derived rects and there is
+                        // no live auto rect to compare against.
+                        autoReference: effective == nil && !gameRect.isEmpty
+                            ? autoRegion : nil)
+                },
+                onDragChanged: { region in
+                    ScreenRegionApplier.preview(region, isPortrait: isPortrait)
+                },
+                onDragEnded: { region in
+                    layout.endScreenDrag(region: region)
+                    // The snap decision may have discarded the edit;
+                    // preview whatever is pending now.
+                    ScreenRegionApplier.preview(
+                        layout.pendingScreenEdit.flatMap { $0 }, isPortrait: isPortrait)
+                },
+                onReset: {
+                    layout.resetScreenEdit()
+                    ScreenRegionApplier.preview(nil, isPortrait: isPortrait)
+                }
+            )
+        }
+        .ignoresSafeArea()
     }
 
     @ViewBuilder

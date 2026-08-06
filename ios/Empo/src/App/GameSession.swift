@@ -101,6 +101,10 @@ enum GameSession {
         )
 
         mkxp_resetSessionState()
+        // After the reset (which clears the previous session's
+        // region) and before boot: the engine's first recalc reads
+        // the bridge statics, so the region is set pre-boot.
+        ScreenRegionApplier.beginSession(container: container)
         mkxp_setGameControllerCaptureEnabled(false)
         mkxp_setTouchMouseEnabled(settings.touchMouse ?? true)
     }

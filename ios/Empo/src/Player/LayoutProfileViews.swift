@@ -384,6 +384,7 @@ struct LayoutProfileEditorView: View {
     @State private var renameText = ""
     @State private var showRename = false
     @State private var showRenameError = false
+    @State private var diskScreen: ScreenRegionFile.ReadResult?
     @State private var layout: ControlsLayout
     @State private var actions = PlayerActionRegistry()
     @State private var editingOrientation: ControlsOrientation = .portrait
@@ -406,6 +407,38 @@ struct LayoutProfileEditorView: View {
     private var canvasSafeArea: EdgeInsets { EditorCanvas.safeArea(for: editingOrientation) }
     private var fakeGameRect: CGRect { EditorCanvas.fakeGameRect(for: editingOrientation) }
 
+    /// The profile's screen entry for the shown orientation, with
+    /// this session's pending edit on top.
+    private var screenRegion: ScreenRegion? {
+        if let pending = layout.pendingScreenEdit { return pending }
+        return editingOrientation == .portrait ? diskScreen?.portrait : diskScreen?.landscape
+    }
+
+    /// Region rect on the canvas, when a region exists.
+    private var screenRegionRect: CGRect? {
+        guard let region = screenRegion else { return nil }
+        let size = canvasSize
+        return CGRect(
+            x: region.x * size.width, y: region.y * size.height,
+            width: region.w * size.width, height: region.h * size.height)
+    }
+
+    /// The placeholder is the 4:3 fit INSIDE the region — the
+    /// engine letterboxes centered inside it — so the controls
+    /// clamp against what the player will actually show.
+    private var placeholderGameRect: CGRect {
+        guard let regionRect = screenRegionRect else { return fakeGameRect }
+        var width = regionRect.width
+        var height = width * 3 / 4
+        if height > regionRect.height {
+            height = regionRect.height
+            width = height * 4 / 3
+        }
+        return CGRect(
+            x: regionRect.midX - width / 2, y: regionRect.midY - height / 2,
+            width: width, height: height)
+    }
+
     var body: some View {
         VStack(spacing: Spacing.md) {
             Picker("Orientation", selection: $editingOrientation) {
@@ -418,6 +451,7 @@ struct LayoutProfileEditorView: View {
                 layout.editorSave()
                 layout.setOrientation(new)
                 layout.beginEditSession()
+                diskScreen = LayoutProfilesManager.store.readScreen(currentName)
             }
 
             GeometryReader { outer in
@@ -473,6 +507,7 @@ struct LayoutProfileEditorView: View {
         .onAppear {
             layout.setOrientation(editingOrientation)
             layout.beginEditSession()
+            diskScreen = LayoutProfilesManager.store.readScreen(currentName)
         }
         .onDisappear {
             layout.endEditSession()
@@ -507,7 +542,7 @@ struct LayoutProfileEditorView: View {
 
     private var canvas: some View {
         let size = canvasSize
-        let gameRect = fakeGameRect
+        let gameRect = placeholderGameRect
         let controlsMinY = ControlsZone.toolbarBottomY(
             isPortrait: editingOrientation == .portrait,
             gameRect: gameRect,
@@ -546,6 +581,31 @@ struct LayoutProfileEditorView: View {
                     draggingButtonID: $draggingButtonID
                 )
             }
+
+            // Screen gizmo on the mock canvas: no live engine, so
+            // drags stay local until editorSave merges them.
+            ScreenRegionGizmo(
+                canvasSize: size,
+                baseRect: screenRegionRect ?? gameRect,
+                showsReset: screenRegion != nil,
+                onDragBegan: {
+                    let auto = EditorCanvas.fakeGameRect(for: editingOrientation)
+                    layout.beginScreenDrag(
+                        chromeGameRect: gameRect,
+                        autoReference: screenRegion == nil
+                            ? ScreenRegion(
+                                x: auto.minX / size.width, y: auto.minY / size.height,
+                                w: auto.width / size.width, h: auto.height / size.height)
+                            : nil)
+                },
+                onDragChanged: { _ in },
+                onDragEnded: { region in
+                    layout.endScreenDrag(region: region)
+                },
+                onReset: {
+                    layout.resetScreenEdit()
+                }
+            )
         }
         .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
     }

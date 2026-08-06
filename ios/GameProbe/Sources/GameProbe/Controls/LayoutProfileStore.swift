@@ -49,8 +49,12 @@ public struct LayoutProfileStore {
         profileURL(name).appendingPathComponent("controls.json")
     }
 
-    private func logURL(_ name: String) -> URL {
-        profileURL(name).appendingPathComponent("controls.json.log")
+    public func screenURL(_ name: String) -> URL {
+        profileURL(name).appendingPathComponent(ScreenRegionFile.fileName)
+    }
+
+    private func logURL(_ name: String, file: String = "controls.json") -> URL {
+        profileURL(name).appendingPathComponent(file + ".log")
     }
 
     // MARK: - Listing and reading
@@ -169,12 +173,59 @@ public struct LayoutProfileStore {
         }
     }
 
+    /// Folder copy, so `screen.json` travels with the profile. The
+    /// copy drops the log files (they describe the original) and
+    /// re-serializes `controls.json` for canonical bytes.
     @discardableResult
     public func duplicateProfile(_ name: String) -> String? {
         guard let read = readProfile(name), let touch = read.touch else { return nil }
         let copyName = uniqueName(base: name)
-        guard createProfile(copyName, touch: touch) else { return nil }
+        guard Self.validatedName(copyName) == copyName, !profileExists(copyName) else {
+            return nil
+        }
+        let fm = FileManager.default
+        do {
+            try fm.copyItem(at: profileURL(name), to: profileURL(copyName))
+        } catch {
+            return nil
+        }
+        try? fm.removeItem(at: logURL(copyName))
+        try? fm.removeItem(at: logURL(copyName, file: ScreenRegionFile.fileName))
+        guard writeProfile(copyName, touch: touch) else {
+            try? fm.removeItem(at: profileURL(copyName))
+            return nil
+        }
         return copyName
+    }
+
+    // MARK: - Screen region
+
+    /// nil when the file is absent. Invalid content parses to a
+    /// result with findings and nil regions; the caller logs.
+    public func readScreen(_ name: String) -> ScreenRegionFile.ReadResult? {
+        guard let data = try? Data(contentsOf: screenURL(name)) else { return nil }
+        return ScreenRegionFile.parse(data)
+    }
+
+    /// Both orientations nil deletes the file: an empty
+    /// `screen.json` must not exist.
+    @discardableResult
+    public func writeScreen(
+        _ name: String, portrait: ScreenRegion?, landscape: ScreenRegion?
+    ) -> Bool {
+        guard profileExists(name) else { return false }
+        let fm = FileManager.default
+        guard let data = ScreenRegionFile.serialize(portrait: portrait, landscape: landscape)
+        else {
+            try? fm.removeItem(at: screenURL(name))
+            return true
+        }
+        do {
+            try data.write(to: screenURL(name), options: .atomic)
+            return true
+        } catch {
+            return false
+        }
     }
 
     // MARK: - Pins
@@ -231,8 +282,8 @@ public struct LayoutProfileStore {
 
     // MARK: - Log
 
-    public func appendLog(_ name: String, line: String) {
-        let url = logURL(name)
+    public func appendLog(_ name: String, file: String = "controls.json", line: String) {
+        let url = logURL(name, file: file)
         let fm = FileManager.default
         try? fm.createDirectory(at: profileURL(name), withIntermediateDirectories: true)
         let entry = Data((line.hasSuffix("\n") ? line : line + "\n").utf8)

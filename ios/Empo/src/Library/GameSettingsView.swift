@@ -445,8 +445,34 @@ struct GameSettingsView: View {
         } header: {
             Text("Touch controls")
         } footer: {
-            Text("Profiles live in Settings and work for any game.")
+            if profileSetsScreenPortrait || profileSetsScreenLandscape {
+                Text(
+                    "Profiles live in Settings and work for any game. The layout profile also sets the screen position."
+                )
+            } else {
+                Text("Profiles live in Settings and work for any game.")
+            }
         }
+    }
+
+    /// Whether the resolved screen region for an orientation comes
+    /// from a profile (named pin, $default, or chain default).
+    private var resolvedScreen: ScreenResolution.Result? {
+        guard let container = game.container else { return nil }
+        let store = LayoutProfilesManager.store
+        return ScreenResolution.resolve(
+            pin: store.loadPin(forGameFolder: container.url).pin,
+            defaultProfileName: LayoutProfilesManager.defaultProfileName,
+            readScreen: { store.readScreen($0) }
+        )
+    }
+
+    private var profileSetsScreenPortrait: Bool {
+        resolvedScreen?.portrait.region != nil
+    }
+
+    private var profileSetsScreenLandscape: Bool {
+        resolvedScreen?.landscape.region != nil
     }
 
     private var currentPinLabel: String {
@@ -465,6 +491,15 @@ struct GameSettingsView: View {
         let name = store.uniqueName(base: game.title)
         let section = LayoutProfilesManager.materializedLayout(for: container)
         guard store.createProfile(name, touch: section) else { return }
+        // Copy the RESOLVED screen region too. The save pins the new
+        // profile, and a pin is terminal for the screen — without
+        // the copy, saving would snap the screen to automatic.
+        if let screen = resolvedScreen,
+            screen.portrait.region != nil || screen.landscape.region != nil
+        {
+            store.writeScreen(
+                name, portrait: screen.portrait.region, landscape: screen.landscape.region)
+        }
         store.writePin(.profile(name), forGameFolder: container.url)
         LayoutProfilesManager.postPinChange(gameID: container.id, from: nil)
         savedProfileName = name
@@ -484,10 +519,21 @@ struct GameSettingsView: View {
             }
             .pickerStyle(.inline)
             .labelsHidden()
+            // A profile region outranks the preset; a live control
+            // that does nothing reads as a bug.
+            .disabled(profileSetsScreenPortrait)
         } header: {
             Text("Portrait layout")
         } footer: {
-            Text("Where the game sits on screen when playing in portrait. Controls appear below.")
+            if profileSetsScreenPortrait {
+                Text(
+                    "The layout profile sets the screen position for this game, so this preset is off."
+                )
+            } else {
+                Text(
+                    "Where the game sits on screen when playing in portrait. Controls appear below."
+                )
+            }
         }
     }
 
