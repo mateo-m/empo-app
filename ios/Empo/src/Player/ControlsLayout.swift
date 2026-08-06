@@ -489,14 +489,11 @@ class ControlsLayout {
         }
     }
 
-    /// "Controls over game": flips the overlay flag on the active
-    /// orientation's screen entry. The flag needs a concrete region
-    /// to live on, so toggling from engine-auto mints an entry at
-    /// the caller-supplied current rect.
-    func setScreenOverlay(_ on: Bool, currentRegion: ScreenRegion?) {
+    /// Records a screen edit for the active orientation without a
+    /// gesture — the overlay toggle computes its own region (flag
+    /// flip plus a clamp back into the below-game limit).
+    func recordScreenEdit(_ region: ScreenRegion) {
         guard editSessionActive else { return }
-        guard var region = pendingScreenEdit.flatMap({ $0 }) ?? currentRegion else { return }
-        region.overlay = on
         screenEdits[currentOrientation] = .some(region)
     }
 

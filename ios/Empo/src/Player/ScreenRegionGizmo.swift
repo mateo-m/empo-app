@@ -28,6 +28,13 @@ struct ScreenRegionGizmo: View {
     /// editor's mock canvas has no controls zone to flip).
     var overlayOn: Bool = false
     var onToggleOverlay: (() -> Void)?
+    /// The player renders the gizmo TWICE: the outline and gesture
+    /// surfaces below the controls overlay (so control drags win
+    /// over the region surface), and a chips-only copy above it (so
+    /// the chips stay reachable when overlay mode puts controls on
+    /// the game area).
+    var chipsOnly: Bool = false
+    var showsChips: Bool = true
 
     @State private var draft: CGRect?
     @State private var anchorRect: CGRect?
@@ -46,6 +53,25 @@ struct ScreenRegionGizmo: View {
 
     var body: some View {
         ZStack {
+            if !chipsOnly {
+                surfaces
+            }
+            if showsChips {
+                chips
+            }
+        }
+        // Pin the glass pieces to the dark variant like the rest of
+        // the player chrome.
+        .darkGlass()
+        .onChange(of: gestureActive) { _, active in
+            if !active, anchorRect != nil {
+                finishDrag()
+            }
+        }
+    }
+
+    private var surfaces: some View {
+        ZStack {
             ZStack {
                 Rectangle().fill(Color.brand.opacity(0.06))
                 GizmoOutline()
@@ -56,15 +82,6 @@ struct ScreenRegionGizmo: View {
             .gesture(moveGesture)
             .accessibilityLabel("Game screen position")
             .accessibilityHint("Drag to move the game picture")
-
-            Text("Screen")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.brand)
-                .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, 2)
-                .glassEffect(.regular, in: .capsule)
-                .position(x: rect.midX, y: rect.minY + 14)
-                .allowsHitTesting(false)
 
             // Crop-style corner grabber: reads as "drag to resize"
             // where the small circle did not. It sits ON the border
@@ -95,6 +112,19 @@ struct ScreenRegionGizmo: View {
                     .gesture(resizeGesture(for: corner))
                     .accessibilityLabel("Resize game screen")
             }
+        }
+    }
+
+    private var chips: some View {
+        ZStack {
+            Text("Screen")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.brand)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, 2)
+                .glassEffect(.regular, in: .capsule)
+                .position(x: rect.midX, y: rect.minY + 14)
+                .allowsHitTesting(false)
 
             if showsReset {
                 Button {
@@ -133,18 +163,6 @@ struct ScreenRegionGizmo: View {
                 .accessibilityLabel(
                     overlayOn
                         ? "Put controls below the game" : "Put controls over the game")
-            }
-        }
-        // Pin the glass pieces to the dark variant like the rest of
-        // the player chrome. No implicit animation on rect: in the
-        // player the outline follows the engine's ~60 Hz rect
-        // stream (the reset tween included), and easing on top of a
-        // continuous signal only adds lag. The editor's reset
-        // animates through its withAnimation transaction instead.
-        .darkGlass()
-        .onChange(of: gestureActive) { _, active in
-            if !active, anchorRect != nil {
-                finishDrag()
             }
         }
     }
