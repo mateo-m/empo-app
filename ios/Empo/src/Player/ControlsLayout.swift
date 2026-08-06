@@ -993,6 +993,64 @@ class ControlsLayout {
     /// earlier reset then cannot append onto the new state.
     private var staggerGeneration = 0
 
+    // MARK: - Edit-drag collision
+
+    /// Rigid collision for edit drags: the dragged control cannot
+    /// enter its neighbors — they act as walls and the drag slides
+    /// along their rims. Circle push-out, iterated a few times so
+    /// settling between two obstacles converges. No momentum, no
+    /// physics engine: neighbors never move.
+    func collisionResolvedCenter(
+        _ desired: CGPoint, draggedID: UUID?, draggedIsDPad: Bool,
+        controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
+        controlsMinY: CGFloat
+    ) -> CGPoint {
+        let radius = controlSize / 2
+        var obstacles: [(center: CGPoint, radius: CGFloat)] = []
+        func append(_ relativeCenter: CGPoint, _ size: CGFloat) {
+            let absolute = ControlsZone.absolutePosition(
+                for: relativeCenter, in: geoSize,
+                controlSize: CGSize(width: size, height: size),
+                safeArea: safeArea, controlsMinY: controlsMinY)
+            obstacles.append((absolute, size / 2))
+        }
+        for button in buttons where button.id != draggedID {
+            append(button.relativeCenter, button.size)
+        }
+        for button in actionButtons where button.id != draggedID {
+            append(button.relativeCenter, button.size)
+        }
+        if !draggedIsDPad {
+            append(dpadRelativeCenter, dpadSize)
+        }
+
+        var center = desired
+        for _ in 0..<3 {
+            var moved = false
+            for obstacle in obstacles {
+                let dx = center.x - obstacle.center.x
+                let dy = center.y - obstacle.center.y
+                let minDistance = radius + obstacle.radius
+                let distanceSquared = dx * dx + dy * dy
+                guard distanceSquared < minDistance * minDistance else { continue }
+                let distance = sqrt(max(distanceSquared, 0.000001))
+                if distance < 0.001 {
+                    // Dead center: push straight up, any stable
+                    // direction works.
+                    center = CGPoint(
+                        x: obstacle.center.x, y: obstacle.center.y - minDistance)
+                } else {
+                    center = CGPoint(
+                        x: obstacle.center.x + dx / distance * minDistance,
+                        y: obstacle.center.y + dy / distance * minDistance)
+                }
+                moved = true
+            }
+            if !moved { break }
+        }
+        return center
+    }
+
     // MARK: - Display-time button separation
 
     /// Single choke point for resolved button centers at display resolution.

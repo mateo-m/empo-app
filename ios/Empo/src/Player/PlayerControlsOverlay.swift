@@ -100,12 +100,12 @@ struct PlayerControlsOverlay: View {
                     layout.recordEditSnapshot()
                     draggingDPad = true
                 }
-                let clamped = ControlsZone.clampToSafeArea(
-                    value.location, controlSize: layout.dpadSize, geoSize: geo.size,
-                    safeArea: safeArea, controlsMinY: controlsMinY)
+                let resolved = resolvedDragPosition(
+                    value.location, draggedID: nil, draggedIsDPad: true,
+                    size: layout.dpadSize)
                 layout.dpadRelativeCenter = CGPoint(
-                    x: clamped.x / geo.size.width,
-                    y: clamped.y / geo.size.height
+                    x: resolved.x / geo.size.width,
+                    y: resolved.y / geo.size.height
                 )
             }
             .onEnded { _ in
@@ -249,6 +249,24 @@ struct PlayerControlsOverlay: View {
         }
     }
 
+    /// Shared drag pipeline: zone clamp, then rigid collision
+    /// against the other controls, then a re-clamp (the push-out
+    /// can leave the zone at its edges).
+    private func resolvedDragPosition(
+        _ location: CGPoint, draggedID: UUID?, draggedIsDPad: Bool, size: CGFloat
+    ) -> CGPoint {
+        let clamped = ControlsZone.clampToSafeArea(
+            location, controlSize: size, geoSize: geo.size, safeArea: safeArea,
+            controlsMinY: controlsMinY)
+        let collided = layout.collisionResolvedCenter(
+            clamped, draggedID: draggedID, draggedIsDPad: draggedIsDPad,
+            controlSize: size, geoSize: geo.size, safeArea: safeArea,
+            controlsMinY: controlsMinY)
+        return ControlsZone.clampToSafeArea(
+            collided, controlSize: size, geoSize: geo.size, safeArea: safeArea,
+            controlsMinY: controlsMinY)
+    }
+
     private func actionButtonDragGesture(id: UUID, size: CGFloat) -> some Gesture {
         DragGesture()
             .onChanged { value in
@@ -256,14 +274,13 @@ struct PlayerControlsOverlay: View {
                     layout.recordEditSnapshot()
                     draggingButtonID = id
                 }
-                let clamped = ControlsZone.clampToSafeArea(
-                    value.location, controlSize: size, geoSize: geo.size, safeArea: safeArea,
-                    controlsMinY: controlsMinY)
+                let resolved = resolvedDragPosition(
+                    value.location, draggedID: id, draggedIsDPad: false, size: size)
                 layout.updateActionButton(
                     id: id,
                     relativeCenter: CGPoint(
-                        x: clamped.x / geo.size.width,
-                        y: clamped.y / geo.size.height
+                        x: resolved.x / geo.size.width,
+                        y: resolved.y / geo.size.height
                     ))
             }
             .onEnded { _ in
@@ -279,14 +296,13 @@ struct PlayerControlsOverlay: View {
                     layout.recordEditSnapshot()
                     draggingButtonID = id
                 }
-                let clamped = ControlsZone.clampToSafeArea(
-                    value.location, controlSize: size, geoSize: geo.size, safeArea: safeArea,
-                    controlsMinY: controlsMinY)
+                let resolved = resolvedDragPosition(
+                    value.location, draggedID: id, draggedIsDPad: false, size: size)
                 layout.updateButton(
                     id: id,
                     relativeCenter: CGPoint(
-                        x: clamped.x / geo.size.width,
-                        y: clamped.y / geo.size.height
+                        x: resolved.x / geo.size.width,
+                        y: resolved.y / geo.size.height
                     ))
             }
             .onEnded { _ in
