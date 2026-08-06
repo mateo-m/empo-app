@@ -489,6 +489,17 @@ class ControlsLayout {
         }
     }
 
+    /// "Controls over game": flips the overlay flag on the active
+    /// orientation's screen entry. The flag needs a concrete region
+    /// to live on, so toggling from engine-auto mints an entry at
+    /// the caller-supplied current rect.
+    func setScreenOverlay(_ on: Bool, currentRegion: ScreenRegion?) {
+        guard editSessionActive else { return }
+        guard var region = pendingScreenEdit.flatMap({ $0 }) ?? currentRegion else { return }
+        region.overlay = on
+        screenEdits[currentOrientation] = .some(region)
+    }
+
     /// "Reset screen": back to engine-auto for the active
     /// orientation. Dirties the commit only when a stored entry
     /// exists to delete — resetting a drag that never saved is a

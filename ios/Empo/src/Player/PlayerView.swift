@@ -57,6 +57,12 @@ struct PlayerView: View {
             // the toolbar was cramped in the zone below the game) no
             // longer applies.
             let toolbarBtnSize = IconButtonSize.sm.points
+            // An active screen region carries the profile's own
+            // overlay choice; nil keeps the geometry heuristic.
+            let activeScreenRegion =
+                layout.pendingScreenEdit
+                ?? ScreenRegionApplier.resolvedRegion(isPortrait: isPortrait)
+            let forcedOverlay = activeScreenRegion?.overlay
             // The chrome follows the engine's republished gameRect
             // LIVE during a screen drag, so the controls zone tracks
             // the moving screen. The edit toolbar fades during the
@@ -64,7 +70,11 @@ struct PlayerView: View {
             let controlsMinY = ControlsZone.toolbarBottomY(
                 isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
                 btnSize: toolbarBtnSize,
-                geoHeight: geo.size.height)
+                geoHeight: geo.size.height, forcedOverlay: forcedOverlay)
+            // Edit mode reserves the header strip, so controls can
+            // never clamp underneath the action row.
+            let controlsClampMinY =
+                editMode ? controlsMinY + ControlsZone.editHeaderStrip : controlsMinY
 
             ZStack {
                 // Debug visualization of the touch-mouse zone: the
@@ -160,7 +170,7 @@ struct PlayerView: View {
                         layout: layout,
                         actions: actions,
                         geo: geo,
-                        controlsMinY: controlsMinY,
+                        controlsMinY: controlsClampMinY,
                         editMode: editMode,
                         safeArea: safeArea,
                         editingButton: $editingButton,
@@ -220,7 +230,8 @@ struct PlayerView: View {
                         isPortrait: isPortrait,
                         gameRect: gameRect,
                         safeArea: safeArea,
-                        geoHeight: geo.size.height
+                        geoHeight: geo.size.height,
+                        forcedOverlay: forcedOverlay
                     )
                 )
                 .allowsHitTesting(showDebugOverlay)
@@ -495,14 +506,22 @@ struct PlayerView: View {
                 : gameRect
         }()
         // Same inset policy as the applier's clamp: landscape keeps
-        // only the left/right insets.
+        // only the left/right insets. Without overlay mode, the
+        // drag also blocks where the controls zone would drop below
+        // the height its controls need — the profile opts into
+        // overlay explicitly instead of squeezing the zone.
         let safeArea = AppWindow.currentSafeArea
+        let overlayOn = (layout.pendingScreenEdit ?? resolved)?.overlay ?? false
+        let safeBottom = isPortrait ? geoSize.height - safeArea.bottom : geoSize.height
+        let maxBottom =
+            isPortrait && !overlayOn
+            ? safeBottom - ControlsZone.requiredEditZoneHeight
+            : safeBottom
         let allowedRect = CGRect(
             x: safeArea.leading,
             y: isPortrait ? safeArea.top : 0,
             width: geoSize.width - safeArea.leading - safeArea.trailing,
-            height: isPortrait
-                ? geoSize.height - safeArea.top - safeArea.bottom : geoSize.height)
+            height: maxBottom - (isPortrait ? safeArea.top : 0))
         let autoRegion = ScreenRegion(
             x: gameRect.minX / max(geoSize.width, 1),
             y: gameRect.minY / max(geoSize.height, 1),
@@ -539,7 +558,9 @@ struct PlayerView: View {
                     }
                 },
                 onReset: {
-                    layout.resetScreenEdit()
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        layout.resetScreenEdit()
+                    }
                     if let current = effective,
                         let target = estimatedAutoRegion(
                             geoSize: geoSize, isPortrait: isPortrait,
@@ -551,6 +572,21 @@ struct PlayerView: View {
                     } else {
                         ScreenRegionApplier.preview(nil, isPortrait: isPortrait)
                     }
+                },
+                overlayOn: overlayOn,
+                onToggleOverlay: {
+                    // Animate the zone flip; the region itself does
+                    // not move (the flag rides on the current
+                    // effective region, minting one at the auto rect
+                    // when none exists yet).
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        layout.setScreenOverlay(
+                            !overlayOn,
+                            currentRegion: effective
+                                ?? (gameRect.isEmpty ? nil : autoRegion))
+                    }
+                    ScreenRegionApplier.preview(
+                        layout.pendingScreenEdit.flatMap { $0 }, isPortrait: isPortrait)
                 }
             )
         }

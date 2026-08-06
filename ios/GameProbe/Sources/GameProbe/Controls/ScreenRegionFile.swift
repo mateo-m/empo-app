@@ -2,25 +2,30 @@ import Foundation
 
 /// A game-picture region as fractions of the window, top-left
 /// origin. Dimensionless, so it survives rotation and device
-/// changes.
+/// changes. `overlay` floats the touch controls OVER the game
+/// instead of reserving a zone below it — the player opts in per
+/// orientation when the region leaves no room for a controls zone.
 public struct ScreenRegion: Equatable, Sendable {
     public var x: Double
     public var y: Double
     public var w: Double
     public var h: Double
+    public var overlay: Bool
 
-    public init(x: Double, y: Double, w: Double, h: Double) {
+    public init(x: Double, y: Double, w: Double, h: Double, overlay: Bool = false) {
         self.x = x
         self.y = y
         self.w = w
         self.h = h
+        self.overlay = overlay
     }
 
     /// Rounded to 4 decimals, the serializer's precision, so a
     /// round-trip compares equal.
     public func rounded() -> ScreenRegion {
         func round4(_ v: Double) -> Double { (v * 10000).rounded() / 10000 }
-        return ScreenRegion(x: round4(x), y: round4(y), w: round4(w), h: round4(h))
+        return ScreenRegion(
+            x: round4(x), y: round4(y), w: round4(w), h: round4(h), overlay: overlay)
     }
 }
 
@@ -94,7 +99,10 @@ public enum ScreenRegionFile {
             findings.append("S004: '\(key)' is missing x/y/w/h numbers")
             return nil
         }
-        let region = ScreenRegion(x: x, y: y, w: w, h: h).rounded()
+        // Optional per-orientation flag; only a JSON true enables
+        // it (numbers and strings stay ignored).
+        let overlay = entry["overlay"].map { isJSONBool($0) && ($0 as? Bool) == true } ?? false
+        let region = ScreenRegion(x: x, y: y, w: w, h: h, overlay: overlay).rounded()
         guard region.x >= 0, region.y >= 0,
             region.w >= minFraction, region.h >= minFraction,
             region.x + region.w <= 1 + boundsEpsilon,
@@ -115,8 +123,9 @@ public enum ScreenRegionFile {
         guard portrait != nil || landscape != nil else { return nil }
         func entry(_ key: String, _ region: ScreenRegion) -> String {
             let r = region.rounded()
+            let overlay = r.overlay ? ", \"overlay\": true" : ""
             return "  \"\(key)\": { \"x\": \(format(r.x)), \"y\": \(format(r.y)), "
-                + "\"w\": \(format(r.w)), \"h\": \(format(r.h)) }"
+                + "\"w\": \(format(r.w)), \"h\": \(format(r.h))\(overlay) }"
         }
         var entries = ["  \"version\": 1"]
         if let portrait { entries.append(entry("portrait", portrait)) }

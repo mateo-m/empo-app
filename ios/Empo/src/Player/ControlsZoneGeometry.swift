@@ -47,9 +47,25 @@ enum ControlsZone {
         return (top, bottom)
     }
 
+    /// Zone height a below-the-game layout needs in edit mode: the
+    /// tallest control (the d-pad) plus the edit header strip and
+    /// the zone paddings. The screen drag blocks at this limit
+    /// unless the profile opts into overlay mode.
+    static let requiredEditZoneHeight: CGFloat = 240
+
+    /// Vertical space the edit header (banner pill + action row)
+    /// reserves at the top of the controls zone, so controls can
+    /// never clamp underneath it.
+    static let editHeaderStrip: CGFloat = 48
+
     static func useOverlayLayout(
-        isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat
+        isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat,
+        forcedOverlay: Bool? = nil
     ) -> Bool {
+        // An active screen region carries an explicit per-profile
+        // choice; the geometry heuristic only decides when no
+        // region is in play.
+        if let forcedOverlay { return forcedOverlay }
         guard isPortrait, gameRect.height > 0 else { return false }
         let spaceBelow = geoHeight - (gameRect.origin.y + gameRect.height) - safeArea.bottom
         return spaceBelow < minControlsZoneHeight
@@ -66,11 +82,13 @@ enum ControlsZone {
     /// it doesn't push controls down). In overlay / landscape, the
     /// zone begins below the toolbar that sits in the top-right.
     static func toolbarBottomY(
-        isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat, geoHeight: CGFloat
+        isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat,
+        geoHeight: CGFloat, forcedOverlay: Bool? = nil
     ) -> CGFloat {
         if isPortrait && gameRect.height > 0
             && !useOverlayLayout(
-                isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoHeight)
+                isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
+                geoHeight: geoHeight, forcedOverlay: forcedOverlay)
         {
             return gameRect.origin.y + gameRect.height + toolbarGap
         } else {

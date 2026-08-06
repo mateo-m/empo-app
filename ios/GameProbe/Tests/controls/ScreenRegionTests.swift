@@ -160,6 +160,35 @@ final class ScreenRegionTests: XCTestCase {
         XCTAssertTrue(result.findings.contains { $0.hasPrefix("S004") })
     }
 
+    func testOverlayFlagRoundTrips() throws {
+        let result = ScreenRegionFile.parse(
+            data(
+                #"{ "version": 1, "portrait": { "x": 0, "y": 0.5, "w": 1, "h": 0.5, "overlay": true } }"#
+            ))
+        let region = try XCTUnwrap(result.portrait)
+        XCTAssertTrue(region.overlay)
+
+        let serialized = try XCTUnwrap(
+            ScreenRegionFile.serialize(portrait: region, landscape: nil))
+        let reparsed = ScreenRegionFile.parse(serialized)
+        XCTAssertEqual(reparsed.portrait?.overlay, true)
+
+        // Absent and non-boolean values mean off.
+        for json in [
+            #"{ "version": 1, "portrait": { "x": 0, "y": 0, "w": 1, "h": 1 } }"#,
+            #"{ "version": 1, "portrait": { "x": 0, "y": 0, "w": 1, "h": 1, "overlay": 1 } }"#,
+        ] {
+            XCTAssertEqual(ScreenRegionFile.parse(data(json)).portrait?.overlay, false, json)
+        }
+    }
+
+    func testSerializeOmitsOverlayWhenOff() throws {
+        let serialized = try XCTUnwrap(
+            ScreenRegionFile.serialize(
+                portrait: ScreenRegion(x: 0, y: 0, w: 1, h: 1), landscape: nil))
+        XCTAssertFalse(String(decoding: serialized, as: UTF8.self).contains("overlay"))
+    }
+
     func testParseAcceptsFloatVersionOne() {
         // 1.0 is exactly representable: Int(exactly:) admits it.
         let result = ScreenRegionFile.parse(

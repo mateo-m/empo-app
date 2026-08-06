@@ -24,6 +24,10 @@ struct ScreenRegionGizmo: View {
     let onDragChanged: (ScreenRegion) -> Void
     let onDragEnded: (ScreenRegion) -> Void
     let onReset: () -> Void
+    /// "Controls over game" toggle. nil hides the chip (the profile
+    /// editor's mock canvas has no controls zone to flip).
+    var overlayOn: Bool = false
+    var onToggleOverlay: (() -> Void)?
 
     @State private var draft: CGRect?
     @State private var anchorRect: CGRect?
@@ -108,6 +112,27 @@ struct ScreenRegionGizmo: View {
                 // minimum region size a bottom chip would overlap it.
                 .position(x: rect.midX, y: rect.minY + 44)
                 .accessibilityLabel("Reset screen to automatic placement")
+            }
+
+            if let onToggleOverlay {
+                Button {
+                    onToggleOverlay()
+                } label: {
+                    Label(
+                        "Controls over game",
+                        systemImage: overlayOn
+                            ? "checkmark.circle.fill" : "circle"
+                    )
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .foregroundStyle(overlayOn ? Color.brand : .white)
+                    .glassEffect(.regular.interactive(), in: .capsule)
+                }
+                .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
+                .accessibilityLabel(
+                    overlayOn
+                        ? "Put controls below the game" : "Put controls over the game")
             }
         }
         // Pin the glass pieces to the dark variant like the rest of
@@ -235,11 +260,14 @@ struct ScreenRegionGizmo: View {
     }
 
     private func region(from rect: CGRect) -> ScreenRegion {
+        // The overlay flag rides along: a drag must not strip the
+        // choice the toggle just made.
         ScreenRegion(
             x: rect.minX / canvasSize.width,
             y: rect.minY / canvasSize.height,
             w: rect.width / canvasSize.width,
-            h: rect.height / canvasSize.height)
+            h: rect.height / canvasSize.height,
+            overlay: overlayOn)
     }
 }
 
