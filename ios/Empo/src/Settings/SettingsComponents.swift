@@ -16,6 +16,26 @@ struct SettingsToggle: View {
     }
 }
 
+struct SettingsNavigationRow<Destination: View>: View {
+    let title: String
+    let description: String
+    @ViewBuilder let destination: () -> Destination
+
+    var body: some View {
+        NavigationLink {
+            destination()
+        } label: {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(title)
+                Text(description)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, Spacing.xxs)
+        }
+    }
+}
+
 struct SettingsPicker<SelectionValue: Hashable, Content: View>: View {
     let title: String
     @Binding var selection: SelectionValue
