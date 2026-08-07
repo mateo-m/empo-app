@@ -1,11 +1,14 @@
 import GameProbe
 import SwiftUI
 
-/// Edit-mode drag/resize gizmo for the screen region. Pure
-/// geometry: the parent supplies the rect to show and receives
-/// fraction regions through callbacks; ControlsLayout and the
-/// bridge applier stay in the parent's hands, so the same gizmo
-/// works in the player and on the profile editor's mock canvas.
+/// Edit-mode drag/resize gizmo for the screen region: the outline,
+/// the move surface, and the corner grabbers. Pure geometry: the
+/// parent supplies the rect to show and receives fraction regions
+/// through callbacks; ControlsLayout and the bridge applier stay in
+/// the parent's hands, so the same gizmo works in the player and on
+/// the profile editor's mock canvas. The chips are a separate view
+/// (`ScreenRegionChips`) so the player can layer them ABOVE the
+/// controls overlay while the gesture surfaces stay below it.
 struct ScreenRegionGizmo: View {
     let canvasSize: CGSize
     /// Where the region may live, in canvas points. The parent
@@ -17,24 +20,12 @@ struct ScreenRegionGizmo: View {
     /// The parent derives it from the pending edit, the resolved
     /// region, or the automatic placement.
     let baseRect: CGRect
-    /// Shows the "Reset screen" chip: an entry or a pending
-    /// non-auto edit exists for this orientation.
-    let showsReset: Bool
     let onDragBegan: () -> Void
     let onDragChanged: (ScreenRegion) -> Void
     let onDragEnded: (ScreenRegion) -> Void
-    let onReset: () -> Void
-    /// "Controls over game" toggle. nil hides the chip (the profile
-    /// editor's mock canvas has no controls zone to flip).
+    /// Rides into every region the callbacks emit, so a drag cannot
+    /// strip the choice the overlay toggle just made.
     var overlayOn: Bool = false
-    var onToggleOverlay: (() -> Void)?
-    /// The player renders the gizmo TWICE: the outline and gesture
-    /// surfaces below the controls overlay (so control drags win
-    /// over the region surface), and a chips-only copy above it (so
-    /// the chips stay reachable when overlay mode puts controls on
-    /// the game area).
-    var chipsOnly: Bool = false
-    var showsChips: Bool = true
 
     @State private var draft: CGRect?
     @State private var anchorRect: CGRect?
@@ -58,22 +49,12 @@ struct ScreenRegionGizmo: View {
     private static let handleSize: CGFloat = 28
 
     var body: some View {
-        ZStack {
-            if !chipsOnly {
-                surfaces
+        surfaces
+            .onChange(of: gestureActive) { _, active in
+                if !active, anchorRect != nil {
+                    finishDrag()
+                }
             }
-            if showsChips {
-                chips
-            }
-        }
-        // Pin the glass pieces to the dark variant like the rest of
-        // the player chrome.
-        .darkGlass()
-        .onChange(of: gestureActive) { _, active in
-            if !active, anchorRect != nil {
-                finishDrag()
-            }
-        }
     }
 
     /// Captures the anchor on the first event of a drag, shrunk
@@ -138,58 +119,6 @@ struct ScreenRegionGizmo: View {
                     .position(corner.point(in: rect, inset: 16))
                     .gesture(resizeGesture(for: corner))
                     .accessibilityLabel("Resize game screen")
-            }
-        }
-    }
-
-    private var chips: some View {
-        ZStack {
-            Text("Screen")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.brand)
-                .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, 2)
-                .glassEffect(.regular, in: .capsule)
-                .position(x: rect.midX, y: rect.minY + 14)
-                .allowsHitTesting(false)
-
-            if showsReset {
-                Button {
-                    onReset()
-                } label: {
-                    Label("Reset screen", systemImage: "arrow.counterclockwise")
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, Spacing.sm)
-                        .padding(.vertical, Spacing.xs)
-                        .foregroundStyle(.white)
-                        .glassEffect(.regular.interactive(), in: .capsule)
-                }
-                // Top area, below the "Screen" label: the bottom
-                // corner belongs to the resize grabber, and at the
-                // minimum region size a bottom chip would overlap it.
-                .position(x: rect.midX, y: rect.minY + 44)
-                .accessibilityLabel("Reset screen to automatic placement")
-            }
-
-            if let onToggleOverlay {
-                Button {
-                    onToggleOverlay()
-                } label: {
-                    Label(
-                        "Controls over game",
-                        systemImage: overlayOn
-                            ? "checkmark.circle.fill" : "circle"
-                    )
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(.vertical, Spacing.xs)
-                    .foregroundStyle(overlayOn ? Color.brand : .white)
-                    .glassEffect(.regular.interactive(), in: .capsule)
-                }
-                .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
-                .accessibilityLabel(
-                    overlayOn
-                        ? "Put controls below the game" : "Put controls over the game")
             }
         }
     }
@@ -316,6 +245,80 @@ struct ScreenRegionGizmo: View {
             w: rect.width / canvasSize.width,
             h: rect.height / canvasSize.height,
             overlay: overlayOn)
+    }
+}
+
+/// The gizmo's floating chips: the "Screen" label, the reset chip,
+/// and the overlay toggle. A separate view from the gesture
+/// surfaces, so the player can render the chips above the controls
+/// overlay (overlay mode puts controls on the game area) while the
+/// drag surfaces stay below it. The parent positions both from the
+/// same effective rect, so the chips follow a drag live.
+struct ScreenRegionChips: View {
+    /// The region rect on the canvas, in canvas points.
+    let rect: CGRect
+    /// Shows the "Reset screen" chip: an entry or a pending
+    /// non-auto edit exists for this orientation.
+    let showsReset: Bool
+    let onReset: () -> Void
+    /// "Controls over game" toggle. nil hides the chip (the profile
+    /// editor's mock canvas has no controls zone to flip).
+    var overlayOn: Bool = false
+    var onToggleOverlay: (() -> Void)?
+
+    var body: some View {
+        ZStack {
+            Text("Screen")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.brand)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, 2)
+                .glassEffect(.regular, in: .capsule)
+                .position(x: rect.midX, y: rect.minY + 14)
+                .allowsHitTesting(false)
+
+            if showsReset {
+                Button {
+                    onReset()
+                } label: {
+                    Label("Reset screen", systemImage: "arrow.counterclockwise")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xs)
+                        .foregroundStyle(.white)
+                        .glassEffect(.regular.interactive(), in: .capsule)
+                }
+                // Top area, below the "Screen" label: the bottom
+                // corner belongs to the resize grabber, and at the
+                // minimum region size a bottom chip would overlap it.
+                .position(x: rect.midX, y: rect.minY + 44)
+                .accessibilityLabel("Reset screen to automatic placement")
+            }
+
+            if let onToggleOverlay {
+                Button {
+                    onToggleOverlay()
+                } label: {
+                    Label(
+                        "Controls over game",
+                        systemImage: overlayOn
+                            ? "checkmark.circle.fill" : "circle"
+                    )
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.vertical, Spacing.xs)
+                    .foregroundStyle(overlayOn ? Color.brand : .white)
+                    .glassEffect(.regular.interactive(), in: .capsule)
+                }
+                .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
+                .accessibilityLabel(
+                    overlayOn
+                        ? "Put controls below the game" : "Put controls over the game")
+            }
+        }
+        // Pin the glass chips to the dark variant like the rest of
+        // the player chrome.
+        .darkGlass()
     }
 }
 

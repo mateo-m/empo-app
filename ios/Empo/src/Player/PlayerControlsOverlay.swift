@@ -102,7 +102,8 @@ struct PlayerControlsOverlay: View {
                 if !draggingDPad {
                     layout.recordEditSnapshot()
                     draggingDPad = true
-                    lastDragResolved = nil
+                    lastDragResolved.removeValue(
+                        forKey: dragKey(draggedID: nil, draggedIsDPad: true))
                 }
                 let resolved = resolvedDragPosition(
                     value.location, draggedID: nil, draggedIsDPad: true,
@@ -114,7 +115,8 @@ struct PlayerControlsOverlay: View {
             }
             .onEnded { _ in
                 draggingDPad = false
-                lastDragResolved = nil
+                lastDragResolved.removeValue(
+                    forKey: dragKey(draggedID: nil, draggedIsDPad: true))
                 layout.save()
             }
     }
@@ -254,12 +256,18 @@ struct PlayerControlsOverlay: View {
         }
     }
 
-    /// Last resolved center of the drag in flight. The collision
-    /// solve uses it as side memory (no tunneling through an
-    /// obstacle's center), and the clamp+collide loop keeps a
-    /// control squeezed between a wall and a neighbor on its own
-    /// side instead of re-clamping into overlap.
-    @State private var lastDragResolved: CGPoint?
+    /// Last resolved center of each drag in flight, keyed per
+    /// control (the d-pad uses its own key). The collision solve
+    /// uses it as side memory (no tunneling through an obstacle's
+    /// center), and the clamp+collide loop keeps a control squeezed
+    /// between a wall and a neighbor on its own side instead of
+    /// re-clamping into overlap. Keyed, so two simultaneous finger
+    /// drags cannot clobber each other's memory.
+    @State private var lastDragResolved: [AnyHashable: CGPoint] = [:]
+
+    private func dragKey(draggedID: UUID?, draggedIsDPad: Bool) -> AnyHashable {
+        draggedID.map(AnyHashable.init) ?? AnyHashable("dpad")
+    }
 
     /// The dragged control's stored center in absolute space; the
     /// side memory seeds from it so the drag's FIRST event already
@@ -295,8 +303,9 @@ struct PlayerControlsOverlay: View {
     private func resolvedDragPosition(
         _ location: CGPoint, draggedID: UUID?, draggedIsDPad: Bool, size: CGFloat
     ) -> CGPoint {
-        if lastDragResolved == nil {
-            lastDragResolved = currentAbsoluteCenter(
+        let key = dragKey(draggedID: draggedID, draggedIsDPad: draggedIsDPad)
+        if lastDragResolved[key] == nil {
+            lastDragResolved[key] = currentAbsoluteCenter(
                 draggedID: draggedID, draggedIsDPad: draggedIsDPad)
         }
         var center = ControlsZone.clampToSafeArea(
@@ -304,7 +313,7 @@ struct PlayerControlsOverlay: View {
             controlsMinY: controlsMinY)
         for _ in 0..<3 {
             center = layout.collisionResolvedCenter(
-                center, previous: lastDragResolved, draggedID: draggedID,
+                center, previous: lastDragResolved[key], draggedID: draggedID,
                 draggedIsDPad: draggedIsDPad,
                 controlSize: size, geoSize: geo.size, safeArea: safeArea,
                 controlsMinY: controlsMinY)
@@ -316,11 +325,11 @@ struct PlayerControlsOverlay: View {
             center, draggedID: draggedID, draggedIsDPad: draggedIsDPad,
             controlSize: size, geoSize: geo.size, safeArea: safeArea,
             controlsMinY: controlsMinY),
-            let held = lastDragResolved
+            let held = lastDragResolved[key]
         {
             return held
         }
-        lastDragResolved = center
+        lastDragResolved[key] = center
         return center
     }
 
@@ -330,7 +339,8 @@ struct PlayerControlsOverlay: View {
                 if draggingButtonID != id {
                     layout.recordEditSnapshot()
                     draggingButtonID = id
-                    lastDragResolved = nil
+                    lastDragResolved.removeValue(
+                        forKey: dragKey(draggedID: id, draggedIsDPad: false))
                 }
                 let resolved = resolvedDragPosition(
                     value.location, draggedID: id, draggedIsDPad: false, size: size)
@@ -343,7 +353,8 @@ struct PlayerControlsOverlay: View {
             }
             .onEnded { _ in
                 draggingButtonID = nil
-                lastDragResolved = nil
+                lastDragResolved.removeValue(
+                    forKey: dragKey(draggedID: id, draggedIsDPad: false))
                 layout.save()
             }
     }
@@ -354,7 +365,8 @@ struct PlayerControlsOverlay: View {
                 if draggingButtonID != id {
                     layout.recordEditSnapshot()
                     draggingButtonID = id
-                    lastDragResolved = nil
+                    lastDragResolved.removeValue(
+                        forKey: dragKey(draggedID: id, draggedIsDPad: false))
                 }
                 let resolved = resolvedDragPosition(
                     value.location, draggedID: id, draggedIsDPad: false, size: size)
@@ -367,7 +379,8 @@ struct PlayerControlsOverlay: View {
             }
             .onEnded { _ in
                 draggingButtonID = nil
-                lastDragResolved = nil
+                lastDragResolved.removeValue(
+                    forKey: dragKey(draggedID: id, draggedIsDPad: false))
                 layout.save()
             }
     }

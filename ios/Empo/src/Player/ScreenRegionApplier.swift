@@ -13,6 +13,14 @@ import UIKit
 /// authored on a notchless device cannot put game content under
 /// another device's Dynamic Island. The minimum size survives the
 /// clamp by shifting before shrinking.
+/// ControlsLayout's hook into the applier (see `ScreenEditSyncing`).
+struct ScreenRegionApplierSync: ScreenEditSyncing {
+    func endPreview() { ScreenRegionApplier.endPreview() }
+    func resolvedRegion(isPortrait: Bool) -> ScreenRegion? {
+        ScreenRegionApplier.resolvedRegion(isPortrait: isPortrait)
+    }
+}
+
 @MainActor
 enum ScreenRegionApplier {
     private(set) static var activeContainer: GameContainer?

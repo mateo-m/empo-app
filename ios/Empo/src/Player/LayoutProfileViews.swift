@@ -572,32 +572,16 @@ struct LayoutProfileEditorView: View {
             // drags stay local until editorSave merges them. It sits
             // BELOW the controls overlay (same order as the player),
             // or its move surface would steal drags from any control
-            // inside the region rect.
+            // inside the region rect. The allowed rect comes from
+            // the same policy helper the player uses, so the editor
+            // can never author a region the player forbids.
             ScreenRegionGizmo(
                 canvasSize: size,
-                allowedRect: {
-                    // Same inset policy AND the same fit-then-block
-                    // rule as the player: without the block, the
-                    // editor could author an overlay-off region that
-                    // leaves the play zone no room for its controls.
-                    let safeArea = canvasSafeArea
-                    let isPortrait = editingOrientation == .portrait
-                    let overlayOn = screenRegion?.overlay ?? false
-                    let safeBottom =
-                        isPortrait ? size.height - safeArea.bottom : size.height
-                    let maxBottom =
-                        isPortrait && !overlayOn
-                        ? safeBottom - layout.requiredEditZoneHeight
-                        : safeBottom
-                    let top = isPortrait ? safeArea.top : 0
-                    return CGRect(
-                        x: safeArea.leading,
-                        y: top,
-                        width: size.width - safeArea.leading - safeArea.trailing,
-                        height: maxBottom - top)
-                }(),
+                allowedRect: layout.screenDragAllowedRect(
+                    isPortrait: editingOrientation == .portrait,
+                    overlayOn: screenRegion?.overlay ?? false,
+                    canvasSize: size, safeArea: canvasSafeArea),
                 baseRect: screenRegionRect ?? gameRect,
-                showsReset: screenRegion != nil,
                 onDragBegan: {
                     let auto = EditorCanvas.fakeGameRect(for: editingOrientation)
                     layout.beginScreenDrag(
@@ -608,25 +592,28 @@ struct LayoutProfileEditorView: View {
                             : nil)
                 },
                 onDragChanged: { region in
-                    layout.liveScreenDragRegion = region
+                    layout.screenDragChanged(region)
                 },
                 onDragEnded: { region in
-                    layout.liveScreenDragRegion = nil
                     layout.endScreenDrag(region: region)
                 },
+                // The flag must ride through editor drags too, or a
+                // one-point nudge in the editor silently strips
+                // "overlay": true from the profile.
+                overlayOn: screenRegion?.overlay ?? false
+            )
+
+            ScreenRegionChips(
+                rect: screenRegionRect ?? gameRect,
+                showsReset: screenRegion != nil,
                 onReset: {
-                    layout.liveScreenDragRegion = nil
                     // The mock canvas has no engine: the SwiftUI
                     // animation on the placeholder IS the reset
                     // animation.
                     withAnimation(.easeInOut(duration: 0.25)) {
                         layout.resetScreenEdit()
                     }
-                },
-                // The flag must ride through editor drags too, or a
-                // one-point nudge in the editor silently strips
-                // "overlay": true from the profile.
-                overlayOn: screenRegion?.overlay ?? false
+                }
             )
 
             GeometryReader { geo in

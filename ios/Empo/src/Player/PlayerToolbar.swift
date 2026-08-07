@@ -103,15 +103,22 @@ struct PlayerEditToolbar: View {
     @Binding var showResetConfirm: Bool
     let onDone: () -> Void
 
-    /// Half-heights for `.position` anchoring, same idiom as
-    /// `ControlsZone.editToolbarHalfHeight`: caption2 + 2x4 padding
-    /// for the pill; footnote capsule + 2x4 container padding for
-    /// the row.
-    private static let bannerHalfHeight: CGFloat = 11
-    private static let actionsHalfHeight: CGFloat = IconButtonSize.sm.points / 2
+    /// First-render fallbacks for the `.position` anchoring, before
+    /// `onGeometryChange` reports the real piece sizes below.
+    private static let bannerHalfHeightFallback: CGFloat = 11
+    private static let actionsHalfHeightFallback: CGFloat = IconButtonSize.sm.points / 2
     /// The pill's gap above the zone border equals the action row's
     /// gap below it (user ruling: symmetric around the border).
     private static let borderGap: CGFloat = Spacing.md
+
+    /// Measured half-heights: the same frames the chrome walls use.
+    /// A font or padding change then moves the anchors with it.
+    private var bannerHalfHeight: CGFloat {
+        bannerFrame.height > 0 ? bannerFrame.height / 2 : Self.bannerHalfHeightFallback
+    }
+    private var actionsHalfHeight: CGFloat {
+        actionsFrame.height > 0 ? actionsFrame.height / 2 : Self.actionsHalfHeightFallback
+    }
 
     var body: some View {
         // Anchor both pieces to the controls-zone border, not the
@@ -123,16 +130,19 @@ struct PlayerEditToolbar: View {
         let zoneBounds = ControlsZone.bounds(
             controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
         let zoneTop = zoneBounds.minY
-        let crushed =
-            zoneBounds.height < layout.requiredEditZoneHeight + Self.actionsHalfHeight * 2 * 2
+        // The row's own height below the border, plus the same
+        // height again as clearance over the tallest control.
+        let actionsRowHeight = actionsHalfHeight * 2
+        let headerRoom = actionsRowHeight * 2
+        let crushed = zoneBounds.height < layout.requiredEditZoneHeight + headerRoom
         let actionsY =
             crushed
-            ? zoneTop - Self.borderGap - Self.actionsHalfHeight
-            : zoneTop + Self.borderGap + Self.actionsHalfHeight
+            ? zoneTop - Self.borderGap - actionsHalfHeight
+            : zoneTop + Self.borderGap + actionsHalfHeight
         let bannerY =
             crushed
-            ? actionsY - Self.actionsHalfHeight - Spacing.xs - Self.bannerHalfHeight
-            : zoneTop - Self.borderGap - Self.bannerHalfHeight
+            ? actionsY - actionsHalfHeight - Spacing.xs - bannerHalfHeight
+            : zoneTop - Self.borderGap - bannerHalfHeight
 
         ZStack {
             // Blast-radius banner: a pinned profile's edits reach
@@ -154,7 +164,7 @@ struct PlayerEditToolbar: View {
                 )
                 .position(
                     x: geoSize.width / 2,
-                    y: max(safeArea.top + Self.bannerHalfHeight, bannerY)
+                    y: max(safeArea.top + bannerHalfHeight, bannerY)
                 )
 
             actionsRow

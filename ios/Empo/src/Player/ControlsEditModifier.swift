@@ -501,7 +501,7 @@ struct ControlsEditDialogs: ViewModifier {
                 .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(layout.resetConfirmationMessage)
+                Text(layout.resetConfirmationMessage())
             }
             .sheet(item: $editingButton) { button in
                 ButtonEditSheet(layout: layout, buttonID: button.id)
