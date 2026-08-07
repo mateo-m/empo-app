@@ -66,12 +66,6 @@ struct SettingsView: View {
                         description:
                             "Show a card at the top of your library to quickly jump back into your last game."
                     )
-
-                    NavigationLink {
-                        LayoutProfilesSettingsView()
-                    } label: {
-                        Label("Layout profiles", systemImage: "square.on.square")
-                    }
                 } header: {
                     Text("Look & Feel")
                 } footer: {
