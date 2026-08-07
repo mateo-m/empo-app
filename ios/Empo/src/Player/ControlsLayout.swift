@@ -214,9 +214,8 @@ class ControlsLayout {
     var buttons: [ButtonModel] = []
     var actionButtons: [ActionButtonModel] = []
 
-    /// The file-format cap counts key buttons and action buttons
-    /// together per orientation. The add UI gates on this.
-    static let maxButtonsPerOrientation = 21
+    /// The add UI gates on the loader's cap, so a saved layout
+    /// can never fail V015 on its next load.
     var combinedButtonCount: Int { buttons.count + actionButtons.count }
 
     // MARK: - Inactive snapshots

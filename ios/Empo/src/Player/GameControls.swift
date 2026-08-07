@@ -185,13 +185,92 @@ struct ActionButton: View {
     let size: CGFloat
     let editing: Bool
 
+    var body: some View {
+        // VoiceOver: the visible glyph (`A`, `B`, `X`, `Y`, etc.) reads
+        // as a letter otherwise, which gives no hint that it's a game
+        // input. Announce it explicitly so users know they're holding
+        // a gamepad button.
+        CircularControlButton(
+            size: size,
+            editing: editing,
+            accessibilityLabel: "\(label) button",
+            onPress: {
+                EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
+            },
+            onRelease: {
+                EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+            },
+            face: { isPressed in
+                Text(label)
+                    .font(
+                        .system(size: size < 60 ? 12 : 16, weight: .semibold, design: .rounded)
+                    )
+                    .foregroundStyle(.white.opacity(isPressed ? 1.0 : 0.9))
+            }
+        )
+    }
+}
+
+// MARK: - Function button
+
+/// Circular glass button bound to an Empo action instead of a game
+/// key. Renders the action's fixed SF Symbol. Hold actions emit a
+/// press/release pair; toggle and instant actions fire on press (the
+/// registry decides per kind whether the release matters).
+/// Slide-off keeps a hold engaged, same as `ActionButton`.
+struct FunctionButton: View {
+    let action: EmpoAction
+    let size: CGFloat
+    let editing: Bool
+    /// Toggle kind only: renders the engaged state while the toggle
+    /// is latched on (driven by `PlayerRuntimeState`).
+    let isActive: Bool
+    let onPress: () -> Void
+    let onRelease: () -> Void
+
+    var body: some View {
+        CircularControlButton(
+            size: size,
+            editing: editing,
+            isActive: isActive,
+            accessibilityLabel: action.displayName,
+            onPress: onPress,
+            onRelease: onRelease,
+            face: { isPressed in
+                Image(systemName: action.symbolName)
+                    .font(.system(size: size < 60 ? 16 : 20, weight: .semibold))
+                    .foregroundStyle(
+                        isActive ? Color.brand : .white.opacity(isPressed ? 1.0 : 0.9))
+            }
+        )
+    }
+}
+
+// MARK: - Shared circular control
+
+/// The circular Liquid Glass control both button kinds share: the
+/// opaque backing, the glass, the press glow, the press scale, the
+/// touch capture with slide-off holds, and the release hooks. The
+/// wrappers supply only the face and the press handlers, so the
+/// input contract lives in exactly one place.
+struct CircularControlButton<Face: View>: View {
+    let size: CGFloat
+    let editing: Bool
+    /// Keeps the rim glow lit while a latched toggle is engaged.
+    var isActive: Bool = false
+    let accessibilityLabel: String
+    let onPress: () -> Void
+    let onRelease: () -> Void
+    /// The button face, given the live pressed state.
+    @ViewBuilder let face: (Bool) -> Face
+
     @State private var isPressed = false
 
     var body: some View {
-        // Label drawn on top of a Liquid Glass circle. `.interactive()`
+        // Face drawn on top of a Liquid Glass circle. `.interactive()`
         // supplies the native press-style brightness on the glass
         // itself. A matching scaleEffect on the whole ZStack makes
-        // the label scale together with the glass (the interactive
+        // the face scale together with the glass (the interactive
         // modifier alone only scales the glass layer, not content
         // drawn on top of it).
         ZStack {
@@ -207,111 +286,8 @@ struct ActionButton: View {
 
             // Press highlight matching the D-pad arm gradient
             // (white 0.28 at the rim → clear toward the center).
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [.white.opacity(0), .white.opacity(0.28)],
-                        center: .center,
-                        startRadius: size * 0.15,
-                        endRadius: size / 2
-                    )
-                )
-                .opacity(isPressed ? 1 : 0)
-                .animation(Motion.instant, value: isPressed)
-
-            Text(label)
-                .font(.system(size: size < 60 ? 12 : 16, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(isPressed ? 1.0 : 0.9))
-        }
-        .frame(width: size, height: size)
-        .scaleEffect(isPressed ? PressScale.standard : 1.0)
-        .animation(Motion.controlPress, value: isPressed)
-        // Force the dark Liquid Glass variant to match the D-pad.
-        // Both controls pin to `.dark` so the glass material looks
-        // consistent regardless of the system interface style or
-        // the brightness of the game content behind them.
-        .darkGlass()
-        .contentShape(Circle())
-        // VoiceOver: the visible glyph (`A`, `B`, `X`, `Y`, etc.) reads
-        // as a letter otherwise, which gives no hint that it's a game
-        // input. Announce it explicitly so users know they're holding
-        // a gamepad button. The editing state is announced separately
-        // by the layout's edit-mode container.
-        .accessibilityLabel("\(label) button")
-        .accessibilityAddTraits(.isButton)
-        // Touch dispatch via the UIKit capture layer so the keydown
-        // reaches the engine on touch-down, never deferred by gesture
-        // arbitration. Disabled (not removed) while editing: touches
-        // then fall through to the parent's tap-to-edit and
-        // drag-to-reposition gestures, and the instant interaction
-        // cutoff closes the animated-removal window described on
-        // `ControlTouchCapture.enabled`.
-        .overlay {
-            ControlTouchCapture(
-                enabled: !editing,
-                onBegan: { _ in press() },
-                // Slide-off keeps the key held by design: no
-                // location tracking while the finger moves.
-                onMoved: { _ in },
-                onEnded: { releaseIfHeld() }
-            )
-        }
-        // If the user enters edit mode while this button is pressed, or
-        // the button is removed from the layout while pressed, release
-        // the key explicitly.
-        .onChange(of: editing) { _, newValue in
-            if newValue {
-                releaseIfHeld()
-            }
-        }
-        .onDisappear {
-            releaseIfHeld()
-        }
-    }
-
-    private func press() {
-        guard !isPressed else { return }
-        isPressed = true
-        Haptics.controllerTap()
-        EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
-    }
-
-    private func releaseIfHeld() {
-        guard isPressed else { return }
-        isPressed = false
-        EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
-    }
-}
-
-// MARK: - Function button
-
-/// Circular glass button bound to an Empo action instead of a game
-/// key. Renders the action's fixed SF Symbol. Hold actions emit a
-/// press/release pair; toggle and instant actions fire on press.
-/// Slide-off keeps a hold engaged, same as `ActionButton`.
-struct FunctionButton: View {
-    let action: EmpoAction
-    let size: CGFloat
-    let editing: Bool
-    /// Toggle kind only: renders the engaged state while the toggle
-    /// is latched on (driven by `PlayerRuntimeState`).
-    let isActive: Bool
-    let onPress: () -> Void
-    let onRelease: () -> Void
-
-    @State private var isPressed = false
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(Color.black)
-
-            Circle()
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: .circle)
-
-            // Latched toggles keep a steady rim glow so the state is
-            // visible without a label.
+            // Latched toggles keep it lit so the state is visible
+            // without a label.
             Circle()
                 .fill(
                     RadialGradient(
@@ -324,26 +300,39 @@ struct FunctionButton: View {
                 .opacity(isPressed || isActive ? 1 : 0)
                 .animation(Motion.instant, value: isPressed)
 
-            Image(systemName: action.symbolName)
-                .font(.system(size: size < 60 ? 16 : 20, weight: .semibold))
-                .foregroundStyle(
-                    isActive ? Color.brand : .white.opacity(isPressed ? 1.0 : 0.9))
+            face(isPressed)
         }
         .frame(width: size, height: size)
         .scaleEffect(isPressed ? PressScale.standard : 1.0)
         .animation(Motion.controlPress, value: isPressed)
+        // Force the dark Liquid Glass variant to match the D-pad.
+        // Both controls pin to `.dark` so the glass material looks
+        // consistent regardless of the system interface style or
+        // the brightness of the game content behind them.
         .darkGlass()
         .contentShape(Circle())
-        .accessibilityLabel(action.displayName)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
+        // Touch dispatch via the UIKit capture layer so the keydown
+        // reaches the engine on touch-down, never deferred by gesture
+        // arbitration. Disabled (not removed) while editing: touches
+        // then fall through to the parent's tap-to-edit and
+        // drag-to-reposition gestures, and the instant interaction
+        // cutoff closes the animated-removal window described on
+        // `ControlTouchCapture.enabled`.
         .overlay {
             ControlTouchCapture(
                 enabled: !editing,
                 onBegan: { _ in press() },
+                // Slide-off keeps the input held by design: no
+                // location tracking while the finger moves.
                 onMoved: { _ in },
                 onEnded: { releaseIfHeld() }
             )
         }
+        // If the user enters edit mode while this button is pressed, or
+        // the button is removed from the layout while pressed, release
+        // the input explicitly.
         .onChange(of: editing) { _, newValue in
             if newValue {
                 releaseIfHeld()
@@ -364,7 +353,6 @@ struct FunctionButton: View {
     private func releaseIfHeld() {
         guard isPressed else { return }
         isPressed = false
-        // The registry decides per kind whether the release matters.
         onRelease()
     }
 }
