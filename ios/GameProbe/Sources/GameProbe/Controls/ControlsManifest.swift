@@ -42,17 +42,36 @@ public struct TouchLayout: Equatable, Sendable {
     }
 }
 
+/// Visual style of the single movement control. The file key stays
+/// `dpad` for both; `style` picks the renderer. Same key mapping and
+/// direction math either way.
+public enum MovementStyle: String, Equatable, Sendable, CaseIterable, Codable {
+    case dpad
+    case stick
+}
+
 public struct DPadSpec: Equatable, Sendable {
     public var x: Double
     public var y: Double
     public var size: Double?
     public var opacity: Double?
+    /// Never optional: an absent file field IS the d-pad, and the
+    /// serializer omits the field for `.dpad`, so no consumer ever
+    /// needs to tell nil from `.dpad`.
+    public var style: MovementStyle
 
-    public init(x: Double, y: Double, size: Double? = nil, opacity: Double? = nil) {
+    public init(
+        x: Double,
+        y: Double,
+        size: Double? = nil,
+        opacity: Double? = nil,
+        style: MovementStyle = .dpad
+    ) {
         self.x = x
         self.y = y
         self.size = size
         self.opacity = opacity
+        self.style = style
     }
 }
 

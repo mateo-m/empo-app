@@ -82,6 +82,14 @@ final class OrientationDerivationTests: XCTestCase {
         XCTAssertEqual(derived.actionButtons?.first?.action, "$toggleFastForward")
     }
 
+    func testMovementStyleCarriesThroughDerivation() {
+        var portrait = samplePortraitLayout()
+        portrait.dpad?.style = .stick
+        let landscape = OrientationDerivation.derive(
+            from: portrait, sourceIsLandscape: false, metrics: metrics, defaultDpad: nil)
+        XCTAssertEqual(landscape.dpad?.style, .stick)
+    }
+
     func testMissingActionButtonsStayMissing() {
         let portrait = samplePortraitLayout()
         let landscape = OrientationDerivation.derive(

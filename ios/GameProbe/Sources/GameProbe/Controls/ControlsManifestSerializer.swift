@@ -10,7 +10,13 @@ public enum ControlsManifestSerializer {
         public var dpadY: Double
         public var dpadSize: Double
         public var dpadOpacity: Double
+        public var dpadStyle: MovementStyle
         public var buttons: [TouchButtonInput]
+        /// An empty list serializes as an OMITTED key on this input
+        /// path (see `orientedLayout`), which means "inherit". This
+        /// input feeds the legacy migration, where the user never
+        /// expressed a choice about action buttons. The live save
+        /// path builds `TouchLayout` directly and keeps `[]` = none.
         public var actionButtons: [TouchActionButtonInput]
 
         public init(
@@ -18,6 +24,7 @@ public enum ControlsManifestSerializer {
             dpadY: Double,
             dpadSize: Double,
             dpadOpacity: Double,
+            dpadStyle: MovementStyle = .dpad,
             buttons: [TouchButtonInput],
             actionButtons: [TouchActionButtonInput] = []
         ) {
@@ -25,6 +32,7 @@ public enum ControlsManifestSerializer {
             self.dpadY = dpadY
             self.dpadSize = dpadSize
             self.dpadOpacity = dpadOpacity
+            self.dpadStyle = dpadStyle
             self.buttons = buttons
             self.actionButtons = actionButtons
         }
@@ -132,7 +140,8 @@ public enum ControlsManifestSerializer {
             x: clampCoordinate(input.dpadX),
             y: clampCoordinate(input.dpadY),
             size: clampDPadSize(input.dpadSize),
-            opacity: clampOpacity(input.dpadOpacity)
+            opacity: clampOpacity(input.dpadOpacity),
+            style: input.dpadStyle
         )
 
         var buttons: [ButtonSpec] = []
@@ -288,6 +297,11 @@ public enum ControlsManifestSerializer {
         }
         if let opacity = dpad.opacity {
             lines.append("\(pad),\"opacity\": \(formatNumber(opacity))")
+        }
+        // Absent and "dpad" mean the same thing; only "stick" is
+        // worth a line. Keeps every existing file byte-stable.
+        if dpad.style != .dpad {
+            lines.append("\(pad),\"style\": \(jsonString(dpad.style.rawValue))")
         }
     }
 

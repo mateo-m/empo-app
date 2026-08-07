@@ -374,16 +374,103 @@ struct CircularControlButton<Face: View>: View {
 /// engage (the angular wedge map decides which direction they
 /// represent). This keeps hit-testing lenient even with a visually
 /// spare plus silhouette.
-struct DPad: View {
+/// Shared touch plumbing for both movement styles: ONE reducer, one
+/// capture overlay, the edit-mode and disappear releases, and the
+/// edge injection with its haptic policy. The styles are pure
+/// visuals fed the live state, so the injection contract — releases
+/// before presses, inject in array order, one buzz per new
+/// direction — lives in exactly one place.
+///
+/// Touch dispatch goes via the UIKit capture layer: a tap must press
+/// its direction on touch-down (a whole down/up pair delivered at
+/// lift lands in one engine event batch and moves the character zero
+/// tiles), and a motionless hold must engage without the finger
+/// having to travel first. UIKit keeps delivering the touch sequence
+/// after the finger leaves the bounds, which is exactly the
+/// slide-off contract `DPadTouchReducer` documents.
+private struct MovementTouchState {
+    var active: DPadTouchReducer.DirectionSet
+    /// The finger's point in local space while a touch is live
+    /// (the stick's nub tracks it). nil between touches.
+    var touchPoint: CGPoint?
+}
+
+private struct MovementTouchHost<Visual: View>: View {
     let size: CGFloat
     let editing: Bool
+    /// The reducer tuning differs per style; the state machine and
+    /// the injection contract do not.
+    let style: MovementStyle
+    @ViewBuilder let visual: (MovementTouchState) -> Visual
 
     /// Touch-to-directions state machine (GameProbe, tested on
     /// Linux): 8-wedge angular map, inner dead zone, cardinal-only
     /// inner ring, slide-off release, and press/release edge
-    /// diffing. The view renders `dpadState.active` and injects
-    /// whatever edges the reducer returns, in order.
-    @State private var dpadState = DPadTouchReducer()
+    /// diffing. This host renders the visual from `reducer.active`
+    /// and injects whatever edges the reducer returns, in order.
+    @State private var reducer = DPadTouchReducer()
+    @State private var touchPoint: CGPoint?
+
+    var body: some View {
+        visual(MovementTouchState(active: reducer.active, touchPoint: touchPoint))
+            .overlay {
+                ControlTouchCapture(
+                    enabled: !editing,
+                    onBegan: { sample($0) },
+                    onMoved: { sample($0) },
+                    onEnded: { release() }
+                )
+            }
+            .onChange(of: editing) { _, newValue in
+                if newValue {
+                    release()
+                }
+            }
+            .onDisappear {
+                release()
+            }
+    }
+
+    private func sample(_ point: CGPoint) {
+        touchPoint = point
+        switch style {
+        case .dpad:
+            apply(reducer.touchChanged(x: point.x, y: point.y, size: size))
+        case .stick:
+            apply(
+                reducer.touchChanged(
+                    x: point.x, y: point.y, size: size,
+                    deadZoneRatio: MovementStickTuning.deadZoneRatio,
+                    cardinalOnlyRadiusRatio: MovementStickTuning.cardinalOnlyRadiusRatio,
+                    slideOffMargin: MovementStickTuning.slideOffMargin(size: size)
+                ))
+        }
+    }
+
+    private func release() {
+        touchPoint = nil
+        apply(reducer.touchEnded())
+    }
+
+    /// Inject the reducer's edges in array order — the reducer lists
+    /// releases before presses so a wedge transition never
+    /// momentarily holds opposing directions — and fire a haptic tap
+    /// when a new direction enters the active set (one buzz per
+    /// wedge transition rather than one continuous buzz while held).
+    private func apply(_ edges: [DPadTouchReducer.Edge]) {
+        for edge in edges {
+            EngineSessionCoordinator.shared.injectKey(
+                scancode: edge.direction.scancode, pressed: edge.pressed)
+        }
+        if edges.contains(where: { $0.pressed }) {
+            Haptics.controllerTap()
+        }
+    }
+}
+
+struct DPad: View {
+    let size: CGFloat
+    let editing: Bool
 
     /// Width of each arm of the plus, as a fraction of the total
     /// bounding box. 0.36 gives balanced proportions where the center
@@ -404,18 +491,24 @@ struct DPad: View {
     private let innerCornerFraction: CGFloat = 0.1
 
     var body: some View {
+        MovementTouchHost(size: size, editing: editing, style: .dpad) { state in
+            visual(active: state.active)
+        }
+    }
+
+    private func visual(active: DPadTouchReducer.DirectionSet) -> some View {
         let plus = DPadPlusShape(
             armFraction: armFraction,
             cornerFraction: cornerFraction,
             innerCornerFraction: innerCornerFraction
         )
 
-        let pressed = !dpadState.active.isEmpty
+        let pressed = !active.isEmpty
 
         // Everything here lives inside a single scaled ZStack so the
         // glass plus, per-arm highlights, chevrons, and center dot all
         // spring together on press (same structure as v0.2.6).
-        ZStack {
+        return ZStack {
             // Opaque backing under glass. With the game view embedded
             // in AppWindow, Liquid Glass otherwise samples the Metal
             // layer and blooms a clipped top/left highlight on device.
@@ -450,8 +543,8 @@ struct DPad: View {
                         )
                         .frame(width: arm.width, height: arm.height)
                         .position(x: arm.midX, y: arm.midY)
-                        .opacity(dpadState.active.contains(dir) ? 1 : 0)
-                        .animation(Motion.instant, value: dpadState.active)
+                        .opacity(active.contains(dir) ? 1 : 0)
+                        .animation(Motion.instant, value: active)
                 }
             }
             .clipShape(plus)
@@ -459,7 +552,7 @@ struct DPad: View {
             ForEach(DPadDirection.allCases, id: \.self) { dir in
                 Image(systemName: dir.symbolName)
                     .font(.system(size: size * 0.14, weight: .semibold))
-                    .foregroundStyle(.white.opacity(dpadState.active.contains(dir) ? 1.0 : 0.55))
+                    .foregroundStyle(.white.opacity(active.contains(dir) ? 1.0 : 0.55))
                     .offset(dir.glyphOffset(size: size, armFraction: armFraction))
             }
 
@@ -480,44 +573,98 @@ struct DPad: View {
         .accessibilityLabel("Directional pad")
         .accessibilityHint("Touch and drag to move the character")
         .accessibilityAddTraits(.allowsDirectInteraction)
-        // Touch dispatch via the UIKit capture layer: a tap must press
-        // its direction on touch-down (a whole down/up pair delivered
-        // at lift lands in one engine event batch and moves the
-        // character zero tiles), and a motionless hold must engage
-        // without the finger having to travel first. UIKit keeps
-        // delivering the touch sequence to this layer after the finger
-        // leaves its bounds, which is exactly the slide-off contract
-        // `DPadTouchReducer` documents.
-        .overlay {
-            ControlTouchCapture(
-                enabled: !editing,
-                onBegan: { apply(dpadState.touchChanged(x: $0.x, y: $0.y, size: size)) },
-                onMoved: { apply(dpadState.touchChanged(x: $0.x, y: $0.y, size: size)) },
-                onEnded: { apply(dpadState.touchEnded()) }
-            )
-        }
-        .onChange(of: editing) { _, newValue in
-            if newValue {
-                apply(dpadState.touchEnded())
-            }
-        }
-        .onDisappear {
-            apply(dpadState.touchEnded())
+    }
+}
+
+// MARK: - Joystick
+
+/// Movement stick: the same reducer, direction math, and injection
+/// contract as the D-pad (via `MovementTouchHost`), rendered as a
+/// base ring with a thumb nub that follows the finger. Only the
+/// visuals and the tuning differ: the cardinal-only ring shrinks
+/// and the slide-off margin scales with the radius
+/// (`MovementStickTuning`, which also owns the nub travel math).
+struct Joystick: View {
+    let size: CGFloat
+    let editing: Bool
+
+    /// Chevron distance from the center, as a fraction of the size.
+    /// Unrelated to `MovementStickTuning.nubRatio` even though the
+    /// values match today.
+    private let chevronDistanceRatio: CGFloat = 0.42
+
+    private var nubSize: CGFloat {
+        size * CGFloat(MovementStickTuning.nubRatio)
+    }
+
+    var body: some View {
+        MovementTouchHost(size: size, editing: editing, style: .stick) { state in
+            visual(active: state.active, touchPoint: state.touchPoint)
         }
     }
 
-    /// Inject the reducer's edges in array order — the reducer lists
-    /// releases before presses so a wedge transition never
-    /// momentarily holds opposing directions — and fire a haptic tap
-    /// when a new direction enters the active set (one buzz per wedge
-    /// transition rather than one continuous buzz while held).
-    private func apply(_ edges: [DPadTouchReducer.Edge]) {
-        for edge in edges {
-            EngineSessionCoordinator.shared.injectKey(
-                scancode: edge.direction.scancode, pressed: edge.pressed)
+    private func visual(
+        active: DPadTouchReducer.DirectionSet, touchPoint: CGPoint?
+    ) -> some View {
+        let pressed = !active.isEmpty
+        // `active` is empty inside the dead zone and past slide-off,
+        // so the touch point (not the active set) drives the nub: a
+        // spring there would lag the finger.
+        let touching = touchPoint != nil
+        let thumbOffset =
+            touchPoint.map { point in
+                let offset = MovementStickTuning.thumbOffset(
+                    x: point.x, y: point.y, size: size)
+                return CGSize(width: offset.dx, height: offset.dy)
+            } ?? .zero
+
+        return ZStack {
+            // Opaque backing under glass, same rationale as the
+            // D-pad: Liquid Glass samples the Metal layer otherwise.
+            Circle()
+                .fill(Color.black)
+
+            Circle()
+                .fill(.clear)
+                .glassEffect(.regular.interactive(), in: .circle)
+
+            // Direction chevrons on the base ring. The active one
+            // brightens, same visual language as the D-pad's arms.
+            ForEach(DPadDirection.allCases, id: \.self) { dir in
+                Image(systemName: dir.symbolName)
+                    .font(.system(size: size * 0.12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(active.contains(dir) ? 1.0 : 0.4))
+                    .offset(chevronOffset(dir))
+            }
+
+            // Thumb nub.
+            ZStack {
+                Circle()
+                    .fill(Color.black)
+                Circle()
+                    .fill(.white.opacity(pressed ? 0.35 : 0.2))
+                Circle()
+                    .strokeBorder(.white.opacity(0.5), lineWidth: 1.5)
+            }
+            .frame(width: nubSize, height: nubSize)
+            .offset(thumbOffset)
+            .animation(touching ? Motion.instant : Motion.snappy, value: thumbOffset)
         }
-        if edges.contains(where: { $0.pressed }) {
-            Haptics.controllerTap()
+        .frame(width: size, height: size)
+        .darkGlass()
+        .contentShape(Circle())
+        .accessibilityLabel("Movement stick")
+        .accessibilityHint("Touch and drag to move the character")
+        .accessibilityAddTraits(.allowsDirectInteraction)
+    }
+
+    private func chevronOffset(_ dir: DPadDirection) -> CGSize {
+        let distance = size * chevronDistanceRatio
+        switch dir {
+        case .up: return CGSize(width: 0, height: -distance)
+        case .down: return CGSize(width: 0, height: distance)
+        case .left: return CGSize(width: -distance, height: 0)
+        case .right: return CGSize(width: distance, height: 0)
         }
     }
 }

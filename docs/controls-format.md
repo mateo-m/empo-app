@@ -169,9 +169,18 @@ area. You do not need to adjust for individual devices.
 | `x`, `y` | yes | 0.0 to 1.0 | |
 | `size` | no | 100 to 200 (points) | 140 |
 | `opacity` | no | 0.2 to 1.0 | 1.0 |
+| `style` | no | `"dpad"` or `"stick"` | `"dpad"` |
 
 Omit `dpad` to keep the default placement. You cannot remove the
 d-pad, because these games need arrow keys.
+
+`"style": "stick"` draws a joystick instead of the d-pad: a thumb
+nub that follows the finger. The key mapping and the 8-way direction
+math stay the same. The joystick allows diagonal movement closer to
+the center than the d-pad does. Empo added `style` in version 0.6; older versions ignore the
+field and draw a d-pad. An unknown style value is a warning and
+falls back to the d-pad, but note: when the player edits the layout,
+the next save writes the field back only if Empo knows the value.
 
 ### `buttons`
 
@@ -427,6 +436,7 @@ controls did not show up, ask a tester for that log line.
 | W003 | Two buttons share one key (warning) |
 | W004 | Unknown action in `actionButtons`; that button is skipped (warning) |
 | W005 | Unknown action in `controller`; the binding stays but does nothing (warning) |
+| W006 | Unknown `dpad` style; the d-pad renders instead (warning) |
 
 Warnings never reject the file.
 

@@ -45,7 +45,7 @@ struct PlayerControlsOverlay: View {
             for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size),
             safeArea: AppWindow.currentSafeArea, controlsMinY: controlsMinY)
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
-        DPad(size: size, editing: editMode)
+        movementControl(size: size)
             .frame(width: size, height: size)
             // Measure the region BEFORE .position: position()
             // expands to the full proposed space, so a region attached
@@ -70,6 +70,18 @@ struct PlayerControlsOverlay: View {
                 including: editMode ? .all : .subviews
             )
             .gesture(dpadDragGesture, including: editMode ? .all : .subviews)
+    }
+
+    /// The movement control renders per style; everything around it
+    /// (position, drag, edit gestures, hit region) is shared.
+    @ViewBuilder
+    private func movementControl(size: CGFloat) -> some View {
+        switch layout.dpadStyle {
+        case .dpad:
+            DPad(size: size, editing: editMode)
+        case .stick:
+            Joystick(size: size, editing: editMode)
+        }
     }
 
     private var dpadDragGesture: some Gesture {

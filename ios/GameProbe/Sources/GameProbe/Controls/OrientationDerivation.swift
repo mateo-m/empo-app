@@ -52,7 +52,7 @@ public enum OrientationDerivation {
                 elementSize: size
             )
             derivedDpad = DPadSpec(
-                x: 0, y: 0, size: size, opacity: spec.opacity
+                x: 0, y: 0, size: size, opacity: spec.opacity, style: spec.style
             )
             dpadObstacle = (center.x, center.y, size)
         } else if let defaultDpad {

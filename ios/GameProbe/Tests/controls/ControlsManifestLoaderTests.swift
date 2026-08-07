@@ -400,12 +400,43 @@ final class ControlsManifestLoaderTests: XCTestCase {
         XCTAssertEqual(touchResult.manifest?.touch?.portrait?.actionButtons, [])
     }
 
+    func testMovementStyleParses() {
+        let json = #"""
+            { "version": 1, "touch": { "portrait": {
+              "dpad": { "x": 0.25, "y": 0.75, "style": "stick" } } } }
+            """#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertTrue(result.findings.isEmpty, "\(result.findings)")
+        XCTAssertEqual(result.manifest?.touch?.portrait?.dpad?.style, .stick)
+
+        let absent = #"{ "version": 1, "touch": { "portrait": { "dpad": { "x": 0.25, "y": 0.75 } } } }"#
+        let absentResult = ControlsManifestLoader.parse(data: absent.data(using: .utf8)!)
+        XCTAssertEqual(absentResult.manifest?.touch?.portrait?.dpad?.style, .dpad)
+    }
+
+    func testW006UnknownMovementStyleFallsBackToDPad() {
+        // Unknown string AND wrong type both warn and fall back; a
+        // future style value must never reject the file here.
+        for value in [#""floating""#, "5"] {
+            let json = """
+                { "version": 1, "touch": { "portrait": {
+                  "dpad": { "x": 0.25, "y": 0.75, "style": \(value) } } } }
+                """
+            let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+            XCTAssertNotNil(result.manifest, value)
+            XCTAssertNotNil(
+                finding(result, code: "W006", path: "/touch/portrait/dpad/style"), value)
+            XCTAssertEqual(result.manifest?.touch?.portrait?.dpad?.style, .dpad, value)
+        }
+    }
+
     func testEmittedFindingCodesAreUniqueAndConsistent() {
         let codes = ControlsManifestLoader.emittedFindingCodes
         XCTAssertEqual(Set(codes).count, codes.count)
         XCTAssertTrue(codes.contains("V015"))
         XCTAssertTrue(codes.contains("W004"))
         XCTAssertTrue(codes.contains("W005"))
+        XCTAssertTrue(codes.contains("W006"))
         XCTAssertFalse(codes.contains("V021"), "V021 is superseded by W005")
         for code in codes {
             XCTAssertTrue(
