@@ -104,6 +104,16 @@ final class LayoutProfilesTests: XCTestCase {
         XCTAssertNotNil(garbage.note)
     }
 
+    func testPinFileRejectsNamesThatFailProfileValidation() {
+        for bad in ["..", "../Escape", "a/b", "a\\b", ".hidden", " ", ""] {
+            let data = try! JSONSerialization.data(
+                withJSONObject: ["version": 1, "pin": bad])
+            let parsed = LayoutPinFile.parse(data: data)
+            XCTAssertEqual(parsed.pin, .followChain, "pin \(bad) must not resolve")
+            XCTAssertNotNil(parsed.note, "pin \(bad) must leave a note")
+        }
+    }
+
     // MARK: - Chain resolver
 
     func testChainResolverMatrix() {
