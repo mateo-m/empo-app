@@ -83,8 +83,8 @@ class AppState {
         selectedGame = game
         sessionHadError = false
         // Bind the controls layout to this game so edits during play
-        // persist to this game's per-game slot (not a global one).
-        ControlsLayout.shared.switchGame(id: game.id, container: container)
+        // persist to this game's layout profile.
+        ControlsLayout.shared.switchGame(id: game.id, container: container, title: game.title)
         PauseManager.shared.reset()
         phase = .loading
 

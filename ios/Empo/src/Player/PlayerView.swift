@@ -45,6 +45,7 @@ struct PlayerView: View {
     /// itself stays trimmed to keyboard / edit / hide / more.
     @State private var showMoreSheet = false
     @State private var showControllerRemap = false
+    @State private var showLayoutProfilePicker = false
 
     var body: some View {
         GeometryReader { geo in
@@ -91,32 +92,8 @@ struct PlayerView: View {
                         .allowsHitTesting(false)
 
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
-                    if layout.manifestRejectionErrorCount > 0 {
-                        let errorCount = layout.manifestRejectionErrorCount
-                        let errorLabel = errorCount == 1 ? "error" : "errors"
-                        Text(
-                            "This game ships a controls.json with \(errorCount) \(errorLabel). See Logs."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, Spacing.lg)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, safeArea.bottom + Spacing.md)
-                        .allowsHitTesting(false)
-                    } else if layout.userControlsRejectionErrorCount > 0 {
-                        let errorCount = layout.userControlsRejectionErrorCount
-                        let errorLabel = errorCount == 1 ? "error" : "errors"
-                        Text(
-                            "Your saved controls file has \(errorCount) \(errorLabel). See Logs."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, Spacing.lg)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, safeArea.bottom + Spacing.md)
-                        .allowsHitTesting(false)
+                    if let caption = editZoneCaptionText {
+                        editZoneCaption(caption, safeArea: safeArea)
                     }
                 }
                 // Invisible tap layer that dismisses the keyboard when
@@ -142,6 +119,7 @@ struct PlayerView: View {
                         geo: geo,
                         controlsMinY: controlsMinY,
                         editMode: editMode,
+                        safeArea: safeArea,
                         editingButton: $editingButton,
                         editingActionButton: $editingActionButton,
                         editingDPad: $editingDPad,
@@ -218,6 +196,41 @@ struct PlayerView: View {
                         rect: gameRect,
                         opacity: snapshotOpacity
                     )
+                }
+
+                // One-time heads-up: the game's own layout displaced
+                // the user's default profile.
+                if layout.gameLayoutNoticePending && !editMode && !layout.importOfferPending {
+                    noticeCapsule(hitRegionKey: "gameLayoutNotice", safeArea: safeArea) {
+                        Text("This game ships its own control layout; it is now active.")
+                            .font(.footnote)
+                            .foregroundStyle(.white)
+                        Button("OK") {
+                            layout.dismissGameLayoutNotice()
+                        }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.brand)
+                    }
+                }
+
+                // A migrated-then-changed controls file in the game
+                // folder waits for the user's import decision.
+                if layout.importOfferPending && !editMode {
+                    noticeCapsule(hitRegionKey: "importOffer", safeArea: safeArea) {
+                        Text("This game's folder has a controls file.")
+                            .font(.footnote)
+                            .foregroundStyle(.white)
+                        Button("Import as profile") {
+                            layout.acceptImportOffer()
+                        }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.brand)
+                        Button("Not now") {
+                            layout.dismissImportOffer()
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    }
                 }
             }
             // Push device orientation into ControlsLayout so it can
@@ -337,10 +350,16 @@ struct PlayerView: View {
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: controllerInput.hasHadControllerThisSession,
                 onControllerRemap: { showControllerRemap = true },
+                onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { appState.requestPause() },
                 onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) },
                 onQuit: { showQuitConfirm = true }
             )
+        }
+        .sheet(isPresented: $showLayoutProfilePicker) {
+            if let container = layout.currentContainer {
+                LayoutProfilePickerSheet(container: container)
+            }
         }
         .sheet(isPresented: $showControllerRemap) {
             ControllerRemapView(
@@ -369,6 +388,57 @@ struct PlayerView: View {
             editingActionButton: $editingActionButton,
             editingDPad: $editingDPad
         )
+    }
+
+    /// The first edit-mode notice worth showing, most severe first.
+    private var editZoneCaptionText: String? {
+        if layout.manifestRejectionErrorCount > 0 {
+            let errorCount = layout.manifestRejectionErrorCount
+            let errorLabel = errorCount == 1 ? "error" : "errors"
+            return "This game ships a controls.json with \(errorCount) \(errorLabel). See Logs."
+        }
+        if layout.profileRejectionErrorCount > 0 {
+            let errorCount = layout.profileRejectionErrorCount
+            let errorLabel = errorCount == 1 ? "error" : "errors"
+            return "The pinned profile has \(errorCount) \(errorLabel). See Logs."
+        }
+        if layout.pinFellThrough {
+            return "The pinned layout is missing. This game uses the next layout in line."
+        }
+        return nil
+    }
+
+    /// The bottom caption chrome every edit-mode notice shares.
+    private func editZoneCaption(_ text: String, safeArea: EdgeInsets) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, Spacing.lg)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, safeArea.bottom + Spacing.md)
+            .allowsHitTesting(false)
+    }
+
+    /// The bottom notice pill both play-time banners share. Without
+    /// a hit region, taps inside gameRect route to the engine
+    /// instead of the buttons.
+    private func noticeCapsule(
+        hitRegionKey: String, safeArea: EdgeInsets,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        VStack {
+            Spacer()
+            HStack(spacing: Spacing.lg) {
+                content()
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .background(Color.black.opacity(Scrim.heavy))
+            .clipShape(Capsule())
+            .chromeHitRegion(hitRegionKey)
+            .padding(.bottom, safeArea.bottom + Spacing.md)
+        }
     }
 
     @ViewBuilder
@@ -418,8 +488,11 @@ struct PlayerView: View {
         if editMode {
             layout.beginEditSession()
         } else {
-            layout.endEditSession()
+            // Save BEFORE ending the session: the ambient auto-create
+            // branch only fires inside an edit session, and sheet-only
+            // edits commit exactly here.
             layout.save()
+            layout.endEditSession()
             resetToolbarIdleTimer()
         }
     }
