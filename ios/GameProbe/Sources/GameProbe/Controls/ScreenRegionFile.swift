@@ -177,8 +177,10 @@ public enum ScreenRegionFile {
         return Data(("{\n" + entries.joined(separator: ",\n") + "\n}\n").utf8)
     }
 
+    // The explicit POSIX locale keeps the decimal separator a "."
+    // on every device locale, so the output stays valid JSON.
     private static func format(_ value: Double) -> String {
-        String(format: "%.4f", value)
+        String(format: "%.4f", locale: Locale(identifier: "en_US_POSIX"), value)
     }
 
     // JSON booleans must not pass as numbers. Type casts cannot
