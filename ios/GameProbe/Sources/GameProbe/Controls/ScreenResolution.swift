@@ -17,11 +17,11 @@ public enum ScreenProvenance: Equatable, Sendable {
 /// default profile.
 public enum ScreenResolution {
     public struct Outcome: Equatable, Sendable {
-        public var region: ScreenRegion?
+        public var placement: ScreenPlacement?
         public var provenance: ScreenProvenance
 
-        public init(region: ScreenRegion?, provenance: ScreenProvenance) {
-            self.region = region
+        public init(placement: ScreenPlacement?, provenance: ScreenProvenance) {
+            self.placement = placement
             self.provenance = provenance
         }
     }
@@ -41,7 +41,7 @@ public enum ScreenResolution {
         defaultProfileName: String?,
         readScreen: (String) -> ScreenRegionFile.ReadResult?
     ) -> Result {
-        let auto = Outcome(region: nil, provenance: .engineAuto)
+        let auto = Outcome(placement: nil, provenance: .engineAuto)
 
         let sourceName: String?
         switch pin {
@@ -57,9 +57,9 @@ public enum ScreenResolution {
             return Result(portrait: auto, landscape: auto)
         }
 
-        func outcome(_ region: ScreenRegion?) -> Outcome {
-            guard let region else { return auto }
-            return Outcome(region: region, provenance: .profile(sourceName))
+        func outcome(_ placement: ScreenPlacement?) -> Outcome {
+            guard let placement else { return auto }
+            return Outcome(placement: placement, provenance: .profile(sourceName))
         }
         return Result(
             portrait: outcome(read.portrait), landscape: outcome(read.landscape))

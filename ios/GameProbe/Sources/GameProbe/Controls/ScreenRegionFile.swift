@@ -29,6 +29,34 @@ public struct ScreenRegion: Equatable, Sendable {
     }
 }
 
+/// Named screen positions. A preset stores the NAME, never a rect:
+/// the rect gets computed per device at apply time, so one profile
+/// places the game right on an iPhone and an iPad alike.
+public enum ScreenPreset: String, CaseIterable, Sendable {
+    case top
+    case topCenter = "top-center"
+    case center
+}
+
+/// One orientation's screen placement — the single per-orientation
+/// value in `screen.json`. A preset serializes as a bare string, a
+/// custom region as an object; same key either way.
+public enum ScreenPlacement: Equatable, Sendable {
+    case preset(ScreenPreset)
+    case region(ScreenRegion)
+
+    /// The custom rect, when this placement carries one.
+    public var region: ScreenRegion? {
+        if case .region(let region) = self { return region }
+        return nil
+    }
+
+    /// Presets never float the controls over the game.
+    public var overlay: Bool {
+        region?.overlay ?? false
+    }
+}
+
 /// `Profiles/<Name>/screen.json`: Empo-private, profiles only. NOT
 /// part of the frozen controls v1 spec; the loader never reads it
 /// from game folders. Strict parse with its own small `S` finding
@@ -44,12 +72,12 @@ public enum ScreenRegionFile {
     public static let boundsEpsilon = 1e-6
 
     public struct ReadResult: Equatable, Sendable {
-        public var portrait: ScreenRegion?
-        public var landscape: ScreenRegion?
+        public var portrait: ScreenPlacement?
+        public var landscape: ScreenPlacement?
         public var findings: [String]
 
         public init(
-            portrait: ScreenRegion? = nil, landscape: ScreenRegion? = nil,
+            portrait: ScreenPlacement? = nil, landscape: ScreenPlacement? = nil,
             findings: [String] = []
         ) {
             self.portrait = portrait
@@ -84,10 +112,19 @@ public enum ScreenRegionFile {
 
     private static func parseEntry(
         _ raw: Any?, key: String, findings: inout [String]
-    ) -> ScreenRegion? {
+    ) -> ScreenPlacement? {
         guard let raw else { return nil }
+        // A bare string is a named preset; the rect gets computed
+        // per device at apply time.
+        if let text = raw as? String {
+            guard let preset = ScreenPreset(rawValue: text) else {
+                findings.append("S006: '\(key)' names an unknown preset: \(text)")
+                return nil
+            }
+            return .preset(preset)
+        }
         guard let entry = raw as? [String: Any] else {
-            findings.append("S003: '\(key)' is not an object")
+            findings.append("S003: '\(key)' is not an object or a preset name")
             return nil
         }
         func number(_ field: String) -> Double? {
@@ -111,7 +148,7 @@ public enum ScreenRegionFile {
             findings.append("S005: '\(key)' region is out of bounds or below the minimum size")
             return nil
         }
-        return region
+        return .region(region)
     }
 
     // MARK: - Serialize
@@ -119,13 +156,20 @@ public enum ScreenRegionFile {
     /// Stable bytes: fixed key order, fixed 4-decimal numbers. Only
     /// the orientations that exist are written. Both nil returns nil
     /// — the caller deletes the file instead of writing an empty one.
-    public static func serialize(portrait: ScreenRegion?, landscape: ScreenRegion?) -> Data? {
+    public static func serialize(
+        portrait: ScreenPlacement?, landscape: ScreenPlacement?
+    ) -> Data? {
         guard portrait != nil || landscape != nil else { return nil }
-        func entry(_ key: String, _ region: ScreenRegion) -> String {
-            let r = region.rounded()
-            let overlay = r.overlay ? ", \"overlay\": true" : ""
-            return "  \"\(key)\": { \"x\": \(format(r.x)), \"y\": \(format(r.y)), "
-                + "\"w\": \(format(r.w)), \"h\": \(format(r.h))\(overlay) }"
+        func entry(_ key: String, _ placement: ScreenPlacement) -> String {
+            switch placement {
+            case .preset(let preset):
+                return "  \"\(key)\": \"\(preset.rawValue)\""
+            case .region(let region):
+                let r = region.rounded()
+                let overlay = r.overlay ? ", \"overlay\": true" : ""
+                return "  \"\(key)\": { \"x\": \(format(r.x)), \"y\": \(format(r.y)), "
+                    + "\"w\": \(format(r.w)), \"h\": \(format(r.h))\(overlay) }"
+            }
         }
         var entries = ["  \"version\": 1"]
         if let portrait { entries.append(entry("portrait", portrait)) }

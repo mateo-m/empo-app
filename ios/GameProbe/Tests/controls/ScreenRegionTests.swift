@@ -52,8 +52,8 @@ final class ScreenRegionTests: XCTestCase {
                   "landscape": { "x": 0.1, "y": 0, "w": 0.8, "h": 1 }
                 }
                 """))
-        XCTAssertEqual(result.portrait, ScreenRegion(x: 0, y: 0.05, w: 1, h: 0.55))
-        XCTAssertEqual(result.landscape, ScreenRegion(x: 0.1, y: 0, w: 0.8, h: 1))
+        XCTAssertEqual(result.portrait, .region(ScreenRegion(x: 0, y: 0.05, w: 1, h: 0.55)))
+        XCTAssertEqual(result.landscape, .region(ScreenRegion(x: 0.1, y: 0, w: 0.8, h: 1)))
         XCTAssertTrue(result.findings.isEmpty)
     }
 
@@ -165,11 +165,11 @@ final class ScreenRegionTests: XCTestCase {
             data(
                 #"{ "version": 1, "portrait": { "x": 0, "y": 0.5, "w": 1, "h": 0.5, "overlay": true } }"#
             ))
-        let region = try XCTUnwrap(result.portrait)
-        XCTAssertTrue(region.overlay)
+        let placement = try XCTUnwrap(result.portrait)
+        XCTAssertTrue(placement.overlay)
 
         let serialized = try XCTUnwrap(
-            ScreenRegionFile.serialize(portrait: region, landscape: nil))
+            ScreenRegionFile.serialize(portrait: placement, landscape: nil))
         let reparsed = ScreenRegionFile.parse(serialized)
         XCTAssertEqual(reparsed.portrait?.overlay, true)
 
@@ -185,7 +185,7 @@ final class ScreenRegionTests: XCTestCase {
     func testSerializeOmitsOverlayWhenOff() throws {
         let serialized = try XCTUnwrap(
             ScreenRegionFile.serialize(
-                portrait: ScreenRegion(x: 0, y: 0, w: 1, h: 1), landscape: nil))
+                portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil))
         XCTAssertFalse(String(decoding: serialized, as: UTF8.self).contains("overlay"))
     }
 
@@ -193,19 +193,19 @@ final class ScreenRegionTests: XCTestCase {
         store.createProfile("P", touch: sampleTouch())
         let portrait = ScreenRegion(x: 0, y: 0.5, w: 1, h: 0.5, overlay: true)
         let landscape = ScreenRegion(x: 0, y: 0, w: 1, h: 1)
-        XCTAssertTrue(store.writeScreen("P", portrait: portrait, landscape: landscape))
+        XCTAssertTrue(store.writeScreen("P", portrait: .region(portrait), landscape: .region(landscape)))
 
         let read = try XCTUnwrap(store.readScreen("P"))
         XCTAssertEqual(read.portrait?.overlay, true)
         XCTAssertEqual(read.landscape?.overlay, false)
-        XCTAssertEqual(read.portrait, portrait)
-        XCTAssertEqual(read.landscape, landscape)
+        XCTAssertEqual(read.portrait, .region(portrait))
+        XCTAssertEqual(read.landscape, .region(landscape))
     }
 
     func testSerializeRoundTripIsByteStableWithOverlay() throws {
         let portrait = ScreenRegion(x: 0.1, y: 0.4, w: 0.9, h: 0.6, overlay: true)
         let first = try XCTUnwrap(
-            ScreenRegionFile.serialize(portrait: portrait, landscape: nil))
+            ScreenRegionFile.serialize(portrait: .region(portrait), landscape: nil))
         let reparsed = ScreenRegionFile.parse(first)
         let second = try XCTUnwrap(
             ScreenRegionFile.serialize(portrait: reparsed.portrait, landscape: nil))
@@ -219,12 +219,87 @@ final class ScreenRegionTests: XCTestCase {
         XCTAssertNotNil(result.portrait)
     }
 
+    // MARK: - Presets
+
+    func testParsePresetStrings() {
+        for (raw, preset) in [
+            ("top", ScreenPreset.top),
+            ("top-center", .topCenter),
+            ("center", .center),
+        ] {
+            let result = ScreenRegionFile.parse(
+                data("{ \"version\": 1, \"portrait\": \"\(raw)\" }"))
+            XCTAssertEqual(result.portrait, .preset(preset), raw)
+            XCTAssertTrue(result.findings.isEmpty, raw)
+        }
+    }
+
+    func testParseUnknownPresetIsAFindingAndAbsent() {
+        let result = ScreenRegionFile.parse(
+            data(#"{ "version": 1, "portrait": "bottom" }"#))
+        XCTAssertNil(result.portrait)
+        XCTAssertTrue(result.findings.contains { $0.hasPrefix("S006") }, "\(result.findings)")
+    }
+
+    func testPresetSerializeRoundTripIsByteStable() throws {
+        let first = try XCTUnwrap(
+            ScreenRegionFile.serialize(
+                portrait: .preset(.topCenter),
+                landscape: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1))))
+        let reparsed = ScreenRegionFile.parse(first)
+        XCTAssertEqual(reparsed.portrait, .preset(.topCenter))
+        let second = try XCTUnwrap(
+            ScreenRegionFile.serialize(
+                portrait: reparsed.portrait, landscape: reparsed.landscape))
+        XCTAssertEqual(first, second)
+    }
+
+    func testPresetRegionComputesPerDevice() throws {
+        // A 4:3 game on a phone-shaped portrait canvas: full safe
+        // width, aspect-fit height, aligned per preset.
+        func rect(_ preset: ScreenPreset, height: Double) -> ScreenRegion? {
+            ScreenPresetPlacement.region(
+                preset: preset,
+                canvasWidth: 400, canvasHeight: height,
+                safeTop: 60, safeBottom: 30, safeLeading: 0, safeTrailing: 0,
+                isPortrait: true, aspect: 4.0 / 3.0)
+        }
+        let top = try XCTUnwrap(rect(.top, height: 800))
+        XCTAssertEqual(top.y, 60.0 / 800.0, accuracy: 0.0001)
+        XCTAssertEqual(top.w, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(top.h, 300.0 / 800.0, accuracy: 0.0001)
+
+        let center = try XCTUnwrap(rect(.center, height: 800))
+        // Available height 710, game 300: centered at 60 + 205.
+        XCTAssertEqual(center.y, 265.0 / 800.0, accuracy: 0.0001)
+
+        let topCenter = try XCTUnwrap(rect(.topCenter, height: 800))
+        XCTAssertEqual(topCenter.y, (60.0 + 265.0) / 2.0 / 800.0, accuracy: 0.0001)
+
+        // A taller canvas (a different device) yields a DIFFERENT
+        // rect for the same preset: the preset is a rule, not a
+        // stored rectangle.
+        let tall = try XCTUnwrap(rect(.center, height: 900))
+        XCTAssertNotEqual(center.y, tall.y)
+    }
+
+    func testPresetRegionLandscapeCentersForEveryPreset() {
+        let rects = ScreenPreset.allCases.map { preset in
+            ScreenPresetPlacement.region(
+                preset: preset,
+                canvasWidth: 800, canvasHeight: 400,
+                safeTop: 0, safeBottom: 20, safeLeading: 60, safeTrailing: 60,
+                isPortrait: false, aspect: 4.0 / 3.0)
+        }
+        XCTAssertEqual(Set(rects.map { $0?.y }).count, 1)
+    }
+
     // MARK: - Serialize
 
     func testSerializeRoundTripIsByteStable() throws {
         let portrait = ScreenRegion(x: 0.1234567, y: 0.05, w: 0.8, h: 0.55)
         let first = try XCTUnwrap(
-            ScreenRegionFile.serialize(portrait: portrait, landscape: nil))
+            ScreenRegionFile.serialize(portrait: .region(portrait), landscape: nil))
         let reparsed = ScreenRegionFile.parse(first)
         let second = try XCTUnwrap(
             ScreenRegionFile.serialize(portrait: reparsed.portrait, landscape: nil))
@@ -234,7 +309,7 @@ final class ScreenRegionTests: XCTestCase {
     func testSerializeRoundsToFourDecimals() throws {
         let serialized = try XCTUnwrap(
             ScreenRegionFile.serialize(
-                portrait: ScreenRegion(x: 0.123456, y: 0, w: 0.876544, h: 1),
+                portrait: .region(ScreenRegion(x: 0.123456, y: 0, w: 0.876544, h: 1)),
                 landscape: nil))
         let text = String(decoding: serialized, as: UTF8.self)
         XCTAssertTrue(text.contains("0.1235"), text)
@@ -244,7 +319,7 @@ final class ScreenRegionTests: XCTestCase {
     func testSerializeWritesOnlyExistingOrientations() throws {
         let serialized = try XCTUnwrap(
             ScreenRegionFile.serialize(
-                portrait: nil, landscape: ScreenRegion(x: 0, y: 0, w: 1, h: 1)))
+                portrait: nil, landscape: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1))))
         let text = String(decoding: serialized, as: UTF8.self)
         XCTAssertFalse(text.contains("portrait"))
         XCTAssertTrue(text.contains("landscape"))
@@ -264,16 +339,16 @@ final class ScreenRegionTests: XCTestCase {
     func testWriteAndReadScreen() throws {
         store.createProfile("P", touch: sampleTouch())
         let region = ScreenRegion(x: 0.1, y: 0.2, w: 0.5, h: 0.5)
-        XCTAssertTrue(store.writeScreen("P", portrait: region, landscape: nil))
+        XCTAssertTrue(store.writeScreen("P", portrait: .region(region), landscape: nil))
         let read = try XCTUnwrap(store.readScreen("P"))
-        XCTAssertEqual(read.portrait, region)
+        XCTAssertEqual(read.portrait, .region(region))
         XCTAssertNil(read.landscape)
     }
 
     func testWriteScreenZeroOrientationsDeletesTheFile() {
         store.createProfile("P", touch: sampleTouch())
         store.writeScreen(
-            "P", portrait: ScreenRegion(x: 0, y: 0, w: 1, h: 1), landscape: nil)
+            "P", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
         XCTAssertTrue(FileManager.default.fileExists(atPath: store.screenURL("P").path))
         XCTAssertTrue(store.writeScreen("P", portrait: nil, landscape: nil))
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.screenURL("P").path))
@@ -282,18 +357,18 @@ final class ScreenRegionTests: XCTestCase {
     func testWriteScreenOnMissingProfileFails() {
         XCTAssertFalse(
             store.writeScreen(
-                "Ghost", portrait: ScreenRegion(x: 0, y: 0, w: 1, h: 1), landscape: nil))
+                "Ghost", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil))
     }
 
     func testDuplicateCarriesScreenFile() throws {
         store.createProfile("P", touch: sampleTouch())
         let region = ScreenRegion(x: 0, y: 0.1, w: 0.9, h: 0.6)
-        store.writeScreen("P", portrait: region, landscape: nil)
+        store.writeScreen("P", portrait: .region(region), landscape: nil)
         store.appendLog("P", file: ScreenRegionFile.fileName, line: "S005: test")
 
         let copy = try XCTUnwrap(store.duplicateProfile("P"))
         let read = try XCTUnwrap(store.readScreen(copy))
-        XCTAssertEqual(read.portrait, region)
+        XCTAssertEqual(read.portrait, .region(region))
         // Logs describe the original and must not travel.
         let copyLog = store.profileURL(copy)
             .appendingPathComponent("screen.json.log")
@@ -303,17 +378,17 @@ final class ScreenRegionTests: XCTestCase {
     func testRenameMovesScreenFile() throws {
         store.createProfile("P", touch: sampleTouch())
         let region = ScreenRegion(x: 0, y: 0, w: 0.5, h: 0.5)
-        store.writeScreen("P", portrait: nil, landscape: region)
+        store.writeScreen("P", portrait: nil, landscape: .region(region))
         XCTAssertTrue(store.renameProfile(from: "P", to: "Q"))
         let read = try XCTUnwrap(store.readScreen("Q"))
-        XCTAssertEqual(read.landscape, region)
+        XCTAssertEqual(read.landscape, .region(region))
         XCTAssertNil(store.readScreen("P"))
     }
 
     func testDeleteRemovesScreenFile() {
         store.createProfile("P", touch: sampleTouch())
         store.writeScreen(
-            "P", portrait: ScreenRegion(x: 0, y: 0, w: 1, h: 1), landscape: nil)
+            "P", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
         XCTAssertTrue(store.deleteProfile("P"))
         XCTAssertNil(store.readScreen("P"))
     }
@@ -345,13 +420,13 @@ final class ScreenRegionTests: XCTestCase {
         store.createProfile("Mine", touch: sampleTouch())
         store.createProfile("Default", touch: sampleTouch())
         let mine = ScreenRegion(x: 0, y: 0, w: 0.5, h: 0.5)
-        store.writeScreen("Mine", portrait: mine, landscape: nil)
+        store.writeScreen("Mine", portrait: .region(mine), landscape: nil)
         store.writeScreen(
-            "Default", portrait: ScreenRegion(x: 0.5, y: 0.5, w: 0.5, h: 0.5),
+            "Default", portrait: .region(ScreenRegion(x: 0.5, y: 0.5, w: 0.5, h: 0.5)),
             landscape: nil)
 
         let result = resolve(pin: .profile("Mine"), defaultName: "Default")
-        XCTAssertEqual(result.portrait.region, mine)
+        XCTAssertEqual(result.portrait.placement?.region, mine)
         XCTAssertEqual(result.portrait.provenance, .profile("Mine"))
     }
 
@@ -362,32 +437,32 @@ final class ScreenRegionTests: XCTestCase {
         store.createProfile("Mine", touch: sampleTouch())
         store.createProfile("Default", touch: sampleTouch())
         store.writeScreen(
-            "Default", portrait: ScreenRegion(x: 0, y: 0, w: 1, h: 1), landscape: nil)
+            "Default", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
 
         let result = resolve(pin: .profile("Mine"), defaultName: "Default")
-        XCTAssertNil(result.portrait.region)
+        XCTAssertNil(result.portrait.placement?.region)
         XCTAssertEqual(result.portrait.provenance, .engineAuto)
-        XCTAssertNil(result.landscape.region)
+        XCTAssertNil(result.landscape.placement?.region)
     }
 
     func testGamePinSkipsTheDefault() {
         store.createProfile("Default", touch: sampleTouch())
         store.writeScreen(
-            "Default", portrait: ScreenRegion(x: 0, y: 0, w: 1, h: 1), landscape: nil)
+            "Default", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
 
         let result = resolve(pin: .gameLayout, defaultName: "Default")
         XCTAssertEqual(result.portrait.provenance, .engineAuto)
-        XCTAssertNil(result.portrait.region)
+        XCTAssertNil(result.portrait.placement?.region)
     }
 
     func testDefaultPinAndChainReadTheDefault() {
         store.createProfile("Default", touch: sampleTouch())
         let region = ScreenRegion(x: 0, y: 0.25, w: 1, h: 0.5)
-        store.writeScreen("Default", portrait: region, landscape: nil)
+        store.writeScreen("Default", portrait: .region(region), landscape: nil)
 
         for pin in [LayoutPin.defaultProfile, .followChain] {
             let result = resolve(pin: pin, defaultName: "Default")
-            XCTAssertEqual(result.portrait.region, region, "\(pin)")
+            XCTAssertEqual(result.portrait.placement?.region, region, "\(pin)")
             XCTAssertEqual(result.portrait.provenance, .profile("Default"), "\(pin)")
         }
     }
@@ -401,12 +476,12 @@ final class ScreenRegionTests: XCTestCase {
     func testOrientationsResolveIndependently() {
         store.createProfile("P", touch: sampleTouch())
         let landscape = ScreenRegion(x: 0.1, y: 0, w: 0.8, h: 1)
-        store.writeScreen("P", portrait: nil, landscape: landscape)
+        store.writeScreen("P", portrait: nil, landscape: .region(landscape))
 
         let result = resolve(pin: .profile("P"), defaultName: nil)
-        XCTAssertNil(result.portrait.region)
+        XCTAssertNil(result.portrait.placement?.region)
         XCTAssertEqual(result.portrait.provenance, .engineAuto)
-        XCTAssertEqual(result.landscape.region, landscape)
+        XCTAssertEqual(result.landscape.placement?.region, landscape)
         XCTAssertEqual(result.landscape.provenance, .profile("P"))
     }
 
@@ -415,7 +490,7 @@ final class ScreenRegionTests: XCTestCase {
         try Data("garbage".utf8).write(to: store.screenURL("P"))
 
         let result = resolve(pin: .profile("P"), defaultName: nil)
-        XCTAssertNil(result.portrait.region)
+        XCTAssertNil(result.portrait.placement?.region)
         XCTAssertEqual(result.portrait.provenance, .engineAuto)
     }
 
@@ -474,7 +549,7 @@ final class ScreenRegionTests: XCTestCase {
             user: touch, manifest: nil, builtins: builtins(), metrics: .reference)
         store.createProfile("Twin", touch: materialized.section)
         store.writeScreen(
-            "Twin", portrait: ScreenRegion(x: 0, y: 0, w: 0.5, h: 0.5), landscape: nil)
+            "Twin", portrait: .region(ScreenRegion(x: 0, y: 0, w: 0.5, h: 0.5)), landscape: nil)
 
         let action = ProfileMigration.decide(
             context: migrationContext(userTouch: touch), builtins: builtins())
@@ -511,7 +586,7 @@ final class ScreenRegionTests: XCTestCase {
 
         store.createProfile("Mine", touch: materialized.section)
         store.writeScreen(
-            "Mine", portrait: ScreenRegion(x: 0, y: 0, w: 1, h: 1), landscape: nil)
+            "Mine", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
 
         let action = ProfileMigration.decide(
             context: migrationContext(userTouch: touch, record: record),

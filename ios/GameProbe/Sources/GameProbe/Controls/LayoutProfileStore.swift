@@ -219,7 +219,7 @@ public struct LayoutProfileStore {
     /// `screen.json` must not exist.
     @discardableResult
     public func writeScreen(
-        _ name: String, portrait: ScreenRegion?, landscape: ScreenRegion?
+        _ name: String, portrait: ScreenPlacement?, landscape: ScreenPlacement?
     ) -> Bool {
         guard profileExists(name) else { return false }
         let fm = FileManager.default
