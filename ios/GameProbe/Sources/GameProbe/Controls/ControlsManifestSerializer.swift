@@ -141,7 +141,7 @@ public enum ControlsManifestSerializer {
             y: clampCoordinate(input.dpadY),
             size: clampDPadSize(input.dpadSize),
             opacity: clampOpacity(input.dpadOpacity),
-            style: input.dpadStyle == .dpad ? nil : input.dpadStyle
+            style: input.dpadStyle
         )
 
         var buttons: [ButtonSpec] = []
@@ -300,8 +300,8 @@ public enum ControlsManifestSerializer {
         }
         // Absent and "dpad" mean the same thing; only "stick" is
         // worth a line. Keeps every existing file byte-stable.
-        if let style = dpad.style, style != .dpad {
-            lines.append("\(pad),\"style\": \(jsonString(style.rawValue))")
+        if dpad.style != .dpad {
+            lines.append("\(pad),\"style\": \(jsonString(dpad.style.rawValue))")
         }
     }
 

@@ -517,7 +517,7 @@ public enum ControlsManifestLoader {
         path: String,
         findings: inout [Finding]
     ) -> DPadSpec? {
-        var style: MovementStyle?
+        var style: MovementStyle = .dpad
         var placement = PlacementFields(sizeRule: .dpad)
 
         for (key, value) in object {

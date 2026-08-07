@@ -9,6 +9,28 @@ final class MovementStickTuningTests: XCTestCase {
         XCTAssertEqual(MovementStickTuning.cardinalOnlyRadiusRatio, 0.3)
         XCTAssertEqual(MovementStickTuning.slideOffMarginRatio, 0.6)
         XCTAssertEqual(MovementStickTuning.slideOffMargin(size: 140), 42)
+        XCTAssertEqual(MovementStickTuning.nubRatio, 0.42)
+    }
+
+    func testThumbOffsetTracksTheFingerInsideTheTravelRadius() {
+        // size 100: radius 50, nub 42, travel 29. A touch 20pt right
+        // of center stays unclamped.
+        let offset = MovementStickTuning.thumbOffset(x: 70, y: 50, size: 100)
+        XCTAssertEqual(offset.dx, 20, accuracy: 0.001)
+        XCTAssertEqual(offset.dy, 0, accuracy: 0.001)
+    }
+
+    func testThumbOffsetClampsAtTheTravelRadius() {
+        // A touch far outside the base pins the nub at travel = 29.
+        let offset = MovementStickTuning.thumbOffset(x: 300, y: 50, size: 100)
+        XCTAssertEqual(offset.dx, 29, accuracy: 0.001)
+        XCTAssertEqual(offset.dy, 0, accuracy: 0.001)
+    }
+
+    func testThumbOffsetAtDeadCenterStaysPut() {
+        let offset = MovementStickTuning.thumbOffset(x: 50, y: 50, size: 100)
+        XCTAssertEqual(offset.dx, 0, accuracy: 0.001)
+        XCTAssertEqual(offset.dy, 0, accuracy: 0.001)
     }
 
     private func stickEdges(

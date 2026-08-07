@@ -119,15 +119,35 @@ private struct PersistedLayout: Codable {
         var rx: CGFloat
         var ry: CGFloat
         var size: CGFloat
-        /// Per-D-pad opacity in [0, 1]. The decoder falls back to
-        /// 1.0, so older persisted layouts (without the key) still
-        /// load without surprise transparency.
+        /// Per-D-pad opacity in [0, 1].
         var opacity: Double?
-        /// Optional ONLY for the legacy Codable boundary. Every
-        /// in-memory construction stores a concrete value, or the
-        /// nil-vs-.dpad mismatch makes `hasTouchCustomization` true
-        /// for every untouched game.
-        var style: MovementStyle?
+        /// Never optional in memory. The custom decoder maps a
+        /// missing key (legacy blobs) to `.dpad`, so a nil-vs-.dpad
+        /// mismatch can never make `hasTouchCustomization` true for
+        /// an untouched game — the type enforces what a comment
+        /// used to ask for.
+        var style: MovementStyle
+
+        init(
+            rx: CGFloat, ry: CGFloat, size: CGFloat, opacity: Double? = nil,
+            style: MovementStyle = .dpad
+        ) {
+            self.rx = rx
+            self.ry = ry
+            self.size = size
+            self.opacity = opacity
+            self.style = style
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            rx = try container.decode(CGFloat.self, forKey: .rx)
+            ry = try container.decode(CGFloat.self, forKey: .ry)
+            size = try container.decode(CGFloat.self, forKey: .size)
+            opacity = try container.decodeIfPresent(Double.self, forKey: .opacity)
+            style =
+                try container.decodeIfPresent(MovementStyle.self, forKey: .style) ?? .dpad
+        }
     }
     struct Oriented: Codable, Equatable {
         var dpad: DPad
@@ -206,51 +226,65 @@ class ControlsLayout {
     /// into the matching snapshot before it loads the other.
     private(set) var currentOrientation: ControlsOrientation = .portrait
 
-    // MARK: - Active layout (current orientation)
-    //
-    // Views read/write these directly. They always represent the
-    // layout for `currentOrientation`. When orientation changes,
-    // `setOrientation(_:)` snapshots them into the matching slot
-    // below and loads the other slot back into these.
+    // MARK: - Oriented control state
 
-    var dpadRelativeCenter: CGPoint = ControlsLayout.defaultDPadCenterPortrait
-    var dpadSize: CGFloat = ControlsLayout.defaultDPadSize
-    var dpadOpacity: Double = 1.0
-    var dpadStyle: MovementStyle = .dpad
-    var buttons: [ButtonModel] = []
-    var actionButtons: [ActionButtonModel] = []
+    /// One orientation's complete control set. The ACTIVE
+    /// orientation lives in `active` (views read and write it
+    /// through the forwarding properties below); the other lives in
+    /// `inactive`. `setOrientation(_:)` swaps the two values whole,
+    /// undo snapshots copy `active`, and resets assign whole
+    /// values — a new field pays its cost here once, not at twenty
+    /// call sites.
+    struct OrientedControls: Equatable {
+        var dpadRelativeCenter: CGPoint
+        var dpadSize: CGFloat = ControlsLayout.defaultDPadSize
+        var dpadOpacity: Double = 1.0
+        var dpadStyle: MovementStyle = .dpad
+        var buttons: [ButtonModel]
+        var actionButtons: [ActionButtonModel] = []
+    }
+
+    private var active = OrientedControls(
+        dpadRelativeCenter: ControlsLayout.defaultDPadCenterPortrait, buttons: [])
+    private var inactive = OrientedControls(
+        dpadRelativeCenter: ControlsLayout.defaultDPadCenterLandscape,
+        buttons: ControlsLayout.defaultButtonsLandscape)
+
+    // Views read/write these directly; they forward to `active`.
+    var dpadRelativeCenter: CGPoint {
+        get { active.dpadRelativeCenter }
+        set { active.dpadRelativeCenter = newValue }
+    }
+    var dpadSize: CGFloat {
+        get { active.dpadSize }
+        set { active.dpadSize = newValue }
+    }
+    var dpadOpacity: Double {
+        get { active.dpadOpacity }
+        set { active.dpadOpacity = newValue }
+    }
+    var dpadStyle: MovementStyle {
+        get { active.dpadStyle }
+        set { active.dpadStyle = newValue }
+    }
+    var buttons: [ButtonModel] {
+        get { active.buttons }
+        set { active.buttons = newValue }
+    }
+    var actionButtons: [ActionButtonModel] {
+        get { active.actionButtons }
+        set { active.actionButtons = newValue }
+    }
 
     /// The add UI gates on the loader's cap, so a saved layout
     /// can never fail V015 on its next load.
     var combinedButtonCount: Int { buttons.count + actionButtons.count }
 
-    // MARK: - Inactive snapshots
-
-    /// Snapshot of the orientation NOT currently active. The active
-    /// orientation's values live in the public `dpad*`/`buttons`
-    /// properties above. The other orientation lives here.
-    /// `setOrientation(_:)` swaps them in and out.
-    private var inactiveDpadRelativeCenter: CGPoint = ControlsLayout.defaultDPadCenterLandscape
-    private var inactiveDpadSize: CGFloat = ControlsLayout.defaultDPadSize
-    private var inactiveDpadOpacity: Double = 1.0
-    private var inactiveDpadStyle: MovementStyle = .dpad
-    private var inactiveButtons: [ButtonModel] = ControlsLayout.defaultButtonsLandscape
-    private var inactiveActionButtons: [ActionButtonModel] = []
-
     // MARK: - Edit-session undo (in-memory only, never persisted)
-
-    private struct OrientedLayoutSnapshot: Equatable {
-        var dpadRelativeCenter: CGPoint
-        var dpadSize: CGFloat
-        var dpadOpacity: Double
-        var dpadStyle: MovementStyle
-        var buttons: [ButtonModel]
-        var actionButtons: [ActionButtonModel]
-    }
 
     private static let maxEditUndoDepth = 50
 
-    private var editUndoStack: [OrientedLayoutSnapshot] = []
+    private var editUndoStack: [OrientedControls] = []
     private var editSessionActive = false
 
     var canUndo: Bool { editSessionActive && !editUndoStack.isEmpty }
@@ -277,15 +311,7 @@ class ControlsLayout {
     /// edit. No-op outside an edit session.
     func recordEditSnapshot() {
         guard editSessionActive else { return }
-        editUndoStack.append(
-            OrientedLayoutSnapshot(
-                dpadRelativeCenter: dpadRelativeCenter,
-                dpadSize: dpadSize,
-                dpadOpacity: dpadOpacity,
-                dpadStyle: dpadStyle,
-                buttons: buttons,
-                actionButtons: actionButtons
-            ))
+        editUndoStack.append(active)
         if editUndoStack.count > Self.maxEditUndoDepth {
             editUndoStack.removeFirst(editUndoStack.count - Self.maxEditUndoDepth)
         }
@@ -295,12 +321,7 @@ class ControlsLayout {
         guard let snapshot = editUndoStack.popLast() else { return }
         staggerGeneration += 1
         withAnimation(Motion.standard) {
-            dpadRelativeCenter = snapshot.dpadRelativeCenter
-            dpadSize = snapshot.dpadSize
-            dpadOpacity = snapshot.dpadOpacity
-            dpadStyle = snapshot.dpadStyle
-            buttons = snapshot.buttons
-            actionButtons = snapshot.actionButtons
+            active = snapshot
         }
     }
 
@@ -344,30 +365,7 @@ class ControlsLayout {
         clearEditUndoStack()
         staggerGeneration += 1
 
-        // Snapshot the orientation we're leaving.
-        let leavingDpadCenter = dpadRelativeCenter
-        let leavingDpadSize = dpadSize
-        let leavingDpadOpacity = dpadOpacity
-        let leavingDpadStyle = dpadStyle
-        let leavingButtons = buttons
-        let leavingActionButtons = actionButtons
-
-        // Promote the inactive slot into the active properties.
-        dpadRelativeCenter = inactiveDpadRelativeCenter
-        dpadSize = inactiveDpadSize
-        dpadOpacity = inactiveDpadOpacity
-        dpadStyle = inactiveDpadStyle
-        buttons = inactiveButtons
-        actionButtons = inactiveActionButtons
-
-        // Demote the previous active values into the inactive slot.
-        inactiveDpadRelativeCenter = leavingDpadCenter
-        inactiveDpadSize = leavingDpadSize
-        inactiveDpadOpacity = leavingDpadOpacity
-        inactiveDpadStyle = leavingDpadStyle
-        inactiveButtons = leavingButtons
-        inactiveActionButtons = leavingActionButtons
-
+        swap(&active, &inactive)
         currentOrientation = new
     }
 
@@ -514,13 +512,7 @@ class ControlsLayout {
             inactiveResolved = portrait
         }
 
-        inactiveDpadRelativeCenter = CGPoint(
-            x: inactiveResolved.dpad.rx, y: inactiveResolved.dpad.ry)
-        inactiveDpadSize = inactiveResolved.dpad.size
-        inactiveDpadOpacity = inactiveResolved.dpad.opacity ?? 1.0
-        inactiveDpadStyle = inactiveResolved.dpad.style ?? .dpad
-        inactiveButtons = inactiveResolved.buttons
-        inactiveActionButtons = inactiveResolved.actionButtons ?? []
+        inactive = Self.orientedControls(from: inactiveResolved)
 
         animateReset(
             toButtons: activeResolved.buttons,
@@ -528,51 +520,45 @@ class ControlsLayout {
             dpadCenter: CGPoint(x: activeResolved.dpad.rx, y: activeResolved.dpad.ry),
             targetDpadSize: activeResolved.dpad.size,
             targetDpadOpacity: activeResolved.dpad.opacity ?? 1.0,
-            targetDpadStyle: activeResolved.dpad.style ?? .dpad
+            targetDpadStyle: activeResolved.dpad.style
         )
     }
 
+    /// Factory state for BOTH orientations (reset = factory state
+    /// for this game).
     func resetToDefaults() {
         applyDefaultsForCurrentOrientation()
-        // Also reset the inactive orientation so "reset" wipes both
-        // (matches user intent: reset = factory state for this game).
-        switch currentOrientation {
-        case .portrait:
-            inactiveDpadRelativeCenter = Self.defaultDPadCenterLandscape
-            inactiveButtons = Self.defaultButtonsLandscape
-        case .landscape:
-            inactiveDpadRelativeCenter = Self.defaultDPadCenterPortrait
-            inactiveButtons = Self.defaultButtonsPortrait
-        }
-        inactiveDpadSize = Self.defaultDPadSize
-        inactiveDpadOpacity = 1.0
-        dpadStyle = .dpad
-        inactiveDpadStyle = .dpad
-        actionButtons = []
-        inactiveActionButtons = []
+    }
+
+    /// The struct defaults carry size, opacity, style, and action
+    /// buttons; only the per-orientation d-pad center and button
+    /// set differ.
+    private static func defaultControls(
+        for orientation: ControlsOrientation
+    ) -> OrientedControls {
+        OrientedControls(
+            dpadRelativeCenter: orientation == .portrait
+                ? defaultDPadCenterPortrait : defaultDPadCenterLandscape,
+            buttons: orientation == .portrait
+                ? defaultButtonsPortrait : defaultButtonsLandscape)
+    }
+
+    private static func orientedControls(
+        from oriented: PersistedLayout.Oriented
+    ) -> OrientedControls {
+        OrientedControls(
+            dpadRelativeCenter: CGPoint(x: oriented.dpad.rx, y: oriented.dpad.ry),
+            dpadSize: oriented.dpad.size,
+            dpadOpacity: oriented.dpad.opacity ?? 1.0,
+            dpadStyle: oriented.dpad.style,
+            buttons: oriented.buttons,
+            actionButtons: oriented.actionButtons ?? [])
     }
 
     private func applyDefaultsForCurrentOrientation() {
-        switch currentOrientation {
-        case .portrait:
-            dpadRelativeCenter = Self.defaultDPadCenterPortrait
-            buttons = Self.defaultButtonsPortrait
-            inactiveDpadRelativeCenter = Self.defaultDPadCenterLandscape
-            inactiveButtons = Self.defaultButtonsLandscape
-        case .landscape:
-            dpadRelativeCenter = Self.defaultDPadCenterLandscape
-            buttons = Self.defaultButtonsLandscape
-            inactiveDpadRelativeCenter = Self.defaultDPadCenterPortrait
-            inactiveButtons = Self.defaultButtonsPortrait
-        }
-        dpadSize = Self.defaultDPadSize
-        dpadOpacity = 1.0
-        inactiveDpadSize = Self.defaultDPadSize
-        inactiveDpadOpacity = 1.0
-        dpadStyle = .dpad
-        inactiveDpadStyle = .dpad
-        actionButtons = []
-        inactiveActionButtons = []
+        active = Self.defaultControls(for: currentOrientation)
+        inactive = Self.defaultControls(
+            for: currentOrientation == .portrait ? .landscape : .portrait)
     }
 
     private func animateReset(
@@ -782,31 +768,28 @@ class ControlsLayout {
         _ = UserControlsFile.write(in: container, touch: touch, controller: controller)
     }
 
+    private static func persistedOriented(
+        from controls: OrientedControls
+    ) -> PersistedLayout.Oriented {
+        PersistedLayout.Oriented(
+            dpad: .init(
+                rx: controls.dpadRelativeCenter.x, ry: controls.dpadRelativeCenter.y,
+                size: controls.dpadSize, opacity: controls.dpadOpacity,
+                style: controls.dpadStyle
+            ),
+            buttons: controls.buttons,
+            actionButtons: controls.actionButtons
+        )
+    }
+
     private func currentPersistedLayout() -> PersistedLayout {
-        let active = PersistedLayout.Oriented(
-            dpad: .init(
-                rx: dpadRelativeCenter.x, ry: dpadRelativeCenter.y,
-                size: dpadSize, opacity: dpadOpacity, style: dpadStyle
-            ),
-            buttons: buttons,
-            actionButtons: actionButtons
-        )
-        let inactive = PersistedLayout.Oriented(
-            dpad: .init(
-                rx: inactiveDpadRelativeCenter.x,
-                ry: inactiveDpadRelativeCenter.y,
-                size: inactiveDpadSize,
-                opacity: inactiveDpadOpacity,
-                style: inactiveDpadStyle
-            ),
-            buttons: inactiveButtons,
-            actionButtons: inactiveActionButtons
-        )
+        let activeOriented = Self.persistedOriented(from: active)
+        let inactiveOriented = Self.persistedOriented(from: inactive)
         switch currentOrientation {
         case .portrait:
-            return PersistedLayout(portrait: active, landscape: inactive)
+            return PersistedLayout(portrait: activeOriented, landscape: inactiveOriented)
         case .landscape:
-            return PersistedLayout(portrait: inactive, landscape: active)
+            return PersistedLayout(portrait: inactiveOriented, landscape: activeOriented)
         }
     }
 
@@ -875,7 +858,7 @@ class ControlsLayout {
             y: Double(oriented.dpad.ry),
             size: Double(oriented.dpad.size),
             opacity: oriented.dpad.opacity,
-            style: oriented.dpad.style ?? .dpad
+            style: oriented.dpad.style
         )
         let buttons = oriented.buttons.compactMap { button -> ButtonSpec? in
             guard let key = KeyCodeTable.code(for: button.scancode) else { return nil }
@@ -964,7 +947,7 @@ class ControlsLayout {
                 ry: CGFloat(spec.y),
                 size: CGFloat(spec.size ?? 140),
                 opacity: spec.opacity ?? 1.0,
-                style: spec.style ?? .dpad
+                style: spec.style
             )
         } else {
             dpad = fallback.dpad
@@ -1301,7 +1284,7 @@ class ControlsLayout {
                 ry: CGFloat(spec.y),
                 size: CGFloat(spec.size ?? 140),
                 opacity: spec.opacity ?? 1.0,
-                style: spec.style ?? .dpad
+                style: spec.style
             )
         } else {
             dpad = PersistedLayout.DPad(
@@ -1359,28 +1342,14 @@ class ControlsLayout {
     }
 
     private func applyV2(_ layout: PersistedLayout) {
-        let active: PersistedLayout.Oriented
-        let inactive: PersistedLayout.Oriented
         switch currentOrientation {
         case .portrait:
-            active = layout.portrait
-            inactive = layout.landscape
+            active = Self.orientedControls(from: layout.portrait)
+            inactive = Self.orientedControls(from: layout.landscape)
         case .landscape:
-            active = layout.landscape
-            inactive = layout.portrait
+            active = Self.orientedControls(from: layout.landscape)
+            inactive = Self.orientedControls(from: layout.portrait)
         }
-        dpadRelativeCenter = CGPoint(x: active.dpad.rx, y: active.dpad.ry)
-        dpadSize = active.dpad.size
-        dpadOpacity = active.dpad.opacity ?? 1.0
-        dpadStyle = active.dpad.style ?? .dpad
-        buttons = active.buttons
-        actionButtons = active.actionButtons ?? []
-        inactiveDpadRelativeCenter = CGPoint(x: inactive.dpad.rx, y: inactive.dpad.ry)
-        inactiveDpadSize = inactive.dpad.size
-        inactiveDpadOpacity = inactive.dpad.opacity ?? 1.0
-        inactiveDpadStyle = inactive.dpad.style ?? .dpad
-        inactiveButtons = inactive.buttons
-        inactiveActionButtons = inactive.actionButtons ?? []
     }
 
     // MARK: - Mutators

@@ -360,9 +360,9 @@ final class ControlsManifestSerializerTests: XCTestCase {
         let result = parseSerialized(data)
         XCTAssertNil(result.findings.first { $0.severity == .error })
         XCTAssertEqual(result.manifest?.touch?.portrait?.dpad?.style, .stick)
-        // The untouched orientation stays style-less: no field, so
-        // every existing file serializes byte-identically.
-        XCTAssertNil(result.manifest?.touch?.landscape?.dpad?.style)
+        // The untouched orientation carries no style field on disk,
+        // so every existing file serializes byte-identically.
+        XCTAssertEqual(result.manifest?.touch?.landscape?.dpad?.style, .dpad)
         let reserialized = ControlsManifestSerializer.serialize(
             touch: result.manifest?.touch, controller: nil)
         XCTAssertEqual(reserialized, data)
@@ -373,7 +373,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
             dpadX: 0.25, dpadY: 0.75, dpadSize: 140, dpadOpacity: 1,
             dpadStyle: .dpad, buttons: [])
         let section = ControlsManifestSerializer.touchSection(portrait: input, landscape: input)
-        XCTAssertNil(section.portrait?.dpad?.style)
+        XCTAssertEqual(section.portrait?.dpad?.style, .dpad)
 
         let stick = ControlsManifestSerializer.TouchOrientedInput(
             dpadX: 0.25, dpadY: 0.75, dpadSize: 140, dpadOpacity: 1,
