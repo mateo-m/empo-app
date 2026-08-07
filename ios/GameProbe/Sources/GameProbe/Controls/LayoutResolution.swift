@@ -23,14 +23,45 @@ public enum LayoutResolution {
         defaultProfileName: String?,
         metrics: TouchZoneMetrics = .reference
     ) -> Result {
-        let pin = store.loadPin(forGameFolder: gameFolder).pin
+        resolve(
+            pin: store.loadPin(forGameFolder: gameFolder).pin,
+            gameRoot: gameRoot,
+            store: store,
+            defaultProfileName: defaultProfileName,
+            metrics: metrics)
+    }
 
-        var pinnedName: String?
-        var pinnedValid: Bool?
+    /// The pin-aware entry: callers that already hold the pin (the
+    /// bound layout, the picker's "Automatic" row via
+    /// `.followChain`) gather the SAME levels the file-based entry
+    /// does, so the chain logic exists once.
+    public static func resolve(
+        pin: LayoutPin,
+        gameRoot: URL?,
+        store: LayoutProfileStore,
+        defaultProfileName: String?,
+        metrics: TouchZoneMetrics = .reference
+    ) -> Result {
+        let outcome = LayoutChainResolver.resolve(
+            pin: pin,
+            levels: levels(
+                pin: pin, gameRoot: gameRoot, store: store,
+                defaultProfileName: defaultProfileName, metrics: metrics)
+        )
+        return Result(provenance: outcome.provenance, fellThrough: outcome.fellThrough)
+    }
+
+    /// Per-level occupancy from files. Shared by both entries.
+    public static func levels(
+        pin: LayoutPin,
+        gameRoot: URL?,
+        store: LayoutProfileStore,
+        defaultProfileName: String?,
+        metrics: TouchZoneMetrics = .reference
+    ) -> LayoutChainResolver.Levels {
+        var pinnedProfile: (name: String, valid: Bool)?
         if case .profile(let name) = pin {
-            pinnedName = name
-            let read = store.readProfile(name)
-            pinnedValid = read?.invalid == false && read?.touch != nil
+            pinnedProfile = (name, store.validTouch(name) != nil)
         }
 
         let gameOccupied: Bool
@@ -41,32 +72,15 @@ public enum LayoutResolution {
             gameOccupied = false
         }
 
-        var defaultValid: Bool?
+        var defaultProfile: (name: String, valid: Bool)?
         if let defaultProfileName {
-            let read = store.readProfile(defaultProfileName)
-            defaultValid = read?.invalid == false && read?.touch != nil
+            defaultProfile = (defaultProfileName, store.validTouch(defaultProfileName) != nil)
         }
 
-        let outcome = LayoutChainResolver.resolve(
-            pin: pin,
-            levels: LayoutChainResolver.Levels(
-                pinnedProfileValid: pinnedValid,
-                gameLayoutOccupied: gameOccupied,
-                defaultProfileValid: defaultValid
-            )
+        return LayoutChainResolver.Levels(
+            pinnedProfile: pinnedProfile,
+            gameLayoutOccupied: gameOccupied,
+            defaultProfile: defaultProfile
         )
-
-        let provenance: LayoutProvenance
-        switch outcome.level {
-        case .pinnedProfile:
-            provenance = .pinnedProfile(pinnedName ?? "")
-        case .gameLayout:
-            provenance = .gameLayout
-        case .defaultProfile:
-            provenance = .defaultProfile(defaultProfileName ?? "")
-        case .builtin:
-            provenance = .builtin
-        }
-        return Result(provenance: provenance, fellThrough: outcome.fellThrough)
     }
 }

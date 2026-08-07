@@ -87,47 +87,41 @@ public enum LayoutProvenance: Equatable, Sendable {
     case builtin
 }
 
-/// Pure chain resolution over per-level occupancy flags. Payload
-/// fetch stays with the caller, and the game-layout level is an
-/// optional slot, so the same resolver serves `controls.json` now
-/// and `screen.json` later (which has no game level).
+/// Pure chain resolution over per-level occupancy. Payload fetch
+/// stays with the caller, and the game-layout level is an optional
+/// slot, so the same resolver serves `controls.json` now and
+/// `screen.json` later (which has no game level). The levels carry
+/// their profile NAMES, so the outcome is a full `LayoutProvenance`
+/// and no caller re-joins names to levels.
 public enum LayoutChainResolver {
     public struct Levels: Sendable {
-        /// nil when the pin names no profile; else whether that
-        /// profile's section exists and is valid.
-        public var pinnedProfileValid: Bool?
+        /// nil when the pin names no profile; else the pinned name
+        /// plus whether that profile's section exists and is valid.
+        public var pinnedProfile: (name: String, valid: Bool)?
         /// Whether the game ships a usable layout at this level.
         public var gameLayoutOccupied: Bool
-        /// nil when no default profile is set; else whether its
-        /// section exists and is valid.
-        public var defaultProfileValid: Bool?
+        /// nil when no default profile is set.
+        public var defaultProfile: (name: String, valid: Bool)?
 
         public init(
-            pinnedProfileValid: Bool?,
+            pinnedProfile: (name: String, valid: Bool)?,
             gameLayoutOccupied: Bool,
-            defaultProfileValid: Bool?
+            defaultProfile: (name: String, valid: Bool)?
         ) {
-            self.pinnedProfileValid = pinnedProfileValid
+            self.pinnedProfile = pinnedProfile
             self.gameLayoutOccupied = gameLayoutOccupied
-            self.defaultProfileValid = defaultProfileValid
+            self.defaultProfile = defaultProfile
         }
     }
 
-    public enum Level: Equatable, Sendable {
-        case pinnedProfile
-        case gameLayout
-        case defaultProfile
-        case builtin
-    }
-
     public struct Outcome: Equatable, Sendable {
-        public var level: Level
+        public var provenance: LayoutProvenance
         /// Set when the pinned target was missing or invalid and the
         /// resolution fell through. The caller surfaces it once.
         public var fellThrough: Bool
 
-        public init(level: Level, fellThrough: Bool) {
-            self.level = level
+        public init(provenance: LayoutProvenance, fellThrough: Bool) {
+            self.provenance = provenance
             self.fellThrough = fellThrough
         }
     }
@@ -135,33 +129,36 @@ public enum LayoutChainResolver {
     public static func resolve(pin: LayoutPin, levels: Levels) -> Outcome {
         switch pin {
         case .profile:
-            if levels.pinnedProfileValid == true {
-                return Outcome(level: .pinnedProfile, fellThrough: false)
+            if let pinned = levels.pinnedProfile, pinned.valid {
+                return Outcome(
+                    provenance: .pinnedProfile(pinned.name), fellThrough: false)
             }
             // Missing or invalid named pin: resume the chain at the
             // game level.
-            return Outcome(
-                level: chainTail(levels), fellThrough: true)
+            return Outcome(provenance: chainTail(levels), fellThrough: true)
         case .gameLayout:
             if levels.gameLayoutOccupied {
-                return Outcome(level: .gameLayout, fellThrough: false)
+                return Outcome(provenance: .gameLayout, fellThrough: false)
             }
             // The $game pin exists to escape the default profile, so
             // its fallback skips level 3 on purpose.
-            return Outcome(level: .builtin, fellThrough: true)
+            return Outcome(provenance: .builtin, fellThrough: true)
         case .defaultProfile:
-            if levels.defaultProfileValid == true {
-                return Outcome(level: .defaultProfile, fellThrough: false)
+            if let defaultProfile = levels.defaultProfile, defaultProfile.valid {
+                return Outcome(
+                    provenance: .defaultProfile(defaultProfile.name), fellThrough: false)
             }
-            return Outcome(level: .builtin, fellThrough: true)
+            return Outcome(provenance: .builtin, fellThrough: true)
         case .followChain:
-            return Outcome(level: chainTail(levels), fellThrough: false)
+            return Outcome(provenance: chainTail(levels), fellThrough: false)
         }
     }
 
-    private static func chainTail(_ levels: Levels) -> Level {
+    private static func chainTail(_ levels: Levels) -> LayoutProvenance {
         if levels.gameLayoutOccupied { return .gameLayout }
-        if levels.defaultProfileValid == true { return .defaultProfile }
+        if let defaultProfile = levels.defaultProfile, defaultProfile.valid {
+            return .defaultProfile(defaultProfile.name)
+        }
         return .builtin
     }
 }

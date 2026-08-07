@@ -85,6 +85,14 @@ public struct LayoutProfileStore {
         public var errorCount: Int = 0
     }
 
+    /// The profile's touch section when the file exists and parses
+    /// valid; nil for missing OR invalid. `readProfile` sets
+    /// `invalid` exactly when `touch` is nil, so this is the ONE
+    /// predicate resolution callers need.
+    public func validTouch(_ name: String) -> TouchSection? {
+        readProfile(name)?.touch
+    }
+
     /// Reads a profile's touch section. Error findings go to the
     /// profile's own log file; a `controller` section is carried (for
     /// preservation on save) but ignored at resolution.

@@ -40,6 +40,19 @@ public enum ProfileMaterializer {
         }
     }
 
+    /// Materialization is total: both orientations are ALWAYS
+    /// present, and the type says so — no caller carries a dead
+    /// empty-layout fallback for a nil that cannot happen.
+    public struct MaterializedTouch: Equatable, Sendable {
+        public var portrait: TouchLayout
+        public var landscape: TouchLayout
+
+        /// The sparse-capable spec shape, for serialization.
+        public var section: TouchSection {
+            TouchSection(portrait: portrait, landscape: landscape)
+        }
+    }
+
     /// `user` layers over `manifest` layers over `builtins`, per
     /// orientation and per field. Pass `manifest: nil` to complete a
     /// PROFILE section: profile gaps fill from the builtin only,
@@ -49,7 +62,7 @@ public enum ProfileMaterializer {
         manifest: TouchSection?,
         builtins: Builtins,
         metrics: TouchZoneMetrics
-    ) -> TouchSection {
+    ) -> MaterializedTouch {
         let completedManifest = manifest.map {
             TouchSectionCompletion.complete(
                 $0, metrics: metrics, defaultDpad: builtins.defaultDpad
@@ -61,7 +74,7 @@ public enum ProfileMaterializer {
             ).section
         }
 
-        return TouchSection(
+        return MaterializedTouch(
             portrait: materializeOrientation(
                 user: completedUser?.portrait,
                 manifest: completedManifest?.portrait,
@@ -79,6 +92,10 @@ public enum ProfileMaterializer {
     /// are always `serialize(touch:controller: nil)`.
     public static func canonicalBytes(_ section: TouchSection) -> Data {
         ControlsManifestSerializer.serialize(touch: section, controller: nil) ?? Data()
+    }
+
+    public static func canonicalBytes(_ materialized: MaterializedTouch) -> Data {
+        canonicalBytes(materialized.section)
     }
 
     private static func materializeOrientation(
@@ -116,6 +133,16 @@ public struct MigrationRecord: Equatable, Sendable {
     }
 
     public static let fileName = ".migration.json"
+
+    /// Missing or unreadable file reads as an empty record, the
+    /// same rule both app call sites hand-rolled before.
+    public static func load(at url: URL) -> MigrationRecord {
+        (try? Data(contentsOf: url)).map(parse) ?? MigrationRecord()
+    }
+
+    public func save(to url: URL) {
+        try? serialize().write(to: url, options: .atomic)
+    }
 
     public static func parse(data: Data) -> MigrationRecord {
         guard
