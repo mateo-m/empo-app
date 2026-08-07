@@ -17,9 +17,7 @@ struct LayoutProfilePickerSheet: View {
     @State private var searchText = ""
 
     private var visibleProfiles: [String] {
-        let query = searchText.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return profiles }
-        return profiles.filter { $0.localizedCaseInsensitiveContains(query) }
+        LayoutProfilesManager.filtered(profiles, query: searchText)
     }
 
     var body: some View {
@@ -65,28 +63,22 @@ struct LayoutProfilePickerSheet: View {
         let store = LayoutProfilesManager.store
         pin = store.loadPin(forGameFolder: container.url).pin
         profiles = store.listProfiles()
-        gameShipsLayout =
-            ControlsManifestLoader.load(gameRoot: container.gameURL)?
-            .result.manifest?.touch != nil
-        // What Automatic yields, ignoring any pin. Validity means a
-        // readable profile with a touch section, not just a set name.
-        let defaultName = LayoutProfilesManager.defaultProfileName
-        let defaultValid: Bool? = defaultName.map { name in
-            let read = store.readProfile(name)
-            return read?.invalid == false && read?.touch != nil
-        }
-        let ambient = LayoutChainResolver.resolve(
+        // What Automatic yields, ignoring any pin — the SAME
+        // resolver entry as the bound layout, so the row cannot
+        // drift from what the player does.
+        let ambient = LayoutResolution.resolve(
             pin: .followChain,
-            levels: LayoutChainResolver.Levels(
-                pinnedProfileValid: nil,
-                gameLayoutOccupied: gameShipsLayout,
-                defaultProfileValid: defaultValid
-            ))
-        switch ambient.level {
+            gameRoot: container.gameURL,
+            store: store,
+            defaultProfileName: LayoutProfilesManager.defaultProfileName)
+        // Game layout outranks the default in the pinless chain, so
+        // the ambient outcome IS the occupancy signal.
+        gameShipsLayout = ambient.provenance == .gameLayout
+        switch ambient.provenance {
         case .gameLayout:
             automaticResolution = "Game layout"
-        case .defaultProfile:
-            automaticResolution = LayoutProfilesManager.defaultProfileName ?? "Default"
+        case .defaultProfile(let name):
+            automaticResolution = name
         default:
             automaticResolution = "Empo default"
         }
@@ -134,9 +126,7 @@ struct LayoutProfilesSettingsView: View {
     @State private var searchText = ""
 
     private var visibleProfiles: [String] {
-        let query = searchText.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return profiles }
-        return profiles.filter { $0.localizedCaseInsensitiveContains(query) }
+        LayoutProfilesManager.filtered(profiles, query: searchText)
     }
 
     var body: some View {
@@ -239,13 +229,7 @@ struct LayoutProfilesSettingsView: View {
             Button("Rename") { performRename() }
             Button("Cancel", role: .cancel) { renaming = nil }
         }
-        .alert("Name not allowed", isPresented: $showNameError) {
-            Button("OK") {}
-        } message: {
-            Text(
-                "Profile names cannot be empty, start with $ or a dot, contain slashes, or repeat an existing name."
-            )
-        }
+        .profileNameErrorAlert(isPresented: $showNameError)
         .confirmationDialog(
             deleteTitle, isPresented: deleteBinding, titleVisibility: .visible
         ) {
@@ -295,10 +279,7 @@ struct LayoutProfilesSettingsView: View {
             showNameError = true
             return
         }
-        let materialized = ProfileMaterializer.materialize(
-            user: nil, manifest: nil,
-            builtins: LayoutProfilesManager.builtins(), metrics: .reference)
-        _ = store.createProfile(name, touch: materialized)
+        LayoutProfilesManager.createProfileFromBuiltins(named: name)
         reload()
     }
 
@@ -420,18 +401,17 @@ struct LayoutProfileEditorView: View {
                 layout.beginEditSession()
             }
 
-            GeometryReader { outer in
-                let size = canvasSize
-                let scale = min(
-                    outer.size.width / size.width, outer.size.height / size.height)
-                canvas
-                    .frame(width: size.width, height: size.height)
-                    .scaleEffect(scale)
-                    .frame(
-                        width: size.width * scale, height: size.height * scale
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            EditorCanvasView(
+                layout: layout,
+                actions: actions,
+                orientation: editingOrientation,
+                editMode: true,
+                editingButton: $editingButton,
+                editingActionButton: $editingActionButton,
+                editingDPad: $editingDPad,
+                draggingDPad: $draggingDPad,
+                draggingButtonID: $draggingButtonID
+            )
 
             HStack(spacing: Spacing.xl) {
                 Button("+ Add") { showAddSheet = true }
@@ -463,13 +443,7 @@ struct LayoutProfileEditorView: View {
             Button("Rename") { performRename() }
             Button("Cancel", role: .cancel) {}
         }
-        .alert("Name not allowed", isPresented: $showRenameError) {
-            Button("OK") {}
-        } message: {
-            Text(
-                "Profile names cannot be empty, start with $ or a dot, contain slashes, or repeat an existing name."
-            )
-        }
+        .profileNameErrorAlert(isPresented: $showRenameError)
         .onAppear {
             layout.setOrientation(editingOrientation)
             layout.beginEditSession()
@@ -504,14 +478,48 @@ struct LayoutProfileEditorView: View {
         currentName = newName
         layout.editorRenamed(to: newName)
     }
+}
 
-    private var canvas: some View {
-        let size = canvasSize
-        let gameRect = fakeGameRect
+// MARK: - Shared canvas shell
+
+/// The mock-canvas shell the editor and the builtin viewer share:
+/// the scale-to-fit wrapper, the black canvas, the game-picture
+/// placeholder, and the controls overlay. One implementation, so
+/// the two screens cannot drift.
+struct EditorCanvasView: View {
+    var layout: ControlsLayout
+    var actions: PlayerActionRegistry
+    let orientation: ControlsOrientation
+    let editMode: Bool
+    var editingButton: Binding<ButtonModel?> = .constant(nil)
+    var editingActionButton: Binding<ActionButtonModel?> = .constant(nil)
+    var editingDPad: Binding<Bool> = .constant(false)
+    var draggingDPad: Binding<Bool> = .constant(false)
+    var draggingButtonID: Binding<UUID?> = .constant(nil)
+    /// The read-only viewer turns hit testing off entirely, so no
+    /// touch reaches the controls and nothing can write.
+    var hitTesting = true
+
+    var body: some View {
+        GeometryReader { outer in
+            let size = EditorCanvas.size(for: orientation)
+            let scale = min(
+                outer.size.width / size.width, outer.size.height / size.height)
+            canvas(size: size)
+                .frame(width: size.width, height: size.height)
+                .scaleEffect(scale)
+                .frame(width: size.width * scale, height: size.height * scale)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func canvas(size: CGSize) -> some View {
+        let safeArea = EditorCanvas.safeArea(for: orientation)
+        let gameRect = EditorCanvas.fakeGameRect(for: orientation)
         let controlsMinY = ControlsZone.toolbarBottomY(
-            isPortrait: editingOrientation == .portrait,
+            isPortrait: orientation == .portrait,
             gameRect: gameRect,
-            safeArea: canvasSafeArea,
+            safeArea: safeArea,
             btnSize: IconButtonSize.sm.points,
             geoHeight: size.height)
 
@@ -536,18 +544,33 @@ struct LayoutProfileEditorView: View {
                     actions: actions,
                     geo: geo,
                     controlsMinY: controlsMinY,
-                    editMode: true,
-                    safeArea: canvasSafeArea,
+                    editMode: editMode,
+                    safeArea: safeArea,
                     isPreview: true,
-                    editingButton: $editingButton,
-                    editingActionButton: $editingActionButton,
-                    editingDPad: $editingDPad,
-                    draggingDPad: $draggingDPad,
-                    draggingButtonID: $draggingButtonID
+                    editingButton: editingButton,
+                    editingActionButton: editingActionButton,
+                    editingDPad: editingDPad,
+                    draggingDPad: draggingDPad,
+                    draggingButtonID: draggingButtonID
                 )
             }
+            .allowsHitTesting(hitTesting)
         }
         .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+    }
+}
+
+extension View {
+    /// The shared "Name not allowed" alert, so the wording exists
+    /// once for the editor, the viewer, and the settings list.
+    func profileNameErrorAlert(isPresented: Binding<Bool>) -> some View {
+        alert("Name not allowed", isPresented: isPresented) {
+            Button("OK") {}
+        } message: {
+            Text(
+                "Profile names cannot be empty, start with $ or a dot, contain slashes, or repeat an existing name."
+            )
+        }
     }
 }
 
@@ -576,18 +599,13 @@ struct BuiltinLayoutViewerView: View {
                 layout.setOrientation(new)
             }
 
-            GeometryReader { outer in
-                let size = EditorCanvas.size(for: orientation)
-                let scale = min(
-                    outer.size.width / size.width, outer.size.height / size.height)
-                canvas
-                    .frame(width: size.width, height: size.height)
-                    .scaleEffect(scale)
-                    .frame(
-                        width: size.width * scale, height: size.height * scale
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            EditorCanvasView(
+                layout: layout,
+                actions: actions,
+                orientation: orientation,
+                editMode: false,
+                hitTesting: false
+            )
 
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text(
@@ -620,13 +638,7 @@ struct BuiltinLayoutViewerView: View {
         } message: {
             Text("The new profile starts as a copy of the Empo default layout.")
         }
-        .alert("Name not allowed", isPresented: $showNameError) {
-            Button("OK") {}
-        } message: {
-            Text(
-                "Profile names cannot be empty, start with $ or a dot, contain slashes, or repeat an existing name."
-            )
-        }
+        .profileNameErrorAlert(isPresented: $showNameError)
     }
 
     private func duplicateAsProfile() {
@@ -637,55 +649,6 @@ struct BuiltinLayoutViewerView: View {
             showNameError = true
             return
         }
-        let materialized = ProfileMaterializer.materialize(
-            user: nil, manifest: nil,
-            builtins: LayoutProfilesManager.builtins(), metrics: .reference)
-        _ = store.createProfile(name, touch: materialized)
-    }
-
-    private var canvas: some View {
-        let size = EditorCanvas.size(for: orientation)
-        let safeArea = EditorCanvas.safeArea(for: orientation)
-        let gameRect = EditorCanvas.fakeGameRect(for: orientation)
-        let controlsMinY = ControlsZone.toolbarBottomY(
-            isPortrait: orientation == .portrait,
-            gameRect: gameRect,
-            safeArea: safeArea,
-            btnSize: IconButtonSize.sm.points,
-            geoHeight: size.height)
-
-        return ZStack {
-            RoundedRectangle(cornerRadius: Radius.sm)
-                .fill(Color.black)
-
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .overlay(
-                    Text("Game")
-                        .font(.headline)
-                        .foregroundStyle(.white.opacity(0.3))
-                )
-                .frame(width: gameRect.width, height: gameRect.height)
-                .position(x: gameRect.midX, y: gameRect.midY)
-
-            GeometryReader { geo in
-                PlayerControlsOverlay(
-                    layout: layout,
-                    actions: actions,
-                    geo: geo,
-                    controlsMinY: controlsMinY,
-                    editMode: false,
-                    safeArea: safeArea,
-                    isPreview: true,
-                    editingButton: .constant(nil),
-                    editingActionButton: .constant(nil),
-                    editingDPad: .constant(false),
-                    draggingDPad: .constant(false),
-                    draggingButtonID: .constant(nil)
-                )
-            }
-            .allowsHitTesting(false)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+        LayoutProfilesManager.createProfileFromBuiltins(named: name)
     }
 }

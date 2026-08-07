@@ -229,10 +229,28 @@ class ControlsLayout {
     /// recomputation could misread metrics drift as a user edit.
     private var ambientBaseline: PersistedLayout?
 
-    /// The out-of-player editor instance sets these; the player
-    /// singleton never does.
-    private(set) var isEditorInstance = false
-    private(set) var editorProfileName: String?
+    /// Which surface this instance serves. ONE stored value: the
+    /// viewer is its own case, not an implicit editor-with-no-name,
+    /// and a profile name cannot exist without the editor role.
+    enum Role: Equatable {
+        /// The shared singleton: binds games, saves through the
+        /// chain.
+        case player
+        /// The out-of-player editor: writes one named profile.
+        case profileEditor(name: String)
+        /// Read-only builtin viewer: every write path is inert.
+        case builtinViewer
+    }
+
+    private(set) var role: Role = .player
+
+    /// Any out-of-player instance (editor or viewer).
+    var isEditorInstance: Bool { role != .player }
+
+    var editorProfileName: String? {
+        if case .profileEditor(let name) = role { return name }
+        return nil
+    }
 
     /// Editor instances inject synthetic metrics; nil uses the live
     /// screen state.
@@ -340,19 +358,17 @@ class ControlsLayout {
     /// Out-of-player profile editor instance. It never binds a game,
     /// never runs `save()`, and writes only through `editorSave()`.
     init(editorForProfile name: String, metrics: TouchZoneMetrics) {
-        isEditorInstance = true
-        editorProfileName = name
+        role = .profileEditor(name: name)
         metricsOverride = metrics
         applyDefaultsForCurrentOrientation()
         observeProfileNotifications()
         reloadEditorProfile()
     }
 
-    /// Read-only viewer for the built-in layout: an editor instance
-    /// with no backing profile, so every write path is inert. The
-    /// built-ins never change, so it observes nothing.
+    /// Read-only viewer for the built-in layout. The built-ins
+    /// never change, so it observes nothing.
     init(viewerForBuiltins metrics: TouchZoneMetrics) {
-        isEditorInstance = true
+        role = .builtinViewer
         metricsOverride = metrics
         applyDefaultsForCurrentOrientation()
     }
@@ -966,11 +982,25 @@ class ControlsLayout {
 
     /// The editor renamed its profile (the store rename already ran).
     func editorRenamed(to name: String) {
-        guard isEditorInstance else { return }
-        editorProfileName = name
+        guard case .profileEditor = role else { return }
+        role = .profileEditor(name: name)
     }
 
     // MARK: - Chain resolution
+
+    /// Occupancy for the chain, from the ALREADY-LOADED manifest
+    /// (never a second disk load) and the profile files.
+    private func chainLevels(
+        pinnedProfile: (name: String, valid: Bool)?
+    ) -> LayoutChainResolver.Levels {
+        let store = LayoutProfilesManager.store
+        return LayoutChainResolver.Levels(
+            pinnedProfile: pinnedProfile,
+            gameLayoutOccupied: activeManifest?.touch != nil,
+            defaultProfile: LayoutProfilesManager.defaultProfileName.map {
+                ($0, store.validTouch($0) != nil)
+            })
+    }
 
     private func resolveChain(container: GameContainer) {
         let store = LayoutProfilesManager.store
@@ -979,54 +1009,42 @@ class ControlsLayout {
             container.appendLogLine(note, fileName: Self.controlsManifestLogFile)
         }
 
-        var pinnedName: String?
         var pinnedRead: LayoutProfileStore.ProfileRead?
+        var pinnedProfile: (name: String, valid: Bool)?
         if case .profile(let name) = loaded.pin {
-            pinnedName = name
             pinnedRead = store.readProfile(name)
+            pinnedProfile = (name, pinnedRead?.touch != nil)
         }
-        let defaultName = LayoutProfilesManager.defaultProfileName
-        let defaultRead = defaultName.flatMap { store.readProfile($0) }
 
         let outcome = LayoutChainResolver.resolve(
-            pin: loaded.pin,
-            levels: LayoutChainResolver.Levels(
-                pinnedProfileValid: pinnedName == nil
-                    ? nil : (pinnedRead?.invalid == false && pinnedRead?.touch != nil),
-                gameLayoutOccupied: activeManifest?.touch != nil,
-                defaultProfileValid: defaultName == nil
-                    ? nil : (defaultRead?.invalid == false && defaultRead?.touch != nil)
-            )
-        )
+            pin: loaded.pin, levels: chainLevels(pinnedProfile: pinnedProfile))
 
         pinFellThrough = outcome.fellThrough
         profileRejectionErrorCount =
             pinnedRead?.invalid == true ? (pinnedRead?.errorCount ?? 1) : 0
 
-        switch outcome.level {
+        provenance = outcome.provenance
+        switch outcome.provenance {
         case .pinnedProfile:
-            provenance = .pinnedProfile(pinnedName ?? "")
             if let touch = pinnedRead?.touch {
                 applyProfileSection(touch)
             }
         case .gameLayout:
-            provenance = .gameLayout
             // One-time heads-up that the game layout displaced the
             // user's default profile (record §8 wording).
-            if loaded.pin == .followChain, defaultName != nil,
+            if loaded.pin == .followChain,
+                LayoutProfilesManager.defaultProfileName != nil,
                 let gameID = currentGameID,
                 !Self.shownGameLayoutNotices().contains(gameID)
             {
                 gameLayoutNoticePending = true
             }
             applyResolvedLayout()
-        case .defaultProfile:
-            provenance = .defaultProfile(defaultName ?? "")
-            if let touch = defaultRead?.touch {
+        case .defaultProfile(let name):
+            if let touch = store.validTouch(name) {
                 applyProfileSection(touch)
             }
         case .builtin:
-            provenance = .builtin
             resolutionInvolvesDerivation = false
             applyDefaultsForCurrentOrientation()
         }
@@ -1038,31 +1056,27 @@ class ControlsLayout {
     /// manifest — that would leak per-game values into a portable
     /// profile).
     private func applyProfileSection(_ touch: TouchSection) {
+        let metrics = layoutMetrics()
         let materialized = ProfileMaterializer.materialize(
             user: touch, manifest: nil,
-            builtins: LayoutProfilesManager.builtins(), metrics: layoutMetrics())
+            builtins: LayoutProfilesManager.builtins(), metrics: metrics)
         resolutionInvolvesDerivation = false
-        let metrics = layoutMetrics()
-        let portrait = Self.oriented(
-            from: materialized.portrait
-                ?? TouchLayout(dpad: nil, buttons: [], actionButtons: []),
-            orientation: .portrait, manifest: nil, metrics: metrics)
-        let landscape = Self.oriented(
-            from: materialized.landscape
-                ?? TouchLayout(dpad: nil, buttons: [], actionButtons: []),
-            orientation: .landscape, manifest: nil, metrics: metrics)
-        applyV2(PersistedLayout(portrait: portrait, landscape: landscape))
+        applyV2(
+            PersistedLayout(
+                portrait: Self.oriented(
+                    from: materialized.portrait, orientation: .portrait,
+                    manifest: nil, metrics: metrics),
+                landscape: Self.oriented(
+                    from: materialized.landscape, orientation: .landscape,
+                    manifest: nil, metrics: metrics)))
     }
 
+    /// The chain with no named pin — the SAME resolver as
+    /// `resolveChain`, so the ambient tail cannot drift from it.
     private func ambientProvenance() -> LayoutProvenance {
-        if activeManifest?.touch != nil { return .gameLayout }
-        if let name = LayoutProfilesManager.defaultProfileName,
-            let read = LayoutProfilesManager.store.readProfile(name),
-            !read.invalid, read.touch != nil
-        {
-            return .defaultProfile(name)
-        }
-        return .builtin
+        LayoutChainResolver.resolve(
+            pin: .followChain, levels: chainLevels(pinnedProfile: nil)
+        ).provenance
     }
 
     /// What the chain yields with no named pin: the auto-create
@@ -1078,21 +1092,18 @@ class ControlsLayout {
             )
         }
         if let defaultName = LayoutProfilesManager.defaultProfileName,
-            let read = LayoutProfilesManager.store.readProfile(defaultName),
-            !read.invalid, let touch = read.touch
+            let touch = LayoutProfilesManager.store.validTouch(defaultName)
         {
             let materialized = ProfileMaterializer.materialize(
                 user: touch, manifest: nil,
                 builtins: LayoutProfilesManager.builtins(), metrics: metrics)
             return PersistedLayout(
                 portrait: Self.oriented(
-                    from: materialized.portrait
-                        ?? TouchLayout(dpad: nil, buttons: [], actionButtons: []),
-                    orientation: .portrait, manifest: nil, metrics: metrics),
+                    from: materialized.portrait, orientation: .portrait,
+                    manifest: nil, metrics: metrics),
                 landscape: Self.oriented(
-                    from: materialized.landscape
-                        ?? TouchLayout(dpad: nil, buttons: [], actionButtons: []),
-                    orientation: .landscape, manifest: nil, metrics: metrics)
+                    from: materialized.landscape, orientation: .landscape,
+                    manifest: nil, metrics: metrics)
             )
         }
         return PersistedLayout(
@@ -1111,11 +1122,8 @@ class ControlsLayout {
 
     private func runProfileMigration(container: GameContainer) {
         let store = LayoutProfilesManager.store
-        let recordURL = LayoutProfilesManager.profilesRootURL
-            .appendingPathComponent(MigrationRecord.fileName)
-        var record =
-            (try? Data(contentsOf: recordURL)).map(MigrationRecord.parse)
-            ?? MigrationRecord()
+        let recordURL = Self.migrationRecordURL
+        var record = MigrationRecord.load(at: recordURL)
         let builtins = LayoutProfilesManager.builtins()
 
         // An invalid per-game file yields no touch section here and
@@ -1158,13 +1166,11 @@ class ControlsLayout {
         case .recordOnly(let hash):
             record.games[container.id] = MigrationRecord.Entry(hash: hash, profile: nil)
         case .createAndPin(let baseName, let hash):
-            let materialized = ProfileMaterializer.materialize(
-                user: userTouch, manifest: activeManifest?.touch,
-                builtins: builtins, metrics: .reference)
-            let name = store.uniqueName(base: baseName)
-            guard store.createProfile(name, touch: materialized) else { return }
-            store.writePin(.profile(name), forGameFolder: container.url)
-            record.games[container.id] = MigrationRecord.Entry(hash: hash, profile: name)
+            guard
+                createAndPinProfile(
+                    userTouch: userTouch, baseName: baseName, hash: hash,
+                    container: container, record: &record)
+            else { return }
         case .pinToExisting(let profile, let renameToShared, let hash):
             var target = profile
             if renameToShared {
@@ -1180,7 +1186,32 @@ class ControlsLayout {
             store.writePin(.profile(target), forGameFolder: container.url)
             record.games[container.id] = MigrationRecord.Entry(hash: hash, profile: target)
         }
-        try? record.serialize().write(to: recordURL, options: .atomic)
+        record.save(to: recordURL)
+    }
+
+    private static var migrationRecordURL: URL {
+        LayoutProfilesManager.profilesRootURL
+            .appendingPathComponent(MigrationRecord.fileName)
+    }
+
+    /// The `.createAndPin` arm: materialize, create, pin, record.
+    /// Shared with the import-accept path so the two cannot drift.
+    /// nil `hash` records the materialized bytes' own hash.
+    private func createAndPinProfile(
+        userTouch: TouchSection?, baseName: String, hash: String?,
+        container: GameContainer, record: inout MigrationRecord
+    ) -> Bool {
+        let store = LayoutProfilesManager.store
+        let materialized = ProfileMaterializer.materialize(
+            user: userTouch, manifest: activeManifest?.touch,
+            builtins: LayoutProfilesManager.builtins(), metrics: .reference)
+        let name = store.uniqueName(base: baseName)
+        guard store.createProfile(name, touch: materialized.section) else { return false }
+        store.writePin(.profile(name), forGameFolder: container.url)
+        record.games[container.id] = MigrationRecord.Entry(
+            hash: hash ?? FNV1a.hash64(ProfileMaterializer.canonicalBytes(materialized)),
+            profile: name)
+        return true
     }
 
     /// The user accepted the import offer: the changed per-game file
@@ -1188,30 +1219,21 @@ class ControlsLayout {
     func acceptImportOffer() {
         guard let container = currentContainer, importOfferPending else { return }
         importOfferPending = false
-        let store = LayoutProfilesManager.store
-        let builtins = LayoutProfilesManager.builtins()
         let importLoad = UserControlsFile.load(in: container)
         if let findings = importLoad?.findings, !findings.isEmpty {
             UserControlsFile.logFindings(findings, container: container)
         }
         guard let userTouch = importLoad?.manifest?.touch else { return }
-        let materialized = ProfileMaterializer.materialize(
-            user: userTouch, manifest: activeManifest?.touch,
-            builtins: builtins, metrics: .reference)
-        let name = store.uniqueName(
-            base: currentGameTitle ?? container.url.lastPathComponent)
-        guard store.createProfile(name, touch: materialized) else { return }
-        store.writePin(.profile(name), forGameFolder: container.url)
 
-        let recordURL = LayoutProfilesManager.profilesRootURL
-            .appendingPathComponent(MigrationRecord.fileName)
-        var record =
-            (try? Data(contentsOf: recordURL)).map(MigrationRecord.parse)
-            ?? MigrationRecord()
-        record.games[container.id] = MigrationRecord.Entry(
-            hash: FNV1a.hash64(ProfileMaterializer.canonicalBytes(materialized)),
-            profile: name)
-        try? record.serialize().write(to: recordURL, options: .atomic)
+        let recordURL = Self.migrationRecordURL
+        var record = MigrationRecord.load(at: recordURL)
+        guard
+            createAndPinProfile(
+                userTouch: userTouch,
+                baseName: currentGameTitle ?? container.url.lastPathComponent,
+                hash: nil, container: container, record: &record)
+        else { return }
+        record.save(to: recordURL)
 
         resolveChain(container: container)
     }

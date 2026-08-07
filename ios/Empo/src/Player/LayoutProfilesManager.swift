@@ -20,12 +20,15 @@ enum LayoutProfilesManager {
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Profiles", isDirectory: true)
 
-    static var store: LayoutProfileStore {
+    /// A `let`: the getter used to run `createDirectory` on EVERY
+    /// access, and resolution paths access it dozens of times per
+    /// cycle. The directory is ensured once at first touch instead.
+    static let store: LayoutProfileStore = {
         try? FileManager.default.createDirectory(
             at: profilesRootURL, withIntermediateDirectories: true)
         return LayoutProfileStore(
             profilesRoot: profilesRootURL, gamesRoot: GameContainer.rootURL)
-    }
+    }()
 
     // MARK: - Default profile
 
@@ -87,6 +90,26 @@ enum LayoutProfilesManager {
             name: .layoutPinDidChange, object: origin, userInfo: ["gameID": gameID])
     }
 
+    /// Case-insensitive profile search, shared by the picker and
+    /// the settings list.
+    nonisolated static func filtered(_ profiles: [String], query: String) -> [String] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return profiles }
+        return profiles.filter { $0.localizedCaseInsensitiveContains(trimmed) }
+    }
+
+    /// Creates a profile seeded from the builtin defaults — ONE
+    /// home for the operation the settings list and the builtin
+    /// viewer both offer.
+    @discardableResult
+    static func createProfileFromBuiltins(named name: String) -> Bool {
+        store.createProfile(
+            name,
+            touch: ProfileMaterializer.materialize(
+                user: nil, manifest: nil, builtins: builtins(), metrics: .reference
+            ).section)
+    }
+
     // MARK: - Off-player materialization
 
     /// The game's current resolved layout as a full profile section,
@@ -105,13 +128,16 @@ enum LayoutProfilesManager {
         case .pinnedProfile(let name), .defaultProfile(let name):
             let touch = store.readProfile(name)?.touch
             return ProfileMaterializer.materialize(
-                user: touch, manifest: nil, builtins: builtins(), metrics: .reference)
+                user: touch, manifest: nil, builtins: builtins(), metrics: .reference
+            ).section
         case .gameLayout:
             return ProfileMaterializer.materialize(
-                user: nil, manifest: manifestTouch, builtins: builtins(), metrics: .reference)
+                user: nil, manifest: manifestTouch, builtins: builtins(), metrics: .reference
+            ).section
         case .builtin:
             return ProfileMaterializer.materialize(
-                user: nil, manifest: nil, builtins: builtins(), metrics: .reference)
+                user: nil, manifest: nil, builtins: builtins(), metrics: .reference
+            ).section
         }
     }
 
