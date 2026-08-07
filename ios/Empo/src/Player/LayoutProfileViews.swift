@@ -153,56 +153,27 @@ struct LayoutProfilesSettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Built in")
+                    Text("Built in profiles")
                 } footer: {
                     Text("Empo ships this layout. Games use it when nothing else applies.")
                 }
             }
 
-            ForEach(visibleProfiles, id: \.self) { name in
-                Section {
-                    NavigationLink {
-                        LayoutProfileEditorView(profileName: name)
-                    } label: {
-                        HStack {
-                            Text(name)
-                            Spacer()
-                            if defaultName == name {
-                                Text("Default")
-                                    .font(.caption)
-                                    .foregroundStyle(.brand)
-                            }
-                        }
-                    }
-                    .contextMenu {
-                        if defaultName != name {
-                            Button("Set as default") {
-                                LayoutProfilesManager.defaultProfileName = name
-                                reload()
-                            }
-                        } else {
-                            Button("Remove default") {
-                                LayoutProfilesManager.defaultProfileName = nil
-                                reload()
-                            }
-                        }
-                        Button("Rename") {
-                            renameText = name
-                            renaming = name
-                        }
-                        Button("Duplicate") {
-                            _ = LayoutProfilesManager.store.duplicateProfile(name)
-                            reload()
-                        }
-                        Button("Delete", role: .destructive) {
-                            deleting = name
-                        }
+            // ONE section with the ForEach as its direct content:
+            // the rows read as one list, and List instantiates and
+            // diffs them lazily by their stable name IDs — the shape
+            // that stays smooth when the list grows.
+            if !visibleProfiles.isEmpty {
+                Section("Custom profiles") {
+                    ForEach(visibleProfiles, id: \.self) { name in
+                        profileRow(name)
                     }
                 }
             }
         }
         .navigationTitle("Layout profiles")
         .searchable(text: $searchText, prompt: "Search profiles")
+        .animation(.default, value: visibleProfiles)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -269,6 +240,46 @@ struct LayoutProfilesSettingsView: View {
     private func reload() {
         profiles = LayoutProfilesManager.store.listProfiles()
         defaultName = LayoutProfilesManager.defaultProfileName
+    }
+
+    private func profileRow(_ name: String) -> some View {
+        NavigationLink {
+            LayoutProfileEditorView(profileName: name)
+        } label: {
+            HStack {
+                Text(name)
+                Spacer()
+                if defaultName == name {
+                    Text("Default")
+                        .font(.caption)
+                        .foregroundStyle(.brand)
+                }
+            }
+        }
+        .contextMenu {
+            if defaultName != name {
+                Button("Set as default") {
+                    LayoutProfilesManager.defaultProfileName = name
+                    reload()
+                }
+            } else {
+                Button("Remove default") {
+                    LayoutProfilesManager.defaultProfileName = nil
+                    reload()
+                }
+            }
+            Button("Rename") {
+                renameText = name
+                renaming = name
+            }
+            Button("Duplicate") {
+                _ = LayoutProfilesManager.store.duplicateProfile(name)
+                reload()
+            }
+            Button("Delete", role: .destructive) {
+                deleting = name
+            }
+        }
     }
 
     private func createBlank() {
