@@ -451,7 +451,9 @@ struct GameSettingsView: View {
             }
             .disabled(savedProfileName != nil)
 
-            Picker("Position", selection: verticalAlignmentBinding) {
+            // A named row that pushes the three options, so they
+            // carry a label instead of floating in the section.
+            Picker("Portrait screen position", selection: verticalAlignmentBinding) {
                 ForEach(VerticalAlignment.allCases, id: \.self) { alignment in
                     HStack(spacing: 10) {
                         VerticalAlignmentIllustration(alignment: alignment)
@@ -461,8 +463,7 @@ struct GameSettingsView: View {
                     .tag(alignment)
                 }
             }
-            .pickerStyle(.inline)
-            .labelsHidden()
+            .pickerStyle(.navigationLink)
         } header: {
             Text("Layout")
         } footer: {
