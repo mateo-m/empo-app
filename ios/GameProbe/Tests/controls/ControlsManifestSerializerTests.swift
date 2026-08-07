@@ -205,4 +205,165 @@ final class ControlsManifestSerializerTests: XCTestCase {
         }
         XCTAssertEqual(data.last, UInt8(ascii: "\n"))
     }
+
+    func testActionButtonsRoundTrip() {
+        var touch = sampleTouch()
+        touch.portrait?.actionButtons = [
+            ActionButtonSpec(action: "$toggleFastForward", x: 0.75, y: 0.25, size: 56, opacity: 0.5),
+            ActionButtonSpec(action: "$pauseMenu", x: 0.5, y: 0.25, size: 44, opacity: 1),
+        ]
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil) else {
+            XCTFail("expected data")
+            return
+        }
+
+        let result = parseSerialized(data)
+        XCTAssertNil(result.findings.first { $0.severity == .error })
+        XCTAssertEqual(result.manifest?.touch?.portrait?.actionButtons?.count, 2)
+        XCTAssertEqual(
+            result.manifest?.touch?.portrait?.actionButtons?.first?.action,
+            "$toggleFastForward"
+        )
+        XCTAssertNil(result.manifest?.touch?.landscape?.actionButtons)
+
+        // Wire-level stability: parse and re-serialize must reproduce
+        // the exact bytes.
+        let reserialized = ControlsManifestSerializer.serialize(
+            touch: result.manifest?.touch,
+            controller: nil
+        )
+        XCTAssertEqual(reserialized, data)
+    }
+
+    func testUnknownControllerActionRoundTripsByteStable() {
+        // W005 keeps unknown action entries. Saving the map back must
+        // not strip or rewrite them.
+        let controller = ControllerMap(entries: [
+            "start": .action("$notAnAction"),
+            "a": .key("Enter"),
+        ])
+        guard let data = ControlsManifestSerializer.serialize(touch: nil, controller: controller)
+        else {
+            XCTFail("expected data")
+            return
+        }
+
+        let result = parseSerialized(data)
+        XCTAssertNil(result.findings.first { $0.severity == .error })
+        XCTAssertEqual(result.findings.first { $0.code == "W005" }?.path, "/controller/start")
+        XCTAssertEqual(result.manifest?.controller?.entries["start"], .action("$notAnAction"))
+
+        let reserialized = ControlsManifestSerializer.serialize(
+            touch: nil,
+            controller: result.manifest?.controller
+        )
+        XCTAssertEqual(reserialized, data)
+    }
+
+    func testEmptyActionButtonsListRoundTrips() {
+        // Pinned behavior: `[]` and an omitted key differ. nil means
+        // "inherit the game-shipped action buttons"; [] means "none"
+        // (the user deleted them all). Collapsing [] to an omitted
+        // key would resurrect deleted buttons on the next load.
+        var touch = sampleTouch()
+        touch.portrait?.actionButtons = []
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil)
+        else {
+            XCTFail("expected data")
+            return
+        }
+        XCTAssertTrue(String(data: data, encoding: .utf8)!.contains("\"actionButtons\": ["))
+        let result = parseSerialized(data)
+        XCTAssertEqual(result.manifest?.touch?.portrait?.actionButtons, [])
+        // The untouched orientation keeps no key at all.
+        XCTAssertNil(result.manifest?.touch?.landscape?.actionButtons)
+    }
+
+    func testGoldenOutputBytes() {
+        // Byte-level pin for the wire format. A whitespace or
+        // ordering change here rewrites every user file on its next
+        // save; change this expectation only on purpose.
+        let touch = TouchSection(
+            portrait: TouchLayout(
+                dpad: DPadSpec(x: 0.25, y: 0.75, size: 140, opacity: 1),
+                buttons: [
+                    ButtonSpec(label: "OK", key: "Enter", x: 0.75, y: 0.5, size: 56, opacity: 1)
+                ],
+                actionButtons: [
+                    ActionButtonSpec(action: "$pauseMenu", x: 0.5, y: 0.25, size: 44, opacity: 0.5)
+                ]
+            )
+        )
+        let controller = ControllerMap(entries: [
+            "a": .key("Enter"),
+            "back": .action("$toggleTouchControls"),
+            "start": .unbound,
+        ])
+        let data = ControlsManifestSerializer.serialize(touch: touch, controller: controller)
+        // Line array because two lines carry trailing spaces (the
+        // array-item separator lines), which a multiline literal
+        // cannot express reliably.
+        let expected = [
+            "{",
+            "  \"version\": 1",
+            "  ,\"touch\": {",
+            "    \"portrait\": {",
+            "      \"dpad\": {",
+            "        \"x\": 0.25",
+            "        ,\"y\": 0.75",
+            "        ,\"size\": 140",
+            "        ,\"opacity\": 1",
+            "      }",
+            "      ,\"buttons\": [",
+            "        ",
+            "          {",
+            "            \"label\": \"OK\"",
+            "            ,\"key\": \"Enter\"",
+            "            ,\"x\": 0.75",
+            "            ,\"y\": 0.5",
+            "            ,\"size\": 56",
+            "            ,\"opacity\": 1",
+            "          }",
+            "      ]",
+            "      ,\"actionButtons\": [",
+            "        ",
+            "          {",
+            "            \"action\": \"$pauseMenu\"",
+            "            ,\"x\": 0.5",
+            "            ,\"y\": 0.25",
+            "            ,\"size\": 44",
+            "            ,\"opacity\": 0.5",
+            "          }",
+            "      ]",
+            "    }",
+            "  }",
+            "  ,\"controller\": {",
+            "    \"a\": \"Enter\"",
+            "    ,\"back\": \"$toggleTouchControls\"",
+            "    ,\"start\": null",
+            "  }",
+            "}",
+            "",
+        ].joined(separator: "\n")
+        XCTAssertEqual(String(data: data ?? Data(), encoding: .utf8), expected)
+    }
+
+    func testTouchInputConvertsActionButtons() {
+        let input = ControlsManifestSerializer.TouchOrientedInput(
+            dpadX: 0.13, dpadY: 0.72, dpadSize: 140, dpadOpacity: 1,
+            buttons: [],
+            actionButtons: [
+                ControlsManifestSerializer.TouchActionButtonInput(
+                    action: "$toggleCheats", x: 1.5, y: -0.25, size: 500, opacity: 0)
+            ]
+        )
+        let section = ControlsManifestSerializer.touchSection(portrait: input, landscape: input)
+        // Writer-side clamping keeps the round trip valid.
+        let button = section.portrait?.actionButtons?.first
+        XCTAssertEqual(button?.action, "$toggleCheats")
+        XCTAssertEqual(button?.x, 1.0)
+        XCTAssertEqual(button?.y, 0.0)
+        XCTAssertEqual(button?.size, 100)
+        XCTAssertEqual(button?.opacity, 0.2)
+    }
 }

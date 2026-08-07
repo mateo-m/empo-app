@@ -68,6 +68,6 @@ public enum ControllerMapResolver {
         "leftstick": .key("KeyS"),
         "rightstick": .key("KeyD"),
         "start": .action("$pauseMenu"),
-        "back": .action("$toggleOverlay"),
+        "back": .action("$toggleTouchControls"),
     ]
 }

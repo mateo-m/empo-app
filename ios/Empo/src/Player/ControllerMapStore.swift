@@ -12,13 +12,15 @@ extension Notification.Name {
 /// UserDefaults persistence for global controller overrides. Per-game overrides
 /// live in `EmpoState/controls.json` (SPEC §3, ticket 009).
 enum ControllerMapStore {
-    private static let knownActions: Set<String> = [
-        "$pauseMenu",
-        "$toggleOverlay",
-    ]
-
     static func loadGlobal() -> ControllerMap? {
-        load(key: DefaultsKey.controllerMapGlobal)
+        guard let map = load(key: DefaultsKey.controllerMapGlobal) else { return nil }
+        // One-time rename migration for Empo-owned storage. Quiet
+        // write: a change notification here would re-enter this load.
+        let migrated = EmpoActionCatalog.migrated(map)
+        if migrated.changed {
+            saveQuietly(migrated.map, key: DefaultsKey.controllerMapGlobal)
+        }
+        return migrated.map
     }
 
     static func saveGlobal(_ map: ControllerMap) {
@@ -67,7 +69,9 @@ enum ControllerMapStore {
             }
             guard let text = value as? String else { continue }
             if text.hasPrefix("$") {
-                guard knownActions.contains(text) else { continue }
+                // Unknown actions stay in the map (inert at dispatch)
+                // so a load-modify-save cycle cannot strip them. Same
+                // rule as the file loader's W005.
                 entries[element] = .action(text)
             } else if KeyCodeTable.scancode(for: text) != nil {
                 entries[element] = .key(text)
@@ -77,6 +81,11 @@ enum ControllerMapStore {
     }
 
     private static func save(_ map: ControllerMap, key: String) {
+        saveQuietly(map, key: key)
+        NotificationCenter.default.post(name: .controllerMapDidChange, object: nil)
+    }
+
+    private static func saveQuietly(_ map: ControllerMap, key: String) {
         var object: [String: Any] = [:]
         for (element, target) in map.entries {
             switch target {
@@ -90,7 +99,17 @@ enum ControllerMapStore {
         }
         guard let data = try? JSONSerialization.data(withJSONObject: object) else { return }
         UserDefaults.standard.set(data, forKey: key)
-        NotificationCenter.default.post(name: .controllerMapDidChange, object: nil)
+    }
+
+    /// One-time rename migration for the per-game controller section.
+    /// Runs at game selection. Quiet: the caller reloads afterwards.
+    static func migrateRenamedActions(container: GameContainer) {
+        guard let result = UserControlsFile.load(in: container),
+            let controller = result.manifest?.controller
+        else { return }
+        let migrated = EmpoActionCatalog.migrated(controller)
+        guard migrated.changed else { return }
+        _ = UserControlsFile.updateController(in: container, controller: migrated.map)
     }
 
     /// Decode a legacy per-game controller map from UserDefaults (migration only).

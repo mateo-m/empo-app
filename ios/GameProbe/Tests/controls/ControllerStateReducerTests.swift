@@ -53,7 +53,7 @@ final class ControllerStateReducerTests: XCTestCase {
         XCTAssertEqual(map["b"], .key(41))
         XCTAssertEqual(map["x"], .key(225))
         XCTAssertEqual(map["start"], .action("$pauseMenu"))
-        XCTAssertEqual(map["back"], .action("$toggleOverlay"))
+        XCTAssertEqual(map["back"], .action("$toggleTouchControls"))
         XCTAssertNil(map["guide"])
     }
 

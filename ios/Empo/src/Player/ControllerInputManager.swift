@@ -7,7 +7,11 @@ import SwiftUI
 /// elements to keyboard scancodes via the merged four-layer map (§9).
 @MainActor
 final class ControllerInputManager {
-    var pauseMenuHandler: () -> Void = {}
+    /// Dispatches action targets: (action id, pressed). Wired to
+    /// `PlayerActionRegistry.handle`. Hold actions rely on the
+    /// release edge; see `releaseAllHeldKeys` for the paths where
+    /// release edges cannot arrive.
+    var actionHandler: ((String, Bool) -> Void)?
 
     /// Runs on physical element press edges (listen mode for the remap UI).
     var elementActivityHandler: ((String) -> Void)?
@@ -50,6 +54,9 @@ final class ControllerInputManager {
     private var reducer = ControllerStateReducer()
     private var resolvedMap = ControllerMapResolver.resolvedRuntimeMap()
     private var elementPressScancode: [String: Int32] = [:]
+    // element -> action id held by that element, mirroring
+    // elementPressScancode so hold actions get their release edge.
+    private var elementPressAction: [String: String] = [:]
     private var connectedControllers: [ObjectIdentifier: GCController] = [:]
     // scancode -> number of elements that currently hold it. The engine
     // sees a press on 0->1 and a release on 1->0 only.
@@ -123,6 +130,7 @@ final class ControllerInputManager {
         connectedControllers.removeAll()
         reducer = ControllerStateReducer()
         elementPressScancode.removeAll()
+        elementPressAction.removeAll()
         overlayHiddenBinding = nil
         editModeBinding = nil
         overlayManualOverride = false
@@ -249,12 +257,15 @@ final class ControllerInputManager {
         feedButton(
             controllerID: controllerID, element: "leftshoulder", pressed: gamepad.leftShoulder.isPressed)
         feedButton(
-            controllerID: controllerID, element: "rightshoulder", pressed: gamepad.rightShoulder.isPressed)
+            controllerID: controllerID, element: "rightshoulder", pressed: gamepad.rightShoulder.isPressed
+        )
         feedButton(controllerID: controllerID, element: "lefttrigger", value: gamepad.leftTrigger.value)
-        feedButton(controllerID: controllerID, element: "righttrigger", value: gamepad.rightTrigger.value)
+        feedButton(
+            controllerID: controllerID, element: "righttrigger", value: gamepad.rightTrigger.value)
         feedButton(controllerID: controllerID, element: "start", pressed: gamepad.buttonMenu.isPressed)
         feedButton(
-            controllerID: controllerID, element: "back", pressed: gamepad.buttonOptions?.isPressed ?? false)
+            controllerID: controllerID, element: "back",
+            pressed: gamepad.buttonOptions?.isPressed ?? false)
         feedButton(
             controllerID: controllerID, element: "guide", pressed: gamepad.buttonHome?.isPressed ?? false)
         feedButton(
@@ -419,18 +430,16 @@ final class ControllerInputManager {
                         EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
                     }
                 case .action(let name):
-                    switch name {
-                    case "$toggleOverlay":
-                        toggleOverlay()
-                    case "$pauseMenu":
-                        pauseMenuHandler()
-                    default:
-                        break
-                    }
+                    elementPressAction[edge.element] = name
+                    actionHandler?(name, true)
                 case .unbound:
                     break
                 }
             } else {
+                if let action = elementPressAction.removeValue(forKey: edge.element) {
+                    actionHandler?(action, false)
+                    continue
+                }
                 guard let scancode = elementPressScancode.removeValue(forKey: edge.element) else {
                     continue
                 }
@@ -443,12 +452,6 @@ final class ControllerInputManager {
                 }
             }
         }
-    }
-
-    private func toggleOverlay() {
-        guard let overlayHiddenBinding else { return }
-        noteManualOverlayToggle()
-        overlayHiddenBinding.wrappedValue.toggle()
     }
 
     /// Auto-hide follows the extended controllers only. A basic or
@@ -468,5 +471,13 @@ final class ControllerInputManager {
         }
         heldScancodes.removeAll()
         elementPressScancode.removeAll()
+
+        // Held actions must release here too. Suppression and stop()
+        // swallow the physical release edges, and a held fast-forward
+        // with no release would leave the engine sped up.
+        for action in elementPressAction.values {
+            actionHandler?(action, false)
+        }
+        elementPressAction.removeAll()
     }
 }

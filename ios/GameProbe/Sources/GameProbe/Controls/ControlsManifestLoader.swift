@@ -38,10 +38,40 @@ public enum ControlsManifestLoader {
         }
     }
 
-    private static let knownActions: Set<String> = [
-        "$pauseMenu",
-        "$toggleOverlay",
-    ]
+    /// The file-format cap on key buttons + action buttons per
+    /// orientation. Public: the app's add UI gates on the SAME
+    /// value, so a saved layout can never fail V015 on its next
+    /// load.
+    public static let maxButtonsPerOrientation = 21
+
+    /// Every finding code this loader can emit. Emission sites use
+    /// the enum, so a new code cannot ship without appearing here.
+    /// V021 is absent on purpose: W005 superseded it.
+    public enum FindingCode: String, CaseIterable, Sendable {
+        case v000 = "V000"
+        case v001 = "V001"
+        case v002 = "V002"
+        case v010 = "V010"
+        case v011 = "V011"
+        case v012 = "V012"
+        case v013 = "V013"
+        case v014 = "V014"
+        case v015 = "V015"
+        case v020 = "V020"
+        case w001 = "W001"
+        case w002 = "W002"
+        case w003 = "W003"
+        case w004 = "W004"
+        case w005 = "W005"
+        case k001 = "K001"
+        case j001 = "J001"
+    }
+
+    /// Derived from the enum: the docs table and the uniqueness
+    /// test read this, and it cannot drift from the emission sites.
+    public static var emittedFindingCodes: [String] {
+        FindingCode.allCases.map(\.rawValue)
+    }
 
     public struct Result: Sendable {
         public var manifest: ControlsManifest?
@@ -78,6 +108,13 @@ public enum ControlsManifestLoader {
             self.code = code
             self.path = path
             self.message = message
+        }
+
+        /// Loader emission sites go through the typed code, so the
+        /// emitted set and `emittedFindingCodes` cannot drift.
+        init(severity: Severity, code: FindingCode, path: String, message: String) {
+            self.init(
+                severity: severity, code: code.rawValue, path: path, message: message)
         }
     }
 
@@ -140,7 +177,7 @@ public enum ControlsManifestLoader {
                 findings: [
                     Finding(
                         severity: .error,
-                        code: "V000",
+                        code: .v000,
                         path: "",
                         message: "Failed to read controls manifest"
                     ),
@@ -213,7 +250,7 @@ public enum ControlsManifestLoader {
         let data = (try? Data(contentsOf: url)) ?? Data()
         let translation = KirinControlsTranslator.translate(data: data, metrics: metrics)
         let findings = translation.notes.map { note in
-            Finding(severity: .warning, code: "K001", path: "", message: note)
+            Finding(severity: .warning, code: .k001, path: "", message: note)
         }
         let result = Result(
             manifest: translation.manifest,
@@ -229,7 +266,7 @@ public enum ControlsManifestLoader {
         let data = (try? Data(contentsOf: url)) ?? Data()
         let translation = JoiPlayControlsTranslator.translate(data: data, metrics: metrics)
         let findings = translation.notes.map { note in
-            Finding(severity: .warning, code: "J001", path: "", message: note)
+            Finding(severity: .warning, code: .j001, path: "", message: note)
         }
         let result = Result(
             manifest: translation.manifest,
@@ -246,7 +283,7 @@ public enum ControlsManifestLoader {
                 findings: [
                     Finding(
                         severity: .error,
-                        code: "V001",
+                        code: .v001,
                         path: "",
                         message: "Controls manifest exceeds 128 KiB"
                     ),
@@ -260,7 +297,7 @@ public enum ControlsManifestLoader {
                 findings: [
                     Finding(
                         severity: .error,
-                        code: "V000",
+                        code: .v000,
                         path: "",
                         message: "Controls manifest is not valid UTF-8"
                     ),
@@ -283,7 +320,7 @@ public enum ControlsManifestLoader {
                     findings: [
                         Finding(
                             severity: .error,
-                            code: "V000",
+                            code: .v000,
                             path: "",
                             message: "Invalid JSON in controls manifest"
                         ),
@@ -297,7 +334,7 @@ public enum ControlsManifestLoader {
                 findings: [
                     Finding(
                         severity: .error,
-                        code: "V000",
+                        code: .v000,
                         path: "",
                         message: "Invalid JSON in controls manifest: "
                             + "\(error.message) "
@@ -311,7 +348,7 @@ public enum ControlsManifestLoader {
                 findings: [
                     Finding(
                         severity: .error,
-                        code: "V000",
+                        code: .v000,
                         path: "",
                         message: "Invalid JSON in controls manifest"
                     ),
@@ -332,7 +369,7 @@ public enum ControlsManifestLoader {
                 findings.append(
                     Finding(
                         severity: .error,
-                        code: "V002",
+                        code: .v002,
                         path: "/version",
                         message: "version must be exactly 1"
                     )
@@ -342,7 +379,7 @@ public enum ControlsManifestLoader {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V002",
+                    code: .v002,
                     path: "/version",
                     message: "version is required and must be an integer"
                 )
@@ -355,7 +392,7 @@ public enum ControlsManifestLoader {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V000",
+                    code: .v000,
                     path: "/touch",
                     message: "touch must be an object"
                 )
@@ -368,7 +405,7 @@ public enum ControlsManifestLoader {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V000",
+                    code: .v000,
                     path: "/controller",
                     message: "controller must be an object"
                 )
@@ -379,7 +416,7 @@ public enum ControlsManifestLoader {
             findings.append(
                 Finding(
                     severity: .warning,
-                    code: "W001",
+                    code: .w001,
                     path: "",
                     message: "Manifest has neither touch nor controller section"
                 )
@@ -446,9 +483,29 @@ public enum ControlsManifestLoader {
                 } else {
                     appendTypeError(findings: &findings, path: "\(path)/buttons", expected: "array")
                 }
+            case "actionButtons":
+                if let actionsArray = value as? [Any] {
+                    layout.actionButtons = parseActionButtons(
+                        actionsArray, path: "\(path)/actionButtons", findings: &findings)
+                } else {
+                    appendTypeError(
+                        findings: &findings, path: "\(path)/actionButtons", expected: "array")
+                }
             default:
                 continue
             }
+        }
+
+        let combinedCount = (layout.buttons?.count ?? 0) + (layout.actionButtons?.count ?? 0)
+        if combinedCount > maxButtonsPerOrientation {
+            findings.append(
+                Finding(
+                    severity: .error,
+                    code: .v015,
+                    path: path,
+                    message: "More than 21 buttons and action buttons combined in one orientation"
+                )
+            )
         }
 
         return layout
@@ -459,55 +516,17 @@ public enum ControlsManifestLoader {
         path: String,
         findings: inout [Finding]
     ) -> DPadSpec? {
-        var x: Double?
-        var y: Double?
-        var size: Double?
-        var opacity: Double?
+        var placement = PlacementFields(sizeRule: .dpad)
 
         for (key, value) in object {
-            switch key {
-            case "x":
-                if let number = asDouble(value) {
-                    x = number
-                    validateCoordinate(number, path: "\(path)/x", findings: &findings)
-                } else {
-                    appendCoordinateError(findings: &findings, path: "\(path)/x")
-                }
-            case "y":
-                if let number = asDouble(value) {
-                    y = number
-                    validateCoordinate(number, path: "\(path)/y", findings: &findings)
-                } else {
-                    appendCoordinateError(findings: &findings, path: "\(path)/y")
-                }
-            case "size":
-                if let number = asDouble(value) {
-                    size = number
-                    validateDPadSize(number, path: "\(path)/size", findings: &findings)
-                } else {
-                    appendRangeError(findings: &findings, path: "\(path)/size")
-                }
-            case "opacity":
-                if let number = asDouble(value) {
-                    opacity = number
-                    validateOpacity(number, path: "\(path)/opacity", findings: &findings)
-                } else {
-                    appendRangeError(findings: &findings, path: "\(path)/opacity")
-                }
-            default:
-                continue
-            }
+            _ = placement.consume(
+                field: key, value: value, path: path, findings: &findings)
         }
 
-        if x == nil {
-            appendCoordinateError(findings: &findings, path: "\(path)/x")
-        }
-        if y == nil {
-            appendCoordinateError(findings: &findings, path: "\(path)/y")
-        }
-
-        guard let x, let y else { return nil }
-        return DPadSpec(x: x, y: y, size: size, opacity: opacity)
+        guard let coords = placement.requireCoordinates(path: path, findings: &findings)
+        else { return nil }
+        return DPadSpec(
+            x: coords.x, y: coords.y, size: placement.size, opacity: placement.opacity)
     }
 
     private static func parseButtons(
@@ -515,13 +534,13 @@ public enum ControlsManifestLoader {
         path: String,
         findings: inout [Finding]
     ) -> [ButtonSpec] {
-        if array.count > 21 {
+        if array.count > maxButtonsPerOrientation {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V013",
+                    code: .v013,
                     path: path,
-                    message: "More than 21 buttons in one orientation"
+                    message: "More than \(maxButtonsPerOrientation) buttons in one orientation"
                 )
             )
         }
@@ -535,7 +554,7 @@ public enum ControlsManifestLoader {
                 findings.append(
                     Finding(
                         severity: .error,
-                        code: "V000",
+                        code: .v000,
                         path: buttonPath,
                         message: "Button must be an object"
                     )
@@ -553,7 +572,7 @@ public enum ControlsManifestLoader {
             findings.append(
                 Finding(
                     severity: .warning,
-                    code: "W003",
+                    code: .w003,
                     path: path,
                     message: "Duplicate button key \(key)"
                 )
@@ -570,12 +589,14 @@ public enum ControlsManifestLoader {
     ) -> ButtonSpec? {
         var label: String?
         var key: String?
-        var x: Double?
-        var y: Double?
-        var size: Double?
-        var opacity: Double?
+        var placement = PlacementFields()
 
         for (field, value) in object {
+            if placement.consume(
+                field: field, value: value, path: path, findings: &findings)
+            {
+                continue
+            }
             switch field {
             case "label":
                 if let text = value as? String {
@@ -584,7 +605,7 @@ public enum ControlsManifestLoader {
                         findings.append(
                             Finding(
                                 severity: .warning,
-                                code: "W002",
+                                code: .w002,
                                 path: "\(path)/label",
                                 message: "Label truncated to 8 characters"
                             )
@@ -604,39 +625,11 @@ public enum ControlsManifestLoader {
                     findings.append(
                         Finding(
                             severity: .error,
-                            code: "V010",
+                            code: .v010,
                             path: "\(path)/key",
                             message: "Unknown key code: \(value)"
                         )
                     )
-                }
-            case "x":
-                if let number = asDouble(value) {
-                    x = number
-                    validateCoordinate(number, path: "\(path)/x", findings: &findings)
-                } else {
-                    appendCoordinateError(findings: &findings, path: "\(path)/x")
-                }
-            case "y":
-                if let number = asDouble(value) {
-                    y = number
-                    validateCoordinate(number, path: "\(path)/y", findings: &findings)
-                } else {
-                    appendCoordinateError(findings: &findings, path: "\(path)/y")
-                }
-            case "size":
-                if let number = asDouble(value) {
-                    size = number
-                    validateButtonSize(number, path: "\(path)/size", findings: &findings)
-                } else {
-                    appendRangeError(findings: &findings, path: "\(path)/size")
-                }
-            case "opacity":
-                if let number = asDouble(value) {
-                    opacity = number
-                    validateOpacity(number, path: "\(path)/opacity", findings: &findings)
-                } else {
-                    appendRangeError(findings: &findings, path: "\(path)/opacity")
                 }
             default:
                 continue
@@ -647,16 +640,19 @@ public enum ControlsManifestLoader {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V010",
+                    code: .v010,
                     path: "\(path)/key",
                     message: "Unknown key code: "
                 )
             )
             return nil
         }
-        guard let x, let y else { return nil }
+        guard let coords = placement.requireCoordinates(path: path, findings: &findings)
+        else { return nil }
 
-        return ButtonSpec(label: label, key: key, x: x, y: y, size: size, opacity: opacity)
+        return ButtonSpec(
+            label: label, key: key, x: coords.x, y: coords.y,
+            size: placement.size, opacity: placement.opacity)
     }
 
     // MARK: - Controller
@@ -674,7 +670,7 @@ public enum ControlsManifestLoader {
                 findings.append(
                     Finding(
                         severity: .error,
-                        code: "V020",
+                        code: .v020,
                         path: elementPath,
                         message: "Unknown controller element \(element)"
                     )
@@ -691,7 +687,7 @@ public enum ControlsManifestLoader {
                 findings.append(
                     Finding(
                         severity: .error,
-                        code: "V000",
+                        code: .v000,
                         path: elementPath,
                         message: "Controller target must be a string or null"
                     )
@@ -700,25 +696,28 @@ public enum ControlsManifestLoader {
             }
 
             if text.hasPrefix("$") {
-                if knownActions.contains(text) {
-                    entries[element] = .action(text)
-                } else {
+                // Unknown actions warn and KEEP the entry. Every
+                // load-modify-save path rewrites this file, so a
+                // skipped entry would be stripped from disk. A kept
+                // entry stays inert at dispatch and survives saves.
+                if !EmpoActionCatalog.allIDs.contains(text) {
                     findings.append(
                         Finding(
-                            severity: .error,
-                            code: "V021",
+                            severity: .warning,
+                            code: .w005,
                             path: elementPath,
-                            message: "Unknown action: \(text)"
+                            message: "Unknown action, binding does nothing: \(text)"
                         )
                     )
                 }
+                entries[element] = .action(text)
             } else if KeyCodeTable.scancode(for: text) != nil {
                 entries[element] = .key(text)
             } else {
                 findings.append(
                     Finding(
                         severity: .error,
-                        code: "V010",
+                        code: .v010,
                         path: elementPath,
                         message: "Unknown key code: \(text)"
                     )
@@ -736,9 +735,9 @@ public enum ControlsManifestLoader {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V014",
+                    code: .v014,
                     path: path,
-                    message: "Action strings are not allowed in touch buttons: \(key)"
+                    message: "Actions do not go in buttons. Use actionButtons for: \(key)"
                 )
             )
             return
@@ -747,7 +746,7 @@ public enum ControlsManifestLoader {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V010",
+                    code: .v010,
                     path: path,
                     message: "Unknown key code: \(key)"
                 )
@@ -755,12 +754,12 @@ public enum ControlsManifestLoader {
         }
     }
 
-    private static func validateCoordinate(_ value: Double, path: String, findings: inout [Finding]) {
+    static func validateCoordinate(_ value: Double, path: String, findings: inout [Finding]) {
         if !(0.0 ... 1.0).contains(value) {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V011",
+                    code: .v011,
                     path: path,
                     message: "Coordinate must be between 0.0 and 1.0"
                 )
@@ -768,12 +767,12 @@ public enum ControlsManifestLoader {
         }
     }
 
-    private static func validateButtonSize(_ value: Double, path: String, findings: inout [Finding]) {
+    static func validateButtonSize(_ value: Double, path: String, findings: inout [Finding]) {
         if !(40.0 ... 100.0).contains(value) {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V012",
+                    code: .v012,
                     path: path,
                     message: "Button size must be between 40 and 100"
                 )
@@ -781,12 +780,12 @@ public enum ControlsManifestLoader {
         }
     }
 
-    private static func validateDPadSize(_ value: Double, path: String, findings: inout [Finding]) {
+    static func validateDPadSize(_ value: Double, path: String, findings: inout [Finding]) {
         if !(100.0 ... 200.0).contains(value) {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V012",
+                    code: .v012,
                     path: path,
                     message: "D-pad size must be between 100 and 200"
                 )
@@ -794,12 +793,12 @@ public enum ControlsManifestLoader {
         }
     }
 
-    private static func validateOpacity(_ value: Double, path: String, findings: inout [Finding]) {
+    static func validateOpacity(_ value: Double, path: String, findings: inout [Finding]) {
         if !(0.2 ... 1.0).contains(value) {
             findings.append(
                 Finding(
                     severity: .error,
-                    code: "V012",
+                    code: .v012,
                     path: path,
                     message: "Opacity must be between 0.2 and 1.0"
                 )
@@ -817,7 +816,7 @@ public enum ControlsManifestLoader {
         return String(cString: number.objCType) == "c"
     }
 
-    private static func asDouble(_ value: Any) -> Double? {
+    static func asDouble(_ value: Any) -> Double? {
         guard !isJSONBool(value) else { return nil }
         if let number = value as? NSNumber { return number.doubleValue }
         if let double = value as? Double { return double }
@@ -833,33 +832,33 @@ public enum ControlsManifestLoader {
         return nil
     }
 
-    private static func appendCoordinateError(findings: inout [Finding], path: String) {
+    static func appendCoordinateError(findings: inout [Finding], path: String) {
         findings.append(
             Finding(
                 severity: .error,
-                code: "V011",
+                code: .v011,
                 path: path,
                 message: "Coordinate must be a number between 0.0 and 1.0"
             )
         )
     }
 
-    private static func appendRangeError(findings: inout [Finding], path: String) {
+    static func appendRangeError(findings: inout [Finding], path: String) {
         findings.append(
             Finding(
                 severity: .error,
-                code: "V012",
+                code: .v012,
                 path: path,
                 message: "Value is out of the allowed range"
             )
         )
     }
 
-    private static func appendTypeError(findings: inout [Finding], path: String, expected: String) {
+    static func appendTypeError(findings: inout [Finding], path: String, expected: String) {
         findings.append(
             Finding(
                 severity: .error,
-                code: "V000",
+                code: .v000,
                 path: path,
                 message: "Expected \(expected)"
             )

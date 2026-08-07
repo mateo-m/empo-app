@@ -131,11 +131,10 @@ enum ControllerRemapCatalog {
         case .key(let code):
             return KeyCodeTable.displayName(for: code) ?? code
         case .action(let name):
-            switch name {
-            case "$pauseMenu": return "Pause menu"
-            case "$toggleOverlay": return "Toggle overlay"
-            default: return name
-            }
+            // Unknown = written by a newer Empo or by hand. The
+            // binding stays in the map (W005 rule) and does nothing.
+            return EmpoActionCatalog.action(id: name)?.displayName
+                ?? "Unavailable action (\(name))"
         case .unbound:
             return "Unbound"
         }

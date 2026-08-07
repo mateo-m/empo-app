@@ -29,10 +29,16 @@ public struct TouchSection: Equatable, Sendable {
 public struct TouchLayout: Equatable, Sendable {
     public var dpad: DPadSpec?
     public var buttons: [ButtonSpec]?
+    public var actionButtons: [ActionButtonSpec]?
 
-    public init(dpad: DPadSpec? = nil, buttons: [ButtonSpec]? = nil) {
+    public init(
+        dpad: DPadSpec? = nil,
+        buttons: [ButtonSpec]? = nil,
+        actionButtons: [ActionButtonSpec]? = nil
+    ) {
         self.dpad = dpad
         self.buttons = buttons
+        self.actionButtons = actionButtons
     }
 }
 
@@ -68,6 +74,30 @@ public struct ButtonSpec: Equatable, Sendable {
     ) {
         self.label = label
         self.key = key
+        self.x = x
+        self.y = y
+        self.size = size
+        self.opacity = opacity
+    }
+}
+
+/// A touch button bound to an Empo action instead of a game key.
+/// It has no label: rendering uses the action's fixed icon.
+public struct ActionButtonSpec: Equatable, Sendable {
+    public var action: String
+    public var x: Double
+    public var y: Double
+    public var size: Double?
+    public var opacity: Double?
+
+    public init(
+        action: String,
+        x: Double,
+        y: Double,
+        size: Double? = nil,
+        opacity: Double? = nil
+    ) {
+        self.action = action
         self.x = x
         self.y = y
         self.size = size

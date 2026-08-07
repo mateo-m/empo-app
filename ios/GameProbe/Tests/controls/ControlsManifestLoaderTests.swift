@@ -74,6 +74,17 @@ final class ControlsManifestLoaderTests: XCTestCase {
             ButtonSpec(label: "Log", key: "KeyQ", x: 0.06, y: 0.06, size: 44, opacity: 0.5)
         )
 
+        // Same ulp caveat as the landscape "Back" button below: the
+        // fixture decimals parse a platform-dependent ulp off, so the
+        // numeric fields compare with a tolerance.
+        let actionButton = portrait?.actionButtons?.first
+        XCTAssertEqual(portrait?.actionButtons?.count, 1)
+        XCTAssertEqual(actionButton?.action, "$toggleFastForward")
+        XCTAssertEqual(actionButton?.x ?? .nan, 0.94, accuracy: 1e-9)
+        XCTAssertEqual(actionButton?.y ?? .nan, 0.06, accuracy: 1e-9)
+        XCTAssertEqual(actionButton?.size, 44)
+        XCTAssertEqual(actionButton?.opacity ?? .nan, 0.6, accuracy: 1e-9)
+
         let landscape = manifest.touch?.landscape
         XCTAssertEqual(landscape?.dpad, DPadSpec(x: 0.10, y: 0.68, size: nil, opacity: nil))
         XCTAssertEqual(landscape?.buttons?.count, 2)
@@ -174,6 +185,8 @@ final class ControlsManifestLoaderTests: XCTestCase {
         let finding = finding(result, code: "V014", path: "/touch/portrait/buttons/0/key")
         XCTAssertNotNil(finding)
         XCTAssertTrue(finding?.message.contains("$pauseMenu") == true)
+        // The message must point at the right fix.
+        XCTAssertTrue(finding?.message.contains("actionButtons") == true)
     }
 
     func testV020UnknownControllerElement() throws {
@@ -183,13 +196,253 @@ final class ControlsManifestLoaderTests: XCTestCase {
         XCTAssertNotNil(finding(result, code: "V020", path: "/controller/notabutton"))
     }
 
-    func testV021UnknownAction() throws {
+    func testW005UnknownControllerActionKeepsEntry() throws {
         let data = try loadFixture("v021-unknown-action.json5")
         let result = ControlsManifestLoader.parse(data: data)
-        XCTAssertNil(result.manifest)
-        let finding = finding(result, code: "V021", path: "/controller/start")
+        // The file loads. The unknown binding stays in the map so a
+        // load-modify-save cycle cannot strip it from disk.
+        XCTAssertNotNil(result.manifest)
+        let finding = finding(result, code: "W005", path: "/controller/start")
         XCTAssertNotNil(finding)
         XCTAssertTrue(finding?.message.contains("$notAnAction") == true)
+        XCTAssertEqual(result.manifest?.controller?.entries["start"], .action("$notAnAction"))
+    }
+
+    func testKnownControllerActionsParseWithoutFindings() {
+        let entries = EmpoActionCatalog.all.map(\.id).enumerated()
+            .map { index, id in
+                "\"\(ControllerElement.allElements[index])\": \"\(id)\""
+            }
+            .joined(separator: ", ")
+        let json = "{ \"version\": 1, \"controller\": { \(entries) } }"
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertTrue(result.findings.isEmpty, "\(result.findings)")
+        XCTAssertEqual(result.manifest?.controller?.entries.count, EmpoActionCatalog.all.count)
+    }
+
+    func testActionButtonsParse() {
+        let json = #"""
+            { "version": 1, "touch": { "portrait": {
+              "dpad": { "x": 0.14, "y": 0.74 },
+              "actionButtons": [
+                { "action": "$toggleFastForward", "x": 0.75, "y": 0.25, "size": 56, "opacity": 0.5 }
+              ] } } }
+            """#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertTrue(result.findings.isEmpty, "\(result.findings)")
+        // Exact binary fractions only: the json5pp parser builds other
+        // decimals a platform-dependent ulp off.
+        XCTAssertEqual(
+            result.manifest?.touch?.portrait?.actionButtons,
+            [ActionButtonSpec(action: "$toggleFastForward", x: 0.75, y: 0.25, size: 56, opacity: 0.5)]
+        )
+    }
+
+    func testW004UnknownTouchActionSkipsOnlyThatButton() {
+        let json = #"""
+            { "version": 1, "touch": { "portrait": {
+              "actionButtons": [
+                { "action": "$notAnAction", "x": 0.5, "y": 0.5 },
+                { "action": "$pauseMenu", "x": 0.75, "y": 0.5 }
+              ] } } }
+            """#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNotNil(result.manifest)
+        let finding = finding(result, code: "W004", path: "/touch/portrait/actionButtons/0/action")
+        XCTAssertNotNil(finding)
+        XCTAssertEqual(
+            result.manifest?.touch?.portrait?.actionButtons,
+            [ActionButtonSpec(action: "$pauseMenu", x: 0.75, y: 0.5)]
+        )
+    }
+
+    func testW004ControllerOnlyActionSkippedInTouch() {
+        let json = #"""
+            { "version": 1, "touch": { "portrait": {
+              "actionButtons": [
+                { "action": "$toggleTouchControls", "x": 0.5, "y": 0.5 }
+              ] } } }
+            """#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "W004", path: "/touch/portrait/actionButtons/0/action"))
+        XCTAssertEqual(result.manifest?.touch?.portrait?.actionButtons, [])
+    }
+
+    private func combinedCapJSON(buttons: Int, actions: Int) -> String {
+        let keys = [
+            "KeyA", "KeyB", "KeyC", "KeyD", "KeyE", "KeyF", "KeyG", "KeyH", "KeyI", "KeyJ",
+            "KeyK", "KeyL", "KeyM", "KeyN", "KeyO", "KeyP", "KeyQ", "KeyR", "KeyS", "KeyT",
+        ]
+        let buttonEntries = (0..<buttons).map { index in
+            "{ \"key\": \"\(keys[index])\", \"x\": 0.5, \"y\": 0.5 }"
+        }.joined(separator: ", ")
+        let actionEntries = (0..<actions).map { index in
+            "{ \"action\": \"$pauseMenu\", \"x\": 0.\(index + 1), \"y\": 0.5 }"
+        }.joined(separator: ", ")
+        return """
+            { "version": 1, "touch": { "portrait": {
+              "buttons": [ \(buttonEntries) ],
+              "actionButtons": [ \(actionEntries) ] } } }
+            """
+    }
+
+    func testV015CombinedCapExceeded() {
+        let json = combinedCapJSON(buttons: 20, actions: 2)
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V015", path: "/touch/portrait"))
+        // The per-array V013 must not fire: neither list exceeds 21 alone.
+        XCTAssertNil(finding(result, code: "V013", path: "/touch/portrait/buttons"))
+    }
+
+    func testV015CombinedCapAtLimitPasses() {
+        let json = combinedCapJSON(buttons: 19, actions: 2)
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertNil(finding(result, code: "V015", path: "/touch/portrait"))
+    }
+
+    func testV015ActionButtonsAloneExceedCap() {
+        let json = combinedCapJSON(buttons: 0, actions: 22)
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V015", path: "/touch/portrait"))
+    }
+
+    func testSkippedActionButtonsDoNotCountTowardCap() {
+        // The cap counts parsed buttons. A W004-skipped button never
+        // renders, so it takes no slot.
+        var json = combinedCapJSON(buttons: 20, actions: 0)
+        json = json.replacingOccurrences(
+            of: "\"actionButtons\": [  ]",
+            with: """
+                "actionButtons": [
+                  { "action": "$nope1", "x": 0.5, "y": 0.5 },
+                  { "action": "$nope2", "x": 0.5, "y": 0.5 }
+                ]
+                """)
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertNil(finding(result, code: "V015", path: "/touch/portrait"))
+        XCTAssertEqual(result.findings.filter { $0.code == "W004" }.count, 2)
+    }
+
+    func testActionButtonRangeErrors() {
+        let json = #"""
+            { "version": 1, "touch": { "portrait": {
+              "actionButtons": [
+                { "action": "$pauseMenu", "x": 1.5, "y": 0.5, "size": 30, "opacity": 0.1 }
+              ] } } }
+            """#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V011", path: "/touch/portrait/actionButtons/0/x"))
+        XCTAssertNotNil(finding(result, code: "V012", path: "/touch/portrait/actionButtons/0/size"))
+        XCTAssertNotNil(finding(result, code: "V012", path: "/touch/portrait/actionButtons/0/opacity"))
+    }
+
+    func testW004MissingActionField() {
+        let json = #"""
+            { "version": 1, "touch": { "portrait": {
+              "actionButtons": [ { "x": 0.5, "y": 0.5 } ] } } }
+            """#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNotNil(result.manifest)
+        let finding = finding(result, code: "W004", path: "/touch/portrait/actionButtons/0/action")
+        XCTAssertNotNil(finding)
+        XCTAssertTrue(finding?.message.contains("(missing)") == true)
+    }
+
+    func testMissingCoordinateIsV011NotSilentDrop() {
+        // A silently dropped button would vanish from disk on the next
+        // load-modify-save cycle, so missing x/y must reject loudly.
+        let buttonJSON = #"""
+            { "version": 1, "touch": { "portrait": {
+              "buttons": [ { "key": "KeyZ", "y": 0.5 } ] } } }
+            """#
+        let buttonResult = ControlsManifestLoader.parse(data: buttonJSON.data(using: .utf8)!)
+        XCTAssertNil(buttonResult.manifest)
+        XCTAssertNotNil(
+            finding(buttonResult, code: "V011", path: "/touch/portrait/buttons/0/x"))
+
+        let actionJSON = #"""
+            { "version": 1, "touch": { "portrait": {
+              "actionButtons": [ { "action": "$pauseMenu", "x": 0.5 } ] } } }
+            """#
+        let actionResult = ControlsManifestLoader.parse(data: actionJSON.data(using: .utf8)!)
+        XCTAssertNil(actionResult.manifest)
+        XCTAssertNotNil(
+            finding(actionResult, code: "V011", path: "/touch/portrait/actionButtons/0/y"))
+    }
+
+    func testRenamedOldActionIDTakesUnknownPaths() {
+        // Gate 2 ruling: no alias. The loader treats the old id as
+        // unknown everywhere; only the app-side migration rewrites it.
+        let controllerJSON = #"{ "version": 1, "controller": { "back": "$toggleOverlay" } }"#
+        let controllerResult = ControlsManifestLoader.parse(
+            data: controllerJSON.data(using: .utf8)!)
+        XCTAssertNotNil(controllerResult.manifest)
+        XCTAssertNotNil(finding(controllerResult, code: "W005", path: "/controller/back"))
+        XCTAssertEqual(
+            controllerResult.manifest?.controller?.entries["back"], .action("$toggleOverlay"))
+
+        let touchJSON = #"""
+            { "version": 1, "touch": { "portrait": {
+              "actionButtons": [ { "action": "$toggleOverlay", "x": 0.5, "y": 0.5 } ] } } }
+            """#
+        let touchResult = ControlsManifestLoader.parse(data: touchJSON.data(using: .utf8)!)
+        XCTAssertNotNil(touchResult.manifest)
+        XCTAssertNotNil(
+            finding(touchResult, code: "W004", path: "/touch/portrait/actionButtons/0/action"))
+        XCTAssertEqual(touchResult.manifest?.touch?.portrait?.actionButtons, [])
+    }
+
+    func testEmittedFindingCodesAreUniqueAndConsistent() {
+        let codes = ControlsManifestLoader.emittedFindingCodes
+        XCTAssertEqual(Set(codes).count, codes.count)
+        XCTAssertTrue(codes.contains("V015"))
+        XCTAssertTrue(codes.contains("W004"))
+        XCTAssertTrue(codes.contains("W005"))
+        XCTAssertFalse(codes.contains("V021"), "V021 is superseded by W005")
+        for code in codes {
+            XCTAssertTrue(
+                code.hasPrefix("V") || code.hasPrefix("W")
+                    || code.hasPrefix("K") || code.hasPrefix("J"),
+                code
+            )
+        }
+    }
+
+    func testActionButtonsBranchIsIsolatedFromSiblings() {
+        // Sibling-isolation check: parsing with and without the
+        // `actionButtons` key yields identical results everywhere
+        // else. NOTE: this runs the NEW parser on both inputs. The
+        // real old-version compat claim rests on the old binary's
+        // orientation-level `default: continue`, which no test here
+        // can execute; that claim is verified by reading and stated
+        // in docs/controls-format.md.
+        let withActions = #"""
+            { "version": 1, "touch": { "portrait": {
+              "dpad": { "x": 0.14, "y": 0.74 },
+              "buttons": [ { "key": "KeyZ", "x": 0.9, "y": 0.8 } ],
+              "actionButtons": [ { "action": "$pauseMenu", "x": 0.5, "y": 0.5 } ]
+              } }, "controller": { "y": "F5" } }
+            """#
+        let withoutActions = #"""
+            { "version": 1, "touch": { "portrait": {
+              "dpad": { "x": 0.14, "y": 0.74 },
+              "buttons": [ { "key": "KeyZ", "x": 0.9, "y": 0.8 } ]
+              } }, "controller": { "y": "F5" } }
+            """#
+        let a = ControlsManifestLoader.parse(data: withActions.data(using: .utf8)!)
+        let b = ControlsManifestLoader.parse(data: withoutActions.data(using: .utf8)!)
+        var stripped = a.manifest
+        stripped?.touch?.portrait?.actionButtons = nil
+        XCTAssertNotNil(a.manifest?.touch?.portrait?.actionButtons)
+        XCTAssertEqual(stripped, b.manifest)
     }
 
     func testW001EmptyManifest() throws {

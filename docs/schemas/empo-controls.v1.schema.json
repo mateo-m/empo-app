@@ -138,11 +138,24 @@
       ]
     },
     "action": {
-      "description": "Host action string (SPEC §8). Valid in controller maps only.",
+      "description": "Host action string (SPEC §8). Valid in controller maps; the touch-valid subset also works in actionButtons.",
       "type": "string",
       "enum": [
+        "$fastForward",
+        "$toggleFastForward",
         "$pauseMenu",
-        "$toggleOverlay"
+        "$toggleCheats",
+        "$toggleTouchControls"
+      ]
+    },
+    "touchAction": {
+      "description": "Actions a touch actionButton can bind. $toggleTouchControls is controller-only.",
+      "type": "string",
+      "enum": [
+        "$fastForward",
+        "$toggleFastForward",
+        "$pauseMenu",
+        "$toggleCheats"
       ]
     },
     "controllerTarget": {
@@ -236,6 +249,32 @@
         }
       }
     },
+    "actionButton": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "action",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/touchAction"
+        },
+        "x": {
+          "$ref": "#/$defs/coordinate"
+        },
+        "y": {
+          "$ref": "#/$defs/coordinate"
+        },
+        "size": {
+          "$ref": "#/$defs/buttonSize"
+        },
+        "opacity": {
+          "$ref": "#/$defs/opacity"
+        }
+      }
+    },
     "touchLayout": {
       "type": "object",
       "additionalProperties": true,
@@ -248,6 +287,14 @@
           "maxItems": 21,
           "items": {
             "$ref": "#/$defs/button"
+          }
+        },
+        "actionButtons": {
+          "description": "Buttons that trigger Empo actions. The 21-per-orientation cap counts buttons and actionButtons together; the runtime validator enforces the combined cap.",
+          "type": "array",
+          "maxItems": 21,
+          "items": {
+            "$ref": "#/$defs/actionButton"
           }
         }
       }

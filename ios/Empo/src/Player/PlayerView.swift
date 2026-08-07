@@ -1,3 +1,4 @@
+import GameProbe
 import SwiftUI
 
 struct PlayerView: View {
@@ -21,7 +22,10 @@ struct PlayerView: View {
     @State private var toolbarOpacity: Double = Alpha.toolbarDim
     @State private var toolbarIdleTask: Task<Void, Never>?
     @State private var showQuitConfirm = false
-    @State private var cheatsEnabled = false
+    /// Action dispatch + the runtime state actions act on (fast
+    /// forward, cheats). Both input paths (touch function buttons,
+    /// controller action bindings) route through this registry.
+    @State private var actions = PlayerActionRegistry()
 
     @State private var resumeSnapshot: UIImage?
     @State private var snapshotOpacity: Double = 1
@@ -31,6 +35,7 @@ struct PlayerView: View {
     @State private var showAddSheet = false
     @State private var showResetConfirm = false
     @State private var editingButton: ButtonModel?
+    @State private var editingActionButton: ActionButtonModel?
     @State private var editingDPad = false
     @State private var draggingDPad = false
     @State private var draggingButtonID: UUID?
@@ -40,17 +45,6 @@ struct PlayerView: View {
     /// itself stays trimmed to keyboard / edit / hide / more.
     @State private var showMoreSheet = false
     @State private var showControllerRemap = false
-    /// Live fast-forward state. We mirror it into the engine via
-    /// `mkxp_setFastForwardMultiplier` so the FPS limiter scales the
-    /// frame pacing while the toggle is on. The actual multiplier
-    /// comes from `fastForwardMultiplier` (per-game setting).
-    @State private var fastForwardActive = false
-    /// Per-game fast-forward multiplier loaded from GameSettings.
-    /// nil = off (the toolbar sheet hides the row). It refreshes
-    /// every time the Menu sheet opens, because the user can pause →
-    /// library → edit Game Settings → resume and change this value
-    /// mid-session.
-    @State private var fastForwardMultiplier: Int?
 
     var body: some View {
         GeometryReader { geo in
@@ -144,10 +138,12 @@ struct PlayerView: View {
                 if !controlsHidden && (controlsVisible || resumeSnapshot == nil) {
                     PlayerControlsOverlay(
                         layout: layout,
+                        actions: actions,
                         geo: geo,
                         controlsMinY: controlsMinY,
                         editMode: editMode,
                         editingButton: $editingButton,
+                        editingActionButton: $editingActionButton,
                         editingDPad: $editingDPad,
                         draggingDPad: $draggingDPad,
                         draggingButtonID: $draggingButtonID
@@ -167,7 +163,7 @@ struct PlayerView: View {
                         onShowMore: { showMoreSheet = true },
                         menuVisible: PlayerMoreSheet.hasContent(
                             settings: settings,
-                            fastForwardMultiplier: fastForwardMultiplier,
+                            fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                             controllerRemapAvailable: controllerInput.hasHadControllerThisSession
                         ),
                         onResetIdleTimer: { resetToolbarIdleTimer() }
@@ -260,18 +256,27 @@ struct PlayerView: View {
                 }
             }
 
-            controllerInput.pauseMenuHandler = { appState.togglePauseMenu() }
+            // The registry must be wired BEFORE controller input
+            // starts: the first controller edge can dispatch an
+            // action as soon as start() attaches handlers.
+            actions.pauseMenu = { appState.togglePauseMenu() }
+            actions.toggleTouchControls = { toggleHideControls() }
+            actions.log = { line in
+                layout.currentContainer?.appendLogLine(line, fileName: "controls.json.log")
+            }
+            controllerInput.actionHandler = { id, pressed in
+                actions.handle(id, pressed: pressed)
+            }
+            // Bind runtime state BEFORE controller input starts:
+            // start() polls attached controllers synchronously, and a
+            // button already held at resume must find the per-game
+            // multiplier loaded or its press drops as "unavailable".
+            // Fires on first launch AND on resume from pause ->
+            // library -> resume (engine state is process-static).
+            actions.runtime.bind(container: layout.currentContainer)
             ControllerMapBindings.applyRuntimeMap(
                 to: controllerInput, container: layout.currentContainer)
             controllerInput.start(overlayHidden: $controlsHidden, editMode: $editMode)
-
-            // Load the per-game fast-forward multiplier (and re-push
-            // to the engine if the toggle was already on). Fires on
-            // first launch AND on resume from pause -> library ->
-            // resume, so the in-game state always tracks the latest
-            // Game Settings value the user might have edited while
-            // paused.
-            syncFastForwardFromSettings()
 
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
@@ -298,6 +303,7 @@ struct PlayerView: View {
         }
         .onChange(of: layout.currentContainer) { _, container in
             ControllerMapBindings.applyRuntimeMap(to: controllerInput, container: container)
+            actions.runtime.bind(container: container)
         }
         .onReceive(NotificationCenter.default.publisher(for: .controllerMapDidChange)) { _ in
             ControllerMapBindings.applyRuntimeMap(
@@ -324,12 +330,15 @@ struct PlayerView: View {
             PlayerMoreSheet(
                 gameTitle: appState.selectedGame?.title ?? "Game",
                 showDebugOverlay: $showDebugOverlay,
-                fastForwardActive: $fastForwardActive,
-                fastForwardMultiplier: fastForwardMultiplier,
+                fastForwardActive: Binding(
+                    get: { actions.runtime.fastForwardActive },
+                    set: { actions.runtime.setFastForward(active: $0) }
+                ),
+                fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: controllerInput.hasHadControllerThisSession,
                 onControllerRemap: { showControllerRemap = true },
                 onPause: { appState.requestPause() },
-                onCheats: { toggleCheats() },
+                onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) },
                 onQuit: { showQuitConfirm = true }
             )
         }
@@ -349,13 +358,7 @@ struct PlayerView: View {
             // pick that up. If they turned it off entirely, the row
             // should disappear.
             guard opened else { return }
-            syncFastForwardFromSettings()
-        }
-        .onChange(of: fastForwardActive) { _, active in
-            // Active = use the per-game configured multiplier. Not
-            // active = 1 (no scaling). The engine clamps to >= 1.
-            let mult = active ? (fastForwardMultiplier ?? 1) : 1
-            mkxp_setFastForwardMultiplier(Int32(mult))
+            actions.runtime.reconcile()
         }
         .tint(nil)
         .controlsEditDialogs(
@@ -363,54 +366,19 @@ struct PlayerView: View {
             showAddSheet: $showAddSheet,
             showResetConfirm: $showResetConfirm,
             editingButton: $editingButton,
+            editingActionButton: $editingActionButton,
             editingDPad: $editingDPad
         )
     }
 
-    /// Re-read the per-game fast-forward multiplier from disk and
-    /// reconcile the UI toggle with the engine's actual state.
-    /// Called on PlayerView appear (initial launch + resume) and
-    /// whenever the Menu sheet opens.
-    ///
-    /// SwiftUI can recycle `PlayerView` when the user pauses to the
-    /// library and resumes, which resets `@State fastForwardActive`
-    /// back to its default `false`. The engine's host-bridge
-    /// multiplier is process-static and survives that recycle, so
-    /// the only reliable "is fast-forward currently on?" signal is
-    /// the bridge itself. A read here lets the toolbar toggle
-    /// reflect the engine's truth instead of stale local state.
-    ///
-    /// Reconciliation rules (engine state vs. configured value):
-    ///   - engine fast-forwarding AND settings still allow it ->
-    ///     toggle on. .onChange pushes the configured value back to
-    ///     the bridge so an in-pause settings edit (e.g. 4x -> 2x)
-    ///     takes effect on resume.
-    ///   - engine fast-forwarding BUT settings cleared the
-    ///     multiplier -> toggle off. .onChange pushes 1 to the
-    ///     bridge so the engine stops speeding next frame.
-    ///   - engine at 1x -> toggle off regardless of settings.
-    private func syncFastForwardFromSettings() {
-        guard let container = appState.selectedGame?.container else { return }
-        let s = GameSettings.load(from: container.empoStateURL)
-        fastForwardMultiplier = s.speedMultiplier
-
-        let engineMult = Int(mkxp_getFastForwardMultiplier())
-        let configuredMult = s.speedMultiplier ?? 1
-        let shouldBeActive = engineMult > 1 && configuredMult >= 2
-
-        if fastForwardActive != shouldBeActive {
-            // Setting fastForwardActive triggers `.onChange` which
-            // writes the bridge to the right value (configured
-            // multiplier when active, 1 when not), so we don't
-            // call mkxp_setFastForwardMultiplier directly here.
-            fastForwardActive = shouldBeActive
-        }
-    }
-
     @ViewBuilder
-    private func editZoneBackground(controlsMinY: CGFloat, safeArea: EdgeInsets, geoSize: CGSize) -> some View
+    private func editZoneBackground(
+        controlsMinY: CGFloat, safeArea: EdgeInsets, geoSize: CGSize
+    )
+        -> some View
     {
-        let bounds = ControlsZone.bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
+        let bounds = ControlsZone.bounds(
+            controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
         let radii = ControlsZone.cornerRadii(safeArea: safeArea)
 
         UnevenRoundedRectangle(
@@ -468,27 +436,6 @@ struct PlayerView: View {
         keyboardMode.toggle()
         if !keyboardMode {
             AppWindow.setAllowKeyWindow(false)
-        }
-    }
-
-    /// Toggle the JoiPlay-derived cheat menu. The first tap arms
-    /// $CHEATS and injects a HOME keypress so the in-game Scene_Cheat
-    /// hook fires immediately. The second tap disarms $CHEATS again.
-    /// The Ruby-side poller the engine installs keeps $CHEATS in
-    /// sync with the bridge flag each Input.update.
-    private func toggleCheats() {
-        cheatsEnabled.toggle()
-        mkxp_setCheatsEnabled(cheatsEnabled)
-        if cheatsEnabled {
-            // Inject a synthetic HOME keypress. The Ruby side's
-            // Input.trigger?(HOME) returns true only on the frame the
-            // key transitions from released to pressed, so the KEYUP
-            // must land at least one RGSS tick (~16ms @ 60fps) after
-            // the KEYDOWN. Otherwise both events get consumed in the
-            // same eventthread batch and Input.update never observes
-            // the pressed-edge the Scene_Map hook is waiting for.
-            EngineSessionCoordinator.shared.injectKeyTap(
-                scancode: Int32(MKXP_SCANCODE_HOME), holdMilliseconds: 100)
         }
     }
 

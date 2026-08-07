@@ -11,6 +11,9 @@
         { "label": "Back", "key": "KeyX",      "x": 0.74, "y": 0.86, "size": 56 },
         { "label": "Run",  "key": "ShiftLeft", "x": 0.88, "y": 0.62, "size": 50, "opacity": 0.8 },
         { "label": "Log",  "key": "KeyQ",      "x": 0.06, "y": 0.06, "size": 44, "opacity": 0.5 }
+      ],
+      "actionButtons": [
+        { "action": "$toggleFastForward", "x": 0.94, "y": 0.06, "size": 44, "opacity": 0.6 }
       ]
     },
     "landscape": {

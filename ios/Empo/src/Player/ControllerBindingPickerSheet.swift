@@ -13,8 +13,13 @@ struct ControllerBindingPickerSheet: View {
         NavigationStack {
             List {
                 Section("Actions") {
-                    actionRow(label: "Pause menu", target: .action("$pauseMenu"))
-                    actionRow(label: "Toggle overlay", target: .action("$toggleOverlay"))
+                    ForEach(EmpoActionCatalog.all, id: \.id) { action in
+                        actionRow(
+                            label: action.displayName,
+                            blurb: action.blurb,
+                            target: .action(action.id)
+                        )
+                    }
                     actionRow(label: "Unbound", target: .unbound)
                 }
 
@@ -41,9 +46,20 @@ struct ControllerBindingPickerSheet: View {
         .presentationDragIndicator(.visible)
     }
 
-    private func actionRow(label: String, target: ControllerMap.Target) -> some View {
+    private func actionRow(
+        label: String,
+        blurb: String? = nil,
+        target: ControllerMap.Target
+    ) -> some View {
         HStack {
-            Text(label)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                if let blurb {
+                    Text(blurb)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Spacer()
             if targetsMatch(current, target) {
                 Image(systemName: "checkmark")

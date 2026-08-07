@@ -19,7 +19,9 @@ struct ButtonModel: Identifiable, Equatable, Codable {
         case rx, ry
     }
 
-    init(label: String, scancode: Int32, relativeCenter: CGPoint, size: CGFloat, opacity: Double = 1.0) {
+    init(
+        label: String, scancode: Int32, relativeCenter: CGPoint, size: CGFloat, opacity: Double = 1.0
+    ) {
         self.id = UUID()
         self.label = label
         self.scancode = scancode
@@ -44,6 +46,51 @@ struct ButtonModel: Identifiable, Equatable, Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(label, forKey: .label)
         try c.encode(scancode, forKey: .scancode)
+        try c.encode(relativeCenter.x, forKey: .rx)
+        try c.encode(relativeCenter.y, forKey: .ry)
+        try c.encode(size, forKey: .size)
+        try c.encode(opacity, forKey: .opacity)
+    }
+}
+
+/// A touch button bound to an Empo action instead of a game key.
+/// No label: rendering uses the action's fixed icon and the registry
+/// display name. Codable so `PersistedLayout` stays decodable, though
+/// legacy UserDefaults blobs never contain these.
+struct ActionButtonModel: Identifiable, Equatable, Codable {
+    let id: UUID
+    var action: String
+    var relativeCenter: CGPoint  // fraction of superview size
+    var size: CGFloat
+    var opacity: Double
+
+    enum CodingKeys: String, CodingKey {
+        case action, size, opacity
+        case rx, ry
+    }
+
+    init(action: String, relativeCenter: CGPoint, size: CGFloat, opacity: Double = 1.0) {
+        self.id = UUID()
+        self.action = action
+        self.relativeCenter = relativeCenter
+        self.size = size
+        self.opacity = opacity
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = UUID()
+        self.action = try c.decodeIfPresent(String.self, forKey: .action) ?? ""
+        let rx = try c.decodeIfPresent(CGFloat.self, forKey: .rx) ?? 0.5
+        let ry = try c.decodeIfPresent(CGFloat.self, forKey: .ry) ?? 0.5
+        self.relativeCenter = CGPoint(x: rx, y: ry)
+        self.size = try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? 56
+        self.opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(action, forKey: .action)
         try c.encode(relativeCenter.x, forKey: .rx)
         try c.encode(relativeCenter.y, forKey: .ry)
         try c.encode(size, forKey: .size)
@@ -80,6 +127,15 @@ private struct PersistedLayout: Codable {
     struct Oriented: Codable, Equatable {
         var dpad: DPad
         var buttons: [ButtonModel]
+        /// Optional so legacy UserDefaults blobs (no such key) still
+        /// decode. nil and [] mean the same thing.
+        var actionButtons: [ActionButtonModel]?
+
+        init(dpad: DPad, buttons: [ButtonModel], actionButtons: [ActionButtonModel]? = nil) {
+            self.dpad = dpad
+            self.buttons = buttons
+            self.actionButtons = actionButtons
+        }
     }
     var portrait: Oriented
     var landscape: Oriented
@@ -156,6 +212,11 @@ class ControlsLayout {
     var dpadSize: CGFloat = ControlsLayout.defaultDPadSize
     var dpadOpacity: Double = 1.0
     var buttons: [ButtonModel] = []
+    var actionButtons: [ActionButtonModel] = []
+
+    /// The add UI gates on the loader's cap, so a saved layout
+    /// can never fail V015 on its next load.
+    var combinedButtonCount: Int { buttons.count + actionButtons.count }
 
     // MARK: - Inactive snapshots
 
@@ -167,6 +228,7 @@ class ControlsLayout {
     private var inactiveDpadSize: CGFloat = ControlsLayout.defaultDPadSize
     private var inactiveDpadOpacity: Double = 1.0
     private var inactiveButtons: [ButtonModel] = ControlsLayout.defaultButtonsLandscape
+    private var inactiveActionButtons: [ActionButtonModel] = []
 
     // MARK: - Edit-session undo (in-memory only, never persisted)
 
@@ -175,6 +237,7 @@ class ControlsLayout {
         var dpadSize: CGFloat
         var dpadOpacity: Double
         var buttons: [ButtonModel]
+        var actionButtons: [ActionButtonModel]
     }
 
     private static let maxEditUndoDepth = 50
@@ -211,7 +274,8 @@ class ControlsLayout {
                 dpadRelativeCenter: dpadRelativeCenter,
                 dpadSize: dpadSize,
                 dpadOpacity: dpadOpacity,
-                buttons: buttons
+                buttons: buttons,
+                actionButtons: actionButtons
             ))
         if editUndoStack.count > Self.maxEditUndoDepth {
             editUndoStack.removeFirst(editUndoStack.count - Self.maxEditUndoDepth)
@@ -226,6 +290,7 @@ class ControlsLayout {
             dpadSize = snapshot.dpadSize
             dpadOpacity = snapshot.dpadOpacity
             buttons = snapshot.buttons
+            actionButtons = snapshot.actionButtons
         }
     }
 
@@ -249,6 +314,7 @@ class ControlsLayout {
         loadManifest(from: container?.gameURL)
         if let container, newGameID != nil {
             migrateLegacyPersistenceIfNeeded(container: container)
+            ControllerMapStore.migrateRenamedActions(container: container)
             loadUserTouchLayout(from: container)
             return
         }
@@ -273,18 +339,21 @@ class ControlsLayout {
         let leavingDpadSize = dpadSize
         let leavingDpadOpacity = dpadOpacity
         let leavingButtons = buttons
+        let leavingActionButtons = actionButtons
 
         // Promote the inactive slot into the active properties.
         dpadRelativeCenter = inactiveDpadRelativeCenter
         dpadSize = inactiveDpadSize
         dpadOpacity = inactiveDpadOpacity
         buttons = inactiveButtons
+        actionButtons = inactiveActionButtons
 
         // Demote the previous active values into the inactive slot.
         inactiveDpadRelativeCenter = leavingDpadCenter
         inactiveDpadSize = leavingDpadSize
         inactiveDpadOpacity = leavingDpadOpacity
         inactiveButtons = leavingButtons
+        inactiveActionButtons = leavingActionButtons
 
         currentOrientation = new
     }
@@ -313,7 +382,8 @@ class ControlsLayout {
         dpadCenter: CGPoint,
         dpadSize: CGFloat,
         dpadOpacity: Double,
-        buttons: [ButtonModel]
+        buttons: [ButtonModel],
+        actionButtons: [ActionButtonModel] = []
     ) -> ControlsManifestSerializer.TouchOrientedInput {
         ControlsManifestSerializer.TouchOrientedInput(
             dpadX: Double(dpadCenter.x),
@@ -324,6 +394,15 @@ class ControlsLayout {
                 ControlsManifestSerializer.TouchButtonInput(
                     label: button.label,
                     scancode: button.scancode,
+                    x: Double(button.relativeCenter.x),
+                    y: Double(button.relativeCenter.y),
+                    size: Double(button.size),
+                    opacity: button.opacity
+                )
+            },
+            actionButtons: actionButtons.map { button in
+                ControlsManifestSerializer.TouchActionButtonInput(
+                    action: button.action,
                     x: Double(button.relativeCenter.x),
                     y: Double(button.relativeCenter.y),
                     size: Double(button.size),
@@ -352,15 +431,19 @@ class ControlsLayout {
     /// 2x2 button grid in the bottom-right of a portrait viewport.
     nonisolated static let defaultButtonsPortrait: [ButtonModel] = [
         ButtonModel(
-            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.70, y: 0.67),
+            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN),
+            relativeCenter: CGPoint(x: 0.70, y: 0.67),
             size: 56),
         ButtonModel(
-            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.88, y: 0.67),
+            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE),
+            relativeCenter: CGPoint(x: 0.88, y: 0.67),
             size: 56),
         ButtonModel(
-            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.70, y: 0.76), size: 56),
+            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.70, y: 0.76),
+            size: 56),
         ButtonModel(
-            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.76), size: 56),
+            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.76),
+            size: 56),
     ]
 
     /// 2x2 button grid in the bottom-right of a landscape viewport.
@@ -369,15 +452,19 @@ class ControlsLayout {
     /// game viewport's center.
     nonisolated static let defaultButtonsLandscape: [ButtonModel] = [
         ButtonModel(
-            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN), relativeCenter: CGPoint(x: 0.80, y: 0.59),
+            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN),
+            relativeCenter: CGPoint(x: 0.80, y: 0.59),
             size: 56),
         ButtonModel(
-            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE), relativeCenter: CGPoint(x: 0.88, y: 0.59),
+            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE),
+            relativeCenter: CGPoint(x: 0.88, y: 0.59),
             size: 56),
         ButtonModel(
-            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.80, y: 0.75), size: 56),
+            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.80, y: 0.75),
+            size: 56),
         ButtonModel(
-            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.75), size: 56),
+            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.75),
+            size: 56),
     ]
 
     /// Legacy alias for callers that grab "the" defaults without
@@ -417,9 +504,11 @@ class ControlsLayout {
         inactiveDpadSize = inactiveResolved.dpad.size
         inactiveDpadOpacity = inactiveResolved.dpad.opacity ?? 1.0
         inactiveButtons = inactiveResolved.buttons
+        inactiveActionButtons = inactiveResolved.actionButtons ?? []
 
         animateReset(
             toButtons: activeResolved.buttons,
+            toActionButtons: activeResolved.actionButtons ?? [],
             dpadCenter: CGPoint(x: activeResolved.dpad.rx, y: activeResolved.dpad.ry),
             targetDpadSize: activeResolved.dpad.size,
             targetDpadOpacity: activeResolved.dpad.opacity ?? 1.0
@@ -440,6 +529,8 @@ class ControlsLayout {
         }
         inactiveDpadSize = Self.defaultDPadSize
         inactiveDpadOpacity = 1.0
+        actionButtons = []
+        inactiveActionButtons = []
     }
 
     private func applyDefaultsForCurrentOrientation() {
@@ -459,10 +550,13 @@ class ControlsLayout {
         dpadOpacity = 1.0
         inactiveDpadSize = Self.defaultDPadSize
         inactiveDpadOpacity = 1.0
+        actionButtons = []
+        inactiveActionButtons = []
     }
 
     private func animateReset(
         toButtons targetButtons: [ButtonModel],
+        toActionButtons targetActionButtons: [ActionButtonModel],
         dpadCenter: CGPoint,
         targetDpadSize: CGFloat,
         targetDpadOpacity: Double
@@ -491,15 +585,47 @@ class ControlsLayout {
             }
         }
 
+        // Action buttons match by action id (they have no label or
+        // scancode).
+        var matchedActionIDs = Set<UUID>()
+        var matchedActionTargets = Set<Int>()
+        var actionMoves: [(id: UUID, center: CGPoint, size: CGFloat)] = []
+        for (ti, target) in targetActionButtons.enumerated() {
+            guard
+                let current = actionButtons.first(where: {
+                    $0.action == target.action && !matchedActionIDs.contains($0.id)
+                })
+            else { continue }
+
+            matchedActionIDs.insert(current.id)
+            matchedActionTargets.insert(ti)
+
+            let posChanged =
+                abs(current.relativeCenter.x - target.relativeCenter.x) > 0.001
+                || abs(current.relativeCenter.y - target.relativeCenter.y) > 0.001
+            let sizeChanged = abs(current.size - target.size) > 0.5
+            if posChanged || sizeChanged {
+                actionMoves.append((current.id, target.relativeCenter, target.size))
+            }
+        }
+
         withAnimation(Motion.standard) {
             buttons.removeAll { !matchedIDs.contains($0.id) }
             for move in moves {
                 updateButton(id: move.id, size: move.size, relativeCenter: move.center)
             }
+            actionButtons.removeAll { !matchedActionIDs.contains($0.id) }
+            for move in actionMoves {
+                updateActionButton(id: move.id, size: move.size, relativeCenter: move.center)
+            }
             dpadRelativeCenter = dpadCenter
             dpadSize = targetDpadSize
             dpadOpacity = targetDpadOpacity
         }
+
+        let missingActions = targetActionButtons.enumerated()
+            .filter { !matchedActionTargets.contains($0.offset) }
+            .map(\.element)
 
         let missing = targetButtons.enumerated()
             .filter { !matchedTargets.contains($0.offset) }
@@ -522,6 +648,17 @@ class ControlsLayout {
                 }
             }
         }
+        for (i, button) in missingActions.enumerated() {
+            let delay =
+                Motion.controlsAppearDelay + Double(missing.count + i) * Motion.staggerMedium
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(delay))
+                guard generation == staggerGeneration else { return }
+                withAnimation(Motion.gentle) {
+                    actionButtons.append(button)
+                }
+            }
+        }
     }
 
     /// Each wholesale layout replacement (undo, orientation flip,
@@ -540,17 +677,30 @@ class ControlsLayout {
     /// manifest, translated, user, and builtin layouts alike, and never
     /// persists adjusted positions. Returns final absolute positions.
     func separatedDisplayPositions(
-        for geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat
+        for geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat,
+        includeActionButton: (ActionButtonModel) -> Bool = { _ in true }
     ) -> [UUID: CGPoint] {
-        guard !buttons.isEmpty, geoSize.width > 0, geoSize.height > 0 else { return [:] }
+        // Hidden action buttons (unavailable during play) must not
+        // take part, or an invisible button pushes visible ones away.
+        let visibleActionButtons = actionButtons.filter(includeActionButton)
+        guard buttons.count + visibleActionButtons.count > 0, geoSize.width > 0,
+            geoSize.height > 0
+        else { return [:] }
 
-        let inputs = buttons.map { button -> (x: Double, y: Double, size: Double) in
+        // Both button collections feed one separation pass. Input
+        // order is buttons, then action buttons; the id mapping at
+        // the end follows the same order.
+        let allCircles: [(id: UUID, center: CGPoint, size: CGFloat)] =
+            buttons.map { ($0.id, $0.relativeCenter, $0.size) }
+            + visibleActionButtons.map { ($0.id, $0.relativeCenter, $0.size) }
+
+        let inputs = allCircles.map { circle -> (x: Double, y: Double, size: Double) in
             let clamped = ControlsZone.absolutePosition(
-                for: button.relativeCenter, in: geoSize,
-                controlSize: CGSize(width: button.size, height: button.size),
+                for: circle.center, in: geoSize,
+                controlSize: CGSize(width: circle.size, height: circle.size),
                 safeArea: safeArea, controlsMinY: controlsMinY
             )
-            return (x: Double(clamped.x), y: Double(clamped.y), size: Double(button.size))
+            return (x: Double(clamped.x), y: Double(clamped.y), size: Double(circle.size))
         }
 
         let dpadClamped = ControlsZone.absolutePosition(
@@ -571,7 +721,7 @@ class ControlsLayout {
 
         if result.movedCount > 0 {
             let signature =
-                "\(result.movedCount)-\(Int(geoSize.width))x\(Int(geoSize.height))-\(buttons.count)"
+                "\(result.movedCount)-\(Int(geoSize.width))x\(Int(geoSize.height))-\(allCircles.count)"
             if separationLogSignature != signature, let container = currentContainer {
                 separationLogSignature = signature
                 container.appendLogLine(
@@ -582,9 +732,9 @@ class ControlsLayout {
         }
 
         var centers: [UUID: CGPoint] = [:]
-        for (index, button) in buttons.enumerated() {
+        for (index, circle) in allCircles.enumerated() {
             let point = result.positions[index]
-            centers[button.id] = CGPoint(x: CGFloat(point.x), y: CGFloat(point.y))
+            centers[circle.id] = CGPoint(x: CGFloat(point.x), y: CGFloat(point.y))
         }
         return centers
     }
@@ -615,7 +765,8 @@ class ControlsLayout {
                 rx: dpadRelativeCenter.x, ry: dpadRelativeCenter.y,
                 size: dpadSize, opacity: dpadOpacity
             ),
-            buttons: buttons
+            buttons: buttons,
+            actionButtons: actionButtons
         )
         let inactive = PersistedLayout.Oriented(
             dpad: .init(
@@ -624,7 +775,8 @@ class ControlsLayout {
                 size: inactiveDpadSize,
                 opacity: inactiveDpadOpacity
             ),
-            buttons: inactiveButtons
+            buttons: inactiveButtons,
+            actionButtons: inactiveActionButtons
         )
         switch currentOrientation {
         case .portrait:
@@ -653,6 +805,16 @@ class ControlsLayout {
         _ b: PersistedLayout.Oriented
     ) -> Bool {
         guard a.dpad == b.dpad, a.buttons.count == b.buttons.count else { return false }
+        let aActions = a.actionButtons ?? []
+        let bActions = b.actionButtons ?? []
+        guard aActions.count == bActions.count else { return false }
+        guard
+            zip(aActions, bActions).allSatisfy({ lhs, rhs in
+                lhs.action == rhs.action
+                    && lhs.relativeCenter == rhs.relativeCenter
+                    && lhs.size == rhs.size && lhs.opacity == rhs.opacity
+            })
+        else { return false }
         return zip(a.buttons, b.buttons).allSatisfy { lhs, rhs in
             lhs.label == rhs.label && lhs.scancode == rhs.scancode
                 && lhs.relativeCenter == rhs.relativeCenter
@@ -699,7 +861,19 @@ class ControlsLayout {
                 opacity: button.opacity
             )
         }
-        return TouchLayout(dpad: dpad, buttons: buttons)
+        // Always non-nil: an omitted key means "inherit the shipped
+        // action buttons" at load, so a user who deleted them all
+        // must save an explicit [].
+        let actionButtons = (oriented.actionButtons ?? []).map { button in
+            ActionButtonSpec(
+                action: button.action,
+                x: Double(button.relativeCenter.x),
+                y: Double(button.relativeCenter.y),
+                size: Double(button.size),
+                opacity: button.opacity
+            )
+        }
+        return TouchLayout(dpad: dpad, buttons: buttons, actionButtons: actionButtons)
     }
 
     private func loadUserTouchLayout(from container: GameContainer) {
@@ -785,7 +959,24 @@ class ControlsLayout {
             buttons = fallback.buttons
         }
 
-        return PersistedLayout.Oriented(dpad: dpad, buttons: buttons)
+        let actionButtons: [ActionButtonModel]?
+        if let specs = touchLayout.actionButtons {
+            actionButtons = specs.map(Self.actionButtonModel(from:))
+        } else {
+            actionButtons = fallback.actionButtons
+        }
+
+        return PersistedLayout.Oriented(
+            dpad: dpad, buttons: buttons, actionButtons: actionButtons)
+    }
+
+    private static func actionButtonModel(from spec: ActionButtonSpec) -> ActionButtonModel {
+        ActionButtonModel(
+            action: spec.action,
+            relativeCenter: CGPoint(x: spec.x, y: spec.y),
+            size: CGFloat(spec.size ?? 56),
+            opacity: spec.opacity ?? 1.0
+        )
     }
 
     /// One-time migration from UserDefaults layout/controller keys.
@@ -929,7 +1120,9 @@ class ControlsLayout {
 
         let metrics = Self.touchZoneMetricsForManifestLoad()
 
-        guard let outcome = ControlsManifestLoader.load(gameRoot: gameRoot, metrics: metrics) else { return }
+        guard let outcome = ControlsManifestLoader.load(gameRoot: gameRoot, metrics: metrics) else {
+            return
+        }
 
         let result = outcome.result
         activeManifestSource = result.location
@@ -1104,7 +1297,15 @@ class ControlsLayout {
             buttons = builtinButtons
         }
 
-        return PersistedLayout.Oriented(dpad: dpad, buttons: buttons)
+        // Game-shipped layouts may carry action buttons. Mapping them
+        // here keeps the customization diff honest: a shipped action
+        // button must not read as a user edit.
+        let actionButtons = touchLayout.actionButtons.map { specs in
+            specs.map(actionButtonModel(from:))
+        }
+
+        return PersistedLayout.Oriented(
+            dpad: dpad, buttons: buttons, actionButtons: actionButtons)
     }
 
     private static func builtinOriented(
@@ -1118,7 +1319,8 @@ class ControlsLayout {
                 size: defaultDPadSize,
                 opacity: 1.0
             ),
-            buttons: buttons
+            buttons: buttons,
+            actionButtons: nil
         )
     }
 
@@ -1137,10 +1339,12 @@ class ControlsLayout {
         dpadSize = active.dpad.size
         dpadOpacity = active.dpad.opacity ?? 1.0
         buttons = active.buttons
+        actionButtons = active.actionButtons ?? []
         inactiveDpadRelativeCenter = CGPoint(x: inactive.dpad.rx, y: inactive.dpad.ry)
         inactiveDpadSize = inactive.dpad.size
         inactiveDpadOpacity = inactive.dpad.opacity ?? 1.0
         inactiveButtons = inactive.buttons
+        inactiveActionButtons = inactive.actionButtons ?? []
     }
 
     // MARK: - Mutators
@@ -1162,6 +1366,31 @@ class ControlsLayout {
     func removeButton(id: UUID) {
         recordEditSnapshot()
         buttons.removeAll { $0.id == id }
+    }
+
+    func addActionButton(action: String) {
+        recordEditSnapshot()
+        let button = ActionButtonModel(
+            action: action,
+            relativeCenter: CGPoint(x: 0.5, y: 0.5), size: 56)
+        withAnimation(Motion.gentle) {
+            actionButtons.append(button)
+        }
+    }
+
+    func removeActionButton(id: UUID) {
+        recordEditSnapshot()
+        actionButtons.removeAll { $0.id == id }
+    }
+
+    func updateActionButton(
+        id: UUID, size: CGFloat? = nil,
+        relativeCenter: CGPoint? = nil, opacity: Double? = nil
+    ) {
+        guard let index = actionButtons.firstIndex(where: { $0.id == id }) else { return }
+        if let size { actionButtons[index].size = size }
+        if let relativeCenter { actionButtons[index].relativeCenter = relativeCenter }
+        if let opacity { actionButtons[index].opacity = opacity }
     }
 
     func updateButton(

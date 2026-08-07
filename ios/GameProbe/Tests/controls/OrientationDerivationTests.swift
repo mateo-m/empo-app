@@ -16,6 +16,83 @@ final class OrientationDerivationTests: XCTestCase {
 
     // MARK: - Derivation transform
 
+    func testActionButtonsDeriveWithButtons() {
+        var portrait = samplePortraitLayout()
+        portrait.actionButtons = [
+            ActionButtonSpec(action: "$toggleFastForward", x: 0.9, y: 0.1, size: 56, opacity: 0.8)
+        ]
+        let landscape = OrientationDerivation.derive(
+            from: portrait,
+            sourceIsLandscape: false,
+            metrics: metrics,
+            defaultDpad: nil
+        )
+
+        XCTAssertEqual(landscape.actionButtons?.count, 1)
+        let derived = landscape.actionButtons?.first
+        XCTAssertEqual(derived?.action, "$toggleFastForward")
+        XCTAssertEqual(derived?.size, 56)
+        XCTAssertEqual(derived?.opacity, 0.8)
+        XCTAssertTrue((0.0...1.0).contains(derived?.x ?? -1))
+        XCTAssertTrue((0.0...1.0).contains(derived?.y ?? -1))
+        // Plain buttons still derive alongside.
+        XCTAssertEqual(landscape.buttons?.count, portrait.buttons?.count)
+    }
+
+    func testActionButtonPositionTracksItsOwnSource() {
+        // An action button must land where a plain button at the same
+        // source spot would land. This pins the index bookkeeping in
+        // the shared separation pass: reading the wrong slot yields a
+        // plain button's position instead.
+        let base = samplePortraitLayout()
+        let spot = (x: 0.9, y: 0.1, size: 56.0)
+
+        var withAction = base
+        withAction.actionButtons = [
+            ActionButtonSpec(action: "$pauseMenu", x: spot.x, y: spot.y, size: spot.size)
+        ]
+        var withButton = base
+        withButton.buttons = (base.buttons ?? []) + [
+            ButtonSpec(label: "P", key: "KeyP", x: spot.x, y: spot.y, size: spot.size)
+        ]
+
+        let derivedAction = OrientationDerivation.derive(
+            from: withAction, sourceIsLandscape: false, metrics: metrics, defaultDpad: nil
+        ).actionButtons?.first
+        let derivedButton = OrientationDerivation.derive(
+            from: withButton, sourceIsLandscape: false, metrics: metrics, defaultDpad: nil
+        ).buttons?.last
+
+        XCTAssertEqual(derivedAction?.x ?? .nan, derivedButton?.x ?? .nan, accuracy: 1e-9)
+        XCTAssertEqual(derivedAction?.y ?? .nan, derivedButton?.y ?? .nan, accuracy: 1e-9)
+    }
+
+    func testActionOnlyLayoutDerives() {
+        let source = TouchLayout(
+            dpad: DPadSpec(x: 0.13, y: 0.72, size: 140),
+            buttons: nil,
+            actionButtons: [
+                ActionButtonSpec(action: "$toggleFastForward", x: 0.9, y: 0.6, size: 56)
+            ]
+        )
+        let derived = OrientationDerivation.derive(
+            from: source, sourceIsLandscape: false, metrics: metrics, defaultDpad: nil)
+        XCTAssertNil(derived.buttons)
+        XCTAssertEqual(derived.actionButtons?.count, 1)
+        XCTAssertEqual(derived.actionButtons?.first?.action, "$toggleFastForward")
+    }
+
+    func testMissingActionButtonsStayMissing() {
+        let portrait = samplePortraitLayout()
+        let landscape = OrientationDerivation.derive(
+            from: portrait,
+            sourceIsLandscape: false,
+            metrics: metrics,
+            defaultDpad: nil
+        )
+        XCTAssertNil(landscape.actionButtons)
+    }
+
     func testPortraitClusterDerivesLandscapePreservingSignsAndGaps() {
         let portrait = samplePortraitLayout()
         let landscape = OrientationDerivation.derive(
