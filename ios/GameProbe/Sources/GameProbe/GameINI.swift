@@ -1,6 +1,15 @@
 import Foundation
 
 public enum GameINI {
+    /// The game's declared title: `[Game] Title=` from the
+    /// directory's INI files. This is THE identity value in Empo -
+    /// container names, shared data directories, rescue buckets,
+    /// and library display all start from it - so every caller
+    /// must read it the same way.
+    public static func gameTitle(at gameDir: URL) -> String? {
+        parseINIValue(at: gameDir, section: "game", key: "title")
+    }
+
     /// Reads `[section] key=value`, looking in `Game.ini` first and
     /// then in every other `*.ini` in the directory, in sorted
     /// order, until one yields a value. Two properties matter here

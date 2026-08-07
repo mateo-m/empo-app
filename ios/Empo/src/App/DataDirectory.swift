@@ -77,8 +77,7 @@ enum DataDirectory {
             stateDirectory: container.empoStateURL,
             gameDirectory: container.gameURL
         )
-        let iniTitle = GameINI.parseINIValue(
-            at: container.gameURL, section: "game", key: "title")
+        let iniTitle = GameINI.gameTitle(at: container.gameURL)
         let components = dataPath.sharedDirectoryComponents(
             iniTitleFallback: iniTitle,
             folderNameFallback: container.folderName
@@ -87,21 +86,26 @@ enum DataDirectory {
         let fm = FileManager.default
         var url = sharedRootURL
         for component in components {
-            // Directories only: the matcher exists to REUSE an
-            // existing directory across case-variant titles. A
-            // case-variant FILE must not hijack the match - on
-            // case-sensitive APFS the exact-case directory can
-            // coexist with it and gets created normally.
-            let existingDirectories =
-                ((try? fm.contentsOfDirectory(atPath: url.path)) ?? [])
-                .filter { name in
-                    var isDirectory: ObjCBool = false
-                    return fm.fileExists(
-                        atPath: url.appendingPathComponent(name).path,
-                        isDirectory: &isDirectory) && isDirectory.boolValue
+            var chosen = DirectoryNameMatch.preferringExisting(
+                component, among: fm.subdirectoryNames(at: url))
+            // Heal mojibake-era directory names in place. The
+            // matcher keeps such a directory reachable even when
+            // the rename fails (a concurrent session, an iCloud
+            // hold), so this is an upgrade, not a requirement.
+            // Case-variant reuse stays a reuse: that behavior is
+            // the desktop save-sharing contract, not a defect.
+            if chosen != component,
+                DirectoryNameMatch.legacyMojibakeRendering(of: component) == chosen
+            {
+                let legacyURL = url.appendingPathComponent(chosen, isDirectory: true)
+                let healedURL = url.appendingPathComponent(component, isDirectory: true)
+                if (try? fm.moveItem(at: legacyURL, to: healedURL)) != nil {
+                    NSLog(
+                        "[DataDirectory] Renamed mojibake data directory %@ -> %@",
+                        chosen, component)
+                    chosen = component
                 }
-            let chosen = DirectoryNameMatch.preferringExisting(
-                component, among: existingDirectories)
+            }
             url.appendPathComponent(chosen, isDirectory: true)
         }
         return url
@@ -289,21 +293,13 @@ enum DataDirectory {
     /// `Data/` components.
     private static func rescueBucket(for container: GameContainer, fm: FileManager) -> URL {
         let metadata = GameMetadata.load(from: container)
-        let iniTitle = GameINI.parseINIValue(
-            at: container.gameURL, section: "game", key: "title")
+        let iniTitle = GameINI.gameTitle(at: container.gameURL)
         let title =
             metadata.customTitle ?? metadata.baseTitle ?? iniTitle ?? container.folderName
         let name = GameFolderName.sanitize(title)
 
-        let existingDirectories =
-            ((try? fm.contentsOfDirectory(atPath: rescuedSavesRootURL.path)) ?? [])
-            .filter { entry in
-                var isDirectory: ObjCBool = false
-                return fm.fileExists(
-                    atPath: rescuedSavesRootURL.appendingPathComponent(entry).path,
-                    isDirectory: &isDirectory) && isDirectory.boolValue
-            }
-        let chosen = DirectoryNameMatch.preferringExisting(name, among: existingDirectories)
+        let chosen = DirectoryNameMatch.preferringExisting(
+            name, among: fm.subdirectoryNames(at: rescuedSavesRootURL))
         return rescuedSavesRootURL.appendingPathComponent(chosen, isDirectory: true)
     }
 

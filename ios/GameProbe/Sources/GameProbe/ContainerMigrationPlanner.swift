@@ -91,6 +91,22 @@ public enum ContainerMigrationPlanner {
         return uuidPart
     }
 
+    /// The corrected folder name for a container named in the
+    /// mojibake era, when `decodeAsLooseText` read Windows-1252 INI
+    /// titles as Shift-JIS ("Pokémon Empyrean" imported into
+    /// `Pok駑on Empyrean/`). Returns the sanitized title exactly
+    /// when the current folder name is that title's legacy mojibake
+    /// rendering; nil otherwise, so a folder never renames on a
+    /// guess. `title` is the game's title as the FIXED decoder
+    /// reads it today.
+    public static func mojibakeRenameTarget(folderName: String, title: String) -> String? {
+        let target = GameFolderName.sanitize(title)
+        guard target != folderName,
+            DirectoryNameMatch.legacyMojibakeRendering(of: target) == folderName
+        else { return nil }
+        return target
+    }
+
     /// `"<uuid>-pokemon-uranium"` -> `"pokemon uranium"`. Nil when
     /// the legacy name has no slug part. Last-resort title source
     /// for legacy containers with no INI title and no metadata.

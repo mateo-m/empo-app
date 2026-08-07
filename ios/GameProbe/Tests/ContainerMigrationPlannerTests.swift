@@ -215,4 +215,54 @@ final class ContainerMigrationPlannerTests: XCTestCase {
             ContainerMigrationPlanner.slugTitle(fromLegacyFolderName: "\(uuidA)-x"),
             "x")
     }
+
+    // MARK: - Mojibake rename targets
+
+    func testMojibakeFolderRenamesToCorrectedTitle() throws {
+        guard DirectoryNameMatch.legacyMojibakeRendering(of: "Pokémon Empyrean") != nil else {
+            throw XCTSkip("Legacy encodings are unavailable on this platform")
+        }
+        XCTAssertEqual(
+            ContainerMigrationPlanner.mojibakeRenameTarget(
+                folderName: "Pok駑on Empyrean", title: "Pokémon Empyrean"),
+            "Pokémon Empyrean")
+    }
+
+    func testCorrectlyNamedFolderIsNotARenameCandidate() {
+        XCTAssertNil(
+            ContainerMigrationPlanner.mojibakeRenameTarget(
+                folderName: "Pokémon Empyrean", title: "Pokémon Empyrean"))
+        XCTAssertNil(
+            ContainerMigrationPlanner.mojibakeRenameTarget(
+                folderName: "Pokemon Uranium", title: "Pokemon Uranium"))
+    }
+
+    func testJapaneseFolderIsNotARenameCandidate() {
+        // A genuine Japanese title has no Windows-1252 rendering,
+        // so it must never be treated as mojibake.
+        XCTAssertNil(
+            ContainerMigrationPlanner.mojibakeRenameTarget(
+                folderName: "ポケットモンスター", title: "ポケットモンスター"))
+    }
+
+    func testUnrelatedNameIsNotARenameCandidate() {
+        // The folder differs from the title, but not in the way the
+        // old decoder produced - a rename here would be a guess.
+        XCTAssertNil(
+            ContainerMigrationPlanner.mojibakeRenameTarget(
+                folderName: "Pok mon Empyrean", title: "Pokémon Empyrean"))
+    }
+
+    func testRenameTargetSanitizesTheTitle() throws {
+        guard DirectoryNameMatch.legacyMojibakeRendering(of: "Pokémon Empyrean") != nil else {
+            throw XCTSkip("Legacy encodings are unavailable on this platform")
+        }
+        // Sanitization replaces ":" before the mojibake comparison,
+        // matching how the import named the folder in the first
+        // place.
+        XCTAssertEqual(
+            ContainerMigrationPlanner.mojibakeRenameTarget(
+                folderName: "Pok駑on Empyrean", title: "Pokémon: Empyrean"),
+            "Pokémon Empyrean")
+    }
 }

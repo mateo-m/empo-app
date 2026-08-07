@@ -65,22 +65,23 @@ public enum RescuedSaves {
     /// folder name is `folderName`, sorted by name for determinism.
     /// A bucket matches when its marker's identity matches
     /// case-insensitively - or, with no readable marker, when its
-    /// own directory name does.
+    /// own directory name does. The legacy mojibake rendering of
+    /// `folderName` matches too: a bucket rescued before the INI
+    /// decode fix carries the mojibake name in its marker, and the
+    /// re-import it waits for now arrives under the corrected name.
     public static func matchingBuckets(
         in root: URL, folderName: String, fm: FileManager = .default
     ) -> [URL] {
-        guard let entries = try? fm.contentsOfDirectory(atPath: root.path) else { return [] }
-        let wanted = folderName.lowercased()
-        return entries.sorted().compactMap { name in
+        var wanted = Set([folderName.lowercased()])
+        if let legacy = DirectoryNameMatch.legacyMojibakeRendering(of: folderName) {
+            wanted.insert(legacy.lowercased())
+        }
+        return fm.subdirectoryNames(at: root).sorted().compactMap { name in
             let bucket = root.appendingPathComponent(name, isDirectory: true)
-            var isDirectory: ObjCBool = false
-            guard fm.fileExists(atPath: bucket.path, isDirectory: &isDirectory),
-                isDirectory.boolValue
-            else { return nil }
             if let identity = readMarker(inBucket: bucket, fm: fm) {
-                return identity.folderName.lowercased() == wanted ? bucket : nil
+                return wanted.contains(identity.folderName.lowercased()) ? bucket : nil
             }
-            return name.lowercased() == wanted ? bucket : nil
+            return wanted.contains(name.lowercased()) ? bucket : nil
         }
     }
 

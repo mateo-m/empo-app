@@ -47,7 +47,7 @@ struct GameInfoView: View {
         // raw Game.ini one which may be uglier.
         self.originalTitle =
             meta.baseTitle
-            ?? GameINI.parseINIValue(at: container.gameURL, section: "game", key: "title")
+            ?? GameINI.gameTitle(at: container.gameURL)
             ?? "Unknown Game"
     }
 

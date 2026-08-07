@@ -139,7 +139,7 @@ enum GameCatalog {
         quick: Bool = false
     ) -> GameSnapshot? {
         let iniTitle =
-            GameINI.parseINIValue(at: container.gameURL, section: "game", key: "title")
+            GameINI.gameTitle(at: container.gameURL)
             ?? "Unknown Game"
         let defaultArtwork = quick ? quickFindArtwork(in: container) : findArtwork(in: container)
 

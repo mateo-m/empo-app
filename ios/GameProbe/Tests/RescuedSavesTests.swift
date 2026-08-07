@@ -109,6 +109,21 @@ final class RescuedSavesTests: XCTestCase {
             [bucket])
     }
 
+    func testMojibakeEraBucketMatchesTheCorrectedFolderName() throws {
+        guard DirectoryNameMatch.legacyMojibakeRendering(of: "Pokémon Empyrean") != nil else {
+            throw XCTSkip("Legacy encodings are unavailable on this platform")
+        }
+        // Rescued before the INI decode fix: bucket and marker both
+        // carry the mojibake name. The re-import arrives under the
+        // corrected name and must still find it.
+        let marked = try makeBucket("Pok駑on Empyrean", identity: "Pok駑on Empyrean")
+        let unmarked = try makeBucket("Pok駑on Empyrean 2", identity: nil)
+        _ = unmarked
+        let matches = RescuedSaves.matchingBuckets(
+            in: tempRoot, folderName: "Pokémon Empyrean", fm: fm)
+        XCTAssertEqual(matches, [marked])
+    }
+
     func testMatchingReturnsAllMatchesSortedAndSkipsFiles() throws {
         let second = try makeBucket("Second Nickname", identity: "Pokemon Example")
         let first = try makeBucket("First Nickname", identity: "Pokemon Example")

@@ -209,4 +209,25 @@ final class GameINITests: XCTestCase {
             GameINI.parseINIValue(at: dir, section: "game", key: "title"),
             title)
     }
+
+    func testGameTitleReadsTheGameSectionTitle() throws {
+        let dir = try makeGameDir(inis: [
+            "Game.ini": "[Game]\r\nTitle=Pokémon Empyrean\r\n"
+        ])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        XCTAssertEqual(GameINI.gameTitle(at: dir), "Pokémon Empyrean")
+    }
+
+    func testSubdirectoryNamesListsDirectoriesOnly() throws {
+        let fm = FileManager.default
+        let dir = try makeGameDir(inis: ["stray.ini": ""])
+        defer { try? fm.removeItem(at: dir) }
+        try fm.createDirectory(
+            at: dir.appendingPathComponent("Child"), withIntermediateDirectories: true)
+        try fm.createDirectory(
+            at: dir.appendingPathComponent(".hidden"), withIntermediateDirectories: true)
+        XCTAssertEqual(
+            Set(fm.subdirectoryNames(at: dir)), Set(["Child", ".hidden"]))
+        XCTAssertEqual(fm.subdirectoryNames(at: dir.appendingPathComponent("absent")), [])
+    }
 }

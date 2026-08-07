@@ -127,7 +127,7 @@ enum SaveMigration {
         let defaults = LegacyDataPathDefaults.resolve(
             declaredOrg: declaredOrg,
             declaredApp: declaredApp,
-            iniTitle: GameINI.parseINIValue(at: gameDir, section: "game", key: "title")
+            iniTitle: GameINI.gameTitle(at: gameDir)
         )
         return applicationSupportDirectory()
             .appendingPathComponent(defaults.org, isDirectory: true)

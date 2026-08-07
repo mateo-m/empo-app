@@ -458,7 +458,7 @@ enum GameImportValidator {
             // manifest - an archive-name fallback here would mint
             // a second container for the same game.
             let title =
-                GameINI.parseINIValue(at: root, section: "game", key: "title")
+                GameINI.gameTitle(at: root)
                 ?? jgpManifestName(at: root)
                 ?? (relativePath.isEmpty ? fallbackRootName : root.lastPathComponent)
             let subtitle = relativePath.isEmpty ? fallbackRootName : relativePath

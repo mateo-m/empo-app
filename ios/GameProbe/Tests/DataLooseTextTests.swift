@@ -21,6 +21,45 @@ final class DataLooseTextTests: XCTestCase {
         XCTAssertEqual(sjis.decodeAsLooseText(), title)
     }
 
+    func testWindows1252AccentsDecodeCorrectly() throws {
+        // "é" (0xE9) followed by "m" (0x6D) is also one valid
+        // Shift-JIS kanji (駑). The Western decode must win here.
+        let title = "Pokémon Empyrean"
+        guard let cp1252 = title.data(using: .windowsCP1252) else {
+            throw XCTSkip("Windows-1252 encoding is unavailable on this platform")
+        }
+        XCTAssertNil(String(data: cp1252, encoding: .utf8))
+        XCTAssertNotNil(String(data: cp1252, encoding: .shiftJIS))
+        XCTAssertEqual(cp1252.decodeAsLooseText(), title)
+    }
+
+    func testWindows1252FullINIDecodesCorrectly() throws {
+        let ini = "[Game]\r\nLibrary=RGSS104E.dll\r\nScripts=Data\\Scripts.rxdata\r\nTitle=Pokémon Empyrean\r\n"
+        guard let cp1252 = ini.data(using: .windowsCP1252) else {
+            throw XCTSkip("Windows-1252 encoding is unavailable on this platform")
+        }
+        XCTAssertEqual(cp1252.decodeAsLooseText(), ini)
+    }
+
+    func testShiftJISFullINIStillDecodesAsShiftJIS() throws {
+        // Kana in the title marks the file as Japanese even though
+        // most of its bytes are ASCII.
+        let ini = "[Game]\r\nLibrary=RGSS102J.dll\r\nTitle=ポケットモンスター\r\n"
+        guard let sjis = ini.data(using: .shiftJIS) else {
+            throw XCTSkip("Shift-JIS encoding is unavailable on this platform")
+        }
+        XCTAssertEqual(sjis.decodeAsLooseText(), ini)
+    }
+
+    func testHalfWidthKanaRunDecodesAsShiftJIS() throws {
+        let title = "ﾎﾟｹｯﾄ"
+        guard let sjis = title.data(using: .shiftJIS) else {
+            throw XCTSkip("Shift-JIS encoding is unavailable on this platform")
+        }
+        XCTAssertNil(String(data: sjis, encoding: .utf8))
+        XCTAssertEqual(sjis.decodeAsLooseText(), title)
+    }
+
     func testArbitraryHighBytesNeverDecodeToNil() {
         // 0xFF is invalid as UTF-8 here and invalid as a Shift-JIS
         // lead byte; the Latin-1 fallback maps every byte.
