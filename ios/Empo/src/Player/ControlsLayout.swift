@@ -181,7 +181,7 @@ private struct PersistedLayoutV1: Codable {
 @MainActor
 protocol ScreenEditSyncing {
     func endPreview()
-    func resolvedRegion(isPortrait: Bool) -> ScreenRegion?
+    func resolvedPlacement(isPortrait: Bool) -> ScreenPlacement?
 }
 
 @MainActor
@@ -305,8 +305,8 @@ class ControlsLayout {
     /// edits dropped) resolves to none.
     private func screenChangesOnReset() -> Bool {
         let isPortrait = currentOrientation == .portrait
-        let current = effectiveScreenRegion(
-            stored: screenSync?.resolvedRegion(isPortrait: isPortrait))
+        let current = effectiveScreenPlacement(
+            stored: screenSync?.resolvedPlacement(isPortrait: isPortrait))
         guard current != nil else { return false }
 
         let store = LayoutProfilesManager.store
@@ -320,7 +320,7 @@ class ControlsLayout {
             pin: postResetPin,
             defaultProfileName: LayoutProfilesManager.defaultProfileName,
             readScreen: { store.readScreen($0) })
-        return (isPortrait ? postReset.portrait : postReset.landscape).region == nil
+        return (isPortrait ? postReset.portrait : postReset.landscape).placement == nil
     }
 
     private static let controlsManifestLogFile = "controls.json.log"
@@ -512,13 +512,13 @@ class ControlsLayout {
     /// `ScreenRegion??` whose `.some(nil)` case needed a comment at
     /// every call site.
     enum ScreenEdit: Equatable {
-        case set(ScreenRegion)
+        case set(ScreenPlacement)
         case resetToAuto
 
-        /// The region a surface draws or a commit writes: nil IS
+        /// The placement a surface draws or a commit writes: nil IS
         /// engine-auto.
-        var region: ScreenRegion? {
-            if case .set(let region) = self { return region }
+        var placement: ScreenPlacement? {
+            if case .set(let placement) = self { return placement }
             return nil
         }
     }
@@ -536,21 +536,21 @@ class ControlsLayout {
 
     /// This session's edit for `orientation`, or the caller's stored
     /// fallback when the orientation is untouched.
-    private func editedRegion(
-        _ orientation: ControlsOrientation, fallback: ScreenRegion?
-    ) -> ScreenRegion? {
+    private func editedPlacement(
+        _ orientation: ControlsOrientation, fallback: ScreenPlacement?
+    ) -> ScreenPlacement? {
         guard let edit = screenEdits[orientation] else { return fallback }
-        return edit.region
+        return edit.placement
     }
 
-    /// The region every surface should draw RIGHT NOW: the in-flight
-    /// drag, then this session's pending edit, then the caller's
-    /// stored fallback (the resolved chain in the player, the
-    /// profile file in the editor). The player and the settings
+    /// The placement every surface should draw RIGHT NOW: the
+    /// in-flight drag, then this session's pending edit, then the
+    /// caller's stored fallback (the resolved chain in the player,
+    /// the profile file in the editor). The player and the settings
     /// editor both go through here, so a drag follows live in both.
-    func effectiveScreenRegion(stored: ScreenRegion?) -> ScreenRegion? {
-        if let live = activeScreenDrag?.liveRegion { return live }
-        return editedRegion(currentOrientation, fallback: stored)
+    func effectiveScreenPlacement(stored: ScreenPlacement?) -> ScreenPlacement? {
+        if let live = activeScreenDrag?.liveRegion { return .region(live) }
+        return editedPlacement(currentOrientation, fallback: stored)
     }
 
     /// A screen-gizmo drag in flight. One value carries every
@@ -599,14 +599,14 @@ class ControlsLayout {
             screenEdits.removeValue(forKey: currentOrientation)
             return
         }
-        screenEdits[currentOrientation] = region.map { .set($0) } ?? .resetToAuto
+        screenEdits[currentOrientation] = region.map { .set(.region($0)) } ?? .resetToAuto
     }
 
     /// Records a screen edit for the active orientation without a
-    /// gesture (the overlay toggle).
-    func recordScreenEdit(_ region: ScreenRegion) {
+    /// gesture (the overlay toggle, the editor's position row).
+    func recordScreenEdit(_ placement: ScreenPlacement) {
         guard editSessionActive else { return }
-        screenEdits[currentOrientation] = .set(region)
+        screenEdits[currentOrientation] = .set(placement)
     }
 
     /// Abandon all drag and edit state without committing, and end
@@ -638,7 +638,7 @@ class ControlsLayout {
         if storedEntry != nil {
             screenEdits[currentOrientation] = .resetToAuto
         } else if targetName == nil,
-            screenSync?.resolvedRegion(isPortrait: currentOrientation == .portrait) != nil
+            screenSync?.resolvedPlacement(isPortrait: currentOrientation == .portrait) != nil
         {
             // The region resolves from the DEFAULT profile (ambient
             // provenance): nothing to delete in place, so the reset
@@ -654,13 +654,13 @@ class ControlsLayout {
 
     /// Disk regions overlaid with this session's edits — what a
     /// commit writes for the named profile.
-    private func mergedScreenRegions(
+    private func mergedScreenPlacements(
         profile name: String, store: LayoutProfileStore
-    ) -> (portrait: ScreenRegion?, landscape: ScreenRegion?) {
+    ) -> (portrait: ScreenPlacement?, landscape: ScreenPlacement?) {
         let disk = store.readScreen(name)
         return (
-            editedRegion(.portrait, fallback: disk?.portrait),
-            editedRegion(.landscape, fallback: disk?.landscape)
+            editedPlacement(.portrait, fallback: disk?.portrait),
+            editedPlacement(.landscape, fallback: disk?.landscape)
         )
     }
 
@@ -1357,7 +1357,7 @@ class ControlsLayout {
             // Per-file skip: the screen write runs only when the
             // merged regions differ from disk.
             if screenEditsDirty {
-                let merged = mergedScreenRegions(profile: name, store: store)
+                let merged = mergedScreenPlacements(profile: name, store: store)
                 let disk = store.readScreen(name)
                 if merged.portrait != disk?.portrait || merged.landscape != disk?.landscape {
                     store.writeScreen(
@@ -1396,9 +1396,10 @@ class ControlsLayout {
                 pin: store.loadPin(forGameFolder: container.url).pin,
                 defaultProfileName: LayoutProfilesManager.defaultProfileName,
                 readScreen: { store.readScreen($0) })
-            let portrait = editedRegion(.portrait, fallback: resolvedScreen.portrait.region)
-            let landscape = editedRegion(
-                .landscape, fallback: resolvedScreen.landscape.region)
+            let portrait = editedPlacement(
+                .portrait, fallback: resolvedScreen.portrait.placement)
+            let landscape = editedPlacement(
+                .landscape, fallback: resolvedScreen.landscape.placement)
             if portrait != nil || landscape != nil {
                 store.writeScreen(name, portrait: portrait, landscape: landscape)
             }
@@ -1431,7 +1432,7 @@ class ControlsLayout {
         let store = LayoutProfilesManager.store
         store.writeProfile(name, touch: materializedTouchSection())
         if screenEditsDirty {
-            let merged = mergedScreenRegions(profile: name, store: store)
+            let merged = mergedScreenPlacements(profile: name, store: store)
             store.writeScreen(name, portrait: merged.portrait, landscape: merged.landscape)
             screenEdits.removeAll()
         }

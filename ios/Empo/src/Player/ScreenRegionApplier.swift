@@ -16,8 +16,8 @@ import UIKit
 /// ControlsLayout's hook into the applier (see `ScreenEditSyncing`).
 struct ScreenRegionApplierSync: ScreenEditSyncing {
     func endPreview() { ScreenRegionApplier.endPreview() }
-    func resolvedRegion(isPortrait: Bool) -> ScreenRegion? {
-        ScreenRegionApplier.resolvedRegion(isPortrait: isPortrait)
+    func resolvedPlacement(isPortrait: Bool) -> ScreenPlacement? {
+        ScreenRegionApplier.resolvedPlacement(isPortrait: isPortrait)
     }
 }
 
@@ -49,6 +49,7 @@ enum ScreenRegionApplier {
         activeContainer = container
         previewActive = false
         resolutionCache = nil
+        gameAspect = nil
         loggedFindingSignatures.removeAll()
         observeIfNeeded()
         apply()
@@ -75,14 +76,78 @@ enum ScreenRegionApplier {
         guard let resolved = resolve() else { return }
         let portrait = currentWindowIsPortrait
         let outcome = portrait ? resolved.portrait : resolved.landscape
-        send(outcome.region, isPortrait: portrait)
+        guard let placement = outcome.placement else {
+            send(nil, isPortrait: portrait)
+            return
+        }
+        // A preset without a known game aspect cannot compute its
+        // rect yet: leave the engine on automatic placement. The
+        // first published gameRect feeds the aspect and re-applies.
+        send(region(for: placement, isPortrait: portrait), isPortrait: portrait)
     }
 
-    /// The region the chain resolves to right now, for the gizmo's
-    /// base rect. Served from the cache.
-    static func resolvedRegion(isPortrait: Bool) -> ScreenRegion? {
+    /// The placement the chain resolves to right now, for the gizmo
+    /// and the layout decisions. Served from the cache.
+    static func resolvedPlacement(isPortrait: Bool) -> ScreenPlacement? {
         guard let resolved = resolve() else { return nil }
-        return (isPortrait ? resolved.portrait : resolved.landscape).region
+        return (isPortrait ? resolved.portrait : resolved.landscape).placement
+    }
+
+    /// The resolved placement as a concrete rect for this device.
+    static func resolvedRegion(isPortrait: Bool) -> ScreenRegion? {
+        resolvedPlacement(isPortrait: isPortrait)
+            .flatMap { region(for: $0, isPortrait: isPortrait) }
+    }
+
+    // MARK: - Presets
+
+    /// The game picture's aspect ratio, from the engine's published
+    /// gameRect (the letterboxed picture keeps the game's aspect
+    /// whatever region holds it). Presets need it to compute their
+    /// rect; until the first publish they cannot apply.
+    private(set) static var gameAspect: CGFloat?
+
+    static func gameRectChanged(_ rect: CGRect) {
+        guard rect.width > 0, rect.height > 0 else { return }
+        let aspect = rect.width / rect.height
+        guard gameAspect != aspect else { return }
+        let hadAspect = gameAspect != nil
+        gameAspect = aspect
+        // A preset placement that was waiting on the aspect (or
+        // computed from a stale one) must recompute now.
+        if !hadAspect || currentPlacementIsPreset {
+            apply()
+        }
+    }
+
+    private static var currentPlacementIsPreset: Bool {
+        if case .preset = resolvedPlacement(isPortrait: currentWindowIsPortrait) {
+            return true
+        }
+        return false
+    }
+
+    /// A preset's rect for the CURRENT window: computed at apply
+    /// time, so one profile places the game right on any device.
+    static func region(for placement: ScreenPlacement, isPortrait: Bool) -> ScreenRegion? {
+        switch placement {
+        case .region(let region):
+            return region
+        case .preset(let preset):
+            guard let window, let aspect = gameAspect else { return nil }
+            let bounds = window.bounds
+            let insets = window.safeAreaInsets
+            return ScreenPresetPlacement.region(
+                preset: preset,
+                canvasWidth: Double(bounds.width),
+                canvasHeight: Double(bounds.height),
+                safeTop: Double(insets.top),
+                safeBottom: Double(insets.bottom),
+                safeLeading: Double(insets.left),
+                safeTrailing: Double(insets.right),
+                isPortrait: isPortrait,
+                aspect: Double(aspect))
+        }
     }
 
     private static func resolve() -> ScreenResolution.Result? {

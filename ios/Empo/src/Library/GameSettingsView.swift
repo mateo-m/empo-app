@@ -414,7 +414,6 @@ struct GameSettingsView: View {
     }
 
     @State private var showLayoutProfilePicker = false
-    @State private var savedProfileName: String?
 
     /// ONE section for everything layout: the profile (controls +
     /// screen placement), the save-as-profile shortcut, and the
@@ -441,40 +440,15 @@ struct GameSettingsView: View {
                 }
             )
             .onAppear { reloadResolvedScreen() }
-
-            Button {
-                saveLayoutAsProfile()
-            } label: {
-                Text(
-                    savedProfileName.map { "Saved as \($0)" }
-                        ?? "Save this game's layout as a profile")
-            }
-            .disabled(savedProfileName != nil)
-
-            // A named row that pushes the three options, so they
-            // carry a label instead of floating in the section.
-            Picker("Portrait screen position", selection: verticalAlignmentBinding) {
-                ForEach(VerticalAlignment.allCases, id: \.self) { alignment in
-                    HStack(spacing: 10) {
-                        VerticalAlignmentIllustration(alignment: alignment)
-                            .frame(width: 24, height: 40)
-                        Text(alignment.label)
-                    }
-                    .tag(alignment)
-                }
-            }
-            .pickerStyle(.navigationLink)
         } header: {
             Text("Layout")
         } footer: {
-            if profileSetsScreenPortrait {
+            if profileSetsScreenPortrait || profileSetsScreenLandscape {
                 Text(
-                    "Profiles live in Settings and work for any game. The layout profile sets the screen position for portrait. When you change the position, the profile stops setting it and the preset applies."
+                    "Profiles live in Settings and work for any game. The profile also sets where the game sits on screen."
                 )
             } else {
-                Text(
-                    "Profiles live in Settings and work for any game. The position sets where the game sits on screen in portrait. Controls appear below."
-                )
+                Text("Profiles live in Settings and work for any game.")
             }
         }
     }
@@ -496,11 +470,11 @@ struct GameSettingsView: View {
     }
 
     private var profileSetsScreenPortrait: Bool {
-        resolvedScreen?.portrait.region != nil
+        resolvedScreen?.portrait.placement != nil
     }
 
     private var profileSetsScreenLandscape: Bool {
-        resolvedScreen?.landscape.region != nil
+        resolvedScreen?.landscape.placement != nil
     }
 
     private var currentPinLabel: String {
@@ -511,57 +485,6 @@ struct GameSettingsView: View {
         case .gameLayout: return "Game layout"
         case .defaultProfile: return "Default profile"
         }
-    }
-
-    private func saveLayoutAsProfile() {
-        guard let container = game.container else { return }
-        if resolvedScreen == nil {
-            reloadResolvedScreen()
-        }
-        let store = LayoutProfilesManager.store
-        let name = store.uniqueName(base: game.title)
-        let section = LayoutProfilesManager.materializedLayout(for: container)
-        guard store.createProfile(name, touch: section) else { return }
-        // Copy the RESOLVED screen region too. The save pins the new
-        // profile, and a pin is terminal for the screen — without
-        // the copy, saving would snap the screen to automatic.
-        if let screen = resolvedScreen,
-            screen.portrait.region != nil || screen.landscape.region != nil
-        {
-            store.writeScreen(
-                name, portrait: screen.portrait.region, landscape: screen.landscape.region)
-        }
-        store.writePin(.profile(name), forGameFolder: container.url)
-        LayoutProfilesManager.postPinChange(gameID: container.id, from: nil)
-        savedProfileName = name
-    }
-
-    /// The preset only applies when no profile region covers
-    /// portrait. Changing it while one does means "use automatic
-    /// placement with this alignment": drop the portrait entry the
-    /// same way the player's "Reset screen" does — from the pinned
-    /// profile in place, or by minting this game's own profile when
-    /// the region came from the default profile (a pin is terminal
-    /// for the screen).
-    private func clearPortraitScreenRegion() {
-        guard let container = game.container, profileSetsScreenPortrait else { return }
-        let store = LayoutProfilesManager.store
-        switch store.loadPin(forGameFolder: container.url).pin {
-        case .profile(let name):
-            let existing = store.readScreen(name)
-            store.writeScreen(name, portrait: nil, landscape: existing?.landscape)
-            LayoutProfilesManager.postProfileChange(name: name, from: nil)
-        default:
-            let name = store.uniqueName(base: game.title)
-            let section = LayoutProfilesManager.materializedLayout(for: container)
-            guard store.createProfile(name, touch: section) else { return }
-            if let landscape = resolvedScreen?.landscape.region {
-                store.writeScreen(name, portrait: nil, landscape: landscape)
-            }
-            store.writePin(.profile(name), forGameFolder: container.url)
-            LayoutProfilesManager.postPinChange(gameID: container.id, from: nil)
-        }
-        reloadResolvedScreen()
     }
 
     private var performanceSection: some View {
@@ -866,13 +789,7 @@ struct GameSettingsView: View {
     private var verticalAlignmentBinding: Binding<VerticalAlignment> {
         Binding(
             get: { effectiveVerticalAlignment },
-            set: {
-                // A profile region would override the preset, so a
-                // preset change first turns the region off for this
-                // game (see `clearPortraitScreenRegion`).
-                clearPortraitScreenRegion()
-                settings.verticalAlignment = $0
-            }
+            set: { settings.verticalAlignment = $0 }
         )
     }
 

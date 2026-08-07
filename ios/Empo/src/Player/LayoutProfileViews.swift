@@ -191,9 +191,7 @@ struct LayoutProfilesSettingsView: View {
             Button("Create") { createBlank() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(
-                "A new profile starts from the Empo default layout. You can also save a game's current layout as a profile from its Settings sheet."
-            )
+            Text("A new profile starts from the Empo default layout.")
         }
         .alert("Rename profile", isPresented: renameBinding) {
             TextField("Name", text: $renameText)
@@ -403,12 +401,37 @@ struct LayoutProfileEditorView: View {
     /// this session's pending edit and the in-flight drag on top.
     /// Same precedence as the player, through the shared helper, so
     /// the placeholder and the controls follow a drag live here too.
-    private var screenRegion: ScreenRegion? {
-        layout.effectiveScreenRegion(
+    private var screenPlacement: ScreenPlacement? {
+        layout.effectiveScreenPlacement(
             stored: editingOrientation == .portrait ? diskScreen?.portrait : diskScreen?.landscape)
     }
 
-    /// Region rect on the canvas, when a region exists.
+    /// The placement as a rect on the MOCK canvas. A preset
+    /// computes against the reference canvas and the placeholder's
+    /// 4:3 aspect — the same per-device rule the player applies to
+    /// the real window.
+    private var screenRegion: ScreenRegion? {
+        guard let placement = screenPlacement else { return nil }
+        switch placement {
+        case .region(let region):
+            return region
+        case .preset(let preset):
+            let size = canvasSize
+            let safeArea = canvasSafeArea
+            return ScreenPresetPlacement.region(
+                preset: preset,
+                canvasWidth: Double(size.width),
+                canvasHeight: Double(size.height),
+                safeTop: Double(safeArea.top),
+                safeBottom: Double(safeArea.bottom),
+                safeLeading: Double(safeArea.leading),
+                safeTrailing: Double(safeArea.trailing),
+                isPortrait: editingOrientation == .portrait,
+                aspect: 4.0 / 3.0)
+        }
+    }
+
+    /// Region rect on the canvas, when a placement exists.
     private var screenRegionRect: CGRect? {
         guard let region = screenRegion else { return nil }
         let size = canvasSize
@@ -472,6 +495,9 @@ struct LayoutProfileEditorView: View {
                     Label("Undo", systemImage: "arrow.uturn.backward")
                 }
                 .disabled(!layout.canUndo)
+                if editingOrientation == .portrait {
+                    positionMenu
+                }
             }
             .font(.footnote.weight(.semibold))
             .padding(.bottom, Spacing.md)
@@ -517,6 +543,59 @@ struct LayoutProfileEditorView: View {
         )
     }
 
+    /// Where the game sits in portrait: a named preset (computed
+    /// per device at play time), the automatic engine placement, or
+    /// the custom rect the gizmo drew.
+    private enum PositionChoice: Hashable {
+        case automatic
+        case preset(ScreenPreset)
+        case custom
+    }
+
+    private var positionChoice: PositionChoice {
+        switch screenPlacement {
+        case nil: return .automatic
+        case .preset(let preset): return .preset(preset)
+        case .region: return .custom
+        }
+    }
+
+    private var positionMenu: some View {
+        Menu {
+            Picker(
+                "Screen position",
+                selection: Binding(
+                    get: { positionChoice },
+                    set: { choice in
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            switch choice {
+                            case .automatic:
+                                layout.resetScreenEdit()
+                            case .preset(let preset):
+                                layout.recordScreenEdit(.preset(preset))
+                            case .custom:
+                                break
+                            }
+                        }
+                    })
+            ) {
+                Text("Automatic").tag(PositionChoice.automatic)
+                Text("Top").tag(PositionChoice.preset(.top))
+                Text("Top-center").tag(PositionChoice.preset(.topCenter))
+                Text("Center").tag(PositionChoice.preset(.center))
+                if positionChoice == .custom {
+                    Text("Custom").tag(PositionChoice.custom)
+                }
+            }
+        } label: {
+            HStack(spacing: Spacing.xs) {
+                Text("Screen position")
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+            }
+        }
+    }
+
     private func performRename() {
         guard let newName = LayoutProfileStore.validatedName(renameText),
             newName != currentName,
@@ -550,7 +629,7 @@ struct LayoutProfileEditorView: View {
             onDragBegan: {
                 let auto = EditorCanvas.fakeGameRect(for: editingOrientation)
                 layout.beginScreenDrag(
-                    autoReference: screenRegion == nil
+                    autoReference: screenPlacement == nil
                         ? ScreenRegion(
                             x: auto.minX / size.width, y: auto.minY / size.height,
                             w: auto.width / size.width, h: auto.height / size.height)
@@ -570,7 +649,7 @@ struct LayoutProfileEditorView: View {
 
         ScreenRegionChips(
             rect: screenRegionRect ?? gameRect,
-            showsReset: screenRegion != nil,
+            showsReset: screenPlacement != nil,
             onReset: {
                 // The mock canvas has no engine: the SwiftUI
                 // animation on the placeholder IS the reset

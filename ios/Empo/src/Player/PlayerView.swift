@@ -59,9 +59,9 @@ struct PlayerView: View {
             let toolbarBtnSize = IconButtonSize.sm.points
             // An active screen region carries the profile's own
             // overlay choice; nil keeps the geometry heuristic.
-            let activeScreenRegion = layout.effectiveScreenRegion(
-                stored: ScreenRegionApplier.resolvedRegion(isPortrait: isPortrait))
-            let forcedOverlay = activeScreenRegion?.overlay
+            let activeScreenPlacement = layout.effectiveScreenPlacement(
+                stored: ScreenRegionApplier.resolvedPlacement(isPortrait: isPortrait))
+            let forcedOverlay = activeScreenPlacement?.overlay
             // The chrome follows the engine's republished gameRect
             // LIVE during a screen drag, so the controls zone tracks
             // the moving screen. The edit toolbar fades during the
@@ -272,7 +272,11 @@ struct PlayerView: View {
                 // pending, leaving preview mode re-applies from disk
                 // in both the preview and the normal case.
                 if let pending = layout.pendingScreenEdit {
-                    ScreenRegionApplier.preview(pending.region, isPortrait: nowPortrait)
+                    ScreenRegionApplier.preview(
+                        pending.placement.flatMap {
+                            ScreenRegionApplier.region(for: $0, isPortrait: nowPortrait)
+                        },
+                        isPortrait: nowPortrait)
                 } else {
                     ScreenRegionApplier.endPreview()
                 }
@@ -281,8 +285,11 @@ struct PlayerView: View {
             // during the loading transition, BEFORE PlayerView mounts.
             // Without an initial firing we miss the one real publish,
             // and translated layouts keep their estimate-based bands.
-            .onChange(of: engineState.gameRect, initial: true) { _, _ in
+            .onChange(of: engineState.gameRect, initial: true) { _, rect in
                 layout.refreshForGameGeometryChange()
+                // Presets compute their rect from the game's aspect;
+                // the published picture rect carries it.
+                ScreenRegionApplier.gameRectChanged(rect)
             }
         }
         .ignoresSafeArea()
@@ -431,7 +438,12 @@ struct PlayerView: View {
     /// render from the same effective rect, so the chips follow the
     /// outline mid-drag.
     private struct ScreenGizmoContext {
-        var effective: ScreenRegion?
+        /// The placement in force (preset or custom); nil is
+        /// engine-auto.
+        var effectivePlacement: ScreenPlacement?
+        /// The placement as this device's rect (a preset computes
+        /// per device).
+        var effectiveRegion: ScreenRegion?
         var baseRect: CGRect
         var allowedRect: CGRect
         var autoRegion: ScreenRegion
@@ -441,14 +453,17 @@ struct PlayerView: View {
     private func screenGizmoContext(
         geoSize: CGSize, isPortrait: Bool, gameRect: CGRect
     ) -> ScreenGizmoContext {
-        let resolved = ScreenRegionApplier.resolvedRegion(isPortrait: isPortrait)
-        let effective = layout.effectiveScreenRegion(stored: resolved)
+        let resolved = ScreenRegionApplier.resolvedPlacement(isPortrait: isPortrait)
+        let effectivePlacement = layout.effectiveScreenPlacement(stored: resolved)
+        let effectiveRegion = effectivePlacement.flatMap {
+            ScreenRegionApplier.region(for: $0, isPortrait: isPortrait)
+        }
         // The outline draws the CLAMPED region — the same rect the
         // applier sends — so it can never disagree with the picture
         // when stored fractions fall outside this device's safe
         // area.
         let baseRect: CGRect = {
-            if let region = effective {
+            if let region = effectiveRegion {
                 let clamped = ScreenRegionApplier.clampToSafeArea(region)
                 return CGRect(
                     x: clamped.x * geoSize.width,
@@ -461,17 +476,18 @@ struct PlayerView: View {
                 : gameRect
         }()
         return ScreenGizmoContext(
-            effective: effective,
+            effectivePlacement: effectivePlacement,
+            effectiveRegion: effectiveRegion,
             baseRect: baseRect,
             allowedRect: layout.screenDragAllowedRect(
-                isPortrait: isPortrait, overlayOn: effective?.overlay ?? false,
+                isPortrait: isPortrait, overlayOn: effectivePlacement?.overlay ?? false,
                 canvasSize: geoSize, safeArea: AppWindow.currentSafeArea),
             autoRegion: ScreenRegion(
                 x: gameRect.minX / max(geoSize.width, 1),
                 y: gameRect.minY / max(geoSize.height, 1),
                 w: gameRect.width / max(geoSize.width, 1),
                 h: gameRect.height / max(geoSize.height, 1)),
-            overlayOn: effective?.overlay ?? false)
+            overlayOn: effectivePlacement?.overlay ?? false)
     }
 
     /// Edit-mode screen gizmo surfaces, below the controls overlay
@@ -496,7 +512,7 @@ struct PlayerView: View {
                     // publishes region-derived rects and there is no
                     // live auto rect to compare against.
                     layout.beginScreenDrag(
-                        autoReference: context.effective == nil && !gameRect.isEmpty
+                        autoReference: context.effectivePlacement == nil && !gameRect.isEmpty
                             ? context.autoRegion : nil)
                 },
                 onDragChanged: { region in
@@ -506,7 +522,11 @@ struct PlayerView: View {
                 onDragEnded: { region in
                     layout.endScreenDrag(region: region)
                     if let pending = layout.pendingScreenEdit {
-                        ScreenRegionApplier.preview(pending.region, isPortrait: isPortrait)
+                        ScreenRegionApplier.preview(
+                            pending.placement.flatMap {
+                                ScreenRegionApplier.region(for: $0, isPortrait: isPortrait)
+                            },
+                            isPortrait: isPortrait)
                     } else {
                         // Snapped back with no prior edit: nothing is
                         // pending, so leave preview mode — a stuck
@@ -532,12 +552,12 @@ struct PlayerView: View {
         GeometryReader { _ in
             ScreenRegionChips(
                 rect: context.baseRect,
-                showsReset: context.effective != nil,
+                showsReset: context.effectivePlacement != nil,
                 onReset: {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         layout.resetScreenEdit()
                     }
-                    if let current = context.effective,
+                    if let current = context.effectiveRegion,
                         let target = estimatedAutoRegion(
                             geoSize: geoSize, isPortrait: isPortrait,
                             aspect: gameRect.height > 0
@@ -552,14 +572,14 @@ struct PlayerView: View {
                 overlayOn: context.overlayOn,
                 onToggleOverlay: {
                     guard
-                        let region = context.effective
+                        let region = context.effectiveRegion
                             ?? (gameRect.isEmpty ? nil : context.autoRegion)
                     else { return }
                     let toggled = layout.overlayToggledRegion(
                         from: region, isPortrait: isPortrait, canvasSize: geoSize,
                         safeArea: AppWindow.currentSafeArea)
                     withAnimation(.easeInOut(duration: 0.25)) {
-                        layout.recordScreenEdit(toggled)
+                        layout.recordScreenEdit(.region(toggled))
                     }
                     ScreenRegionApplier.preview(toggled, isPortrait: isPortrait)
                 }
@@ -576,36 +596,26 @@ struct PlayerView: View {
     private func estimatedAutoRegion(
         geoSize: CGSize, isPortrait: Bool, aspect: CGFloat
     ) -> ScreenRegion? {
-        guard geoSize.width > 0, geoSize.height > 0, aspect > 0 else { return nil }
+        // Automatic placement follows the game's engine alignment;
+        // the shared preset calculator holds the ONE copy of the
+        // fit-and-align math.
+        let preset: ScreenPreset
+        switch mkxp_getVerticalAlignment() {
+        case MKXP_VALIGN_TOP: preset = .top
+        case MKXP_VALIGN_CENTER: preset = .center
+        default: preset = .topCenter
+        }
         let safeArea = AppWindow.currentSafeArea
-        let availW = geoSize.width - safeArea.leading - safeArea.trailing
-        let availH =
-            isPortrait ? geoSize.height - safeArea.top - safeArea.bottom : geoSize.height
-        guard availW > 1, availH > 1 else { return nil }
-
-        var width = availW
-        var height = width / aspect
-        if height > availH {
-            height = availH
-            width = height * aspect
-        }
-        let x = safeArea.leading + (availW - width) / 2
-
-        let y: CGFloat
-        if isPortrait {
-            let topY = safeArea.top
-            let centerY = safeArea.top + (availH - height) / 2
-            switch mkxp_getVerticalAlignment() {
-            case MKXP_VALIGN_TOP: y = topY
-            case MKXP_VALIGN_CENTER: y = centerY
-            default: y = (topY + centerY) / 2
-            }
-        } else {
-            y = (availH - height) / 2
-        }
-        return ScreenRegion(
-            x: x / geoSize.width, y: y / geoSize.height,
-            w: width / geoSize.width, h: height / geoSize.height)
+        return ScreenPresetPlacement.region(
+            preset: preset,
+            canvasWidth: Double(geoSize.width),
+            canvasHeight: Double(geoSize.height),
+            safeTop: Double(safeArea.top),
+            safeBottom: Double(safeArea.bottom),
+            safeLeading: Double(safeArea.leading),
+            safeTrailing: Double(safeArea.trailing),
+            isPortrait: isPortrait,
+            aspect: Double(aspect))
     }
 
     /// The first edit-mode notice worth showing, most severe first.
