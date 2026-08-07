@@ -54,7 +54,14 @@ public enum LayoutPinFile {
             if raw.hasPrefix("$") {
                 return (.followChain, "layout_profile.json: unknown pin \(raw), following the chain")
             }
-            return (.profile(raw.precomposedStringWithCanonicalMapping), nil)
+            // The pin file sits in the game folder, so users can
+            // hand-edit it. An unvalidated name would flow into
+            // profile path building; ".." must never do that.
+            let name = raw.precomposedStringWithCanonicalMapping
+            guard LayoutProfileStore.validatedName(name) == name else {
+                return (.followChain, "layout_profile.json: invalid pin \(raw), following the chain")
+            }
+            return (.profile(name), nil)
         }
     }
 
