@@ -453,10 +453,10 @@ struct GameSettingsView: View {
         }
     }
 
-    /// Whether the resolved screen region for an orientation comes
-    /// from a profile (named pin, $default, or chain default).
-    /// Cached: Form bodies re-render on every control interaction,
-    /// and the resolve reads two files.
+    /// The resolved screen placement per orientation. The footer
+    /// only asks whether a placement exists; it does not care which
+    /// profile set it. Cached: Form bodies re-render on every
+    /// control interaction, and the resolve reads two files.
     @State private var resolvedScreen: ScreenResolution.Result?
 
     private func reloadResolvedScreen() {

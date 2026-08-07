@@ -102,8 +102,7 @@ struct PlayerControlsOverlay: View {
                 if !draggingDPad {
                     layout.recordEditSnapshot()
                     draggingDPad = true
-                    lastDragResolved.removeValue(
-                        forKey: dragKey(draggedID: nil, draggedIsDPad: true))
+                    lastDragResolved.removeValue(forKey: dragKey(draggedID: nil))
                 }
                 let resolved = resolvedDragPosition(
                     value.location, draggedID: nil, draggedIsDPad: true,
@@ -115,8 +114,7 @@ struct PlayerControlsOverlay: View {
             }
             .onEnded { _ in
                 draggingDPad = false
-                lastDragResolved.removeValue(
-                    forKey: dragKey(draggedID: nil, draggedIsDPad: true))
+                lastDragResolved.removeValue(forKey: dragKey(draggedID: nil))
                 layout.save()
             }
     }
@@ -198,7 +196,9 @@ struct PlayerControlsOverlay: View {
     /// drags cannot clobber each other's memory.
     @State private var lastDragResolved: [AnyHashable: CGPoint] = [:]
 
-    private func dragKey(draggedID: UUID?, draggedIsDPad: Bool) -> AnyHashable {
+    /// A nil ID always means the d-pad: it is the one draggable
+    /// control without a UUID.
+    private func dragKey(draggedID: UUID?) -> AnyHashable {
         draggedID.map(AnyHashable.init) ?? AnyHashable("dpad")
     }
 
@@ -236,7 +236,7 @@ struct PlayerControlsOverlay: View {
     private func resolvedDragPosition(
         _ location: CGPoint, draggedID: UUID?, draggedIsDPad: Bool, size: CGFloat
     ) -> CGPoint {
-        let key = dragKey(draggedID: draggedID, draggedIsDPad: draggedIsDPad)
+        let key = dragKey(draggedID: draggedID)
         if lastDragResolved[key] == nil {
             lastDragResolved[key] = currentAbsoluteCenter(
                 draggedID: draggedID, draggedIsDPad: draggedIsDPad)
@@ -340,7 +340,7 @@ struct PlayerControlsOverlay: View {
                     layout.recordEditSnapshot()
                     draggingButtonID = id
                     lastDragResolved.removeValue(
-                        forKey: dragKey(draggedID: id, draggedIsDPad: false))
+                        forKey: dragKey(draggedID: id))
                 }
                 let resolved = resolvedDragPosition(
                     value.location, draggedID: id, draggedIsDPad: false, size: size)
@@ -353,7 +353,7 @@ struct PlayerControlsOverlay: View {
             .onEnded { _ in
                 draggingButtonID = nil
                 lastDragResolved.removeValue(
-                    forKey: dragKey(draggedID: id, draggedIsDPad: false))
+                    forKey: dragKey(draggedID: id))
                 layout.save()
             }
     }
