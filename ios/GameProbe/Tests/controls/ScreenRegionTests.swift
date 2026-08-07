@@ -472,7 +472,7 @@ final class ScreenRegionTests: XCTestCase {
         let touch = sampleTouch()
         let materialized = ProfileMaterializer.materialize(
             user: touch, manifest: nil, builtins: builtins(), metrics: .reference)
-        store.createProfile("Twin", touch: materialized)
+        store.createProfile("Twin", touch: materialized.section)
         store.writeScreen(
             "Twin", portrait: ScreenRegion(x: 0, y: 0, w: 0.5, h: 0.5), landscape: nil)
 
@@ -487,7 +487,7 @@ final class ScreenRegionTests: XCTestCase {
         let touch = sampleTouch()
         let materialized = ProfileMaterializer.materialize(
             user: touch, manifest: nil, builtins: builtins(), metrics: .reference)
-        store.createProfile("Twin", touch: materialized)
+        store.createProfile("Twin", touch: materialized.section)
 
         let action = ProfileMigration.decide(
             context: migrationContext(userTouch: touch), builtins: builtins())
@@ -509,7 +509,7 @@ final class ScreenRegionTests: XCTestCase {
         var record = MigrationRecord()
         record.games["game-1"] = MigrationRecord.Entry(hash: hash, profile: "Mine")
 
-        store.createProfile("Mine", touch: materialized)
+        store.createProfile("Mine", touch: materialized.section)
         store.writeScreen(
             "Mine", portrait: ScreenRegion(x: 0, y: 0, w: 1, h: 1), landscape: nil)
 

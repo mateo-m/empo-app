@@ -285,13 +285,13 @@ final class LayoutProfilesTests: XCTestCase {
 
         // User dpad wins; buttons fall to the builtin (manifest has
         // none either); actionButtons fall to the manifest.
-        XCTAssertEqual(result.portrait?.dpad?.x, 0.3)
-        XCTAssertEqual(result.portrait?.buttons?.first?.key, "Enter")
-        XCTAssertEqual(result.portrait?.actionButtons?.first?.action, "$pauseMenu")
+        XCTAssertEqual(result.portrait.dpad?.x, 0.3)
+        XCTAssertEqual(result.portrait.buttons?.first?.key, "Enter")
+        XCTAssertEqual(result.portrait.actionButtons?.first?.action, "$pauseMenu")
         // Both orientations always present, all fields present.
-        XCTAssertNotNil(result.landscape?.dpad)
-        XCTAssertNotNil(result.landscape?.buttons)
-        XCTAssertNotNil(result.landscape?.actionButtons)
+        XCTAssertNotNil(result.landscape.dpad)
+        XCTAssertNotNil(result.landscape.buttons)
+        XCTAssertNotNil(result.landscape.actionButtons)
     }
 
     func testProfileGapsCompleteAgainstBuiltinOnly() {
@@ -303,8 +303,8 @@ final class LayoutProfilesTests: XCTestCase {
         )
         let result = ProfileMaterializer.materialize(
             user: sparse, manifest: nil, builtins: builtins(), metrics: .reference)
-        XCTAssertEqual(result.portrait?.buttons?.first?.label, "A", "builtin, not any manifest")
-        XCTAssertEqual(result.portrait?.actionButtons, [])
+        XCTAssertEqual(result.portrait.buttons?.first?.label, "A", "builtin, not any manifest")
+        XCTAssertEqual(result.portrait.actionButtons, [])
     }
 
     // MARK: - Migration decisions
@@ -343,7 +343,8 @@ final class LayoutProfilesTests: XCTestCase {
 
     private func materializedSample() -> TouchSection {
         ProfileMaterializer.materialize(
-            user: sampleTouch(), manifest: nil, builtins: builtins(), metrics: .reference)
+            user: sampleTouch(), manifest: nil, builtins: builtins(), metrics: .reference
+        ).section
     }
 
     func testMigrationCreatesForFreshCustomLayout() {
@@ -383,7 +384,7 @@ final class LayoutProfilesTests: XCTestCase {
         // intent: no profile.
         let ambient = ProfileMaterializer.materialize(
             user: nil, manifest: nil, builtins: builtins(), metrics: .reference)
-        let action = decide(userTouch: ambient)
+        let action = decide(userTouch: ambient.section)
         guard case .recordOnly = action else { return XCTFail("\(action)") }
     }
 
@@ -459,7 +460,7 @@ final class LayoutProfilesTests: XCTestCase {
         let reread = try XCTUnwrap(store.readProfile("Stable")?.touch)
         let rematerialized = ProfileMaterializer.materialize(
             user: reread, manifest: nil, builtins: builtins(), metrics: .reference)
-        XCTAssertTrue(store.writeProfile("Stable", touch: rematerialized))
+        XCTAssertTrue(store.writeProfile("Stable", touch: rematerialized.section))
         let second = try Data(contentsOf: store.controlsURL("Stable"))
         XCTAssertEqual(first, second)
     }
