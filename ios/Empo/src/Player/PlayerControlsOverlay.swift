@@ -123,51 +123,23 @@ struct PlayerControlsOverlay: View {
 
     @ViewBuilder
     private func actionButton(button: ButtonModel, index: Int, displayPosition: CGPoint?) -> some View {
-        // displayPosition is already absolute and separation-adjusted
-        // (post-clamp). The fallback only covers the empty-layout case.
-        let pos =
-            displayPosition
-            ?? ControlsZone.absolutePosition(
-                for: button.relativeCenter, in: geo.size,
-                controlSize: CGSize(width: button.size, height: button.size),
-                safeArea: safeArea,
-                controlsMinY: controlsMinY)
-        let isDragging = draggingButtonID == button.id
-        let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
-        ActionButton(
-            label: button.label,
-            scancode: button.scancode,
+        editableControl(
+            ActionButton(
+                label: button.label,
+                scancode: button.scancode,
+                size: button.size,
+                editing: editMode
+            ),
+            id: button.id,
             size: button.size,
-            editing: editMode
+            opacity: button.opacity,
+            position: resolvedPosition(
+                displayPosition, center: button.relativeCenter, size: button.size),
+            hitRegionKey: "controls.button.\(button.id.uuidString)",
+            onTapEdit: { editingButton = button },
+            onDelete: { layout.removeButton(id: button.id) },
+            update: { layout.updateButton(id: button.id, relativeCenter: $0) }
         )
-        .frame(width: button.size, height: button.size)
-        .opacity(button.opacity)
-        // Edit-mode-only, same masking rationale as the D-pad's
-        // tap-to-edit gesture above.
-        .gesture(
-            TapGesture().onEnded { editingButton = button },
-            including: editMode ? .all : .subviews
-        )
-        .overlay(alignment: .topTrailing) {
-            if editMode && !isDragging {
-                Button {
-                    withAnimation(Motion.snappy) {
-                        layout.removeButton(id: button.id)
-                    }
-                } label: {
-                    Chip(systemImage: "xmark", tint: .destructive)
-                }
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .chromeHitRegion("controls.button.\(button.id.uuidString)", enabled: !isPreview)
-        .scaleEffect(isDragging ? ControlsZone.dragScaleFactor : 1.0)
-        .animation(Motion.snappy, value: isDragging)
-        .position(pos)
-        .transition(.controlAppear(anchor: anchor))
-        .gesture(
-            buttonDragGesture(id: button.id, size: button.size),
-            including: editMode ? .all : .subviews)
     }
 
     @ViewBuilder
@@ -183,77 +155,38 @@ struct PlayerControlsOverlay: View {
     private func functionButton(
         button: ActionButtonModel, action: EmpoAction, displayPosition: CGPoint?
     ) -> some View {
-        let pos =
-            displayPosition
-            ?? ControlsZone.absolutePosition(
-                for: button.relativeCenter, in: geo.size,
-                controlSize: CGSize(width: button.size, height: button.size),
-                safeArea: safeArea,
-                controlsMinY: controlsMinY)
-        let isDragging = draggingButtonID == button.id
-        let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
-        let unavailable = !isPreview && !actions.isAvailable(button.action)
-        FunctionButton(
-            action: action,
-            size: button.size,
-            editing: editMode,
-            isActive: isToggleActive(action),
-            onPress: { actions.handle(button.action, pressed: true) },
-            onRelease: { actions.handle(button.action, pressed: false) }
-        )
-        .frame(width: button.size, height: button.size)
-        .opacity(button.opacity)
-        .gesture(
-            TapGesture().onEnded { editingActionButton = button },
-            including: editMode ? .all : .subviews
-        )
-        .overlay(alignment: .topTrailing) {
-            if editMode && !isDragging {
-                Button {
-                    withAnimation(Motion.snappy) {
-                        layout.removeActionButton(id: button.id)
-                    }
-                } label: {
-                    Chip(systemImage: "xmark", tint: .destructive)
+        editableControl(
+            FunctionButton(
+                action: action,
+                size: button.size,
+                editing: editMode,
+                isActive: actions.isToggleActive(action),
+                onPress: { actions.handle(button.action, pressed: true) },
+                onRelease: { actions.handle(button.action, pressed: false) }
+            )
+            .overlay(alignment: .bottom) {
+                if editMode && !isPreview && !actions.isAvailable(button.action) {
+                    Text("Unavailable in this game")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(.black.opacity(0.6), in: Capsule())
+                        .fixedSize()
+                        .offset(y: 14)
+                        .allowsHitTesting(false)
                 }
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .overlay(alignment: .bottom) {
-            if editMode && unavailable {
-                Text("Unavailable in this game")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(.black.opacity(0.6), in: Capsule())
-                    .fixedSize()
-                    .offset(y: 14)
-                    .allowsHitTesting(false)
-            }
-        }
-        .chromeHitRegion("controls.actionButton.\(button.id.uuidString)", enabled: !isPreview)
-        .scaleEffect(isDragging ? ControlsZone.dragScaleFactor : 1.0)
-        .animation(Motion.snappy, value: isDragging)
-        .position(pos)
-        .transition(.controlAppear(anchor: anchor))
-        .gesture(
-            actionButtonDragGesture(id: button.id, size: button.size),
-            including: editMode ? .all : .subviews)
-    }
-
-    /// A latched fast-forward toggle shows its engaged state on the
-    /// button face.
-    private func isToggleActive(_ action: EmpoAction) -> Bool {
-        guard action.kind == .toggle else { return false }
-        switch action.id {
-        case EmpoActionCatalog.fastForwardToggle:
-            return actions.runtime.fastForwardActive
-        case EmpoActionCatalog.toggleCheats:
-            return actions.runtime.cheatsEnabled
-        default:
-            return false
-        }
+            },
+            id: button.id,
+            size: button.size,
+            opacity: button.opacity,
+            position: resolvedPosition(
+                displayPosition, center: button.relativeCenter, size: button.size),
+            hitRegionKey: "controls.actionButton.\(button.id.uuidString)",
+            onTapEdit: { editingActionButton = button },
+            onDelete: { layout.removeActionButton(id: button.id) },
+            update: { layout.updateActionButton(id: button.id, relativeCenter: $0) }
+        )
     }
 
     /// Last resolved center of each drag in flight, keyed per
@@ -333,33 +266,74 @@ struct PlayerControlsOverlay: View {
         return center
     }
 
-    private func actionButtonDragGesture(id: UUID, size: CGFloat) -> some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if draggingButtonID != id {
-                    layout.recordEditSnapshot()
-                    draggingButtonID = id
-                    lastDragResolved.removeValue(
-                        forKey: dragKey(draggedID: id, draggedIsDPad: false))
-                }
-                let resolved = resolvedDragPosition(
-                    value.location, draggedID: id, draggedIsDPad: false, size: size)
-                layout.updateActionButton(
-                    id: id,
-                    relativeCenter: CGPoint(
-                        x: resolved.x / geo.size.width,
-                        y: resolved.y / geo.size.height
-                    ))
-            }
-            .onEnded { _ in
-                draggingButtonID = nil
-                lastDragResolved.removeValue(
-                    forKey: dragKey(draggedID: id, draggedIsDPad: false))
-                layout.save()
-            }
+    /// displayPosition is already absolute and separation-adjusted
+    /// (post-clamp). The fallback only covers the empty-layout case.
+    private func resolvedPosition(
+        _ displayPosition: CGPoint?, center: CGPoint, size: CGFloat
+    ) -> CGPoint {
+        displayPosition
+            ?? ControlsZone.absolutePosition(
+                for: center, in: geo.size,
+                controlSize: CGSize(width: size, height: size),
+                safeArea: safeArea,
+                controlsMinY: controlsMinY)
     }
 
-    private func buttonDragGesture(id: UUID, size: CGFloat) -> some Gesture {
+    /// The edit chrome every draggable button shares: tap-to-edit,
+    /// delete chip, hit region, drag scale, appear transition, and
+    /// ONE drag gesture whose `update` closure routes to the right
+    /// mutator. Key buttons and action buttons cannot drift apart.
+    private func editableControl<Control: View>(
+        _ control: Control,
+        id: UUID,
+        size: CGFloat,
+        opacity: Double,
+        position: CGPoint,
+        hitRegionKey: String,
+        onTapEdit: @escaping () -> Void,
+        onDelete: @escaping () -> Void,
+        update: @escaping (CGPoint) -> Void
+    ) -> some View {
+        let isDragging = draggingButtonID == id
+        let anchor = UnitPoint(
+            x: position.x / geo.size.width, y: position.y / geo.size.height)
+        return
+            control
+            .frame(width: size, height: size)
+            .opacity(opacity)
+            // Edit-mode-only, same masking rationale as the D-pad's
+            // tap-to-edit gesture above.
+            .gesture(
+                TapGesture().onEnded { onTapEdit() },
+                including: editMode ? .all : .subviews
+            )
+            .overlay(alignment: .topTrailing) {
+                if editMode && !isDragging {
+                    Button {
+                        withAnimation(Motion.snappy) {
+                            onDelete()
+                        }
+                    } label: {
+                        Chip(systemImage: "xmark", tint: .destructive)
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .chromeHitRegion(hitRegionKey, enabled: !isPreview)
+            .scaleEffect(isDragging ? ControlsZone.dragScaleFactor : 1.0)
+            .animation(Motion.snappy, value: isDragging)
+            .position(position)
+            .transition(.controlAppear(anchor: anchor))
+            .gesture(
+                controlDragGesture(id: id, size: size, update: update),
+                including: editMode ? .all : .subviews)
+    }
+
+    /// One drag gesture for both button kinds, on the shared
+    /// clamp+collide pipeline.
+    private func controlDragGesture(
+        id: UUID, size: CGFloat, update: @escaping (CGPoint) -> Void
+    ) -> some Gesture {
         DragGesture()
             .onChanged { value in
                 if draggingButtonID != id {
@@ -370,9 +344,8 @@ struct PlayerControlsOverlay: View {
                 }
                 let resolved = resolvedDragPosition(
                     value.location, draggedID: id, draggedIsDPad: false, size: size)
-                layout.updateButton(
-                    id: id,
-                    relativeCenter: CGPoint(
+                update(
+                    CGPoint(
                         x: resolved.x / geo.size.width,
                         y: resolved.y / geo.size.height
                     ))

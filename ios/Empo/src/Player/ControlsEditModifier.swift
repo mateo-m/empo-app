@@ -10,7 +10,7 @@ struct AddButtonSheet: View {
     /// on its next load and silently reset, so the add rows disable
     /// at the limit instead.
     private var atCap: Bool {
-        layout.combinedButtonCount >= ControlsLayout.maxButtonsPerOrientation
+        layout.combinedButtonCount >= ControlsManifestLoader.maxButtonsPerOrientation
     }
 
     var body: some View {
@@ -19,7 +19,7 @@ struct AddButtonSheet: View {
                 if atCap {
                     Section {
                         Text(
-                            "This layout has the maximum of \(ControlsLayout.maxButtonsPerOrientation) buttons. Delete one to add another."
+                            "This layout has the maximum of \(ControlsManifestLoader.maxButtonsPerOrientation) buttons. Delete one to add another."
                         )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -125,6 +125,97 @@ struct AddButtonSheet: View {
     }
 }
 
+/// Size presets shared by the edit sheets, so the progressions
+/// cannot drift between the button kinds.
+enum ControlSizePresets {
+    static let button: [(String, CGFloat)] = [
+        ("Small", 44), ("Medium", 50),
+        ("Default", 56), ("Large", 68), ("Extra large", 80),
+    ]
+    /// Matches the button progression's feel; the D-pad's default
+    /// (140pt) is the middle preset.
+    static let dpad: [(String, CGFloat)] = [
+        ("Small", 110), ("Medium", 125),
+        ("Default", 140), ("Large", 160), ("Extra large", 180),
+    ]
+}
+
+/// The Size / Opacity / Delete sections every control edit sheet
+/// shares. One implementation, so the sheets cannot drift.
+struct ControlSizeSection: View {
+    let sizes: [(String, CGFloat)]
+    let current: CGFloat
+    let onSelect: (CGFloat) -> Void
+
+    var body: some View {
+        Section("Size") {
+            ForEach(sizes, id: \.1) { name, size in
+                HStack {
+                    Text(name)
+                    Spacer()
+                    Text("\(Int(size))pt")
+                        .foregroundStyle(.secondary)
+                    if Int(size) == Int(current) {
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(.brand)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { onSelect(size) }
+            }
+        }
+    }
+}
+
+struct ControlOpacitySection: View {
+    let opacity: Double
+    let onEditingBegan: () -> Void
+    let onChange: (Double) -> Void
+
+    var body: some View {
+        Section("Opacity") {
+            // The integer-percent label mirrors the Photos
+            // adjust-panel idiom, so the exact slider value stays
+            // visible while you drag.
+            HStack {
+                Slider(
+                    value: Binding(get: { opacity }, set: onChange),
+                    in: 0.2...1.0
+                ) { editing in
+                    if editing {
+                        onEditingBegan()
+                    }
+                }
+                Text("\(Int(opacity * 100))%")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 48, alignment: .trailing)
+            }
+        }
+    }
+}
+
+struct ControlDeleteSection: View {
+    let onDelete: () -> Void
+
+    var body: some View {
+        Section {
+            Button {
+                onDelete()
+            } label: {
+                Text("Delete button")
+            }
+            .buttonStyle(.secondary(tint: .destructive))
+            .frame(maxWidth: .infinity)
+            .listRowBackground(Color.clear)
+            .listRowInsets(
+                EdgeInsets(
+                    top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg
+                ))
+        }
+    }
+}
+
 struct ButtonEditSheet: View {
     var layout: ControlsLayout
     let buttonID: UUID
@@ -132,11 +223,6 @@ struct ButtonEditSheet: View {
 
     @State private var labelText = ""
     @State private var labelEditSnapshotRecorded = false
-
-    private let sizes: [(String, CGFloat)] = [
-        ("Small", 44), ("Medium", 50),
-        ("Default", 56), ("Large", 68), ("Extra large", 80),
-    ]
 
     private var button: ButtonModel? {
         layout.buttons.first { $0.id == buttonID }
@@ -170,65 +256,24 @@ struct ButtonEditSheet: View {
                         }
                     }
 
-                    Section("Size") {
-                        ForEach(sizes, id: \.1) { name, size in
-                            HStack {
-                                Text(name)
-                                Spacer()
-                                Text("\(Int(size))pt")
-                                    .foregroundStyle(.secondary)
-                                if Int(size) == Int(button.size) {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.brand)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                layout.recordEditSnapshot()
-                                layout.updateButton(id: buttonID, size: size)
-                            }
-                        }
+                    ControlSizeSection(
+                        sizes: ControlSizePresets.button, current: button.size
+                    ) { size in
+                        layout.recordEditSnapshot()
+                        layout.updateButton(id: buttonID, size: size)
                     }
 
-                    Section("Opacity") {
-                        // The integer-percent label mirrors the Photos
-                        // adjust-panel idiom, so the exact slider
-                        // value stays visible while you drag.
-                        HStack {
-                            Slider(
-                                value: Binding(
-                                    get: { button.opacity },
-                                    set: { layout.updateButton(id: buttonID, opacity: $0) }
-                                ),
-                                in: 0.2...1.0
-                            ) { editing in
-                                if editing {
-                                    layout.recordEditSnapshot()
-                                }
-                            }
-                            Text("\(Int(button.opacity * 100))%")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .frame(width: 48, alignment: .trailing)
-                        }
-                    }
+                    ControlOpacitySection(
+                        opacity: button.opacity,
+                        onEditingBegan: { layout.recordEditSnapshot() },
+                        onChange: { layout.updateButton(id: buttonID, opacity: $0) }
+                    )
 
-                    Section {
-                        Button {
-                            dismiss()
-                            withAnimation(Motion.snappy) {
-                                layout.removeButton(id: buttonID)
-                            }
-                        } label: {
-                            Text("Delete button")
+                    ControlDeleteSection {
+                        dismiss()
+                        withAnimation(Motion.snappy) {
+                            layout.removeButton(id: buttonID)
                         }
-                        .buttonStyle(.secondary(tint: .destructive))
-                        .frame(maxWidth: .infinity)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(
-                            EdgeInsets(
-                                top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg
-                            ))
                     }
                 }
                 .navigationTitle("Edit button")
@@ -282,11 +327,6 @@ struct ActionButtonEditSheet: View {
     let buttonID: UUID
     @Environment(\.dismiss) private var dismiss
 
-    private let sizes: [(String, CGFloat)] = [
-        ("Small", 44), ("Medium", 50),
-        ("Default", 56), ("Large", 68), ("Extra large", 80),
-    ]
-
     private var button: ActionButtonModel? {
         layout.actionButtons.first { $0.id == buttonID }
     }
@@ -314,62 +354,24 @@ struct ActionButtonEditSheet: View {
                         }
                     }
 
-                    Section("Size") {
-                        ForEach(sizes, id: \.1) { name, size in
-                            HStack {
-                                Text(name)
-                                Spacer()
-                                Text("\(Int(size))pt")
-                                    .foregroundStyle(.secondary)
-                                if Int(size) == Int(button.size) {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.brand)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                layout.recordEditSnapshot()
-                                layout.updateActionButton(id: buttonID, size: size)
-                            }
-                        }
+                    ControlSizeSection(
+                        sizes: ControlSizePresets.button, current: button.size
+                    ) { size in
+                        layout.recordEditSnapshot()
+                        layout.updateActionButton(id: buttonID, size: size)
                     }
 
-                    Section("Opacity") {
-                        HStack {
-                            Slider(
-                                value: Binding(
-                                    get: { button.opacity },
-                                    set: { layout.updateActionButton(id: buttonID, opacity: $0) }
-                                ),
-                                in: 0.2...1.0
-                            ) { editing in
-                                if editing {
-                                    layout.recordEditSnapshot()
-                                }
-                            }
-                            Text("\(Int(button.opacity * 100))%")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .frame(width: 48, alignment: .trailing)
-                        }
-                    }
+                    ControlOpacitySection(
+                        opacity: button.opacity,
+                        onEditingBegan: { layout.recordEditSnapshot() },
+                        onChange: { layout.updateActionButton(id: buttonID, opacity: $0) }
+                    )
 
-                    Section {
-                        Button {
-                            dismiss()
-                            withAnimation(Motion.snappy) {
-                                layout.removeActionButton(id: buttonID)
-                            }
-                        } label: {
-                            Text("Delete button")
+                    ControlDeleteSection {
+                        dismiss()
+                        withAnimation(Motion.snappy) {
+                            layout.removeActionButton(id: buttonID)
                         }
-                        .buttonStyle(.secondary(tint: .destructive))
-                        .frame(maxWidth: .infinity)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(
-                            EdgeInsets(
-                                top: Spacing.md, leading: Spacing.lg, bottom: Spacing.md, trailing: Spacing.lg
-                            ))
                     }
                 }
                 .navigationTitle("Edit button")
@@ -394,14 +396,6 @@ struct DPadEditSheet: View {
     var layout: ControlsLayout
     @Environment(\.dismiss) private var dismiss
 
-    /// Size presets match the action button sheet's progression so
-    /// the two controls feel consistent when you size them side by
-    /// side. The D-pad's default (140pt) is the middle preset.
-    private let sizes: [(String, CGFloat)] = [
-        ("Small", 110), ("Medium", 125),
-        ("Default", 140), ("Large", 160), ("Extra large", 180),
-    ]
-
     var body: some View {
         NavigationStack {
             List {
@@ -416,45 +410,18 @@ struct DPadEditSheet: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section("Size") {
-                    ForEach(sizes, id: \.1) { name, size in
-                        HStack {
-                            Text(name)
-                            Spacer()
-                            Text("\(Int(size))pt")
-                                .foregroundStyle(.secondary)
-                            if Int(size) == Int(layout.dpadSize) {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(.brand)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            layout.recordEditSnapshot()
-                            layout.dpadSize = size
-                        }
-                    }
+                ControlSizeSection(
+                    sizes: ControlSizePresets.dpad, current: layout.dpadSize
+                ) { size in
+                    layout.recordEditSnapshot()
+                    layout.dpadSize = size
                 }
 
-                Section("Opacity") {
-                    HStack {
-                        Slider(
-                            value: Binding(
-                                get: { layout.dpadOpacity },
-                                set: { layout.dpadOpacity = $0 }
-                            ),
-                            in: 0.2...1.0
-                        ) { editing in
-                            if editing {
-                                layout.recordEditSnapshot()
-                            }
-                        }
-                        Text("\(Int(layout.dpadOpacity * 100))%")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 48, alignment: .trailing)
-                    }
-                }
+                ControlOpacitySection(
+                    opacity: layout.dpadOpacity,
+                    onEditingBegan: { layout.recordEditSnapshot() },
+                    onChange: { layout.dpadOpacity = $0 }
+                )
             }
             .navigationTitle(layout.dpadStyle == .stick ? "Edit joystick" : "Edit D-pad")
             .navigationBarTitleDisplayMode(.inline)

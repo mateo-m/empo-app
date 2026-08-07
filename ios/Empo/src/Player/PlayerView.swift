@@ -102,43 +102,8 @@ struct PlayerView: View {
                         .allowsHitTesting(false)
 
                     editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
-                    if layout.manifestRejectionErrorCount > 0 {
-                        let errorCount = layout.manifestRejectionErrorCount
-                        let errorLabel = errorCount == 1 ? "error" : "errors"
-                        Text(
-                            "This game ships a controls.json with \(errorCount) \(errorLabel). See Logs."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, Spacing.lg)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, safeArea.bottom + Spacing.md)
-                        .allowsHitTesting(false)
-                    } else if layout.profileRejectionErrorCount > 0 {
-                        let errorCount = layout.profileRejectionErrorCount
-                        let errorLabel = errorCount == 1 ? "error" : "errors"
-                        Text(
-                            "The pinned profile has \(errorCount) \(errorLabel). See Logs."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, Spacing.lg)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, safeArea.bottom + Spacing.md)
-                        .allowsHitTesting(false)
-                    } else if layout.pinFellThrough {
-                        Text(
-                            "The pinned layout is missing. This game uses the next layout in line."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, Spacing.lg)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .padding(.bottom, safeArea.bottom + Spacing.md)
-                        .allowsHitTesting(false)
+                    if let caption = editZoneCaptionText {
+                        editZoneCaption(caption, safeArea: safeArea)
                     }
 
                     screenRegionGizmo(
@@ -261,55 +226,35 @@ struct PlayerView: View {
                 // One-time heads-up: the game's own layout displaced
                 // the user's default profile.
                 if layout.gameLayoutNoticePending && !editMode && !layout.importOfferPending {
-                    VStack {
-                        Spacer()
-                        HStack(spacing: Spacing.lg) {
-                            Text("This game ships its own control layout; it is now active.")
-                                .font(.footnote)
-                                .foregroundStyle(.white)
-                            Button("OK") {
-                                layout.dismissGameLayoutNotice()
-                            }
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.brand)
+                    noticeCapsule(hitRegionKey: "gameLayoutNotice", safeArea: safeArea) {
+                        Text("This game ships its own control layout; it is now active.")
+                            .font(.footnote)
+                            .foregroundStyle(.white)
+                        Button("OK") {
+                            layout.dismissGameLayoutNotice()
                         }
-                        .padding(.horizontal, Spacing.lg)
-                        .padding(.vertical, Spacing.md)
-                        .background(Color.black.opacity(Scrim.heavy))
-                        .clipShape(Capsule())
-                        // Without a hit region, taps inside gameRect
-                        // route to the engine instead of the button.
-                        .chromeHitRegion("gameLayoutNotice")
-                        .padding(.bottom, safeArea.bottom + Spacing.md)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.brand)
                     }
                 }
 
                 // A migrated-then-changed controls file in the game
                 // folder waits for the user's import decision.
                 if layout.importOfferPending && !editMode {
-                    VStack {
-                        Spacer()
-                        HStack(spacing: Spacing.lg) {
-                            Text("This game's folder has a controls file.")
-                                .font(.footnote)
-                                .foregroundStyle(.white)
-                            Button("Import as profile") {
-                                layout.acceptImportOffer()
-                            }
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.brand)
-                            Button("Not now") {
-                                layout.dismissImportOffer()
-                            }
+                    noticeCapsule(hitRegionKey: "importOffer", safeArea: safeArea) {
+                        Text("This game's folder has a controls file.")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.white)
+                        Button("Import as profile") {
+                            layout.acceptImportOffer()
                         }
-                        .padding(.horizontal, Spacing.lg)
-                        .padding(.vertical, Spacing.md)
-                        .background(Color.black.opacity(Scrim.heavy))
-                        .clipShape(Capsule())
-                        .chromeHitRegion("importOffer")
-                        .padding(.bottom, safeArea.bottom + Spacing.md)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.brand)
+                        Button("Not now") {
+                            layout.dismissImportOffer()
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -661,6 +606,57 @@ struct PlayerView: View {
         return ScreenRegion(
             x: x / geoSize.width, y: y / geoSize.height,
             w: width / geoSize.width, h: height / geoSize.height)
+    }
+
+    /// The first edit-mode notice worth showing, most severe first.
+    private var editZoneCaptionText: String? {
+        if layout.manifestRejectionErrorCount > 0 {
+            let errorCount = layout.manifestRejectionErrorCount
+            let errorLabel = errorCount == 1 ? "error" : "errors"
+            return "This game ships a controls.json with \(errorCount) \(errorLabel). See Logs."
+        }
+        if layout.profileRejectionErrorCount > 0 {
+            let errorCount = layout.profileRejectionErrorCount
+            let errorLabel = errorCount == 1 ? "error" : "errors"
+            return "The pinned profile has \(errorCount) \(errorLabel). See Logs."
+        }
+        if layout.pinFellThrough {
+            return "The pinned layout is missing. This game uses the next layout in line."
+        }
+        return nil
+    }
+
+    /// The bottom caption chrome every edit-mode notice shares.
+    private func editZoneCaption(_ text: String, safeArea: EdgeInsets) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, Spacing.lg)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .padding(.bottom, safeArea.bottom + Spacing.md)
+            .allowsHitTesting(false)
+    }
+
+    /// The bottom notice pill both play-time banners share. Without
+    /// a hit region, taps inside gameRect route to the engine
+    /// instead of the buttons.
+    private func noticeCapsule(
+        hitRegionKey: String, safeArea: EdgeInsets,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        VStack {
+            Spacer()
+            HStack(spacing: Spacing.lg) {
+                content()
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .background(Color.black.opacity(Scrim.heavy))
+            .clipShape(Capsule())
+            .chromeHitRegion(hitRegionKey)
+            .padding(.bottom, safeArea.bottom + Spacing.md)
+        }
     }
 
     @ViewBuilder

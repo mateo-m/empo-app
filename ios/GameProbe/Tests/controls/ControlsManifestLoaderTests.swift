@@ -411,7 +411,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
 
         let absent = #"{ "version": 1, "touch": { "portrait": { "dpad": { "x": 0.25, "y": 0.75 } } } }"#
         let absentResult = ControlsManifestLoader.parse(data: absent.data(using: .utf8)!)
-        XCTAssertNil(absentResult.manifest?.touch?.portrait?.dpad?.style)
+        XCTAssertEqual(absentResult.manifest?.touch?.portrait?.dpad?.style, .dpad)
     }
 
     func testW006UnknownMovementStyleFallsBackToDPad() {
@@ -426,7 +426,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
             XCTAssertNotNil(result.manifest, value)
             XCTAssertNotNil(
                 finding(result, code: "W006", path: "/touch/portrait/dpad/style"), value)
-            XCTAssertNil(result.manifest?.touch?.portrait?.dpad?.style, value)
+            XCTAssertEqual(result.manifest?.touch?.portrait?.dpad?.style, .dpad, value)
         }
     }
 

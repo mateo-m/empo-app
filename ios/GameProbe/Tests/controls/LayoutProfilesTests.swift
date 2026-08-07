@@ -114,22 +114,22 @@ final class LayoutProfilesTests: XCTestCase {
             LayoutChainResolver.resolve(
                 pin: .profile("P"),
                 levels: Levels(
-                    pinnedProfileValid: true, gameLayoutOccupied: true, defaultProfileValid: true)),
-            LayoutChainResolver.Outcome(level: .pinnedProfile, fellThrough: false))
+                    pinnedProfile: ("P", true), gameLayoutOccupied: true, defaultProfile: ("D", true))),
+            LayoutChainResolver.Outcome(provenance: .pinnedProfile("P"), fellThrough: false))
 
         // Missing named pin resumes the chain at the game level.
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .profile("P"),
                 levels: Levels(
-                    pinnedProfileValid: false, gameLayoutOccupied: true, defaultProfileValid: true)),
-            LayoutChainResolver.Outcome(level: .gameLayout, fellThrough: true))
+                    pinnedProfile: ("P", false), gameLayoutOccupied: true, defaultProfile: ("D", true))),
+            LayoutChainResolver.Outcome(provenance: .gameLayout, fellThrough: true))
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .profile("P"),
                 levels: Levels(
-                    pinnedProfileValid: false, gameLayoutOccupied: false, defaultProfileValid: true)),
-            LayoutChainResolver.Outcome(level: .defaultProfile, fellThrough: true))
+                    pinnedProfile: ("P", false), gameLayoutOccupied: false, defaultProfile: ("D", true))),
+            LayoutChainResolver.Outcome(provenance: .defaultProfile("D"), fellThrough: true))
 
         // $game forces the game level; its fallback skips the
         // default profile on purpose.
@@ -137,36 +137,36 @@ final class LayoutProfilesTests: XCTestCase {
             LayoutChainResolver.resolve(
                 pin: .gameLayout,
                 levels: Levels(
-                    pinnedProfileValid: nil, gameLayoutOccupied: false, defaultProfileValid: true)),
-            LayoutChainResolver.Outcome(level: .builtin, fellThrough: true))
+                    pinnedProfile: nil, gameLayoutOccupied: false, defaultProfile: ("D", true))),
+            LayoutChainResolver.Outcome(provenance: .builtin, fellThrough: true))
 
         // $default falls to builtin when unset.
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .defaultProfile,
                 levels: Levels(
-                    pinnedProfileValid: nil, gameLayoutOccupied: true, defaultProfileValid: nil)),
-            LayoutChainResolver.Outcome(level: .builtin, fellThrough: true))
+                    pinnedProfile: nil, gameLayoutOccupied: true, defaultProfile: nil)),
+            LayoutChainResolver.Outcome(provenance: .builtin, fellThrough: true))
 
         // Follow-chain ordering: game, default, builtin.
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .followChain,
                 levels: Levels(
-                    pinnedProfileValid: nil, gameLayoutOccupied: true, defaultProfileValid: true)),
-            LayoutChainResolver.Outcome(level: .gameLayout, fellThrough: false))
+                    pinnedProfile: nil, gameLayoutOccupied: true, defaultProfile: ("D", true))),
+            LayoutChainResolver.Outcome(provenance: .gameLayout, fellThrough: false))
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .followChain,
                 levels: Levels(
-                    pinnedProfileValid: nil, gameLayoutOccupied: false, defaultProfileValid: true)),
-            LayoutChainResolver.Outcome(level: .defaultProfile, fellThrough: false))
+                    pinnedProfile: nil, gameLayoutOccupied: false, defaultProfile: ("D", true))),
+            LayoutChainResolver.Outcome(provenance: .defaultProfile("D"), fellThrough: false))
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .followChain,
                 levels: Levels(
-                    pinnedProfileValid: nil, gameLayoutOccupied: false, defaultProfileValid: nil)),
-            LayoutChainResolver.Outcome(level: .builtin, fellThrough: false))
+                    pinnedProfile: nil, gameLayoutOccupied: false, defaultProfile: nil)),
+            LayoutChainResolver.Outcome(provenance: .builtin, fellThrough: false))
     }
 
     // MARK: - Name validation

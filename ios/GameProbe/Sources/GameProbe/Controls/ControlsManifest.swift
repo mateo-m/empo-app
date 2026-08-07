@@ -55,15 +55,17 @@ public struct DPadSpec: Equatable, Sendable {
     public var y: Double
     public var size: Double?
     public var opacity: Double?
-    /// nil means the field is absent in the file (= d-pad).
-    public var style: MovementStyle?
+    /// Never optional: an absent file field IS the d-pad, and the
+    /// serializer omits the field for `.dpad`, so no consumer ever
+    /// needs to tell nil from `.dpad`.
+    public var style: MovementStyle
 
     public init(
         x: Double,
         y: Double,
         size: Double? = nil,
         opacity: Double? = nil,
-        style: MovementStyle? = nil
+        style: MovementStyle = .dpad
     ) {
         self.x = x
         self.y = y

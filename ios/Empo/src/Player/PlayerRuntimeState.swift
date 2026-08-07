@@ -153,22 +153,63 @@ final class PlayerActionRegistry {
     var toggleTouchControls: () -> Void = {}
     var log: (String) -> Void = { _ in }
 
+    /// One behavior record per action: availability, latched state,
+    /// and the edge handler. Availability, dispatch, and the button
+    /// face all read THIS table, so a new action registers in one
+    /// place — no kind-vs-id split across files.
+    private struct ActionBehavior {
+        var isAvailable: () -> Bool = { true }
+        var isActive: () -> Bool = { false }
+        /// Receives both edges. Toggle and instant behaviors wrap
+        /// themselves in `pressOnly`.
+        var handle: (Bool) -> Void
+    }
+
+    private static func pressOnly(_ body: @escaping () -> Void) -> (Bool) -> Void {
+        { pressed in
+            guard pressed else { return }
+            body()
+        }
+    }
+
+    /// Lazy: `pauseMenu`/`toggleTouchControls` capture self, so the
+    /// closures read the wiring the player scene sets after init.
+    private lazy var behaviors: [String: ActionBehavior] = [
+        EmpoActionCatalog.fastForwardHold: ActionBehavior(
+            isAvailable: { [runtime] in runtime.fastForwardAvailable },
+            handle: { [runtime] pressed in
+                runtime.fastForwardHoldChanged(pressed: pressed)
+            }),
+        EmpoActionCatalog.fastForwardToggle: ActionBehavior(
+            isAvailable: { [runtime] in runtime.fastForwardAvailable },
+            isActive: { [runtime] in runtime.fastForwardActive },
+            handle: Self.pressOnly { [runtime] in runtime.fastForwardToggled() }),
+        EmpoActionCatalog.pauseMenu: ActionBehavior(
+            handle: Self.pressOnly { [weak self] in self?.pauseMenu() }),
+        EmpoActionCatalog.toggleCheats: ActionBehavior(
+            isActive: { [runtime] in runtime.cheatsEnabled },
+            handle: Self.pressOnly { [runtime] in runtime.toggleCheats() }),
+        EmpoActionCatalog.toggleTouchControls: ActionBehavior(
+            handle: Self.pressOnly { [weak self] in self?.toggleTouchControls() }),
+    ]
+
     /// Whether the action does anything for the current game. An
     /// unavailable action's touch button hides during play; a
     /// controller binding to one stays inert.
     func isAvailable(_ actionID: String) -> Bool {
-        switch actionID {
-        case EmpoActionCatalog.fastForwardHold, EmpoActionCatalog.fastForwardToggle:
-            return runtime.fastForwardAvailable
-        default:
-            return EmpoActionCatalog.allIDs.contains(actionID)
-        }
+        behaviors[actionID]?.isAvailable() ?? EmpoActionCatalog.allIDs.contains(actionID)
+    }
+
+    /// A latched toggle shows its engaged state on the button face.
+    func isToggleActive(_ action: EmpoAction) -> Bool {
+        guard action.kind == .toggle else { return false }
+        return behaviors[action.id]?.isActive() ?? false
     }
 
     /// `pressed` is true on press edges. Hold actions also receive
     /// the release edge; toggle and instant actions ignore it.
     func handle(_ actionID: String, pressed: Bool) {
-        guard let action = EmpoActionCatalog.action(id: actionID) else {
+        guard EmpoActionCatalog.action(id: actionID) != nil else {
             if pressed {
                 log("Controls: unknown action \(actionID) does nothing")
             }
@@ -183,24 +224,7 @@ final class PlayerActionRegistry {
             return
         }
 
-        switch action.kind {
-        case .hold:
-            runtime.fastForwardHoldChanged(pressed: pressed)
-        case .toggle, .instant:
-            guard pressed else { return }
-            switch actionID {
-            case EmpoActionCatalog.fastForwardToggle:
-                runtime.fastForwardToggled()
-            case EmpoActionCatalog.pauseMenu:
-                pauseMenu()
-            case EmpoActionCatalog.toggleCheats:
-                runtime.toggleCheats()
-            case EmpoActionCatalog.toggleTouchControls:
-                toggleTouchControls()
-            default:
-                break
-            }
-        }
+        behaviors[actionID]?.handle(pressed)
     }
 
     /// Drops every held action at once. `ControllerInputManager`
