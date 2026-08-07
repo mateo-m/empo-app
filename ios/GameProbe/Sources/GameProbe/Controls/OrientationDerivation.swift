@@ -61,9 +61,15 @@ public enum OrientationDerivation {
 
         var derivedButtons: [ButtonSpec]?
         var derivedActionButtons: [ActionButtonSpec]?
+        // ONE tagged list feeds the separation pass, so recovering
+        // the results needs no positional offset arithmetic and the
+        // input order cannot desynchronize from the readback.
+        enum TaggedSpec {
+            case key(ButtonSpec)
+            case action(ActionButtonSpec)
+        }
         var buttonInputs: [(x: Double, y: Double, size: Double)] = []
-        var buttonSpecs: [ButtonSpec] = []
-        var actionButtonSpecs: [ActionButtonSpec] = []
+        var taggedSpecs: [TaggedSpec] = []
 
         func mappedCenter(x: Double, y: Double, size: Double) -> (x: Double, y: Double) {
             mapCenter(
@@ -91,7 +97,7 @@ public enum OrientationDerivation {
                 let size = spec.size ?? 56
                 let center = mappedCenter(x: spec.x, y: spec.y, size: size)
                 buttonInputs.append((center.x, center.y, size))
-                buttonSpecs.append(spec)
+                taggedSpecs.append(.key(spec))
             }
         }
 
@@ -101,7 +107,7 @@ public enum OrientationDerivation {
                 let size = spec.size ?? 56
                 let center = mappedCenter(x: spec.x, y: spec.y, size: size)
                 buttonInputs.append((center.x, center.y, size))
-                actionButtonSpecs.append(spec)
+                taggedSpecs.append(.action(spec))
             }
         }
 
@@ -114,39 +120,27 @@ public enum OrientationDerivation {
                 obstacles: obstacles
             )
 
-            // Separation input order is buttons, then action buttons.
             var separatedButtons: [ButtonSpec] = []
-            for (index, spec) in buttonSpecs.enumerated() {
+            var separatedActionButtons: [ActionButtonSpec] = []
+            for (index, tagged) in taggedSpecs.enumerated() {
                 let point = separated.positions[index]
-                let size = spec.size ?? 56
-                separatedButtons.append(
-                    ButtonSpec(
-                        label: spec.label,
-                        key: spec.key,
-                        x: clampFraction(point.x / targetWidth),
-                        y: clampFraction(point.y / targetHeight),
-                        size: size,
-                        opacity: spec.opacity
-                    )
-                )
+                let x = clampFraction(point.x / targetWidth)
+                let y = clampFraction(point.y / targetHeight)
+                switch tagged {
+                case .key(let spec):
+                    separatedButtons.append(
+                        ButtonSpec(
+                            label: spec.label, key: spec.key, x: x, y: y,
+                            size: spec.size ?? 56, opacity: spec.opacity))
+                case .action(let spec):
+                    separatedActionButtons.append(
+                        ActionButtonSpec(
+                            action: spec.action, x: x, y: y,
+                            size: spec.size ?? 56, opacity: spec.opacity))
+                }
             }
             if source.buttons != nil {
                 derivedButtons = separatedButtons
-            }
-
-            var separatedActionButtons: [ActionButtonSpec] = []
-            for (index, spec) in actionButtonSpecs.enumerated() {
-                let point = separated.positions[buttonSpecs.count + index]
-                let size = spec.size ?? 56
-                separatedActionButtons.append(
-                    ActionButtonSpec(
-                        action: spec.action,
-                        x: clampFraction(point.x / targetWidth),
-                        y: clampFraction(point.y / targetHeight),
-                        size: size,
-                        opacity: spec.opacity
-                    )
-                )
             }
             if source.actionButtons != nil {
                 derivedActionButtons = separatedActionButtons
