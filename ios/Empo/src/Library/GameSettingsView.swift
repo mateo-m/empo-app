@@ -247,8 +247,7 @@ struct GameSettingsView: View {
             Form {
                 gameplaySection
                 displaySection
-                layoutProfileSection
-                verticalAlignmentSection
+                layoutSection
                 performanceSection
                 engineSection
 
@@ -417,7 +416,11 @@ struct GameSettingsView: View {
     @State private var showLayoutProfilePicker = false
     @State private var savedProfileName: String?
 
-    private var layoutProfileSection: some View {
+    /// ONE section for everything layout: the profile (controls +
+    /// screen placement), the save-as-profile shortcut, and the
+    /// portrait position preset the profile can override. Merged so
+    /// the override relationship is visible in place.
+    private var layoutSection: some View {
         Section {
             Button {
                 showLayoutProfilePicker = true
@@ -447,15 +450,30 @@ struct GameSettingsView: View {
                         ?? "Save this game's layout as a profile")
             }
             .disabled(savedProfileName != nil)
+
+            Picker("Position", selection: verticalAlignmentBinding) {
+                ForEach(VerticalAlignment.allCases, id: \.self) { alignment in
+                    HStack(spacing: 10) {
+                        VerticalAlignmentIllustration(alignment: alignment)
+                            .frame(width: 24, height: 40)
+                        Text(alignment.label)
+                    }
+                    .tag(alignment)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
         } header: {
-            Text("Touch controls")
+            Text("Layout")
         } footer: {
-            if profileSetsScreenPortrait || profileSetsScreenLandscape {
+            if profileSetsScreenPortrait {
                 Text(
-                    "Profiles live in Settings and work for any game. The layout profile also sets the screen position."
+                    "Profiles live in Settings and work for any game. The layout profile sets the screen position for portrait. When you change the position, the profile stops setting it and the preset applies."
                 )
             } else {
-                Text("Profiles live in Settings and work for any game.")
+                Text(
+                    "Profiles live in Settings and work for any game. The position sets where the game sits on screen in portrait. Controls appear below."
+                )
             }
         }
     }
@@ -517,36 +535,32 @@ struct GameSettingsView: View {
         savedProfileName = name
     }
 
-    private var verticalAlignmentSection: some View {
-        Section {
-            Picker("Position", selection: verticalAlignmentBinding) {
-                ForEach(VerticalAlignment.allCases, id: \.self) { alignment in
-                    HStack(spacing: 10) {
-                        VerticalAlignmentIllustration(alignment: alignment)
-                            .frame(width: 24, height: 40)
-                        Text(alignment.label)
-                    }
-                    .tag(alignment)
-                }
+    /// The preset only applies when no profile region covers
+    /// portrait. Changing it while one does means "use automatic
+    /// placement with this alignment": drop the portrait entry the
+    /// same way the player's "Reset screen" does — from the pinned
+    /// profile in place, or by minting this game's own profile when
+    /// the region came from the default profile (a pin is terminal
+    /// for the screen).
+    private func clearPortraitScreenRegion() {
+        guard let container = game.container, profileSetsScreenPortrait else { return }
+        let store = LayoutProfilesManager.store
+        switch store.loadPin(forGameFolder: container.url).pin {
+        case .profile(let name):
+            let existing = store.readScreen(name)
+            store.writeScreen(name, portrait: nil, landscape: existing?.landscape)
+            LayoutProfilesManager.postProfileChange(name: name, from: nil)
+        default:
+            let name = store.uniqueName(base: game.title)
+            let section = LayoutProfilesManager.materializedLayout(for: container)
+            guard store.createProfile(name, touch: section) else { return }
+            if let landscape = resolvedScreen?.landscape.region {
+                store.writeScreen(name, portrait: nil, landscape: landscape)
             }
-            .pickerStyle(.inline)
-            .labelsHidden()
-            // A profile region outranks the preset; a live control
-            // that does nothing reads as a bug.
-            .disabled(profileSetsScreenPortrait)
-        } header: {
-            Text("Portrait layout")
-        } footer: {
-            if profileSetsScreenPortrait {
-                Text(
-                    "The layout profile sets the screen position for this game, so this preset is off."
-                )
-            } else {
-                Text(
-                    "Where the game sits on screen when playing in portrait. Controls appear below."
-                )
-            }
+            store.writePin(.profile(name), forGameFolder: container.url)
+            LayoutProfilesManager.postPinChange(gameID: container.id, from: nil)
         }
+        reloadResolvedScreen()
     }
 
     private var performanceSection: some View {
@@ -851,7 +865,13 @@ struct GameSettingsView: View {
     private var verticalAlignmentBinding: Binding<VerticalAlignment> {
         Binding(
             get: { effectiveVerticalAlignment },
-            set: { settings.verticalAlignment = $0 }
+            set: {
+                // A profile region would override the preset, so a
+                // preset change first turns the region off for this
+                // game (see `clearPortraitScreenRegion`).
+                clearPortraitScreenRegion()
+                settings.verticalAlignment = $0
+            }
         )
     }
 
