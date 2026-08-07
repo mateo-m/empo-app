@@ -408,10 +408,12 @@ struct LayoutProfileEditorView: View {
     private var fakeGameRect: CGRect { EditorCanvas.fakeGameRect(for: editingOrientation) }
 
     /// The profile's screen entry for the shown orientation, with
-    /// this session's pending edit on top.
+    /// this session's pending edit and the in-flight drag on top.
+    /// Same precedence as the player, through the shared helper, so
+    /// the placeholder and the controls follow a drag live here too.
     private var screenRegion: ScreenRegion? {
-        if let pending = layout.pendingScreenEdit { return pending }
-        return editingOrientation == .portrait ? diskScreen?.portrait : diskScreen?.landscape
+        layout.effectiveScreenRegion(
+            stored: editingOrientation == .portrait ? diskScreen?.portrait : diskScreen?.landscape)
     }
 
     /// Region rect on the canvas, when a region exists.
@@ -605,11 +607,15 @@ struct LayoutProfileEditorView: View {
                                 w: auto.width / size.width, h: auto.height / size.height)
                             : nil)
                 },
-                onDragChanged: { _ in },
+                onDragChanged: { region in
+                    layout.liveScreenDragRegion = region
+                },
                 onDragEnded: { region in
+                    layout.liveScreenDragRegion = nil
                     layout.endScreenDrag(region: region)
                 },
                 onReset: {
+                    layout.liveScreenDragRegion = nil
                     // The mock canvas has no engine: the SwiftUI
                     // animation on the placeholder IS the reset
                     // animation.

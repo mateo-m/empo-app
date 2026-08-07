@@ -453,6 +453,16 @@ class ControlsLayout {
     /// draw the dragged region before any save.
     var pendingScreenEdit: ScreenRegion?? { screenEdits[currentOrientation] }
 
+    /// The region every surface should draw RIGHT NOW: the in-flight
+    /// drag, then this session's pending edit, then the caller's
+    /// stored fallback (the resolved chain in the player, the
+    /// profile file in the editor). The player and the settings
+    /// editor both go through here, so a drag follows live in both.
+    func effectiveScreenRegion(stored: ScreenRegion?) -> ScreenRegion? {
+        if let live = liveScreenDragRegion { return live }
+        return pendingScreenEdit ?? stored
+    }
+
     /// True while a screen-gizmo drag is in flight. The chrome
     /// follows the engine's republished rects LIVE during the drag
     /// (user ruling 2026-08-06, overriding the freeze-at-drag-start

@@ -500,8 +500,7 @@ struct PlayerView: View {
         // The live drag region feeds BOTH gizmo copies, so the
         // chips instance above the controls follows the outline
         // mid-drag (each instance has its own local draft state).
-        let effective: ScreenRegion? =
-            layout.liveScreenDragRegion ?? (layout.pendingScreenEdit ?? resolved)
+        let effective = layout.effectiveScreenRegion(stored: resolved)
         // The outline draws the CLAMPED region — the same rect the
         // applier sends — so it can never disagree with the picture
         // when stored fractions fall outside this device's safe
