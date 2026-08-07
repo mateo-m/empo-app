@@ -247,8 +247,7 @@ struct GameSettingsView: View {
             Form {
                 gameplaySection
                 displaySection
-                layoutProfileSection
-                verticalAlignmentSection
+                layoutSection
                 performanceSection
                 engineSection
 
@@ -415,9 +414,12 @@ struct GameSettingsView: View {
     }
 
     @State private var showLayoutProfilePicker = false
-    @State private var savedProfileName: String?
 
-    private var layoutProfileSection: some View {
+    /// ONE section for everything layout: the profile (controls +
+    /// screen placement), the save-as-profile shortcut, and the
+    /// portrait position preset the profile can override. Merged so
+    /// the override relationship is visible in place.
+    private var layoutSection: some View {
         Section {
             Button {
                 showLayoutProfilePicker = true
@@ -430,23 +432,49 @@ struct GameSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .sheet(isPresented: $showLayoutProfilePicker) {
-                LayoutProfilePickerSheet(container: game.container!)
-            }
-
-            Button {
-                saveLayoutAsProfile()
-            } label: {
-                Text(
-                    savedProfileName.map { "Saved as \($0)" }
-                        ?? "Save this game's layout as a profile")
-            }
-            .disabled(savedProfileName != nil)
+            .sheet(
+                isPresented: $showLayoutProfilePicker,
+                onDismiss: { reloadResolvedScreen() },
+                content: {
+                    LayoutProfilePickerSheet(container: game.container!)
+                }
+            )
+            .onAppear { reloadResolvedScreen() }
         } header: {
-            Text("Touch controls")
+            Text("Layout")
         } footer: {
-            Text("Profiles live in Settings and work for any game.")
+            if profileSetsScreenPortrait || profileSetsScreenLandscape {
+                Text(
+                    "Profiles live in Settings and work for any game. The profile also sets where the game sits on screen."
+                )
+            } else {
+                Text("Profiles live in Settings and work for any game.")
+            }
         }
+    }
+
+    /// The resolved screen placement per orientation. The footer
+    /// only asks whether a placement exists; it does not care which
+    /// profile set it. Cached: Form bodies re-render on every
+    /// control interaction, and the resolve reads two files.
+    @State private var resolvedScreen: ScreenResolution.Result?
+
+    private func reloadResolvedScreen() {
+        guard let container = game.container else { return }
+        let store = LayoutProfilesManager.store
+        resolvedScreen = ScreenResolution.resolve(
+            pin: store.loadPin(forGameFolder: container.url).pin,
+            defaultProfileName: LayoutProfilesManager.defaultProfileName,
+            readScreen: { store.readScreen($0) }
+        )
+    }
+
+    private var profileSetsScreenPortrait: Bool {
+        resolvedScreen?.portrait.placement != nil
+    }
+
+    private var profileSetsScreenLandscape: Bool {
+        resolvedScreen?.landscape.placement != nil
     }
 
     private var currentPinLabel: String {
@@ -456,38 +484,6 @@ struct GameSettingsView: View {
         case .profile(let name): return name
         case .gameLayout: return "Game layout"
         case .defaultProfile: return "Default profile"
-        }
-    }
-
-    private func saveLayoutAsProfile() {
-        guard let container = game.container else { return }
-        let store = LayoutProfilesManager.store
-        let name = store.uniqueName(base: game.title)
-        let section = LayoutProfilesManager.materializedLayout(for: container)
-        guard store.createProfile(name, touch: section) else { return }
-        store.writePin(.profile(name), forGameFolder: container.url)
-        LayoutProfilesManager.postPinChange(gameID: container.id, from: nil)
-        savedProfileName = name
-    }
-
-    private var verticalAlignmentSection: some View {
-        Section {
-            Picker("Position", selection: verticalAlignmentBinding) {
-                ForEach(VerticalAlignment.allCases, id: \.self) { alignment in
-                    HStack(spacing: 10) {
-                        VerticalAlignmentIllustration(alignment: alignment)
-                            .frame(width: 24, height: 40)
-                        Text(alignment.label)
-                    }
-                    .tag(alignment)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
-        } header: {
-            Text("Portrait layout")
-        } footer: {
-            Text("Where the game sits on screen when playing in portrait. Controls appear below.")
         }
     }
 

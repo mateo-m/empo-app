@@ -10,6 +10,12 @@ extension Notification.Name {
     /// Posted after a game's pin file changes. userInfo carries
     /// `gameID`.
     static let layoutPinDidChange = Notification.Name("layoutPinDidChange")
+
+    /// Posted after the default profile is set, cleared, or renamed.
+    /// The screen region follows the default live, so a silent
+    /// UserDefaults write is not enough anymore.
+    static let layoutDefaultProfileDidChange = Notification.Name(
+        "layoutDefaultProfileDidChange")
 }
 
 /// App-side access to the layout-profile store, the default-profile
@@ -41,10 +47,15 @@ enum LayoutProfilesManager {
             return store.profileExists(name) ? name : nil
         }
         set {
+            let old = UserDefaults.standard.string(forKey: defaultKey)
             if let newValue {
                 UserDefaults.standard.set(newValue, forKey: defaultKey)
             } else {
                 UserDefaults.standard.removeObject(forKey: defaultKey)
+            }
+            if old != newValue {
+                NotificationCenter.default.post(
+                    name: .layoutDefaultProfileDidChange, object: nil)
             }
         }
     }

@@ -119,33 +119,27 @@ final class LayoutProfilesTests: XCTestCase {
     func testChainResolverMatrix() {
         typealias Levels = LayoutChainResolver.Levels
 
-        // Named pin wins when valid, and the outcome carries the
-        // NAME — no caller re-joins names to levels.
+        // Named pin wins when valid.
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .profile("P"),
                 levels: Levels(
-                    pinnedProfile: ("P", true), gameLayoutOccupied: true,
-                    defaultProfile: ("D", true))),
-            LayoutChainResolver.Outcome(
-                provenance: .pinnedProfile("P"), fellThrough: false))
+                    pinnedProfile: ("P", true), gameLayoutOccupied: true, defaultProfile: ("D", true))),
+            LayoutChainResolver.Outcome(provenance: .pinnedProfile("P"), fellThrough: false))
 
         // Missing named pin resumes the chain at the game level.
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .profile("P"),
                 levels: Levels(
-                    pinnedProfile: ("P", false), gameLayoutOccupied: true,
-                    defaultProfile: ("D", true))),
+                    pinnedProfile: ("P", false), gameLayoutOccupied: true, defaultProfile: ("D", true))),
             LayoutChainResolver.Outcome(provenance: .gameLayout, fellThrough: true))
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .profile("P"),
                 levels: Levels(
-                    pinnedProfile: ("P", false), gameLayoutOccupied: false,
-                    defaultProfile: ("D", true))),
-            LayoutChainResolver.Outcome(
-                provenance: .defaultProfile("D"), fellThrough: true))
+                    pinnedProfile: ("P", false), gameLayoutOccupied: false, defaultProfile: ("D", true))),
+            LayoutChainResolver.Outcome(provenance: .defaultProfile("D"), fellThrough: true))
 
         // $game forces the game level; its fallback skips the
         // default profile on purpose.
@@ -153,8 +147,7 @@ final class LayoutProfilesTests: XCTestCase {
             LayoutChainResolver.resolve(
                 pin: .gameLayout,
                 levels: Levels(
-                    pinnedProfile: nil, gameLayoutOccupied: false,
-                    defaultProfile: ("D", true))),
+                    pinnedProfile: nil, gameLayoutOccupied: false, defaultProfile: ("D", true))),
             LayoutChainResolver.Outcome(provenance: .builtin, fellThrough: true))
 
         // $default falls to builtin when unset.
@@ -170,17 +163,14 @@ final class LayoutProfilesTests: XCTestCase {
             LayoutChainResolver.resolve(
                 pin: .followChain,
                 levels: Levels(
-                    pinnedProfile: nil, gameLayoutOccupied: true,
-                    defaultProfile: ("D", true))),
+                    pinnedProfile: nil, gameLayoutOccupied: true, defaultProfile: ("D", true))),
             LayoutChainResolver.Outcome(provenance: .gameLayout, fellThrough: false))
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .followChain,
                 levels: Levels(
-                    pinnedProfile: nil, gameLayoutOccupied: false,
-                    defaultProfile: ("D", true))),
-            LayoutChainResolver.Outcome(
-                provenance: .defaultProfile("D"), fellThrough: false))
+                    pinnedProfile: nil, gameLayoutOccupied: false, defaultProfile: ("D", true))),
+            LayoutChainResolver.Outcome(provenance: .defaultProfile("D"), fellThrough: false))
         XCTAssertEqual(
             LayoutChainResolver.resolve(
                 pin: .followChain,
@@ -308,7 +298,7 @@ final class LayoutProfilesTests: XCTestCase {
         XCTAssertEqual(result.portrait.dpad?.x, 0.3)
         XCTAssertEqual(result.portrait.buttons?.first?.key, "Enter")
         XCTAssertEqual(result.portrait.actionButtons?.first?.action, "$pauseMenu")
-        // Both orientations always present BY TYPE, all fields present.
+        // Both orientations always present, all fields present.
         XCTAssertNotNil(result.landscape.dpad)
         XCTAssertNotNil(result.landscape.buttons)
         XCTAssertNotNil(result.landscape.actionButtons)
@@ -352,6 +342,9 @@ final class LayoutProfilesTests: XCTestCase {
                         ProfileMaterializer.materialize(
                             user: touch, manifest: nil, builtins: self.builtins(),
                             metrics: .reference))
+                },
+                profileHasScreen: { name in
+                    FileManager.default.fileExists(atPath: self.store.screenURL(name).path)
                 }
             ),
             builtins: builtins()

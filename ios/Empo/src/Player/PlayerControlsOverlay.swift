@@ -27,6 +27,12 @@ struct PlayerControlsOverlay: View {
     var body: some View {
         let separatedPositions = layout.separatedDisplayPositions(
             for: geo.size, safeArea: safeArea, controlsMinY: controlsMinY,
+            // The separation pass stays off ONLY while a CONTROL
+            // drags (neighbors must not move under the finger; the
+            // rigid collision owns that case). Everywhere else it
+            // runs, so a crushed zone rearranges its controls
+            // instead of clamping them into a stack.
+            separate: draggingButtonID == nil && !draggingDPad,
             includeActionButton: { isPreview || editMode || actions.isAvailable($0.action) })
         ZStack {
             dpadView
@@ -96,17 +102,19 @@ struct PlayerControlsOverlay: View {
                 if !draggingDPad {
                     layout.recordEditSnapshot()
                     draggingDPad = true
+                    lastDragResolved.removeValue(forKey: dragKey(draggedID: nil))
                 }
-                let clamped = ControlsZone.clampToSafeArea(
-                    value.location, controlSize: layout.dpadSize, geoSize: geo.size,
-                    safeArea: safeArea, controlsMinY: controlsMinY)
+                let resolved = resolvedDragPosition(
+                    value.location, draggedID: nil, draggedIsDPad: true,
+                    size: layout.dpadSize)
                 layout.dpadRelativeCenter = CGPoint(
-                    x: clamped.x / geo.size.width,
-                    y: clamped.y / geo.size.height
+                    x: resolved.x / geo.size.width,
+                    y: resolved.y / geo.size.height
                 )
             }
             .onEnded { _ in
                 draggingDPad = false
+                lastDragResolved.removeValue(forKey: dragKey(draggedID: nil))
                 layout.save()
             }
     }
@@ -137,39 +145,125 @@ struct PlayerControlsOverlay: View {
         // The loader skips unknown actions (W004) and the picker only
         // offers catalog entries, so the lookup always succeeds.
         if let action = EmpoActionCatalog.action(id: button.action) {
-            editableControl(
-                FunctionButton(
-                    action: action,
-                    size: button.size,
-                    editing: editMode,
-                    isActive: actions.isToggleActive(action),
-                    onPress: { actions.handle(button.action, pressed: true) },
-                    onRelease: { actions.handle(button.action, pressed: false) }
-                )
-                .overlay(alignment: .bottom) {
-                    if editMode && !isPreview && !actions.isAvailable(button.action) {
-                        Text("Unavailable in this game")
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .background(.black.opacity(0.6), in: Capsule())
-                            .fixedSize()
-                            .offset(y: 14)
-                            .allowsHitTesting(false)
-                    }
-                },
-                id: button.id,
-                size: button.size,
-                opacity: button.opacity,
-                position: resolvedPosition(
-                    displayPosition, center: button.relativeCenter, size: button.size),
-                hitRegionKey: "controls.actionButton.\(button.id.uuidString)",
-                onTapEdit: { editingActionButton = button },
-                onDelete: { layout.removeActionButton(id: button.id) },
-                update: { layout.updateActionButton(id: button.id, relativeCenter: $0) }
-            )
+            functionButton(button: button, action: action, displayPosition: displayPosition)
         }
+    }
+
+    @ViewBuilder
+    private func functionButton(
+        button: ActionButtonModel, action: EmpoAction, displayPosition: CGPoint?
+    ) -> some View {
+        editableControl(
+            FunctionButton(
+                action: action,
+                size: button.size,
+                editing: editMode,
+                isActive: actions.isToggleActive(action),
+                onPress: { actions.handle(button.action, pressed: true) },
+                onRelease: { actions.handle(button.action, pressed: false) }
+            )
+            .overlay(alignment: .bottom) {
+                if editMode && !isPreview && !actions.isAvailable(button.action) {
+                    Text("Unavailable in this game")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(.black.opacity(0.6), in: Capsule())
+                        .fixedSize()
+                        .offset(y: 14)
+                        .allowsHitTesting(false)
+                }
+            },
+            id: button.id,
+            size: button.size,
+            opacity: button.opacity,
+            position: resolvedPosition(
+                displayPosition, center: button.relativeCenter, size: button.size),
+            hitRegionKey: "controls.actionButton.\(button.id.uuidString)",
+            onTapEdit: { editingActionButton = button },
+            onDelete: { layout.removeActionButton(id: button.id) },
+            update: { layout.updateActionButton(id: button.id, relativeCenter: $0) }
+        )
+    }
+
+    /// Last resolved center of each drag in flight, keyed per
+    /// control (the d-pad uses its own key). The collision solve
+    /// uses it as side memory (no tunneling through an obstacle's
+    /// center), and the clamp+collide loop keeps a control squeezed
+    /// between a wall and a neighbor on its own side instead of
+    /// re-clamping into overlap. Keyed, so two simultaneous finger
+    /// drags cannot clobber each other's memory.
+    @State private var lastDragResolved: [AnyHashable: CGPoint] = [:]
+
+    /// A nil ID always means the d-pad: it is the one draggable
+    /// control without a UUID.
+    private func dragKey(draggedID: UUID?) -> AnyHashable {
+        draggedID.map(AnyHashable.init) ?? AnyHashable("dpad")
+    }
+
+    /// The dragged control's stored center in absolute space; the
+    /// side memory seeds from it so the drag's FIRST event already
+    /// knows its approach side.
+    private func currentAbsoluteCenter(
+        draggedID: UUID?, draggedIsDPad: Bool
+    ) -> CGPoint? {
+        let relative: CGPoint
+        let size: CGFloat
+        if draggedIsDPad {
+            relative = layout.dpadRelativeCenter
+            size = layout.dpadSize
+        } else if let button = layout.buttons.first(where: { $0.id == draggedID }) {
+            relative = button.relativeCenter
+            size = button.size
+        } else if let button = layout.actionButtons.first(where: { $0.id == draggedID }) {
+            relative = button.relativeCenter
+            size = button.size
+        } else {
+            return nil
+        }
+        return ControlsZone.absolutePosition(
+            for: relative, in: geo.size, controlSize: CGSize(width: size, height: size),
+            safeArea: safeArea, controlsMinY: controlsMinY)
+    }
+
+    /// Shared drag pipeline: alternate the zone clamp and the rigid
+    /// collision until stable — either alone can undo the other at
+    /// the zone edges. An update that STILL collides after the
+    /// solve (no free space on the approach side) is rejected: the
+    /// control holds its last valid position instead of entering
+    /// the obstacle.
+    private func resolvedDragPosition(
+        _ location: CGPoint, draggedID: UUID?, draggedIsDPad: Bool, size: CGFloat
+    ) -> CGPoint {
+        let key = dragKey(draggedID: draggedID)
+        if lastDragResolved[key] == nil {
+            lastDragResolved[key] = currentAbsoluteCenter(
+                draggedID: draggedID, draggedIsDPad: draggedIsDPad)
+        }
+        var center = ControlsZone.clampToSafeArea(
+            location, controlSize: size, geoSize: geo.size, safeArea: safeArea,
+            controlsMinY: controlsMinY)
+        for _ in 0..<3 {
+            center = layout.collisionResolvedCenter(
+                center, previous: lastDragResolved[key], draggedID: draggedID,
+                draggedIsDPad: draggedIsDPad,
+                controlSize: size, geoSize: geo.size, safeArea: safeArea,
+                controlsMinY: controlsMinY)
+            center = ControlsZone.clampToSafeArea(
+                center, controlSize: size, geoSize: geo.size, safeArea: safeArea,
+                controlsMinY: controlsMinY)
+        }
+        if layout.dragPositionCollides(
+            center, draggedID: draggedID, draggedIsDPad: draggedIsDPad,
+            controlSize: size, geoSize: geo.size, safeArea: safeArea,
+            controlsMinY: controlsMinY),
+            let held = lastDragResolved[key]
+        {
+            return held
+        }
+        lastDragResolved[key] = center
+        return center
     }
 
     /// displayPosition is already absolute and separation-adjusted
@@ -235,6 +329,8 @@ struct PlayerControlsOverlay: View {
                 including: editMode ? .all : .subviews)
     }
 
+    /// One drag gesture for both button kinds, on the shared
+    /// clamp+collide pipeline.
     private func controlDragGesture(
         id: UUID, size: CGFloat, update: @escaping (CGPoint) -> Void
     ) -> some Gesture {
@@ -243,19 +339,21 @@ struct PlayerControlsOverlay: View {
                 if draggingButtonID != id {
                     layout.recordEditSnapshot()
                     draggingButtonID = id
+                    lastDragResolved.removeValue(
+                        forKey: dragKey(draggedID: id))
                 }
-                let clamped = ControlsZone.clampToSafeArea(
-                    value.location, controlSize: size, geoSize: geo.size,
-                    safeArea: safeArea,
-                    controlsMinY: controlsMinY)
+                let resolved = resolvedDragPosition(
+                    value.location, draggedID: id, draggedIsDPad: false, size: size)
                 update(
                     CGPoint(
-                        x: clamped.x / geo.size.width,
-                        y: clamped.y / geo.size.height
+                        x: resolved.x / geo.size.width,
+                        y: resolved.y / geo.size.height
                     ))
             }
             .onEnded { _ in
                 draggingButtonID = nil
+                lastDragResolved.removeValue(
+                    forKey: dragKey(draggedID: id))
                 layout.save()
             }
     }

@@ -32,24 +32,47 @@ enum ControlsZone {
         return CGRect(x: leading, y: top, width: trailing - leading, height: bottom - top)
     }
 
+    /// The physical display corner radius never changes, and this
+    /// lookup (scene walk + KVC) sits on the hot layout path:
+    /// `absolutePosition` runs per control per frame while the zone
+    /// animates, and the uncached call cost hundreds of main-thread
+    /// UIKit round trips a second. Cached on the first access that
+    /// actually finds a screen — an early pre-scene access must not
+    /// freeze the fallback for the whole process.
+    private static var cachedDeviceCornerRadius: CGFloat?
+
+    private static var deviceCornerRadius: CGFloat {
+        if let cachedDeviceCornerRadius { return cachedDeviceCornerRadius }
+        guard
+            let screen = UIApplication.shared.connectedScenes
+                .compactMap({ ($0 as? UIWindowScene)?.screen })
+                .first
+        else { return fallbackDeviceCornerRadius }
+        let radius =
+            (screen.value(forKey: "displayCornerRadius") as? CGFloat)
+            ?? fallbackDeviceCornerRadius
+        cachedDeviceCornerRadius = radius
+        return radius
+    }
+
     static func cornerRadii(safeArea: EdgeInsets) -> (top: CGFloat, bottom: CGFloat) {
         let pad = padding
-        let screen = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.screen
-        let deviceCorner =
-            (screen?.value(forKey: "displayCornerRadius") as? CGFloat) ?? fallbackDeviceCornerRadius
         let horizontalGap = safeArea.leading + pad
         let bottomGap = safeArea.bottom + pad
         let minGap = min(horizontalGap, bottomGap)
-        let bottom = max(deviceCorner - minGap, Radius.sm)
+        let bottom = max(deviceCornerRadius - minGap, Radius.sm)
         let top = Radius.xl
         return (top, bottom)
     }
 
     static func useOverlayLayout(
-        isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat
+        isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat,
+        forcedOverlay: Bool? = nil
     ) -> Bool {
+        // An active screen region carries an explicit per-profile
+        // choice; the geometry heuristic only decides when no
+        // region is in play.
+        if let forcedOverlay { return forcedOverlay }
         guard isPortrait, gameRect.height > 0 else { return false }
         let spaceBelow = geoHeight - (gameRect.origin.y + gameRect.height) - safeArea.bottom
         return spaceBelow < minControlsZoneHeight
@@ -66,11 +89,13 @@ enum ControlsZone {
     /// it doesn't push controls down). In overlay / landscape, the
     /// zone begins below the toolbar that sits in the top-right.
     static func toolbarBottomY(
-        isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat, geoHeight: CGFloat
+        isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat,
+        geoHeight: CGFloat, forcedOverlay: Bool? = nil
     ) -> CGFloat {
         if isPortrait && gameRect.height > 0
             && !useOverlayLayout(
-                isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, geoHeight: geoHeight)
+                isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
+                geoHeight: geoHeight, forcedOverlay: forcedOverlay)
         {
             return gameRect.origin.y + gameRect.height + toolbarGap
         } else {

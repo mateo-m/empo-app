@@ -174,10 +174,27 @@ private struct PersistedLayoutV1: Codable {
     var buttons: [ButtonModel]
 }
 
+/// The engine-preview hooks ControlsLayout needs while screen edits
+/// run. The player wires the applier in; editor and viewer instances
+/// leave the slot nil, so every preview call no-ops there without a
+/// per-call mode check.
+@MainActor
+protocol ScreenEditSyncing {
+    func endPreview()
+    func resolvedPlacement(isPortrait: Bool) -> ScreenPlacement?
+}
+
 @MainActor
 @Observable
 class ControlsLayout {
-    static let shared = ControlsLayout()
+    static let shared: ControlsLayout = {
+        let layout = ControlsLayout()
+        layout.screenSync = ScreenRegionApplierSync()
+        return layout
+    }()
+
+    /// nil on editor and viewer instances. See `ScreenEditSyncing`.
+    @ObservationIgnored var screenSync: ScreenEditSyncing?
 
     /// Stable identifier of the game these controls are currently
     /// bound to. `switchGame(id:container:)` updates this. Mutators
@@ -268,11 +285,42 @@ class ControlsLayout {
         return hasManifestTouchSection ? "Reset to game default" : "Reset to Empo default"
     }
 
-    var resetConfirmationMessage: String {
+    /// A method, not a property: building the message resolves the
+    /// post-reset screen chain (two file reads). Call it when the
+    /// confirm alert shows, not per render.
+    func resetConfirmationMessage() -> String {
         if case .pinnedProfile(let name) = provenance {
-            return "This game stops using the profile \(name). The profile keeps its layout."
+            let base = "This game stops using the profile \(name). The profile keeps its layout."
+            return screenChangesOnReset()
+                ? base + " The screen returns to automatic placement." : base
         }
-        return "This removes your custom layout."
+        return screenChangesOnReset()
+            ? "This removes your custom layout. The screen returns to automatic placement."
+            : "This removes your custom layout."
+    }
+
+    /// The reset clause must only promise "automatic placement" when
+    /// the reset actually delivers it: a region is active now, and
+    /// the post-reset chain (unpinned for pinned provenance, session
+    /// edits dropped) resolves to none.
+    private func screenChangesOnReset() -> Bool {
+        let isPortrait = currentOrientation == .portrait
+        let current = effectiveScreenPlacement(
+            stored: screenSync?.resolvedPlacement(isPortrait: isPortrait))
+        guard current != nil else { return false }
+
+        let store = LayoutProfilesManager.store
+        var postResetPin: LayoutPin = .followChain
+        if case .pinnedProfile = provenance {
+            postResetPin = .followChain
+        } else if let container = currentContainer {
+            postResetPin = store.loadPin(forGameFolder: container.url).pin
+        }
+        let postReset = ScreenResolution.resolve(
+            pin: postResetPin,
+            defaultProfileName: LayoutProfilesManager.defaultProfileName,
+            readScreen: { store.readScreen($0) })
+        return (isPortrait ? postReset.portrait : postReset.landscape).placement == nil
     }
 
     private static let controlsManifestLogFile = "controls.json.log"
@@ -365,8 +413,9 @@ class ControlsLayout {
         reloadEditorProfile()
     }
 
-    /// Read-only viewer for the built-in layout. The built-ins
-    /// never change, so it observes nothing.
+    /// Read-only viewer for the built-in layout: an editor instance
+    /// with no backing profile, so every write path is inert. The
+    /// built-ins never change, so it observes nothing.
     init(viewerForBuiltins metrics: TouchZoneMetrics) {
         role = .builtinViewer
         metricsOverride = metrics
@@ -440,6 +489,179 @@ class ControlsLayout {
 
     func endEditSession() {
         editSessionActive = false
+        // Player path: drop abandoned screen edits (save() commits
+        // before this in the player flow, so leftovers mean the
+        // session was torn down) and ALWAYS end the preview — a
+        // snapped-back drag previews without leaving an edit behind,
+        // and a stuck preview would freeze the applier for the rest
+        // of the session. Done can arrive MID-drag (the toolbar
+        // stays tappable by design); the gizmo unmounts with edit
+        // mode, so its own recovery never runs. The profile editor
+        // saves AFTER ending its session, so its edits must survive
+        // here.
+        if !isEditorInstance {
+            screenEdits.removeAll()
+            activeScreenDrag = nil
+            screenSync?.endPreview()
+        }
+    }
+
+    // MARK: - Screen region editing
+
+    /// One screen edit for one orientation. The enum replaces a
+    /// `ScreenRegion??` whose `.some(nil)` case needed a comment at
+    /// every call site.
+    enum ScreenEdit: Equatable {
+        case set(ScreenPlacement)
+        case resetToAuto
+
+        /// The placement a surface draws or a commit writes: nil IS
+        /// engine-auto.
+        var placement: ScreenPlacement? {
+            if case .set(let placement) = self { return placement }
+            return nil
+        }
+    }
+
+    /// Pending screen edits for this edit session, keyed by
+    /// orientation. Absent key = untouched. Cleared when a save
+    /// commits them.
+    private var screenEdits: [ControlsOrientation: ScreenEdit] = [:]
+    var screenEditsDirty: Bool { !screenEdits.isEmpty }
+
+    /// The pending edit for the active orientation, or nil when the
+    /// orientation is untouched this session. The gizmo reads it to
+    /// draw the dragged region before any save.
+    var pendingScreenEdit: ScreenEdit? { screenEdits[currentOrientation] }
+
+    /// This session's edit for `orientation`, or the caller's stored
+    /// fallback when the orientation is untouched.
+    private func editedPlacement(
+        _ orientation: ControlsOrientation, fallback: ScreenPlacement?
+    ) -> ScreenPlacement? {
+        guard let edit = screenEdits[orientation] else { return fallback }
+        return edit.placement
+    }
+
+    /// The placement every surface should draw RIGHT NOW: the
+    /// in-flight drag, then this session's pending edit, then the
+    /// caller's stored fallback (the resolved chain in the player,
+    /// the profile file in the editor). The player and the settings
+    /// editor both go through here, so a drag follows live in both.
+    func effectiveScreenPlacement(stored: ScreenPlacement?) -> ScreenPlacement? {
+        if let live = activeScreenDrag?.liveRegion { return .region(live) }
+        return editedPlacement(currentOrientation, fallback: stored)
+    }
+
+    /// A screen-gizmo drag in flight. One value carries every
+    /// drag-scoped field, so ending a drag is a single nil
+    /// assignment — no path can clear one flag and forget another.
+    private struct ActiveScreenDrag {
+        /// Auto-placement reference captured at drag start when the
+        /// orientation had no entry. Ending a drag within 1% of it
+        /// discards the edit (snap back to engine-auto). nil when an
+        /// entry already existed — then the explicit reset is the
+        /// only path back.
+        var autoReference: ScreenRegion?
+        /// The region under the finger, so every surface (chips
+        /// copy, controls zone, editor placeholder) tracks the
+        /// outline live.
+        var liveRegion: ScreenRegion?
+    }
+
+    private var activeScreenDrag: ActiveScreenDrag?
+
+    /// True while a screen-gizmo drag is in flight. The chrome
+    /// follows the region LIVE during the drag (user ruling
+    /// 2026-08-06); the edit toolbar fades on this flag instead.
+    var screenDragActive: Bool { activeScreenDrag != nil }
+
+    func beginScreenDrag(autoReference: ScreenRegion?) {
+        guard editSessionActive else { return }
+        activeScreenDrag = ActiveScreenDrag(autoReference: autoReference)
+    }
+
+    /// Live update from the gizmo while the finger moves.
+    func screenDragChanged(_ region: ScreenRegion) {
+        activeScreenDrag?.liveRegion = region
+    }
+
+    func endScreenDrag(region: ScreenRegion?) {
+        guard let drag = activeScreenDrag else { return }
+        activeScreenDrag = nil
+        if let region, let auto = drag.autoReference,
+            abs(region.x - auto.x) < 0.01, abs(region.y - auto.y) < 0.01,
+            abs(region.w - auto.w) < 0.01, abs(region.h - auto.h) < 0.01
+        {
+            // The auto reference only exists when the orientation had
+            // no entry, so a snapped-back drag is NO change. A stored
+            // edit would count as dirty and mint a profile on Done.
+            screenEdits.removeValue(forKey: currentOrientation)
+            return
+        }
+        screenEdits[currentOrientation] = region.map { .set(.region($0)) } ?? .resetToAuto
+    }
+
+    /// Records a screen edit for the active orientation without a
+    /// gesture (the overlay toggle, the editor's position row).
+    func recordScreenEdit(_ placement: ScreenPlacement) {
+        guard editSessionActive else { return }
+        screenEdits[currentOrientation] = .set(placement)
+    }
+
+    /// Abandon all drag and edit state without committing, and end
+    /// any engine preview. Every teardown path funnels through here.
+    private func abandonScreenEdits() {
+        guard !screenEdits.isEmpty || activeScreenDrag != nil else { return }
+        screenEdits.removeAll()
+        activeScreenDrag = nil
+        screenSync?.endPreview()
+    }
+
+    /// "Reset screen": back to engine-auto for the active
+    /// orientation. Dirties the commit only when a stored entry
+    /// exists to delete — resetting a drag that never saved is a
+    /// no-change and must not mint a profile on Done.
+    func resetScreenEdit() {
+        guard editSessionActive else { return }
+        activeScreenDrag = nil
+        var targetName: String?
+        if let editorProfileName {
+            targetName = editorProfileName
+        } else if case .pinnedProfile(let name) = provenance {
+            targetName = name
+        }
+        let storedRead = targetName.flatMap { LayoutProfilesManager.store.readScreen($0) }
+        let storedEntry = storedRead.flatMap {
+            currentOrientation == .portrait ? $0.portrait : $0.landscape
+        }
+        if storedEntry != nil {
+            screenEdits[currentOrientation] = .resetToAuto
+        } else if targetName == nil,
+            screenSync?.resolvedPlacement(isPortrait: currentOrientation == .portrait) != nil
+        {
+            // The region resolves from the DEFAULT profile (ambient
+            // provenance): nothing to delete in place, so the reset
+            // must dirty the commit — Done then mints a terminal
+            // pinned profile without a screen entry, which IS
+            // engine-auto. A silent drop would snap the default's
+            // region back after Done.
+            screenEdits[currentOrientation] = .resetToAuto
+        } else {
+            screenEdits.removeValue(forKey: currentOrientation)
+        }
+    }
+
+    /// Disk regions overlaid with this session's edits — what a
+    /// commit writes for the named profile.
+    private func mergedScreenPlacements(
+        profile name: String, store: LayoutProfileStore
+    ) -> (portrait: ScreenPlacement?, landscape: ScreenPlacement?) {
+        let disk = store.readScreen(name)
+        return (
+            editedPlacement(.portrait, fallback: disk?.portrait),
+            editedPlacement(.landscape, fallback: disk?.landscape)
+        )
     }
 
     private func clearEditUndoStack() {
@@ -473,6 +695,10 @@ class ControlsLayout {
             save()
         }
         editSessionActive = false
+        // A failed save() can leave screen edits behind; they must
+        // not leak into the next game's first save.
+        screenEdits.removeAll()
+        activeScreenDrag = nil
         clearEditUndoStack()
         staggerGeneration += 1
         currentGameID = newGameID
@@ -506,6 +732,14 @@ class ControlsLayout {
     /// device rotation in real time.
     func setOrientation(_ new: ControlsOrientation) {
         guard new != currentOrientation else { return }
+
+        // Abort an in-flight screen drag: its rect lives in the OLD
+        // orientation's canvas space and must not commit under the
+        // new orientation.
+        if activeScreenDrag != nil {
+            activeScreenDrag = nil
+            screenSync?.endPreview()
+        }
 
         clearEditUndoStack()
         staggerGeneration += 1
@@ -636,6 +870,11 @@ class ControlsLayout {
     func resetToResolvedDefault() {
         guard !isEditorInstance else { return }
         recordEditSnapshot()
+
+        // Screen edits from this session drop with the reset. The
+        // unpin below re-resolves the screen through the applier's
+        // pin-change observer; ambient resets re-apply from disk.
+        abandonScreenEdits()
 
         if case .pinnedProfile = provenance, let container = currentContainer {
             LayoutProfilesManager.store.writePin(.followChain, forGameFolder: container.url)
@@ -828,6 +1067,149 @@ class ControlsLayout {
     /// earlier reset then cannot append onto the new state.
     private var staggerGeneration = 0
 
+    // MARK: - Edit-drag collision
+
+    /// Edit-chrome frames (banner pill, action row) in window
+    /// space, measured by PlayerEditToolbar. They join the drag
+    /// collision as rectangular walls, so a control cannot park
+    /// underneath the header. Never persisted.
+    var editChromeFrames: [CGRect] = []
+
+    /// The zone height the screen drag blocks at: the tallest
+    /// control plus the clamp-band insets (fit-then-block, user
+    /// ruling 2026-08-06). The band insets by padding PLUS
+    /// innerPadding on each side; using the zone padding alone
+    /// left the d-pad 12 pt short and it overflowed the border.
+    var requiredEditZoneHeight: CGFloat {
+        let tallestButton =
+            (buttons.map(\.size) + actionButtons.map(\.size)).max() ?? 0
+        return max(dpadSize, tallestButton)
+            + 2 * (ControlsZone.padding + ControlsZone.innerPadding)
+            + ControlsZone.toolbarGap
+    }
+
+    /// Where the screen gizmo may drag, in canvas points. ONE policy
+    /// for the player and the profile editor: the safe-area insets
+    /// the applier's clamp uses (portrait all, landscape left/right
+    /// only), minus the fit-then-block limit unless the profile
+    /// opted into overlay mode.
+    func screenDragAllowedRect(
+        isPortrait: Bool, overlayOn: Bool, canvasSize: CGSize, safeArea: EdgeInsets
+    ) -> CGRect {
+        let safeBottom =
+            isPortrait ? canvasSize.height - safeArea.bottom : canvasSize.height
+        let maxBottom =
+            isPortrait && !overlayOn
+            ? safeBottom - requiredEditZoneHeight
+            : safeBottom
+        let top = isPortrait ? safeArea.top : 0
+        return CGRect(
+            x: safeArea.leading,
+            y: top,
+            width: canvasSize.width - safeArea.leading - safeArea.trailing,
+            height: maxBottom - top)
+    }
+
+    /// The overlay toggle's region math, beside the record call it
+    /// feeds. Flips the flag; when overlay turns OFF while the
+    /// region sits deep, the region shifts up and then shrinks back
+    /// above the fit limit, or the zone reappears with no space and
+    /// the controls stack at the bottom.
+    func overlayToggledRegion(
+        from region: ScreenRegion, isPortrait: Bool, canvasSize: CGSize,
+        safeArea: EdgeInsets
+    ) -> ScreenRegion {
+        var toggled = region
+        toggled.overlay = !region.overlay
+        guard !toggled.overlay, isPortrait, canvasSize.height > 0 else { return toggled }
+        let allowed = screenDragAllowedRect(
+            isPortrait: isPortrait, overlayOn: false, canvasSize: canvasSize,
+            safeArea: safeArea)
+        let limit = Double(allowed.maxY / canvasSize.height)
+        let top = Double(allowed.minY / canvasSize.height)
+        if toggled.y + toggled.h > limit {
+            toggled.y = max(top, limit - toggled.h)
+            toggled.h = min(toggled.h, limit - toggled.y)
+        }
+        return toggled
+    }
+
+    /// Non-dragged controls as solver obstacles, clamped through the
+    /// same transform the renderer uses. The solve itself lives in
+    /// GameProbe (`EditDragSolver`), where it has unit tests.
+    private func dragObstacles(
+        draggedID: UUID?, draggedIsDPad: Bool, geoSize: CGSize,
+        safeArea: EdgeInsets, controlsMinY: CGFloat
+    ) -> [EditDragSolver.Circle] {
+        var obstacles: [EditDragSolver.Circle] = []
+        func append(_ relativeCenter: CGPoint, _ size: CGFloat) {
+            let absolute = ControlsZone.absolutePosition(
+                for: relativeCenter, in: geoSize,
+                controlSize: CGSize(width: size, height: size),
+                safeArea: safeArea, controlsMinY: controlsMinY)
+            obstacles.append(
+                EditDragSolver.Circle(
+                    x: Double(absolute.x), y: Double(absolute.y),
+                    radius: Double(size) / 2))
+        }
+        for button in buttons where button.id != draggedID {
+            append(button.relativeCenter, button.size)
+        }
+        for button in actionButtons where button.id != draggedID {
+            append(button.relativeCenter, button.size)
+        }
+        if !draggedIsDPad {
+            append(dpadRelativeCenter, dpadSize)
+        }
+        return obstacles
+    }
+
+    private var chromeWalls: [EditDragSolver.Rect] {
+        editChromeFrames.map {
+            EditDragSolver.Rect(
+                x: Double($0.minX), y: Double($0.minY),
+                width: Double($0.width), height: Double($0.height))
+        }
+    }
+
+    /// True when a center intersects any non-dragged control. The
+    /// drag pipeline REJECTS updates that still collide after the
+    /// solve: a wall never admits the dragged control, no matter how
+    /// the clamp and the push-out fight at the zone edges.
+    func dragPositionCollides(
+        _ center: CGPoint, draggedID: UUID?, draggedIsDPad: Bool,
+        controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
+        controlsMinY: CGFloat
+    ) -> Bool {
+        EditDragSolver.collides(
+            x: Double(center.x), y: Double(center.y),
+            radius: Double(controlSize) / 2,
+            obstacles: dragObstacles(
+                draggedID: draggedID, draggedIsDPad: draggedIsDPad, geoSize: geoSize,
+                safeArea: safeArea, controlsMinY: controlsMinY),
+            walls: chromeWalls)
+    }
+
+    /// Rigid collision for edit drags: neighbors are walls and the
+    /// drag slides along their rims. `previous` is the drag's side
+    /// memory.
+    func collisionResolvedCenter(
+        _ desired: CGPoint, previous: CGPoint?, draggedID: UUID?, draggedIsDPad: Bool,
+        controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
+        controlsMinY: CGFloat
+    ) -> CGPoint {
+        let resolved = EditDragSolver.resolvedCenter(
+            desiredX: Double(desired.x), desiredY: Double(desired.y),
+            previousX: previous.map { Double($0.x) },
+            previousY: previous.map { Double($0.y) },
+            radius: Double(controlSize) / 2,
+            obstacles: dragObstacles(
+                draggedID: draggedID, draggedIsDPad: draggedIsDPad, geoSize: geoSize,
+                safeArea: safeArea, controlsMinY: controlsMinY),
+            walls: chromeWalls)
+        return CGPoint(x: resolved.x, y: resolved.y)
+    }
+
     // MARK: - Display-time button separation
 
     /// Single choke point for resolved button centers at display resolution.
@@ -838,8 +1220,12 @@ class ControlsLayout {
     /// brings back (e.g. rows that collapse onto controlsMinY). Covers
     /// manifest, translated, user, and builtin layouts alike, and never
     /// persists adjusted positions. Returns final absolute positions.
+    /// `separate: false` returns the clamped centers WITHOUT the
+    /// overlap pass: edit mode renders positions raw, or dragging
+    /// one control would push its neighbors around live.
     func separatedDisplayPositions(
         for geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat,
+        separate: Bool = true,
         includeActionButton: (ActionButtonModel) -> Bool = { _ in true }
     ) -> [UUID: CGPoint] {
         // Hidden action buttons (unavailable during play) must not
@@ -865,19 +1251,48 @@ class ControlsLayout {
             return (x: Double(clamped.x), y: Double(clamped.y), size: Double(circle.size))
         }
 
+        if !separate {
+            var centers: [UUID: CGPoint] = [:]
+            for (index, circle) in allCircles.enumerated() {
+                centers[circle.id] = CGPoint(
+                    x: CGFloat(inputs[index].x), y: CGFloat(inputs[index].y))
+            }
+            return centers
+        }
+
         let dpadClamped = ControlsZone.absolutePosition(
             for: dpadRelativeCenter, in: geoSize,
             controlSize: CGSize(width: dpadSize, height: dpadSize),
             safeArea: safeArea, controlsMinY: controlsMinY
         )
+
+        // Separation must stay inside the clamp BAND, not the full
+        // window — pushed against the window box, a crushed zone
+        // squeezed controls straight past its borders. Translate
+        // into band space, separate, translate back.
+        let pad = ControlsZone.padding + ControlsZone.innerPadding
+        let bandMinX = Double(safeArea.leading + pad)
+        let bandMinY = Double(max(safeArea.top + pad, controlsMinY + pad))
+        let bandWidth = max(
+            1, Double(geoSize.width - safeArea.trailing - pad) - bandMinX)
+        let bandHeight = max(
+            1, Double(geoSize.height - safeArea.bottom - pad) - bandMinY)
+
+        let bandInputs = inputs.map { input in
+            (x: input.x - bandMinX, y: input.y - bandMinY, size: input.size)
+        }
         let obstacles = [
-            (x: Double(dpadClamped.x), y: Double(dpadClamped.y), size: Double(dpadSize))
+            (
+                x: Double(dpadClamped.x) - bandMinX,
+                y: Double(dpadClamped.y) - bandMinY,
+                size: Double(dpadSize)
+            )
         ]
 
         let result = ButtonSeparation.separate(
-            inputs,
-            width: Double(geoSize.width),
-            height: Double(geoSize.height),
+            bandInputs,
+            width: bandWidth,
+            height: bandHeight,
             obstacles: obstacles
         )
 
@@ -894,9 +1309,16 @@ class ControlsLayout {
         }
 
         var centers: [UUID: CGPoint] = [:]
+        // A collapsed band (deep controlsMinY from a cross-device
+        // or editor-authored region) must not strand controls below
+        // the safe bottom: floor every center against the window.
+        let maxBottom = Double(geoSize.height - safeArea.bottom) - Double(pad)
         for (index, circle) in allCircles.enumerated() {
             let point = result.positions[index]
-            centers[circle.id] = CGPoint(x: CGFloat(point.x), y: CGFloat(point.y))
+            let half = Double(circle.size) / 2
+            centers[circle.id] = CGPoint(
+                x: CGFloat(point.x + bandMinX),
+                y: CGFloat(min(point.y + bandMinY, maxBottom - half)))
         }
         return centers
     }
@@ -920,18 +1342,34 @@ class ControlsLayout {
 
         switch provenance {
         case .pinnedProfile(let name):
+            var changed = false
             let section = materializedTouchSection()
-            if let existing = store.readProfile(name)?.touch {
-                let disk = ProfileMaterializer.canonicalBytes(
+            let controlsOnDisk = store.readProfile(name)?.touch.map { existing in
+                ProfileMaterializer.canonicalBytes(
                     ProfileMaterializer.materialize(
                         user: existing, manifest: nil,
                         builtins: LayoutProfilesManager.builtins(), metrics: layoutMetrics()))
-                if ProfileMaterializer.canonicalBytes(section) == disk {
-                    return
-                }
             }
-            store.writeProfile(name, touch: section)
-            LayoutProfilesManager.postProfileChange(name: name, from: self)
+            if controlsOnDisk != ProfileMaterializer.canonicalBytes(section) {
+                store.writeProfile(name, touch: section)
+                changed = true
+            }
+            // Per-file skip: the screen write runs only when the
+            // merged regions differ from disk.
+            if screenEditsDirty {
+                let merged = mergedScreenPlacements(profile: name, store: store)
+                let disk = store.readScreen(name)
+                if merged.portrait != disk?.portrait || merged.landscape != disk?.landscape {
+                    store.writeScreen(
+                        name, portrait: merged.portrait, landscape: merged.landscape)
+                    changed = true
+                }
+                screenEdits.removeAll()
+                screenSync?.endPreview()
+            }
+            if changed {
+                LayoutProfilesManager.postProfileChange(name: name, from: self)
+            }
 
         case .gameLayout, .defaultProfile, .builtin:
             // Auto-create fires only from edit-session commits, so a
@@ -939,19 +1377,39 @@ class ControlsLayout {
             guard editSessionActive else { return }
             guard let baseline = ambientBaseline else { return }
             let current = currentPersistedLayout()
-            if Self.layoutsEquivalent(current.portrait, baseline.portrait),
-                Self.layoutsEquivalent(current.landscape, baseline.landscape)
-            {
-                return
-            }
+            let layoutsChanged =
+                !Self.layoutsEquivalent(current.portrait, baseline.portrait)
+                || !Self.layoutsEquivalent(current.landscape, baseline.landscape)
+            // A screen drag is a committed change too: it must mint
+            // the profile even when no control moved.
+            guard layoutsChanged || screenEditsDirty else { return }
             let base = currentGameTitle ?? container.url.lastPathComponent
             let name = store.uniqueName(base: base)
             guard store.createProfile(name, touch: materializedTouchSection()) else { return }
+            // Screen entries for the minted profile: this session's
+            // edits (drags AND resets) win per orientation, and
+            // UNTOUCHED orientations inherit the currently resolved
+            // region. The new pin is terminal — without the copy, a
+            // controls-only edit under a default-profile region
+            // would silently snap the screen to automatic.
+            let resolvedScreen = ScreenResolution.resolve(
+                pin: store.loadPin(forGameFolder: container.url).pin,
+                defaultProfileName: LayoutProfilesManager.defaultProfileName,
+                readScreen: { store.readScreen($0) })
+            let portrait = editedPlacement(
+                .portrait, fallback: resolvedScreen.portrait.placement)
+            let landscape = editedPlacement(
+                .landscape, fallback: resolvedScreen.landscape.placement)
+            if portrait != nil || landscape != nil {
+                store.writeScreen(name, portrait: portrait, landscape: landscape)
+            }
+            screenEdits.removeAll()
             store.writePin(.profile(name), forGameFolder: container.url)
             provenance = .pinnedProfile(name)
             pinFellThrough = false
             LayoutProfilesManager.postPinChange(gameID: gameID, from: self)
             LayoutProfilesManager.postProfileChange(name: name, from: self)
+            screenSync?.endPreview()
         }
     }
 
@@ -966,10 +1424,18 @@ class ControlsLayout {
         )
     }
 
-    /// Editor instances write straight to the profile file.
+    /// Editor instances write straight to the profile file. Screen
+    /// edits merge into the existing entries — opening and closing
+    /// the editor never mints a `screen.json`.
     func editorSave() {
         guard let name = editorProfileName else { return }
-        LayoutProfilesManager.store.writeProfile(name, touch: materializedTouchSection())
+        let store = LayoutProfilesManager.store
+        store.writeProfile(name, touch: materializedTouchSection())
+        if screenEditsDirty {
+            let merged = mergedScreenPlacements(profile: name, store: store)
+            store.writeScreen(name, portrait: merged.portrait, landscape: merged.landscape)
+            screenEdits.removeAll()
+        }
         LayoutProfilesManager.postProfileChange(name: name, from: self)
     }
 
@@ -1152,6 +1618,9 @@ class ControlsLayout {
                         ProfileMaterializer.materialize(
                             user: touch, manifest: nil, builtins: builtins,
                             metrics: .reference))
+                },
+                profileHasScreen: { name in
+                    FileManager.default.fileExists(atPath: store.screenURL(name).path)
                 }
             ),
             builtins: builtins

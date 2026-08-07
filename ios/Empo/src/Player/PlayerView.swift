@@ -57,9 +57,19 @@ struct PlayerView: View {
             // the toolbar was cramped in the zone below the game) no
             // longer applies.
             let toolbarBtnSize = IconButtonSize.sm.points
+            // An active screen region carries the profile's own
+            // overlay choice; nil keeps the geometry heuristic.
+            let activeScreenPlacement = layout.effectiveScreenPlacement(
+                stored: ScreenRegionApplier.resolvedPlacement(isPortrait: isPortrait))
+            let forcedOverlay = activeScreenPlacement?.overlay
+            // The chrome follows the engine's republished gameRect
+            // LIVE during a screen drag, so the controls zone tracks
+            // the moving screen. The edit toolbar fades during the
+            // drag instead of holding still.
             let controlsMinY = ControlsZone.toolbarBottomY(
-                isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea, btnSize: toolbarBtnSize,
-                geoHeight: geo.size.height)
+                isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
+                btnSize: toolbarBtnSize,
+                geoHeight: geo.size.height, forcedOverlay: forcedOverlay)
 
             ZStack {
                 // Debug visualization of the touch-mouse zone: the
@@ -95,6 +105,9 @@ struct PlayerView: View {
                     if let caption = editZoneCaptionText {
                         editZoneCaption(caption, safeArea: safeArea)
                     }
+
+                    screenRegionGizmo(
+                        geoSize: geo.size, isPortrait: isPortrait, gameRect: gameRect)
                 }
                 // Invisible tap layer that dismisses the keyboard when
                 // it's open. Placed below controls + toolbar so those
@@ -128,6 +141,11 @@ struct PlayerView: View {
                     )
                 }
 
+                if editMode {
+                    screenRegionChips(
+                        geoSize: geo.size, isPortrait: isPortrait, gameRect: gameRect)
+                }
+
                 if controlsVisible {
                     PlayerToolbar(
                         isPortrait: isPortrait,
@@ -150,8 +168,7 @@ struct PlayerView: View {
                     .allowsHitTesting(!editMode)
 
                     PlayerEditToolbar(
-                        isPortrait: isPortrait,
-                        gameRect: gameRect,
+                        controlsMinY: controlsMinY,
                         safeArea: safeArea,
                         geoSize: geo.size,
                         layout: layout,
@@ -159,7 +176,14 @@ struct PlayerView: View {
                         showResetConfirm: $showResetConfirm,
                         onDone: { toggleEditMode() }
                     )
-                    .opacity(editMode ? 1 : 0)
+                    // Fade while the screen gizmo drags, so the
+                    // toolbar never hides the region or its handle
+                    // mid-drag. VISUAL only: hit-testing stays on,
+                    // because any state that left the drag flag
+                    // set (a system-cancelled gesture) would
+                    // otherwise silence the header's buttons.
+                    .opacity(editMode ? (layout.screenDragActive ? 0.15 : 1) : 0)
+                    .animation(.easeInOut(duration: 0.15), value: layout.screenDragActive)
                     .allowsHitTesting(editMode)
                 }
 
@@ -174,7 +198,8 @@ struct PlayerView: View {
                         isPortrait: isPortrait,
                         gameRect: gameRect,
                         safeArea: safeArea,
-                        geoHeight: geo.size.height
+                        geoHeight: geo.size.height,
+                        forcedOverlay: forcedOverlay
                     )
                 )
                 .allowsHitTesting(showDebugOverlay)
@@ -239,13 +264,32 @@ struct PlayerView: View {
             // as soon as PlayerView appears, not just on rotation.
             .onChange(of: isPortrait, initial: true) { _, nowPortrait in
                 layout.setOrientation(nowPortrait ? .portrait : .landscape)
+                // Rotation re-sends the region for the new
+                // orientation; the engine draws automatic placement
+                // until this call lands (orientation-tag guard).
+                // Mid-edit-session, the new orientation's pending
+                // edit outranks the resolved state; with nothing
+                // pending, leaving preview mode re-applies from disk
+                // in both the preview and the normal case.
+                if let pending = layout.pendingScreenEdit {
+                    ScreenRegionApplier.preview(
+                        pending.placement.flatMap {
+                            ScreenRegionApplier.region(for: $0, isPortrait: nowPortrait)
+                        },
+                        isPortrait: nowPortrait)
+                } else {
+                    ScreenRegionApplier.endPreview()
+                }
             }
             // `initial: true`: the engine usually publishes gameRect
             // during the loading transition, BEFORE PlayerView mounts.
             // Without an initial firing we miss the one real publish,
             // and translated layouts keep their estimate-based bands.
-            .onChange(of: engineState.gameRect, initial: true) { _, _ in
+            .onChange(of: engineState.gameRect, initial: true) { _, rect in
                 layout.refreshForGameGeometryChange()
+                // Presets compute their rect from the game's aspect;
+                // the published picture rect carries it.
+                ScreenRegionApplier.gameRectChanged(rect)
             }
         }
         .ignoresSafeArea()
@@ -388,6 +432,190 @@ struct PlayerView: View {
             editingActionButton: $editingActionButton,
             editingDPad: $editingDPad
         )
+    }
+
+    /// Shared inputs for the gizmo surfaces and the chips: both
+    /// render from the same effective rect, so the chips follow the
+    /// outline mid-drag.
+    private struct ScreenGizmoContext {
+        /// The placement in force (preset or custom); nil is
+        /// engine-auto.
+        var effectivePlacement: ScreenPlacement?
+        /// The placement as this device's rect (a preset computes
+        /// per device).
+        var effectiveRegion: ScreenRegion?
+        var baseRect: CGRect
+        var allowedRect: CGRect
+        var autoRegion: ScreenRegion
+        var overlayOn: Bool
+    }
+
+    private func screenGizmoContext(
+        geoSize: CGSize, isPortrait: Bool, gameRect: CGRect
+    ) -> ScreenGizmoContext {
+        let resolved = ScreenRegionApplier.resolvedPlacement(isPortrait: isPortrait)
+        let effectivePlacement = layout.effectiveScreenPlacement(stored: resolved)
+        let effectiveRegion = effectivePlacement.flatMap {
+            ScreenRegionApplier.region(for: $0, isPortrait: isPortrait)
+        }
+        // The outline draws the CLAMPED region — the same rect the
+        // applier sends — so it can never disagree with the picture
+        // when stored fractions fall outside this device's safe
+        // area.
+        let baseRect: CGRect = {
+            if let region = effectiveRegion {
+                let clamped = ScreenRegionApplier.clampToSafeArea(region)
+                return CGRect(
+                    x: clamped.x * geoSize.width,
+                    y: clamped.y * geoSize.height,
+                    width: clamped.w * geoSize.width,
+                    height: clamped.h * geoSize.height)
+            }
+            return gameRect.isEmpty
+                ? CGRect(origin: .zero, size: geoSize)
+                : gameRect
+        }()
+        return ScreenGizmoContext(
+            effectivePlacement: effectivePlacement,
+            effectiveRegion: effectiveRegion,
+            baseRect: baseRect,
+            allowedRect: layout.screenDragAllowedRect(
+                isPortrait: isPortrait, overlayOn: effectivePlacement?.overlay ?? false,
+                canvasSize: geoSize, safeArea: AppWindow.currentSafeArea),
+            autoRegion: ScreenRegion(
+                x: gameRect.minX / max(geoSize.width, 1),
+                y: gameRect.minY / max(geoSize.height, 1),
+                w: gameRect.width / max(geoSize.width, 1),
+                h: gameRect.height / max(geoSize.height, 1)),
+            overlayOn: effectivePlacement?.overlay ?? false)
+    }
+
+    /// Edit-mode screen gizmo surfaces, below the controls overlay
+    /// so control drags win over the region surface. Base rect
+    /// precedence: this session's pending edit, then the resolved
+    /// region, then the engine's automatic placement (the live
+    /// gameRect).
+    @ViewBuilder
+    private func screenRegionGizmo(
+        geoSize: CGSize, isPortrait: Bool, gameRect: CGRect
+    ) -> some View {
+        let context = screenGizmoContext(
+            geoSize: geoSize, isPortrait: isPortrait, gameRect: gameRect)
+        GeometryReader { _ in
+            ScreenRegionGizmo(
+                canvasSize: geoSize,
+                allowedRect: context.allowedRect,
+                baseRect: context.baseRect,
+                onDragBegan: {
+                    // Snap-to-auto only when the orientation had no
+                    // entry: with an entry active, the engine
+                    // publishes region-derived rects and there is no
+                    // live auto rect to compare against.
+                    layout.beginScreenDrag(
+                        autoReference: context.effectivePlacement == nil && !gameRect.isEmpty
+                            ? context.autoRegion : nil)
+                },
+                onDragChanged: { region in
+                    layout.screenDragChanged(region)
+                    ScreenRegionApplier.preview(region, isPortrait: isPortrait)
+                },
+                onDragEnded: { region in
+                    layout.endScreenDrag(region: region)
+                    if let pending = layout.pendingScreenEdit {
+                        ScreenRegionApplier.preview(
+                            pending.placement.flatMap {
+                                ScreenRegionApplier.region(for: $0, isPortrait: isPortrait)
+                            },
+                            isPortrait: isPortrait)
+                    } else {
+                        // Snapped back with no prior edit: nothing is
+                        // pending, so leave preview mode — a stuck
+                        // preview would freeze the applier.
+                        ScreenRegionApplier.endPreview()
+                    }
+                },
+                overlayOn: context.overlayOn
+            )
+        }
+        .ignoresSafeArea()
+    }
+
+    /// The chips copy ABOVE the controls: in overlay mode the
+    /// controls sit on the game area and would otherwise bury the
+    /// Screen / Reset / overlay chips.
+    @ViewBuilder
+    private func screenRegionChips(
+        geoSize: CGSize, isPortrait: Bool, gameRect: CGRect
+    ) -> some View {
+        let context = screenGizmoContext(
+            geoSize: geoSize, isPortrait: isPortrait, gameRect: gameRect)
+        GeometryReader { _ in
+            ScreenRegionChips(
+                rect: context.baseRect,
+                showsReset: context.effectivePlacement != nil,
+                onReset: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        layout.resetScreenEdit()
+                    }
+                    if let current = context.effectiveRegion,
+                        let target = estimatedAutoRegion(
+                            geoSize: geoSize, isPortrait: isPortrait,
+                            aspect: gameRect.height > 0
+                                ? gameRect.width / gameRect.height : 4.0 / 3.0)
+                    {
+                        ScreenRegionApplier.animateResetToAuto(
+                            from: current, toEstimate: target, isPortrait: isPortrait)
+                    } else {
+                        ScreenRegionApplier.preview(nil, isPortrait: isPortrait)
+                    }
+                },
+                overlayOn: context.overlayOn,
+                onToggleOverlay: {
+                    guard
+                        let region = context.effectiveRegion
+                            ?? (gameRect.isEmpty ? nil : context.autoRegion)
+                    else { return }
+                    let toggled = layout.overlayToggledRegion(
+                        from: region, isPortrait: isPortrait, canvasSize: geoSize,
+                        safeArea: AppWindow.currentSafeArea)
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        layout.recordScreenEdit(.region(toggled))
+                    }
+                    ScreenRegionApplier.preview(toggled, isPortrait: isPortrait)
+                }
+            )
+        }
+        .ignoresSafeArea()
+    }
+
+    /// Where the engine's automatic placement will land, in window
+    /// fractions — the reset animation's target. Mirrors the fit in
+    /// `recalculateScreenSize`: aspect-fit inside the safe-area
+    /// container, vertical alignment in portrait, centered in
+    /// landscape (top/bottom insets ignored there).
+    private func estimatedAutoRegion(
+        geoSize: CGSize, isPortrait: Bool, aspect: CGFloat
+    ) -> ScreenRegion? {
+        // Automatic placement follows the game's engine alignment;
+        // the shared preset calculator holds the ONE copy of the
+        // fit-and-align math.
+        let preset: ScreenPreset
+        switch mkxp_getVerticalAlignment() {
+        case MKXP_VALIGN_TOP: preset = .top
+        case MKXP_VALIGN_CENTER: preset = .center
+        default: preset = .topCenter
+        }
+        let safeArea = AppWindow.currentSafeArea
+        return ScreenPresetPlacement.region(
+            preset: preset,
+            canvasWidth: Double(geoSize.width),
+            canvasHeight: Double(geoSize.height),
+            safeTop: Double(safeArea.top),
+            safeBottom: Double(safeArea.bottom),
+            safeLeading: Double(safeArea.leading),
+            safeTrailing: Double(safeArea.trailing),
+            isPortrait: isPortrait,
+            aspect: Double(aspect))
     }
 
     /// The first edit-mode notice worth showing, most severe first.

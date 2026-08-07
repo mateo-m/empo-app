@@ -153,56 +153,27 @@ struct LayoutProfilesSettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Built in")
+                    Text("Built in profiles")
                 } footer: {
-                    Text("The layout Empo ships with. Games use it when nothing else applies.")
+                    Text("Empo ships this layout. Games use it when nothing else applies.")
                 }
             }
 
-            ForEach(visibleProfiles, id: \.self) { name in
-                Section {
-                    NavigationLink {
-                        LayoutProfileEditorView(profileName: name)
-                    } label: {
-                        HStack {
-                            Text(name)
-                            Spacer()
-                            if defaultName == name {
-                                Text("Default")
-                                    .font(.caption)
-                                    .foregroundStyle(.brand)
-                            }
-                        }
-                    }
-                    .contextMenu {
-                        if defaultName != name {
-                            Button("Set as default") {
-                                LayoutProfilesManager.defaultProfileName = name
-                                reload()
-                            }
-                        } else {
-                            Button("Remove default") {
-                                LayoutProfilesManager.defaultProfileName = nil
-                                reload()
-                            }
-                        }
-                        Button("Rename") {
-                            renameText = name
-                            renaming = name
-                        }
-                        Button("Duplicate") {
-                            _ = LayoutProfilesManager.store.duplicateProfile(name)
-                            reload()
-                        }
-                        Button("Delete", role: .destructive) {
-                            deleting = name
-                        }
+            // ONE section with the ForEach as its direct content:
+            // the rows read as one list, and List instantiates and
+            // diffs them lazily by their stable name IDs — the shape
+            // that stays smooth when the list grows.
+            if !visibleProfiles.isEmpty {
+                Section("Custom profiles") {
+                    ForEach(visibleProfiles, id: \.self) { name in
+                        profileRow(name)
                     }
                 }
             }
         }
         .navigationTitle("Layout profiles")
         .searchable(text: $searchText, prompt: "Search profiles")
+        .animation(.default, value: visibleProfiles)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -220,9 +191,7 @@ struct LayoutProfilesSettingsView: View {
             Button("Create") { createBlank() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(
-                "A new profile starts from the Empo default layout. You can also save a game's current layout as a profile from its Settings sheet."
-            )
+            Text("A new profile starts from the Empo default layout.")
         }
         .alert("Rename profile", isPresented: renameBinding) {
             TextField("Name", text: $renameText)
@@ -269,6 +238,46 @@ struct LayoutProfilesSettingsView: View {
     private func reload() {
         profiles = LayoutProfilesManager.store.listProfiles()
         defaultName = LayoutProfilesManager.defaultProfileName
+    }
+
+    private func profileRow(_ name: String) -> some View {
+        NavigationLink {
+            LayoutProfileEditorView(profileName: name)
+        } label: {
+            HStack {
+                Text(name)
+                Spacer()
+                if defaultName == name {
+                    Text("Default")
+                        .font(.caption)
+                        .foregroundStyle(.brand)
+                }
+            }
+        }
+        .contextMenu {
+            if defaultName != name {
+                Button("Set as default") {
+                    LayoutProfilesManager.defaultProfileName = name
+                    reload()
+                }
+            } else {
+                Button("Remove default") {
+                    LayoutProfilesManager.defaultProfileName = nil
+                    reload()
+                }
+            }
+            Button("Rename") {
+                renameText = name
+                renaming = name
+            }
+            Button("Duplicate") {
+                _ = LayoutProfilesManager.store.duplicateProfile(name)
+                reload()
+            }
+            Button("Delete", role: .destructive) {
+                deleting = name
+            }
+        }
     }
 
     private func createBlank() {
@@ -365,6 +374,7 @@ struct LayoutProfileEditorView: View {
     @State private var renameText = ""
     @State private var showRename = false
     @State private var showRenameError = false
+    @State private var diskScreen: ScreenRegionFile.ReadResult?
     @State private var layout: ControlsLayout
     @State private var actions = PlayerActionRegistry()
     @State private var editingOrientation: ControlsOrientation = .portrait
@@ -387,6 +397,65 @@ struct LayoutProfileEditorView: View {
     private var canvasSafeArea: EdgeInsets { EditorCanvas.safeArea(for: editingOrientation) }
     private var fakeGameRect: CGRect { EditorCanvas.fakeGameRect(for: editingOrientation) }
 
+    /// The profile's screen entry for the shown orientation, with
+    /// this session's pending edit and the in-flight drag on top.
+    /// Same precedence as the player, through the shared helper, so
+    /// the placeholder and the controls follow a drag live here too.
+    private var screenPlacement: ScreenPlacement? {
+        layout.effectiveScreenPlacement(
+            stored: editingOrientation == .portrait ? diskScreen?.portrait : diskScreen?.landscape)
+    }
+
+    /// The placement as a rect on the MOCK canvas. A preset
+    /// computes against the reference canvas and the placeholder's
+    /// 4:3 aspect — the same per-device rule the player applies to
+    /// the real window.
+    private var screenRegion: ScreenRegion? {
+        guard let placement = screenPlacement else { return nil }
+        switch placement {
+        case .region(let region):
+            return region
+        case .preset(let preset):
+            let size = canvasSize
+            let safeArea = canvasSafeArea
+            return ScreenPresetPlacement.region(
+                preset: preset,
+                canvasWidth: Double(size.width),
+                canvasHeight: Double(size.height),
+                safeTop: Double(safeArea.top),
+                safeBottom: Double(safeArea.bottom),
+                safeLeading: Double(safeArea.leading),
+                safeTrailing: Double(safeArea.trailing),
+                isPortrait: editingOrientation == .portrait,
+                aspect: 4.0 / 3.0)
+        }
+    }
+
+    /// Region rect on the canvas, when a placement exists.
+    private var screenRegionRect: CGRect? {
+        guard let region = screenRegion else { return nil }
+        let size = canvasSize
+        return CGRect(
+            x: region.x * size.width, y: region.y * size.height,
+            width: region.w * size.width, height: region.h * size.height)
+    }
+
+    /// The placeholder is the 4:3 fit INSIDE the region — the
+    /// engine letterboxes centered inside it — so the controls
+    /// clamp against what the player will actually show.
+    private var placeholderGameRect: CGRect {
+        guard let regionRect = screenRegionRect else { return fakeGameRect }
+        var width = regionRect.width
+        var height = width * 3 / 4
+        if height > regionRect.height {
+            height = regionRect.height
+            width = height * 4 / 3
+        }
+        return CGRect(
+            x: regionRect.midX - width / 2, y: regionRect.midY - height / 2,
+            width: width, height: height)
+    }
+
     var body: some View {
         VStack(spacing: Spacing.md) {
             Picker("Orientation", selection: $editingOrientation) {
@@ -399,19 +468,24 @@ struct LayoutProfileEditorView: View {
                 layout.editorSave()
                 layout.setOrientation(new)
                 layout.beginEditSession()
+                diskScreen = LayoutProfilesManager.store.readScreen(currentName)
             }
 
-            EditorCanvasView(
+            EditorCanvasShell(
                 layout: layout,
                 actions: actions,
                 orientation: editingOrientation,
                 editMode: true,
+                placeholderRect: placeholderGameRect,
+                forcedOverlay: screenRegion?.overlay,
                 editingButton: $editingButton,
                 editingActionButton: $editingActionButton,
                 editingDPad: $editingDPad,
                 draggingDPad: $draggingDPad,
                 draggingButtonID: $draggingButtonID
-            )
+            ) { size, gameRect in
+                screenGizmoLayers(size: size, gameRect: gameRect)
+            }
 
             HStack(spacing: Spacing.xl) {
                 Button("+ Add") { showAddSheet = true }
@@ -421,6 +495,9 @@ struct LayoutProfileEditorView: View {
                     Label("Undo", systemImage: "arrow.uturn.backward")
                 }
                 .disabled(!layout.canUndo)
+                if editingOrientation == .portrait {
+                    positionMenu
+                }
             }
             .font(.footnote.weight(.semibold))
             .padding(.bottom, Spacing.md)
@@ -447,6 +524,7 @@ struct LayoutProfileEditorView: View {
         .onAppear {
             layout.setOrientation(editingOrientation)
             layout.beginEditSession()
+            diskScreen = LayoutProfilesManager.store.readScreen(currentName)
         }
         .onDisappear {
             layout.endEditSession()
@@ -465,6 +543,59 @@ struct LayoutProfileEditorView: View {
         )
     }
 
+    /// Where the game sits in portrait: a named preset (computed
+    /// per device at play time), the automatic engine placement, or
+    /// the custom rect the gizmo drew.
+    private enum PositionChoice: Hashable {
+        case automatic
+        case preset(ScreenPreset)
+        case custom
+    }
+
+    private var positionChoice: PositionChoice {
+        switch screenPlacement {
+        case nil: return .automatic
+        case .preset(let preset): return .preset(preset)
+        case .region: return .custom
+        }
+    }
+
+    private var positionMenu: some View {
+        Menu {
+            Picker(
+                "Screen position",
+                selection: Binding(
+                    get: { positionChoice },
+                    set: { choice in
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            switch choice {
+                            case .automatic:
+                                layout.resetScreenEdit()
+                            case .preset(let preset):
+                                layout.recordScreenEdit(.preset(preset))
+                            case .custom:
+                                break
+                            }
+                        }
+                    })
+            ) {
+                Text("Automatic").tag(PositionChoice.automatic)
+                Text("Top").tag(PositionChoice.preset(.top))
+                Text("Top-center").tag(PositionChoice.preset(.topCenter))
+                Text("Center").tag(PositionChoice.preset(.center))
+                if positionChoice == .custom {
+                    Text("Custom").tag(PositionChoice.custom)
+                }
+            }
+        } label: {
+            HStack(spacing: Spacing.xs) {
+                Text("Screen position")
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+            }
+        }
+    }
+
     private func performRename() {
         guard let newName = LayoutProfileStore.validatedName(renameText),
             newName != currentName,
@@ -478,19 +609,76 @@ struct LayoutProfileEditorView: View {
         currentName = newName
         layout.editorRenamed(to: newName)
     }
+
+    /// The editor's extra canvas layers: the screen gizmo and its
+    /// chips, BELOW the controls overlay (same order as the player),
+    /// or the move surface would steal drags from any control
+    /// inside the region rect. The allowed rect comes from the same
+    /// policy helper the player uses, so the editor can never
+    /// author a region the player forbids. No live engine here:
+    /// drags stay local until editorSave merges them.
+    @ViewBuilder
+    private func screenGizmoLayers(size: CGSize, gameRect: CGRect) -> some View {
+        ScreenRegionGizmo(
+            canvasSize: size,
+            allowedRect: layout.screenDragAllowedRect(
+                isPortrait: editingOrientation == .portrait,
+                overlayOn: screenRegion?.overlay ?? false,
+                canvasSize: size, safeArea: canvasSafeArea),
+            baseRect: screenRegionRect ?? gameRect,
+            onDragBegan: {
+                let auto = EditorCanvas.fakeGameRect(for: editingOrientation)
+                layout.beginScreenDrag(
+                    autoReference: screenPlacement == nil
+                        ? ScreenRegion(
+                            x: auto.minX / size.width, y: auto.minY / size.height,
+                            w: auto.width / size.width, h: auto.height / size.height)
+                        : nil)
+            },
+            onDragChanged: { region in
+                layout.screenDragChanged(region)
+            },
+            onDragEnded: { region in
+                layout.endScreenDrag(region: region)
+            },
+            // The flag must ride through editor drags too, or a
+            // one-point nudge in the editor silently strips
+            // "overlay": true from the profile.
+            overlayOn: screenRegion?.overlay ?? false
+        )
+
+        ScreenRegionChips(
+            rect: screenRegionRect ?? gameRect,
+            showsReset: screenPlacement != nil,
+            onReset: {
+                // The mock canvas has no engine: the SwiftUI
+                // animation on the placeholder IS the reset
+                // animation.
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    layout.resetScreenEdit()
+                }
+            }
+        )
+    }
 }
 
 // MARK: - Shared canvas shell
 
 /// The mock-canvas shell the editor and the builtin viewer share:
 /// the scale-to-fit wrapper, the black canvas, the game-picture
-/// placeholder, and the controls overlay. One implementation, so
-/// the two screens cannot drift.
-struct EditorCanvasView: View {
+/// placeholder, and the controls overlay. `underControls` injects
+/// extra layers BETWEEN the placeholder and the controls (the
+/// editor's screen gizmo); the viewer leaves it empty.
+struct EditorCanvasShell<UnderControls: View>: View {
     var layout: ControlsLayout
     var actions: PlayerActionRegistry
     let orientation: ControlsOrientation
     let editMode: Bool
+    /// nil uses the canvas's fake game rect; the editor passes its
+    /// region-aware placeholder.
+    var placeholderRect: CGRect?
+    /// The profile's overlay choice, forwarded to the zone split.
+    var forcedOverlay: Bool?
     var editingButton: Binding<ButtonModel?> = .constant(nil)
     var editingActionButton: Binding<ActionButtonModel?> = .constant(nil)
     var editingDPad: Binding<Bool> = .constant(false)
@@ -499,6 +687,7 @@ struct EditorCanvasView: View {
     /// The read-only viewer turns hit testing off entirely, so no
     /// touch reaches the controls and nothing can write.
     var hitTesting = true
+    @ViewBuilder let underControls: (CGSize, CGRect) -> UnderControls
 
     var body: some View {
         GeometryReader { outer in
@@ -515,13 +704,14 @@ struct EditorCanvasView: View {
 
     private func canvas(size: CGSize) -> some View {
         let safeArea = EditorCanvas.safeArea(for: orientation)
-        let gameRect = EditorCanvas.fakeGameRect(for: orientation)
+        let gameRect = placeholderRect ?? EditorCanvas.fakeGameRect(for: orientation)
         let controlsMinY = ControlsZone.toolbarBottomY(
             isPortrait: orientation == .portrait,
             gameRect: gameRect,
             safeArea: safeArea,
             btnSize: IconButtonSize.sm.points,
-            geoHeight: size.height)
+            geoHeight: size.height,
+            forcedOverlay: forcedOverlay)
 
         return ZStack {
             RoundedRectangle(cornerRadius: Radius.sm)
@@ -537,6 +727,8 @@ struct EditorCanvasView: View {
                 )
                 .frame(width: gameRect.width, height: gameRect.height)
                 .position(x: gameRect.midX, y: gameRect.midY)
+
+            underControls(size, gameRect)
 
             GeometryReader { geo in
                 PlayerControlsOverlay(
@@ -599,20 +791,22 @@ struct BuiltinLayoutViewerView: View {
                 layout.setOrientation(new)
             }
 
-            EditorCanvasView(
+            EditorCanvasShell(
                 layout: layout,
                 actions: actions,
                 orientation: orientation,
                 editMode: false,
                 hitTesting: false
-            )
+            ) { _, _ in
+                EmptyView()
+            }
 
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text(
-                    "This is the layout Empo ships with. A game uses it when the game has no layout of its own and no profile applies."
+                    "Empo ships this layout. A game uses it when the game ships no layout and no profile applies."
                 )
                 Text(
-                    "You cannot edit this layout. It stays unchanged so a working layout is always available. To make your own version, duplicate it as a profile and edit the copy."
+                    "You cannot edit this layout. Empo keeps it unchanged as a fallback that works for every game. To make your own version, duplicate it as a profile and edit the copy."
                 )
             }
             .font(.footnote)
@@ -651,4 +845,5 @@ struct BuiltinLayoutViewerView: View {
         }
         LayoutProfilesManager.createProfileFromBuiltins(named: name)
     }
+
 }

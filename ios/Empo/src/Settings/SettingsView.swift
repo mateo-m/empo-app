@@ -61,27 +61,35 @@ struct SettingsView: View {
                     )
 
                     SettingsToggle(
-                        title: "Controller haptics",
-                        isOn: $settings.controllerHaptics,
-                        description: "Vibration feedback on the on-screen game controls while you play."
-                    )
-
-                    SettingsToggle(
                         title: "Continue playing",
                         isOn: $settings.showContinuePlaying,
                         description:
                             "Show a card at the top of your library to quickly jump back into your last game."
                     )
-
-                    NavigationLink {
-                        LayoutProfilesSettingsView()
-                    } label: {
-                        Label("Layout profiles", systemImage: "square.on.square")
-                    }
                 } header: {
                     Text("Look & Feel")
                 } footer: {
                     Text("Customize the appearance and layout of your library.")
+                }
+
+                Section {
+                    SettingsNavigationRow(
+                        title: "Layout profiles",
+                        description:
+                            "Create and edit saved layouts for the on-screen controls and the game screen."
+                    ) {
+                        LayoutProfilesSettingsView()
+                    }
+
+                    SettingsToggle(
+                        title: "Controller haptics",
+                        isOn: $settings.controllerHaptics,
+                        description: "Vibration feedback on the on-screen game controls while you play."
+                    )
+                } header: {
+                    Text("Gameplay")
+                } footer: {
+                    Text("These options apply while you play a game.")
                 }
 
                 Section {

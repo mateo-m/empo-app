@@ -188,6 +188,7 @@ class AppState {
         // game's slot. `switchGame(nil)` also flushes any pending
         // edits.
         ControlsLayout.shared.switchGame(id: nil, container: nil)
+        ScreenRegionApplier.endSession()
         engineReady = false
         PauseManager.shared.reset()
         phase = nil
