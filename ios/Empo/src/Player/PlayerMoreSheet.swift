@@ -95,7 +95,7 @@ struct PlayerMoreSheet: View {
                                 )
                             }
                             if showControllerRemap {
-                                MenuRow(icon: "gamecontroller.fill", label: "Controller") {
+                                MenuRow(icon: "gamecontroller.fill", label: "Buttons") {
                                     onControllerRemap()
                                     dismiss()
                                 }

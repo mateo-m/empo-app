@@ -101,11 +101,11 @@ public struct ControllerStateReducer: Sendable {
 /// Built-in controller map from SPEC section 9.1 with scancodes
 /// resolved once.
 public enum ControllerBuiltinMap {
-    public typealias ResolvedTarget = ControllerMapResolver.ResolvedTarget
+    public typealias ResolvedTarget = BindingResolver.ResolvedTarget
     public typealias Resolved = [String: ResolvedTarget]
 
     public static func builtinResolved() -> Resolved {
-        ControllerMapResolver.resolvedRuntimeMap()
+        BindingResolver.resolvedRuntimeMap()
     }
 }
 

@@ -3,16 +3,16 @@ import Foundation
 public struct ControlsManifest: Equatable, Sendable {
     public var version: Int
     public var touch: TouchSection?
-    public var controller: ControllerMap?
+    public var bindings: BindingMap?
 
     public init(
         version: Int,
         touch: TouchSection? = nil,
-        controller: ControllerMap? = nil
+        bindings: BindingMap? = nil
     ) {
         self.version = version
         self.touch = touch
-        self.controller = controller
+        self.bindings = bindings
     }
 }
 
@@ -124,19 +124,44 @@ public struct ActionButtonSpec: Equatable, Sendable {
     }
 }
 
-/// Ordered element -> target map. A target is a key, an action, or an
-/// explicit unbind.
-public struct ControllerMap: Equatable, Sendable {
-    public enum Target: Equatable, Sendable {
-        case key(String)
-        case action(String)
-        case unbound
-    }
+/// What a physical input does: press a game key, act as a controller
+/// element, run an Empo action, or nothing at all.
+///
+/// The `element` target is what makes one set of binds serve every
+/// pad. A controller in keyboard mode sends keys, so `"KeyJ": "a"`
+/// files that key under the A button, and every A binding — Empo's
+/// default, the game's manifest, the player's own — applies to it.
+public enum ControlsTarget: Equatable, Sendable {
+    case key(String)
+    case element(String)
+    case action(String)
+    case unbound
+}
+
+/// Source -> target map (SPEC section 9). A source is a controller
+/// element or a keyboard key; the two vocabularies are disjoint, so
+/// one map holds both.
+///
+/// A key that no source names passes through to the game unchanged.
+/// That keeps typing, and the engine hotkeys, alive on a real
+/// keyboard. `unbound` makes a source do nothing.
+public struct BindingMap: Equatable, Sendable {
+    public typealias Target = ControlsTarget
 
     public var entries: [String: Target]
 
     public init(entries: [String: Target] = [:]) {
         self.entries = entries
+    }
+
+    /// Entries whose source is a controller element.
+    public var elementEntries: [String: Target] {
+        entries.filter { ControllerElement.allNames.contains($0.key) }
+    }
+
+    /// Entries whose source is a keyboard key.
+    public var keyEntries: [String: Target] {
+        entries.filter { !ControllerElement.allNames.contains($0.key) }
     }
 }
 

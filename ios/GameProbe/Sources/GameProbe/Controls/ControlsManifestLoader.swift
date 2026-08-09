@@ -58,12 +58,14 @@ public enum ControlsManifestLoader {
         case v014 = "V014"
         case v015 = "V015"
         case v020 = "V020"
+        case v023 = "V023"
         case w001 = "W001"
         case w002 = "W002"
         case w003 = "W003"
         case w004 = "W004"
         case w005 = "W005"
         case w006 = "W006"
+        case w007 = "W007"
         case k001 = "K001"
         case j001 = "J001"
     }
@@ -400,26 +402,41 @@ public enum ControlsManifestLoader {
             )
         }
 
-        if let controller = root["controller"] as? [String: Any] {
-            manifest.controller = parseControllerMap(controller, path: "/controller", findings: &findings)
-        } else if root["controller"] != nil {
+        // `controller` is the section's first name. It stays valid
+        // for ever: manifests already in the wild use it.
+        let bindingsKey = root["bindings"] != nil ? "bindings" : "controller"
+        if root["bindings"] != nil && root["controller"] != nil {
             findings.append(
                 Finding(
-                    severity: .error,
-                    code: .v000,
+                    severity: .warning,
+                    code: .w007,
                     path: "/controller",
-                    message: "controller must be an object"
+                    message: "bindings and controller are the same section; controller is ignored"
                 )
             )
         }
 
-        if manifest.touch == nil && manifest.controller == nil {
+        if let bindings = root[bindingsKey] as? [String: Any] {
+            manifest.bindings = parseBindingMap(
+                bindings, path: "/\(bindingsKey)", findings: &findings)
+        } else if root[bindingsKey] != nil {
+            findings.append(
+                Finding(
+                    severity: .error,
+                    code: .v000,
+                    path: "/\(bindingsKey)",
+                    message: "\(bindingsKey) must be an object"
+                )
+            )
+        }
+
+        if manifest.touch == nil && manifest.bindings == nil {
             findings.append(
                 Finding(
                     severity: .warning,
                     code: .w001,
                     path: "",
-                    message: "Manifest has neither touch nor controller section"
+                    message: "Manifest has neither touch nor bindings section"
                 )
             )
         }
@@ -678,77 +695,114 @@ public enum ControlsManifestLoader {
             size: placement.size, opacity: placement.opacity)
     }
 
-    // MARK: - Controller
+    // MARK: - Bindings
 
-    private static func parseControllerMap(
+    private static func parseBindingMap(
         _ object: [String: Any],
         path: String,
         findings: inout [Finding]
-    ) -> ControllerMap {
-        var entries: [String: ControllerMap.Target] = [:]
+    ) -> BindingMap {
+        var entries: [String: BindingMap.Target] = [:]
 
-        for (element, value) in object {
-            let elementPath = "\(path)/\(element)"
-            guard ControllerElement.allNames.contains(element) else {
+        for (source, value) in object {
+            let sourcePath = "\(path)/\(source)"
+            let isElement = ControllerElement.allNames.contains(source)
+            guard isElement || KeyCodeTable.scancode(for: source) != nil else {
                 findings.append(
                     Finding(
                         severity: .error,
                         code: .v020,
-                        path: elementPath,
-                        message: "Unknown controller element \(element)"
+                        path: sourcePath,
+                        message: "Unknown controller element or key: \(source)"
                     )
                 )
                 continue
             }
 
-            if value is NSNull {
-                entries[element] = .unbound
+            guard let target = parseTarget(value, path: sourcePath, findings: &findings) else {
                 continue
             }
 
-            guard let text = value as? String else {
+            // One hop only. A key can stand in for an element, but an
+            // element that pointed at another element would need the
+            // resolver to chase a chain, and a chain can loop.
+            if case .element(let name) = target, isElement {
                 findings.append(
                     Finding(
                         severity: .error,
-                        code: .v000,
-                        path: elementPath,
-                        message: "Controller target must be a string or null"
+                        code: .v023,
+                        path: sourcePath,
+                        message: "A controller element cannot bind to another element: \(name)"
                     )
                 )
                 continue
             }
 
-            if text.hasPrefix("$") {
-                // Unknown actions warn and KEEP the entry. Every
-                // load-modify-save path rewrites this file, so a
-                // skipped entry would be stripped from disk. A kept
-                // entry stays inert at dispatch and survives saves.
-                if !EmpoActionCatalog.allIDs.contains(text) {
-                    findings.append(
-                        Finding(
-                            severity: .warning,
-                            code: .w005,
-                            path: elementPath,
-                            message: "Unknown action, binding does nothing: \(text)"
-                        )
-                    )
-                }
-                entries[element] = .action(text)
-            } else if KeyCodeTable.scancode(for: text) != nil {
-                entries[element] = .key(text)
-            } else {
-                findings.append(
-                    Finding(
-                        severity: .error,
-                        code: .v010,
-                        path: elementPath,
-                        message: "Unknown key code: \(text)"
-                    )
-                )
-            }
+            entries[source] = target
         }
 
-        return ControllerMap(entries: entries)
+        return BindingMap(entries: entries)
+    }
+
+    /// Target grammar of the bindings map: a key code, a controller
+    /// element, an action id, or null for an explicit unbind. Returns
+    /// nil when the value is not usable; the caller skips the entry.
+    private static func parseTarget(
+        _ value: Any,
+        path: String,
+        findings: inout [Finding]
+    ) -> ControlsTarget? {
+        if value is NSNull {
+            return .unbound
+        }
+
+        guard let text = value as? String else {
+            findings.append(
+                Finding(
+                    severity: .error,
+                    code: .v000,
+                    path: path,
+                    message: "Binding target must be a string or null"
+                )
+            )
+            return nil
+        }
+
+        if text.hasPrefix("$") {
+            // Unknown actions warn and KEEP the entry. Every
+            // load-modify-save path rewrites this file, so a
+            // skipped entry would be stripped from disk. A kept
+            // entry stays inert at dispatch and survives saves.
+            if !EmpoActionCatalog.allIDs.contains(text) {
+                findings.append(
+                    Finding(
+                        severity: .warning,
+                        code: .w005,
+                        path: path,
+                        message: "Unknown action, binding does nothing: \(text)"
+                    )
+                )
+            }
+            return .action(text)
+        }
+
+        if KeyCodeTable.scancode(for: text) != nil {
+            return .key(text)
+        }
+
+        if ControllerElement.allNames.contains(text) {
+            return .element(text)
+        }
+
+        findings.append(
+            Finding(
+                severity: .error,
+                code: .v010,
+                path: path,
+                message: "Unknown key code: \(text)"
+            )
+        )
+        return nil
     }
 
     // MARK: - Validation helpers

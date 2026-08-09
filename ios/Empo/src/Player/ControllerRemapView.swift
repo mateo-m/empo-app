@@ -1,12 +1,13 @@
 import GameProbe
 import SwiftUI
 
-/// Per-game / global controller remap screen (ticket 005).
+/// Per-game / global button remap screen (ticket 005).
 struct ControllerRemapView: View {
     let container: GameContainer?
     let gameTitle: String
-    let manifest: ControllerMap?
+    let manifest: BindingMap?
     var controllerInput: ControllerInputManager
+    var keyboardInput: KeyboardInputManager
 
     @Environment(\.dismiss) private var dismiss
 
@@ -15,11 +16,19 @@ struct ControllerRemapView: View {
     @State private var highlightedElement: String?
     @State private var showResetConfirm = false
     @State private var refreshToken = UUID()
+    @State private var listeningForKey = false
+    @State private var capturedKey: String?
 
     private var sections: [ControllerRemapCatalog.Section] {
         _ = refreshToken
         return ControllerRemapCatalog.sections(
             includingOptional: controllerInput.exposedOptionalElements)
+    }
+
+    private var keySources: [ControllerRemapCatalog.Element] {
+        _ = refreshToken
+        return ControllerRemapCatalog.keySources(
+            scope: scope, container: container, manifest: manifest)
     }
 
     var body: some View {
@@ -44,6 +53,30 @@ struct ControllerRemapView: View {
                                 }
                             }
                         }
+
+                        if keyboardInput.hasHadKeyboardThisSession {
+                            Section {
+                                ForEach(keySources) { element in
+                                    elementRow(element)
+                                        .id(element.id)
+                                }
+                                Button {
+                                    listeningForKey = true
+                                } label: {
+                                    Label("Add a key", systemImage: "plus")
+                                }
+                            } header: {
+                                Text("Keyboard")
+                            } footer: {
+                                Text(
+                                    """
+                                    A controller in keyboard mode sends keys, not buttons. \
+                                    Bind its keys to controller buttons here and every \
+                                    button binding applies to it.
+                                    """
+                                )
+                            }
+                        }
                     }
                     .listStyle(.insetGrouped)
                     .onChange(of: highlightedElement) { _, element in
@@ -54,7 +87,7 @@ struct ControllerRemapView: View {
                     }
                 }
             }
-            .navigationTitle("Controller")
+            .navigationTitle("Buttons")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -76,6 +109,12 @@ struct ControllerRemapView: View {
             } message: {
                 Text(resetMessage)
             }
+            .sheet(isPresented: $listeningForKey) {
+                KeyCaptureSheet(keyboardInput: keyboardInput) { code in
+                    listeningForKey = false
+                    capturedKey = code
+                }
+            }
             .sheet(item: $pickingElement) { element in
                 ControllerBindingPickerSheet(
                     elementLabel: element.label,
@@ -84,7 +123,8 @@ struct ControllerRemapView: View {
                         scope: scope,
                         container: container,
                         manifest: manifest
-                    )
+                    ),
+                    allowsElements: !ControllerElement.allNames.contains(element.id)
                 ) { target in
                     ControllerRemapCatalog.save(
                         element: element.id,
@@ -97,25 +137,51 @@ struct ControllerRemapView: View {
             }
             .onAppear {
                 controllerInput.suppressInjection = true
+                keyboardInput.suppressInjection = true
                 controllerInput.elementActivityHandler = { element in
-                    highlightedElement = element
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(600))
-                        if highlightedElement == element {
-                            highlightedElement = nil
-                        }
-                    }
+                    highlight(element)
+                }
+                keyboardInput.keyActivityHandler = { code in
+                    guard !listeningForKey else { return }
+                    highlight(code)
                 }
             }
             .onDisappear {
                 controllerInput.suppressInjection = false
+                keyboardInput.suppressInjection = false
                 controllerInput.elementActivityHandler = nil
+                keyboardInput.keyActivityHandler = nil
+            }
+            .onChange(of: listeningForKey) { _, listening in
+                // The capture sheet takes the handler while it is up,
+                // and this screen never leaves the display, so it has
+                // to claim the handler back by hand.
+                guard !listening else { return }
+                keyboardInput.keyActivityHandler = { code in
+                    highlight(code)
+                }
+            }
+            .onChange(of: capturedKey) { _, code in
+                guard let code else { return }
+                capturedKey = nil
+                pickingElement = ControllerRemapCatalog.Element(
+                    id: code, label: ControllerRemapCatalog.keyLabel(code))
             }
             .onReceive(NotificationCenter.default.publisher(for: .controllerMapDidChange)) { _ in
                 refreshToken = UUID()
             }
         }
         .tint(.brand)
+    }
+
+    private func highlight(_ source: String) {
+        highlightedElement = source
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            if highlightedElement == source {
+                highlightedElement = nil
+            }
+        }
     }
 
     private var resetTitle: String {
@@ -126,9 +192,9 @@ struct ControllerRemapView: View {
         switch scope {
         case .thisGame:
             return
-                "Remove all controller overrides for \(gameTitle). Game defaults and global settings will apply again."
+                "Remove all button overrides for \(gameTitle). Game defaults and global settings will apply again."
         case .allGames:
-            return "Remove all global controller overrides. Empo defaults will apply until you remap again."
+            return "Remove all global button overrides. Empo defaults will apply until you remap again."
         }
     }
 

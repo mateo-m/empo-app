@@ -52,7 +52,7 @@ final class ControllerInputManager {
 
     private var sessionActive = false
     private var reducer = ControllerStateReducer()
-    private var resolvedMap = ControllerMapResolver.resolvedRuntimeMap()
+    private var resolvedMap = BindingResolver.resolvedRuntimeMap()
     private var elementPressScancode: [String: Int32] = [:]
     // element -> action id held by that element, mirroring
     // elementPressScancode so hold actions get their release edge.
@@ -71,7 +71,7 @@ final class ControllerInputManager {
 
     /// Atomically swap the merged map. Keys held mid-press keep their
     /// press-time scancode until release (SPEC §10.2 / ticket 004).
-    func updateResolvedMap(_ map: [String: ControllerMapResolver.ResolvedTarget]) {
+    func updateResolvedMap(_ map: [String: BindingResolver.ResolvedTarget]) {
         resolvedMap = map
     }
 
@@ -147,8 +147,32 @@ final class ControllerInputManager {
         overlayManualOverride = true
     }
 
+    /// Reports every connected device to `controls.json.log`, whether
+    /// or not the mapper can use it. A bug report about a controller
+    /// that "does nothing" is unanswerable without this: it tells
+    /// apart a pad iOS never exposed, a pad with element names Empo
+    /// does not know, and a pad that works but is bound elsewhere.
+    var deviceLogHandler: ((String) -> Void)?
+
+    private func logDevice(_ controller: GCController) {
+        guard let deviceLogHandler else { return }
+        let profile = controller.physicalInputProfile
+        let elements = profile.elements.keys.sorted().joined(separator: ", ")
+        deviceLogHandler(
+            """
+            controller connected: \(controller.vendorName ?? "unnamed") \
+            [\(controller.productCategory)] \
+            extended=\(controller.extendedGamepad != nil) \
+            micro=\(controller.microGamepad != nil) \
+            mappable=\(Self.isMappable(controller)) \
+            elements=[\(elements)]
+            """
+        )
+    }
+
     private func attach(_ controller: GCController) {
         guard sessionActive else { return }
+        logDevice(controller)
         guard Self.isMappable(controller) else { return }
         let id = ObjectIdentifier(controller)
         guard connectedControllers[id] == nil else {

@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 
 const schemaPath = path.join(repoRoot, "docs/schemas/empo-controls.v1.schema.json");
-const examplePath = path.join(repoRoot, "docs/examples/empo-controls-example.json");
+const examplePath = path.join(repoRoot, "docs/examples/controls.json");
 const typoPath = path.join(repoRoot, "tools/fixtures/controls-v010-typo.json");
 
 function loadJson(filePath) {

@@ -125,11 +125,51 @@ enum ControllerRemapCatalog {
         return result
     }
 
-    static func displayName(for target: ControllerMap.Target?) -> String {
+    /// Label for one physical key, for the keyboard rows.
+    static func keyLabel(_ code: String) -> String {
+        let name = KeyCodeTable.displayName(for: code) ?? code
+        return name == code ? name : "\(name) (\(code))"
+    }
+
+    /// Label for a controller element, for element targets and rows.
+    static func elementLabel(_ element: String) -> String {
+        for section in baseSections + [extrasSection] {
+            if let match = section.elements.first(where: { $0.id == element }) {
+                return match.label
+            }
+        }
+        return element
+    }
+
+    /// Key sources bound in this scope, in key-table order. These are
+    /// the rows of the keyboard section: a controller in keyboard
+    /// mode has no elements to list, only the keys it sends.
+    static func keySources(
+        scope: Scope,
+        container: GameContainer?,
+        manifest: BindingMap?
+    ) -> [Element] {
+        let layers: [BindingMap]
+        switch scope {
+        case .thisGame:
+            layers = BindingLayers.overrideLayers(for: container)
+        case .allGames:
+            layers = [BindingStore.loadGlobal()].compactMap { $0 }
+        }
+        let merged = BindingResolver.resolve(layers: layers)
+        let bound = Set(merged.keys).subtracting(ControllerElement.allNames)
+        return KeyCodeTable.allCodes
+            .filter { bound.contains($0) }
+            .map { Element(id: $0, label: keyLabel($0)) }
+    }
+
+    static func displayName(for target: BindingMap.Target?) -> String {
         guard let target else { return "Unbound" }
         switch target {
         case .key(let code):
             return KeyCodeTable.displayName(for: code) ?? code
+        case .element(let name):
+            return elementLabel(name)
         case .action(let name):
             // Unknown = written by a newer Empo or by hand. The
             // binding stays in the map (W005 rule) and does nothing.
@@ -144,12 +184,12 @@ enum ControllerRemapCatalog {
         element: String,
         scope: Scope,
         container: GameContainer?,
-        manifest: ControllerMap?
+        manifest: BindingMap?
     ) -> Provenance? {
         switch scope {
         case .thisGame:
             if let container,
-                let perGame = ControllerMapStore.loadPerGame(container: container),
+                let perGame = BindingStore.loadPerGame(container: container),
                 perGame.entries[element] != nil
             {
                 return .userOverride
@@ -157,14 +197,14 @@ enum ControllerRemapCatalog {
             if let manifest, manifest.entries[element] != nil {
                 return .gameDefault
             }
-            if let global = ControllerMapStore.loadGlobal(),
+            if let global = BindingStore.loadGlobal(),
                 global.entries[element] != nil
             {
                 return nil
             }
             return .empoDefault
         case .allGames:
-            if let global = ControllerMapStore.loadGlobal(),
+            if let global = BindingStore.loadGlobal(),
                 global.entries[element] != nil
             {
                 return .userOverride
@@ -177,35 +217,35 @@ enum ControllerRemapCatalog {
         element: String,
         scope: Scope,
         container: GameContainer?,
-        manifest: ControllerMap?
-    ) -> ControllerMap.Target? {
-        let layers: [ControllerMap]
+        manifest: BindingMap?
+    ) -> BindingMap.Target? {
+        let layers: [BindingMap]
         switch scope {
         case .thisGame:
-            layers = ControllerMapBindings.overrideLayers(for: container)
+            layers = BindingLayers.overrideLayers(for: container)
         case .allGames:
-            layers = [ControllerMapStore.loadGlobal()].compactMap { $0 }
+            layers = [BindingStore.loadGlobal()].compactMap { $0 }
         }
-        let merged = ControllerMapResolver.resolve(layers: layers)
+        let merged = BindingResolver.resolve(layers: layers)
         return merged[element]
     }
 
     static func save(
         element: String,
-        target: ControllerMap.Target,
+        target: BindingMap.Target,
         scope: Scope,
         container: GameContainer?
     ) {
         switch scope {
         case .thisGame:
             guard let container else { return }
-            var map = ControllerMapStore.loadPerGame(container: container) ?? ControllerMap()
+            var map = BindingStore.loadPerGame(container: container) ?? BindingMap()
             map.entries[element] = target
-            ControllerMapStore.savePerGame(container: container, map: map)
+            BindingStore.savePerGame(container: container, map: map)
         case .allGames:
-            var map = ControllerMapStore.loadGlobal() ?? ControllerMap()
+            var map = BindingStore.loadGlobal() ?? BindingMap()
             map.entries[element] = target
-            ControllerMapStore.saveGlobal(map)
+            BindingStore.saveGlobal(map)
         }
     }
 
@@ -217,21 +257,21 @@ enum ControllerRemapCatalog {
         switch scope {
         case .thisGame:
             guard let container,
-                var map = ControllerMapStore.loadPerGame(container: container)
+                var map = BindingStore.loadPerGame(container: container)
             else { return }
             map.entries.removeValue(forKey: element)
             if map.entries.isEmpty {
-                ControllerMapStore.deletePerGame(container: container)
+                BindingStore.deletePerGame(container: container)
             } else {
-                ControllerMapStore.savePerGame(container: container, map: map)
+                BindingStore.savePerGame(container: container, map: map)
             }
         case .allGames:
-            guard var map = ControllerMapStore.loadGlobal() else { return }
+            guard var map = BindingStore.loadGlobal() else { return }
             map.entries.removeValue(forKey: element)
             if map.entries.isEmpty {
-                ControllerMapStore.deleteGlobal()
+                BindingStore.deleteGlobal()
             } else {
-                ControllerMapStore.saveGlobal(map)
+                BindingStore.saveGlobal(map)
             }
         }
     }
@@ -240,9 +280,9 @@ enum ControllerRemapCatalog {
         switch scope {
         case .thisGame:
             guard let container else { return }
-            ControllerMapStore.deletePerGame(container: container)
+            BindingStore.deletePerGame(container: container)
         case .allGames:
-            ControllerMapStore.deleteGlobal()
+            BindingStore.deleteGlobal()
         }
     }
 
@@ -250,9 +290,9 @@ enum ControllerRemapCatalog {
         switch scope {
         case .thisGame:
             guard let container else { return false }
-            return ControllerMapStore.loadPerGame(container: container) != nil
+            return BindingStore.loadPerGame(container: container) != nil
         case .allGames:
-            return ControllerMapStore.loadGlobal() != nil
+            return BindingStore.loadGlobal() != nil
         }
     }
 }

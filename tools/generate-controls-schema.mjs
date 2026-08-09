@@ -40,18 +40,53 @@ function extractControllerElements(swift) {
   return elements;
 }
 
+function extractActions(swift) {
+  const block = swift.match(/all: \[EmpoAction\] = \[([\s\S]*?)\n    \]/);
+  if (!block) {
+    throw new Error("action table not found in EmpoAction.swift");
+  }
+  const constants = Object.fromEntries(
+    [...swift.matchAll(/static let (\w+) = "(\$\w+)"/g)].map((m) => [m[1], m[2]])
+  );
+  const actions = [...block[1].matchAll(/id: (\w+)[\s\S]*?touchValid: (true|false)/g)].map(
+    (m) => ({ id: constants[m[1]], touchValid: m[2] === "true" })
+  );
+  if (actions.length === 0 || actions.some((a) => !a.id)) {
+    throw new Error("no actions found in EmpoAction.swift");
+  }
+  return actions;
+}
+
+function extractMovementStyles(swift) {
+  const block = swift.match(/enum MovementStyle[^{]*\{([\s\S]*?)\n\}/);
+  if (!block) {
+    throw new Error("MovementStyle enum not found in ControlsManifest.swift");
+  }
+  const styles = [...block[1].matchAll(/case (\w+)/g)].map((m) => m[1]);
+  if (styles.length === 0) {
+    throw new Error("no movement styles found");
+  }
+  return styles;
+}
+
 const keyCodes = extractKeyCodes(read("ios/GameProbe/Sources/GameProbe/Controls/KeyCodeTable.swift"));
 const controllerElements = extractControllerElements(
   read("ios/GameProbe/Sources/GameProbe/Controls/ControlsManifest.swift")
 );
-const actions = ["$pauseMenu", "$toggleOverlay"];
+const actionTable = extractActions(read("ios/GameProbe/Sources/GameProbe/Controls/EmpoAction.swift"));
+const actions = actionTable.map((a) => a.id);
+const touchActions = actionTable.filter((a) => a.touchValid).map((a) => a.id);
+
+const movementStyles = extractMovementStyles(
+  read("ios/GameProbe/Sources/GameProbe/Controls/ControlsManifest.swift")
+);
 
 const schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://raw.githubusercontent.com/mateo-m/empo-app/main/docs/schemas/empo-controls.v1.schema.json",
   title: "Empo controls manifest v1",
   description:
-    "Per-game touch layout and controller map for Empo (empo/controls.json). " +
+    "Per-game touch layout and input bindings for Empo (empo/controls.json). " +
     "The Swift validator in GameProbe is authoritative; this schema supports editor autocomplete.",
   type: "object",
   additionalProperties: true,
@@ -64,7 +99,11 @@ const schema = {
       const: 1
     },
     touch: { $ref: "#/$defs/touchSection" },
-    controller: { $ref: "#/$defs/controllerMap" }
+    bindings: { $ref: "#/$defs/bindingMap" },
+    controller: {
+      description: "First name of the bindings section. Still valid; bindings wins if both appear.",
+      $ref: "#/$defs/bindingMap"
+    }
   },
   $defs: {
     keyCode: {
@@ -73,13 +112,28 @@ const schema = {
       enum: keyCodes
     },
     action: {
-      description: "Host action string (SPEC §8). Valid in controller maps only.",
+      description:
+        "Host action string (SPEC §8). Valid in the bindings map; " +
+        "the touch-valid subset also works in actionButtons.",
       type: "string",
       enum: actions
     },
-    controllerTarget: {
-      description: "Key binding, host action, or explicit unbind (null).",
-      oneOf: [{ $ref: "#/$defs/keyCode" }, { $ref: "#/$defs/action" }, { type: "null" }]
+    touchAction: {
+      description:
+        "Actions a touch actionButton can bind. $toggleTouchControls is controller-only.",
+      type: "string",
+      enum: touchActions
+    },
+    bindingTarget: {
+      description:
+        "Key binding, controller element, host action, or explicit unbind (null). " +
+        "An element target is for key sources only: the key then takes that button's binding.",
+      oneOf: [
+        { $ref: "#/$defs/keyCode" },
+        { $ref: "#/$defs/controllerElement" },
+        { $ref: "#/$defs/action" },
+        { type: "null" }
+      ]
     },
     coordinate: {
       description: "Center position as a fraction of the controls zone (0.0–1.0).",
@@ -113,6 +167,24 @@ const schema = {
         x: { $ref: "#/$defs/coordinate" },
         y: { $ref: "#/$defs/coordinate" },
         size: { $ref: "#/$defs/dpadSize" },
+        opacity: { $ref: "#/$defs/opacity" },
+        style: {
+          description:
+            "Movement control style. stick draws a joystick with the same key mapping.",
+          type: "string",
+          enum: movementStyles
+        }
+      }
+    },
+    actionButton: {
+      type: "object",
+      additionalProperties: true,
+      required: ["action", "x", "y"],
+      properties: {
+        action: { $ref: "#/$defs/touchAction" },
+        x: { $ref: "#/$defs/coordinate" },
+        y: { $ref: "#/$defs/coordinate" },
+        size: { $ref: "#/$defs/buttonSize" },
         opacity: { $ref: "#/$defs/opacity" }
       }
     },
@@ -142,6 +214,15 @@ const schema = {
           type: "array",
           maxItems: 21,
           items: { $ref: "#/$defs/button" }
+        },
+        actionButtons: {
+          description:
+            "Buttons that trigger Empo actions. The 21-per-orientation cap counts " +
+            "buttons and actionButtons together; the runtime validator enforces the " +
+            "combined cap.",
+          type: "array",
+          maxItems: 21,
+          items: { $ref: "#/$defs/actionButton" }
         }
       }
     },
@@ -158,11 +239,18 @@ const schema = {
       type: "string",
       enum: controllerElements
     },
-    controllerMap: {
+    bindingSource: {
+      description:
+        "A controller element (SPEC §7) or a keyboard key (SPEC §6). " +
+        "A pad in keyboard mode reaches iOS as a keyboard, so its buttons are keys here.",
+      type: "string",
+      enum: [...controllerElements, ...keyCodes]
+    },
+    bindingMap: {
       type: "object",
-      description: "Patch overlay: only listed elements change; null unbinds.",
-      propertyNames: { $ref: "#/$defs/controllerElement" },
-      additionalProperties: { $ref: "#/$defs/controllerTarget" }
+      description: "Patch overlay: only listed sources change; null unbinds.",
+      propertyNames: { $ref: "#/$defs/bindingSource" },
+      additionalProperties: { $ref: "#/$defs/bindingTarget" }
     }
   }
 };

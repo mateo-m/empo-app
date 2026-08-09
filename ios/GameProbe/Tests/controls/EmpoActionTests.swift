@@ -35,7 +35,7 @@ final class EmpoActionTests: XCTestCase {
     }
 
     func testMigrationRewritesRenamedAction() {
-        let map = ControllerMap(entries: [
+        let map = BindingMap(entries: [
             "back": .action("$toggleOverlay"),
             "start": .action("$pauseMenu"),
             "y": .key("F5"),
@@ -54,7 +54,7 @@ final class EmpoActionTests: XCTestCase {
     }
 
     func testMigrationLeavesUnknownActionsAlone() {
-        let map = ControllerMap(entries: ["start": .action("$notAnAction")])
+        let map = BindingMap(entries: ["start": .action("$notAnAction")])
         let result = EmpoActionCatalog.migrated(map)
         XCTAssertFalse(result.changed)
         XCTAssertEqual(result.map, map)

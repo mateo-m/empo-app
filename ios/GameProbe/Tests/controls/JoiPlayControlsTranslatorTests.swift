@@ -34,7 +34,7 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
         let translation = JoiPlayControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: metrics)
 
         XCTAssertNotNil(translation.manifest)
-        XCTAssertNil(translation.manifest?.controller)
+        XCTAssertNil(translation.manifest?.bindings)
 
         let portrait = translation.manifest?.touch?.portrait
         let landscape = translation.manifest?.touch?.landscape
@@ -179,7 +179,7 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
 
         let serialized = ControlsManifestSerializer.serialize(
             touch: manifest.touch,
-            controller: manifest.controller
+            bindings: manifest.bindings
         )
         XCTAssertNotNil(serialized)
 

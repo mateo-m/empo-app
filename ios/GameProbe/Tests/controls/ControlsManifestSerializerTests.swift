@@ -29,14 +29,14 @@ final class ControlsManifestSerializerTests: XCTestCase {
     }
 
     func testRoundTripZeroFindings() {
-        let controller = ControllerMap(entries: [
+        let controller = BindingMap(entries: [
             "a": .key("Enter"),
             "b": .unbound,
             "start": .action("$pauseMenu"),
         ])
         guard let data = ControlsManifestSerializer.serialize(
             touch: sampleTouch(),
-            controller: controller
+            bindings: controller
         ) else {
             XCTFail("expected data")
             return
@@ -45,7 +45,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
         let result = parseSerialized(data)
         XCTAssertNil(result.findings.first { $0.severity == .error })
         XCTAssertEqual(result.manifest?.version, 1)
-        XCTAssertEqual(result.manifest?.controller, controller)
+        XCTAssertEqual(result.manifest?.bindings, controller)
         // The loader parses with the engine's json5pp, which builds
         // fractions with pow(10, -n). The parsed double lands within
         // an ulp of the written value, and WHICH ulp differs per
@@ -56,16 +56,58 @@ final class ControlsManifestSerializerTests: XCTestCase {
         // bytes, because the serializer rounds to 6 decimals.
         let reserialized = ControlsManifestSerializer.serialize(
             touch: result.manifest?.touch,
-            controller: result.manifest?.controller
+            bindings: result.manifest?.bindings
         )
         XCTAssertEqual(reserialized, data)
     }
 
+    func testKeySourcesRoundTrip() {
+        let bindings = BindingMap(entries: [
+            "a": .key("Enter"),
+            "KeyJ": .element("a"),
+            "KeyB": .key("Escape"),
+            "Enter": .action("$pauseMenu"),
+            "KeyM": .unbound,
+        ])
+        guard
+            let data = ControlsManifestSerializer.serialize(touch: nil, bindings: bindings)
+        else {
+            XCTFail("expected data")
+            return
+        }
+        let result = parseSerialized(data)
+        XCTAssertNil(result.findings.first { $0.severity == .error })
+        XCTAssertEqual(result.manifest?.bindings, bindings)
+
+        let reserialized = ControlsManifestSerializer.serialize(
+            touch: result.manifest?.touch,
+            bindings: result.manifest?.bindings
+        )
+        XCTAssertEqual(reserialized, data)
+    }
+
+    func testElementsAreWrittenBeforeKeys() {
+        let bindings = BindingMap(entries: ["KeyJ": .element("a"), "b": .key("Escape")])
+        guard let data = ControlsManifestSerializer.serialize(touch: nil, bindings: bindings),
+            let text = String(data: data, encoding: .utf8)
+        else {
+            XCTFail("expected data")
+            return
+        }
+        guard let elementIndex = text.range(of: "\"b\""),
+            let keyIndex = text.range(of: "\"KeyJ\"")
+        else {
+            XCTFail("expected both sources in \(text)")
+            return
+        }
+        XCTAssertLessThan(elementIndex.lowerBound, keyIndex.lowerBound)
+    }
+
     func testDeterministicOutput() {
         let touch = sampleTouch()
-        let controller = ControllerMap(entries: ["a": .key("KeyZ")])
-        guard let first = ControlsManifestSerializer.serialize(touch: touch, controller: controller),
-            let second = ControlsManifestSerializer.serialize(touch: touch, controller: controller)
+        let controller = BindingMap(entries: ["a": .key("KeyZ")])
+        guard let first = ControlsManifestSerializer.serialize(touch: touch, bindings: controller),
+            let second = ControlsManifestSerializer.serialize(touch: touch, bindings: controller)
         else {
             XCTFail("expected data")
             return
@@ -120,7 +162,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
         XCTAssertEqual(touch.portrait?.buttons?.count, 1)
         XCTAssertEqual(touch.portrait?.buttons?.first?.key, "Enter")
 
-        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil) else {
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, bindings: nil) else {
             XCTFail("expected data")
             return
         }
@@ -157,7 +199,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
             portrait: portrait,
             landscape: landscape
         )
-        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil) else {
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, bindings: nil) else {
             XCTFail("expected data")
             return
         }
@@ -173,33 +215,33 @@ final class ControlsManifestSerializerTests: XCTestCase {
         XCTAssertEqual(result.manifest?.touch?.landscape?.dpad?.size, 200)
     }
 
-    func testControllerOnlyOmitsTouch() {
-        let controller = ControllerMap(entries: ["a": .key("Enter")])
-        guard let data = ControlsManifestSerializer.serialize(touch: nil, controller: controller) else {
+    func testBindingsOnlyOmitTouch() {
+        let controller = BindingMap(entries: ["a": .key("Enter")])
+        guard let data = ControlsManifestSerializer.serialize(touch: nil, bindings: controller) else {
             XCTFail("expected data")
             return
         }
         let text = String(data: data, encoding: .utf8) ?? ""
         XCTAssertFalse(text.contains("\"touch\""))
-        XCTAssertTrue(text.contains("\"controller\""))
+        XCTAssertTrue(text.contains("\"bindings\""))
 
         let result = parseSerialized(data)
         XCTAssertNil(result.manifest?.touch)
-        XCTAssertEqual(result.manifest?.controller, controller)
+        XCTAssertEqual(result.manifest?.bindings, controller)
         XCTAssertTrue(result.findings.filter { $0.severity == .error }.isEmpty)
     }
 
     func testEmptyReturnsNil() {
-        XCTAssertNil(ControlsManifestSerializer.serialize(touch: nil, controller: nil))
+        XCTAssertNil(ControlsManifestSerializer.serialize(touch: nil, bindings: nil))
         XCTAssertNil(
             ControlsManifestSerializer.serialize(
                 touch: nil,
-                controller: ControllerMap(entries: [:])
+                bindings: BindingMap(entries: [:])
             ))
     }
 
     func testTrailingNewline() {
-        guard let data = ControlsManifestSerializer.serialize(touch: sampleTouch(), controller: nil) else {
+        guard let data = ControlsManifestSerializer.serialize(touch: sampleTouch(), bindings: nil) else {
             XCTFail("expected data")
             return
         }
@@ -212,7 +254,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
             ActionButtonSpec(action: "$toggleFastForward", x: 0.75, y: 0.25, size: 56, opacity: 0.5),
             ActionButtonSpec(action: "$pauseMenu", x: 0.5, y: 0.25, size: 44, opacity: 1),
         ]
-        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil) else {
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, bindings: nil) else {
             XCTFail("expected data")
             return
         }
@@ -230,7 +272,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
         // the exact bytes.
         let reserialized = ControlsManifestSerializer.serialize(
             touch: result.manifest?.touch,
-            controller: nil
+            bindings: nil
         )
         XCTAssertEqual(reserialized, data)
     }
@@ -238,11 +280,11 @@ final class ControlsManifestSerializerTests: XCTestCase {
     func testUnknownControllerActionRoundTripsByteStable() {
         // W005 keeps unknown action entries. Saving the map back must
         // not strip or rewrite them.
-        let controller = ControllerMap(entries: [
+        let controller = BindingMap(entries: [
             "start": .action("$notAnAction"),
             "a": .key("Enter"),
         ])
-        guard let data = ControlsManifestSerializer.serialize(touch: nil, controller: controller)
+        guard let data = ControlsManifestSerializer.serialize(touch: nil, bindings: controller)
         else {
             XCTFail("expected data")
             return
@@ -250,12 +292,12 @@ final class ControlsManifestSerializerTests: XCTestCase {
 
         let result = parseSerialized(data)
         XCTAssertNil(result.findings.first { $0.severity == .error })
-        XCTAssertEqual(result.findings.first { $0.code == "W005" }?.path, "/controller/start")
-        XCTAssertEqual(result.manifest?.controller?.entries["start"], .action("$notAnAction"))
+        XCTAssertEqual(result.findings.first { $0.code == "W005" }?.path, "/bindings/start")
+        XCTAssertEqual(result.manifest?.bindings?.entries["start"], .action("$notAnAction"))
 
         let reserialized = ControlsManifestSerializer.serialize(
             touch: nil,
-            controller: result.manifest?.controller
+            bindings: result.manifest?.bindings
         )
         XCTAssertEqual(reserialized, data)
     }
@@ -267,7 +309,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
         // key would resurrect deleted buttons on the next load.
         var touch = sampleTouch()
         touch.portrait?.actionButtons = []
-        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil)
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, bindings: nil)
         else {
             XCTFail("expected data")
             return
@@ -294,12 +336,12 @@ final class ControlsManifestSerializerTests: XCTestCase {
                 ]
             )
         )
-        let controller = ControllerMap(entries: [
+        let controller = BindingMap(entries: [
             "a": .key("Enter"),
             "back": .action("$toggleTouchControls"),
             "start": .unbound,
         ])
-        let data = ControlsManifestSerializer.serialize(touch: touch, controller: controller)
+        let data = ControlsManifestSerializer.serialize(touch: touch, bindings: controller)
         // Line array because two lines carry trailing spaces (the
         // array-item separator lines), which a multiline literal
         // cannot express reliably.
@@ -337,7 +379,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
             "      ]",
             "    }",
             "  }",
-            "  ,\"controller\": {",
+            "  ,\"bindings\": {",
             "    \"a\": \"Enter\"",
             "    ,\"back\": \"$toggleTouchControls\"",
             "    ,\"start\": null",
@@ -351,7 +393,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
     func testStickStyleRoundTrips() {
         var touch = sampleTouch()
         touch.portrait?.dpad?.style = .stick
-        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: nil)
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, bindings: nil)
         else {
             XCTFail("expected data")
             return
@@ -364,7 +406,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
         // so every existing file serializes byte-identically.
         XCTAssertEqual(result.manifest?.touch?.landscape?.dpad?.style, .dpad)
         let reserialized = ControlsManifestSerializer.serialize(
-            touch: result.manifest?.touch, controller: nil)
+            touch: result.manifest?.touch, bindings: nil)
         XCTAssertEqual(reserialized, data)
     }
 

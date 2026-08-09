@@ -1,11 +1,15 @@
 import GameProbe
 import SwiftUI
 
-/// Key/action picker for controller remap rows (ticket 005 §4).
+/// Key/action picker for remap rows (ticket 005 §4).
 struct ControllerBindingPickerSheet: View {
     let elementLabel: String
-    let current: ControllerMap.Target?
-    let onSelect: (ControllerMap.Target) -> Void
+    let current: BindingMap.Target?
+    /// Key sources can stand in for a controller button, which hands
+    /// them every binding that button already has. Element sources
+    /// cannot: a chain of elements could loop.
+    var allowsElements: Bool = false
+    let onSelect: (BindingMap.Target) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -21,6 +25,22 @@ struct ControllerBindingPickerSheet: View {
                         )
                     }
                     actionRow(label: "Unbound", target: .unbound)
+                }
+
+                if allowsElements {
+                    Section("Controller buttons") {
+                        ForEach(
+                            ControllerRemapCatalog.sections(includingOptional: []), id: \.id
+                        ) { section in
+                            ForEach(section.elements) { element in
+                                actionRow(
+                                    label: element.label,
+                                    blurb: "Acts as this button",
+                                    target: .element(element.id)
+                                )
+                            }
+                        }
+                    }
                 }
 
                 ForEach(KeyCodePickerGroup.allCases, id: \.self) { group in
@@ -49,7 +69,7 @@ struct ControllerBindingPickerSheet: View {
     private func actionRow(
         label: String,
         blurb: String? = nil,
-        target: ControllerMap.Target
+        target: BindingMap.Target
     ) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -74,7 +94,7 @@ struct ControllerBindingPickerSheet: View {
     }
 
     private func keyRow(code: String, group: KeyCodePickerGroup) -> some View {
-        let target: ControllerMap.Target = .key(code)
+        let target: BindingMap.Target = .key(code)
         let title = KeyCodeTable.displayName(for: code) ?? code
         let annotation = group == .common ? ControllerRemapCatalog.commonKeyAnnotations[code] : nil
 
@@ -100,9 +120,10 @@ struct ControllerBindingPickerSheet: View {
         }
     }
 
-    private func targetsMatch(_ lhs: ControllerMap.Target?, _ rhs: ControllerMap.Target) -> Bool {
+    private func targetsMatch(_ lhs: BindingMap.Target?, _ rhs: BindingMap.Target) -> Bool {
         switch (lhs, rhs) {
         case (.key(let a), .key(let b)): return a == b
+        case (.element(let a), .element(let b)): return a == b
         case (.action(let a), .action(let b)): return a == b
         case (.unbound, .unbound): return true
         default: return false
