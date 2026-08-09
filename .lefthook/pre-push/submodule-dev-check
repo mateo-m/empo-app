@@ -1,0 +1,14 @@
+#!/bin/sh
+# Run the pre-push guard on every push.
+#
+# lefthook builds a push-file list and skips a `commands:` entry when
+# that list is empty. It drops mkxp-z-apple-mobile from the list,
+# because a submodule path is a directory and not a regular file. A
+# commit that moves only the gitlink therefore matched no files, the
+# guard skipped with "no matching push files", and an off-dev engine
+# pin reached a pull request (empo-app#118). That is the one case this
+# guard exists to catch.
+#
+# lefthook scripts carry no file filter, so keep the guard here. The
+# checks stay in scripts/hooks/pre-push.sh, which CI also calls.
+exec "$(git rev-parse --show-toplevel)/scripts/hooks/pre-push.sh"
