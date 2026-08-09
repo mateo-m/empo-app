@@ -697,112 +697,47 @@ public enum ControlsManifestLoader {
 
     // MARK: - Bindings
 
+    /// The grammar itself lives in `BindingMapCoder`, which the app's
+    /// defaults store reads with too. This only turns its issues into
+    /// findings.
     private static func parseBindingMap(
         _ object: [String: Any],
         path: String,
         findings: inout [Finding]
     ) -> BindingMap {
-        var entries: [String: BindingMap.Target] = [:]
-
-        for (source, value) in object {
+        var reported: [Finding] = []
+        let map = BindingMapCoder.decode(object) { source, issue in
             let sourcePath = "\(path)/\(source)"
-            let isElement = ControllerElement.allNames.contains(source)
-            guard isElement || KeyCodeTable.scancode(for: source) != nil else {
-                findings.append(
+            switch issue {
+            case .unknownSource:
+                reported.append(
                     Finding(
-                        severity: .error,
-                        code: .v020,
-                        path: sourcePath,
-                        message: "Unknown controller element or key: \(source)"
-                    )
-                )
-                continue
-            }
-
-            guard let target = parseTarget(value, path: sourcePath, findings: &findings) else {
-                continue
-            }
-
-            // One hop only. A key can stand in for an element, but an
-            // element that pointed at another element would need the
-            // resolver to chase a chain, and a chain can loop.
-            if case .element(let name) = target, isElement {
-                findings.append(
+                        severity: .error, code: .v020, path: sourcePath,
+                        message: "Unknown controller element or key: \(source)"))
+            case .targetNotText:
+                reported.append(
                     Finding(
-                        severity: .error,
-                        code: .v023,
-                        path: sourcePath,
-                        message: "A controller element cannot bind to another element: \(name)"
-                    )
-                )
-                continue
-            }
-
-            entries[source] = target
-        }
-
-        return BindingMap(entries: entries)
-    }
-
-    /// Target grammar of the bindings map: a key code, a controller
-    /// element, an action id, or null for an explicit unbind. Returns
-    /// nil when the value is not usable; the caller skips the entry.
-    private static func parseTarget(
-        _ value: Any,
-        path: String,
-        findings: inout [Finding]
-    ) -> ControlsTarget? {
-        if value is NSNull {
-            return .unbound
-        }
-
-        guard let text = value as? String else {
-            findings.append(
-                Finding(
-                    severity: .error,
-                    code: .v000,
-                    path: path,
-                    message: "Binding target must be a string or null"
-                )
-            )
-            return nil
-        }
-
-        if text.hasPrefix("$") {
-            // Unknown actions warn and KEEP the entry. Every
-            // load-modify-save path rewrites this file, so a
-            // skipped entry would be stripped from disk. A kept
-            // entry stays inert at dispatch and survives saves.
-            if !EmpoActionCatalog.allIDs.contains(text) {
-                findings.append(
+                        severity: .error, code: .v000, path: sourcePath,
+                        message: "Binding target must be a string or null"))
+            case .unknownTarget(let text):
+                reported.append(
                     Finding(
-                        severity: .warning,
-                        code: .w005,
-                        path: path,
-                        message: "Unknown action, binding does nothing: \(text)"
-                    )
-                )
+                        severity: .error, code: .v010, path: sourcePath,
+                        message: "Unknown key code: \(text)"))
+            case .unknownAction(let id):
+                reported.append(
+                    Finding(
+                        severity: .warning, code: .w005, path: sourcePath,
+                        message: "Unknown action, binding does nothing: \(id)"))
+            case .elementChain(let element):
+                reported.append(
+                    Finding(
+                        severity: .error, code: .v023, path: sourcePath,
+                        message: "A controller element cannot bind to another element: \(element)"))
             }
-            return .action(text)
         }
-
-        if KeyCodeTable.scancode(for: text) != nil {
-            return .key(text)
-        }
-
-        if ControllerElement.allNames.contains(text) {
-            return .element(text)
-        }
-
-        findings.append(
-            Finding(
-                severity: .error,
-                code: .v010,
-                path: path,
-                message: "Unknown key code: \(text)"
-            )
-        )
-        return nil
+        findings.append(contentsOf: reported)
+        return map
     }
 
     // MARK: - Validation helpers

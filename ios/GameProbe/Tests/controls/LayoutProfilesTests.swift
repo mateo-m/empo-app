@@ -263,7 +263,7 @@ final class LayoutProfilesTests: XCTestCase {
                 .manifest)
         let withController = ControlsManifestSerializer.serialize(
             touch: manifest.touch,
-            bindings: BindingMap(entries: ["y": .key("F5")])
+            bindings: BindingMap(entries: [.element("y"): .key("F5")])
         )
         try XCTUnwrap(withController).write(to: store.controlsURL("Keep"))
 
@@ -271,7 +271,7 @@ final class LayoutProfilesTests: XCTestCase {
         XCTAssertTrue(store.writeProfile("Keep", touch: sampleTouch(buttonX: 0.5)))
         let reread = ControlsManifestLoader.parse(
             data: try Data(contentsOf: store.controlsURL("Keep")))
-        XCTAssertEqual(reread.manifest?.bindings?.entries["y"], .key("F5"))
+        XCTAssertEqual(reread.manifest?.bindings?.entries[.element("y")], .key("F5"))
         XCTAssertEqual(reread.manifest?.touch?.portrait?.buttons?.first?.x, 0.5)
     }
 

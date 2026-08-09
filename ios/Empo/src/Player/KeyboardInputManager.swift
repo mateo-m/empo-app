@@ -1,7 +1,6 @@
 import Foundation
 import GameController
 import GameProbe
-import SwiftUI
 
 /// Host-side hardware keyboard input (SPEC §10.3).
 ///
@@ -40,6 +39,10 @@ final class KeyboardInputManager {
         }
     }
 
+    /// The session's overlay rule. The manager reports the first key
+    /// press to it and never writes the player's visibility flag.
+    weak var overlay: OverlayVisibilityController?
+
     /// True once a hardware keyboard has connected during this session.
     private(set) var hasHadKeyboardThisSession = false
 
@@ -54,32 +57,24 @@ final class KeyboardInputManager {
     }
 
     private var sessionActive = false
-    private var resolvedMap: [Int32: BindingResolver.ResolvedTarget] = [:]
+    private var resolvedMap: [Int32: ResolvedTarget] = [:]
     /// source scancode -> injected scancode, so a release repeats the
     /// press-time decision even if the map changed meanwhile.
     private var pressedKeyScancode: [Int32: Int32] = [:]
     private var pressedKeyAction: [Int32: String] = [:]
-    private var heldScancodes: [Int32: Int] = [:]
-    private var overlayManualOverride = false
-
-    private var overlayHiddenBinding: Binding<Bool>?
-    private var editModeBinding: Binding<Bool>?
 
     private var connectObserver: NSObjectProtocol?
     private var disconnectObserver: NSObjectProtocol?
 
     /// Atomically swap the merged key map. Keys held mid-press keep
     /// their press-time target until release.
-    func updateResolvedMap(_ map: [Int32: BindingResolver.ResolvedTarget]) {
+    func updateResolvedMap(_ map: [Int32: ResolvedTarget]) {
         resolvedMap = map
     }
 
-    func start(overlayHidden: Binding<Bool>, editMode: Binding<Bool>) {
+    func start() {
         stop()
         sessionActive = true
-        overlayHiddenBinding = overlayHidden
-        editModeBinding = editMode
-        overlayManualOverride = false
         hasHadKeyboardThisSession = false
 
         connectObserver = NotificationCenter.default.addObserver(
@@ -119,21 +114,10 @@ final class KeyboardInputManager {
         connectObserver = nil
         disconnectObserver = nil
 
-        // Hand the keys back as themselves. Clearing the slot would
-        // leave the keyboard dead until it reconnects, because SDL
-        // only claims the slot on connect and we took it from there.
-        installPassThroughHandler()
-
-        overlayHiddenBinding = nil
-        editModeBinding = nil
-        overlayManualOverride = false
+        // Nothing outside a session needs these keys, and `start()`
+        // claims the slot again for the next one.
+        GCKeyboard.coalesced?.keyboardInput?.keyChangedHandler = nil
         textInputActive = false
-    }
-
-    /// The player calls this when they toggle overlay visibility by
-    /// hand, so the first-keypress auto-hide does not fight them.
-    func noteManualOverlayToggle() {
-        overlayManualOverride = true
     }
 
     private func attach(_ keyboard: GCKeyboard?) {
@@ -163,25 +147,15 @@ final class KeyboardInputManager {
         releaseAllHeldKeys()
     }
 
-    private func installPassThroughHandler() {
-        GCKeyboard.coalesced?.keyboardInput?.keyChangedHandler = {
-            _, _, keyCode, pressed in
-            let scancode = Int32(keyCode.rawValue)
-            Task { @MainActor in
-                EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: pressed)
-            }
-        }
-    }
-
     private func handle(keyCode: GCKeyCode, pressed: Bool) {
         guard sessionActive else { return }
         let source = Int32(keyCode.rawValue)
 
         if pressed {
-            if let code = KeyCodeTable.code(for: source) {
+            if keyActivityHandler != nil, let code = KeyCodeTable.code(for: source) {
                 keyActivityHandler?(code)
             }
-            applyAutoOverlayVisibility()
+            overlay?.update { $0.noteKeyPress() }
         }
 
         guard !suppressInjection else { return }
@@ -211,46 +185,17 @@ final class KeyboardInputManager {
                 return
             }
             guard let scancode = pressedKeyScancode.removeValue(forKey: source) else { return }
-            release(scancode: scancode)
+            EngineSessionCoordinator.shared.releaseKey(scancode: scancode, by: .keyboard(source))
         }
     }
 
-    /// Two physical keys can map to one game key. The engine sees a
-    /// press on the first and a release on the last.
     private func press(source: Int32, scancode: Int32) {
         pressedKeyScancode[source] = scancode
-        let holders = heldScancodes[scancode, default: 0]
-        heldScancodes[scancode] = holders + 1
-        if holders == 0 {
-            EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
-        }
-    }
-
-    private func release(scancode: Int32) {
-        let holders = heldScancodes[scancode, default: 0]
-        if holders <= 1 {
-            heldScancodes.removeValue(forKey: scancode)
-            EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
-        } else {
-            heldScancodes[scancode] = holders - 1
-        }
-    }
-
-    /// The overlay hides on the first key press, not on connect: an
-    /// iPad with a Magic Keyboard attached keeps its touch controls
-    /// until the player actually plays with keys.
-    private func applyAutoOverlayVisibility() {
-        guard !overlayManualOverride else { return }
-        guard editModeBinding?.wrappedValue != true else { return }
-        guard let overlayHiddenBinding, !overlayHiddenBinding.wrappedValue else { return }
-        overlayHiddenBinding.wrappedValue = true
+        EngineSessionCoordinator.shared.holdKey(scancode: scancode, by: .keyboard(source))
     }
 
     private func releaseAllHeldKeys() {
-        for scancode in heldScancodes.keys {
-            EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
-        }
-        heldScancodes.removeAll()
+        EngineSessionCoordinator.shared.releaseKeys(from: .keyboard)
         pressedKeyScancode.removeAll()
 
         for action in pressedKeyAction.values {

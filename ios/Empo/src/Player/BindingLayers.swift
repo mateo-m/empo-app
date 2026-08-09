@@ -1,8 +1,9 @@
 import Foundation
 import GameProbe
 
-/// Builds binding override layers and applies them to the session
-/// input managers (SPEC §9). Call on game select and override changes.
+/// Builds the binding override layers, newest last (SPEC §9).
+/// `SessionInput` resolves them once and hands each runtime map to
+/// the path that reads it.
 @MainActor
 enum BindingLayers {
     static func overrideLayers(for container: GameContainer?) -> [BindingMap] {
@@ -17,15 +18,5 @@ enum BindingLayers {
             layers.append(perGame)
         }
         return layers
-    }
-
-    static func applyRuntimeMap(to manager: ControllerInputManager, container: GameContainer?) {
-        manager.updateResolvedMap(
-            BindingResolver.resolvedRuntimeMap(layers: overrideLayers(for: container)))
-    }
-
-    static func applyRuntimeMap(to manager: KeyboardInputManager, container: GameContainer?) {
-        manager.updateResolvedMap(
-            BindingResolver.resolvedKeyMap(layers: overrideLayers(for: container)))
     }
 }

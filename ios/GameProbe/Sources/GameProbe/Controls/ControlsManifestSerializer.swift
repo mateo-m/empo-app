@@ -122,14 +122,7 @@ public enum ControlsManifestSerializer {
 
         if hasBindings {
             lines.append("  ,\"bindings\": {")
-            // Elements first, keys after, each in vocabulary order, so
-            // a load-save round trip stays byte stable.
-            appendTargetMap(
-                bindingEntries,
-                order: ControllerElement.allElements + KeyCodeTable.allCodes,
-                into: &lines,
-                indent: 4
-            )
+            appendBindings(bindingEntries, into: &lines, indent: 4)
             lines.append("  }")
         }
 
@@ -348,34 +341,20 @@ public enum ControlsManifestSerializer {
         lines.append("\(pad)}")
     }
 
-    /// Writes the bindings map. `order` fixes the on-disk order so a
-    /// load-save round trip stays byte stable.
-    private static func appendTargetMap(
-        _ entries: [String: ControlsTarget],
-        order: [String],
+    /// Writes the bindings map in vocabulary order, so a load-save
+    /// round trip stays byte stable.
+    private static func appendBindings(
+        _ entries: [BindingSource: ControlsTarget],
         into lines: inout [String],
         indent: Int
     ) {
         let pad = String(repeating: " ", count: indent)
-        let ordered = order.filter { entries[$0] != nil }
-        for (index, element) in ordered.enumerated() {
-            guard let target = entries[element] else { continue }
-            let value: String
-            switch target {
-            case .key(let code):
-                value = jsonString(code)
-            case .element(let name):
-                value = jsonString(name)
-            case .action(let name):
-                value = jsonString(name)
-            case .unbound:
-                value = "null"
-            }
-            if index > 0 {
-                lines.append("\(pad),\"\(element)\": \(value)")
-            } else {
-                lines.append("\(pad)\"\(element)\": \(value)")
-            }
+        let ordered = BindingMapCoder.sourceOrder.filter { entries[$0] != nil }
+        for (index, source) in ordered.enumerated() {
+            guard let target = entries[source] else { continue }
+            let value = target.name.map(jsonString) ?? "null"
+            let separator = index > 0 ? "," : ""
+            lines.append("\(pad)\(separator)\"\(source.name)\": \(value)")
         }
     }
 

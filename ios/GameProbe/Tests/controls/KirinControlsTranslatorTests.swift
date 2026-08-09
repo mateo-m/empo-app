@@ -308,7 +308,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .root)
         XCTAssertEqual(outcome?.note, .kirinSkippedBecauseManifestExists)
-        XCTAssertEqual(outcome?.result.manifest?.bindings?.entries["b"], .key("Escape"))
+        XCTAssertEqual(outcome?.result.manifest?.bindings?.entries[.element("b")], .key("Escape"))
     }
 
     func testLoadUnclaimedRootFallsThroughToKirin() throws {

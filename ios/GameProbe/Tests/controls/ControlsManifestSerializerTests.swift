@@ -30,9 +30,9 @@ final class ControlsManifestSerializerTests: XCTestCase {
 
     func testRoundTripZeroFindings() {
         let controller = BindingMap(entries: [
-            "a": .key("Enter"),
-            "b": .unbound,
-            "start": .action("$pauseMenu"),
+            .element("a"): .key("Enter"),
+            .element("b"): .unbound,
+            .element("start"): .action("$pauseMenu"),
         ])
         guard let data = ControlsManifestSerializer.serialize(
             touch: sampleTouch(),
@@ -63,11 +63,11 @@ final class ControlsManifestSerializerTests: XCTestCase {
 
     func testKeySourcesRoundTrip() {
         let bindings = BindingMap(entries: [
-            "a": .key("Enter"),
-            "KeyJ": .element("a"),
-            "KeyB": .key("Escape"),
-            "Enter": .action("$pauseMenu"),
-            "KeyM": .unbound,
+            .element("a"): .key("Enter"),
+            .key("KeyJ"): .element("a"),
+            .key("KeyB"): .key("Escape"),
+            .key("Enter"): .action("$pauseMenu"),
+            .key("KeyM"): .unbound,
         ])
         guard
             let data = ControlsManifestSerializer.serialize(touch: nil, bindings: bindings)
@@ -87,7 +87,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
     }
 
     func testElementsAreWrittenBeforeKeys() {
-        let bindings = BindingMap(entries: ["KeyJ": .element("a"), "b": .key("Escape")])
+        let bindings = BindingMap(entries: [.key("KeyJ"): .element("a"), .element("b"): .key("Escape")])
         guard let data = ControlsManifestSerializer.serialize(touch: nil, bindings: bindings),
             let text = String(data: data, encoding: .utf8)
         else {
@@ -105,7 +105,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
 
     func testDeterministicOutput() {
         let touch = sampleTouch()
-        let controller = BindingMap(entries: ["a": .key("KeyZ")])
+        let controller = BindingMap(entries: [.element("a"): .key("KeyZ")])
         guard let first = ControlsManifestSerializer.serialize(touch: touch, bindings: controller),
             let second = ControlsManifestSerializer.serialize(touch: touch, bindings: controller)
         else {
@@ -216,7 +216,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
     }
 
     func testBindingsOnlyOmitTouch() {
-        let controller = BindingMap(entries: ["a": .key("Enter")])
+        let controller = BindingMap(entries: [.element("a"): .key("Enter")])
         guard let data = ControlsManifestSerializer.serialize(touch: nil, bindings: controller) else {
             XCTFail("expected data")
             return
@@ -281,8 +281,8 @@ final class ControlsManifestSerializerTests: XCTestCase {
         // W005 keeps unknown action entries. Saving the map back must
         // not strip or rewrite them.
         let controller = BindingMap(entries: [
-            "start": .action("$notAnAction"),
-            "a": .key("Enter"),
+            .element("start"): .action("$notAnAction"),
+            .element("a"): .key("Enter"),
         ])
         guard let data = ControlsManifestSerializer.serialize(touch: nil, bindings: controller)
         else {
@@ -293,7 +293,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
         let result = parseSerialized(data)
         XCTAssertNil(result.findings.first { $0.severity == .error })
         XCTAssertEqual(result.findings.first { $0.code == "W005" }?.path, "/bindings/start")
-        XCTAssertEqual(result.manifest?.bindings?.entries["start"], .action("$notAnAction"))
+        XCTAssertEqual(result.manifest?.bindings?.entries[.element("start")], .action("$notAnAction"))
 
         let reserialized = ControlsManifestSerializer.serialize(
             touch: nil,
@@ -337,9 +337,9 @@ final class ControlsManifestSerializerTests: XCTestCase {
             )
         )
         let controller = BindingMap(entries: [
-            "a": .key("Enter"),
-            "back": .action("$toggleTouchControls"),
-            "start": .unbound,
+            .element("a"): .key("Enter"),
+            .element("back"): .action("$toggleTouchControls"),
+            .element("start"): .unbound,
         ])
         let data = ControlsManifestSerializer.serialize(touch: touch, bindings: controller)
         // Line array because two lines carry trailing spaces (the

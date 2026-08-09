@@ -138,9 +138,41 @@ public enum ControlsTarget: Equatable, Sendable {
     case unbound
 }
 
-/// Source -> target map (SPEC section 9). A source is a controller
-/// element or a keyboard key; the two vocabularies are disjoint, so
-/// one map holds both.
+/// What a binding reads: a controller element or a keyboard key. The
+/// two vocabularies are disjoint (a test enforces it), so one name
+/// always decides one kind, and one map holds both.
+///
+/// Every layer takes this type instead of a bare name. Nothing
+/// downstream has to ask "is this an element?" again.
+public enum BindingSource: Hashable, Sendable {
+    case element(String)
+    case key(String)
+
+    /// nil for a name in neither vocabulary.
+    public init?(name: String) {
+        if ControllerElement.allNames.contains(name) {
+            self = .element(name)
+        } else if KeyCodeTable.scancode(for: name) != nil {
+            self = .key(name)
+        } else {
+            return nil
+        }
+    }
+
+    /// The name as it appears in the file and in stored maps.
+    public var name: String {
+        switch self {
+        case .element(let name), .key(let name): return name
+        }
+    }
+
+    public var isElement: Bool {
+        if case .element = self { return true }
+        return false
+    }
+}
+
+/// Source -> target map (SPEC section 9).
 ///
 /// A key that no source names passes through to the game unchanged.
 /// That keeps typing, and the engine hotkeys, alive on a real
@@ -148,20 +180,28 @@ public enum ControlsTarget: Equatable, Sendable {
 public struct BindingMap: Equatable, Sendable {
     public typealias Target = ControlsTarget
 
-    public var entries: [String: Target]
+    public var entries: [BindingSource: Target]
 
-    public init(entries: [String: Target] = [:]) {
+    public init(entries: [BindingSource: Target] = [:]) {
         self.entries = entries
     }
 
-    /// Entries whose source is a controller element.
+    /// Element name -> target. The one place the map splits by kind.
     public var elementEntries: [String: Target] {
-        entries.filter { ControllerElement.allNames.contains($0.key) }
+        var out: [String: Target] = [:]
+        for (source, target) in entries {
+            if case .element(let name) = source { out[name] = target }
+        }
+        return out
     }
 
-    /// Entries whose source is a keyboard key.
+    /// Key code -> target.
     public var keyEntries: [String: Target] {
-        entries.filter { !ControllerElement.allNames.contains($0.key) }
+        var out: [String: Target] = [:]
+        for (source, target) in entries {
+            if case .key(let name) = source { out[name] = target }
+        }
+        return out
     }
 }
 

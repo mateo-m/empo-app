@@ -1,7 +1,6 @@
 import Foundation
 import GameController
 import GameProbe
-import SwiftUI
 
 /// Host-side physical controller input (SPEC §10.2). Maps GCController
 /// elements to keyboard scancodes via the merged four-layer map (§9).
@@ -24,10 +23,14 @@ final class ControllerInputManager {
     var suppressInjection = false {
         didSet {
             if suppressInjection, !oldValue {
-                releaseAllHeldKeys()
+                releaseAllHeldInputs()
             }
         }
     }
+
+    /// The session's overlay rule. The manager reports facts to it
+    /// and never writes the player's visibility flag itself.
+    weak var overlay: OverlayVisibilityController?
 
     /// True once any controller has connected during this session.
     private(set) var hasHadControllerThisSession = false
@@ -52,35 +55,25 @@ final class ControllerInputManager {
 
     private var sessionActive = false
     private var reducer = ControllerStateReducer()
-    private var resolvedMap = BindingResolver.resolvedRuntimeMap()
+    private var resolvedMap = BindingResolver.resolveRuntime().elements
     private var elementPressScancode: [String: Int32] = [:]
     // element -> action id held by that element, mirroring
     // elementPressScancode so hold actions get their release edge.
     private var elementPressAction: [String: String] = [:]
     private var connectedControllers: [ObjectIdentifier: GCController] = [:]
-    // scancode -> number of elements that currently hold it. The engine
-    // sees a press on 0->1 and a release on 1->0 only.
-    private var heldScancodes: [Int32: Int] = [:]
-    private var overlayManualOverride = false
-
-    private var overlayHiddenBinding: Binding<Bool>?
-    private var editModeBinding: Binding<Bool>?
 
     private var connectObserver: NSObjectProtocol?
     private var disconnectObserver: NSObjectProtocol?
 
     /// Atomically swap the merged map. Keys held mid-press keep their
     /// press-time scancode until release (SPEC §10.2 / ticket 004).
-    func updateResolvedMap(_ map: [String: BindingResolver.ResolvedTarget]) {
+    func updateResolvedMap(_ map: [String: ResolvedTarget]) {
         resolvedMap = map
     }
 
-    func start(overlayHidden: Binding<Bool>, editMode: Binding<Bool>) {
+    func start() {
         stop()
         sessionActive = true
-        overlayHiddenBinding = overlayHidden
-        editModeBinding = editMode
-        overlayManualOverride = false
         hasHadControllerThisSession = false
 
         connectObserver = NotificationCenter.default.addObserver(
@@ -112,7 +105,7 @@ final class ControllerInputManager {
 
     func stop() {
         sessionActive = false
-        releaseAllHeldKeys()
+        releaseAllHeldInputs()
 
         if let connectObserver {
             NotificationCenter.default.removeObserver(connectObserver)
@@ -131,20 +124,6 @@ final class ControllerInputManager {
         reducer = ControllerStateReducer()
         elementPressScancode.removeAll()
         elementPressAction.removeAll()
-        overlayHiddenBinding = nil
-        editModeBinding = nil
-        overlayManualOverride = false
-    }
-
-    /// The player calls this when the user manually toggles overlay
-    /// visibility. Auto-hide then does not fight the user: the
-    /// override resets when an extended controller connects as the
-    /// first controller, and on every disconnect. Auto visibility is
-    /// re-applied on disconnect only when the disconnect changes the
-    /// auto answer (the set emptied, or extended-pad presence
-    /// changed), so a partial detach keeps the user's choice.
-    func noteManualOverlayToggle() {
-        overlayManualOverride = true
     }
 
     /// Reports every connected device to `controls.json.log`, whether
@@ -185,14 +164,9 @@ final class ControllerInputManager {
         hasHadControllerThisSession = true
         installHandler(on: controller)
 
-        // Reset the manual override only when an extended pad opens
-        // the session's controller set. A basic or micro pad does
-        // not auto-hide the overlay, so it must not cancel a hide
-        // the user chose by hand either.
-        if priorCount == 0, controller.extendedGamepad != nil {
-            overlayManualOverride = false
+        overlay?.update {
+            $0.setExtendedController(hasExtendedController, isFirstController: priorCount == 0)
         }
-        applyAutoOverlayVisibility()
     }
 
     /// A controller is mappable when it has the extended profile, or
@@ -229,9 +203,10 @@ final class ControllerInputManager {
         let edges = reducer.removeController(String(id.hashValue))
         dispatch(edges: edges)
 
-        overlayManualOverride = false
-        if connectedControllers.isEmpty || hadExtendedController != hasExtendedController {
-            applyAutoOverlayVisibility()
+        if connectedControllers.isEmpty {
+            overlay?.update { $0.noteAllControllersDisconnected() }
+        } else if hadExtendedController != hasExtendedController {
+            overlay?.update { $0.setExtendedController(hasExtendedController) }
         }
     }
 
@@ -448,11 +423,8 @@ final class ControllerInputManager {
                 switch target {
                 case .key(let scancode):
                     elementPressScancode[edge.element] = scancode
-                    let holders = heldScancodes[scancode, default: 0]
-                    heldScancodes[scancode] = holders + 1
-                    if holders == 0 {
-                        EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
-                    }
+                    EngineSessionCoordinator.shared.holdKey(
+                        scancode: scancode, by: .controller(edge.element))
                 case .action(let name):
                     elementPressAction[edge.element] = name
                     actionHandler?(name, true)
@@ -467,38 +439,19 @@ final class ControllerInputManager {
                 guard let scancode = elementPressScancode.removeValue(forKey: edge.element) else {
                     continue
                 }
-                let holders = heldScancodes[scancode, default: 0]
-                if holders <= 1 {
-                    heldScancodes.removeValue(forKey: scancode)
-                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
-                } else {
-                    heldScancodes[scancode] = holders - 1
-                }
+                EngineSessionCoordinator.shared.releaseKey(
+                    scancode: scancode, by: .controller(edge.element))
             }
         }
     }
 
-    /// Auto-hide follows the extended controllers only. A basic or
-    /// micro pad has too few elements to replace the touch overlay, so
-    /// the overlay stays visible while only such pads are connected.
-    private func applyAutoOverlayVisibility() {
-        guard !overlayManualOverride else { return }
-        guard editModeBinding?.wrappedValue != true else { return }
-        guard let overlayHiddenBinding else { return }
-
-        overlayHiddenBinding.wrappedValue = hasExtendedController
-    }
-
-    private func releaseAllHeldKeys() {
-        for scancode in heldScancodes.keys {
-            EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
-        }
-        heldScancodes.removeAll()
+    /// Drops everything this path holds. Suppression and stop()
+    /// swallow the physical release edges, and a held fast-forward
+    /// with no release would leave the engine sped up.
+    private func releaseAllHeldInputs() {
+        EngineSessionCoordinator.shared.releaseKeys(from: .controller)
         elementPressScancode.removeAll()
 
-        // Held actions must release here too. Suppression and stop()
-        // swallow the physical release edges, and a held fast-forward
-        // with no release would leave the engine sped up.
         for action in elementPressAction.values {
             actionHandler?(action, false)
         }

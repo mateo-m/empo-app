@@ -29,8 +29,7 @@ struct PlayerView: View {
 
     @State private var resumeSnapshot: UIImage?
     @State private var snapshotOpacity: Double = 1
-    @State private var controllerInput = ControllerInputManager()
-    @State private var keyboardInput = KeyboardInputManager()
+    @State private var input = SessionInput()
     @State private var controlsVisible: Bool = true
 
     @State private var showAddSheet = false
@@ -161,8 +160,7 @@ struct PlayerView: View {
                         menuVisible: PlayerMoreSheet.hasContent(
                             settings: settings,
                             fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
-                            controllerRemapAvailable: controllerInput.hasHadControllerThisSession
-                                || keyboardInput.hasHadKeyboardThisSession
+                            controllerRemapAvailable: input.hasSeenPhysicalInput
                         ),
                         onResetIdleTimer: { resetToolbarIdleTimer() }
                     )
@@ -310,7 +308,7 @@ struct PlayerView: View {
                 // While the game takes text, the keyboard is a
                 // keyboard: no binding stands between the player and
                 // the letters they type.
-                keyboardInput.textInputActive = active
+                input.textInputActive = active
                 if active != keyboardMode {
                     keyboardMode = active
                     if active {
@@ -327,18 +325,13 @@ struct PlayerView: View {
             actions.log = { line in
                 layout.currentContainer?.appendLogLine(line, fileName: "controls.json.log")
             }
-            controllerInput.actionHandler = { id, pressed in
+            input.actionHandler = { id, pressed in
                 actions.handle(id, pressed: pressed)
             }
-            keyboardInput.actionHandler = { id, pressed in
-                actions.handle(id, pressed: pressed)
-            }
-            let logDevice: (String) -> Void = { line in
+            input.deviceLogHandler = { line in
                 layout.currentContainer?.appendLogLine(
                     line, fileName: UserControlsFile.logFileName)
             }
-            controllerInput.deviceLogHandler = logDevice
-            keyboardInput.deviceLogHandler = logDevice
             // Bind runtime state BEFORE controller input starts:
             // start() polls attached controllers synchronously, and a
             // button already held at resume must find the per-game
@@ -346,12 +339,8 @@ struct PlayerView: View {
             // Fires on first launch AND on resume from pause ->
             // library -> resume (engine state is process-static).
             actions.runtime.bind(container: layout.currentContainer)
-            BindingLayers.applyRuntimeMap(
-                to: controllerInput, container: layout.currentContainer)
-            BindingLayers.applyRuntimeMap(
-                to: keyboardInput, container: layout.currentContainer)
-            controllerInput.start(overlayHidden: $controlsHidden, editMode: $editMode)
-            keyboardInput.start(overlayHidden: $controlsHidden, editMode: $editMode)
+            input.applyBindings(container: layout.currentContainer)
+            input.start(overlayHidden: $controlsHidden, editMode: $editMode)
 
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
@@ -373,20 +362,15 @@ struct PlayerView: View {
         }
         .onDisappear {
             ChromeHitRegions.removeAll()
-            controllerInput.stop()
-            keyboardInput.stop()
+            input.stop()
             EngineSessionCoordinator.shared.clearTextInputModeHandler()
         }
         .onChange(of: layout.currentContainer) { _, container in
-            BindingLayers.applyRuntimeMap(to: controllerInput, container: container)
-            BindingLayers.applyRuntimeMap(to: keyboardInput, container: container)
+            input.applyBindings(container: container)
             actions.runtime.bind(container: container)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .controllerMapDidChange)) { _ in
-            BindingLayers.applyRuntimeMap(
-                to: controllerInput, container: layout.currentContainer)
-            BindingLayers.applyRuntimeMap(
-                to: keyboardInput, container: layout.currentContainer)
+        .onReceive(NotificationCenter.default.publisher(for: .bindingsDidChange)) { _ in
+            input.applyBindings(container: layout.currentContainer)
         }
         .onReceive(NotificationCenter.default.publisher(for: .gameAreaTouchBegan)) { _ in
             resetToolbarIdleTimer()
@@ -414,8 +398,7 @@ struct PlayerView: View {
                     set: { actions.runtime.setFastForward(active: $0) }
                 ),
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
-                showControllerRemap: controllerInput.hasHadControllerThisSession
-                    || keyboardInput.hasHadKeyboardThisSession,
+                showControllerRemap: input.hasSeenPhysicalInput,
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { appState.requestPause() },
@@ -429,12 +412,11 @@ struct PlayerView: View {
             }
         }
         .sheet(isPresented: $showControllerRemap) {
-            ControllerRemapView(
+            BindingsView(
                 container: layout.currentContainer,
                 gameTitle: appState.selectedGame?.title ?? "Game",
                 manifest: layout.activeManifest?.bindings,
-                controllerInput: controllerInput,
-                keyboardInput: keyboardInput
+                input: input
             )
         }
         .onChange(of: showMoreSheet) { _, opened in
@@ -729,8 +711,7 @@ struct PlayerView: View {
         let entering = !editMode
         if entering && controlsHidden {
             controlsHidden = false
-            controllerInput.noteManualOverlayToggle()
-            keyboardInput.noteManualOverlayToggle()
+            input.noteManualOverlayToggle()
         }
         withAnimation(Motion.snappy) {
             editMode.toggle()
@@ -754,8 +735,7 @@ struct PlayerView: View {
         withAnimation(Motion.snappy) {
             controlsHidden.toggle()
         }
-        controllerInput.noteManualOverlayToggle()
-        keyboardInput.noteManualOverlayToggle()
+        input.noteManualOverlayToggle()
         resetToolbarIdleTimer()
     }
 

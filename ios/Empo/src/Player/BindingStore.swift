@@ -3,14 +3,18 @@ import GameProbe
 
 extension Notification.Name {
     /// The store posts this after it saves a global or per-game controller map.
-    static let controllerMapDidChange = Notification.Name("controllerMapDidChange")
+    static let bindingsDidChange = Notification.Name("bindingsDidChange")
 
     /// The app posts this when a touch begins on the embedded SDL game view during play.
     static let gameAreaTouchBegan = Notification.Name("gameAreaTouchBegan")
 }
 
-/// UserDefaults persistence for global controller overrides. Per-game overrides
-/// live in `EmpoState/controls.json` (SPEC §3, ticket 009).
+/// UserDefaults persistence for global binding overrides. Per-game
+/// overrides live in `EmpoState/controls.json` (SPEC §3, ticket 009).
+///
+/// The stored shape is the manifest's own bindings object, read and
+/// written by `BindingMapCoder`, so a binding means the same thing
+/// here as it does in a file a game ships.
 enum BindingStore {
     static func loadGlobal() -> BindingMap? {
         guard let map = load(key: DefaultsKey.controllerMapGlobal) else { return nil }
@@ -36,7 +40,7 @@ enum BindingStore {
     static func savePerGame(container: GameContainer, map: BindingMap) {
         let controller = map.entries.isEmpty ? nil : map
         _ = UserControlsFile.updateBindings(in: container, bindings: controller)
-        NotificationCenter.default.post(name: .controllerMapDidChange, object: nil)
+        NotificationCenter.default.post(name: .bindingsDidChange, object: nil)
     }
 
     static func deleteGlobal() {
@@ -45,12 +49,12 @@ enum BindingStore {
 
     static func deletePerGame(container: GameContainer) {
         _ = UserControlsFile.removeBindingsSection(in: container)
-        NotificationCenter.default.post(name: .controllerMapDidChange, object: nil)
+        NotificationCenter.default.post(name: .bindingsDidChange, object: nil)
     }
 
     private static func delete(key: String) {
         UserDefaults.standard.removeObject(forKey: key)
-        NotificationCenter.default.post(name: .controllerMapDidChange, object: nil)
+        NotificationCenter.default.post(name: .bindingsDidChange, object: nil)
     }
 
     private static func load(key: String) -> BindingMap? {
@@ -60,50 +64,22 @@ enum BindingStore {
         else {
             return nil
         }
-        var entries: [String: BindingMap.Target] = [:]
-        for (source, value) in object {
-            let isElement = ControllerElement.allNames.contains(source)
-            guard isElement || KeyCodeTable.scancode(for: source) != nil else { continue }
-            if value is NSNull {
-                entries[source] = .unbound
-                continue
-            }
-            guard let text = value as? String else { continue }
-            if text.hasPrefix("$") {
-                // Unknown actions stay in the map (inert at dispatch)
-                // so a load-modify-save cycle cannot strip them. Same
-                // rule as the file loader's W005.
-                entries[source] = .action(text)
-            } else if KeyCodeTable.scancode(for: text) != nil {
-                entries[source] = .key(text)
-            } else if ControllerElement.allNames.contains(text), !isElement {
-                // A key standing in for a pad button. Elements cannot
-                // chain to elements; the loader rejects that (V023).
-                entries[source] = .element(text)
-            }
+        let map = BindingMapCoder.decode(object) { source, issue in
+            // Empo owns this file, so a rejected entry means a hand
+            // edit or an older shape. The manifest log is per game;
+            // this one is global, so it goes to the console.
+            NSLog("bindings: dropped \(source) from stored map (\(issue))")
         }
-        return entries.isEmpty ? nil : BindingMap(entries: entries)
+        return map.entries.isEmpty ? nil : map
     }
 
     private static func save(_ map: BindingMap, key: String) {
         saveQuietly(map, key: key)
-        NotificationCenter.default.post(name: .controllerMapDidChange, object: nil)
+        NotificationCenter.default.post(name: .bindingsDidChange, object: nil)
     }
 
     private static func saveQuietly(_ map: BindingMap, key: String) {
-        var object: [String: Any] = [:]
-        for (source, target) in map.entries {
-            switch target {
-            case .key(let code):
-                object[source] = code
-            case .element(let name):
-                object[source] = name
-            case .action(let name):
-                object[source] = name
-            case .unbound:
-                object[source] = NSNull()
-            }
-        }
+        let object = BindingMapCoder.encode(map)
         guard let data = try? JSONSerialization.data(withJSONObject: object) else { return }
         UserDefaults.standard.set(data, forKey: key)
     }

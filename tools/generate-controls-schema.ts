@@ -1,85 +1,87 @@
-#!/usr/bin/env node
-/**
- * Generates docs/schemas/empo-controls.v1.schema.json from GameProbe source.
- * Run: node tools/generate-controls-schema.mjs
- */
+#!/usr/bin/env bun
+//
+// Generates docs/schemas/empo-controls.v1.schema.json from GameProbe source.
+// The Swift model is the single source of truth: key codes, controller
+// elements, actions and movement styles are all read out of it, so the
+// published schema cannot drift from the validator.
+//
+// Usage:
+//   bun tools/generate-controls-schema.ts
 
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-function read(relPath) {
+interface EmpoActionEntry {
+  id: string;
+  touchValid: boolean;
+}
+
+function read(relPath: string): string {
   return fs.readFileSync(path.join(repoRoot, relPath), "utf8");
 }
 
-function extractKeyCodes(swift) {
-  const codes = [];
-  const re = /Entry\(code: "([^"]+)"/g;
-  let match;
-  while ((match = re.exec(swift)) !== null) {
-    codes.push(match[1]);
-  }
+function extractKeyCodes(swift: string): string[] {
+  const codes = [...swift.matchAll(/Entry\(code: "([^"]+)"/g)].map((match) => match[1]!);
   if (codes.length === 0) {
     throw new Error("no key codes found in KeyCodeTable.swift");
   }
   return codes;
 }
 
-function extractControllerElements(swift) {
+function extractControllerElements(swift: string): string[] {
   const block = swift.match(/allElements: \[String\] = \[([\s\S]*?)\]/);
   if (!block) {
     throw new Error("controller element list not found in ControlsManifest.swift");
   }
-  const elements = [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const elements = [...block[1]!.matchAll(/"([^"]+)"/g)].map((match) => match[1]!);
   if (elements.length === 0) {
     throw new Error("no controller elements found");
   }
   return elements;
 }
 
-function extractActions(swift) {
+function extractActions(swift: string): EmpoActionEntry[] {
   const block = swift.match(/all: \[EmpoAction\] = \[([\s\S]*?)\n    \]/);
   if (!block) {
     throw new Error("action table not found in EmpoAction.swift");
   }
-  const constants = Object.fromEntries(
-    [...swift.matchAll(/static let (\w+) = "(\$\w+)"/g)].map((m) => [m[1], m[2]])
+  const constants = new Map(
+    [...swift.matchAll(/static let (\w+) = "(\$\w+)"/g)].map((match) => [match[1]!, match[2]!]),
   );
-  const actions = [...block[1].matchAll(/id: (\w+)[\s\S]*?touchValid: (true|false)/g)].map(
-    (m) => ({ id: constants[m[1]], touchValid: m[2] === "true" })
+  const actions = [...block[1]!.matchAll(/id: (\w+)[\s\S]*?touchValid: (true|false)/g)].map(
+    (match): EmpoActionEntry => ({
+      id: constants.get(match[1]!) ?? "",
+      touchValid: match[2] === "true",
+    }),
   );
-  if (actions.length === 0 || actions.some((a) => !a.id)) {
+  if (actions.length === 0 || actions.some((action) => action.id === "")) {
     throw new Error("no actions found in EmpoAction.swift");
   }
   return actions;
 }
 
-function extractMovementStyles(swift) {
+function extractMovementStyles(swift: string): string[] {
   const block = swift.match(/enum MovementStyle[^{]*\{([\s\S]*?)\n\}/);
   if (!block) {
     throw new Error("MovementStyle enum not found in ControlsManifest.swift");
   }
-  const styles = [...block[1].matchAll(/case (\w+)/g)].map((m) => m[1]);
+  const styles = [...block[1]!.matchAll(/case (\w+)/g)].map((match) => match[1]!);
   if (styles.length === 0) {
     throw new Error("no movement styles found");
   }
   return styles;
 }
 
+const manifestSwift = read("ios/GameProbe/Sources/GameProbe/Controls/ControlsManifest.swift");
 const keyCodes = extractKeyCodes(read("ios/GameProbe/Sources/GameProbe/Controls/KeyCodeTable.swift"));
-const controllerElements = extractControllerElements(
-  read("ios/GameProbe/Sources/GameProbe/Controls/ControlsManifest.swift")
-);
+const controllerElements = extractControllerElements(manifestSwift);
 const actionTable = extractActions(read("ios/GameProbe/Sources/GameProbe/Controls/EmpoAction.swift"));
-const actions = actionTable.map((a) => a.id);
-const touchActions = actionTable.filter((a) => a.touchValid).map((a) => a.id);
-
-const movementStyles = extractMovementStyles(
-  read("ios/GameProbe/Sources/GameProbe/Controls/ControlsManifest.swift")
-);
+const actions = actionTable.map((action) => action.id);
+const touchActions = actionTable.filter((action) => action.touchValid).map((action) => action.id);
+const movementStyles = extractMovementStyles(manifestSwift);
 
 const schema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
