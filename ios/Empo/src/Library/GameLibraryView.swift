@@ -619,7 +619,7 @@ struct GameLibraryView: View {
                 .transition(.cardAppear)
             }
 
-            ForEach(Array(games.enumerated()), id: \.element.id) { index, game in
+            ForEach(Array(games.enumerated()), id: \.element.viewIdentity) { index, game in
                 listRow(for: game, index: index)
 
                 if index < games.count - 1 {
@@ -656,7 +656,7 @@ struct GameLibraryView: View {
             .transition(.cardAppear)
         }
 
-        ForEach(Array(games.enumerated()), id: \.element.id) { index, game in
+        ForEach(Array(games.enumerated()), id: \.element.viewIdentity) { index, game in
             gridItem(for: game, index: index)
         }
     }
