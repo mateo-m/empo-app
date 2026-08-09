@@ -1,11 +1,16 @@
 import GameProbe
 import SwiftUI
 
-/// Key/action picker for controller remap rows (ticket 005 §4).
-struct ControllerBindingPickerSheet: View {
-    let elementLabel: String
-    let current: ControllerMap.Target?
-    let onSelect: (ControllerMap.Target) -> Void
+/// Key, button and action picker for one binding row (ticket 005 §4).
+struct BindingTargetPicker: View {
+    let source: BindingSource
+    let current: BindingMap.Target?
+    let onSelect: (BindingMap.Target) -> Void
+
+    /// A key can stand in for a controller button, which hands it
+    /// every binding that button already has. An element cannot: a
+    /// chain of elements could loop.
+    private var offersElements: Bool { !source.isElement }
 
     @Environment(\.dismiss) private var dismiss
 
@@ -23,6 +28,22 @@ struct ControllerBindingPickerSheet: View {
                     actionRow(label: "Unbound", target: .unbound)
                 }
 
+                if offersElements {
+                    Section("Controller buttons") {
+                        ForEach(
+                            BindingsCatalog.sections(includingOptional: []), id: \.id
+                        ) { section in
+                            ForEach(section.elements) { row in
+                                actionRow(
+                                    label: row.label,
+                                    blurb: "Acts as this button",
+                                    target: .element(row.source.name)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 ForEach(KeyCodePickerGroup.allCases, id: \.self) { group in
                     let codes = KeyCodeTable.codesByPickerGroup[group] ?? []
                     if !codes.isEmpty {
@@ -34,7 +55,7 @@ struct ControllerBindingPickerSheet: View {
                     }
                 }
             }
-            .navigationTitle(elementLabel)
+            .navigationTitle(BindingsCatalog.label(for: source))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -49,7 +70,7 @@ struct ControllerBindingPickerSheet: View {
     private func actionRow(
         label: String,
         blurb: String? = nil,
-        target: ControllerMap.Target
+        target: BindingMap.Target
     ) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -74,9 +95,9 @@ struct ControllerBindingPickerSheet: View {
     }
 
     private func keyRow(code: String, group: KeyCodePickerGroup) -> some View {
-        let target: ControllerMap.Target = .key(code)
+        let target: BindingMap.Target = .key(code)
         let title = KeyCodeTable.displayName(for: code) ?? code
-        let annotation = group == .common ? ControllerRemapCatalog.commonKeyAnnotations[code] : nil
+        let annotation = group == .common ? BindingsCatalog.commonKeyAnnotations[code] : nil
 
         return HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -100,9 +121,10 @@ struct ControllerBindingPickerSheet: View {
         }
     }
 
-    private func targetsMatch(_ lhs: ControllerMap.Target?, _ rhs: ControllerMap.Target) -> Bool {
+    private func targetsMatch(_ lhs: BindingMap.Target?, _ rhs: BindingMap.Target) -> Bool {
         switch (lhs, rhs) {
         case (.key(let a), .key(let b)): return a == b
+        case (.element(let a), .element(let b)): return a == b
         case (.action(let a), .action(let b)): return a == b
         case (.unbound, .unbound): return true
         default: return false

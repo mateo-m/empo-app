@@ -37,7 +37,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let translation = KirinControlsTranslator.translate(data: data, metrics: metrics)
 
         XCTAssertNotNil(translation.manifest)
-        XCTAssertNil(translation.manifest?.controller)
+        XCTAssertNil(translation.manifest?.bindings)
 
         let portrait = translation.manifest?.touch?.portrait
         let landscape = translation.manifest?.touch?.landscape
@@ -292,7 +292,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .empo)
         XCTAssertEqual(outcome?.note, .kirinSkippedBecauseManifestExists)
-        XCTAssertNotNil(outcome?.result.manifest?.controller)
+        XCTAssertNotNil(outcome?.result.manifest?.bindings)
     }
 
     func testLoadClaimedRootWinsOverKirin() throws {
@@ -308,7 +308,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .root)
         XCTAssertEqual(outcome?.note, .kirinSkippedBecauseManifestExists)
-        XCTAssertEqual(outcome?.result.manifest?.controller?.entries["b"], .key("Escape"))
+        XCTAssertEqual(outcome?.result.manifest?.bindings?.entries[.element("b")], .key("Escape"))
     }
 
     func testLoadUnclaimedRootFallsThroughToKirin() throws {
@@ -383,7 +383,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
     private func assertRoundTrip(manifest: ControlsManifest) {
         let serialized = ControlsManifestSerializer.serialize(
             touch: manifest.touch,
-            controller: manifest.controller
+            bindings: manifest.bindings
         )
         XCTAssertNotNil(serialized)
         let result = ControlsManifestLoader.parse(data: serialized!)

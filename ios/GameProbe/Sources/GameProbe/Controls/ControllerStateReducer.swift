@@ -98,17 +98,6 @@ public struct ControllerStateReducer: Sendable {
     }
 }
 
-/// Built-in controller map from SPEC section 9.1 with scancodes
-/// resolved once.
-public enum ControllerBuiltinMap {
-    public typealias ResolvedTarget = ControllerMapResolver.ResolvedTarget
-    public typealias Resolved = [String: ResolvedTarget]
-
-    public static func builtinResolved() -> Resolved {
-        ControllerMapResolver.resolvedRuntimeMap()
-    }
-}
-
 /// Maps a GCController stick position into SDL half-axis element samples.
 /// GC Y is +up. SDL `-lefty` is stick up (SPEC section 7).
 public enum ControllerStickMapper {

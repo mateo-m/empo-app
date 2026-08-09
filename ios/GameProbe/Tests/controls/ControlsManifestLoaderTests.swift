@@ -105,8 +105,8 @@ final class ControlsManifestLoaderTests: XCTestCase {
         XCTAssertEqual(back?.size, 56)
         XCTAssertNil(back?.opacity)
 
-        XCTAssertEqual(manifest.controller?.entries["y"], .key("F5"))
-        XCTAssertEqual(manifest.controller?.entries["righttrigger"], .key("ShiftLeft"))
+        XCTAssertEqual(manifest.bindings?.entries[.element("y")], .key("F5"))
+        XCTAssertEqual(manifest.bindings?.entries[.element("righttrigger")], .key("ShiftLeft"))
     }
 
     func testV000InvalidJSON() throws {
@@ -205,7 +205,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
         let finding = finding(result, code: "W005", path: "/controller/start")
         XCTAssertNotNil(finding)
         XCTAssertTrue(finding?.message.contains("$notAnAction") == true)
-        XCTAssertEqual(result.manifest?.controller?.entries["start"], .action("$notAnAction"))
+        XCTAssertEqual(result.manifest?.bindings?.entries[.element("start")], .action("$notAnAction"))
     }
 
     func testKnownControllerActionsParseWithoutFindings() {
@@ -218,7 +218,81 @@ final class ControlsManifestLoaderTests: XCTestCase {
         let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
         XCTAssertNotNil(result.manifest)
         XCTAssertTrue(result.findings.isEmpty, "\(result.findings)")
-        XCTAssertEqual(result.manifest?.controller?.entries.count, EmpoActionCatalog.all.count)
+        XCTAssertEqual(result.manifest?.bindings?.entries.count, EmpoActionCatalog.all.count)
+    }
+
+    func testKeySourcesParseInTheBindingsSection() {
+        let json = #"""
+            { "version": 1, "bindings": {
+              "KeyB": "Escape", "KeyJ": "a", "Enter": "$pauseMenu", "KeyM": null } }
+            """#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertTrue(result.findings.isEmpty, "\(result.findings)")
+        let bindings = result.manifest?.bindings
+        XCTAssertEqual(bindings?.entries[.key("KeyB")], .key("Escape"))
+        XCTAssertEqual(bindings?.entries[.key("KeyJ")], .element("a"))
+        XCTAssertEqual(bindings?.entries[.key("Enter")], .action("$pauseMenu"))
+        XCTAssertEqual(bindings?.entries[.key("KeyM")], .unbound)
+    }
+
+    func testControllerSectionStaysValidUnderItsOldName() {
+        let json = #"{ "version": 1, "controller": { "a": "KeyZ" } }"#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertTrue(result.findings.isEmpty, "\(result.findings)")
+        XCTAssertEqual(result.manifest?.bindings?.entries[.element("a")], .key("KeyZ"))
+    }
+
+    func testW007BothSectionNamesPresent() {
+        let json = #"""
+            { "version": 1, "bindings": { "a": "KeyZ" }, "controller": { "a": "KeyX" } }
+            """#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNotNil(finding(result, code: "W007", path: "/controller"))
+        XCTAssertEqual(result.manifest?.bindings?.entries[.element("a")], .key("KeyZ"))
+    }
+
+    func testV020UnknownBindingSource() {
+        let json = #"{ "version": 1, "bindings": { "AnyKey": "Enter" } }"#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V020", path: "/bindings/AnyKey"))
+    }
+
+    func testV010UnknownKeySourceTarget() {
+        let json = #"{ "version": 1, "bindings": { "KeyB": "AnyKey" } }"#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V010", path: "/bindings/KeyB"))
+    }
+
+    func testV023ElementCannotTargetAnElement() {
+        let json = #"{ "version": 1, "bindings": { "x": "a" } }"#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V023", path: "/bindings/x"))
+    }
+
+    func testV000BindingsSectionMustBeAnObject() {
+        let json = #"{ "version": 1, "bindings": [] }"#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNil(result.manifest)
+        XCTAssertNotNil(finding(result, code: "V000", path: "/bindings"))
+    }
+
+    func testBindingsOnlyManifestIsNotEmpty() {
+        let json = #"{ "version": 1, "bindings": { "KeyB": "Escape" } }"#
+        let result = ControlsManifestLoader.parse(data: json.data(using: .utf8)!)
+        XCTAssertNotNil(result.manifest)
+        XCTAssertNil(finding(result, code: "W001", path: ""))
+    }
+
+    func testElementAndKeyVocabulariesStayDisjoint() {
+        // One map holds both source kinds. The day a key code equals
+        // an element name, the loader could not tell them apart.
+        let elements = ControllerElement.allNames
+        for code in KeyCodeTable.allCodes {
+            XCTAssertFalse(elements.contains(code), "\(code) is both a key and an element")
+        }
     }
 
     func testActionButtonsParse() {
@@ -387,7 +461,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
         XCTAssertNotNil(controllerResult.manifest)
         XCTAssertNotNil(finding(controllerResult, code: "W005", path: "/controller/back"))
         XCTAssertEqual(
-            controllerResult.manifest?.controller?.entries["back"], .action("$toggleOverlay"))
+            controllerResult.manifest?.bindings?.entries[.element("back")], .action("$toggleOverlay"))
 
         let touchJSON = #"""
             { "version": 1, "touch": { "portrait": {
@@ -530,7 +604,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
         let result = ControlsManifestLoader.parse(data: data)
         XCTAssertNotNil(result.manifest)
         XCTAssertTrue(result.findings.isEmpty)
-        XCTAssertEqual(result.manifest?.controller?.entries["a"], .key("Enter"))
+        XCTAssertEqual(result.manifest?.bindings?.entries[.element("a")], .key("Enter"))
     }
 
     func testEmptyButtonsDistinctFromNil() throws {
@@ -565,7 +639,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
         XCTAssertNotNil(outcome)
         XCTAssertEqual(outcome?.result.location, .empo)
         XCTAssertNil(outcome?.note)
-        XCTAssertEqual(outcome?.result.manifest?.controller?.entries["a"], .key("Enter"))
+        XCTAssertEqual(outcome?.result.manifest?.bindings?.entries[.element("a")], .key("Enter"))
     }
 
     func testLoadResolvesRootOnlyManifest() throws {
@@ -581,7 +655,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
         XCTAssertNotNil(outcome)
         XCTAssertEqual(outcome?.result.location, .root)
         XCTAssertNil(outcome?.note)
-        XCTAssertEqual(outcome?.result.manifest?.controller?.entries["a"], .key("Enter"))
+        XCTAssertEqual(outcome?.result.manifest?.bindings?.entries[.element("a")], .key("Enter"))
     }
 
     func testLoadPrefersEmpoWhenBothLocationsExist() throws {
@@ -601,7 +675,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .empo)
         XCTAssertEqual(outcome?.note, .rootSkippedBecauseEmpoExists)
-        XCTAssertEqual(outcome?.result.manifest?.controller?.entries["a"], .key("Enter"))
+        XCTAssertEqual(outcome?.result.manifest?.bindings?.entries[.element("a")], .key("Enter"))
     }
 
     func testLoadSurfacesEmpoErrorsWhenRootWouldBeValid() throws {

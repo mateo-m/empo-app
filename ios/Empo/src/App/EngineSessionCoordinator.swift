@@ -38,6 +38,11 @@ final class EngineSessionCoordinator {
     private var keyPressStartedAt: [Int32: ContinuousClock.Instant] = [:]
     private var pendingKeyReleases: [Int32: Task<Void, Never>] = [:]
     private static let minimumKeyHold: Duration = .milliseconds(50)
+    /// Who currently holds each game key. Touch buttons, controller
+    /// elements and keyboard keys all press the same small set of
+    /// keys, so the engine may only see a release once the LAST
+    /// holder lets go.
+    private var keyHolders: [Int32: Set<KeyHolder>] = [:]
 
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
 
@@ -148,6 +153,42 @@ final class EngineSessionCoordinator {
         textInputModeHandler = nil
     }
 
+    // MARK: - Held keys
+
+    /// The engine sees a press when the first holder arrives. Holding
+    /// twice with the same holder changes nothing.
+    func holdKey(scancode: Int32, by holder: KeyHolder) {
+        var holders = keyHolders[scancode] ?? []
+        let wasEmpty = holders.isEmpty
+        holders.insert(holder)
+        keyHolders[scancode] = holders
+        if wasEmpty {
+            injectKey(scancode: scancode, pressed: true)
+        }
+    }
+
+    /// The engine sees a release when the last holder lets go.
+    func releaseKey(scancode: Int32, by holder: KeyHolder) {
+        guard var holders = keyHolders[scancode], holders.remove(holder) != nil else { return }
+        if holders.isEmpty {
+            keyHolders.removeValue(forKey: scancode)
+            injectKey(scancode: scancode, pressed: false)
+        } else {
+            keyHolders[scancode] = holders
+        }
+    }
+
+    /// Drops every key one source holds. Input paths call this when
+    /// they lose the release edges: a controller unplugged, a remap
+    /// screen opening, a session ending.
+    func releaseKeys(from source: KeyHolder.Source) {
+        for (scancode, holders) in keyHolders {
+            for holder in holders where holder.source == source {
+                releaseKey(scancode: scancode, by: holder)
+            }
+        }
+    }
+
     func injectKey(scancode: Int32, pressed: Bool) {
         if pressed {
             pendingKeyReleases.removeValue(forKey: scancode)?.cancel()
@@ -197,6 +238,10 @@ final class EngineSessionCoordinator {
             mkxp_injectKeyEvent(scancode, 0)
         }
         keyPressStartedAt.removeAll()
+        // A holder left behind would make the next session's first
+        // press look like a second one, and the engine would never
+        // see it.
+        keyHolders.removeAll()
     }
 
     private func installInputBridgesIfNeeded() {

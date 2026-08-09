@@ -21,7 +21,7 @@ layout and gamepad mapping. Setup takes about five minutes.
          ]
        }
      },
-     "controller": {
+     "bindings": {
        "y": "F5"  // north face button opens the fishing minigame
      }
    }
@@ -72,7 +72,7 @@ file stays in your game folder, and Empo reads it again at each
 launch. The converted layout sits in the same precedence slot as your
 `touch` section, so players' own edits still win. Conversion notes go
 to the same log file as manifest findings. A file that Empo cannot use
-changes nothing. Neither format adds controller bindings.
+changes nothing. Neither format adds button bindings.
 
 **Kirin** saves its touch layout as `kirin-touch-controls.json`. Empo
 keeps each mapped key as a touch button in Kirin's right-hand and
@@ -108,7 +108,7 @@ Top level:
 |---|---|---|
 | `version` | yes | Must be `1` |
 | `touch` | no | On-screen layout ([reference](#touch-reference)) |
-| `controller` | no | Gamepad mapping ([reference](#controller-reference)) |
+| `bindings` | no | Controller and keyboard mapping ([reference](#bindings-reference)) |
 
 Ship either section or both. Empo ignores object keys it does not
 recognize, so a file written for a future Empo version still loads on
@@ -240,19 +240,54 @@ Note: fast-forward buttons work only in games where the player set a
 speed multiplier in Game Settings. In other games the button hides
 during play.
 
-## Controller reference
+## Bindings reference
 
 ```jsonc
-"controller": {
+"bindings": {
   "a": "Enter",
   "y": "F5",
   "righttrigger": "ShiftLeft",  // hold to run
   "lefttrigger": null,          // unbind
-  "start": "$pauseMenu"
+  "start": "$pauseMenu",
+
+  "KeyJ": "a"                   // a pad in keyboard mode: this key is the A button
 }
 ```
 
-Each entry maps a gamepad element to a key code, an action, or `null`.
+Each entry maps a source to a key code, an action, or `null`. A source
+is a controller element or a keyboard key.
+
+The section was called `controller` before it also held keys. That name
+still works and always will. If a file has both, `bindings` wins and
+Empo logs a warning (W007).
+
+### Keyboard sources
+
+Small controllers often have a keyboard mode, and some of them support
+nothing else on iOS: the 8BitDo Micro is a keyboard to an iPhone unless
+you put it in Switch mode. Such a pad sends a key per button, so iOS
+never reports a controller at all.
+
+Name the key as the source to bind it. Point it at a controller element
+and the key inherits that button's binding, wherever the binding comes
+from — Empo's default, your manifest, or the player's own remap:
+
+```jsonc
+"bindings": {
+  "a": "KeyZ",     // the A button presses Z in this game
+  "KeyJ": "a"      // and the pad's J key is the A button, so it presses Z too
+}
+```
+
+Only keys can point at an element. An element pointing at an element
+would be a chain, and Empo rejects it (V023).
+
+A key you do not name reaches the game unchanged, so a real keyboard
+keeps typing. Use `null` to silence a key.
+
+Players do the same thing in the app: **Menu → Buttons → Keyboard →
+Add a key** asks them to press the button, reads the key it sends, and
+binds it.
 
 **Your map is a patch.** Empo has a built-in mapping (table below).
 Your file changes only the elements you list, and `null` removes a
@@ -293,7 +328,7 @@ Notes:
 ### Actions
 
 Values that start with `$` trigger Empo features instead of keys.
-Controller maps can bind every action. The touch `actionButtons` list
+The bindings map can bind every action. The touch `actionButtons` list
 can bind the touch-valid ones. A normal touch button's `key` field
 can never hold an action.
 
@@ -405,7 +440,7 @@ ones:
 
 1. Empo's built-in map
 2. The player's global overrides (all games)
-3. Your `controller` section
+3. Your `bindings` section
 4. The player's overrides for your game
 
 Your file outranks a player's global preferences because you know your
@@ -421,7 +456,7 @@ layout or Empo's, never a mix you did not test.
 
 Two documented exceptions exist, both for forward compatibility with
 future actions. An unknown action in `actionButtons` skips that one
-button (W004). An unknown action in `controller` keeps the entry but
+button (W004). An unknown action in `bindings` keeps the entry but
 makes it do nothing (W005). Both are warnings, and the rest of the
 file loads.
 
@@ -442,14 +477,16 @@ controls did not show up, ask a tester for that log line.
 | V013 | More than 21 entries in `buttons` |
 | V014 | `$action` in a normal touch button's `key` |
 | V015 | More than 21 `buttons` + `actionButtons` combined in one orientation |
-| V020 | Unknown controller element |
+| V020 | Unknown binding source (not an element, not a key) |
+| V023 | A controller element bound to another element |
 | V021 | Superseded by W005 (older Empo versions still reject the file with it) |
-| W001 | Neither `touch` nor `controller` present (warning) |
+| W001 | Neither `touch` nor `bindings` present (warning) |
 | W002 | Label truncated to 8 characters (warning) |
 | W003 | Two buttons share one key (warning) |
 | W004 | Unknown action in `actionButtons`; that button is skipped (warning) |
-| W005 | Unknown action in `controller`; the binding stays but does nothing (warning) |
+| W005 | Unknown action in `bindings`; the binding stays but does nothing (warning) |
 | W006 | Unknown `dpad` style; the d-pad renders instead (warning) |
+| W007 | Both `bindings` and `controller` present; `controller` is ignored (warning) |
 
 Warnings never reject the file.
 
@@ -469,14 +506,16 @@ editor or a validator like `ajv` works.
   future Empo will read version 1 files exactly as this document
   describes. It is safe to ship a `controls.json` today.
 
-Two compatibility notes for the action features:
+Three compatibility notes:
 
 - `actionButtons` needs Empo 0.6 or later. Older versions ignore the
   list and show the rest of your layout. Safe to ship.
+- Key sources and the `bindings` name need Empo 0.6 or later. Write
+  `controller` with element sources only if you must support 0.5.
 - A `controller` entry bound to one of the new actions makes Empo
   0.5 and older reject the whole file (their V021 was a hard error).
   If you must support older versions, keep new actions out of your
-  `controller` section for now.
+  `bindings` section for now.
 
 ## Before you ship
 
@@ -486,5 +525,5 @@ Two compatibility notes for the action features:
 2. Import the game in Empo and open the edit-controls screen. A broken
    file shows an error notice there. Details go to the game's
    `Logs/controls.json.log`. Five minutes.
-3. If you ship a `controller` section, connect a gamepad and press
+3. If you ship a `bindings` section, connect a gamepad and press
    each remapped element once in-game. Five minutes.

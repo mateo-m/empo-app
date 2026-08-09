@@ -3,16 +3,16 @@ import Foundation
 public struct ControlsManifest: Equatable, Sendable {
     public var version: Int
     public var touch: TouchSection?
-    public var controller: ControllerMap?
+    public var bindings: BindingMap?
 
     public init(
         version: Int,
         touch: TouchSection? = nil,
-        controller: ControllerMap? = nil
+        bindings: BindingMap? = nil
     ) {
         self.version = version
         self.touch = touch
-        self.controller = controller
+        self.bindings = bindings
     }
 }
 
@@ -124,19 +124,84 @@ public struct ActionButtonSpec: Equatable, Sendable {
     }
 }
 
-/// Ordered element -> target map. A target is a key, an action, or an
-/// explicit unbind.
-public struct ControllerMap: Equatable, Sendable {
-    public enum Target: Equatable, Sendable {
-        case key(String)
-        case action(String)
-        case unbound
+/// What a physical input does: press a game key, act as a controller
+/// element, run an Empo action, or nothing at all.
+///
+/// The `element` target is what makes one set of binds serve every
+/// pad. A controller in keyboard mode sends keys, so `"KeyJ": "a"`
+/// files that key under the A button, and every A binding — Empo's
+/// default, the game's manifest, the player's own — applies to it.
+public enum ControlsTarget: Equatable, Sendable {
+    case key(String)
+    case element(String)
+    case action(String)
+    case unbound
+}
+
+/// What a binding reads: a controller element or a keyboard key. The
+/// two vocabularies are disjoint (a test enforces it), so one name
+/// always decides one kind, and one map holds both.
+///
+/// Every layer takes this type instead of a bare name. Nothing
+/// downstream has to ask "is this an element?" again.
+public enum BindingSource: Hashable, Sendable {
+    case element(String)
+    case key(String)
+
+    /// nil for a name in neither vocabulary.
+    public init?(name: String) {
+        if ControllerElement.allNames.contains(name) {
+            self = .element(name)
+        } else if KeyCodeTable.scancode(for: name) != nil {
+            self = .key(name)
+        } else {
+            return nil
+        }
     }
 
-    public var entries: [String: Target]
+    /// The name as it appears in the file and in stored maps.
+    public var name: String {
+        switch self {
+        case .element(let name), .key(let name): return name
+        }
+    }
 
-    public init(entries: [String: Target] = [:]) {
+    public var isElement: Bool {
+        if case .element = self { return true }
+        return false
+    }
+}
+
+/// Source -> target map (SPEC section 9).
+///
+/// A key that no source names passes through to the game unchanged.
+/// That keeps typing, and the engine hotkeys, alive on a real
+/// keyboard. `unbound` makes a source do nothing.
+public struct BindingMap: Equatable, Sendable {
+    public typealias Target = ControlsTarget
+
+    public var entries: [BindingSource: Target]
+
+    public init(entries: [BindingSource: Target] = [:]) {
         self.entries = entries
+    }
+
+    /// Element name -> target. The one place the map splits by kind.
+    public var elementEntries: [String: Target] {
+        var out: [String: Target] = [:]
+        for (source, target) in entries {
+            if case .element(let name) = source { out[name] = target }
+        }
+        return out
+    }
+
+    /// Key code -> target.
+    public var keyEntries: [String: Target] {
+        var out: [String: Target] = [:]
+        for (source, target) in entries {
+            if case .key(let name) = source { out[name] = target }
+        }
+        return out
     }
 }
 

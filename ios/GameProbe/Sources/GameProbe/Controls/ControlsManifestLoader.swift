@@ -58,12 +58,14 @@ public enum ControlsManifestLoader {
         case v014 = "V014"
         case v015 = "V015"
         case v020 = "V020"
+        case v023 = "V023"
         case w001 = "W001"
         case w002 = "W002"
         case w003 = "W003"
         case w004 = "W004"
         case w005 = "W005"
         case w006 = "W006"
+        case w007 = "W007"
         case k001 = "K001"
         case j001 = "J001"
     }
@@ -400,26 +402,41 @@ public enum ControlsManifestLoader {
             )
         }
 
-        if let controller = root["controller"] as? [String: Any] {
-            manifest.controller = parseControllerMap(controller, path: "/controller", findings: &findings)
-        } else if root["controller"] != nil {
+        // `controller` is the section's first name. It stays valid
+        // for ever: manifests already in the wild use it.
+        let bindingsKey = root["bindings"] != nil ? "bindings" : "controller"
+        if root["bindings"] != nil && root["controller"] != nil {
             findings.append(
                 Finding(
-                    severity: .error,
-                    code: .v000,
+                    severity: .warning,
+                    code: .w007,
                     path: "/controller",
-                    message: "controller must be an object"
+                    message: "bindings and controller are the same section; controller is ignored"
                 )
             )
         }
 
-        if manifest.touch == nil && manifest.controller == nil {
+        if let bindings = root[bindingsKey] as? [String: Any] {
+            manifest.bindings = parseBindingMap(
+                bindings, path: "/\(bindingsKey)", findings: &findings)
+        } else if root[bindingsKey] != nil {
+            findings.append(
+                Finding(
+                    severity: .error,
+                    code: .v000,
+                    path: "/\(bindingsKey)",
+                    message: "\(bindingsKey) must be an object"
+                )
+            )
+        }
+
+        if manifest.touch == nil && manifest.bindings == nil {
             findings.append(
                 Finding(
                     severity: .warning,
                     code: .w001,
                     path: "",
-                    message: "Manifest has neither touch nor controller section"
+                    message: "Manifest has neither touch nor bindings section"
                 )
             )
         }
@@ -678,77 +695,49 @@ public enum ControlsManifestLoader {
             size: placement.size, opacity: placement.opacity)
     }
 
-    // MARK: - Controller
+    // MARK: - Bindings
 
-    private static func parseControllerMap(
+    /// The grammar itself lives in `BindingMapCoder`, which the app's
+    /// defaults store reads with too. This only turns its issues into
+    /// findings.
+    private static func parseBindingMap(
         _ object: [String: Any],
         path: String,
         findings: inout [Finding]
-    ) -> ControllerMap {
-        var entries: [String: ControllerMap.Target] = [:]
-
-        for (element, value) in object {
-            let elementPath = "\(path)/\(element)"
-            guard ControllerElement.allNames.contains(element) else {
-                findings.append(
+    ) -> BindingMap {
+        var reported: [Finding] = []
+        let map = BindingMapCoder.decode(object) { source, issue in
+            let sourcePath = "\(path)/\(source)"
+            switch issue {
+            case .unknownSource:
+                reported.append(
                     Finding(
-                        severity: .error,
-                        code: .v020,
-                        path: elementPath,
-                        message: "Unknown controller element \(element)"
-                    )
-                )
-                continue
-            }
-
-            if value is NSNull {
-                entries[element] = .unbound
-                continue
-            }
-
-            guard let text = value as? String else {
-                findings.append(
+                        severity: .error, code: .v020, path: sourcePath,
+                        message: "Unknown controller element or key: \(source)"))
+            case .targetNotText:
+                reported.append(
                     Finding(
-                        severity: .error,
-                        code: .v000,
-                        path: elementPath,
-                        message: "Controller target must be a string or null"
-                    )
-                )
-                continue
-            }
-
-            if text.hasPrefix("$") {
-                // Unknown actions warn and KEEP the entry. Every
-                // load-modify-save path rewrites this file, so a
-                // skipped entry would be stripped from disk. A kept
-                // entry stays inert at dispatch and survives saves.
-                if !EmpoActionCatalog.allIDs.contains(text) {
-                    findings.append(
-                        Finding(
-                            severity: .warning,
-                            code: .w005,
-                            path: elementPath,
-                            message: "Unknown action, binding does nothing: \(text)"
-                        )
-                    )
-                }
-                entries[element] = .action(text)
-            } else if KeyCodeTable.scancode(for: text) != nil {
-                entries[element] = .key(text)
-            } else {
-                findings.append(
+                        severity: .error, code: .v000, path: sourcePath,
+                        message: "Binding target must be a string or null"))
+            case .unknownTarget(let text):
+                reported.append(
                     Finding(
-                        severity: .error,
-                        code: .v010,
-                        path: elementPath,
-                        message: "Unknown key code: \(text)"
-                    )
-                )
+                        severity: .error, code: .v010, path: sourcePath,
+                        message: "Unknown key code: \(text)"))
+            case .unknownAction(let id):
+                reported.append(
+                    Finding(
+                        severity: .warning, code: .w005, path: sourcePath,
+                        message: "Unknown action, binding does nothing: \(id)"))
+            case .elementChain(let element):
+                reported.append(
+                    Finding(
+                        severity: .error, code: .v023, path: sourcePath,
+                        message: "A controller element cannot bind to another element: \(element)"))
             }
         }
-
-        return ControllerMap(entries: entries)
+        findings.append(contentsOf: reported)
+        return map
     }
 
     // MARK: - Validation helpers

@@ -89,9 +89,9 @@ public enum ProfileMaterializer {
     }
 
     /// The serializer has no touch-only entry point; canonical bytes
-    /// are always `serialize(touch:controller: nil)`.
+    /// are always `serialize(touch:bindings: nil)`.
     public static func canonicalBytes(_ section: TouchSection) -> Data {
-        ControlsManifestSerializer.serialize(touch: section, controller: nil) ?? Data()
+        ControlsManifestSerializer.serialize(touch: section, bindings: nil) ?? Data()
     }
 
     public static func canonicalBytes(_ materialized: MaterializedTouch) -> Data {

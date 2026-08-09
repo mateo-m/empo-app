@@ -25,9 +25,14 @@
     }
   },
 
-  "controller": {
+  "bindings": {
     // This game reads F5 for its fishing minigame.
     "y": "F5",
-    "righttrigger": "ShiftLeft"
+    "righttrigger": "ShiftLeft",
+
+    // A small pad in keyboard mode: these keys are the face buttons,
+    // so every binding above applies to it too.
+    "KeyJ": "a",
+    "KeyK": "b"
   }
 }

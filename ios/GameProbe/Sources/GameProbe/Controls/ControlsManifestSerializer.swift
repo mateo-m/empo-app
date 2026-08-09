@@ -99,15 +99,16 @@ public enum ControlsManifestSerializer {
         )
     }
 
-    /// Returns `nil` when there is nothing to persist (no touch and no controller overrides).
+    /// Returns `nil` when there is nothing to persist (no touch and no
+    /// binding overrides).
     public static func serialize(
         touch: TouchSection?,
-        controller: ControllerMap?
+        bindings: BindingMap?
     ) -> Data? {
-        let controllerEntries = controller?.entries ?? [:]
-        let hasController = !controllerEntries.isEmpty
+        let bindingEntries = bindings?.entries ?? [:]
+        let hasBindings = !bindingEntries.isEmpty
         let hasTouch = touch != nil
-        guard hasTouch || hasController else { return nil }
+        guard hasTouch || hasBindings else { return nil }
 
         var lines: [String] = []
         lines.append("{")
@@ -119,9 +120,9 @@ public enum ControlsManifestSerializer {
             lines.append("  }")
         }
 
-        if hasController {
-            lines.append("  ,\"controller\": {")
-            appendControllerMap(controllerEntries, into: &lines, indent: 4)
+        if hasBindings {
+            lines.append("  ,\"bindings\": {")
+            appendBindings(bindingEntries, into: &lines, indent: 4)
             lines.append("  }")
         }
 
@@ -340,29 +341,20 @@ public enum ControlsManifestSerializer {
         lines.append("\(pad)}")
     }
 
-    private static func appendControllerMap(
-        _ entries: [String: ControllerMap.Target],
+    /// Writes the bindings map in vocabulary order, so a load-save
+    /// round trip stays byte stable.
+    private static func appendBindings(
+        _ entries: [BindingSource: ControlsTarget],
         into lines: inout [String],
         indent: Int
     ) {
         let pad = String(repeating: " ", count: indent)
-        let ordered = ControllerElement.allElements.filter { entries[$0] != nil }
-        for (index, element) in ordered.enumerated() {
-            guard let target = entries[element] else { continue }
-            let value: String
-            switch target {
-            case .key(let code):
-                value = jsonString(code)
-            case .action(let name):
-                value = jsonString(name)
-            case .unbound:
-                value = "null"
-            }
-            if index > 0 {
-                lines.append("\(pad),\"\(element)\": \(value)")
-            } else {
-                lines.append("\(pad)\"\(element)\": \(value)")
-            }
+        let ordered = BindingMapCoder.sourceOrder.filter { entries[$0] != nil }
+        for (index, source) in ordered.enumerated() {
+            guard let target = entries[source] else { continue }
+            let value = target.name.map(jsonString) ?? "null"
+            let separator = index > 0 ? "," : ""
+            lines.append("\(pad)\(separator)\"\(source.name)\": \(value)")
         }
     }
 

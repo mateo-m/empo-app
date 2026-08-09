@@ -124,6 +124,11 @@ public enum KeyCodeTable {
         Dictionary(uniqueKeysWithValues: entries.map { ($0.code, $0) })
     }()
 
+    // Keyed lookup, not a scan: every hardware key press asks for it.
+    private static let byScancode: [Int32: Entry] = {
+        Dictionary(entries.map { ($0.scancode, $0) }, uniquingKeysWith: { first, _ in first })
+    }()
+
     /// W3C KeyboardEvent.code -> SDL/USB-HID scancode. nil means an
     /// unknown code.
     public static func scancode(for code: String) -> Int32? {
@@ -135,10 +140,10 @@ public enum KeyCodeTable {
         byCode[code]?.displayName
     }
 
-    /// Reverse lookup (first match wins). The migration of existing
-    /// layouts to names uses it.
+    /// Reverse lookup (first match wins). Hardware key edges and the
+    /// migration of existing layouts both use it.
     public static func code(for scancode: Int32) -> String? {
-        entries.first(where: { $0.scancode == scancode })?.code
+        byScancode[scancode]?.code
     }
 
     /// All codes, stable order (table order), for pickers.

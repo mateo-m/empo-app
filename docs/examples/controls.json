@@ -39,8 +39,11 @@
     }
   },
 
-  "controller": {
+  "bindings": {
     "y": "F5",
-    "righttrigger": "ShiftLeft"
+    "righttrigger": "ShiftLeft",
+
+    "KeyJ": "a",
+    "KeyK": "b"
   }
 }

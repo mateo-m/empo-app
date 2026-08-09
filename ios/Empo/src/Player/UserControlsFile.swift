@@ -56,9 +56,9 @@ enum UserControlsFile {
     static func write(
         in container: GameContainer,
         touch: TouchSection?,
-        controller: ControllerMap?
+        bindings: BindingMap?
     ) -> Bool {
-        guard let data = ControlsManifestSerializer.serialize(touch: touch, controller: controller)
+        guard let data = ControlsManifestSerializer.serialize(touch: touch, bindings: bindings)
         else {
             return write(nil, in: container)
         }
@@ -71,28 +71,28 @@ enum UserControlsFile {
         return write(
             in: container,
             touch: touch,
-            controller: existing?.controller
+            bindings: existing?.bindings
         )
     }
 
-    /// Read-modify-write: update only the `controller` section.
-    static func updateController(in container: GameContainer, controller: ControllerMap?) -> Bool {
+    /// Read-modify-write: update only the `bindings` section.
+    static func updateBindings(in container: GameContainer, bindings: BindingMap?) -> Bool {
         let existing = acceptedManifest(in: container)
         return write(
             in: container,
             touch: existing?.touch,
-            controller: controller
+            bindings: bindings
         )
     }
 
     static func removeTouchSection(in container: GameContainer) -> Bool {
         let existing = acceptedManifest(in: container)
-        return write(in: container, touch: nil, controller: existing?.controller)
+        return write(in: container, touch: nil, bindings: existing?.bindings)
     }
 
-    static func removeControllerSection(in container: GameContainer) -> Bool {
+    static func removeBindingsSection(in container: GameContainer) -> Bool {
         let existing = acceptedManifest(in: container)
-        return write(in: container, touch: existing?.touch, controller: nil)
+        return write(in: container, touch: existing?.touch, bindings: nil)
     }
 
     private static func acceptedManifest(in container: GameContainer) -> ControlsManifest? {

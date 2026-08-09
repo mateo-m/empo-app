@@ -80,7 +80,7 @@ public struct LayoutProfileStore {
 
     public struct ProfileRead {
         public var touch: TouchSection?
-        public var controller: ControllerMap?
+        public var bindings: BindingMap?
         /// True when the file exists but did not yield a usable touch
         /// section (parse errors, or no touch key). The chain treats
         /// this as missing.
@@ -98,7 +98,7 @@ public struct LayoutProfileStore {
     }
 
     /// Reads a profile's touch section. Error findings go to the
-    /// profile's own log file; a `controller` section is carried (for
+    /// profile's own log file; a `bindings` section is carried (for
     /// preservation on save) but ignored at resolution.
     public func readProfile(_ name: String) -> ProfileRead? {
         let url = controlsURL(name)
@@ -111,29 +111,29 @@ public struct LayoutProfileStore {
                 appendLog(name, line: "  [\(finding.code)] \(finding.path): \(finding.message)")
             }
             return ProfileRead(
-                touch: nil, controller: nil, invalid: true, errorCount: max(errors.count, 1))
+                touch: nil, bindings: nil, invalid: true, errorCount: max(errors.count, 1))
         }
-        if result.manifest?.controller != nil {
-            appendLog(name, line: "controls.json: controller section ignored (profiles hold touch only)")
+        if result.manifest?.bindings != nil {
+            appendLog(name, line: "controls.json: bindings section ignored (profiles hold touch only)")
         }
         guard let touch = result.manifest?.touch else {
             return ProfileRead(
-                touch: nil, controller: result.manifest?.controller, invalid: true, errorCount: 1)
+                touch: nil, bindings: result.manifest?.bindings, invalid: true, errorCount: 1)
         }
-        return ProfileRead(touch: touch, controller: result.manifest?.controller, invalid: false)
+        return ProfileRead(touch: touch, bindings: result.manifest?.bindings, invalid: false)
     }
 
     // MARK: - Writing
 
-    /// Writes a profile's touch section. A `controller` section a
-    /// user hand-added to the file is preserved verbatim-parsed, and
-    /// stays ignored at resolution.
+    /// Writes a profile's touch section. A `bindings` section a user
+    /// hand-added to the file is preserved verbatim-parsed, and stays
+    /// ignored at resolution.
     @discardableResult
     public func writeProfile(_ name: String, touch: TouchSection) -> Bool {
-        let preservedController = readProfile(name)?.controller
+        let preservedBindings = readProfile(name)?.bindings
         guard
             let data = ControlsManifestSerializer.serialize(
-                touch: touch, controller: preservedController)
+                touch: touch, bindings: preservedBindings)
         else { return false }
         let fm = FileManager.default
         do {

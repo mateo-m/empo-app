@@ -283,7 +283,7 @@ final class OrientationDerivationTests: XCTestCase {
             version: 1,
             touch: TouchSection(portrait: portrait, landscape: derived)
         )
-        guard let data = ControlsManifestSerializer.serialize(touch: manifest.touch, controller: nil) else {
+        guard let data = ControlsManifestSerializer.serialize(touch: manifest.touch, bindings: nil) else {
             XCTFail("expected serialized data")
             return
         }

@@ -48,7 +48,7 @@ final class ControllerStateReducerTests: XCTestCase {
     }
 
     func testBuiltinMapContainsSpecDefaults() {
-        let map = ControllerBuiltinMap.builtinResolved()
+        let map = BindingResolver.resolveRuntime().elements
         XCTAssertEqual(map["a"], .key(40))
         XCTAssertEqual(map["b"], .key(41))
         XCTAssertEqual(map["x"], .key(225))

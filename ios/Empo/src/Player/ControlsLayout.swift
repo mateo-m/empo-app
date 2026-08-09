@@ -713,7 +713,7 @@ class ControlsLayout {
         loadManifest(from: container?.gameURL)
         if let container, newGameID != nil {
             migrateLegacyPersistenceIfNeeded(container: container)
-            ControllerMapStore.migrateRenamedActions(container: container)
+            BindingStore.migrateRenamedActions(container: container)
             runProfileMigration(container: container)
             resolveChain(container: container)
             return
@@ -1331,7 +1331,7 @@ class ControlsLayout {
     /// the game, and updates provenance in place. This never touches
     /// the per-game `EmpoState/controls.json`: its dead touch section
     /// stays byte-identical on disk (copy-not-move), and controller
-    /// persistence lives in `ControllerMapStore`.
+    /// persistence lives in `BindingStore`.
     func save() {
         if isEditorInstance {
             editorSave()
@@ -1907,11 +1907,11 @@ class ControlsLayout {
             touch = nil
         }
 
-        let controller = ControllerMapStore.decodeLegacyPerGameMap(gameID: container.id)
+        let controller = BindingStore.decodeLegacyPerGameMap(gameID: container.id)
 
         guard touch != nil || controller != nil else { return }
 
-        guard UserControlsFile.write(in: container, touch: touch, controller: controller) else {
+        guard UserControlsFile.write(in: container, touch: touch, bindings: controller) else {
             return
         }
 

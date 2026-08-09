@@ -5,7 +5,7 @@ import SwiftUI
 // Liquid Glass material.
 //
 // Touch-dispatch semantics:
-//   - `EngineSessionCoordinator.shared.injectKey(scancode:, pressed:)`
+//   - `EngineSessionCoordinator.shared.holdKey/releaseKey(scancode:by:)`
 //     on press-down and release.
 //   - Touches are captured by a UIKit `ControlTouchCapture` overlay
 //     (raw touchesBegan/Moved/Ended), NOT by SwiftUI gestures. A
@@ -195,10 +195,12 @@ struct ActionButton: View {
             editing: editing,
             accessibilityLabel: "\(label) button",
             onPress: {
-                EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: true)
+                EngineSessionCoordinator.shared.holdKey(
+                    scancode: scancode, by: .touch("button:\(label)"))
             },
             onRelease: {
-                EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
+                EngineSessionCoordinator.shared.releaseKey(
+                    scancode: scancode, by: .touch("button:\(label)"))
             },
             face: { isPressed in
                 Text(label)
@@ -459,8 +461,14 @@ private struct MovementTouchHost<Visual: View>: View {
     /// wedge transition rather than one continuous buzz while held).
     private func apply(_ edges: [DPadTouchReducer.Edge]) {
         for edge in edges {
-            EngineSessionCoordinator.shared.injectKey(
-                scancode: edge.direction.scancode, pressed: edge.pressed)
+            let holder = KeyHolder.touch("dpad:\(edge.direction)")
+            if edge.pressed {
+                EngineSessionCoordinator.shared.holdKey(
+                    scancode: edge.direction.scancode, by: holder)
+            } else {
+                EngineSessionCoordinator.shared.releaseKey(
+                    scancode: edge.direction.scancode, by: holder)
+            }
         }
         if edges.contains(where: { $0.pressed }) {
             Haptics.controllerTap()

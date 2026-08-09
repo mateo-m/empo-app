@@ -109,7 +109,7 @@ public enum EmpoActionCatalog {
 
     /// Rewrites renamed action ids in a stored controller map.
     /// Idempotent: after one pass no old id remains.
-    public static func migrated(_ map: ControllerMap) -> (map: ControllerMap, changed: Bool) {
+    public static func migrated(_ map: BindingMap) -> (map: BindingMap, changed: Bool) {
         var result = map
         var changed = false
         for (element, target) in map.entries {

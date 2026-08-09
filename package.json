@@ -5,7 +5,8 @@
   "scripts": {
     "prepare": "lefthook install --reset-hooks-path",
     "fmt:check": "oxfmt --check altstore-source.json ios/Empo/project.yml ios/Empo/curated-patches/gameRegistry.json",
-    "controls:schema:check": "node tools/controls-schema-check.mjs"
+    "controls:schema:check": "bun tools/controls-schema-check.ts",
+    "controls:schema": "bun tools/generate-controls-schema.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",

@@ -35,18 +35,18 @@ final class EmpoActionTests: XCTestCase {
     }
 
     func testMigrationRewritesRenamedAction() {
-        let map = ControllerMap(entries: [
-            "back": .action("$toggleOverlay"),
-            "start": .action("$pauseMenu"),
-            "y": .key("F5"),
-            "x": .unbound,
+        let map = BindingMap(entries: [
+            .element("back"): .action("$toggleOverlay"),
+            .element("start"): .action("$pauseMenu"),
+            .element("y"): .key("F5"),
+            .element("x"): .unbound,
         ])
         let first = EmpoActionCatalog.migrated(map)
         XCTAssertTrue(first.changed)
-        XCTAssertEqual(first.map.entries["back"], .action("$toggleTouchControls"))
-        XCTAssertEqual(first.map.entries["start"], .action("$pauseMenu"))
-        XCTAssertEqual(first.map.entries["y"], .key("F5"))
-        XCTAssertEqual(first.map.entries["x"], .unbound)
+        XCTAssertEqual(first.map.entries[.element("back")], .action("$toggleTouchControls"))
+        XCTAssertEqual(first.map.entries[.element("start")], .action("$pauseMenu"))
+        XCTAssertEqual(first.map.entries[.element("y")], .key("F5"))
+        XCTAssertEqual(first.map.entries[.element("x")], .unbound)
 
         let second = EmpoActionCatalog.migrated(first.map)
         XCTAssertFalse(second.changed)
@@ -54,7 +54,7 @@ final class EmpoActionTests: XCTestCase {
     }
 
     func testMigrationLeavesUnknownActionsAlone() {
-        let map = ControllerMap(entries: ["start": .action("$notAnAction")])
+        let map = BindingMap(entries: [.element("start"): .action("$notAnAction")])
         let result = EmpoActionCatalog.migrated(map)
         XCTAssertFalse(result.changed)
         XCTAssertEqual(result.map, map)

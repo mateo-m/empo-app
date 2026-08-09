@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/mateo-m/empo-app/main/docs/schemas/empo-controls.v1.schema.json",
   "title": "Empo controls manifest v1",
-  "description": "Per-game touch layout and controller map for Empo (empo/controls.json). The Swift validator in GameProbe is authoritative; this schema supports editor autocomplete.",
+  "description": "Per-game touch layout and input bindings for Empo (empo/controls.json). The Swift validator in GameProbe is authoritative; this schema supports editor autocomplete.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -20,8 +20,12 @@
     "touch": {
       "$ref": "#/$defs/touchSection"
     },
+    "bindings": {
+      "$ref": "#/$defs/bindingMap"
+    },
     "controller": {
-      "$ref": "#/$defs/controllerMap"
+      "description": "First name of the bindings section. Still valid; bindings wins if both appear.",
+      "$ref": "#/$defs/bindingMap"
     }
   },
   "$defs": {
@@ -138,7 +142,7 @@
       ]
     },
     "action": {
-      "description": "Host action string (SPEC §8). Valid in controller maps; the touch-valid subset also works in actionButtons.",
+      "description": "Host action string (SPEC §8). Valid in the bindings map; the touch-valid subset also works in actionButtons.",
       "type": "string",
       "enum": [
         "$fastForward",
@@ -158,11 +162,14 @@
         "$toggleCheats"
       ]
     },
-    "controllerTarget": {
-      "description": "Key binding, host action, or explicit unbind (null).",
+    "bindingTarget": {
+      "description": "Key binding, controller element, host action, or explicit unbind (null). An element target is for key sources only: the key then takes that button's binding.",
       "oneOf": [
         {
           "$ref": "#/$defs/keyCode"
+        },
+        {
+          "$ref": "#/$defs/controllerElement"
         },
         {
           "$ref": "#/$defs/action"
@@ -226,6 +233,32 @@
         }
       }
     },
+    "actionButton": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "action",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/touchAction"
+        },
+        "x": {
+          "$ref": "#/$defs/coordinate"
+        },
+        "y": {
+          "$ref": "#/$defs/coordinate"
+        },
+        "size": {
+          "$ref": "#/$defs/buttonSize"
+        },
+        "opacity": {
+          "$ref": "#/$defs/opacity"
+        }
+      }
+    },
     "button": {
       "type": "object",
       "additionalProperties": true,
@@ -242,32 +275,6 @@
         },
         "key": {
           "$ref": "#/$defs/keyCode"
-        },
-        "x": {
-          "$ref": "#/$defs/coordinate"
-        },
-        "y": {
-          "$ref": "#/$defs/coordinate"
-        },
-        "size": {
-          "$ref": "#/$defs/buttonSize"
-        },
-        "opacity": {
-          "$ref": "#/$defs/opacity"
-        }
-      }
-    },
-    "actionButton": {
-      "type": "object",
-      "additionalProperties": true,
-      "required": [
-        "action",
-        "x",
-        "y"
-      ],
-      "properties": {
-        "action": {
-          "$ref": "#/$defs/touchAction"
         },
         "x": {
           "$ref": "#/$defs/coordinate"
@@ -355,14 +362,156 @@
         "+righty"
       ]
     },
-    "controllerMap": {
+    "bindingSource": {
+      "description": "A controller element (SPEC §7) or a keyboard key (SPEC §6). A pad in keyboard mode reaches iOS as a keyboard, so its buttons are keys here.",
+      "type": "string",
+      "enum": [
+        "a",
+        "b",
+        "x",
+        "y",
+        "back",
+        "guide",
+        "start",
+        "leftstick",
+        "rightstick",
+        "leftshoulder",
+        "rightshoulder",
+        "dpup",
+        "dpdown",
+        "dpleft",
+        "dpright",
+        "paddle1",
+        "paddle2",
+        "paddle3",
+        "paddle4",
+        "touchpad",
+        "lefttrigger",
+        "righttrigger",
+        "-leftx",
+        "+leftx",
+        "-lefty",
+        "+lefty",
+        "-rightx",
+        "+rightx",
+        "-righty",
+        "+righty",
+        "KeyA",
+        "KeyB",
+        "KeyC",
+        "KeyD",
+        "KeyE",
+        "KeyF",
+        "KeyG",
+        "KeyH",
+        "KeyI",
+        "KeyJ",
+        "KeyK",
+        "KeyL",
+        "KeyM",
+        "KeyN",
+        "KeyO",
+        "KeyP",
+        "KeyQ",
+        "KeyR",
+        "KeyS",
+        "KeyT",
+        "KeyU",
+        "KeyV",
+        "KeyW",
+        "KeyX",
+        "KeyY",
+        "KeyZ",
+        "Digit1",
+        "Digit2",
+        "Digit3",
+        "Digit4",
+        "Digit5",
+        "Digit6",
+        "Digit7",
+        "Digit8",
+        "Digit9",
+        "Digit0",
+        "Enter",
+        "Escape",
+        "Backspace",
+        "Tab",
+        "Space",
+        "Minus",
+        "Equal",
+        "BracketLeft",
+        "BracketRight",
+        "Backslash",
+        "Semicolon",
+        "Quote",
+        "Backquote",
+        "Comma",
+        "Period",
+        "Slash",
+        "CapsLock",
+        "F1",
+        "F2",
+        "F3",
+        "F4",
+        "F5",
+        "F6",
+        "F7",
+        "F8",
+        "F9",
+        "F10",
+        "F11",
+        "F12",
+        "PrintScreen",
+        "ScrollLock",
+        "Pause",
+        "Insert",
+        "Home",
+        "PageUp",
+        "Delete",
+        "End",
+        "PageDown",
+        "ArrowRight",
+        "ArrowLeft",
+        "ArrowDown",
+        "ArrowUp",
+        "NumLock",
+        "NumpadDivide",
+        "NumpadMultiply",
+        "NumpadSubtract",
+        "NumpadAdd",
+        "NumpadEnter",
+        "Numpad1",
+        "Numpad2",
+        "Numpad3",
+        "Numpad4",
+        "Numpad5",
+        "Numpad6",
+        "Numpad7",
+        "Numpad8",
+        "Numpad9",
+        "Numpad0",
+        "NumpadDecimal",
+        "IntlBackslash",
+        "IntlRo",
+        "IntlYen",
+        "ControlLeft",
+        "ShiftLeft",
+        "AltLeft",
+        "MetaLeft",
+        "ControlRight",
+        "ShiftRight",
+        "AltRight",
+        "MetaRight"
+      ]
+    },
+    "bindingMap": {
       "type": "object",
-      "description": "Patch overlay: only listed elements change; null unbinds.",
+      "description": "Patch overlay: only listed sources change; null unbinds.",
       "propertyNames": {
-        "$ref": "#/$defs/controllerElement"
+        "$ref": "#/$defs/bindingSource"
       },
       "additionalProperties": {
-        "$ref": "#/$defs/controllerTarget"
+        "$ref": "#/$defs/bindingTarget"
       }
     }
   }
