@@ -8,6 +8,9 @@ pre-commit:
 
 pre-push:
   parallel: false
-  commands:
-    submodule-dev-check:
-      run: scripts/hooks/pre-push.sh
+  # A script, not a command: lefthook skips a command when its
+  # push-file list is empty, and it drops the submodule path from that
+  # list. See .lefthook/pre-push/submodule-dev-check.
+  scripts:
+    "submodule-dev-check":
+      runner: sh
