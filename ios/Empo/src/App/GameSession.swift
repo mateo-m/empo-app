@@ -77,19 +77,23 @@ enum GameSession {
         // overlay mkxp.json there is not a complete config. If the
         // engine read it as base, it would drop every dev key from
         // Game/mkxp.json.
+        DataDirectory.ensureFontsRoot()
         "".withCString { managedPtr in
             input.userDataDir.path.withCString { userDataPtr in
-                var config = MKXPSessionConfig()
-                config.managedConfigDir = managedPtr
-                config.userDataDirectory = userDataPtr
-                config.rubyVersion = rubyVer
-                config.syntaxTransformMode = syntaxTransform
-                config.verticalAlignment = alignment.bridgeValue
-                config.postloadEnabled = postload
-                config.useInGameKeyboard = settings.useInGameKeyboard ?? inGameKeyboardDefault
-                config.joiplayCompat = settings.joiplayCompat ?? false
-                config.networkEnabled = settings.networkEnabled ?? true
-                mkxp_applySessionConfig(&config)
+                DataDirectory.fontsRootURL.path.withCString { fontsPtr in
+                    var config = MKXPSessionConfig()
+                    config.managedConfigDir = managedPtr
+                    config.userDataDirectory = userDataPtr
+                    config.sharedFontsDirectory = fontsPtr
+                    config.rubyVersion = rubyVer
+                    config.syntaxTransformMode = syntaxTransform
+                    config.verticalAlignment = alignment.bridgeValue
+                    config.postloadEnabled = postload
+                    config.useInGameKeyboard = settings.useInGameKeyboard ?? inGameKeyboardDefault
+                    config.joiplayCompat = settings.joiplayCompat ?? false
+                    config.networkEnabled = settings.networkEnabled ?? true
+                    mkxp_applySessionConfig(&config)
+                }
             }
         }
 
