@@ -66,10 +66,21 @@ enum DataDirectory {
         .appendingPathComponent("Fonts", isDirectory: true)
 
     /// The engine mounts the pool at session start, so the folder
-    /// must exist by then. Creation is cheap and idempotent.
+    /// must exist by then. Creation is cheap and idempotent. A
+    /// failure only disables the pool (the engine skips a missing
+    /// mount), but it is logged: the visible symptom - font
+    /// installers that ask again on every launch - appears far
+    /// from the cause, e.g. a user-created FILE named "Fonts" in
+    /// the Empo folder.
     static func ensureFontsRoot() {
-        try? FileManager.default.createDirectory(
-            at: fontsRootURL, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(
+                at: fontsRootURL, withIntermediateDirectories: true)
+        } catch {
+            NSLog(
+                "[DataDirectory] Could not create the shared Fonts folder: %@",
+                "\(error)")
+        }
     }
 
     /// Transient sibling of `Game/` inside a container holding
