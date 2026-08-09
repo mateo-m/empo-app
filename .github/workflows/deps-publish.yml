@@ -10,16 +10,16 @@
 #
 # Shape: the two SDK trees build on PARALLEL runners (halving
 # wall-clock), then a stitch job verifies, packages, publishes, and
-# commits the pin straight to main. Parallelism BETWEEN runners is
-# safe — the "sequential, no parallel races" rule in the rebuild
-# scripts protects shared state within one checkout, and each runner
-# has its own.
+# commits the pin straight to the dispatched branch. Parallelism
+# BETWEEN runners is safe — the "sequential, no parallel races" rule
+# in the rebuild scripts protects shared state within one checkout,
+# and each runner has its own.
 #
 # Secrets:
 #   EMPO_DEPS_READ_TOKEN     read empo-deps (ANGLE headers for mkxp-core)
 #   EMPO_DEPS_PUBLISH_TOKEN  write empo-deps (create the release)
 #   EMPO_RELEASE_TOKEN       fine-grained PAT (Contents: RW here);
-#                            powers the direct pin commit to main
+#                            powers the direct pin commit
 
 name: deps-publish
 
@@ -150,7 +150,13 @@ jobs:
           [ -n "$TAG" ] || TAG="native-$(date -u +%Y-%m-%d)"
           tools/package-native-deps.sh "$TAG" --publish
 
-      - name: Push pin commit to main
+      - name: Push pin commit to the dispatched branch
+        # The pin lands on the branch this run was dispatched from,
+        # because that branch supplies the submodule commit the trees
+        # were built against. Pinning main from a feature branch gave
+        # main a pin whose merged objects match a gitlink main does not
+        # have, which turned main red (seen 2026-08-09).
+        #
         # No PR: commits created with EMPO_RELEASE_TOKEN are
         # GitHub-signed and authored by the token's owner, whose
         # repo-admin role bypasses the ruleset (same mechanism as the
@@ -159,6 +165,7 @@ jobs:
         # being clobbered.
         env:
           GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -e
           TAG="$(sed -n 's/^NATIVE_DEPS_VERSION=//p' ios/Dependencies/native/.version)"
@@ -166,18 +173,18 @@ jobs:
             echo "::error::EMPO_RELEASE_TOKEN is not set; commit ios/Dependencies/native/.version (pin $TAG) manually."
             exit 1
           fi
-          HEAD="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          HEAD="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$BRANCH" --jq .object.sha)"
           base64 < ios/Dependencies/native/.version | tr -d '\n' > /tmp/pin.b64
           gh api graphql \
-            -F repo="$GITHUB_REPOSITORY" -F head="$HEAD" \
+            -F repo="$GITHUB_REPOSITORY" -F head="$HEAD" -F branch="$BRANCH" \
             -F message="chore(deps): pin $TAG native prebuilts" \
             -F path="ios/Dependencies/native/.version" -F contents=@/tmp/pin.b64 \
-            -f query='mutation($repo: String!, $head: GitObjectID!, $message: String!, $path: String!, $contents: Base64String!) {
+            -f query='mutation($repo: String!, $head: GitObjectID!, $branch: String!, $message: String!, $path: String!, $contents: Base64String!) {
               createCommitOnBranch(input: {
-                branch: {repositoryNameWithOwner: $repo, branchName: "main"},
+                branch: {repositoryNameWithOwner: $repo, branchName: $branch},
                 expectedHeadOid: $head,
                 message: {headline: $message},
                 fileChanges: {additions: [{path: $path, contents: $contents}]}
               }) { commit { oid } }
             }' --jq '.data.createCommitOnBranch.commit.oid'
-          echo "pinned $TAG on main"
+          echo "pinned $TAG on $BRANCH"
