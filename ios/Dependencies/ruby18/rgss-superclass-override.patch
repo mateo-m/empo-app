@@ -1,0 +1,29 @@
+diff --git a/eval.c b/eval.c
+index 3ea45d6bc0..f1b4eb4423 100644
+--- a/eval.c
++++ b/eval.c
+@@ -4199,8 +4199,14 @@ rb_eval(self, n)
+ 		if (super) {
+ 		    tmp = rb_class_real(RCLASS(klass)->super);
+ 		    if (tmp != super) {
+-			rb_raise(rb_eTypeError, "superclass mismatch for class %s",
+-				 rb_id2name(cname));
++			/* Ruby 1.8.1 (the RGSS1 interpreter) does not
++			 * raise here: it redefines the class under the
++			 * new superclass and rebinds the constant, so
++			 * the last definition wins. RGSS1-era games
++			 * (e.g. Pokemon Xenoverse) depend on that. */
++			rb_warning("superclass of %s changed, class redefined",
++				   rb_id2name(cname));
++			goto override_class;
+ 		    }
+ 		    super = 0;
+ 		}
+@@ -4209,6 +4215,7 @@ rb_eval(self, n)
+ 		}
+ 	    }
+ 	    else {
++	      override_class:
+ 		if (!super) super = rb_cObject;
+ 		klass = rb_define_class_id(cname, super);
+ 		rb_set_class_path(klass, cbase, rb_id2name(cname));

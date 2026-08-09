@@ -54,6 +54,35 @@ enum DataDirectory {
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent(RescuedSaves.directoryName, isDirectory: true)
 
+    /// The shared font pool. `Documents/Fonts/`. One store for
+    /// every game, like the Windows system font folder: the engine
+    /// mounts it behind each game's own `Fonts/`, and the compat
+    /// layer routes Essentials font-installer writes into it. A
+    /// font dropped here once serves the whole library. It stays
+    /// outside `Data/` because that tree holds per-game state;
+    /// fonts are system state and survive game deletion.
+    static let fontsRootURL: URL = FileManager.default
+        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("Fonts", isDirectory: true)
+
+    /// The engine mounts the pool at session start, so the folder
+    /// must exist by then. Creation is cheap and idempotent. A
+    /// failure only disables the pool (the engine skips a missing
+    /// mount), but it is logged: the visible symptom - font
+    /// installers that ask again on every launch - appears far
+    /// from the cause, e.g. a user-created FILE named "Fonts" in
+    /// the Empo folder.
+    static func ensureFontsRoot() {
+        do {
+            try FileManager.default.createDirectory(
+                at: fontsRootURL, withIntermediateDirectories: true)
+        } catch {
+            NSLog(
+                "[DataDirectory] Could not create the shared Fonts folder: %@",
+                "\(error)")
+        }
+    }
+
     /// Transient sibling of `Game/` inside a container holding
     /// portable saves pulled out during a deletion rescue, until
     /// the drain lands them in the rescue bucket. Dot-prefixed:

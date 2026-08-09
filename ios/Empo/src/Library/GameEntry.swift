@@ -41,11 +41,22 @@ struct GameSnapshot: Sendable {
 /// Off-main code communicates through `GameSnapshot` values.
 @Observable
 final class GameEntry: Identifiable {
-    /// Bare UUID (matches `container?.id`). Stable across renames
-    /// of the on-disk folder. Synthetic entries (in-flight imports
-    /// without a committed folder yet) keep their id but have no
+    /// The container's folder name (matches `container?.id`).
+    /// Synthetic entries (in-flight imports without a committed
+    /// folder yet) carry the planned folder name but have no
     /// `container`.
     let id: String
+
+    /// Per-instance identity for the library's ForEach diffing.
+    /// Two models can carry the same `id` across time: a delete
+    /// removes one instance, and a fast re-import of the same
+    /// title appends a fresh one. Diffing by `id` alone let the
+    /// grid keep the removed instance's card alive, frozen in its
+    /// final `.deleting` state (the model is a class, so the view
+    /// held it after removal). Instance identity turns the
+    /// replacement into a remove + insert, so every rendered card
+    /// is bound to a model that is actually in `games`.
+    let viewIdentity = UUID()
 
     /// `Documents/Games/<title>/` for ready entries.
     /// nil during pre-flight validation when nothing is on disk
@@ -163,9 +174,11 @@ final class GameEntry: Identifiable {
     }
 }
 
-/// Identity for navigation and diffing is the stable `id`; two live
-/// models never share an id (the library holds one model per
-/// container), so id equality is object identity in practice.
+/// Identity for navigation and selection is the stable `id`; two
+/// live models never share an id at the same time (the library
+/// holds one model per container). Across time an id CAN repeat —
+/// a delete followed by a re-import of the same title — so the
+/// library's ForEach loops diff by `viewIdentity`, not by this.
 extension GameEntry: Hashable {
     static func == (lhs: GameEntry, rhs: GameEntry) -> Bool {
         lhs.id == rhs.id
