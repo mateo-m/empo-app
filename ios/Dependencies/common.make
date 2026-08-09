@@ -21,12 +21,15 @@ SDK_TAG := $(SDK)-$(ARCH)
 
 # Every source tree below is shared by both SDKs, and configuring one
 # distcleans it, so only one SDK's objects can live in a tree at a
-# time. A configure step therefore drops every SDK stamp in that tree:
-# the next build for the other SDK reconfigures instead of archiving
-# the objects this one left behind. Without it, building both SDKs in
-# one session produced an iphoneos libruby made of simulator objects,
-# and the merged 3.1 binding failed to link (2026-08-09).
-mark_sdk_configured = rm -f $(dir $@).configured-* && touch $@
+# time. A configure step therefore deletes every `.configured-*` stamp
+# in that tree, across all SDK and arch combinations. The next build
+# for any other combination reconfigures instead of archiving the
+# objects this one left behind. Without it, building both SDKs in one
+# session produced an iphoneos libruby made of simulator objects, and
+# the merged 3.1 binding failed to link (2026-08-09).
+#
+# Keep the `=` assignment: `$@` must expand when the recipe runs.
+MARK_SDK_CONFIGURED = rm -f $(dir $@).configured-* && touch $@
 CMAKE_BUILDDIR := cmakebuild-$(SDK_TAG)
 DOWNLOADS := ${PWD}/downloads/$(HOST)
 SOURCES := ${PWD}/sources
@@ -104,7 +107,7 @@ $(DOWNLOADS)/theora/.configured-$(SDK_TAG): $(DOWNLOADS)/theora/configure
 	cd $(DOWNLOADS)/theora; $(MAKE) distclean 2>/dev/null || true
 	cd $(DOWNLOADS)/theora; \
 	$(CONFIGURE) --with-ogg=$(BUILD_PREFIX) --enable-shared=false --enable-static=true --disable-examples
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(DOWNLOADS)/theora/Makefile: $(DOWNLOADS)/theora/.configured-$(SDK_TAG)
 
@@ -144,7 +147,7 @@ $(DOWNLOADS)/ogg/.configured-$(SDK_TAG): $(DOWNLOADS)/ogg/configure
 	cd $(DOWNLOADS)/ogg; $(MAKE) distclean 2>/dev/null || true
 	cd $(DOWNLOADS)/ogg; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(DOWNLOADS)/ogg/configure: $(DOWNLOADS)/ogg/autogen.sh
 	cd $(DOWNLOADS)/ogg; ./autogen.sh
@@ -181,7 +184,7 @@ $(DOWNLOADS)/pixman/.configured-$(SDK_TAG): $(DOWNLOADS)/pixman/autogen.sh
 	cd $(DOWNLOADS)/pixman; \
 	$(AUTOGEN) --enable-static=yes --enable-shared=no \
 	--disable-arm-a64-neon
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(DOWNLOADS)/pixman/Makefile: $(DOWNLOADS)/pixman/.configured-$(SDK_TAG)
 
@@ -216,7 +219,7 @@ $(DOWNLOADS)/libpng/.configured-$(SDK_TAG): $(DOWNLOADS)/libpng/configure
 	cd $(DOWNLOADS)/libpng; \
 	$(CONFIGURE) \
 	--enable-shared=no --enable-static=yes
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(DOWNLOADS)/libpng/Makefile: $(DOWNLOADS)/libpng/.configured-$(SDK_TAG)
 
@@ -298,7 +301,7 @@ $(SOURCES)/sdl2_ttf/.configured-$(SDK_TAG): $(SOURCES)/sdl2_ttf/configure
 	cd $(SOURCES)/sdl2_ttf; $(MAKE) distclean 2>/dev/null || true
 	cd $(SOURCES)/sdl2_ttf; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(SOURCES)/sdl2_ttf/configure: $(SOURCES)/sdl2_ttf/autogen.sh
 	cd $(SOURCES)/sdl2_ttf; ./autogen.sh
@@ -385,7 +388,7 @@ $(OPENSSL_CONFIGURED): $(OPENSSL_DIR)/Configure
 		--libdir=lib \
 		--openssldir="$(BUILD_PREFIX)/ssl" \
 		$(OPENSSL_CONFIGURE_FLAGS)
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(OPENSSL_DIR)/Configure: $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz
 	cd $(DOWNLOADS) && tar xzf openssl-$(OPENSSL_VERSION).tar.gz
@@ -406,7 +409,7 @@ $(SOURCES)/freetype/.configured-$(SDK_TAG): $(SOURCES)/freetype/builds/unix/conf
 	cd $(SOURCES)/freetype; $(MAKE) distclean 2>/dev/null || true
 	cd $(SOURCES)/freetype; \
 	$(CONFIGURE) --enable-static=true --enable-shared=false
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 	cd $(SOURCES)/freetype; ./autogen.sh
@@ -501,7 +504,7 @@ $(SOURCES)/ruby/.configured-$(SDK_TAG): $(SOURCES)/ruby/configure $(LIBDIR)/libc
 	ac_cv_func_close_range=no \
 	cross_compiling=yes; \
 	sed -i '' 's|^ASFLAGS.*=.*|ASFLAGS = $$(ARCH_FLAG) $$(INCFLAGS) $(TARGETFLAGS)|' Makefile
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 	cd $(SOURCES)/ruby; \
@@ -1048,7 +1051,7 @@ $(SOURCES)/ruby19/.configured-$(SDK_TAG): $(SOURCES)/ruby19/configure
 	    echo 'extern int  mkxp_ruby19_setjmp(void *env) __attribute__((returns_twice));' >> $$CONFIG_H; \
 	    echo 'extern void mkxp_ruby19_longjmp(void *env, int val) __attribute__((noreturn));' >> $$CONFIG_H; \
 	fi
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(SOURCES)/ruby19/configure: $(SOURCES)/ruby19/configure.in
 	cd $(SOURCES)/ruby19; \
@@ -1178,7 +1181,7 @@ $(SOURCES)/ruby18/.configured-$(SDK_TAG): $(SOURCES)/ruby18/configure
 	echo '' >> $(SOURCES)/ruby18/config.h
 	echo 'extern int  mkxp_ruby18_setjmp(void *env) __attribute__((returns_twice));' >> $(SOURCES)/ruby18/config.h
 	echo 'extern void mkxp_ruby18_longjmp(void *env, int val) __attribute__((noreturn));' >> $(SOURCES)/ruby18/config.h
-	$(mark_sdk_configured)
+	$(MARK_SDK_CONFIGURED)
 
 $(SOURCES)/ruby18/configure: $(SOURCES)/ruby18/configure.in
 	cd $(SOURCES)/ruby18; \
