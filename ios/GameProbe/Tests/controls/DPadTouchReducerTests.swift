@@ -33,11 +33,43 @@ final class MovementStickTuningTests: XCTestCase {
         XCTAssertEqual(offset.dy, 0, accuracy: 0.001)
     }
 
+    /// The style -> thresholds mapping the host samples with. The
+    /// d-pad takes the reducer defaults; only the stick differs.
+    func testTuningPerStyle() {
+        let dpad = MovementStyle.dpad.tuning(size: 140)
+        XCTAssertEqual(dpad.deadZoneRatio, DPadTouchReducer.defaultDeadZoneRatio)
+        XCTAssertEqual(dpad.cardinalOnlyRadiusRatio, DPadTouchReducer.defaultCardinalOnlyRadiusRatio)
+        XCTAssertEqual(dpad.slideOffMargin, DPadTouchReducer.defaultSlideOffMargin)
+        // The d-pad margin is fixed; the stick's scales with the size.
+        XCTAssertEqual(MovementStyle.dpad.tuning(size: 400).slideOffMargin, dpad.slideOffMargin)
+
+        let stick = MovementStyle.stick.tuning(size: 140)
+        XCTAssertEqual(stick.deadZoneRatio, MovementStickTuning.deadZoneRatio)
+        XCTAssertEqual(stick.cardinalOnlyRadiusRatio, 0.3)
+        XCTAssertEqual(stick.slideOffMargin, 42)
+    }
+
+    /// Sampling with a tuning value must land exactly where the same
+    /// thresholds do one by one — the host uses the short form.
+    func testTuningSampleMatchesExplicitThresholds() {
+        let size = 140.0
+        var byTuning = DPadTouchReducer()
+        var byThreshold = DPadTouchReducer()
+        let offset = 0.4 * size / 2 * (0.5.squareRoot())
+
+        let edges = byTuning.touchChanged(
+            touch: 1, x: size / 2 + offset, y: size / 2 + offset, size: size,
+            tuning: MovementStyle.stick.tuning(size: size))
+        XCTAssertEqual(edges, stickEdges(&byThreshold, x: size / 2 + offset, y: size / 2 + offset, size: size))
+        XCTAssertEqual(byTuning.active, byThreshold.active)
+        XCTAssertEqual(byTuning.active, [.down, .right])
+    }
+
     private func stickEdges(
         _ reducer: inout DPadTouchReducer, x: Double, y: Double, size: Double
     ) -> [DPadTouchReducer.Edge] {
         reducer.touchChanged(
-            x: x, y: y, size: size,
+            touch: 1, x: x, y: y, size: size,
             deadZoneRatio: MovementStickTuning.deadZoneRatio,
             cardinalOnlyRadiusRatio: MovementStickTuning.cardinalOnlyRadiusRatio,
             slideOffMargin: MovementStickTuning.slideOffMargin(size: size)
@@ -56,7 +88,7 @@ final class MovementStickTuningTests: XCTestCase {
         XCTAssertEqual(stick.active, [.down, .right])
 
         var dpad = DPadTouchReducer()
-        _ = dpad.touchChanged(x: size / 2 + offset, y: size / 2 + offset, size: size)
+        _ = dpad.touchChanged(touch: 1, x: size / 2 + offset, y: size / 2 + offset, size: size)
         XCTAssertEqual(dpad.active.directions.count, 1)
     }
 
@@ -108,7 +140,7 @@ final class DPadTouchReducerTests: XCTestCase {
     /// immediately. No movement, no lift, no second sample required.
     func testFirstSamplePressesImmediately() {
         var reducer = DPadTouchReducer()
-        let edges = reducer.touchChanged(x: 75, y: 20, size: size)
+        let edges = reducer.touchChanged(touch: 1, x: 75, y: 20, size: size)
         XCTAssertEqual(edges, [press(.up)])
         XCTAssertEqual(reducer.active, .up)
     }
@@ -120,8 +152,8 @@ final class DPadTouchReducerTests: XCTestCase {
     /// to be observable on its own to turn the player in place.)
     func testTapEmitsPressAndReleaseAsSeparateBatches() {
         var reducer = DPadTouchReducer()
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: 130, size: size), [press(.down)])
-        XCTAssertEqual(reducer.touchEnded(), [release(.down)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: 130, size: size), [press(.down)])
+        XCTAssertEqual(reducer.touchEnded(touch: 1), [release(.down)])
         XCTAssertEqual(reducer.active, [])
     }
 
@@ -140,7 +172,7 @@ final class DPadTouchReducerTests: XCTestCase {
         ]
         for c in cases {
             var reducer = DPadTouchReducer()
-            _ = reducer.touchChanged(x: c.x, y: c.y, size: size)
+            _ = reducer.touchChanged(touch: 1, x: c.x, y: c.y, size: size)
             XCTAssertEqual(
                 reducer.active, c.expected,
                 "(\(c.x), \(c.y)) should map to \(c.expected)")
@@ -266,9 +298,9 @@ final class DPadTouchReducerTests: XCTestCase {
     /// opposing directions.
     func testNaNSampleReleasesEverything() {
         var reducer = DPadTouchReducer()
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: 20, size: size), [press(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: 20, size: size), [press(.up)])
         XCTAssertEqual(
-            reducer.touchChanged(x: .nan, y: .nan, size: size),
+            reducer.touchChanged(touch: 1, x: .nan, y: .nan, size: size),
             [release(.up)])
         XCTAssertEqual(reducer.active, [])
     }
@@ -283,12 +315,12 @@ final class DPadTouchReducerTests: XCTestCase {
         var reducer = DPadTouchReducer()
         // Distance 20 from the (150, 150) center: pressable under the
         // default 150-point geometry, dead-zoned at size 300.
-        XCTAssertEqual(reducer.touchChanged(x: 150, y: 130, size: 300), [])
-        XCTAssertEqual(reducer.touchChanged(x: 150, y: 30, size: 300), [press(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 150, y: 130, size: 300), [])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 150, y: 30, size: 300), [press(.up)])
         // Distance exactly 180 = radius + margin: still inside.
-        XCTAssertEqual(reducer.touchChanged(x: 150, y: -30, size: 300), [])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 150, y: -30, size: 300), [])
         XCTAssertEqual(reducer.active, .up)
-        XCTAssertEqual(reducer.touchChanged(x: 150, y: -31, size: 300), [release(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 150, y: -31, size: 300), [release(.up)])
     }
 
     /// `size` is read per sample, not cached from the first one: an
@@ -298,9 +330,9 @@ final class DPadTouchReducerTests: XCTestCase {
     /// 80-point pad (center 40).
     func testMidTouchResizeUsesTheNewGeometry() {
         var reducer = DPadTouchReducer()
-        XCTAssertEqual(reducer.touchChanged(x: 100, y: 40, size: 200), [press(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 100, y: 40, size: 200), [press(.up)])
         XCTAssertEqual(
-            reducer.touchChanged(x: 100, y: 40, size: 80),
+            reducer.touchChanged(touch: 1, x: 100, y: 40, size: 80),
             [release(.up), press(.right)])
     }
 
@@ -308,9 +340,9 @@ final class DPadTouchReducerTests: XCTestCase {
 
     func testDeadZoneSwallowsCenterTouches() {
         var reducer = DPadTouchReducer()
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: 75, size: size), [])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: 75, size: size), [])
         // Distance 10, inside the 15-point dead zone.
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: 65, size: size), [])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: 65, size: size), [])
         XCTAssertEqual(reducer.active, [])
     }
 
@@ -319,15 +351,15 @@ final class DPadTouchReducerTests: XCTestCase {
     func testDeadZoneBoundaryEngages() {
         var reducer = DPadTouchReducer()
         // (75, 60): distance exactly 15 = 0.2 * 75.
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: 60, size: size), [press(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: 60, size: size), [press(.up)])
     }
 
     func testRetreatIntoDeadZoneReleasesEverything() {
         var reducer = DPadTouchReducer()
-        _ = reducer.touchChanged(x: 120, y: 30, size: size)
+        _ = reducer.touchChanged(touch: 1, x: 120, y: 30, size: size)
         XCTAssertEqual(reducer.active, [.up, .right])
         XCTAssertEqual(
-            reducer.touchChanged(x: 75, y: 75, size: size),
+            reducer.touchChanged(touch: 1, x: 75, y: 75, size: size),
             [release(.up), release(.right)])
         XCTAssertEqual(reducer.active, [])
     }
@@ -342,12 +374,12 @@ final class DPadTouchReducerTests: XCTestCase {
     func testInnerRingResolvesToNearestCardinal() {
         var reducer = DPadTouchReducer()
         // 26.6 degrees above the +x axis: right of the 45-degree line.
-        XCTAssertEqual(reducer.touchChanged(x: 95, y: 65, size: size), [press(.right)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 95, y: 65, size: size), [press(.right)])
         XCTAssertEqual(reducer.active, .right)
 
         var reducer2 = DPadTouchReducer()
         // 63.4 degrees above the +x axis: up side of the 45-degree line.
-        XCTAssertEqual(reducer2.touchChanged(x: 85, y: 55, size: size), [press(.up)])
+        XCTAssertEqual(reducer2.touchChanged(touch: 1, x: 85, y: 55, size: size), [press(.up)])
     }
 
     /// The ring comparison is strict (`distance < ratio * radius`):
@@ -358,11 +390,11 @@ final class DPadTouchReducerTests: XCTestCase {
     func testInnerRingBoundaryKeepsFullWedges() {
         var reducer = DPadTouchReducer()
         XCTAssertEqual(
-            reducer.touchChanged(x: 195, y: 90, size: 300),
+            reducer.touchChanged(touch: 1, x: 195, y: 90, size: 300),
             [press(.up), press(.right)])
 
         var inner = DPadTouchReducer()
-        XCTAssertEqual(inner.touchChanged(x: 192, y: 94, size: 300), [press(.up)])
+        XCTAssertEqual(inner.touchChanged(touch: 1, x: 192, y: 94, size: 300), [press(.up)])
     }
 
     /// Drifting inward across the ring at a diagonal angle drops
@@ -372,9 +404,9 @@ final class DPadTouchReducerTests: XCTestCase {
     func testDriftIntoRingDropsOnlyTheOffAxisComponent() {
         var reducer = DPadTouchReducer()
         // Distance 49.2, angle 26.6 degrees into the up+right wedge.
-        XCTAssertEqual(reducer.touchChanged(x: 119, y: 53, size: size), [press(.up), press(.right)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 119, y: 53, size: size), [press(.up), press(.right)])
         // Same angle, distance 22.4: inside the ring -> right only.
-        XCTAssertEqual(reducer.touchChanged(x: 95, y: 65, size: size), [release(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 95, y: 65, size: size), [release(.up)])
         XCTAssertEqual(reducer.active, .right)
     }
 
@@ -384,12 +416,12 @@ final class DPadTouchReducerTests: XCTestCase {
     func testCustomCardinalOnlyRadiusRatioIsRespected() {
         var reducer = DPadTouchReducer()
         XCTAssertEqual(
-            reducer.touchChanged(x: 95, y: 65, size: size, cardinalOnlyRadiusRatio: 0),
+            reducer.touchChanged(touch: 1, x: 95, y: 65, size: size, cardinalOnlyRadiusRatio: 0),
             [press(.up), press(.right)])
 
         var wide = DPadTouchReducer()
         XCTAssertEqual(
-            wide.touchChanged(x: 119, y: 53, size: size, cardinalOnlyRadiusRatio: 1),
+            wide.touchChanged(touch: 1, x: 119, y: 53, size: size, cardinalOnlyRadiusRatio: 1),
             [press(.right)])
     }
 
@@ -405,7 +437,7 @@ final class DPadTouchReducerTests: XCTestCase {
             let angle = Double(step) / 720.0 * 2 * .pi
             let x = 75 + 25 * cos(angle)
             let y = 75 + 25 * sin(angle)
-            let edges = reducer.touchChanged(x: x, y: y, size: size)
+            let edges = reducer.touchChanged(touch: 1, x: x, y: y, size: size)
 
             var sawPress = false
             for edge in edges {
@@ -427,46 +459,46 @@ final class DPadTouchReducerTests: XCTestCase {
 
     func testSlideOffReleasesOnceAndReengages() {
         var reducer = DPadTouchReducer()
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: 20, size: size), [press(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: 20, size: size), [press(.up)])
 
         // (75, -30): distance exactly 105 = radius + margin. The
         // comparison is strict (`>`), so the boundary itself is still
         // inside — the direction must stay held.
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: -30, size: size), [])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: -30, size: size), [])
         XCTAssertEqual(reducer.active, .up)
 
         // One point past the boundary: release everything.
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: -31, size: size), [release(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: -31, size: size), [release(.up)])
         XCTAssertEqual(reducer.active, [])
 
         // Parked beyond the edge: the release batch must NOT repeat.
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: -40, size: size), [])
-        XCTAssertEqual(reducer.touchChanged(x: 80, y: -35, size: size), [])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: -40, size: size), [])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 80, y: -35, size: size), [])
 
         // Sliding back inside re-presses without a new touch.
-        XCTAssertEqual(reducer.touchChanged(x: 75, y: 20, size: size), [press(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: 20, size: size), [press(.up)])
     }
 
     /// Ending a touch while slid off (already released) is silent,
     /// and the reducer is immediately reusable for the next touch.
     func testTouchEndedAfterSlideOffIsSilentAndReducerIsReusable() {
         var reducer = DPadTouchReducer()
-        _ = reducer.touchChanged(x: 75, y: 20, size: size)
-        _ = reducer.touchChanged(x: 75, y: -31, size: size)
-        XCTAssertEqual(reducer.touchEnded(), [])
-        XCTAssertEqual(reducer.touchChanged(x: 15, y: 75, size: size), [press(.left)])
+        _ = reducer.touchChanged(touch: 1, x: 75, y: 20, size: size)
+        _ = reducer.touchChanged(touch: 1, x: 75, y: -31, size: size)
+        XCTAssertEqual(reducer.touchEnded(touch: 1), [])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 15, y: 75, size: size), [press(.left)])
     }
 
     // MARK: Edge diffing
 
     func testSteadyHoldEmitsNothing() {
         var reducer = DPadTouchReducer()
-        XCTAssertEqual(reducer.touchChanged(x: 120, y: 120, size: size), [press(.down), press(.right)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 120, y: 120, size: size), [press(.down), press(.right)])
         for _ in 0..<5 {
-            XCTAssertEqual(reducer.touchChanged(x: 120, y: 120, size: size), [])
+            XCTAssertEqual(reducer.touchChanged(touch: 1, x: 120, y: 120, size: size), [])
         }
         // Wobble within the same wedge is also silent.
-        XCTAssertEqual(reducer.touchChanged(x: 118, y: 121, size: size), [])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 118, y: 121, size: size), [])
     }
 
     /// Rolling NE -> E -> SE must keep RIGHT held through the whole
@@ -474,9 +506,9 @@ final class DPadTouchReducerTests: XCTestCase {
     /// shared direction anywhere in the sequence is the stutter bug.
     func testDiagonalRollNeverReleasesTheSharedDirection() {
         var reducer = DPadTouchReducer()
-        XCTAssertEqual(reducer.touchChanged(x: 120, y: 30, size: size), [press(.up), press(.right)])
-        XCTAssertEqual(reducer.touchChanged(x: 135, y: 75, size: size), [release(.up)])
-        XCTAssertEqual(reducer.touchChanged(x: 120, y: 120, size: size), [press(.down)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 120, y: 30, size: size), [press(.up), press(.right)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 135, y: 75, size: size), [release(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 120, y: 120, size: size), [press(.down)])
         XCTAssertEqual(reducer.active, [.down, .right])
     }
 
@@ -485,27 +517,150 @@ final class DPadTouchReducerTests: XCTestCase {
     /// leave the engine holding left+right simultaneously.
     func testOppositeJumpOrdersReleaseBeforePress() {
         var reducer = DPadTouchReducer()
-        _ = reducer.touchChanged(x: 15, y: 75, size: size)
+        _ = reducer.touchChanged(touch: 1, x: 15, y: 75, size: size)
         XCTAssertEqual(
-            reducer.touchChanged(x: 135, y: 75, size: size),
+            reducer.touchChanged(touch: 1, x: 135, y: 75, size: size),
             [release(.left), press(.right)])
     }
 
     func testDiagonalToOppositeDiagonalOrdersAllReleasesFirst() {
         var reducer = DPadTouchReducer()
-        _ = reducer.touchChanged(x: 120, y: 30, size: size)
+        _ = reducer.touchChanged(touch: 1, x: 120, y: 30, size: size)
         XCTAssertEqual(
-            reducer.touchChanged(x: 30, y: 120, size: size),
+            reducer.touchChanged(touch: 1, x: 30, y: 120, size: size),
             [release(.up), release(.right), press(.down), press(.left)])
     }
 
     func testTouchEndedReleasesEveryHeldDirection() {
         var reducer = DPadTouchReducer()
-        _ = reducer.touchChanged(x: 120, y: 30, size: size)
-        XCTAssertEqual(reducer.touchEnded(), [release(.up), release(.right)])
+        _ = reducer.touchChanged(touch: 1, x: 120, y: 30, size: size)
+        XCTAssertEqual(reducer.touchEnded(touch: 1), [release(.up), release(.right)])
         XCTAssertEqual(reducer.active, [])
-        // A second end with nothing held is silent, not a re-release.
-        XCTAssertEqual(reducer.touchEnded(), [])
+        // A second end for the same finger is silent, not a
+        // re-release: touchesEnded and touchesCancelled can both
+        // arrive for one touch.
+        XCTAssertEqual(reducer.touchEnded(touch: 1), [])
+        XCTAssertEqual(reducer.releaseAll(), [])
+    }
+
+    // MARK: Multi-touch
+
+    /// THE behaviour this reducer gained for two thumbs: hold the
+    /// RIGHT arm, land a second finger on the DOWN arm, and the pad
+    /// holds both — like a physical D-pad. Lifting the first finger
+    /// keeps DOWN held, so the player never has to lift the second
+    /// finger and press it again.
+    func testSecondFingerAddsItsDirectionAndSurvivesTheFirstLift() {
+        var reducer = DPadTouchReducer()
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 135, y: 75, size: size), [press(.right)])
+        XCTAssertEqual(reducer.touchChanged(touch: 2, x: 75, y: 135, size: size), [press(.down)])
+        XCTAssertEqual(reducer.active, [.down, .right])
+
+        // The first finger lifts: only RIGHT goes, and DOWN is NOT
+        // released and re-pressed on the way (that stutter would
+        // cost the player a step).
+        XCTAssertEqual(reducer.touchEnded(touch: 1), [release(.right)])
+        XCTAssertEqual(reducer.active, .down)
+
+        XCTAssertEqual(reducer.touchEnded(touch: 2), [release(.down)])
+        XCTAssertEqual(reducer.active, [])
+    }
+
+    /// Opposite arms under two fingers hold both keys, exactly as a
+    /// keyboard does with both arrow keys down. The reducer must not
+    /// invent a winner — the game decides.
+    func testOppositeArmsUnderTwoFingersHoldBoth() {
+        var reducer = DPadTouchReducer()
+        _ = reducer.touchChanged(touch: 1, x: 15, y: 75, size: size)
+        XCTAssertEqual(reducer.touchChanged(touch: 2, x: 135, y: 75, size: size), [press(.right)])
+        XCTAssertEqual(reducer.active, [.left, .right])
+    }
+
+    /// Two fingers on the SAME arm: the direction presses once, and
+    /// it stays held until the second finger lifts too.
+    func testTwoFingersOnOneArmPressOnceAndHoldToTheLast() {
+        var reducer = DPadTouchReducer()
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: 20, size: size), [press(.up)])
+        XCTAssertEqual(reducer.touchChanged(touch: 2, x: 80, y: 25, size: size), [])
+        XCTAssertEqual(reducer.touchEnded(touch: 1), [])
+        XCTAssertEqual(reducer.active, .up)
+        XCTAssertEqual(reducer.touchEnded(touch: 2), [release(.up)])
+    }
+
+    /// Each finger keeps its own geometry state: one sliding off the
+    /// pad releases only what it held.
+    func testOneFingerSlidingOffLeavesTheOtherHeld() {
+        var reducer = DPadTouchReducer()
+        _ = reducer.touchChanged(touch: 1, x: 75, y: 20, size: size)
+        _ = reducer.touchChanged(touch: 2, x: 135, y: 75, size: size)
+        XCTAssertEqual(reducer.active, [.up, .right])
+        // Finger 1 past radius + margin: UP goes, RIGHT stays.
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: -31, size: size), [release(.up)])
+        XCTAssertEqual(reducer.active, .right)
+        // It slides back in and re-presses without a new touch.
+        XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: 20, size: size), [press(.up)])
+    }
+
+    /// Moving one finger must not disturb the other: a roll from the
+    /// UP arm to the LEFT arm swaps only that finger's direction.
+    func testMovingOneFingerLeavesTheOtherDirectionHeld() {
+        var reducer = DPadTouchReducer()
+        _ = reducer.touchChanged(touch: 1, x: 135, y: 75, size: size)
+        _ = reducer.touchChanged(touch: 2, x: 75, y: 20, size: size)
+        XCTAssertEqual(
+            reducer.touchChanged(touch: 2, x: 75, y: 130, size: size),
+            [release(.up), press(.down)])
+        XCTAssertEqual(reducer.active, [.down, .right])
+    }
+
+    /// Host-driven cancellation (edit mode, or the control torn out
+    /// mid-press) drops every finger at once and leaves nothing held
+    /// at the engine.
+    func testReleaseAllDropsEveryFinger() {
+        var reducer = DPadTouchReducer()
+        _ = reducer.touchChanged(touch: 1, x: 135, y: 75, size: size)
+        _ = reducer.touchChanged(touch: 2, x: 75, y: 135, size: size)
+        XCTAssertEqual(reducer.releaseAll(), [release(.down), release(.right)])
+        XCTAssertEqual(reducer.active, [])
+        XCTAssertNil(reducer.leadTouchPoint)
+        // The dropped fingers' own late ends must not fire again.
+        XCTAssertEqual(reducer.touchEnded(touch: 1), [])
+        XCTAssertEqual(reducer.touchEnded(touch: 2), [])
+    }
+
+    /// The joystick nub follows the OLDEST live finger, so a second
+    /// thumb never yanks it away. It hands over when that finger
+    /// lifts, and clears when the pad is idle.
+    func testLeadTouchPointFollowsTheOldestFinger() {
+        var reducer = DPadTouchReducer()
+        XCTAssertNil(reducer.leadTouchPoint)
+
+        _ = reducer.touchChanged(touch: 1, x: 135, y: 75, size: size)
+        _ = reducer.touchChanged(touch: 2, x: 75, y: 135, size: size)
+        XCTAssertEqual(reducer.leadTouchPoint?.x, 135)
+        XCTAssertEqual(reducer.leadTouchPoint?.y, 75)
+
+        // The lead finger moves: the point tracks it.
+        _ = reducer.touchChanged(touch: 1, x: 130, y: 80, size: size)
+        XCTAssertEqual(reducer.leadTouchPoint?.x, 130)
+        XCTAssertEqual(reducer.leadTouchPoint?.y, 80)
+
+        // It lifts: the remaining finger leads.
+        _ = reducer.touchEnded(touch: 1)
+        XCTAssertEqual(reducer.leadTouchPoint?.x, 75)
+        XCTAssertEqual(reducer.leadTouchPoint?.y, 135)
+
+        _ = reducer.touchEnded(touch: 2)
+        XCTAssertNil(reducer.leadTouchPoint)
+    }
+
+    /// An unknown finger is silent — a late end after cancellation
+    /// must not release what a live finger holds.
+    func testUnknownTouchEndingChangesNothing() {
+        var reducer = DPadTouchReducer()
+        _ = reducer.touchChanged(touch: 1, x: 135, y: 75, size: size)
+        XCTAssertEqual(reducer.touchEnded(touch: 99), [])
+        XCTAssertEqual(reducer.active, .right)
     }
 
     // MARK: Parameter plumbing
@@ -517,18 +672,18 @@ final class DPadTouchReducerTests: XCTestCase {
         // Distance 45 from center: outside the default dead zone (15),
         // inside a 0.7 * 75 = 52.5 one.
         XCTAssertEqual(
-            reducer.touchChanged(x: 75, y: 30, size: size, deadZoneRatio: 0.7), [])
+            reducer.touchChanged(touch: 1, x: 75, y: 30, size: size, deadZoneRatio: 0.7), [])
         XCTAssertEqual(
-            reducer.touchChanged(x: 75, y: 30, size: size), [press(.up)])
+            reducer.touchChanged(touch: 1, x: 75, y: 30, size: size), [press(.up)])
     }
 
     func testCustomSlideOffMarginIsRespected() {
         var reducer = DPadTouchReducer()
-        _ = reducer.touchChanged(x: 75, y: 20, size: size)
+        _ = reducer.touchChanged(touch: 1, x: 75, y: 20, size: size)
         // Distance 76: within the default margin (105), outside a
         // zero-margin boundary (75).
         XCTAssertEqual(
-            reducer.touchChanged(x: 75, y: -1, size: size, slideOffMargin: 0),
+            reducer.touchChanged(touch: 1, x: 75, y: -1, size: size, slideOffMargin: 0),
             [release(.up)])
     }
 
@@ -548,7 +703,7 @@ final class DPadTouchReducerTests: XCTestCase {
             let angle = Double(step) / 720.0 * 2 * .pi
             let x = 75 + 60 * cos(angle)
             let y = 75 + 60 * sin(angle)
-            let edges = reducer.touchChanged(x: x, y: y, size: size)
+            let edges = reducer.touchChanged(touch: 1, x: x, y: y, size: size)
 
             var sawPress = false
             for edge in edges {
@@ -578,7 +733,7 @@ final class DPadTouchReducerTests: XCTestCase {
                 held.isSuperset(of: [.left, .right]), "step \(step): left+right held together")
         }
 
-        for edge in reducer.touchEnded() {
+        for edge in reducer.touchEnded(touch: 1) {
             XCTAssertFalse(edge.pressed)
             XCTAssertNotNil(held.remove(edge.direction))
         }

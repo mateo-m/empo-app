@@ -1,12 +1,20 @@
 import Foundation
 
-/// Pure touch-to-directions reducer for the on-screen D-pad: maps a
-/// touch location in the D-pad's own square coordinate space to the
+/// Pure touch-to-directions reducer for the on-screen D-pad: maps the
+/// touches on the D-pad, in its own square coordinate space, to the
 /// set of held directions and emits press / release edges for the
 /// bits that changed. Framework-independent so the exact state
 /// machine the app ships is what the Linux test suite exercises.
 ///
-/// Geometry:
+/// Multi-touch: the pad holds the UNION of what each live touch
+/// resolves to, like a physical D-pad under two thumbs. Hold the
+/// right arm, put a second finger on the down arm, and the pad reads
+/// down+right; lift the right finger and DOWN stays held, with no
+/// need to lift the second finger and press again. Each touch keeps
+/// its own dead zone, ring and slide-off state, so one finger sliding
+/// off releases only what that finger held.
+///
+/// Geometry (per touch):
 ///   - 8-wedge angular map with pi/8 thresholds (cardinals plus
 ///     two-direction diagonals), ported verbatim from the UIKit-era
 ///     implementation.
@@ -29,8 +37,17 @@ import Foundation
 ///     beyond the edge.
 ///
 /// Edge-order contract: every returned array lists ALL releases
-/// before ANY press. Callers must inject edges in array order so a
-/// wedge transition never momentarily holds opposing directions.
+/// before ANY press. Callers must inject edges in array order so one
+/// finger moving between wedges never momentarily holds opposing
+/// directions. Two fingers on opposite arms DO hold both, exactly as
+/// a keyboard does with two arrow keys down; the game decides what
+/// that means.
+///
+/// Stuck-key contract: a direction is held only while a live touch
+/// resolves to it, so the host MUST report every lift. Where UIKit
+/// can drop a touch end (the control was disabled, detached, or the
+/// touch vanished from the event), the host closes that touch
+/// itself — see `ControlTouchSet` and the capture layer.
 public struct DPadTouchReducer: Sendable {
     public enum Direction: CaseIterable, Hashable, Sendable {
         case up, down, left, right
@@ -124,19 +141,40 @@ public struct DPadTouchReducer: Sendable {
     public static let defaultCardinalOnlyRadiusRatio = 0.5
     public static let defaultSlideOffMargin = 30.0
 
-    /// Directions currently held — the reducer's ONLY state. The
-    /// host renders arm highlights from this and MUST have injected
-    /// exactly these keys if it applied every returned edge in order.
+    /// Directions currently held: the union over every live touch.
+    /// The host renders arm highlights from this and MUST have
+    /// injected exactly these keys if it applied every returned edge
+    /// in order.
     public private(set) var active: DirectionSet = []
+
+    /// One entry per live touch, in the order the fingers landed.
+    private struct Touch {
+        let id: Int
+        var x: Double
+        var y: Double
+        var directions: DirectionSet
+    }
+
+    private var touches: [Touch] = []
 
     public init() {}
 
-    /// Applies a touch-down or touch-move sample. `x`/`y` are in the
-    /// D-pad's own coordinate space (center at `size/2`, +y down);
-    /// `size` is the D-pad's bounding-box side length, passed per
-    /// sample so a mid-session resize never leaves the reducer with
-    /// stale geometry.
+    /// Sample point of the OLDEST live touch, or nil while no finger
+    /// is down. The joystick nub follows it: with two fingers on the
+    /// pad the nub stays with the one that started the movement
+    /// instead of jumping between them.
+    public var leadTouchPoint: (x: Double, y: Double)? {
+        touches.first.map { ($0.x, $0.y) }
+    }
+
+    /// Applies a touch-down or touch-move sample for the touch `id`.
+    /// `x`/`y` are in the D-pad's own coordinate space (center at
+    /// `size/2`, +y down); `size` is the D-pad's bounding-box side
+    /// length, passed per sample so a mid-session resize never leaves
+    /// the reducer with stale geometry. An unknown `id` joins the
+    /// pad; a known one replaces its previous sample.
     public mutating func touchChanged(
+        touch id: Int,
         x: Double,
         y: Double,
         size: Double,
@@ -144,22 +182,85 @@ public struct DPadTouchReducer: Sendable {
         cardinalOnlyRadiusRatio: Double = defaultCardinalOnlyRadiusRatio,
         slideOffMargin: Double = defaultSlideOffMargin
     ) -> [Edge] {
+        let directions = Self.directions(
+            x: x, y: y, size: size,
+            deadZoneRatio: deadZoneRatio,
+            cardinalOnlyRadiusRatio: cardinalOnlyRadiusRatio,
+            slideOffMargin: slideOffMargin
+        )
+        let touch = Touch(id: id, x: x, y: y, directions: directions)
+        if let index = touches.firstIndex(where: { $0.id == id }) {
+            touches[index] = touch
+        } else {
+            touches.append(touch)
+        }
+        return diff(to: union)
+    }
+
+    /// Same sample, with the thresholds a movement style supplies.
+    public mutating func touchChanged(
+        touch id: Int,
+        x: Double,
+        y: Double,
+        size: Double,
+        tuning: MovementTuning
+    ) -> [Edge] {
+        touchChanged(
+            touch: id, x: x, y: y, size: size,
+            deadZoneRatio: tuning.deadZoneRatio,
+            cardinalOnlyRadiusRatio: tuning.cardinalOnlyRadiusRatio,
+            slideOffMargin: tuning.slideOffMargin
+        )
+    }
+
+    /// One touch lifted or cancelled: releases the directions only
+    /// that finger held. Directions another finger still holds stay
+    /// pressed, with no release / press stutter. An unknown `id` is
+    /// silent.
+    public mutating func touchEnded(touch id: Int) -> [Edge] {
+        guard let index = touches.firstIndex(where: { $0.id == id }) else { return [] }
+        touches.remove(at: index)
+        return diff(to: union)
+    }
+
+    /// Host-driven cancellation (the control was disabled or torn
+    /// down mid-touch): drops every touch and releases every held
+    /// direction.
+    public mutating func releaseAll() -> [Edge] {
+        touches.removeAll()
+        return diff(to: [])
+    }
+
+    /// What the pad holds: the union over the live touches.
+    private var union: DirectionSet {
+        touches.reduce(into: DirectionSet()) { $0.formUnion($1.directions) }
+    }
+
+    /// The directions ONE touch at `(x, y)` resolves to. Pure
+    /// geometry: no state, so each finger is mapped independently.
+    static func directions(
+        x: Double,
+        y: Double,
+        size: Double,
+        deadZoneRatio: Double,
+        cardinalOnlyRadiusRatio: Double,
+        slideOffMargin: Double
+    ) -> DirectionSet {
         let radius = size / 2
         let dx = x - radius
         let dy = y - radius
         let distance = (dx * dx + dy * dy).squareRoot()
 
-        // Slide-off: release everything but stay engaged. If the
-        // finger comes back inside the D-pad, the next sample picks
-        // up again.
+        // Slide-off: this finger releases but stays engaged. If it
+        // comes back inside the D-pad, its next sample picks up again.
         if distance > radius + slideOffMargin {
-            return diff(to: [])
+            return []
         }
 
         // Inner dead zone: don't emit events for tiny wobbles near
         // the center.
         if distance < radius * deadZoneRatio {
-            return diff(to: [])
+            return []
         }
 
         // atan2(dy, dx) with +y down means "up" is -y, an angle near
@@ -170,16 +271,11 @@ public struct DPadTouchReducer: Sendable {
         // wedges to be trustworthy — resolve to the nearest main
         // direction.
         if distance < radius * cardinalOnlyRadiusRatio {
-            return diff(to: DirectionSet(cardinalAngle: angle))
+            return DirectionSet(cardinalAngle: angle)
         }
 
         // Full 8-wedge angular mapping.
-        return diff(to: DirectionSet(angle: angle))
-    }
-
-    /// Touch lifted or cancelled: releases every held direction.
-    public mutating func touchEnded() -> [Edge] {
-        diff(to: [])
+        return DirectionSet(angle: angle)
     }
 
     /// Diff `newSet` against `active` and emit edges for ONLY the

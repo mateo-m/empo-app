@@ -1,5 +1,41 @@
 import Foundation
 
+/// The reducer thresholds one movement style samples with. The host
+/// asks its style for these instead of branching per style around the
+/// `touchChanged` call, so the style -> numbers mapping lives here
+/// with the numbers themselves.
+public struct MovementTuning: Equatable, Sendable {
+    public let deadZoneRatio: Double
+    public let cardinalOnlyRadiusRatio: Double
+    public let slideOffMargin: Double
+
+    public init(deadZoneRatio: Double, cardinalOnlyRadiusRatio: Double, slideOffMargin: Double) {
+        self.deadZoneRatio = deadZoneRatio
+        self.cardinalOnlyRadiusRatio = cardinalOnlyRadiusRatio
+        self.slideOffMargin = slideOffMargin
+    }
+}
+
+extension MovementStyle {
+    /// Thresholds for a control of this style, `size` points across.
+    public func tuning(size: Double) -> MovementTuning {
+        switch self {
+        case .dpad:
+            return MovementTuning(
+                deadZoneRatio: DPadTouchReducer.defaultDeadZoneRatio,
+                cardinalOnlyRadiusRatio: DPadTouchReducer.defaultCardinalOnlyRadiusRatio,
+                slideOffMargin: DPadTouchReducer.defaultSlideOffMargin
+            )
+        case .stick:
+            return MovementTuning(
+                deadZoneRatio: MovementStickTuning.deadZoneRatio,
+                cardinalOnlyRadiusRatio: MovementStickTuning.cardinalOnlyRadiusRatio,
+                slideOffMargin: MovementStickTuning.slideOffMargin(size: size)
+            )
+        }
+    }
+}
+
 /// Reducer tuning for the joystick style. The stick reuses
 /// `DPadTouchReducer` per sample; only these constants differ from
 /// the d-pad defaults.
