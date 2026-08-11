@@ -197,6 +197,22 @@ public struct DPadTouchReducer: Sendable {
         return diff(to: union)
     }
 
+    /// Same sample, with the thresholds a movement style supplies.
+    public mutating func touchChanged(
+        touch id: Int,
+        x: Double,
+        y: Double,
+        size: Double,
+        tuning: MovementTuning
+    ) -> [Edge] {
+        touchChanged(
+            touch: id, x: x, y: y, size: size,
+            deadZoneRatio: tuning.deadZoneRatio,
+            cardinalOnlyRadiusRatio: tuning.cardinalOnlyRadiusRatio,
+            slideOffMargin: tuning.slideOffMargin
+        )
+    }
+
     /// One touch lifted or cancelled: releases the directions only
     /// that finger held. Directions another finger still holds stay
     /// pressed, with no release / press stutter. An unknown `id` is

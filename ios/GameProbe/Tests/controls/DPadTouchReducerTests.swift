@@ -33,6 +33,38 @@ final class MovementStickTuningTests: XCTestCase {
         XCTAssertEqual(offset.dy, 0, accuracy: 0.001)
     }
 
+    /// The style -> thresholds mapping the host samples with. The
+    /// d-pad takes the reducer defaults; only the stick differs.
+    func testTuningPerStyle() {
+        let dpad = MovementStyle.dpad.tuning(size: 140)
+        XCTAssertEqual(dpad.deadZoneRatio, DPadTouchReducer.defaultDeadZoneRatio)
+        XCTAssertEqual(dpad.cardinalOnlyRadiusRatio, DPadTouchReducer.defaultCardinalOnlyRadiusRatio)
+        XCTAssertEqual(dpad.slideOffMargin, DPadTouchReducer.defaultSlideOffMargin)
+        // The d-pad margin is fixed; the stick's scales with the size.
+        XCTAssertEqual(MovementStyle.dpad.tuning(size: 400).slideOffMargin, dpad.slideOffMargin)
+
+        let stick = MovementStyle.stick.tuning(size: 140)
+        XCTAssertEqual(stick.deadZoneRatio, MovementStickTuning.deadZoneRatio)
+        XCTAssertEqual(stick.cardinalOnlyRadiusRatio, 0.3)
+        XCTAssertEqual(stick.slideOffMargin, 42)
+    }
+
+    /// Sampling with a tuning value must land exactly where the same
+    /// thresholds do one by one — the host uses the short form.
+    func testTuningSampleMatchesExplicitThresholds() {
+        let size = 140.0
+        var byTuning = DPadTouchReducer()
+        var byThreshold = DPadTouchReducer()
+        let offset = 0.4 * size / 2 * (0.5.squareRoot())
+
+        let edges = byTuning.touchChanged(
+            touch: 1, x: size / 2 + offset, y: size / 2 + offset, size: size,
+            tuning: MovementStyle.stick.tuning(size: size))
+        XCTAssertEqual(edges, stickEdges(&byThreshold, x: size / 2 + offset, y: size / 2 + offset, size: size))
+        XCTAssertEqual(byTuning.active, byThreshold.active)
+        XCTAssertEqual(byTuning.active, [.down, .right])
+    }
+
     private func stickEdges(
         _ reducer: inout DPadTouchReducer, x: Double, y: Double, size: Double
     ) -> [DPadTouchReducer.Edge] {

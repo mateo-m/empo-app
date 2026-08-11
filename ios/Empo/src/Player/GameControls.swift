@@ -7,15 +7,10 @@ import SwiftUI
 // Touch-dispatch semantics:
 //   - `EngineSessionCoordinator.shared.holdKey/releaseKey(scancode:by:)`
 //     on press-down and release.
-//   - Touches are captured by a UIKit `ControlTouchCapture` overlay
-//     (raw touchesBegan/Moved/Ended), NOT by SwiftUI gestures. A
-//     `DragGesture(minimumDistance: 0)` is subject to the gesture
-//     graph's tap-vs-drag arbitration, which defers touch-down
-//     delivery until the finger moves or lifts — so a quick tap
-//     injected keydown+keyup in the same engine event batch and
-//     `Input.update` never observed the press at all (see the
-//     `injectKeyTap` comment in PlayerView). UIKit touch handling
-//     has no arbitration: down fires the instant the finger lands.
+//   - Touches come from the UIKit `ControlTouchCapture` overlay
+//     (ControlTouchCapture.swift), NOT from SwiftUI gestures, which
+//     defer touch-down until the gesture graph can tell a tap from a
+//     drag. That file documents why.
 //   - Action button: slide-off does NOT release the key.
 //   - Every control is multi-touch: the capture layer forwards each
 //     finger separately, so a control stays held until its last
@@ -34,203 +29,6 @@ import SwiftUI
 //   - Explicit release-all on disappear / edit-mode transition so
 //     keys never get stuck at the engine when SwiftUI reclaims the
 //     view or the user enters edit mode mid-press.
-
-// MARK: - Touch capture
-
-/// UIKit-backed touch layer the on-screen controls read input from.
-///
-/// The controls previously used `DragGesture(minimumDistance: 0)`,
-/// which sits in SwiftUI's gesture graph alongside the overlay's
-/// edit-mode tap/drag recognizers. The graph resolves competing
-/// recognizers by deferring touch delivery until it can tell a tap
-/// from a drag — the finger moving past the tap tolerance or lifting.
-/// For game input that deferral is fatal: a tap became keydown+keyup
-/// in the same engine event batch (invisible to RGSS `Input.update`),
-/// and a motionless hold didn't engage until the finger drifted.
-///
-/// Raw `touchesBegan/Moved/Ended` overrides have no arbitration:
-/// `onBegan` fires the moment the finger lands. UIKit also keeps
-/// routing a touch sequence to the view that received its begin even
-/// after the finger leaves its bounds, which is exactly the
-/// slide-off contract the D-pad documents.
-private struct ControlTouchCapture: UIViewRepresentable {
-    /// The layer stays installed permanently and is gated by this
-    /// flag instead of being inserted/removed with an `if` branch.
-    /// Edit mode toggles inside `withAnimation`, and a conditionally
-    /// removed overlay would leave with an animated opacity
-    /// transition — touchable for the whole fade, injecting game
-    /// input AFTER the edit-mode release-all, and able to strand a
-    /// mid-transition touch's keys when SwiftUI dismantles the view
-    /// without delivering touchesEnded. `isUserInteractionEnabled`
-    /// is not animatable, so this cutoff is instant.
-    var enabled: Bool
-    /// Called per touch, with the identifier that names that finger
-    /// for the rest of its sequence.
-    var onBegan: (Int, CGPoint) -> Void
-    var onMoved: (Int, CGPoint) -> Void
-    var onEnded: (Int) -> Void
-
-    func makeUIView(context: Context) -> ControlTouchCaptureView {
-        let view = ControlTouchCaptureView()
-        apply(to: view)
-        return view
-    }
-
-    func updateUIView(_ view: ControlTouchCaptureView, context: Context) {
-        // Reassign on every update so the callbacks never capture a
-        // stale copy of the owning view's state.
-        apply(to: view)
-    }
-
-    private func apply(to view: ControlTouchCaptureView) {
-        view.onBegan = onBegan
-        view.onMoved = onMoved
-        view.onEnded = onEnded
-        view.setEnabled(enabled)
-    }
-}
-
-private final class ControlTouchCaptureView: UIView {
-    var onBegan: ((Int, CGPoint) -> Void)?
-    var onMoved: ((Int, CGPoint) -> Void)?
-    var onEnded: ((Int) -> Void)?
-
-    /// Live-touch tracking (GameProbe, tested on Linux). Every finger
-    /// on this control is forwarded under its own identifier, and the
-    /// set decides what a lift means: the control ends only when the
-    /// last finger goes. Two fingers on ONE control therefore behave
-    /// like two fingers on a physical control — put a second finger
-    /// on the D-pad's down arm while walking right and both count.
-    /// Multi-touch ACROSS controls (hold a direction + press A) works
-    /// as before: each control owns its own capture view and UIKit
-    /// routes every touch to the view under it independently.
-    private var touchSet = ControlTouchSet<Int>()
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        backgroundColor = .clear
-        isMultipleTouchEnabled = true
-        // The SwiftUI content underneath carries the accessibility
-        // label and traits; this layer is invisible plumbing.
-        isAccessibilityElement = false
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) is not supported")
-    }
-
-    /// Turning the layer off must also abandon any in-flight touch:
-    /// UIKit does not promise a touchesCancelled to a view that
-    /// stops receiving events mid-sequence, and a silently dropped
-    /// sequence would leave the engine holding keys.
-    func setEnabled(_ enabled: Bool) {
-        guard isUserInteractionEnabled != enabled else { return }
-        isUserInteractionEnabled = enabled
-        if !enabled {
-            cancelActiveTouches()
-        }
-    }
-
-    /// If the view is torn out of the hierarchy while a touch is
-    /// live (SwiftUI reclaiming the control mid-press), end the
-    /// sequence so held keys release even when UIKit never delivers
-    /// the touch's end to the detached view.
-    override func willMove(toWindow newWindow: UIWindow?) {
-        super.willMove(toWindow: newWindow)
-        if newWindow == nil {
-            cancelActiveTouches()
-        }
-    }
-
-    /// Close every live touch as a real lift would, oldest first, so
-    /// the consumer needs no separate cancellation path.
-    private func cancelActiveTouches() {
-        for id in touchSet.reset() {
-            onEnded?(id)
-        }
-    }
-
-    /// Names a finger for the length of its sequence. UIKit keeps one
-    /// `UITouch` instance per finger while it is down, so its object
-    /// identity is a stable key — and, unlike the object itself, an
-    /// `Int` is safe to hold after the touch is recycled.
-    private static func identifier(of touch: UITouch) -> Int {
-        Int(bitPattern: ObjectIdentifier(touch))
-    }
-
-    /// Match the `.contentShape(Circle())` the controls declare: only
-    /// the inscribed circle is hit-testable, so the frame's corners
-    /// stay transparent to whatever sits below. Slide-off handling is
-    /// unaffected — once a touch begins inside, UIKit delivers the
-    /// whole sequence here regardless of where the finger goes.
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        ControlHitShape.circleContains(
-            width: bounds.width, height: bounds.height, x: point.x, y: point.y)
-    }
-
-    /// Closes every tracked finger the event no longer lists as live.
-    ///
-    /// A control that holds keys must never outlive the finger that
-    /// pressed them, and one lost `touchesEnded` used to be
-    /// self-healing: the whole control released on the NEXT lift.
-    /// Per-finger state ends that, so a dropped end would strand a
-    /// direction held for the rest of the session. The event carries
-    /// every touch in the window with its current phase, so a tracked
-    /// finger that is absent from it, or already ended in it, is gone
-    /// — close it exactly as a real lift would.
-    private func dropVanishedTouches(in event: UIEvent?) {
-        guard let event else { return }
-        let stillDown = Set(
-            (event.allTouches ?? [])
-                .filter { $0.phase != .ended && $0.phase != .cancelled }
-                .map(Self.identifier(of:))
-        )
-        for id in touchSet.live where !stillDown.contains(id) {
-            _ = touchSet.end(id)
-            onEnded?(id)
-        }
-    }
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        dropVanishedTouches(in: event)
-        for touch in touches {
-            let id = Self.identifier(of: touch)
-            // The set answers "is this finger mine?" for the moves
-            // and ends that follow. The idle -> engaged transition it
-            // reports belongs to the consumer, not to this layer:
-            // every finger is forwarded.
-            _ = touchSet.begin(id)
-            onBegan?(id, touch.location(in: self))
-        }
-    }
-
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        dropVanishedTouches(in: event)
-        for touch in touches {
-            let id = Self.identifier(of: touch)
-            guard touchSet.isTracking(id) else { continue }
-            onMoved?(id, touch.location(in: self))
-        }
-    }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        endTracked(touches)
-    }
-
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        endTracked(touches)
-    }
-
-    private func endTracked(_ touches: Set<UITouch>) {
-        for touch in touches {
-            let id = Self.identifier(of: touch)
-            // A duplicate end (touchesEnded then touchesCancelled for
-            // one touch) reports `notTracked` and is dropped here.
-            guard touchSet.end(id) != .notTracked else { continue }
-            onEnded?(id)
-        }
-    }
-}
 
 // MARK: - Action button
 
@@ -325,10 +123,6 @@ struct CircularControlButton<Face: View>: View {
     @ViewBuilder let face: (Bool) -> Face
 
     @State private var isPressed = false
-    /// The fingers on this button. The key goes down on the first and
-    /// comes up on the last, so a second finger landing on a held
-    /// button, and then the first one lifting, keeps the key held.
-    @State private var touchSet = ControlTouchSet<Int>()
 
     var body: some View {
         // Face drawn on top of a Liquid Glass circle. `.interactive()`
@@ -387,11 +181,17 @@ struct CircularControlButton<Face: View>: View {
         .overlay {
             ControlTouchCapture(
                 enabled: !editing,
-                onBegan: { id, _ in press(id) },
+                onBegan: { _, _ in press() },
                 // Slide-off keeps the input held by design: no
                 // location tracking while the finger moves.
                 onMoved: { _, _ in },
-                onEnded: { id in release(id) }
+                // A second finger on a held button changes nothing;
+                // the key comes up when the LAST one lifts.
+                onEnded: { _, idle in
+                    if idle {
+                        releaseIfHeld()
+                    }
+                }
             )
         }
         // If the user enters edit mode while this button is pressed, or
@@ -399,29 +199,19 @@ struct CircularControlButton<Face: View>: View {
         // the input explicitly.
         .onChange(of: editing) { _, newValue in
             if newValue {
-                releaseAll()
+                releaseIfHeld()
             }
         }
         .onDisappear {
-            releaseAll()
+            releaseIfHeld()
         }
     }
 
-    private func press(_ id: Int) {
-        guard touchSet.begin(id) else { return }
+    private func press() {
+        guard !isPressed else { return }
         isPressed = true
         Haptics.controllerTap()
         onPress()
-    }
-
-    private func release(_ id: Int) {
-        guard touchSet.end(id) == .idle else { return }
-        releaseIfHeld()
-    }
-
-    private func releaseAll() {
-        _ = touchSet.reset()
-        releaseIfHeld()
     }
 
     private func releaseIfHeld() {
@@ -492,7 +282,9 @@ private struct MovementTouchHost<Visual: View>: View {
                     enabled: !editing,
                     onBegan: { sample($0, at: $1) },
                     onMoved: { sample($0, at: $1) },
-                    onEnded: { apply(reducer.touchEnded(touch: $0)) }
+                    // Every finger holds its own directions, so the
+                    // pad closes them one by one, not on the last.
+                    onEnded: { id, _ in apply(reducer.touchEnded(touch: id)) }
                 )
             }
             .onChange(of: editing) { _, newValue in
@@ -512,18 +304,10 @@ private struct MovementTouchHost<Visual: View>: View {
     }
 
     private func sample(_ id: Int, at point: CGPoint) {
-        switch style {
-        case .dpad:
-            apply(reducer.touchChanged(touch: id, x: point.x, y: point.y, size: size))
-        case .stick:
-            apply(
-                reducer.touchChanged(
-                    touch: id, x: point.x, y: point.y, size: size,
-                    deadZoneRatio: MovementStickTuning.deadZoneRatio,
-                    cardinalOnlyRadiusRatio: MovementStickTuning.cardinalOnlyRadiusRatio,
-                    slideOffMargin: MovementStickTuning.slideOffMargin(size: size)
-                ))
-        }
+        apply(
+            reducer.touchChanged(
+                touch: id, x: point.x, y: point.y, size: size,
+                tuning: style.tuning(size: size)))
     }
 
     /// Inject the reducer's edges in array order — the reducer lists
