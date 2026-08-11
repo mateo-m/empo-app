@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.6.0 - 2026-08-11
+
+### Bug Fixes
+
+- Decode CP1252 INI titles and migrate mojibake folders ([`705c421`](https://github.com/mateo-m/empo-app/commit/705c421d3c36432356c8962660ea9814fd003952))
+- Pick up the recovery for stranded portable saves (#115) ([`d60545c`](https://github.com/mateo-m/empo-app/commit/d60545cacc977a03a4790bdeef66adcf6d550afe))
+- Pick up unlimited tileset sizes (#116) ([`30e552e`](https://github.com/mateo-m/empo-app/commit/30e552e6204bd2c8c85be648ba2ea45f6f385221))
+- Stop the legacy method stubs from faking respond_to? (#118) ([`fcd77be`](https://github.com/mateo-m/empo-app/commit/fcd77be3fba4a399c1ff9b37b1f3a1e2ef95fb4a))
+
+### Chores
+
+- Pin native-2026-08-07 native prebuilts ([`7abe0b0`](https://github.com/mateo-m/empo-app/commit/7abe0b076c63829cad397d6a6beead3924d700df))
+- Return the native pin to native-2026-08-04-r2 (#112) ([`6cfddc7`](https://github.com/mateo-m/empo-app/commit/6cfddc76467c036ab02f71ae36abe55ceba53ed2))
+- Pin engine-2026-08-06 and the native-2026-08-07 prebuilts (#113) ([`562ba12`](https://github.com/mateo-m/empo-app/commit/562ba12eac9f3f9921a1bc596547fc926dcbaa52))
+- Pin the preload fix for Essentials constant probes ([`2757abd`](https://github.com/mateo-m/empo-app/commit/2757abd89d0593d1b6dd44f9620f1ca7b0021608))
+- Pin the engine file handle leak fixes ([`5f27573`](https://github.com/mateo-m/empo-app/commit/5f27573f96dadafebe5be1666fa9482e0a53b97b))
+- Pin the tilemap patch skip for games that wrap tilesets ([`34624c6`](https://github.com/mateo-m/empo-app/commit/34624c684a34d8a7a41995503cefa6bab414f55d))
+- Pin native-2026-08-09 native prebuilts ([`e5f24c1`](https://github.com/mateo-m/empo-app/commit/e5f24c15aefb2014a59b27661665e7e17229ce5b))
+- Pin native-2026-08-09-r2 native prebuilts ([`8d5d20d`](https://github.com/mateo-m/empo-app/commit/8d5d20dc209ddf51206c94dd1f5306f9c566bd26))
+
+### Features
+
+- Add touch action buttons and one action registry (#107) ([`7e0f217`](https://github.com/mateo-m/empo-app/commit/7e0f2170ca555ff527eb8bbc782b449f4542744a))
+- Add a joystick style for the movement control (#108) ([`6aaca4d`](https://github.com/mateo-m/empo-app/commit/6aaca4d75500567cfb0b961d6c731848d4bd940f))
+- Add layout profiles (#109) ([`7da566c`](https://github.com/mateo-m/empo-app/commit/7da566c1ead739a477a4363f636b9bfee48a2079))
+- Add screen placement in profiles (#110) ([`fe02433`](https://github.com/mateo-m/empo-app/commit/fe02433659d7e1b1d1277cf9eb5dff5df11b0062))
+- Bind controllers that reach iOS as a keyboard (#119) ([`6788371`](https://github.com/mateo-m/empo-app/commit/6788371f9e70db785506f110b40cd6bc7fc9bdf5))
+- Handle multi-touch on the on-screen controls (#121) ([`074f2cf`](https://github.com/mateo-m/empo-app/commit/074f2cfd44594018b578c8ce5497e92f3ea29fd0))
+
 ## 0.5.0 - 2026-08-04
 
 ### Bug Fixes
