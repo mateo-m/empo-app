@@ -16,6 +16,9 @@ final class PreLiteralSaveHealTests: XCTestCase {
     }
 
     override func tearDown() {
+        // Failure fixtures drop permissions; restore them so the
+        // temp root always deletes cleanly.
+        try? GameTreeUpdate.normalizeOwnerWritable(at: tempRoot)
         try? fm.removeItem(at: tempRoot)
         super.tearDown()
     }
@@ -57,6 +60,38 @@ final class PreLiteralSaveHealTests: XCTestCase {
         XCTAssertNil(PreLiteralSaveHeal.familyBase(of: "Game.pre-literal.bak.rxdata"))
         // Stripping must never yield an empty base.
         XCTAssertNil(PreLiteralSaveHeal.familyBase(of: ".pre-literal.bak"))
+    }
+
+    func testPromotionOrderingTable() {
+        let base = Date(timeIntervalSince1970: 1_750_000_000)
+        func candidate(_ name: String, _ offset: TimeInterval, _ layers: Int)
+            -> PreLiteralSaveHeal.Candidate
+        {
+            .init(name: name, modificationDate: base.addingTimeInterval(offset), layerCount: layers)
+        }
+
+        // Newest mtime beats fewer layers and smaller names.
+        XCTAssertEqual(
+            PreLiteralSaveHeal.promotion(among: [
+                candidate("a", 0, 1),
+                candidate("z", 60, 9),
+            ])?.name,
+            "z")
+        // Equal mtime: fewest layers wins even against a smaller name.
+        XCTAssertEqual(
+            PreLiteralSaveHeal.promotion(among: [
+                candidate("a", 0, 3),
+                candidate("z", 0, 2),
+            ])?.name,
+            "z")
+        // Equal mtime and layers: lexicographically first wins.
+        XCTAssertEqual(
+            PreLiteralSaveHeal.promotion(among: [
+                candidate("b", 0, 2),
+                candidate("a", 0, 2),
+            ])?.name,
+            "a")
+        XCTAssertNil(PreLiteralSaveHeal.promotion(among: []))
     }
 
     // MARK: - Promotion policy
@@ -117,26 +152,86 @@ final class PreLiteralSaveHealTests: XCTestCase {
 
         let outcome = PreLiteralSaveHeal.heal(directory: tempRoot, fm: fm)
 
+        // Families promote in sorted-base order, deterministically.
         XCTAssertEqual(
-            Set(outcome.promoted),
-            ["Game.rxdata", "Game1.rxdata", "Game.rxdata.bak", "config.ini.bak"])
+            outcome.promoted,
+            ["Game.rxdata", "Game.rxdata.bak", "Game1.rxdata", "config.ini.bak"])
+        XCTAssertTrue(outcome.failures.isEmpty)
         XCTAssertEqual(
             names(),
             ["Game.rxdata", "Game1.rxdata", "Game.rxdata.bak", "config.ini.bak", "Settings.dat"])
+        XCTAssertEqual(
+            try String(contentsOf: tempRoot.appendingPathComponent("config.ini.bak"), encoding: .utf8),
+            "not marshal at all")
     }
 
-    func testHealTreeReachesNestedDataDirs() {
+    func testFailedPromotionIsReportedAndRetriable() throws {
+        let locked = tempRoot.appendingPathComponent("locked", isDirectory: true)
+        try fm.createDirectory(at: locked, withIntermediateDirectories: true)
+        write("Game.rxdata.pre-literal.bak", "save", mtime: Date(), in: locked)
+        // A read-only directory rejects the rename.
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: locked.path)
+
+        let outcome = PreLiteralSaveHeal.heal(directory: locked, fm: fm)
+
+        XCTAssertEqual(outcome.failures, ["Game.rxdata.pre-literal.bak"])
+        XCTAssertTrue(outcome.promoted.isEmpty)
+        XCTAssertFalse(outcome.isEmpty)
+
+        // Unlock and retry: the same call must now succeed - the
+        // launch-time heal relies on failed promotions staying
+        // retriable.
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path)
+        let retry = PreLiteralSaveHeal.heal(directory: locked, fm: fm)
+        XCTAssertEqual(retry.promoted, ["Game.rxdata"])
+        XCTAssertEqual(
+            try String(contentsOf: locked.appendingPathComponent("Game.rxdata"), encoding: .utf8),
+            "save")
+    }
+
+    func testHealTreeReportsRootRelativePaths() {
         let org = tempRoot.appendingPathComponent("PKMN Essentials", isDirectory: true)
         let app = org.appendingPathComponent("Nova", isDirectory: true)
+        let anil = tempRoot.appendingPathComponent("Anil", isDirectory: true)
         try? fm.createDirectory(at: app, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: anil, withIntermediateDirectories: true)
         write("Game.rxdata.pre-literal.bak", "nested save", mtime: Date(), in: app)
+        write("Game2.rxdata.pre-literal.bak", "anil save", mtime: Date(), in: anil)
+        write("Root.rxdata.pre-literal.bak", "root-level", mtime: Date())
 
         let outcome = PreLiteralSaveHeal.healTree(at: tempRoot, fm: fm)
 
-        XCTAssertEqual(outcome.promoted, ["Game.rxdata"])
+        // Root entries first, then subdirectories in sorted order,
+        // every path relative to the walked root.
+        XCTAssertEqual(
+            outcome.promoted,
+            [
+                "Root.rxdata",
+                "Anil/Game2.rxdata",
+                "PKMN Essentials/Nova/Game.rxdata",
+            ])
+        XCTAssertTrue(outcome.failures.isEmpty)
         XCTAssertEqual(
             try String(contentsOf: app.appendingPathComponent("Game.rxdata"), encoding: .utf8),
             "nested save")
+    }
+
+    func testGroupedByTopDirectory() {
+        let groups = PreLiteralSaveHeal.groupedByTopDirectory([
+            "Root.rxdata",
+            "Nova/Game.rxdata",
+            "Anil/Game2.rxdata",
+            "Nova/Game1.rxdata",
+            "PKMN Essentials/Nova/Game.rxdata",
+        ])
+
+        XCTAssertEqual(groups.map(\.directory), ["Anil", "Nova", "PKMN Essentials"])
+        XCTAssertEqual(groups[0].files, ["Game2.rxdata"])
+        XCTAssertEqual(groups[1].files, ["Game.rxdata", "Game1.rxdata"])
+        // Deeper nesting keeps the remainder as the file entry.
+        XCTAssertEqual(groups[2].files, ["Nova/Game.rxdata"])
+        // The root-level path has no directory and is dropped.
+        XCTAssertTrue(PreLiteralSaveHeal.groupedByTopDirectory(["Root.rxdata"]).isEmpty)
     }
 
     func testHealIsIdempotent() {

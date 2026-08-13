@@ -81,7 +81,6 @@ struct ImageSourceSheet: View {
             }
             .padding(Spacing.xl)
             .intrinsicSheetContent(measuredHeight: $measuredHeight)
-            .background(Color(.systemGroupedBackground))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -91,6 +90,9 @@ struct ImageSourceSheet: View {
             }
         }
         .intrinsicSheetDetent(measuredHeight: measuredHeight)
+        // One surface for the whole sheet, stretch region included;
+        // a content-only background shows a second tone on pull-up.
+        .presentationBackground(Color(.systemGroupedBackground))
         .tint(.brand)
     }
 

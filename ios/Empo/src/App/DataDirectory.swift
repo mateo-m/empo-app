@@ -195,46 +195,66 @@ enum DataDirectory {
         guard !didHealAtLaunch else { return }
         didHealAtLaunch = true
         let fm = FileManager.default
-        for name in fm.subdirectoryNames(at: sharedRootURL).sorted() {
-            let directory = sharedRootURL.appendingPathComponent(name, isDirectory: true)
-            healChains(in: directory, noticeName: name, fm: fm)
+        let outcome = drainLock.withLock { _ -> PreLiteralSaveHeal.Outcome in
+            // One walk over the whole tree, one lock window. The
+            // returned paths are Data/-relative, so their first
+            // component IS the recovered game's directory name.
+            let outcome = PreLiteralSaveHeal.healTree(at: sharedRootURL, fm: fm)
+            for group in PreLiteralSaveHeal.groupedByTopDirectory(outcome.promoted) {
+                recordSaveRecovery(name: group.directory, files: group.files)
+            }
+            return outcome
         }
+        logHeal(outcome, root: sharedRootURL)
     }
 
     /// Heal one data directory tree and queue the one-time
-    /// library notice when anything was promoted.
+    /// library sheet when anything was promoted. The record write
+    /// happens under the same lock as the heal: recording is
+    /// read-modify-write on the defaults blob, and two detached
+    /// deletes may heal concurrently.
     private static func healChains(in directory: URL, noticeName: String, fm: FileManager) {
-        let outcome = drainLock.withLock { _ in
-            PreLiteralSaveHeal.healTree(at: directory, fm: fm)
+        let outcome = drainLock.withLock { _ -> PreLiteralSaveHeal.Outcome in
+            let outcome = PreLiteralSaveHeal.healTree(at: directory, fm: fm)
+            if !outcome.promoted.isEmpty {
+                recordSaveRecovery(name: noticeName, files: outcome.promoted)
+            }
+            return outcome
         }
+        logHeal(outcome, root: directory)
+    }
+
+    private static func logHeal(_ outcome: PreLiteralSaveHeal.Outcome, root: URL) {
         guard !outcome.isEmpty else { return }
         NSLog(
             "[DataDirectory] Recovered chained saves in %@ (%ld promoted, %ld failed): %@",
-            directory.path,
+            root.path,
             outcome.promoted.count,
             outcome.failures.count,
             outcome.promoted.joined(separator: ", "))
-        if !outcome.promoted.isEmpty {
-            recordSaveRecovery(name: noticeName)
-        }
     }
 
-    /// Names for the one-time recovery alert. UserDefaults is
-    /// thread-safe; heals can run from detached delete tasks.
-    private static func recordSaveRecovery(name: String) {
+    /// Queue a recovery for the one-time sheet. The merge policy
+    /// and encoding live in `SaveRecoveryLedger` (GameProbe) where
+    /// the Linux CI tests pin them; this wrapper only adds the
+    /// UserDefaults blob. Callers hold `drainLock`: the ledger
+    /// update is read-modify-write and heals can run from detached
+    /// delete tasks.
+    private static func recordSaveRecovery(name: String, files: [String]) {
         let defaults = UserDefaults.standard
-        var names = defaults.stringArray(forKey: DefaultsKey.pendingSaveRecoveryNames) ?? []
-        guard !names.contains(name) else { return }
-        names.append(name)
-        defaults.set(names, forKey: DefaultsKey.pendingSaveRecoveryNames)
+        let ledger = SaveRecoveryLedger.merging(
+            pendingSaveRecoveries(), name: name, files: files, date: .now)
+        guard let blob = SaveRecoveryLedger.encode(ledger) else { return }
+        defaults.set(blob, forKey: DefaultsKey.pendingSaveRecoveries)
     }
 
-    static func pendingSaveRecoveryNames() -> [String] {
-        UserDefaults.standard.stringArray(forKey: DefaultsKey.pendingSaveRecoveryNames) ?? []
+    static func pendingSaveRecoveries() -> [SaveRecoveryLedger.Record] {
+        SaveRecoveryLedger.decode(
+            UserDefaults.standard.data(forKey: DefaultsKey.pendingSaveRecoveries))
     }
 
-    static func clearPendingSaveRecoveryNotice() {
-        UserDefaults.standard.removeObject(forKey: DefaultsKey.pendingSaveRecoveryNames)
+    static func clearPendingSaveRecoveries() {
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.pendingSaveRecoveries)
     }
 
     // MARK: - Engine handoff spelling

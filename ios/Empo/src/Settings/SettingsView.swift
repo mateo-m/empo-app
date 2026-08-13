@@ -900,7 +900,6 @@ private struct BuildInfoSheet: View {
                 .padding(.vertical, Spacing._2xl)
             }
             .intrinsicSheetContent(measuredHeight: $measuredHeight)
-            .background(Color(.systemGroupedBackground))
             .navigationTitle("Build Info")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -911,6 +910,9 @@ private struct BuildInfoSheet: View {
             }
         }
         .intrinsicSheetDetent(measuredHeight: measuredHeight, chromeAllowance: AppSize.libraryHeader)
+        // One surface for the whole sheet, stretch region included;
+        // a content-only background shows a second tone on pull-up.
+        .presentationBackground(Color(.systemGroupedBackground))
     }
 }
 

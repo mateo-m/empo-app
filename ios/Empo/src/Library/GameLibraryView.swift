@@ -78,11 +78,6 @@ struct GameLibraryView: View {
     /// presents the one-time `DuplicateGamesNotice` alert.
     @State private var duplicateNoticeNames: [String] = []
 
-    /// Data-directory names where the launch heal recovered
-    /// chained save files; presents the one-time
-    /// `SaveRecoveryNotice` alert.
-    @State private var saveRecoveryNames: [String] = []
-
     // Derived filter/sort pipeline. A previous attempt cached this in
     // @State and re-derived via .onChange, but passing library.games
     // through a ViewModifier broke the Observation dependency so stale
@@ -207,7 +202,6 @@ struct GameLibraryView: View {
             }
             .task {
                 duplicateNoticeNames = GameContainerMigration.pendingDuplicateNoticeNames()
-                saveRecoveryNames = DataDirectory.pendingSaveRecoveryNames()
             }
     }
 
@@ -228,7 +222,7 @@ struct GameLibraryView: View {
                 )
             )
             .modifier(DuplicateGamesNotice(names: $duplicateNoticeNames))
-            .modifier(SaveRecoveryNotice(names: $saveRecoveryNames))
+            .modifier(SaveRecoveryPresentation(games: library.games))
             .modifier(
                 LibrarySheetPresentation(
                     showSettings: $showSettings,
@@ -1150,57 +1144,6 @@ private struct DuplicateGamesNotice: ViewModifier {
     func body(content: Content) -> some View {
         content.alert(
             "Duplicate Games Moved",
-            isPresented: isPresented
-        ) {
-            Button("OK", action: acknowledge)
-        } message: {
-            Text(message)
-        }
-    }
-}
-
-/// One-time notice after the launch heal renamed chained save
-/// files back to their canonical names (an engine defect in
-/// v0.5.0-v0.6.0 renamed saves to "*.pre-literal.bak" chains on
-/// devices). Names which games got saves back, and tells the user
-/// the remaining backup copies stay in the Files app - if the
-/// automatic pick surfaced the wrong file, the user can restore a
-/// different backup by hand. Extracted for the same
-/// type-checker-budget reason as `BulkDeleteAlert`.
-private struct SaveRecoveryNotice: ViewModifier {
-    @Binding var names: [String]
-
-    private var isPresented: Binding<Bool> {
-        Binding(
-            get: { !names.isEmpty },
-            set: { presented in
-                if !presented { acknowledge() }
-            }
-        )
-    }
-
-    private var message: String {
-        let list = names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            .map { "\u{2022} \($0)" }
-            .joined(separator: "\n")
-        return "A defect in earlier Empo versions renamed save files on your "
-            + "device, so games showed only \u{201C}New Game\u{201D}. Empo "
-            + "restored the most recent save file for:\n\n\(list)\n\n"
-            + "The other renamed copies are still there as backups. If a "
-            + "restored save is not the one you expect, open Files > Empo > "
-            + "Data, pick the game's folder, and rename a "
-            + "\u{201C}.pre-literal.bak\u{201D} file back to the save file "
-            + "name."
-    }
-
-    private func acknowledge() {
-        DataDirectory.clearPendingSaveRecoveryNotice()
-        names = []
-    }
-
-    func body(content: Content) -> some View {
-        content.alert(
-            "Saves Recovered",
             isPresented: isPresented
         ) {
             Button("OK", action: acknowledge)

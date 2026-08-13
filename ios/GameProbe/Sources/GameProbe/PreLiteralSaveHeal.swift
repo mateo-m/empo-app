@@ -137,15 +137,39 @@ public enum PreLiteralSaveHeal {
     /// under `Data/<org>/<app>` at varying depth, so the walk is
     /// the simplest correct scope. Healing an unaffected
     /// directory is a no-op.
+    ///
+    /// Promoted entries and failures come back as ROOT-RELATIVE
+    /// paths (`"Nova/Game.rxdata"`), so one call over a whole tree
+    /// also tells the caller what healed where - callers must not
+    /// loop over subdirectories to reconstruct that.
     @discardableResult
     public static func healTree(at root: URL, fm: FileManager = .default) -> Outcome {
         var outcome = heal(directory: root, fm: fm)
         for name in fm.subdirectoryNames(at: root).sorted() {
             let child = healTree(
                 at: root.appendingPathComponent(name, isDirectory: true), fm: fm)
-            outcome.promoted.append(contentsOf: child.promoted)
-            outcome.failures.append(contentsOf: child.failures)
+            outcome.promoted.append(contentsOf: child.promoted.map { "\(name)/\($0)" })
+            outcome.failures.append(contentsOf: child.failures.map { "\(name)/\($0)" })
         }
         return outcome
+    }
+
+    /// Group tree-relative promoted paths by their first
+    /// component: `["Nova/Game.rxdata", "Nova/Game1.rxdata"]` ->
+    /// `[("Nova", ["Game.rxdata", "Game1.rxdata"])]`, sorted by
+    /// directory for determinism. Paths without a component
+    /// (promotions at the tree root itself) are dropped: they
+    /// belong to no game and have no row to show.
+    public static func groupedByTopDirectory(
+        _ relativePaths: [String]
+    ) -> [(directory: String, files: [String])] {
+        var groups: [String: [String]] = [:]
+        for path in relativePaths {
+            guard let separator = path.firstIndex(of: "/") else { continue }
+            let directory = String(path[..<separator])
+            let file = String(path[path.index(after: separator)...])
+            groups[directory, default: []].append(file)
+        }
+        return groups.keys.sorted().map { ($0, groups[$0] ?? []) }
     }
 }
