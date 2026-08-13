@@ -863,7 +863,7 @@ private struct BuildInfoSheet: View {
         StandardSheet(
             title: "Build Info",
             chromeAllowance: AppSize.libraryHeader,
-            trailingButton: ("Close", { dismiss() })
+            trailingButton: SheetBarAction("Close") { dismiss() }
         ) {
             SheetCard {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in

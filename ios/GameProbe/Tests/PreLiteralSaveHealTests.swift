@@ -216,8 +216,8 @@ final class PreLiteralSaveHealTests: XCTestCase {
             "nested save")
     }
 
-    func testGroupedByTopDirectory() {
-        let groups = PreLiteralSaveHeal.groupedByTopDirectory([
+    func testGroupedByDirectory() {
+        let groups = PreLiteralSaveHeal.groupedByDirectory([
             "Root.rxdata",
             "Nova/Game.rxdata",
             "Anil/Game2.rxdata",
@@ -225,13 +225,32 @@ final class PreLiteralSaveHealTests: XCTestCase {
             "PKMN Essentials/Nova/Game.rxdata",
         ])
 
-        XCTAssertEqual(groups.map(\.directory), ["Anil", "Nova", "PKMN Essentials"])
+        // The CONTAINING directory is the key: an org-nested game
+        // groups under its full path, never under the org alone.
+        XCTAssertEqual(
+            groups.map(\.directory),
+            ["Anil", "Nova", "PKMN Essentials/Nova"])
         XCTAssertEqual(groups[0].files, ["Game2.rxdata"])
         XCTAssertEqual(groups[1].files, ["Game.rxdata", "Game1.rxdata"])
-        // Deeper nesting keeps the remainder as the file entry.
-        XCTAssertEqual(groups[2].files, ["Nova/Game.rxdata"])
+        XCTAssertEqual(groups[2].files, ["Game.rxdata"])
         // The root-level path has no directory and is dropped.
-        XCTAssertTrue(PreLiteralSaveHeal.groupedByTopDirectory(["Root.rxdata"]).isEmpty)
+        XCTAssertTrue(PreLiteralSaveHeal.groupedByDirectory(["Root.rxdata"]).isEmpty)
+    }
+
+    func testHealTreeSkipsDirectorySymlinks() throws {
+        let real = tempRoot.appendingPathComponent("Nova", isDirectory: true)
+        try fm.createDirectory(at: real, withIntermediateDirectories: true)
+        write("Game.rxdata.pre-literal.bak", "save", mtime: Date(), in: real)
+        // A cycle: Data/Nova/loop -> Data. Following it would
+        // recurse forever.
+        try fm.createSymbolicLink(
+            at: real.appendingPathComponent("loop"),
+            withDestinationURL: tempRoot)
+
+        let outcome = PreLiteralSaveHeal.healTree(at: tempRoot, fm: fm)
+
+        XCTAssertEqual(outcome.promoted, ["Nova/Game.rxdata"])
+        XCTAssertTrue(outcome.failures.isEmpty)
     }
 
     func testHealIsIdempotent() {

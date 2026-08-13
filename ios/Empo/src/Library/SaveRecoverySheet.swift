@@ -171,8 +171,11 @@ private struct SaveRecoveryRow: View {
     }
 
     private func openInFiles() {
-        let path = DataDirectory.sharedRootURL
-            .appendingPathComponent(record.name, isDirectory: true).path
+        // The ledger's Documents-relative directory is the one
+        // true location: data directories nest under org folders,
+        // and fallback heals live inside the game container.
+        let path = DataDirectory.documentsRootURL
+            .appendingPathComponent(record.directory, isDirectory: true).path
         let encoded =
             path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
         if let url = URL(string: "shareddocuments://\(encoded)") {

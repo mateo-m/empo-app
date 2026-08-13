@@ -146,26 +146,40 @@ public enum PreLiteralSaveHeal {
     public static func healTree(at root: URL, fm: FileManager = .default) -> Outcome {
         var outcome = heal(directory: root, fm: fm)
         for name in fm.subdirectoryNames(at: root).sorted() {
-            let child = healTree(
-                at: root.appendingPathComponent(name, isDirectory: true), fm: fm)
+            let childURL = root.appendingPathComponent(name, isDirectory: true)
+            // Never step through a directory symlink: a cyclic
+            // link inside a user-managed tree would recurse
+            // forever, and games CAN create links (Ruby exposes
+            // File.symlink). `attributesOfItem` reads the link
+            // itself, not its target.
+            let type =
+                (try? fm.attributesOfItem(atPath: childURL.path))?[.type]
+                as? FileAttributeType
+            guard type != .typeSymbolicLink else { continue }
+            let child = healTree(at: childURL, fm: fm)
             outcome.promoted.append(contentsOf: child.promoted.map { "\(name)/\($0)" })
             outcome.failures.append(contentsOf: child.failures.map { "\(name)/\($0)" })
         }
         return outcome
     }
 
-    /// Group tree-relative promoted paths by their first
-    /// component: `["Nova/Game.rxdata", "Nova/Game1.rxdata"]` ->
-    /// `[("Nova", ["Game.rxdata", "Game1.rxdata"])]`, sorted by
-    /// directory for determinism. Paths without a component
-    /// (promotions at the tree root itself) are dropped: they
-    /// belong to no game and have no row to show.
-    public static func groupedByTopDirectory(
+    /// Group tree-relative promoted paths by their CONTAINING
+    /// directory: `["Nova/Game.rxdata", "Org/App/Game1.rxdata"]`
+    /// -> `[("Nova", ["Game.rxdata"]), ("Org/App",
+    /// ["Game1.rxdata"])]`, sorted by directory for determinism.
+    /// The full directory path is the group key on purpose: data
+    /// directories nest (`Data/<org>/<app>`), and grouping by the
+    /// first component alone would name a recovery after the org
+    /// and point its Files link at the wrong folder. Paths
+    /// without a directory (promotions at the tree root itself)
+    /// are dropped: they belong to no game and have no row to
+    /// show.
+    public static func groupedByDirectory(
         _ relativePaths: [String]
     ) -> [(directory: String, files: [String])] {
         var groups: [String: [String]] = [:]
         for path in relativePaths {
-            guard let separator = path.firstIndex(of: "/") else { continue }
+            guard let separator = path.lastIndex(of: "/") else { continue }
             let directory = String(path[..<separator])
             let file = String(path[path.index(after: separator)...])
             groups[directory, default: []].append(file)

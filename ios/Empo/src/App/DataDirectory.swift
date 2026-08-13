@@ -40,19 +40,24 @@ import Synchronization
 /// settings, mod state - which is small and precious.
 enum DataDirectory {
 
-    /// Parent of all shared data directories. `Documents/Data/`.
-    static let sharedRootURL: URL = FileManager.default
+    /// Parent of `Data/`, `Games/`, and the rescue buckets; the
+    /// base every root below derives from, and the base the
+    /// recovery ledger's `directory` paths are relative to.
+    static let documentsRootURL: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Data", isDirectory: true)
+
+    /// Parent of all shared data directories. `Documents/Data/`.
+    static let sharedRootURL: URL =
+        documentsRootURL.appendingPathComponent("Data", isDirectory: true)
 
     /// Parent of the portable-save rescue buckets.
     /// `Documents/Rescued Saves/`. Portable saves must NOT go into
     /// `Data/`: that tree replicates Windows paths OUTSIDE a game's
     /// folder, and a re-imported game reads portable saves from
     /// `Game/`, never from there.
-    static let rescuedSavesRootURL: URL = FileManager.default
-        .urls(for: .documentDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent(RescuedSaves.directoryName, isDirectory: true)
+    static let rescuedSavesRootURL: URL =
+        documentsRootURL.appendingPathComponent(
+            RescuedSaves.directoryName, isDirectory: true)
 
     /// The shared font pool. `Documents/Fonts/`. One store for
     /// every game, like the Windows system font folder: the engine
@@ -61,9 +66,8 @@ enum DataDirectory {
     /// font dropped here once serves the whole library. It stays
     /// outside `Data/` because that tree holds per-game state;
     /// fonts are system state and survive game deletion.
-    static let fontsRootURL: URL = FileManager.default
-        .urls(for: .documentDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("Fonts", isDirectory: true)
+    static let fontsRootURL: URL =
+        documentsRootURL.appendingPathComponent("Fonts", isDirectory: true)
 
     /// The engine mounts the pool at session start, so the folder
     /// must exist by then. Creation is cheap and idempotent. A
@@ -197,11 +201,18 @@ enum DataDirectory {
         let fm = FileManager.default
         let outcome = drainLock.withLock { _ -> PreLiteralSaveHeal.Outcome in
             // One walk over the whole tree, one lock window. The
-            // returned paths are Data/-relative, so their first
-            // component IS the recovered game's directory name.
+            // returned paths are Data/-relative; each promotion's
+            // CONTAINING directory identifies its game (the leaf
+            // is the app name even when an org level nests above
+            // it).
             let outcome = PreLiteralSaveHeal.healTree(at: sharedRootURL, fm: fm)
-            for group in PreLiteralSaveHeal.groupedByTopDirectory(outcome.promoted) {
-                recordSaveRecovery(name: group.directory, files: group.files)
+            let base = documentsRelativePath(of: sharedRootURL)
+            for group in PreLiteralSaveHeal.groupedByDirectory(outcome.promoted) {
+                recordSaveRecovery(
+                    name: group.directory.split(separator: "/").last.map(String.init)
+                        ?? group.directory,
+                    directory: "\(base)/\(group.directory)",
+                    files: group.files)
             }
             return outcome
         }
@@ -213,15 +224,32 @@ enum DataDirectory {
     /// happens under the same lock as the heal: recording is
     /// read-modify-write on the defaults blob, and two detached
     /// deletes may heal concurrently.
+    ///
+    /// One record covers the whole tree here, while the launch
+    /// pass records per healed subdirectory. That asymmetry is
+    /// deliberate, not drift: this tree IS one game's directory,
+    /// and nested promotions inside it cannot occur - the engine
+    /// defect only ever renamed entries at a data-directory root,
+    /// and the drain preserves root entries as root entries.
     private static func healChains(in directory: URL, noticeName: String, fm: FileManager) {
         let outcome = drainLock.withLock { _ -> PreLiteralSaveHeal.Outcome in
             let outcome = PreLiteralSaveHeal.healTree(at: directory, fm: fm)
             if !outcome.promoted.isEmpty {
-                recordSaveRecovery(name: noticeName, files: outcome.promoted)
+                recordSaveRecovery(
+                    name: noticeName,
+                    directory: documentsRelativePath(of: directory),
+                    files: outcome.promoted)
             }
             return outcome
         }
         logHeal(outcome, root: directory)
+    }
+
+    private static func documentsRelativePath(of url: URL) -> String {
+        let base = documentsRootURL.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        guard path.hasPrefix(base + "/") else { return url.lastPathComponent }
+        return String(path.dropFirst(base.count + 1))
     }
 
     private static func logHeal(_ outcome: PreLiteralSaveHeal.Outcome, root: URL) {
@@ -240,10 +268,14 @@ enum DataDirectory {
     /// UserDefaults blob. Callers hold `drainLock`: the ledger
     /// update is read-modify-write and heals can run from detached
     /// delete tasks.
-    private static func recordSaveRecovery(name: String, files: [String]) {
+    private static func recordSaveRecovery(name: String, directory: String, files: [String]) {
         let defaults = UserDefaults.standard
         let ledger = SaveRecoveryLedger.merging(
-            pendingSaveRecoveries(), name: name, files: files, date: .now)
+            pendingSaveRecoveries(),
+            name: name,
+            directory: directory,
+            files: files,
+            date: .now)
         guard let blob = SaveRecoveryLedger.encode(ledger) else { return }
         defaults.set(blob, forKey: DefaultsKey.pendingSaveRecoveries)
     }
