@@ -122,7 +122,9 @@ private struct SaveRecoverySheet: View {
 }
 
 /// One recovered game: artwork, name, restored files, and the
-/// Files-app deep link into `Documents/Data/<name>/`. The WHOLE
+/// Files-app deep link into the healed directory
+/// (`record.directory` - a data directory, org-nested or not,
+/// or a container's `UserData/` on the fallback path). The WHOLE
 /// row is the tap target - a small trailing pill alone would sit
 /// under the 44pt minimum - and the trailing affordance is
 /// decoration, not a nested button.

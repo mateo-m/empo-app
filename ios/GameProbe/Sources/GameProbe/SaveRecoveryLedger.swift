@@ -9,9 +9,12 @@ public enum SaveRecoveryLedger {
 
     /// One recovered directory.
     public struct Record: Codable, Equatable, Identifiable, Sendable {
-        /// Display name: the game the recovery belongs to (the
-        /// data-directory leaf for launch heals, the container
-        /// folder name for per-game heals).
+        /// Display name: the game the recovery belongs to.
+        /// The healed data directory's leaf in every common case
+        /// (launch and per-game heals alike); the container
+        /// folder name only on the per-game FALLBACK path, where
+        /// the healed directory is the container's `UserData/`
+        /// and its leaf would name no game.
         public let name: String
         /// The healed directory as a path relative to the app's
         /// Documents root (`"Data/Nova"`,
