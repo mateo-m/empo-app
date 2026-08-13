@@ -1,0 +1,36 @@
+# Squash merges reuse the PR title as the commit subject on main,
+# and the release changelog (git-cliff) only parses conventional
+# subjects. An off-format title either vanishes from the release
+# notes or, when it is the only commit in the release, fails the
+# release cut outright. This gate rejects the title before merge.
+#
+# A separate workflow on purpose: the `edited` trigger must re-run
+# this check when the title changes, and putting that trigger on
+# ci.yml would re-run the expensive build jobs on every title
+# tweak.
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-title:
+    name: Conventional title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the title against the commit convention
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          printf 'title: %s\n' "$TITLE"
+          if printf '%s' "$TITLE" |
+              grep -qE '^(build|chore|ci|docs|feat|fix|perf|refactor|release|style|test|ui)(\([^)]+\))?!?: .+'; then
+              echo "OK: the title parses as a conventional subject"
+          else
+              echo "::error::PR titles become squash-merge subjects. Use 'type(scope): subject' with one of: build, chore, ci, docs, feat, fix, perf, refactor, release, style, test, ui."
+              exit 1
+          fi
