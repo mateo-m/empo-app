@@ -58,9 +58,11 @@ targets, and haptics. Sheets over a running game pass
 
 ## Sizing
 
-- Content-sized sheets use the `IntrinsicSheet` helpers:
-  `.intrinsicSheetContent(measuredHeight:)` on the content,
-  `.intrinsicSheetDetent(measuredHeight:)` on the outer view.
+- `StandardSheet` sizes itself to its content, scrolls content
+  taller than the screen, and keeps content pinned to the top
+  when the user pulls the sheet past its detent. Sheets built
+  outside the vocabulary use the `IntrinsicSheet` helpers
+  directly.
 - Browsing sheets with unbounded content (settings, game info)
   use standard detents instead.
 - Always keep the drag indicator visible (the detent helper does

@@ -47,14 +47,21 @@ struct StandardSheet<Content: View>: View {
     /// in the navigation bar.
     var emblem: String?
     var surface: SheetSurface = .grouped
-    /// Extra height for navigation chrome; see
-    /// `intrinsicSheetDetent`.
-    var chromeAllowance: CGFloat = 64
+    /// Extra height for navigation chrome; nil derives it from
+    /// the bar: the full bar allowance with a bar, just the
+    /// grabber zone without one.
+    var chromeAllowance: CGFloat?
     /// Optional top-trailing toolbar action ("Cancel", "Close").
     var trailingButton: (label: String, action: () -> Void)?
     @ViewBuilder var content: Content
 
     @State private var measuredHeight: CGFloat = 0
+
+    /// An identity-block sheet with no toolbar action has an empty
+    /// bar; hiding it lets the sheet hug its content.
+    private var barHidden: Bool {
+        emblem != nil && trailingButton == nil
+    }
 
     var body: some View {
         switch surface {
@@ -67,16 +74,25 @@ struct StandardSheet<Content: View>: View {
 
     private var core: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: Spacing.xl) {
-                if let emblem {
-                    SheetIdentityBlock(systemName: emblem, title: title)
+            // The scroll container does two jobs: content taller
+            // than the screen scrolls instead of clipping, and a
+            // sheet pulled past its detent keeps the content
+            // pinned to the top (a bare VStack centers in the
+            // stretched space).
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    if let emblem {
+                        SheetIdentityBlock(systemName: emblem, title: title)
+                    }
+                    content
                 }
-                content
+                .padding(Spacing.xl)
+                .intrinsicSheetContent(measuredHeight: $measuredHeight)
             }
-            .padding(Spacing.xl)
-            .intrinsicSheetContent(measuredHeight: $measuredHeight)
+            .scrollBounceBehavior(.basedOnSize)
             .navigationTitle(emblem == nil ? title : "")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(barHidden ? .hidden : .automatic, for: .navigationBar)
             .toolbar {
                 if let trailingButton {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -87,7 +103,7 @@ struct StandardSheet<Content: View>: View {
         }
         .intrinsicSheetDetent(
             measuredHeight: measuredHeight,
-            chromeAllowance: chromeAllowance
+            chromeAllowance: chromeAllowance ?? (barHidden ? 28 : 64)
         )
         .tint(.brand)
     }
