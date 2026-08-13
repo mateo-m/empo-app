@@ -11,6 +11,11 @@ import SwiftUI
 struct SaveRecoveryPresentation: ViewModifier {
     /// Loaded library entries, for artwork matching.
     let games: [GameEntry]
+    /// False while the splash is still up. One-time surfaces wait
+    /// for the splash: a sheet sliding over the splash animation
+    /// is noise, and the user must see the library the sheet
+    /// talks about.
+    var active: Bool = true
 
     @State private var records: [SaveRecoveryLedger.Record] = []
 
@@ -19,7 +24,7 @@ struct SaveRecoveryPresentation: ViewModifier {
     /// is one-time, like the duplicate-games notice.
     private var isPresented: Binding<Bool> {
         Binding(
-            get: { !records.isEmpty },
+            get: { active && !records.isEmpty },
             set: { presented in
                 if !presented {
                     DataDirectory.clearPendingSaveRecoveries()

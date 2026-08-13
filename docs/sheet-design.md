@@ -140,6 +140,10 @@ Top to bottom, each zone optional except the action:
 ## Behavior
 
 - Tint the sheet `.brand`.
+- One-time surfaces (recovery sheet, duplicate-games notice)
+  wait for the splash screen to finish before presenting. A sheet
+  sliding over the splash is noise, and the user must see the
+  library the sheet talks about.
 - A one-time sheet treats ANY dismissal (button or swipe) as
   acknowledgment. Derive `isPresented` from the pending state and
   clear that state in the binding's setter; never rely on the
