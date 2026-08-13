@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 - 2026-08-13
+
+### Bug Fixes
+
+- Recover renamed saves and guard the engine recovery (#123) ([`658e9e9`](https://github.com/mateo-m/empo-app/commit/658e9e9b0828d72ce2245a75c18c4f27fbc25fc8))
+
 ## 0.6.0 - 2026-08-11
 
 ### Bug Fixes

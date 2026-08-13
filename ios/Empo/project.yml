@@ -9,8 +9,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: 0.6.0
-    CURRENT_PROJECT_VERSION: 629
+    MARKETING_VERSION: 0.6.1
+    CURRENT_PROJECT_VERSION: 632
     CLANG_CXX_LANGUAGE_STANDARD: c++14
     # `YES` / `NO` are Xcode's canonical boolean tokens for build
     # settings; xcodebuild's parser treats them specially. yamllint
