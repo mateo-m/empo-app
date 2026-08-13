@@ -1,0 +1,44 @@
+---
+# Squash merges reuse the PR title as the commit subject on main,
+# and the release changelog (git-cliff) only parses conventional
+# subjects. An off-format title either vanishes from the release
+# notes or, when it is the only commit in the release, fails the
+# release cut outright. This gate rejects the title before merge.
+#
+# The allowed types mirror cliff.toml's commit_parsers: every type
+# below lands in a named changelog group (or the "Other"
+# catch-all), so a passing title can never be skipped. Reverts
+# made through the GitHub UI ("Revert \"...\"") must be retitled
+# to "revert: ..." - the UI's default title does not parse.
+#
+# A separate workflow on purpose: the `edited` trigger must re-run
+# this check when the title changes, and putting that trigger on
+# ci.yml would re-run the expensive build jobs on every title
+# tweak. The `synchronize` trigger keeps a run attached to the
+# latest head commit, which required-check enforcement needs.
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+jobs:
+  conventional-title:
+    name: Conventional title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the title against the commit convention
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          TYPES: build|chore|ci|docs|feat|fix|perf|refactor|release|revert|style|test|ui
+        run: |
+          printf 'title: %s\n' "$TITLE"
+          if printf '%s' "$TITLE" | grep -qE "^($TYPES)(\([^)]+\))?!?: .+"; then
+              echo "OK: the title parses as a conventional subject"
+          else
+              types_list=$(printf '%s' "$TYPES" | tr '|' ' ')
+              echo "::error::PR titles become squash-merge subjects. Use 'type(scope): subject' with one of: $types_list."
+              exit 1
+          fi
