@@ -121,15 +121,18 @@ private struct SaveRecoverySheet: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
+        VStack(alignment: .leading, spacing: Spacing.xl) {
             // The symbol is the sheet's identity mark and stays
             // centered, the way the system's welcome and What's
             // New sheets treat theirs. Only the reading content
-            // below is leading-aligned.
+            // below is leading-aligned. The emblem zone gets
+            // extra top air and a full emblem-to-prose gap so it
+            // reads as its own region, not the first list item.
             Image(systemName: "checkmark.arrow.trianglehead.counterclockwise")
-                .font(.system(size: 40, weight: .medium))
+                .font(.system(size: 48, weight: .medium))
                 .foregroundStyle(Color.brand)
                 .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, Spacing.md)
             Text(
                 "A defect in earlier Empo versions renamed save files on this "
                     + "device, so games showed only \u{201C}New Game\u{201D}. "

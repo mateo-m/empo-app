@@ -2,9 +2,10 @@ import SwiftUI
 
 /// Helpers for sheets that size themselves to the intrinsic height of
 /// their content. They fall back to `.medium` while the first
-/// measurement is pending. Three sheets in the app share this pattern
-/// (image sources, player menu, build info), so the layout and detent
-/// boilerplate lives here.
+/// measurement is pending. Several sheets share this pattern (image
+/// sources, player menu, build info, save recovery), so the layout
+/// and detent boilerplate lives here. The full sheet rules - surface,
+/// anatomy, alignment, metrics - are in `docs/sheet-design.md`.
 extension View {
     /// Apply to the sheet's inner content. Asks the view to size
     /// itself vertically and writes the measured height into `binding`.
