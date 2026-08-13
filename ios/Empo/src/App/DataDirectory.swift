@@ -166,6 +166,7 @@ enum DataDirectory {
                 resolved.path)
             let staging = container.userDataURL
             try? fm.createDirectory(at: staging, withIntermediateDirectories: true)
+            healChains(in: staging, noticeName: container.folderName, fm: fm)
             return staging
         }
 
@@ -173,7 +174,84 @@ enum DataDirectory {
             LegacyDataDrain.drain(from: container.userDataURL, into: resolved, fm: fm)
         }
         logDrain(outcome, container: container, destination: resolved)
+        // Heal AFTER the drain: chained names inside a legacy
+        // UserData/ tree drain over under their chained names and
+        // must heal at the destination.
+        healChains(in: resolved, noticeName: resolved.lastPathComponent, fm: fm)
         return resolved
+    }
+
+    // MARK: - Pre-literal save heal
+
+    /// One pass over the whole shared `Data/` tree at app launch,
+    /// so damaged saves reappear before the user opens anything.
+    /// The per-game heal in `resolveAndPrepare` covers everything
+    /// this pass cannot see yet (a legacy `UserData/` drain, a
+    /// directory created later).
+    @MainActor private static var didHealAtLaunch = false
+
+    @MainActor
+    static func healPreLiteralChainsAtLaunch() {
+        guard !didHealAtLaunch else { return }
+        didHealAtLaunch = true
+        let fm = FileManager.default
+        for name in fm.subdirectoryNames(at: sharedRootURL).sorted() {
+            let directory = sharedRootURL.appendingPathComponent(name, isDirectory: true)
+            healChains(in: directory, noticeName: name, fm: fm)
+        }
+    }
+
+    /// Heal one data directory tree and queue the one-time
+    /// library notice when anything was promoted.
+    private static func healChains(in directory: URL, noticeName: String, fm: FileManager) {
+        let outcome = drainLock.withLock { _ in
+            PreLiteralSaveHeal.healTree(at: directory, fm: fm)
+        }
+        guard !outcome.isEmpty else { return }
+        NSLog(
+            "[DataDirectory] Recovered chained saves in %@ (%ld promoted, %ld failed): %@",
+            directory.path,
+            outcome.promoted.count,
+            outcome.failures.count,
+            outcome.promoted.joined(separator: ", "))
+        if !outcome.promoted.isEmpty {
+            recordSaveRecovery(name: noticeName)
+        }
+    }
+
+    /// Names for the one-time recovery alert. UserDefaults is
+    /// thread-safe; heals can run from detached delete tasks.
+    private static func recordSaveRecovery(name: String) {
+        let defaults = UserDefaults.standard
+        var names = defaults.stringArray(forKey: DefaultsKey.pendingSaveRecoveryNames) ?? []
+        guard !names.contains(name) else { return }
+        names.append(name)
+        defaults.set(names, forKey: DefaultsKey.pendingSaveRecoveryNames)
+    }
+
+    static func pendingSaveRecoveryNames() -> [String] {
+        UserDefaults.standard.stringArray(forKey: DefaultsKey.pendingSaveRecoveryNames) ?? []
+    }
+
+    static func clearPendingSaveRecoveryNotice() {
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.pendingSaveRecoveryNames)
+    }
+
+    // MARK: - Engine handoff spelling
+
+    /// The spelling of `url` the engine must receive: every
+    /// symlink resolved with POSIX `realpath`, so engine-side
+    /// comparisons against `getcwd` output see one spelling. On
+    /// device, app-container paths arrive as `/var/...` while
+    /// `getcwd` resolves to `/private/var/...`. Foundation's
+    /// `resolvingSymlinksInPath` is the WRONG tool here: it
+    /// normalizes the other way (it strips `/private`).
+    static func engineSpelling(of url: URL) -> URL {
+        guard let resolved = url.path.withCString({ realpath($0, nil) }) else {
+            return url
+        }
+        defer { free(resolved) }
+        return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
     }
 
     /// Rescue path for game deletion. Two save locations sit

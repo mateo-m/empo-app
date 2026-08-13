@@ -39,6 +39,12 @@ enum DefaultsKey {
     /// one-time explanatory alert; cleared once it's shown.
     static let pendingDuplicateGameNames = "pendingDuplicateGameNames"
 
+    /// Data-directory names where the pre-literal save heal
+    /// promoted chained save files back to their canonical names.
+    /// `[String]`. Non-empty means the library owes the user a
+    /// one-time recovery alert; cleared once it's shown.
+    static let pendingSaveRecoveryNames = "pendingSaveRecoveryNames"
+
     static let cleanupInvalidGames = "cleanupInvalidGames"
     static let libraryDisplayMode = "libraryDisplayMode"
     static let librarySortOption = "librarySortOption"
