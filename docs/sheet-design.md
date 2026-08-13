@@ -7,6 +7,28 @@ implementations: `SaveRecoverySheet`, `ImageSourceSheet`, the
 Build Info sheet in `SettingsView`, and `PlayerMoreSheet` for the
 in-game exception.
 
+## Build with the components
+
+New sheets compose the vocabulary in `Design/Sheet.swift` instead
+of hand-writing chrome:
+
+```swift
+StandardSheet(title: "Saves Recovered") {
+    SheetEmblem(systemName: "checkmark.seal")
+    SheetProse("What happened and why.")
+    SheetCard { /* rows, SheetRowSeparator between them */ }
+    SheetFootnote("The fine print.")
+    SheetPrimaryButton("Done") { dismiss() }
+}
+```
+
+`StandardSheet` owns the surface, title, intrinsic sizing, brand
+tint, and the optional trailing toolbar action. The rules below
+are the contract those components implement - and what remains
+the sheet author's job: content, alignment inside rows, touch
+targets, and haptics. Sheets over a running game pass
+`surface: .material`.
+
 ## When to use a sheet
 
 - Use a sheet when the user reads, chooses, or acts on structured
@@ -17,14 +39,19 @@ in-game exception.
 
 ## Surface
 
-- Paint the whole sheet as ONE surface:
-  `.presentationBackground(Color(.systemGroupedBackground))` on
-  the sheet's outermost view.
-- Never paint `systemGroupedBackground` on the content stack
-  alone. The color ends at the content bounds and a pull-up
-  reveals a second tone above it.
-- Cards inside the sheet use `secondarySystemGroupedBackground`
-  clipped to `Radius.md`.
+- The whole sheet is ONE surface. The failure this rule bans:
+  painting `systemGroupedBackground` on the content stack alone,
+  which ends at the content bounds and shows a second tone when
+  the user pulls the sheet up.
+- `StandardSheet` paints the grouped surface with
+  `presentationBackground`. Native `List`/`Form` sheets
+  (`LibrarySortSheet`, `GameSettingsView`) manage their own
+  surface and need nothing.
+- A full-bleed picker on the sheet's default surface
+  (`ImportRootPickerSheet`) is also one surface and is fine.
+- Cards inside a grouped sheet use
+  `secondarySystemGroupedBackground` clipped to `Radius.md`
+  (`SheetCard`).
 - Exception: sheets that float over a running game
   (`PlayerMoreSheet`) keep the system's translucent material so
   the game stays visible. Do not paint those at all.
@@ -57,10 +84,20 @@ Top to bottom, each zone optional except the action:
    `Divider` indented past the thumbnail column
    (`Spacing.lg + 44 + Spacing.lg`).
 5. **Footer** - `footnote` secondary text, leading-aligned.
-6. **Primary action** - one full-width button at the bottom:
-   `PrimaryButtonStyle()` with the label stretched
-   (`Text(...).frame(maxWidth: .infinity)`). Destructive actions
-   get their own card above it, never a red primary button.
+6. **Primary action** - one full-width button at the bottom
+   (`SheetPrimaryButton`). Destructive actions get their own card
+   above it, never a red primary button. Multi-step pickers may
+   confirm from the toolbar instead (`ImportRootPickerSheet`);
+   that is the system's picker pattern, not a violation.
+
+## Touch targets
+
+- Every tappable thing is at least 44pt tall.
+- When a row carries one action, the WHOLE row is the button and
+  the trailing element (chevron, "Files" link, checkmark) is
+  decoration. Never park the only action in a small trailing
+  pill: its target would sit under the minimum, and the row
+  itself would be dead space.
 
 ## Metrics
 
@@ -68,6 +105,31 @@ Top to bottom, each zone optional except the action:
 - Between zones: `Spacing.xl`.
 - Inside a text column: `Spacing.xxs`-`Spacing.md`.
 - Row padding: `Spacing.lg` horizontal, `Spacing.md` vertical.
+
+## Motion and feel
+
+- Scale animation effort to frequency. Rare sheets (a one-time
+  recovery) may add delight; everyday sheets (sort, image
+  sources) present with the system transition and nothing else;
+  actions the user repeats constantly animate minimally or not at
+  all.
+- Use the `Motion` tokens; do not invent durations. UI motion
+  stays at or under 300ms (`snappy`, `standard`); only decorative
+  ambience runs longer. Entrances ease out - never ease in.
+- Be slow where the user decides, fast where the system responds.
+  A confirmation may breathe; feedback for a tap must be
+  immediate.
+- The system sheet handles drag physics (interruption, velocity
+  dismissal, edge damping). Do not re-implement or fight it, and
+  keep the drag indicator visible.
+- Haptics: row and selection actions give `Haptics.tap()`. A
+  sheet that announces a rare, good outcome may play
+  `Haptics.success()` once on presentation. Nothing else buzzes.
+  All haptics route through `Haptics`, which respects the user's
+  interface-haptics setting.
+- Respect Reduce Motion: prefer the system transitions (which
+  already adapt) and keep any custom motion opacity-based when
+  the setting is on.
 
 ## Behavior
 

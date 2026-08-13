@@ -202,6 +202,7 @@ struct ImportRootPickerSheet: View {
     }
 
     private func toggleSelection(_ id: String) {
+        Haptics.tap()
         withAnimation(Motion.gentle) {
             if step == .add {
                 if selectedFreshIDs.contains(id) {

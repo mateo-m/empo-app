@@ -73,132 +73,94 @@ private struct SaveRecoverySheet: View {
     let records: [SaveRecoveryLedger.Record]
     let artworkPaths: [String: String]
 
-    @State private var measuredHeight: CGFloat = 0
-
     var body: some View {
-        NavigationStack {
-            VStack(spacing: Spacing.xl) {
-                header
-
-                VStack(spacing: 0) {
-                    let sorted = records.sorted {
-                        $0.name.localizedStandardCompare($1.name) == .orderedAscending
-                    }
-                    ForEach(sorted) { record in
-                        if record.id != sorted.first?.id {
-                            rowSeparator
-                        }
-                        SaveRecoveryRow(
-                            record: record,
-                            artworkPath: artworkPaths[record.name]
-                        )
-                    }
-                }
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(.rect(cornerRadius: Radius.md))
-
-                footer
-
-                Button {
-                    isPresented = false
-                } label: {
-                    Text("Done").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(PrimaryButtonStyle())
-            }
-            .padding(Spacing.xl)
-            .intrinsicSheetContent(measuredHeight: $measuredHeight)
-            .navigationTitle("Saves Recovered")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-        .intrinsicSheetDetent(measuredHeight: measuredHeight)
-        // The whole sheet paints one surface - title area, content,
-        // and the stretch region a pull-up reveals. A background on
-        // the content VStack alone ends at the content bounds and
-        // shows a second tone during the pull.
-        .presentationBackground(Color(.systemGroupedBackground))
-        .tint(.brand)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Spacing.xl) {
-            // The symbol is the sheet's identity mark and stays
-            // centered, the way the system's welcome and What's
-            // New sheets treat theirs. Only the reading content
-            // below is leading-aligned. The emblem zone gets
-            // extra top air and a full emblem-to-prose gap so it
-            // reads as its own region, not the first list item.
-            Image(systemName: "checkmark.arrow.trianglehead.counterclockwise")
-                .font(.system(size: 48, weight: .medium))
-                .foregroundStyle(Color.brand)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, Spacing.md)
-            Text(
+        StandardSheet(title: "Saves Recovered") {
+            SheetEmblem(systemName: "checkmark.arrow.trianglehead.counterclockwise")
+            SheetProse(
                 "A defect in earlier Empo versions renamed save files on this "
                     + "device, so games showed only \u{201C}New Game\u{201D}. "
                     + "Empo restored the most recent save file for each game "
                     + "below."
             )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.leading)
+
+            SheetCard {
+                let sorted = records.sorted {
+                    $0.name.localizedStandardCompare($1.name) == .orderedAscending
+                }
+                ForEach(sorted) { record in
+                    if record.id != sorted.first?.id {
+                        SheetRowSeparator()
+                    }
+                    SaveRecoveryRow(
+                        record: record,
+                        artworkPath: artworkPaths[record.name]
+                    )
+                }
+            }
+
+            SheetFootnote(
+                "The renamed copies stay in the game's data folder as backups "
+                    + "(\u{201C}.pre-literal.bak\u{201D} files). If a restored "
+                    + "save is not the one you expect, tap Files on that game "
+                    + "and rename a backup to the save file's name."
+            )
+
+            SheetPrimaryButton("Done") { isPresented = false }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var footer: some View {
-        Text(
-            "The renamed copies stay in the game's data folder as backups "
-                + "(\u{201C}.pre-literal.bak\u{201D} files). If a restored "
-                + "save is not the one you expect, tap Files on that game "
-                + "and rename a backup to the save file's name."
-        )
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Hairline separator indented past the artwork column, the
-    /// same rhythm as the image-source rows.
-    private var rowSeparator: some View {
-        Divider()
-            .padding(.leading, Spacing.lg + 44 + Spacing.lg)
+        // This sheet announces a rare, good outcome (recovered
+        // saves), so it earns a one-time success haptic. Everyday
+        // sheets stay silent on presentation.
+        .onAppear { Haptics.success() }
     }
 }
 
 /// One recovered game: artwork, name, restored files, and the
-/// Files-app deep link into `Documents/Data/<name>/`.
+/// Files-app deep link into `Documents/Data/<name>/`. The WHOLE
+/// row is the tap target - a small trailing pill alone would sit
+/// under the 44pt minimum - and the trailing affordance is
+/// decoration, not a nested button.
 private struct SaveRecoveryRow: View {
     let record: SaveRecoveryLedger.Record
     let artworkPath: String?
 
     var body: some View {
-        HStack(spacing: Spacing.lg) {
-            GameArtworkView(
-                artworkPath: artworkPath,
-                placeholderIconSize: 20,
-                size: 44,
-                cornerRadius: Radius.sm
-            )
+        Button {
+            Haptics.tap()
+            openInFiles()
+        } label: {
+            HStack(spacing: Spacing.lg) {
+                GameArtworkView(
+                    artworkPath: artworkPath,
+                    placeholderIconSize: 20,
+                    size: 44,
+                    cornerRadius: Radius.sm
+                )
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(record.name)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(record.name)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: Spacing.md)
+
+                HStack(spacing: Spacing.xs) {
+                    Text("Files")
+                    Image(systemName: "arrow.up.forward")
+                        .font(.caption.weight(.semibold))
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Color.brand)
             }
-
-            Spacer(minLength: Spacing.md)
-
-            Button("Files", action: openInFiles)
-                .buttonStyle(SecondaryButtonStyle(size: .sm))
-                .fixedSize()
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.vertical, Spacing.md)
+        .buttonStyle(.plain)
     }
 
     private var subtitle: String {
