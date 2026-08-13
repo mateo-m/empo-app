@@ -221,7 +221,12 @@ struct GameLibraryView: View {
                     onCancel: importPipeline.cancelReplace
                 )
             )
-            .modifier(DuplicateGamesNotice(names: $duplicateNoticeNames))
+            .modifier(
+                DuplicateGamesNotice(names: $duplicateNoticeNames, active: splashDismissed)
+            )
+            .modifier(
+                SaveRecoveryPresentation(games: library.games, active: splashDismissed)
+            )
             .modifier(
                 LibrarySheetPresentation(
                     showSettings: $showSettings,
@@ -1113,10 +1118,13 @@ private struct BulkDeleteAlert: ViewModifier {
 /// `BulkDeleteAlert`.
 private struct DuplicateGamesNotice: ViewModifier {
     @Binding var names: [String]
+    /// False while the splash is still up; one-time surfaces wait
+    /// for it (see `SaveRecoveryPresentation.active`).
+    var active: Bool = true
 
     private var isPresented: Binding<Bool> {
         Binding(
-            get: { !names.isEmpty },
+            get: { active && !names.isEmpty },
             set: { presented in
                 if !presented { acknowledge() }
             }

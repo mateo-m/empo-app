@@ -66,6 +66,7 @@ class AppState {
     private init() {
         GameContainerMigration.migrateLegacyContainersIfNeeded()
         SaveMigration.migrateAllDiscoveredGamesIfNeeded()
+        DataDirectory.healPreLiteralChainsAtLaunch()
         session = EngineSessionCoordinator.shared
         session.delegate = self
     }
@@ -100,7 +101,11 @@ class AppState {
         // directory. This mirrors how desktop mkxp-z resolves
         // dataPathOrg/dataPathApp through SDL_GetPrefPath for every
         // game, declared or not.
-        let userDataDir = DataDirectory.resolveAndPrepare(for: container)
+        // The engine compares this path against getcwd output, so
+        // it must receive the symlink-resolved spelling (see
+        // `engineSpelling` for the /var vs /private/var trap).
+        let userDataDir = DataDirectory.engineSpelling(
+            of: DataDirectory.resolveAndPrepare(for: container))
         let stateDir = container.empoStateURL
 
         GameSettings.migrateLegacyEngineSettingsIfNeeded(

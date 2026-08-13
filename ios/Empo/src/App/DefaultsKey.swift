@@ -39,6 +39,12 @@ enum DefaultsKey {
     /// one-time explanatory alert; cleared once it's shown.
     static let pendingDuplicateGameNames = "pendingDuplicateGameNames"
 
+    /// Recoveries the pre-literal save heal performed, queued for
+    /// the one-time library sheet. A `SaveRecoveryLedger` JSON
+    /// blob (`Data`). Non-empty means the library owes the user
+    /// the sheet; cleared once shown.
+    static let pendingSaveRecoveries = "pendingSaveRecoveries"
+
     static let cleanupInvalidGames = "cleanupInvalidGames"
     static let libraryDisplayMode = "libraryDisplayMode"
     static let librarySortOption = "librarySortOption"

@@ -830,7 +830,6 @@ struct UpdateStatusBadge: View {
 /// as native chrome (centered inline title, trailing Close button).
 private struct BuildInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var measuredHeight: CGFloat = 0
 
     /// A detail row shown in the list. `value` is the copyable string.
     /// The optional `annotation` renders next to it but stays out of
@@ -861,56 +860,43 @@ private struct BuildInfoSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                        if index > 0 {
-                            Divider().padding(.leading, Spacing.xl)
-                        }
-                        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-                            Text(row.label)
-                            Spacer(minLength: Spacing.md)
-                            // RootView applies `.fontDesign(.rounded)`
-                            // to the whole app tree. Environment
-                            // resolution lets it override any
-                            // `.font(design: .monospaced)` set here.
-                            // Set `.monospaced` again explicitly so the
-                            // value's font reads as fixed-width.
-                            Text(row.value)
-                                .font(.system(size: 15))
-                                .fontDesign(.monospaced)
-                                .textSelection(.enabled)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            if let annotation = row.annotation {
-                                Text(annotation)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.horizontal, Spacing.xl)
-                        .padding(.vertical, Spacing.lg)
+        StandardSheet(
+            title: "Build Info",
+            chromeAllowance: AppSize.libraryHeader,
+            trailingButton: SheetBarAction("Close") { dismiss() }
+        ) {
+            SheetCard {
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    if index > 0 {
+                        Divider().padding(.leading, Spacing.xl)
                     }
-                }
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: Radius.xl))
-                .padding(.horizontal, Spacing._2xl)
-                .padding(.vertical, Spacing._2xl)
-            }
-            .intrinsicSheetContent(measuredHeight: $measuredHeight)
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle("Build Info")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close") { dismiss() }
-                        .tint(.brand)
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                        Text(row.label)
+                        Spacer(minLength: Spacing.md)
+                        // RootView applies `.fontDesign(.rounded)`
+                        // to the whole app tree. Environment
+                        // resolution lets it override any
+                        // `.font(design: .monospaced)` set here.
+                        // Set `.monospaced` again explicitly so the
+                        // value's font reads as fixed-width.
+                        Text(row.value)
+                            .font(.system(size: 15))
+                            .fontDesign(.monospaced)
+                            .textSelection(.enabled)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if let annotation = row.annotation {
+                            Text(annotation)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.vertical, Spacing.lg)
                 }
             }
         }
-        .intrinsicSheetDetent(measuredHeight: measuredHeight, chromeAllowance: AppSize.libraryHeader)
     }
 }
 

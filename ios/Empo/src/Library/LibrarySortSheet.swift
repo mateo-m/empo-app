@@ -34,6 +34,7 @@ struct LibrarySortSheet: View {
 
     private func row(for option: LibrarySortOption) -> some View {
         Button {
+            Haptics.tap()
             withAnimation(Motion.standard) {
                 settings.librarySortOption = option
             }

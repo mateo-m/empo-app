@@ -247,7 +247,6 @@ struct GameInfoView: View {
                     }
                 }
             }
-            .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .animation(Motion.snappy, value: titleScrollProgress > 0.5)
@@ -361,6 +360,9 @@ struct GameInfoView: View {
                 }
             }
         }
+        // One surface for the whole sheet, stretch region included;
+        // a content-only background shows a second tone on pull-up.
+        .presentationBackground(Color(.systemGroupedBackground))
         .onKeyPress(.escape) {
             if isEditingTitle {
                 finishEditingTitle()

@@ -16,8 +16,6 @@ struct ImageSourceSheet: View {
     let onPickFile: () -> Void
     let onRemove: (() -> Void)?
 
-    @State private var measuredHeight: CGFloat = 0
-
     /// Hide the "Take Photo" row when the device can't actually
     /// launch the camera (iPad without a rear camera, Simulator).
     private var cameraAvailable: Bool {
@@ -25,48 +23,45 @@ struct ImageSourceSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: Spacing.lg) {
-                // Sources group: a rounded card that mirrors the
-                // native grouped-list look without embedding in a
-                // List (which would want to fill the sheet).
-                VStack(spacing: 0) {
+        StandardSheet(
+            title: title,
+            trailingButton: SheetBarAction("Cancel") { isPresented = false }
+        ) {
+            SheetCard {
+                ImageSourceRow(
+                    icon: "photo.on.rectangle",
+                    label: "Camera Roll"
+                ) {
+                    isPresented = false
+                    onPickPhoto()
+                }
+
+                if cameraAvailable {
+                    SheetRowSeparator(leadingColumn: 24)
                     ImageSourceRow(
-                        icon: "photo.on.rectangle",
-                        label: "Camera Roll"
+                        icon: "camera",
+                        label: "Take Photo"
                     ) {
                         isPresented = false
-                        onPickPhoto()
-                    }
-
-                    if cameraAvailable {
-                        rowSeparator
-                        ImageSourceRow(
-                            icon: "camera",
-                            label: "Take Photo"
-                        ) {
-                            isPresented = false
-                            onTakePhoto()
-                        }
-                    }
-
-                    rowSeparator
-                    ImageSourceRow(
-                        icon: "folder",
-                        label: "Choose File"
-                    ) {
-                        isPresented = false
-                        onPickFile()
+                        onTakePhoto()
                     }
                 }
-                .background(Color(.secondarySystemGroupedBackground))
-                .clipShape(.rect(cornerRadius: Radius.md))
 
-                if hasExisting, let onRemove {
-                    // Destructive "Remove" action as its own card
-                    // so it reads as separate from the sources.
-                    // This matches the sectioning pattern users
-                    // expect from grouped lists.
+                SheetRowSeparator(leadingColumn: 24)
+                ImageSourceRow(
+                    icon: "folder",
+                    label: "Choose File"
+                ) {
+                    isPresented = false
+                    onPickFile()
+                }
+            }
+
+            if hasExisting, let onRemove {
+                // Destructive "Remove" action as its own card so
+                // it reads as separate from the sources, per the
+                // sheet rules.
+                SheetCard {
                     ImageSourceRow(
                         icon: "trash",
                         label: "Remove",
@@ -75,31 +70,9 @@ struct ImageSourceSheet: View {
                         isPresented = false
                         onRemove()
                     }
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .clipShape(.rect(cornerRadius: Radius.md))
-                }
-            }
-            .padding(Spacing.xl)
-            .intrinsicSheetContent(measuredHeight: $measuredHeight)
-            .background(Color(.systemGroupedBackground))
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Cancel") { isPresented = false }
                 }
             }
         }
-        .intrinsicSheetDetent(measuredHeight: measuredHeight)
-        .tint(.brand)
-    }
-
-    /// Hairline separator between rows inside the sources card.
-    /// Indented past the icon column so it only spans the text
-    /// area, matching the visual rhythm of UIKit grouped lists.
-    private var rowSeparator: some View {
-        Divider()
-            .padding(.leading, Spacing.lg + 24 + Spacing.lg)
     }
 }
 
