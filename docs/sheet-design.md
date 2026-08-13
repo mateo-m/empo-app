@@ -13,8 +13,7 @@ New sheets compose the vocabulary in `Design/Sheet.swift` instead
 of hand-writing chrome:
 
 ```swift
-StandardSheet(title: "Saves Recovered") {
-    SheetEmblem(systemName: "checkmark.seal")
+StandardSheet(title: "Saves Recovered", emblem: "checkmark.seal") {
     SheetProse("What happened and why.")
     SheetCard { /* rows, SheetRowSeparator between them */ }
     SheetFootnote("The fine print.")
