@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.6.1",
+          "buildVersion": "632",
+          "date": "2026-08-13",
+          "localizedDescription": "### Bug Fixes\n\n- Recover renamed saves and guard the engine recovery (#123) ([`658e9e9`](https://github.com/mateo-m/empo-app/commit/658e9e9b0828d72ce2245a75c18c4f27fbc25fc8))",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.6.1/Empo-0.6.1-unsigned.ipa",
+          "size": 19309236,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.6.0",
           "buildVersion": "629",
           "date": "2026-08-11",
