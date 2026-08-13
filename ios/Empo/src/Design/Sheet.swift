@@ -11,8 +11,7 @@ import SwiftUI
 /// shows, the vocabulary decides HOW it looks.
 ///
 /// ```swift
-/// StandardSheet(title: "Saves Recovered") {
-///     SheetEmblem(systemName: "checkmark.seal")
+/// StandardSheet(title: "Saves Recovered", emblem: "checkmark.seal") {
 ///     SheetProse("What happened and why.")
 ///     SheetCard { /* rows */ }
 ///     SheetFootnote("The fine print.")
@@ -33,8 +32,20 @@ enum SheetSurface {
 }
 
 /// The standard content-sized Empo sheet.
+///
+/// Two title styles, matching the two system sheet shapes:
+///
+///   - No emblem: the title sits inline in the navigation bar
+///     (activity-summary style - image sources, build info).
+///   - With `emblem:`: the title joins the symbol as ONE centered
+///     identity block at the top of the content (welcome-sheet
+///     style). Splitting them - a bar title plus a floating
+///     symbol - reads as two competing anchors; never do that.
 struct StandardSheet<Content: View>: View {
     let title: String
+    /// SF Symbol name for the identity block; nil keeps the title
+    /// in the navigation bar.
+    var emblem: String?
     var surface: SheetSurface = .grouped
     /// Extra height for navigation chrome; see
     /// `intrinsicSheetDetent`.
@@ -57,11 +68,14 @@ struct StandardSheet<Content: View>: View {
     private var core: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: Spacing.xl) {
+                if let emblem {
+                    SheetIdentityBlock(systemName: emblem, title: title)
+                }
                 content
             }
             .padding(Spacing.xl)
             .intrinsicSheetContent(measuredHeight: $measuredHeight)
-            .navigationTitle(title)
+            .navigationTitle(emblem == nil ? title : "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if let trailingButton {
@@ -79,20 +93,27 @@ struct StandardSheet<Content: View>: View {
     }
 }
 
-/// The sheet's identity mark: one brand-tinted symbol, centered.
-/// The emblem is the only centered element on a sheet - reading
-/// content stays leading - and it gets extra top air so it reads
-/// as its own zone, the way the system's welcome sheets treat
-/// theirs.
-struct SheetEmblem: View {
+/// The sheet's identity: one brand-tinted symbol with the title
+/// directly under it, centered as a single block, the way the
+/// system's welcome sheets compose theirs. The identity block is
+/// the only centered content on a sheet - everything below stays
+/// leading. Rendered by `StandardSheet` when `emblem:` is set.
+private struct SheetIdentityBlock: View {
     let systemName: String
+    let title: String
 
     var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 48, weight: .medium))
-            .foregroundStyle(Color.brand)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, Spacing.md)
+        VStack(spacing: Spacing.lg) {
+            Image(systemName: systemName)
+                .font(.system(size: 48, weight: .medium))
+                .foregroundStyle(Color.brand)
+            Text(title)
+                .font(.title2.bold())
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.top, Spacing.md)
     }
 }
 

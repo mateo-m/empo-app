@@ -74,8 +74,10 @@ private struct SaveRecoverySheet: View {
     let artworkPaths: [String: String]
 
     var body: some View {
-        StandardSheet(title: "Saves Recovered") {
-            SheetEmblem(systemName: "checkmark.arrow.trianglehead.counterclockwise")
+        StandardSheet(
+            title: "Saves Recovered",
+            emblem: "checkmark.arrow.trianglehead.counterclockwise"
+        ) {
             SheetProse(
                 "A defect in earlier Empo versions renamed save files on this "
                     + "device, so games showed only \u{201C}New Game\u{201D}. "

@@ -70,21 +70,25 @@ targets, and haptics. Sheets over a running game pass
 
 Top to bottom, each zone optional except the action:
 
-1. **Title** - inline navigation title, centered by the system.
-2. **Emblem** - one tinted SF Symbol, 48pt, `Color.brand`,
-   CENTERED. The emblem is the sheet's identity mark, not reading
-   content. Give it `Spacing.md` extra top padding so it reads as
-   its own zone.
-3. **Prose** - `subheadline` secondary text, LEADING-aligned.
-   Reading content is always leading; only the emblem centers.
-4. **Card** - rows in a `secondarySystemGroupedBackground` card.
+1. **Identity** - the title takes one of two shapes, never a mix:
+   - No emblem: an inline navigation-bar title
+     (activity-summary style - image sources, build info).
+   - With an emblem: the title joins the 48pt brand-tinted
+     symbol as ONE centered block at the top of the content
+     (welcome-sheet style - pass `emblem:` to `StandardSheet`).
+     A bar title plus a floating symbol reads as two competing
+     anchors; never split them.
+2. **Prose** - `subheadline` secondary text, LEADING-aligned.
+   Reading content is always leading; only the identity block
+   centers.
+3. **Card** - rows in a `secondarySystemGroupedBackground` card.
    Rows are leading-aligned: leading thumbnail (44pt, `Radius.sm`),
    text column, then a trailing action
    (`SecondaryButtonStyle(size: .sm)`). Separate rows with a
    `Divider` indented past the thumbnail column
    (`Spacing.lg + 44 + Spacing.lg`).
-5. **Footer** - `footnote` secondary text, leading-aligned.
-6. **Primary action** - one full-width button at the bottom
+4. **Footer** - `footnote` secondary text, leading-aligned.
+5. **Primary action** - one full-width button at the bottom
    (`SheetPrimaryButton`). Destructive actions get their own card
    above it, never a red primary button. Multi-step pickers may
    confirm from the toolbar instead (`ImportRootPickerSheet`);
