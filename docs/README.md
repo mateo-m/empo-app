@@ -1,8 +1,8 @@
 # Empo documentation
 
-This folder is the source of the Empo documentation site. Each `.md` and `.mdx` file here
-becomes a page. Run `bunx blume dev` from the repository root to read it in a browser, or read
-the files below on GitHub.
+This folder is the source of the [Empo documentation site](https://mateo-m.github.io/empo-app/).
+Each `.md` and `.mdx` file here becomes a page. Run `bun run docs:dev` from the repository root
+to read it in a browser, or read the files below on GitHub.
 
 Start with the [project README](../README.md) for what Empo is and how to build it.
 

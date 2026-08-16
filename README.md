@@ -93,11 +93,13 @@ Game developers who ship for Empo can start with [`docs/config-format.md`](docs/
 and [`docs/controls-format.md`](docs/controls-format.md). The full documentation index is at
 [`docs/README.md`](docs/README.md).
 
-The `docs/` folder is also a documentation site. To read it in a browser, run:
+The `docs/` folder is also a documentation site, published at
+[mateo-m.github.io/empo-app](https://mateo-m.github.io/empo-app/). To read it in a browser
+locally, run:
 
 ```sh
 bun install
-bunx blume dev
+bun run docs:dev
 ```
 
 ## Importing games
