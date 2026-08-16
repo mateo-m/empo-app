@@ -1,9 +1,11 @@
 {
   "name": "empo-app-ci-tools",
   "private": true,
-  "description": "Pinned versions of Node-based CI lint/format tools. Not shipped with the app; consumed only by .github/workflows/.",
+  "description": "Pinned versions of Node-based CI lint/format tools and the documentation site generator. Not shipped with the app.",
   "scripts": {
     "prepare": "lefthook install --reset-hooks-path",
+    "docs:dev": "blume dev",
+    "docs:build": "blume build",
     "fmt:check": "oxfmt --check altstore-source.json ios/Empo/project.yml ios/Empo/curated-patches/gameRegistry.json",
     "controls:schema:check": "bun tools/controls-schema-check.ts",
     "controls:schema": "bun tools/generate-controls-schema.ts"
@@ -12,6 +14,7 @@
     "@types/bun": "^1.3.14",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
+    "blume": "^1.5.1",
     "lefthook": "2.1.9",
     "markdownlint-cli": "0.48.0",
     "oxfmt": "0.55.0"

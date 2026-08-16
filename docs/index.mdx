@@ -1,0 +1,80 @@
+---
+title: Introduction
+description: Empo runs RPG Maker XP, VX, VX Ace, and Pokemon Essentials games on iPhone and iPad.
+sidebar:
+  icon: house
+---
+
+Empo is a game launcher for iPhone and iPad. It runs games that were made for RPG Maker XP,
+VX, and VX Ace, and for modern [mkxp-z](https://github.com/mkxp-z/mkxp-z) forks such as
+Pokemon Essentials fangames. Under the launcher is
+[mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), an iOS fork of the
+mkxp-z engine.
+
+The name comes from _emporos_, ancient Greek for a traveler who rides on someone else's ship.
+
+<CardGroup cols={2}>
+  <Card title="Install Empo" href="/install" icon="download">
+    Requirements, and how to sideload the app.
+  </Card>
+  <Card title="Import a game" href="/importing-games" icon="folder-down">
+    Folders, archives, and JoiPlay packages.
+  </Card>
+  <Card title="Play" href="/playing" icon="gamepad-2">
+    Touch controls, controllers, per-game settings, and pause.
+  </Card>
+  <Card title="Troubleshooting" href="/troubleshooting" icon="wrench">
+    What to do when a game does not start or does not sound right.
+  </Card>
+</CardGroup>
+
+![A game running in Empo](./media/demo-overworld.png)
+
+## What Empo does
+
+- It plays games that target RGSS1 (XP), RGSS2 (VX), RGSS3 (VX Ace), and modern mkxp-z forks.
+- It ships three Ruby interpreters (1.8, 1.9, and 3.1) in one binary. Each game runs on the
+  Ruby version that it targets. See [Multi-Ruby](/multi-ruby).
+- It imports games from folders or from archives (`.zip`, `.7z`, `.rar`, JoiPlay's `.jgp`, and
+  self-extractable `.exe`).
+- It draws a D-pad and action buttons on the screen. You can move them, and you can keep a
+  different layout for each game and each orientation.
+- It pauses a game, and it resumes the game later from the library.
+- It sorts, searches, and lists your library in a grid or in a list.
+
+## Status
+
+Empo is pre-release. It is not on the App Store. The app works from end to end with RGSS1,
+RGSS2, and RGSS3 games, and with modern mkxp-z forks.
+
+Compatibility reports for single games are welcome. Open an issue on
+[GitHub](https://github.com/mateo-m/empo-app/issues), or ask on
+[Discord](https://discord.gg/m3YnpXMxrB).
+
+## Documentation for game developers
+
+If you make a game, you can ship two files with it to control how Empo behaves.
+
+<CardGroup cols={2}>
+  <Card title="controls.json" href="/controls-format" icon="layout-grid">
+    Set the touch layout and the gamepad mapping for your game.
+  </Card>
+  <Card title="Config files" href="/config-format" icon="braces">
+    The JSON5 dialect that the app and the engine both parse.
+  </Card>
+</CardGroup>
+
+## Documentation for contributors
+
+[How it works](/how-it-works) gives the architecture in one page. The deep dives explain the
+parts that are difficult: [Multi-Ruby](/multi-ruby), [Multi-session](/multi-session),
+[Pause and resume](/pause-resume), and the [import pipeline](/import-pipeline).
+
+To build the app, read
+[CONTRIBUTING.md](https://github.com/mateo-m/empo-app/blob/main/CONTRIBUTING.md).
+
+## License
+
+Empo uses the [GPLv2+](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html) license, the
+same license as upstream mkxp-z. The app shows the full license set for its dependencies and
+fonts at **Settings → Open-source licenses**.

@@ -7,6 +7,10 @@ ios/Empo/build/
 ios/Empo/Empo.xcodeproj/
 *.ipa
 
+# Docs site (Blume generates .blume/ and builds into dist/)
+.blume/
+dist/
+
 # Dependencies (downloaded sources and build outputs)
 ios/Dependencies/downloads/
 ios/Dependencies/build-*/
@@ -85,3 +89,4 @@ build/
 
 # Root-level local object files from ad-hoc builds
 /*.o
+.blume-verify/

@@ -1,4 +1,7 @@
-# Config files: JSON5
+---
+title: "Config files: JSON5"
+description: The JSON5 dialect that Empo and its engine both parse, the files that use it, and the quirks to know about.
+---
 
 Empo and its engine parse config files with the same parser: json5pp, the engine's JSON5
 implementation. The app embeds the identical parser through the `ios/Json5` package. A file
@@ -75,5 +78,5 @@ it with the game.
 
 ## Related
 
-- [controls-format.md](controls-format.md): the `empo/controls.json` manifest
+- [Ship custom controls](/controls-format): the `empo/controls.json` manifest
 - [patches-format.md](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/patches-format.md) in the engine repo: the `patches.json` script-patching format

@@ -1,4 +1,7 @@
-# Game import pipeline
+---
+title: Game import pipeline
+description: How an import turns a folder or an archive into a game container, stage by stage, and the invariants that keep the library consistent.
+---
 
 ## Overview
 
