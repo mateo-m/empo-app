@@ -1,15 +1,3 @@
----
-# Builds the documentation site from docs/ and publishes it to GitHub
-# Pages at https://mateo-m.github.io/empo-app/.
-#
-# The site URL and its /empo-app subpath live in blume.config.ts, not
-# here: `blume build` writes them into every internal link, asset URL,
-# and canonical tag, so a local build matches what Pages serves.
-#
-# Pull requests build but never deploy. That catches a broken link or
-# a bad frontmatter key before it reaches main, where the strict
-# frontmatter check would fail the deploy instead.
-
 name: Docs
 
 on:
@@ -35,8 +23,6 @@ on:
 permissions:
   contents: read
 
-# One Pages deployment at a time. Queued runs wait instead of
-# cancelling, so a superseded run never leaves the site half-written.
 concurrency:
   group: pages
   cancel-in-progress: false
