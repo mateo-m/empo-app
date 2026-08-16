@@ -1,0 +1,108 @@
+---
+title: Troubleshooting
+description: Frequent problems with games in Empo, what causes them, and how to collect logs for a bug report.
+sidebar:
+  icon: wrench
+---
+
+## Empo cannot start a different game
+
+This is a known limitation, and not a defect in the game. Force-close Empo from the app
+switcher, and open it again. [Multi-session](/multi-session) explains why.
+
+## The game does not start
+
+Try these steps in order:
+
+<Steps>
+  <Step title="Check the RGSS version">
+    Empo runs RPG Maker XP, VX, and VX Ace games, and modern mkxp-z forks. Other engines, such as
+    RPG Maker MV and MZ, do not run.
+  </Step>
+  <Step title="Check for an RTP warning">
+    If the game asks for a Run-Time Package, Empo warns you before it starts. Empo cannot install
+    an RTP yet. Import a version of the game that ships its own assets.
+  </Step>
+  <Step title="Turn off the postload scripts">
+    Open the settings for the game, and turn off **Postload scripts** under Engine. Some games
+    conflict with the compatibility scripts that Empo adds.
+  </Step>
+  <Step title="Turn on JoiPlay compatibility">
+    Games that were packaged for JoiPlay sometimes expect its behavior. The option is under
+    Engine.
+  </Step>
+  <Step title="Collect the logs">
+    Turn on **Debug logs**, start the game again, and attach the log to an issue.
+  </Step>
+</Steps>
+
+## The game starts, but assets are missing
+
+The game probably calls a Windows DLL. Empo emulates the frequent Win32 APIs with
+`win32_wrap.rb`, but a game that goes past that set can fail to load some files. Encrypted
+archives from third-party tools have the same effect.
+
+Report the game. A compatibility report with the title and the version helps.
+
+## No music, or no sound
+
+Check the volume of the device and the silent switch first. If the game is still silent, turn on
+**Debug logs**, play until the music should start, and attach the log to an issue. The log names
+each audio file that the engine opens.
+
+## A movie does not play
+
+Empo plays Ogg/Theora movies only. The engine skips MP4 and other formats without a message. A
+game with an MP4 opening runs, but the opening stays blank.
+
+## The text is too small to read
+
+Open the settings for the game. Under Display, raise **Font scale**. **Solid fonts** helps when
+the text renders faint over a bright background.
+
+## The game runs slowly
+
+- Turn on **Frame skip** under Performance.
+- Turn off **Smooth scaling** under Display.
+- Close the other apps.
+
+Battle scenes and large maps cost the most. Older devices show it first.
+
+## My saves are gone
+
+Empo keeps saves inside the folder of the game, so an app update never removes them.
+
+A defect in versions before v0.6.1 renamed the save files of some games. Empo v0.6.1 and newer
+restore the newest save for each affected game at launch, and show a **Saves Recovered** sheet.
+The renamed copies stay in the folder of the game as backups. You can reach them in the Files
+app, under **On My iPhone → Empo**.
+
+:::warning
+Do not delete Empo to fix a problem. iOS removes the app sandbox with the app, and your games
+and saves go with it.
+:::
+
+## A card in the library looks broken
+
+Go to **Settings → Advanced**, and tap **Clean up broken imports**. Empo removes the folders
+that a failed import left behind.
+
+## Collect logs for a bug report
+
+<Steps>
+  <Step title="Turn on the logs">
+    Go to **Settings → Advanced**, and turn on **Debug logs**. Empo removes the older logs at
+    the start of each session.
+  </Step>
+  <Step title="Reproduce the problem">
+    Start the game, and repeat the steps that fail.
+  </Step>
+  <Step title="Share the log">
+    Open the Files app, go to **On My iPhone → Empo**, and share the newest log file.
+  </Step>
+  <Step title="Open an issue">
+    Report it on [GitHub](https://github.com/mateo-m/empo-app/issues) with the title of the game,
+    its version, and a description of the failure. You can also ask on
+    [Discord](https://discord.gg/m3YnpXMxrB).
+  </Step>
+</Steps>

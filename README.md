@@ -93,6 +93,13 @@ Game developers who ship for Empo can start with [`docs/config-format.md`](docs/
 and [`docs/controls-format.md`](docs/controls-format.md). The full documentation index is at
 [`docs/README.md`](docs/README.md).
 
+The `docs/` folder is also a documentation site. To read it in a browser, run:
+
+```sh
+bun install
+bunx blume dev
+```
+
 ## Importing games
 
 Empo accepts these input shapes:

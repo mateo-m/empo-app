@@ -1,4 +1,7 @@
-# Sheet design rules
+---
+title: Sheet design rules
+description: How Empo builds bottom sheets, so every sheet matches the system sheet language and the other sheets in the app.
+---
 
 How Empo builds bottom sheets. These rules keep every sheet
 consistent with the system's own sheet language (welcome, What's

@@ -1,4 +1,7 @@
-# Multi-session
+---
+title: Multi-session
+description: Why Empo plays one game for each process, which quit paths it neutralizes, and what must change before cross-session play returns.
+---
 
 ## Status
 

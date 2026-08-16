@@ -1,0 +1,127 @@
+---
+title: Play a game
+description: The library, the on-screen controls, controllers, the in-game menu, and the settings that apply to one game.
+sidebar:
+  icon: gamepad-2
+---
+
+Tap a card in the library to start a game. This page covers what you can do before, during, and
+after a session.
+
+## The library
+
+- Sort the list, search it, and switch between a grid and a list.
+- Touch and hold a card for **Info**, **Settings**, **Select**, and **Delete**.
+- **Select** turns on multiple selection, so you can delete several games at once.
+- A paused game keeps its place in the library. Tap it to continue.
+
+**Settings → Look & Feel** changes the library itself: the theme, the layout, the position of
+the title, and the interface haptics.
+
+## On-screen controls
+
+Empo draws a D-pad and action buttons over the game. A small toolbar sits beside them with four
+buttons:
+
+| Button          | What it does                                              |
+| --------------- | --------------------------------------------------------- |
+| Keyboard        | Shows the keyboard, for games that ask you to type.       |
+| Edit controls   | Starts edit mode.                                         |
+| Hide controls   | Hides the overlay. Tap again to show it.                  |
+| Menu            | Opens the in-game menu.                                   |
+
+### Edit mode
+
+In edit mode you can:
+
+- Drag the D-pad and the buttons to a new position.
+- Tap a button to set its size, its opacity, and its label, or to delete it.
+- Add a button. Choose an Empo action, or choose a key to send to the game. One orientation
+  holds a maximum of 21 buttons.
+- Switch the movement control between a D-pad and a joystick.
+- Drag the game screen, and resize it with the corner grabbers.
+- Undo the last change, or reset the layout.
+
+Portrait and landscape hold separate layouts. Turn the device to edit the other one.
+
+### Layout profiles
+
+A layout profile is a control layout that works for any game. Create and edit profiles at
+**Settings → Gameplay → Layout profiles**. Assign one to the open game from the in-game menu,
+under **Layout profile**.
+
+The **Automatic** choice resolves in this order:
+
+<Steps>
+  <Step title="Game layout">
+    The layout that the game ships in its `controls.json` file, if it has one.
+  </Step>
+  <Step title="Default profile">
+    The profile that you marked as the default, if you have one.
+  </Step>
+  <Step title="Empo default">The layout that Empo ships.</Step>
+</Steps>
+
+Game developers can read [Ship custom controls](/controls-format) to learn how to supply a
+layout with a game.
+
+## Controllers and keyboards
+
+Empo supports Bluetooth controllers and hardware keyboards. To change a mapping, open the
+in-game menu and tap **Buttons**. The screen lists the controller elements (face buttons, D-pad,
+sticks, shoulders, and system buttons) and the keys that each one sends.
+
+Set the scope at the top of the screen:
+
+- **This game** keeps the mapping for the open game only.
+- **All games** keeps the mapping everywhere.
+
+Each row shows the Empo default until you override it. **Remove override** puts the default
+back, and **Reset** clears every override in the current scope.
+
+:::note
+iOS reserves some controller buttons, such as Home and Guide. A reserved button never reaches
+the game.
+:::
+
+## The in-game menu
+
+| Entry               | What it does                                                                     |
+| ------------------- | --------------------------------------------------------------------------------- |
+| Cheats              | Sets the `$CHEATS` flag. Games that read the flag react to it. Others do not.    |
+| Diagnostics overlay | Shows frame timings and engine state over the game.                              |
+| Buttons             | Opens the controller and keyboard mapping.                                       |
+| Layout profile      | Picks the control layout for this game.                                          |
+| Pause               | Freezes the game and returns to the library.                                     |
+| Quit                | Ends the session.                                                                |
+
+## Pause and resume
+
+Pause keeps the game in memory. Empo shows a frozen frame while it moves you back to the
+library, so the transition stays smooth. Tap the card again to continue where you stopped.
+
+**Settings → Look & Feel → Continue playing** controls whether the library offers the paused
+game first.
+
+For the engine side of the frozen frame, see [Pause and resume](/pause-resume).
+
+## Settings for one game
+
+Touch and hold a card, and tap **Settings**. These options apply to that game only. **Reset to
+Defaults** removes all of them.
+
+| Group       | Options                                                                                             |
+| ----------- | ---------------------------------------------------------------------------------------------------- |
+| Display     | Smooth scaling, fixed aspect ratio, font scale, solid fonts.                                        |
+| Layout      | The layout profile for this game.                                                                   |
+| Performance | Frame skip.                                                                                         |
+| Engine      | Postload scripts, path cache, in-game keyboard, touch acts as mouse, JoiPlay compatibility, network access. |
+| Gameplay    | Fast forward, and its speed.                                                                        |
+
+## One game for each session
+
+After you quit a game, Empo cannot start a different one. Force-close the app from the app
+switcher, and open it again.
+
+The engine keeps one Ruby interpreter for the lifetime of the process, and the interpreter
+cannot restart cleanly. [Multi-session](/multi-session) explains the constraint in full.

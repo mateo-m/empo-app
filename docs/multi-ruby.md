@@ -1,4 +1,7 @@
-# Multi-Ruby
+---
+title: Multi-Ruby
+description: Three Ruby interpreters live in one binary. How Empo detects the version that a game needs, and how the engine dispatches to it.
+---
 
 ## Overview
 

@@ -1,0 +1,95 @@
+---
+title: Import a game
+description: The file types that Empo accepts, the three ways to import a game, and what happens to a game that is already in the library.
+sidebar:
+  icon: folder-down
+---
+
+Empo ships no games. You supply them. Empo copies each game into its own folder in the app
+sandbox, so the folder that you import from stays unchanged.
+
+## What you can import
+
+| Input                       | Notes                                                          |
+| --------------------------- | -------------------------------------------------------------- |
+| A folder                    | A game that is already extracted, with `Game.exe` and `Data/`. |
+| `.zip`, `.7z`, or `.rar`    | An archive with the same content.                              |
+| `.jgp`                      | A JoiPlay Game Package. Empo reads its manifest and settings.  |
+| A self-extracting `.exe`    | A Windows extractor with the game inside it.                   |
+
+## Three ways to import
+
+<Steps>
+  <Step title="From the library">
+    Open Empo. Tap the import button, and pick the folder or the archive in Files.
+  </Step>
+  <Step title="From another app">
+    Share the file, and pick Empo in the share sheet.
+  </Step>
+  <Step title="With drag and drop">
+    Drag the folder or the archive onto the Empo icon.
+  </Step>
+</Steps>
+
+Empo then extracts the game, reads the title from its INI file, detects the RPG Maker version,
+and picks the Ruby interpreter for it. If the game has a `Game.exe` with an icon, Empo uses that
+icon as the artwork on the card. If it has no icon, Empo looks for a title screen in
+`Graphics/Titles/`.
+
+:::tip
+A large archive takes time to extract. The card shows the progress. You can leave the app open
+on the library and let it work, or tap **Cancel** on the card to stop the import. A cancelled
+import leaves nothing behind.
+:::
+
+## An archive that holds more than one game
+
+Some archives hold several games, or hold a game with extra tools beside it. Empo scans the
+archive and lists each valid game that it finds. You then select the games to import.
+
+The list has two steps:
+
+- **Add Games** shows the games that are not in your library. No game is selected at first.
+- **Already in Library** shows the games that are installed. All of them are selected at first,
+  because an import of an installed game updates that install.
+
+## Update a game that is installed
+
+If a game with the same title is in the library, Empo asks before it writes anything. When you
+confirm, Empo merges the new files into the installed game:
+
+- Files with the same path get the new version.
+- All other files stay, which includes your saves, your settings, and files that the new version
+  does not ship.
+- If the update contains a file at the path of one of your saves, the newer file keeps the path.
+  Empo keeps the other file beside it, with a `.empo-displaced.bak` suffix.
+
+If the update fails at any point before the swap, the installed game stays exactly as it was.
+
+:::warning
+Empo cannot update a game that is open. Quit the game first, then import the update.
+:::
+
+## Where Empo puts your games
+
+Each game lives in its own folder under `Documents/Games/<title>/`, and Empo keeps one folder
+per title. The folder is visible in the Files app under **On My iPhone → Empo**. Saves, game
+settings, and artwork live with the game.
+
+Two different games that declare the same title in their INI files cannot both be in the
+library. Some games read their data paths from that title, so a second copy would read the
+first copy's data.
+
+## When an import fails
+
+Empo shows one alert with the reason. The frequent reasons are:
+
+- The source is not an RPG Maker game, or its RGSS version has no support.
+- The archive is corrupt.
+- The device has no free space left.
+
+If a card stays broken after a failure, go to **Settings → Advanced**, and tap **Clean up broken
+imports**.
+
+For the full pipeline, with its stages and its invariants, see
+[Game import pipeline](/import-pipeline).

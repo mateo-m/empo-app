@@ -1,0 +1,62 @@
+---
+title: Install Empo
+description: Requirements for Empo, how to sideload the app, and how to get update notifications.
+sidebar:
+  icon: download
+---
+
+Empo is pre-release, so it is not on the App Store. Each tagged release ships an unsigned
+`.ipa` file that you install yourself.
+
+## Requirements
+
+- An iPhone or an iPad with iOS 26 or newer.
+- A sideloading tool: [AltStore](https://altstore.io), [SideStore](https://sidestore.io), or
+  [Sideloadly](https://sideloadly.io).
+- A game to play. Empo ships no games. See [Import a game](/importing-games).
+
+:::note
+An unsigned app expires after seven days with a free Apple account. Your sideloading tool
+refreshes the app before it expires. A paid Apple Developer account extends the period to one
+year.
+:::
+
+## Install the app
+
+<Steps>
+  <Step title="Download the IPA">
+    Open the [Releases page](https://github.com/mateo-m/empo-app/releases). Download the `.ipa`
+    file from the newest release.
+  </Step>
+  <Step title="Sideload it">
+    Install the `.ipa` file with AltStore, SideStore, or Sideloadly. Each tool documents its own
+    steps.
+  </Step>
+  <Step title="Trust the developer">
+    If iOS refuses to open the app, go to **Settings → General → VPN & Device Management**.
+    Trust the profile that signed the app. This step applies to Sideloadly installs.
+  </Step>
+  <Step title="Open Empo">
+    The library is empty at first. Import a game to fill it.
+  </Step>
+</Steps>
+
+## Get update notifications
+
+AltStore and SideStore can watch Empo for new releases. Add this source:
+
+```text
+https://raw.githubusercontent.com/mateo-m/empo-app/main/altstore-source.json
+```
+
+After you add the source, the store shows Empo updates with the rest of your apps.
+
+## Update the app
+
+Install the new `.ipa` file over the old one. Your games, your saves, and your settings stay in
+place, because Empo keeps them in its own sandbox and not in the app binary.
+
+:::warning
+Do not delete Empo before you update it. iOS deletes the app sandbox with the app, and your
+imported games and saves go with it.
+:::

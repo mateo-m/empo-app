@@ -1,4 +1,7 @@
-# Pause / resume
+---
+title: Pause and resume
+description: The two pause modes, and the frozen-frame snapshots that bridge the SDL window into SwiftUI transitions.
+---
 
 ## Overview
 

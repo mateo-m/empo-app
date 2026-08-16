@@ -1,7 +1,19 @@
 # Empo documentation
 
-Start with the [project README](../README.md) for what Empo is, how to build it, and how to
-import games.
+This folder is the source of the Empo documentation site. Each `.md` and `.mdx` file here
+becomes a page. Run `bunx blume dev` from the repository root to read it in a browser, or read
+the files below on GitHub.
+
+Start with the [project README](../README.md) for what Empo is and how to build it.
+
+## For players
+
+| Doc                                          | What it covers                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------- |
+| [`install.mdx`](install.mdx)                 | Requirements, and how to sideload the app.                         |
+| [`importing-games.mdx`](importing-games.mdx) | The accepted file types, and what happens to an installed game.    |
+| [`playing.mdx`](playing.mdx)                 | The library, the touch controls, controllers, and game settings.   |
+| [`troubleshooting.mdx`](troubleshooting.mdx) | Frequent problems, and how to collect logs for a report.           |
 
 ## For game developers
 
@@ -21,10 +33,13 @@ Explanations of the trickier architecture, in rough reading order:
 
 | Doc                                                  | What it covers                                                                     |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [`how-it-works.mdx`](how-it-works.mdx)               | The architecture in one page, with pointers to each deep dive.                     |
 | [`multi-ruby.md`](multi-ruby.md)                     | Three Ruby interpreters in one binary, with per-game version detection and dispatch. |
 | [`sdl-ruby-workarounds.md`](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/sdl-ruby-workarounds.md) (engine repo) | Why SDL, the GL context, OpenAL, and the Ruby VM persist for the process lifetime. |
 | [`multi-session.md`](multi-session.md)               | Why cross-session play is disabled, and the neutralized quit paths.                |
 | [`pause-resume.md`](pause-resume.md)                 | Frozen-frame snapshots that bridge the SDL window into SwiftUI transitions.        |
 | [`import-pipeline.md`](import-pipeline.md)           | The game import pipeline: supported inputs, stage flow, invariants.                |
+| [`sheet-design.md`](sheet-design.md)                 | The rules that keep every bottom sheet consistent.                                 |
 
-`media/` holds the README screenshots and demo assets.
+`media/` holds the README screenshots and demo assets. The site configuration lives in
+[`blume.config.ts`](../blume.config.ts), and site-wide static files live in [`public/`](../public).

@@ -1,4 +1,7 @@
-# Shipping custom controls with your game
+---
+title: Ship custom controls
+description: Ship a controls.json file with your game to set its touch layout, its screen region, and its gamepad mapping.
+---
 
 Ship a file named `controls.json` with your game to set its touch
 layout and gamepad mapping. Setup takes about five minutes.
@@ -41,7 +44,7 @@ The `$schema` line is optional. With it, editors like VS Code
 autocomplete field names and flag typos as you type.
 
 A full commented example is at
-[`docs/examples/controls.json`](examples/controls.json).
+[`docs/examples/controls.json`](https://github.com/mateo-m/empo-app/blob/main/docs/examples/controls.json).
 
 ## File locations
 
@@ -491,7 +494,7 @@ controls did not show up, ask a tester for that log line.
 Warnings never reject the file.
 
 To catch errors before you ship, validate the file against the
-[JSON Schema](schemas/empo-controls.v1.schema.json). Any JSON-aware
+[JSON Schema](https://github.com/mateo-m/empo-app/blob/main/docs/schemas/empo-controls.v1.schema.json). Any JSON-aware
 editor or a validator like `ajv` works.
 
 ## Versioning
