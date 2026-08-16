@@ -32,8 +32,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A docs-only pull request cannot break the Swift toolchain, the
+  # GameProbe tests, or a Simulator build, so those three jobs skip.
+  #
+  # The skip MUST be a job-level `if:`, never a workflow-level
+  # `paths-ignore`. The ruleset requires the "Lint" and "Format"
+  # contexts; a workflow that path-filters itself away never reports
+  # them, and the PR waits forever for a status that cannot arrive. A
+  # job skipped by `if:` still reports, and GitHub counts a skipped
+  # job as a success. The two summary jobs already run with
+  # `if: always()` and fail only on `failure` or `cancelled`, so a
+  # skipped `swift` job leaves them green with no edit.
+  #
+  # The classifier is conservative on purpose. A path that is not
+  # documentation counts as code, and any failure to read the file
+  # list runs the full gate. `docs/schemas/` and `docs/examples/` are
+  # code here: ControlsSchemaTests reads both from the repository
+  # root, so a change to either must still run the tests.
+  changes:
+    name: Detect docs-only changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - name: Classify the changed paths
+        id: classify
+        # gh ships preinstalled on GitHub-hosted ubuntu runners. The
+        # API gives the file list without cloning the repository.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          full_gate() {
+            printf '%s\n' "$1"
+            echo "code=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          }
+          [ -n "$PR_NUMBER" ] || full_gate "not a pull request: running every job"
+          FILES=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename') ||
+            full_gate "::warning::could not read the changed files: running every job"
+          [ -n "$FILES" ] || full_gate "::warning::the changed file list is empty: running every job"
+          printf 'changed files:\n%s\n' "$FILES"
+          CODE=$(printf '%s\n' "$FILES" |
+            grep -Ev '^(docs/|public/)|^blume\.config\.ts$|\.md$' || true)
+          FIXTURES=$(printf '%s\n' "$FILES" | grep -E '^docs/(schemas|examples)/' || true)
+          if [ -n "$CODE$FIXTURES" ]; then
+            echo "the diff touches code: running every job"
+            echo "code=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "the diff is documentation only: skipping the Swift, test, and Simulator jobs"
+            echo "code=false" >>"$GITHUB_OUTPUT"
+          fi
+
   swift:
     name: Swift (swiftlint + swift-format)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -190,6 +248,8 @@ jobs:
 
   test:
     name: GameProbe (swift test, Linux)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -272,6 +332,8 @@ jobs:
 
   simulator:
     name: Simulator build
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -375,9 +437,13 @@ jobs:
   # descriptive names the ruleset does not track one by one. Format
   # aggregates the subset of jobs that verify formatting; the tools
   # run once and feed both summaries.
+  #
+  # Lint also needs `changes`. A failed classifier skips the jobs that
+  # depend on it, and a skipped job passes - so without this edge, a
+  # broken classifier would wave code through on a green gate.
   lint-summary:
     name: Lint
-    needs: [swift, objc-cpp, shell, yaml, markdown]
+    needs: [changes, swift, objc-cpp, shell, yaml, markdown]
     if: always()
     runs-on: ubuntu-latest
     steps:
