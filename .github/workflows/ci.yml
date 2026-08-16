@@ -76,8 +76,15 @@ jobs:
           [ -n "$FILES" ] || full_gate "::warning::the changed file list is empty: running every job"
           printf 'changed files:\n%s\n' "$FILES"
           CODE=$(printf '%s\n' "$FILES" |
-            grep -Ev '^(docs/|public/)|^blume\.config\.ts$|\.md$' || true)
-          FIXTURES=$(printf '%s\n' "$FILES" | grep -E '^docs/(schemas|examples)/' || true)
+            grep -Ev '^(docs/|public/)|^blume\.config\.ts$|\.md$') || CODE_STATUS=$?
+          FIXTURES=$(printf '%s\n' "$FILES" |
+            grep -E '^docs/(schemas|examples)/') || FIXTURE_STATUS=$?
+          # grep exits 1 when nothing matches, which is an answer here,
+          # not a failure. A status above 1 IS a failure, and its empty
+          # output would otherwise read as "no code touched".
+          if [ "${CODE_STATUS:-0}" -gt 1 ] || [ "${FIXTURE_STATUS:-0}" -gt 1 ]; then
+            full_gate "::warning::could not classify the changed paths: running every job"
+          fi
           if [ -n "$CODE$FIXTURES" ]; then
             echo "the diff touches code: running every job"
             echo "code=true" >>"$GITHUB_OUTPUT"
@@ -441,7 +448,11 @@ jobs:
   # release cut instead. A "Format" twin also sat beside it, needing a
   # subset of the same jobs: a subset cannot fail while the superset
   # passes, so it gated nothing and cost a second required context.
-  # Both went with this commit.
+  #
+  # The required contexts live in the repository ruleset, not in this
+  # file, so the rename and the removal took a settings change as well.
+  # Keep the two in step: rename this job and the ruleset stops seeing
+  # the context it waits for.
   #
   # The gate also needs `changes`. A failed classifier skips the jobs
   # that depend on it, and a skipped job passes - so without this edge,
