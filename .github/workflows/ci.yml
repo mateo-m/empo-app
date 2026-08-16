@@ -4,8 +4,9 @@
 # and build.yml, in one workflow with one trigger block.
 #
 # The ruleset's required context is a check-run name, which comes from
-# a JOB name — so the "Lint" summary job at the bottom must keep that
-# exact name. It is the only context a merge waits on.
+# a JOB name — so the "CI" summary job at the bottom must keep that
+# exact name. It is the only context a merge waits on, and it needs
+# every other job in this file.
 #
 # Requires secret EMPO_DEPS_READ_TOKEN (read access to empo-deps) for
 # the native + ANGLE tarballs; the engine-core prebuilt is public.
@@ -34,13 +35,12 @@ jobs:
   # GameProbe tests, or a Simulator build, so those three jobs skip.
   #
   # The skip MUST be a job-level `if:`, never a workflow-level
-  # `paths-ignore`. The ruleset requires the "Lint" context; a workflow
+  # `paths-ignore`. The ruleset requires the "CI" context; a workflow
   # that path-filters itself away never reports it, and the PR waits
   # forever for a status that cannot arrive. A job skipped by `if:`
   # still reports, and GitHub counts a skipped job as a success. The
-  # summary job already runs with `if: always()` and fails only on
-  # `failure` or `cancelled`, so a skipped `swift` job leaves it green
-  # with no edit.
+  # summary job runs with `if: always()` and fails only on `failure` or
+  # `cancelled`, so a skipped `swift` job leaves it green with no edit.
   #
   # The classifier is conservative on purpose. A path that is not
   # documentation counts as code, and any failure to read the file
@@ -431,24 +431,37 @@ jobs:
           echo "boot smoke OK"
 
   # The aggregate gate. Its check-run name matches the ruleset's one
-  # required context, "Lint", exactly. The per-tool jobs above have
-  # descriptive names the ruleset does not track one by one, so this
-  # job is what a merge waits on.
+  # required context, "CI", exactly. The jobs above have descriptive
+  # names the ruleset does not track one by one, so this job is what a
+  # merge waits on - and it needs EVERY one of them. Add a job above,
+  # add it here too, or a merge stops waiting for it.
   #
-  # A "Format" twin used to sit beside it, needing a subset of these
-  # jobs. A subset can never fail while the superset passes, so it
-  # gated nothing and only added a second required context. The
-  # ruleset dropped it with this commit.
+  # It carried the name "Lint" while it aggregated the lint jobs alone.
+  # A red Simulator build could then land on main and surface at the
+  # release cut instead. A "Format" twin also sat beside it, needing a
+  # subset of the same jobs: a subset cannot fail while the superset
+  # passes, so it gated nothing and cost a second required context.
+  # Both went with this commit.
   #
-  # Lint also needs `changes`. A failed classifier skips the jobs that
-  # depend on it, and a skipped job passes - so without this edge, a
-  # broken classifier would wave code through on a green gate.
-  lint-summary:
-    name: Lint
-    needs: [changes, swift, objc-cpp, shell, yaml, markdown]
+  # The gate also needs `changes`. A failed classifier skips the jobs
+  # that depend on it, and a skipped job passes - so without this edge,
+  # a broken classifier would wave code through on a green gate.
+  ci-summary:
+    name: CI
+    needs:
+      - changes
+      - swift
+      - objc-cpp
+      - shell
+      - yaml
+      - markdown
+      - test
+      - deps-pins
+      - submodule-guard
+      - simulator
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Verify every lint job passed
+      - name: Verify every job passed
         run: |
           [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "false" ]
