@@ -3,11 +3,10 @@
 # lint.yml, format.yml, test.yml, deps-pins.yml, submodule-guard.yml,
 # and build.yml, in one workflow with one trigger block.
 #
-# The ruleset's required contexts are check-run names, which come from
-# JOB names — so the "Lint" and "Format" summary jobs at the bottom
-# must keep those exact names. Format's tool set was always a strict
-# subset of Lint's running identical commands, so the tools run once
-# and both summaries aggregate them.
+# The ruleset's required context is a check-run name, which comes from
+# a JOB name — so the "CI" summary job at the bottom must keep that
+# exact name. It is the only context a merge waits on, and it needs
+# every other job in this file.
 #
 # Requires secret EMPO_DEPS_READ_TOKEN (read access to empo-deps) for
 # the native + ANGLE tarballs; the engine-core prebuilt is public.
@@ -32,8 +31,72 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A docs-only pull request cannot break the Swift toolchain, the
+  # GameProbe tests, or a Simulator build, so those three jobs skip.
+  #
+  # The skip MUST be a job-level `if:`, never a workflow-level
+  # `paths-ignore`. The ruleset requires the "CI" context; a workflow
+  # that path-filters itself away never reports it, and the PR waits
+  # forever for a status that cannot arrive. A job skipped by `if:`
+  # still reports, and GitHub counts a skipped job as a success. The
+  # summary job runs with `if: always()` and fails only on `failure` or
+  # `cancelled`, so a skipped `swift` job leaves it green with no edit.
+  #
+  # The classifier is conservative on purpose. A path that is not
+  # documentation counts as code, and any failure to read the file
+  # list runs the full gate. `docs/schemas/` and `docs/examples/` are
+  # code here: ControlsSchemaTests reads both from the repository
+  # root, so a change to either must still run the tests.
+  changes:
+    name: Detect docs-only changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - name: Classify the changed paths
+        id: classify
+        # gh ships preinstalled on GitHub-hosted ubuntu runners. The
+        # API gives the file list without cloning the repository.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          full_gate() {
+            printf '%s\n' "$1"
+            echo "code=true" >>"$GITHUB_OUTPUT"
+            exit 0
+          }
+          [ -n "$PR_NUMBER" ] || full_gate "not a pull request: running every job"
+          FILES=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename') ||
+            full_gate "::warning::could not read the changed files: running every job"
+          [ -n "$FILES" ] || full_gate "::warning::the changed file list is empty: running every job"
+          printf 'changed files:\n%s\n' "$FILES"
+          CODE=$(printf '%s\n' "$FILES" |
+            grep -Ev '^(docs/|public/)|^blume\.config\.ts$|\.md$') || CODE_STATUS=$?
+          FIXTURES=$(printf '%s\n' "$FILES" |
+            grep -E '^docs/(schemas|examples)/') || FIXTURE_STATUS=$?
+          # grep exits 1 when nothing matches, which is an answer here,
+          # not a failure. A status above 1 IS a failure, and its empty
+          # output would otherwise read as "no code touched".
+          if [ "${CODE_STATUS:-0}" -gt 1 ] || [ "${FIXTURE_STATUS:-0}" -gt 1 ]; then
+            full_gate "::warning::could not classify the changed paths: running every job"
+          fi
+          if [ -n "$CODE$FIXTURES" ]; then
+            echo "the diff touches code: running every job"
+            echo "code=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "the diff is documentation only: skipping the Swift, test, and Simulator jobs"
+            echo "code=false" >>"$GITHUB_OUTPUT"
+          fi
+
   swift:
     name: Swift (swiftlint + swift-format)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -190,6 +253,8 @@ jobs:
 
   test:
     name: GameProbe (swift test, Linux)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -272,6 +337,8 @@ jobs:
 
   simulator:
     name: Simulator build
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -370,27 +437,42 @@ jobs:
             { echo "app process exited within 10s"; exit 1; }
           echo "boot smoke OK"
 
-  # Aggregate gates whose check-run names match the ruleset's required
-  # "Lint" and "Format" contexts exactly. The per-tool jobs above have
-  # descriptive names the ruleset does not track one by one. Format
-  # aggregates the subset of jobs that verify formatting; the tools
-  # run once and feed both summaries.
-  lint-summary:
-    name: Lint
-    needs: [swift, objc-cpp, shell, yaml, markdown]
+  # The aggregate gate. Its check-run name matches the ruleset's one
+  # required context, "CI", exactly. The jobs above have descriptive
+  # names the ruleset does not track one by one, so this job is what a
+  # merge waits on - and it needs EVERY one of them. Add a job above,
+  # add it here too, or a merge stops waiting for it.
+  #
+  # It carried the name "Lint" while it aggregated the lint jobs alone.
+  # A red Simulator build could then land on main and surface at the
+  # release cut instead. A "Format" twin also sat beside it, needing a
+  # subset of the same jobs: a subset cannot fail while the superset
+  # passes, so it gated nothing and cost a second required context.
+  #
+  # The required contexts live in the repository ruleset, not in this
+  # file, so the rename and the removal took a settings change as well.
+  # Keep the two in step: rename this job and the ruleset stops seeing
+  # the context it waits for.
+  #
+  # The gate also needs `changes`. A failed classifier skips the jobs
+  # that depend on it, and a skipped job passes - so without this edge,
+  # a broken classifier would wave code through on a green gate.
+  ci-summary:
+    name: CI
+    needs:
+      - changes
+      - swift
+      - objc-cpp
+      - shell
+      - yaml
+      - markdown
+      - test
+      - deps-pins
+      - submodule-guard
+      - simulator
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Verify every lint job passed
-        run: |
-          [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "false" ]
-
-  format-summary:
-    name: Format
-    needs: [swift, objc-cpp, shell, yaml]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Verify every format job passed
+      - name: Verify every job passed
         run: |
           [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "false" ]
