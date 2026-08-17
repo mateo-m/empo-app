@@ -13,8 +13,7 @@ extension Color {
     /// inverted sheets, which read inconsistently across contexts.
     static let brand = Color(red: 0.98, green: 0.56, blue: 0.16)
 
-    /// Dark: warm dark surface with a hint of amber.
-    /// Light: warm off-white with a hint of peach.
+    /// Warm dark amber, or warm off-white peach in light mode.
     static let surface = Color(
         uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark
@@ -55,41 +54,32 @@ extension Color {
 }
 
 //
-// 4-point grid.
+// 4-point grid. Pick by role: xxs and xs for hairline gaps and
+// inline icons, sm and md for inner padding, lg for grid gutters,
+// xl for section padding and screen-edge margins, _2xl and up for
+// section breaks.
 
 enum Spacing {
-    /// 2pt: hairline gaps, tight label spacing
     static let xxs: CGFloat = 2
-    /// 4pt: minimal padding, inline icon gaps
     static let xs: CGFloat = 4
-    /// 6pt: compact element spacing
     static let sm: CGFloat = 6
-    /// 8pt: standard inner padding, small gaps
     static let md: CGFloat = 8
-    /// 12pt: grid gutter, between related elements
     static let lg: CGFloat = 12
-    /// 16pt: section padding, screen-edge horizontal margins
     static let xl: CGFloat = 16
-    /// 20pt: generous section spacing
     static let _2xl: CGFloat = 20
-    /// 32pt: large section breaks
     static let _3xl: CGFloat = 32
-    /// 40pt: extra-large section breaks
     static let _4xl: CGFloat = 40
 }
 
+// Corner radii, from inline badges up to cards and outer
+// containers. `sheet` is the modal sheet panel only.
+
 enum Radius {
-    /// 4pt: small chips, inline badges
     static let xs: CGFloat = 4
-    /// 8pt: thumbnails, list row artwork
     static let sm: CGFloat = 8
-    /// 12pt: cards, dialogs, sheets
     static let md: CGFloat = 12
-    /// 16pt: large cards, outer containers
     static let lg: CGFloat = 16
-    /// 24pt: hero elements, large artwork
     static let xl: CGFloat = 24
-    /// 56pt: modal sheets and large rounded panels
     static let sheet: CGFloat = 56
 }
 

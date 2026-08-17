@@ -17,27 +17,26 @@ import GameProbe
 /// `DataDirectory.resolve` repeats the heal at game launch for
 /// anything this pass could not fix.
 ///
-/// The library's invariant after this migration is **one container
-/// per title**. Folder names must be exactly the game's INI title
-/// because some games derive their save/data locations from the
-/// title they declare in their INI - a suffixed duplicate like
-/// `Testing 2` would still call itself "Testing" and read the other
-/// copy's data. So when several legacy imports resolve to the same
-/// title, the copy played most recently (then the most recently
-/// added) keeps the canonical name, and every other copy moves -
-/// whole and untouched, saves included - to the Files-visible
-/// `Documents/Duplicate Games/` folder, where the user can recover
-/// save files or re-import. The one-time library alert
-/// (`DuplicateGamesNotice`) explains the move and lists each copy.
-/// The which-copy-wins policy itself lives in GameProbe's
-/// `ContainerMigrationPlanner` so the Linux CI tests exercise it.
+/// The invariant after this migration is **one container per
+/// title**. A folder name must be exactly the game's INI title,
+/// because some games derive their data locations from that title,
+/// so a suffixed duplicate like `Testing 2` would still call itself
+/// "Testing" and read the other copy's data. When several legacy
+/// imports resolve to one title, the copy played most recently
+/// (then the most recently added) keeps the name. Every other copy
+/// moves whole and untouched, saves included, into the
+/// Files-visible `Documents/Duplicate Games/`, where the user can
+/// recover saves or re-import. `DuplicateGamesNotice` explains the
+/// move once and lists each copy. The which-copy-wins policy lives
+/// in GameProbe's `ContainerMigrationPlanner`, so the Linux CI
+/// tests exercise it.
 ///
-/// Renaming the directory also changes the container id (the id IS
-/// the folder name now), so the per-game UserDefaults key families
+/// A rename also changes the container id, since the id IS the
+/// folder name, so the per-game UserDefaults families
 /// (`controlsLayout.<id>`, `controllerMap.<id>`) move with the
-/// canonical copy. All other per-game state (saves, settings,
+/// winning copy. Everything else per-game (saves, settings,
 /// metadata, logs, controls manifest) lives inside the container
-/// and moves with the rename at no extra cost.
+/// and rides along for free.
 ///
 /// Must run before anything enumerates `GameContainer.discover()`
 /// (library scan, save migration, crash tracker), so both singleton
@@ -193,19 +192,17 @@ enum GameContainerMigration {
                 do {
                     try fm.moveItem(at: context.url, to: destination)
                 } catch {
-                    // Leave the tree under its legacy name. The next
-                    // launch retries. Discovery still surfaces it
-                    // (any directory is a container), so the game
-                    // stays playable meanwhile - including its
-                    // controls, since the legacy keys are still in
-                    // place. The title stays unclaimed so the
-                    // next-best duplicate can take it rather than
-                    // getting quarantined behind a rename that
-                    // never happened - which is exactly why the
-                    // keys copied above must roll back NOW: left
-                    // in place, they would block that duplicate's
-                    // own key copy (new-id-wins) and donate this
-                    // copy's controls to a different game.
+                    // Leave the tree under its legacy name and retry
+                    // next launch. Discovery still surfaces it, since
+                    // any directory is a container, so the game stays
+                    // playable with its controls intact. The title
+                    // stays unclaimed so the next-best duplicate can
+                    // take it instead of being quarantined behind a
+                    // rename that never happened. That is why the
+                    // keys copied above must roll back NOW: left in
+                    // place they would block that duplicate's own
+                    // copy (new-id-wins) and donate this copy's
+                    // controls to a different game.
                     for key in copiedKeys {
                         UserDefaults.standard.removeObject(forKey: key)
                     }

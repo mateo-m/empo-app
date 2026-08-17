@@ -1,19 +1,13 @@
 import Foundation
 
-/// Central registry of every UserDefaults key this app reads or
-/// writes. Call sites reference these constants instead of literal
-/// strings. A key rename is then a one-line change, and a grep
-/// across the project surfaces every consumer immediately.
+/// Every UserDefaults key this app reads or writes, in three shapes:
 ///
-/// The registry supports three shapes:
-///
-///   - Fixed-name keys: plain `static let` constants. Most keys.
-///   - Parameterized key families: `static func key(for: ...) -> String`.
-///     Use these for per-entity storage (e.g. per-game, per-tip).
-///   - Enum-backed key families: the `ExperimentalFeature` enum's
-///     `rawValue` drives the key set directly. The raw values are
-///     namespaced with an `experimental.*` prefix so they stay visually
-///     grouped alongside the fixed-name keys.
+///   - Fixed names: plain `static let`. Most keys.
+///   - Key families: `static func key(for: ...) -> String`, for
+///     per-entity storage such as per-game or per-tip.
+///   - Enum-backed families: `ExperimentalFeature.rawValue` drives
+///     the key set directly, prefixed `experimental.*` so the keys
+///     stay grouped with the fixed names.
 enum DefaultsKey {
     // MARK: - App-wide
 

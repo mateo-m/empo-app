@@ -887,15 +887,14 @@ extension GameLibrary {
         guard let container else { return }
         Task.detached(priority: .userInitiated) {
             let outcome = Self.performDelete(container, rescueSaves: rescueSaves)
-            // Release BEFORE any restore reload runs: the reload's
-            // scan consults `deletionsInFlight` live, and an id
-            // still registered would make the scan skip the very
-            // container the reload exists to bring back - the kept
-            // game would then stay missing from the library until
-            // some unrelated reload. (The id joined the set on the
-            // main actor before this task started, user-initiated
-            // deletes only. Removing an unregistered id is a
-            // no-op.)
+            // Release BEFORE any restore reload runs. That reload's
+            // scan consults `deletionsInFlight` live, so a still-
+            // registered id would make it skip the very container it
+            // exists to bring back, and the kept game would stay
+            // missing until some unrelated reload. The id joined the
+            // set on the main actor before this task started, for
+            // user-initiated deletes only. Removing an unregistered
+            // id does nothing.
             await MainActor.run {
                 GameLibrary.shared.deletionsInFlight.withLock {
                     _ = $0.remove(container.id)
@@ -1415,27 +1414,23 @@ extension GameLibrary {
         }
     }
 
-    /// Swap in the card's artwork mid-extract, once the archive
-    /// has yielded a root-level `.exe` icon via `ExeIconSurfacer`.
-    /// Only `.exe` icons surface mid-import. `Graphics/Titles/*`
-    /// previews never do, because they would flash and then
-    /// get replaced by the final artwork pick. Can fire more than
-    /// once per import: the first non-utility `.exe` is a
-    /// tentative pick that a later `Game.exe` supersedes and
-    /// locks.
+    /// Swap in the card's artwork mid-extract, once the archive has
+    /// yielded a root-level `.exe` icon via `ExeIconSurfacer`. Only
+    /// `.exe` icons surface mid-import, because a `Graphics/Titles/*`
+    /// preview would flash and then lose to the final artwork pick.
+    /// Can fire more than once: the first non-utility `.exe` is a
+    /// tentative pick that a later `Game.exe` supersedes and locks.
     nonisolated func updateCardArtwork(_ importID: String, artworkPath: String) {
         Task { @MainActor in
             let lib = GameLibrary.shared
             guard let model = lib.games.first(where: { $0.id == importID }) else { return }
-            // The mid-extract sidecar sits at a fixed location
-            // (`<container>/Metadata/exe-icon.png`) and gets
-            // overwritten on disk when a later .exe in the archive
-            // supersedes the earlier pick (e.g. Reborn1950 ships
-            // [Patcher.exe (skipped), Reborn.exe, Game.exe]: Reborn
-            // writes first, Game.exe overwrites). The path string is
-            // unchanged across those writes, so the revision bump is
-            // what tells GameArtworkView to reload the (already
-            // evicted + re-prewarmed) contents.
+            // The mid-extract sidecar sits at a fixed path
+            // (`<container>/Metadata/exe-icon.png`), overwritten when
+            // a later .exe supersedes the earlier pick. Reborn1950
+            // ships [Patcher.exe (skipped), Reborn.exe, Game.exe], so
+            // Reborn writes first and Game.exe overwrites. The path
+            // string never changes, so the revision bump is what
+            // tells GameArtworkView to reload the contents.
             withAnimation {
                 model.artworkPath = artworkPath
                 model.artworkRevision += 1
@@ -1443,25 +1438,22 @@ extension GameLibrary {
         }
     }
 
-    /// Updates the extraction progress on the already-committed
-    /// progress card (not on `pendingImports`, which was cleared
-    /// once pre-flight passed). Ticks only re-render the card
-    /// bodies that read `importProgress`, not the library. The
-    /// monotonic guard matters twice over: unstructured tasks give
-    /// no FIFO guarantee onto the main actor (an out-of-order write
-    /// would snap the ring backwards), and the extractor degenerates
-    /// to one callback per entry once its byte-based percentage
-    /// saturates. Those arrive as equal values and are dropped
-    /// here instead of notifying observers.
+    /// Updates extraction progress on the already-committed progress
+    /// card. `pendingImports` cleared once pre-flight passed. Ticks
+    /// re-render only the card bodies that read `importProgress`.
     ///
-    /// Strictly an UPDATE: an entry that is not currently importing
-    /// stays untouched. A cancelled replacement re-surfaces the
-    /// installed game's ready card while the import task keeps
-    /// running (replacements finish once past the swap). A late
-    /// progress hop flipping that card back to importing would
-    /// re-arm the stop button - and a second stop tap would delete
-    /// the installed game through the abandon path, whose
-    /// replacement marker the first tap already consumed.
+    /// The monotonic guard earns its keep twice: unstructured tasks
+    /// have no FIFO guarantee onto the main actor, so an out-of-order
+    /// write would snap the ring backwards, and the extractor
+    /// degenerates to one equal-valued callback per entry once its
+    /// byte percentage saturates.
+    ///
+    /// Strictly an UPDATE, so an entry that is not importing stays
+    /// untouched. A cancelled replacement re-surfaces the installed
+    /// game's ready card while its task runs on. A late hop flipping
+    /// that card back to importing would re-arm the stop button, and
+    /// a second stop tap would delete the installed game through the
+    /// abandon path, whose marker the first tap already consumed.
     nonisolated func updateCardProgress(_ importID: String, _ progress: Double) {
         Task { @MainActor in
             guard

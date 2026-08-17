@@ -98,11 +98,9 @@ struct ActionButtonModel: Identifiable, Equatable, Codable {
     }
 }
 
-/// Active orientation for the controls overlay. Each game stores
-/// an independent layout per orientation. Buttons sized as a
-/// fraction of the viewport do not survive an orientation flip
-/// because the aspect ratio inverts. A portrait 0.09 vertical gap
-/// is 79pt, but the
+/// Active orientation for the controls overlay. Each game keeps a
+/// layout per orientation, because fractional sizes do not survive
+/// a flip. A portrait 0.09 vertical gap is 79pt, but the
 /// same fraction in landscape collapses to 37pt and overlaps the
 /// 56pt button. So we keep two layouts instead.
 enum ControlsOrientation: String, Codable {
@@ -337,13 +335,12 @@ class ControlsLayout {
 
     // MARK: - Oriented control state
 
-    /// One orientation's complete control set. The ACTIVE
-    /// orientation lives in `active` (views read and write it
-    /// through the forwarding properties below). The other lives in
-    /// `inactive`. `setOrientation(_:)` swaps the two values whole,
-    /// undo snapshots copy `active`, and resets assign whole
-    /// values. A new field pays its cost here once, not at twenty
-    /// call sites.
+    /// One orientation's complete control set. Views read and write
+    /// `active` through the forwarding properties below, and the
+    /// other orientation waits in `inactive`. Everything moves whole
+    /// values: `setOrientation(_:)` swaps, undo snapshots copy,
+    /// resets assign. A new field pays its cost here once, not at
+    /// twenty call sites.
     struct OrientedControls: Equatable {
         var dpadRelativeCenter: CGPoint
         var dpadSize: CGFloat = ControlsLayout.defaultDPadSize
@@ -489,16 +486,15 @@ class ControlsLayout {
 
     func endEditSession() {
         editSessionActive = false
-        // Player path: drop abandoned screen edits (save() commits
-        // before this in the player flow, so leftovers mean the
-        // session was torn down) and ALWAYS end the preview. A
-        // snapped-back drag previews without leaving an edit behind,
-        // and a stuck preview would freeze the applier for the rest
-        // of the session. Done can arrive MID-drag (the toolbar
-        // stays tappable by design). The gizmo unmounts with edit
-        // mode, so its own recovery never runs. The profile editor
-        // saves AFTER ending its session, so its edits must survive
-        // here.
+        // Player path: drop abandoned screen edits, and ALWAYS end
+        // the preview. save() commits before this, so a leftover
+        // means the session was torn down. A stuck preview would
+        // freeze the applier for the rest of the session, and a
+        // snapped-back drag previews without leaving an edit behind.
+        // Done can arrive MID-drag, because the toolbar stays
+        // tappable by design, and the gizmo unmounts with edit mode
+        // so its own recovery never runs. The profile editor saves
+        // AFTER ending its session, so its edits must survive here.
         if !isEditorInstance {
             screenEdits.removeAll()
             activeScreenDrag = nil
@@ -723,13 +719,11 @@ class ControlsLayout {
         applyDefaultsForCurrentOrientation()
     }
 
-    /// Switch the active orientation. Snapshot the current "active"
-    /// values into the matching slot, then load the other slot's
-    /// values back into the active properties.
-    ///
-    /// No-op if `new == currentOrientation`. PlayerView's
-    /// `.onChange(of: isPortrait)` calls this so the layout follows
-    /// device rotation in real time.
+    /// Switch the active orientation: snapshot the active values
+    /// into their slot, then load the other slot back. Does nothing
+    /// if `new == currentOrientation`. PlayerView's
+    /// `.onChange(of: isPortrait)` calls this, so the layout follows
+    /// device rotation live.
     func setOrientation(_ new: ControlsOrientation) {
         guard new != currentOrientation else { return }
 
@@ -1212,17 +1206,14 @@ class ControlsLayout {
 
     // MARK: - Display-time button separation
 
-    /// Single choke point for resolved button centers at display resolution.
-    /// Maps each fraction center through the same transform the renderer
-    /// uses (`ControlsZone.absolutePosition`, with safe-area and
-    /// toolbar-line clamping) and only then runs `ButtonSeparation`.
-    /// Separation in any earlier space misses overlaps that the clamp
-    /// brings back (e.g. rows that collapse onto controlsMinY). Covers
-    /// manifest, translated, user, and builtin layouts alike, and never
-    /// persists adjusted positions. Returns final absolute positions.
-    /// `separate: false` returns the clamped centers WITHOUT the
-    /// overlap pass: edit mode renders positions raw, or dragging
-    /// one control would push its neighbors around live.
+    /// The one place button centers resolve to display resolution,
+    /// for manifest, translated, user, and builtin layouts alike.
+    /// Centers pass through the renderer's own transform
+    /// (`ControlsZone.absolutePosition`) before `ButtonSeparation`,
+    /// because separating earlier misses overlaps the clamp brings
+    /// back. Adjusted positions are never persisted.
+    /// `separate: false` skips the overlap pass, so edit mode renders
+    /// raw and a drag does not shove its neighbors around live.
     func separatedDisplayPositions(
         for geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat,
         separate: Bool = true,
@@ -1326,12 +1317,11 @@ class ControlsLayout {
     // MARK: - Persistence
 
     /// Persist edits per provenance. A pinned profile takes the
-    /// write-back. Ambient sources are derive-only. The first
-    /// committed change in an edit session creates a profile, pins
-    /// the game, and updates provenance in place. This never touches
-    /// the per-game `EmpoState/controls.json`: its dead touch section
-    /// stays byte-identical on disk (copy-not-move), and controller
-    /// persistence lives in `BindingStore`.
+    /// write-back, ambient sources are derive-only, and the first
+    /// committed change mints a profile, pins the game, and updates
+    /// provenance in place. The per-game `EmpoState/controls.json`
+    /// is never touched: its dead touch section stays byte-identical
+    /// (copy, not move), and `BindingStore` holds controller state.
     func save() {
         if isEditorInstance {
             editorSave()
