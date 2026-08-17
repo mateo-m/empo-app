@@ -31,7 +31,7 @@ extension ControlsTarget {
 
 /// The one reader and writer of a bindings object, shared by the
 /// manifest loader, the manifest writer and the app's own defaults
-/// store. Each caller reports issues its own way; none of them gets
+/// store. Each caller reports issues its own way. None of them gets
 /// to invent a different grammar.
 public enum BindingMapCoder {
     public enum Issue: Equatable, Sendable {

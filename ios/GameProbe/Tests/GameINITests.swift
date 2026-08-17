@@ -114,7 +114,7 @@ final class GameINITests: XCTestCase {
     }
 
     func testEmptyValueInFirstIniDoesNotEndTheScan() throws {
-        // AAA.ini declares the key with an EMPTY value; that is not
+        // AAA.ini declares the key with an EMPTY value. That is not
         // a hit, so the scan must continue to BBB.ini.
         let dir = try makeGameDir(inis: [
             "AAA.ini": "[Game]\ntitle=",
@@ -154,7 +154,7 @@ final class GameINITests: XCTestCase {
     }
 
     func testScanIsValueSeekingNotFirstFile() throws {
-        // AAA.ini sorts first but lacks the value; the scan must
+        // AAA.ini sorts first but lacks the value. The scan must
         // continue to BBB.ini instead of stopping at the first file.
         let dir = try makeGameDir(inis: [
             "AAA.ini": "[Options]\nfullscreen=1",
@@ -193,7 +193,7 @@ final class GameINITests: XCTestCase {
         guard let sjis = "[Game]\r\nTitle=\(title)\r\n".data(using: .shiftJIS) else {
             throw XCTSkip("Shift-JIS encoding is unavailable on this platform")
         }
-        // The fixture must not be valid UTF-8; otherwise this would
+        // The fixture must not be valid UTF-8. Otherwise this would
         // not pin the Shift-JIS leg of decodeAsLooseText.
         XCTAssertNil(String(data: sjis, encoding: .utf8))
 

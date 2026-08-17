@@ -124,7 +124,7 @@ struct PlayerEditToolbar: View {
         // Anchor both pieces to the controls-zone border, not the
         // game rect: the pill floats above the border line by the
         // same distance the action row sits below it. A CRUSHED
-        // zone (fit-then-block leaves just the tallest control)
+        // zone (fit-then-block leaves only the tallest control)
         // has no room for the header, so both pieces dodge above
         // the border and the controls keep the zone to themselves.
         let zoneBounds = ControlsZone.bounds(
@@ -146,7 +146,7 @@ struct PlayerEditToolbar: View {
 
         ZStack {
             // Blast-radius banner: a pinned profile's edits reach
-            // every game using it; ambient edits mint a new profile.
+            // every game using it. Ambient edits mint a new profile.
             // Its own small pill, so the button capsule stays clean.
             Text(editBannerText)
                 .font(.caption2)
@@ -196,7 +196,7 @@ struct PlayerEditToolbar: View {
 
     /// Four actions: symbols, per the HIG rule for bars past three
     /// buttons. The tools are the SAME circular glass buttons as
-    /// the play toolbar, so edit mode reads as a variant of it;
+    /// the play toolbar, so edit mode reads as a variant of it.
     /// Done keeps the tinted capsule and its shape alone marks it
     /// as the primary action. No chromeHitRegion: PlayerEditToolbar
     /// stays mounted at opacity 0 during play (its region would

@@ -6,7 +6,7 @@ import XCTest
 final class MkxpDataPathComponentsTests: XCTestCase {
 
     func testUndeclaredPathFallsBackToINITitle() {
-        // Desktop mkxp-z resolves a pref path for every game; keys
+        // Desktop mkxp-z resolves a pref path for every game. Keys
         // absent means org "." (nothing) and app = INI title.
         XCTAssertEqual(
             MkxpDataPath().sharedDirectoryComponents(iniTitleFallback: "Testing"),
@@ -33,7 +33,7 @@ final class MkxpDataPathComponentsTests: XCTestCase {
 
     func testDegenerateValuesContributeNothing() {
         // Values that sanitize down to nothing ("...", "///") must
-        // not become a literal "Unknown Game" path component; they
+        // not become a literal "Unknown Game" path component. They
         // fall out of the chain like absent values.
         let dotsOrg = MkxpDataPath(org: "...", app: "reborn")
         XCTAssertEqual(dotsOrg.sharedDirectoryComponents(iniTitleFallback: nil), ["reborn"])
@@ -123,7 +123,7 @@ final class MkxpDataPathComponentsTests: XCTestCase {
 
     func testLiteralUnknownGameAppContributes() {
         // The sanitizer's fallback name is only suppressed for
-        // values that sanitize DOWN to it; a game that literally
+        // values that sanitize DOWN to it. A game that literally
         // declares "Unknown Game" keeps its declared directory.
         XCTAssertEqual(
             MkxpDataPath(app: "Unknown Game")
@@ -133,7 +133,7 @@ final class MkxpDataPathComponentsTests: XCTestCase {
 
     func testCaseVariantUnknownGameAppContributes() {
         // The suppression targets values that SANITIZE to the exact
-        // fallback literal; "UNKNOWN GAME" sanitizes to itself, which
+        // fallback literal. "UNKNOWN GAME" sanitizes to itself, which
         // differs from "Unknown Game", so it contributes.
         XCTAssertEqual(
             MkxpDataPath(app: "UNKNOWN GAME")
@@ -175,7 +175,7 @@ final class MkxpDataPathComponentsTests: XCTestCase {
         // "Unknown  Game" (double space) sanitizes to "Unknown
         // Game", which equals the sanitizer's fallback, but the raw
         // trimmed value differs from it. Deliberate: only the exact
-        // literal keeps the name; a coincidental collision falls
+        // literal keeps the name. A coincidental collision falls
         // through the chain like a degenerate value.
         XCTAssertEqual(
             MkxpDataPath(app: "Unknown  Game").sharedDirectoryComponents(

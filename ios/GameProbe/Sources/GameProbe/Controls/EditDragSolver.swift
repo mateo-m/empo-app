@@ -1,9 +1,9 @@
 import Foundation
 
 /// Rigid collision solver for edit-mode control drags. The dragged
-/// circle cannot enter its neighbors or the edit-chrome rectangles —
-/// they act as walls and the drag slides along their rims. Neighbors
-/// never move; there is no momentum and no physics engine.
+/// circle cannot enter its neighbors or the edit-chrome rectangles.
+/// They act as walls and the drag slides along their rims. Neighbors
+/// never move. There is no momentum and no physics engine.
 ///
 /// Pure geometry in the same Double coordinate style as
 /// `ButtonSeparation`, so it tests on Linux CI. The app layer builds
@@ -95,8 +95,8 @@ public enum EditDragSolver {
                     // The pointer reached or crossed the obstacle's
                     // center: push out toward the side the drag came
                     // from, not toward the pointer's side. <= covers
-                    // the pointer sitting exactly ON the center —
-                    // the up-push fallback there would hand the side
+                    // the pointer sitting exactly ON the center.
+                    // The up-push fallback there would hand the side
                     // memory a stray direction and let the circle
                     // tunnel through.
                     let approachX = previousX - obstacle.x

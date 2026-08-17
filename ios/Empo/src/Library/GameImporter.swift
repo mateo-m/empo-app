@@ -45,7 +45,7 @@ enum GameImporter {
     /// overwritten, everything else kept) and swaps in atomically.
     /// Any failure before the swap leaves the installed `Game/`
     /// byte-for-byte untouched. Semantics live in GameProbe's
-    /// `GameTreeUpdate` so the Linux CI tests exercise them; this
+    /// `GameTreeUpdate` so the Linux CI tests exercise them. This
     /// wrapper only exists so pipeline call sites read app-domain
     /// language.
     nonisolated static func stageAndSwapGameTree(
@@ -126,7 +126,7 @@ enum GameImporter {
 
     /// `preservingExistingState` is the replacement path: the user's
     /// settings, engine overlay, custom artwork, and accumulated
-    /// metadata (dateAdded, play time) stay; only the manifest
+    /// metadata (dateAdded, play time) stay. Only the manifest
     /// fields and the re-detected script profile refresh.
     nonisolated static func finalizeJgpImport(
         container: GameContainer,

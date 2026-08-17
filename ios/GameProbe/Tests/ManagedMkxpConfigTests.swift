@@ -321,7 +321,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
             )
         )
 
-        // The hand-added non-engine key survives; only the reset
+        // The hand-added non-engine key survives. Only the reset
         // key is gone.
         let overlay = try readOverlayConfig(stateDir)
         XCTAssertNil(overlay["fontScale"])
@@ -473,7 +473,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(overlay["syncToRefreshrate"] as? Bool, false)
         XCTAssertNil(overlay["pathCache"])
         XCTAssertNil(overlay["patches"])
-        // The migration REBUILDS the overlay; the pre-existing
+        // The migration REBUILDS the overlay. The pre-existing
         // overlay's stale engine key must be gone, not merged in.
         XCTAssertNil(overlay["fontScale"])
 
@@ -491,7 +491,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
             )
         )
         // The repeat call is a no-op: the overlay dict stays
-        // identical, not just "returned true".
+        // identical, not only "returned true".
         let overlayAfterRepeat = try readOverlayConfig(stateDir)
         XCTAssertEqual(overlay as NSDictionary, overlayAfterRepeat as NSDictionary)
     }
@@ -657,7 +657,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
 
     func testReadDataPathBlankOverlayValueRemovesBaseValue() throws {
         // A blank overlay string does not fall through to the base
-        // value; it reads as absent for the merged pair.
+        // value. It reads as absent for the merged pair.
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
@@ -678,7 +678,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
 
     func testReadDataPathNullOverlayValueRemovesBaseValue() throws {
         // A JSON null in the overlay overwrites the base value in
-        // the merged dict; the null is not a string, so the key
+        // the merged dict. The null is not a string, so the key
         // reads as absent.
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)

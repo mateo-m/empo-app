@@ -79,7 +79,7 @@ public enum ContainerMigrationPlanner {
     /// `<uuid>` when the slug was empty - so a valid prefix is
     /// exactly one of those two shapes. Anything longer without
     /// the `-` separator is a title that merely STARTS with a
-    /// UUID; matching it would classify the migrated name as
+    /// UUID. Matching it would classify the migrated name as
     /// legacy on every launch and retry a self-rename forever.
     public static func legacyUUIDPrefix(folderName: String) -> String? {
         guard folderName.count >= 36 else { return nil }
@@ -96,7 +96,7 @@ public enum ContainerMigrationPlanner {
     /// titles as Shift-JIS ("Pokémon Empyrean" imported into
     /// `Pok駑on Empyrean/`). Returns the sanitized title exactly
     /// when the current folder name is that title's legacy mojibake
-    /// rendering; nil otherwise, so a folder never renames on a
+    /// rendering. Nil otherwise, so a folder never renames on a
     /// guess. `title` is the game's title as the FIXED decoder
     /// reads it today.
     public static func mojibakeRenameTarget(folderName: String, title: String) -> String? {

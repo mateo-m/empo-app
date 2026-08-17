@@ -119,7 +119,7 @@ extension MkxpDataPath {
     /// shared directory - different games would then read and
     /// overwrite each other's `Game.rxdata`. The container folder
     /// name (unique per installed game, stable across updates of
-    /// the same title) takes that place instead; `"mkxp-z"`
+    /// the same title) takes that place instead. `"mkxp-z"`
     /// remains only for callers with no folder name to give.
     public func sharedDirectoryComponents(
         iniTitleFallback: String?,
@@ -147,7 +147,7 @@ extension MkxpDataPath {
         let sanitized = GameFolderName.sanitize(trimmed)
         // A value that sanitizes down to nothing ("...", "///")
         // contributes no component instead of the sanitizer's
-        // literal fallback name; the fallback chain (INI title,
+        // literal fallback name. The fallback chain (INI title,
         // then "mkxp-z") picks the actual directory.
         guard
             sanitized != GameFolderName.fallback
@@ -349,7 +349,7 @@ public enum ManagedMkxpConfig {
                     overlay = parsed
                 } else {
                     onUnparseableOverlay?(
-                        "ManagedMkxpConfig: unparseable EmpoState/mkxp.json; treating overlay as absent"
+                        "ManagedMkxpConfig: cannot read EmpoState/mkxp.json, treating the overlay as absent"
                     )
                 }
             }

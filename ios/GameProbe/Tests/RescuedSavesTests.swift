@@ -16,7 +16,7 @@ final class RescuedSavesTests: XCTestCase {
     }
 
     override func tearDown() {
-        // Failure fixtures drop permissions; restore them so the
+        // Failure fixtures drop permissions. Restore them so the
         // temp root always deletes cleanly.
         try? GameTreeUpdate.normalizeOwnerWritable(at: tempRoot)
         try? fm.removeItem(at: tempRoot)
@@ -72,7 +72,7 @@ final class RescuedSavesTests: XCTestCase {
     // MARK: - Matching
 
     func testMatchingPrefersTheMarkerIdentityOverTheBucketName() throws {
-        // Named by a custom title; the marker carries the INI-derived
+        // Named by a custom title. The marker carries the INI-derived
         // folder name a re-import resolves to.
         let bucket = try makeBucket("My Cool Nickname", identity: "Pokemon Example")
 
@@ -189,7 +189,7 @@ final class RescuedSavesTests: XCTestCase {
     #if canImport(Darwin)
     func testPartialRestoreRewritesTheMarkerForTheNextAttempt() throws {
         // An unlistable subdirectory makes the drain fail on
-        // that entry; the bucket must stay identifiable.
+        // that entry. The bucket must stay identifiable.
         let bucket = try makeBucket(
             "Nickname", identity: "Pokemon Example",
             files: [

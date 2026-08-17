@@ -299,7 +299,7 @@ public enum ControlsManifestSerializer {
         if let opacity = dpad.opacity {
             lines.append("\(pad),\"opacity\": \(formatNumber(opacity))")
         }
-        // Absent and "dpad" mean the same thing; only "stick" is
+        // Absent and "dpad" mean the same thing. Only "stick" is
         // worth a line. Keeps every existing file byte-stable.
         if dpad.style != .dpad {
             lines.append("\(pad),\"style\": \(jsonString(dpad.style.rawValue))")

@@ -151,7 +151,7 @@ enum ExecutableIconExtractor {
 
 // MARK: - PEImage
 
-/// Minimal PE reader covering just the pieces used here:
+/// Small PE reader that covers only the pieces used here:
 ///   - section table (so RVAs can be translated to file offsets)
 ///   - data directories (used for the import table)
 ///   - resource tree walking (used for icon extraction)

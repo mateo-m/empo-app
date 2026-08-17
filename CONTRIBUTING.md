@@ -27,9 +27,14 @@ bun install
 # Hydrate ANGLE + native deps (downloads from empo-deps when published,
 # or uses locally-built trees — see below)
 xcodegen generate --spec ios/Empo/project.yml --project ios/Empo
-xcodebuild -project ios/Empo/Empo.xcodeproj -target Empo \
-  -sdk iphonesimulator -arch arm64 -configuration Debug build
+xcodebuild -project ios/Empo/Empo.xcodeproj -scheme Empo \
+  -destination 'generic/platform=iOS Simulator' -configuration Debug build
 ```
+
+Build the scheme, not the target. A `-target` build resolves SwiftPM
+packages through the legacy build system, which cannot find the
+generated module map for the `json5cpp` C package and fails with
+`module map file ... json5cpp.modulemap not found`.
 
 ### First-time / dep-bump setup
 
@@ -77,13 +82,13 @@ For device builds, swap `iphonesimulator` for `iphoneos` and create a gitignored
 
 ## Notable hacks
 
-If you explore the code, note these load-bearing tricks:
+If you read the code, note these unusual parts. The build depends on them:
 
-- **Multi-Ruby in one binary.** Three Ruby versions (1.8, 1.9, 3.1) compile separately. Then each version's libruby + binding code merges into one relocatable `.o`, with hidden symbol islanding via `ld -r --unexported_symbols_list`. Each `.o` exports exactly one global, `_mkxp_get_script_binding_NN`. The host applies a per-game session config (`mkxp_applySessionConfig()`) and the engine dispatches accordingly. See [`docs/multi-ruby.md`](docs/multi-ruby.md).
-- **Persistent SDL + Ruby VM.** The app creates SDL, the GL context, OpenAL, and the active Ruby interpreter once and reuses them for the process lifetime. iOS does not let apps relaunch themselves between games, and CRuby's `ruby_init()` is one-shot per process.
-- **Syntax-transform patches on Ruby 3.1.** The Ruby 3.1 build also applies [PR #304's parser patches](https://github.com/mkxp-z/mkxp-z/pull/304) so that mixed-grammar Pokemon Essentials forks (1.8 syntax + 1.9+ runtime methods) parse on Ruby 3.1's VM. The host activates LEGACY mode per game where needed. Otherwise vanilla 3.1 parsing applies.
-- **Win32 emulation in Ruby.** [`win32_wrap.rb`](mkxp-z-apple-mobile/scripts/preload/win32_wrap.rb) (CC0, by Ancurio and Splendide Imaginarius) plus [`platform_compat.rb`](mkxp-z-apple-mobile/scripts/preload/platform_compat.rb) stub out the Windows APIs that games expect. They also neutralize `system`/`fork`/`spawn` so that games cannot launch new processes, and they swallow load errors from encrypted archives.
-- **Touch controls via SDL events.** The overlay calls `SDL_PushEvent` with synthetic key events, so the engine sees them exactly as if they came from a hardware keyboard. New buttons or layouts need no engine changes.
+- **Three Ruby versions in one binary.** Ruby 1.8, 1.9, and 3.1 compile separately. Each version's libruby and binding code then merges into one relocatable `.o`. `ld -r --unexported_symbols_list` hides every symbol but one, so the three copies cannot clash. Each `.o` exports a single global, `_mkxp_get_script_binding_NN`. The host sets a per-game session config with `mkxp_applySessionConfig()`, and the engine then picks the matching Ruby. See [`docs/multi-ruby.md`](docs/multi-ruby.md).
+- **SDL and the Ruby VM stay alive.** The app creates SDL, the GL context, OpenAL, and the Ruby interpreter once. It then reuses them for the whole process. iOS does not let an app restart itself between games, and CRuby's `ruby_init()` runs only once per process.
+- **Syntax patches on Ruby 3.1.** The Ruby 3.1 build applies [PR #304's parser patches](https://github.com/mkxp-z/mkxp-z/pull/304). They let Pokemon Essentials games that mix old syntax with newer methods parse on Ruby 3.1. The host turns on LEGACY mode for a game that needs it. Other games use plain 3.1 parsing.
+- **Windows API stand-ins in Ruby.** [`win32_wrap.rb`](mkxp-z-apple-mobile/scripts/preload/win32_wrap.rb) (CC0, by Ancurio and Splendide Imaginarius) and [`platform_compat.rb`](mkxp-z-apple-mobile/scripts/preload/platform_compat.rb) replace the Windows functions that games expect. They also block `system`, `fork`, and `spawn`, so a game cannot start a new process. They hide load errors from encrypted archives.
+- **Touch controls send SDL events.** The overlay calls `SDL_PushEvent` with made-up key events, so the engine reads them as it reads a real keyboard. New buttons or layouts need no engine change.
 
 ## Pull requests
 

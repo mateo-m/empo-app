@@ -37,7 +37,7 @@ enum ControlsZone {
     /// `absolutePosition` runs per control per frame while the zone
     /// animates, and the uncached call cost hundreds of main-thread
     /// UIKit round trips a second. Cached on the first access that
-    /// actually finds a screen — an early pre-scene access must not
+    /// finds a screen. An early pre-scene access must not
     /// freeze the fallback for the whole process.
     private static var cachedDeviceCornerRadius: CGFloat?
 
@@ -70,7 +70,7 @@ enum ControlsZone {
         forcedOverlay: Bool? = nil
     ) -> Bool {
         // An active screen region carries an explicit per-profile
-        // choice; the geometry heuristic only decides when no
+        // choice. The geometry heuristic only decides when no
         // region is in play.
         if let forcedOverlay { return forcedOverlay }
         guard isPortrait, gameRect.height > 0 else { return false }

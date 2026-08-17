@@ -3,7 +3,7 @@ import SwiftUI
 /// "Press the button you want to use" step of the keyboard rows.
 ///
 /// A controller in keyboard mode sends a key per button, and no list
-/// can say which. The player presses the button; the bindings screen
+/// can say which. The player presses the button. The bindings screen
 /// reads the key and moves on to the target picker.
 struct KeyCaptureSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -14,7 +14,7 @@ struct KeyCaptureSheet: View {
             emblem: "keyboard",
             trailingButton: SheetBarAction("Cancel") { dismiss() }
         ) {
-            SheetProse(
+            SheetBodyText(
                 "Press the button on your controller, or the key on your "
                     + "keyboard, that you want to bind."
             )

@@ -40,7 +40,7 @@ enum GameCatalog {
     /// in-place update registered mid-scan would otherwise have
     /// its staging directory swept - and its container surfaced -
     /// while the import task is still working on it. A delete
-    /// registered mid-scan looks like a half-removed orphan; the
+    /// registered mid-scan looks like a half-removed orphan. The
     /// cleanup below would then race the delete's own removal and
     /// rescue-drain torn directories into `Data/`.
     nonisolated static func scanGames(
@@ -79,8 +79,8 @@ enum GameCatalog {
                 // Same save rescue as user-initiated deletes: a
                 // pre-0.5 orphan can still hold the only copy of
                 // its saves in UserData/. Rescue first (UserData
-                // into Data/, portable saves into Rescued Saves/);
-                // a failed rescue keeps the container for the next
+                // into Data/, portable saves into Rescued Saves/).
+                // A failed rescue keeps the container for the next
                 // scan instead of erasing the saves.
                 if DataDirectory.rescueUserDataBeforeDeletion(of: container) {
                     NSLog(

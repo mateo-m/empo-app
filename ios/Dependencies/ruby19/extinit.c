@@ -4,8 +4,8 @@
  * common.make) and provides Init_ext() so they auto-initialize at
  * Ruby startup.
  *
- * The matching static stub `dmyext.c` (Ruby's source tree) is empty;
- * the build deletes that .o from libruby19-static.a so the real
+ * The matching static stub `dmyext.c` (Ruby's source tree) is empty.
+ * The build deletes that .o from libruby19-static.a so the real
  * Init_ext below wins at link time.
  *
  * iOS doesn't allow dlopen of arbitrary libraries, so we can't ship
@@ -52,7 +52,7 @@ void Init_ext(void)
 
     /* Only define the real socket classes when the host allows this
      * game onto the network. Some Pokemon Essentials forks ship their
-     * own TCPSocket/UDPSocket class hierarchies; with the toggle off
+     * own TCPSocket/UDPSocket class hierarchies. With the toggle off
      * the VM must look exactly like the pre-networking builds (no
      * socket constants at all) so those scripts keep loading without
      * superclass mismatches. */

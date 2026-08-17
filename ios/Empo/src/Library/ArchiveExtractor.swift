@@ -67,7 +67,7 @@ enum ArchiveExtractor {
     }
 
     /// How the archive's bytes should be decoded. Everything except
-    /// `.exeSfx` reads the whole file with libarchive; `.exe` stubs are
+    /// `.exeSfx` reads the whole file with libarchive. `.exe` stubs are
     /// content-sniffed to find the embedded payload.
     private enum Backend {
         /// libarchive, reading from `payloadOffset` (0 = whole file).
@@ -828,7 +828,7 @@ private final class CabReader {
     }
 
     /// CAB headers store DOS local time. Years below 1980 (the DOS
-    /// epoch) mean the field is junk; those entries keep their
+    /// epoch) mean the field is junk. Those entries keep their
     /// extraction time.
     private static func decodeDate(_ file: mscabd_file) -> Date? {
         guard file.date_y >= 1980 else { return nil }

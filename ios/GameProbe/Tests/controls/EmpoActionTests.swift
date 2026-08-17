@@ -61,7 +61,7 @@ final class EmpoActionTests: XCTestCase {
     }
 
     func testRenamedIDsAreConsistentWithCatalog() {
-        // Every rename target must exist; every old id must be gone
+        // Every rename target must exist. Every old id must be gone
         // from the catalog, or the "no alias" rule is broken.
         for (old, new) in EmpoActionCatalog.renamedIDs {
             XCTAssertTrue(EmpoActionCatalog.allIDs.contains(new), new)

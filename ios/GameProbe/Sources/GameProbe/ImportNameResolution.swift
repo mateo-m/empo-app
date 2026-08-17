@@ -9,7 +9,7 @@ import Foundation
 /// derive their data locations from the title in their INI, so a
 /// suffixed duplicate (`Testing 2`) would still call itself
 /// "Testing" and read the other copy's data. Suffixed names are
-/// therefore never produced; every collision resolves to an update
+/// therefore never produced. Every collision resolves to an update
 /// or a refusal.
 public enum ImportNameResolution {
 
@@ -50,7 +50,7 @@ public enum ImportNameResolution {
 
     /// Resolve one selection. `reservedBatchKeys` carries the
     /// lowercased names claimed by earlier selections in the same
-    /// batch; accepted outcomes (fresh/update) reserve their name,
+    /// batch. Accepted outcomes (fresh/update) reserve their name,
     /// refusals don't.
     public static func resolve(
         title: String,

@@ -36,13 +36,13 @@ enum DefaultsKey {
     /// Folder names (inside `Duplicate Games/`) of legacy duplicate
     /// imports the container migration moved out of the library.
     /// `[String]`. Non-empty means the library owes the user a
-    /// one-time explanatory alert; cleared once it's shown.
+    /// one-time explanatory alert. Cleared once it's shown.
     static let pendingDuplicateGameNames = "pendingDuplicateGameNames"
 
     /// Recoveries the pre-literal save heal performed, queued for
     /// the one-time library sheet. A `SaveRecoveryLedger` JSON
     /// blob (`Data`). Non-empty means the library owes the user
-    /// the sheet; cleared once shown.
+    /// the sheet. Cleared once shown.
     static let pendingSaveRecoveries = "pendingSaveRecoveries"
 
     static let cleanupInvalidGames = "cleanupInvalidGames"
@@ -66,7 +66,7 @@ enum DefaultsKey {
         controlsLayoutPrefix + gameID
     }
 
-    /// Global user controller overrides. `controllerMap.global` -> JSON (SPEC §7).
+    /// Global user controller overrides. `controllerMap.global` -> JSON (SPEC section 7).
     static let controllerMapGlobal = "controllerMap.global"
 
     /// Per-game user controller overrides. `controllerMap.<gameID>` -> JSON.

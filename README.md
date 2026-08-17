@@ -12,7 +12,7 @@
 
 <p align="center"><a href="https://discord.gg/m3YnpXMxrB">Discord</a></p>
 
-Empo is a game launcher using an iOS-specific fork of the [mkxp-z](https://github.com/mkxp-z/mkxp-z) RPG Maker engine called [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile) under the hood to run RPG Maker XP/VX/VX Ace and Pokemon Essentials games.
+Empo is a game launcher for iPhone and iPad. It runs RPG Maker XP, VX, and VX Ace games, and Pokemon Essentials games. Inside, it uses [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), an iOS fork of the [mkxp-z](https://github.com/mkxp-z/mkxp-z) engine.
 
 The name's from _emporos_, ancient Greek for a traveler riding on someone else's ship.
 
@@ -45,9 +45,9 @@ In-game battle:
 ## Highlights
 
 - Plays games made for RGSS1 (XP), RGSS2 (VX), RGSS3 (VX Ace), and modern mkxp-z forks.
-- **Multi-Ruby native dispatch.** Three Ruby interpreters (1.8, 1.9, 3.1) ship in one binary. Each game runs on the Ruby version that it targets. Modern Pokemon Essentials forks that ship a `ruby300.dll` route to 3.1 with a syntax-transform compatibility mode. See [`docs/multi-ruby.md`](docs/multi-ruby.md).
+- **Three Ruby versions in one app.** Empo includes Ruby 1.8, 1.9, and 3.1. Each game runs on the version it was written for. Newer Pokemon Essentials games that ship a `ruby300.dll` run on Ruby 3.1, and Empo rewrites their older syntax as needed. See [`docs/multi-ruby.md`](docs/multi-ruby.md).
 - Imports games from folders or archives (`.zip`, `.7z`, `.rar`, JoiPlay's `.jgp`, self-extractable `.exe`).
-- Customizable on-screen D-pad and action buttons, with per-game and per-orientation layouts.
+- On-screen D-pad and action buttons you can move and resize. Layouts can differ per game and per screen orientation.
 - Pause and resume from the library.
 - Library with sort, search, grid/list views, and bulk delete.
 
@@ -67,9 +67,9 @@ https://raw.githubusercontent.com/mateo-m/empo-app/main/altstore-source.json
 
 ### Limitations
 
-- **Single game per session.** After you exit a game, force-close and reopen Empo from the app switcher to start a different one. Cross-session play is on hold until Ruby state cleanup is reliable. See [`docs/multi-session.md`](docs/multi-session.md).
-- **Ogg/Theora movies only.** The engine skips MP4 and other formats silently.
-- **Native Windows DLL dependencies.** Games that use Win32 APIs beyond what the engine's `win32_wrap.rb` emulates can fail to load some assets.
+- **One game per session.** After you exit a game, close Empo from the app switcher and reopen it to start a different one. This limit stays until Ruby can clear its state reliably. See [`docs/multi-session.md`](docs/multi-session.md).
+- **Ogg and Theora movies only.** The engine skips MP4 and other formats without a message.
+- **Windows-only code.** Some games call Windows functions that the engine's `win32_wrap.rb` does not copy. Those games can fail to load some files.
 
 ## How it works
 
@@ -77,7 +77,7 @@ https://raw.githubusercontent.com/mateo-m/empo-app/main/altstore-source.json
 mkxp-z-apple-mobile/   Engine fork (git submodule, pure C++)
 ios/Empo/              The app (SwiftUI + UIKit for touch controls)
 ios/Dependencies/      Cross-compiled static libs (SDL, three Ruby versions, OpenAL, etc.)
-docs/                  Deep dives on the trickier bits
+docs/                  Notes on the harder parts
 ```
 
 For more detail on the architecture:
@@ -85,7 +85,7 @@ For more detail on the architecture:
 | Doc                                                            | What it covers                                                                                     |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | [`docs/multi-ruby.md`](docs/multi-ruby.md)                     | How three Ruby interpreters live in one binary, and how the engine picks the correct one per game. |
-| [`sdl-ruby-workarounds.md`](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/sdl-ruby-workarounds.md) (engine repo) | Why SDL, the GL context, OpenAL, and the active Ruby VM are persistent for the process lifetime.   |
+| [`sdl-ruby-workarounds.md`](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/sdl-ruby-workarounds.md) (engine repo) | Why SDL, the GL context, OpenAL, and the running Ruby VM stay alive for the whole process.   |
 | [`docs/pause-resume.md`](docs/pause-resume.md)                 | Frozen-frame snapshots that bridge the SDL window into SwiftUI transitions.                        |
 | [`docs/multi-session.md`](docs/multi-session.md)               | Why cross-session play is currently disabled.                                                      |
 
@@ -106,7 +106,7 @@ bun run docs:dev
 
 Empo accepts these input shapes:
 
-- A folder with a vanilla RPG Maker `Game.exe` + `Data/` layout.
+- A folder with a standard RPG Maker `Game.exe` and `Data/` layout.
 - A `.zip`, `.7z`, or `.rar` archive with the same content.
 - A `.jgp` (JoiPlay Game Package) manifest that points at game files.
 

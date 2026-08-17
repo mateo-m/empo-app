@@ -2,9 +2,9 @@ import Foundation
 import GameController
 import GameProbe
 
-/// Host-side hardware keyboard input (SPEC §10.3).
+/// Host-side hardware keyboard input (SPEC section 10.3).
 ///
-/// A controller in keyboard mode — the 8BitDo Micro and its kin — is
+/// A controller in keyboard mode, the 8BitDo Micro and its kin, is
 /// a Bluetooth keyboard to iOS, never a `GCController`. Reading the
 /// keyboard here puts those pads on the same binding layers as every
 /// other controller, so one set of binds serves them all.

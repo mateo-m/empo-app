@@ -35,7 +35,7 @@ struct GameLibraryView: View {
     @State private var showInvalidAlert = false
     @State private var path = NavigationPath()
     @State private var searchText = ""
-    /// Search text actually applied to the catalog. Trails
+    /// Search text applied to the catalog. Trails
     /// `searchText` by a debounce interval (see the `.task(id:)`
     /// in `navigationContent`) so each keystroke doesn't re-filter,
     /// re-sort, and re-render the whole grid.
@@ -89,7 +89,7 @@ struct GameLibraryView: View {
     // list builders and their animation keys, instead of every
     // consumer re-running the pipeline. Because `GameEntry` is a
     // reference model, this body only depends on membership and the
-    // fields the sort/filter/animation keys actually read — the
+    // fields the sort/filter/animation keys read. The
     // high-frequency `importProgress` is read exclusively inside
     // the cards.
     private var filteredGames: [GameEntry] {
@@ -110,7 +110,7 @@ struct GameLibraryView: View {
     }
 
     /// True only once the initial scan has confirmed the library is
-    /// actually empty. Before the scan lands, `games.isEmpty` means
+    /// truly empty. Before the scan lands, `games.isEmpty` means
     /// "unknown", and asserting emptiness flashed the empty state on
     /// slow launches (Low Power Mode, thermal throttling) and on
     /// crash-recovery launches where no splash hides it. While
@@ -180,8 +180,8 @@ struct GameLibraryView: View {
             }
             .task(id: searchText) {
                 // Clearing applies instantly (the user expects the
-                // full library back the moment they hit the X);
-                // typing debounces.
+                // full library back the moment they hit the X).
+                // Typing debounces.
                 if !searchText.isEmpty {
                     try? await Task.sleep(for: .milliseconds(250))
                     guard !Task.isCancelled else { return }
@@ -189,12 +189,12 @@ struct GameLibraryView: View {
                 debouncedSearch = searchText
             }
             .task(id: library.initialScanCompleted) {
-                // Size data is only consumed by the size sorts; the
+                // Size data is only consumed by the size sorts. The
                 // walk enumerates every file of every game, so don't
                 // pay for it while another sort is active. Keyed on
                 // scan completion: at launch this view appears while
                 // the initial scan is still off-main and `games` is
-                // empty, so the appear-time run walks nothing — the
+                // empty, so the appear-time run walks nothing. The
                 // refire when the scan lands does the real work.
                 if settings.librarySortOption.usesDiskSizes {
                     refreshGameSizes()
@@ -985,7 +985,7 @@ struct GameLibraryView: View {
                 guard !Task.isCancelled else { return }
                 guard let container = game.container else { continue }
                 // Whole container size (Game/ + EmpoState/ + Logs/
-                // + Metadata/). Game/ dominates in practice.
+                // + Metadata/). Game/ holds almost all of it.
                 sizes[game.id] = await GameMetadata.diskSize(for: container.url)
             }
             guard !Task.isCancelled else { return }
@@ -1011,7 +1011,7 @@ struct GameLibraryView: View {
         }
         // A play session can grow saves/logs, but the walk visits
         // every file of every game, so only re-run it when a size
-        // sort is actually consuming the data.
+        // sort is consuming the data.
         if newPhase == nil && settings.librarySortOption.usesDiskSizes {
             refreshGameSizes()
         }
@@ -1118,7 +1118,7 @@ private struct BulkDeleteAlert: ViewModifier {
 /// `BulkDeleteAlert`.
 private struct DuplicateGamesNotice: ViewModifier {
     @Binding var names: [String]
-    /// False while the splash is still up; one-time surfaces wait
+    /// False while the splash is still up. One-time surfaces wait
     /// for it (see `SaveRecoveryPresentation.active`).
     var active: Bool = true
 
@@ -1313,7 +1313,7 @@ private struct LibraryAlertPresentation: ViewModifier {
                 isPresented: Binding(
                     get: { !saveRescueFailures.isEmpty },
                     set: { presented in
-                        // Dismissal pops the queue; the binding
+                        // Dismissal pops the queue. The binding
                         // then reads true again while more
                         // failures wait, so the next game's
                         // choice presents in turn.

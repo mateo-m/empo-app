@@ -25,8 +25,8 @@ enum RubyVersionPick: String, CaseIterable, Hashable {
 
     /// Decoder for `GameSettings.rubyVersionOverride` and
     /// auto-detected `metadata.rubyVersion`. Old data may have 30
-    /// from when the project shipped a native Ruby 3.0 binding;
-    /// fold it onto v31 since the dispatcher routes 30 to the 3.1
+    /// from when the project shipped a native Ruby 3.0 binding.
+    /// Fold it onto v31 since the dispatcher routes 30 to the 3.1
     /// runtime + Legacy syntax-transform anyway.
     static func from(_ value: Int?) -> RubyVersionPick {
         switch value {
@@ -263,9 +263,9 @@ struct GameSettingsView: View {
             }
             // Pin the restart-required pill above the form via a
             // top safe-area inset. The inset gives the pill a
-            // z-order above the scrolling rows for free. We don't
+            // z-order above the scrolling rows at no extra cost. We don't
             // try to paint a wide backdrop in the inset's
-            // surrounding area because that just produces a
+            // surrounding area because that only produces a
             // visible white/gray panel in light mode (regardless
             // of whether we use material, color, or a blend of
             // both).
@@ -344,7 +344,7 @@ struct GameSettingsView: View {
                         title: "Smooth scaling",
                         isOn: smoothScalingBinding,
                         description:
-                            "Use bilinear filtering when upscaling. Disable for a pixel-perfect look."
+                            "Smooth the picture when the game scales up. Turn it off to keep the pixels crisp."
                     )
                 }
 
@@ -368,7 +368,7 @@ struct GameSettingsView: View {
 
                         Text(
                             effectiveRenderScale.description
-                                + " The game's aspect ratio and on-screen layout do not change. This only sharpens the rendering on high-DPI screens."
+                                + " The game's proportions and on-screen layout do not change. This only makes the picture sharper on high-resolution screens."
                         )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -402,7 +402,7 @@ struct GameSettingsView: View {
                         title: "Solid fonts",
                         isOn: solidFontsBinding,
                         description:
-                            "Disable alpha blending for text, which can look sharper in some games."
+                            "Draw text as solid pixels, with no soft edges. This looks sharper in some games."
                     )
                 }
             }
@@ -454,7 +454,7 @@ struct GameSettingsView: View {
     }
 
     /// The resolved screen placement per orientation. The footer
-    /// only asks whether a placement exists; it does not care which
+    /// only asks whether a placement exists. It does not care which
     /// profile set it. Cached: Form bodies re-render on every
     /// control interaction, and the resolve reads two files.
     @State private var resolvedScreen: ScreenResolution.Result?
@@ -494,13 +494,13 @@ struct GameSettingsView: View {
                     title: "Frame skip",
                     isOn: frameSkipBinding,
                     description:
-                        "Skip rendering frames when the game falls behind. Can improve performance at the cost of smoothness."
+                        "Skip frames when the game falls behind. The game keeps up better, but motion looks less smooth."
                 )
             }
         } header: {
             Text("Performance")
         } footer: {
-            Text("Tune how the engine handles demanding scenes.")
+            Text("Change how the engine handles heavy scenes.")
         }
     }
 
@@ -510,7 +510,7 @@ struct GameSettingsView: View {
                 title: "Postload scripts",
                 isOn: postloadScriptsBinding,
                 description:
-                    "Run Empo's compatibility scripts after the game's own scripts have loaded. Includes generic RGSS shims (RGSS plugin stubs, cheat menu, nil-safe stubs) and Pokemon Essentials specific fixes (graphics, input, online stubs, session reset, tilemap, window skin)."
+                    "Run Empo's compatibility scripts after the game loads its own. They fill in common RPG Maker gaps, like missing plugins and the cheat menu, plus fixes for Pokemon Essentials graphics, input, online play, and tilemaps."
             )
 
             engineFieldRow(.pathCache) {
@@ -518,7 +518,7 @@ struct GameSettingsView: View {
                     title: "Path cache",
                     isOn: pathCacheBinding,
                     description:
-                        "Index files with lowercase paths for faster lookup. Disable if the game has missing asset issues."
+                        "Keep a lowercase index of every game file so lookups are faster. Turn it off if the game can't find its images or sounds."
                 )
             }
 
@@ -526,28 +526,28 @@ struct GameSettingsView: View {
                 title: "In-game keyboard",
                 isOn: useInGameKeyboardBinding,
                 description:
-                    "Use the game's built-in keyboard scene for name entry instead of the iOS soft keyboard. Enable for Pokemon Essentials games whose keyboard layout has custom keys."
+                    "Use the game's own keyboard for names instead of the iOS one. Turn it on for Pokemon Essentials games with custom keys."
             )
 
             SettingsToggle(
                 title: "Touch acts as mouse",
                 isOn: touchMouseBinding,
                 description:
-                    "Sends taps and drags on the game screen to the game as mouse input."
+                    "Send taps and drags on the game screen to the game as mouse input."
             )
 
             SettingsToggle(
                 title: "JoiPlay compatibility",
                 isOn: joiplayCompatBinding,
                 description:
-                    "Tell the game it's running on JoiPlay ($joiplay). Some games then use mobile-friendly code paths, but games patched for JoiPlay's older engine may misbehave. Enable if the game errors on features its desktop version reserves for PC."
+                    "Tell the game it's running on JoiPlay ($joiplay). Some games then switch to their mobile version. Others were patched for JoiPlay's older engine and will misbehave here. Worth trying if a game breaks on something its PC version handles fine."
             )
 
             SettingsToggle(
                 title: "Network access",
                 isOn: networkEnabledBinding,
                 description:
-                    "Let this game use the internet for update checks, downloads, and online features. The game chooses which servers it contacts, and some games do not encrypt what they send. When off, the game behaves as if the device were in airplane mode."
+                    "Let this game use the internet for update checks, downloads, and online features. The game chooses which servers it contacts, and some games do not encrypt what they send. When off, the game acts as if the device is in airplane mode."
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -560,7 +560,7 @@ struct GameSettingsView: View {
                 .pickerStyle(.navigationLink)
 
                 Text(
-                    "Auto-detect inspects the game's scripts and picks the matching Ruby interpreter. Override only if the game fails to launch with a script error or behaves incorrectly."
+                    "Auto-detect reads the game's scripts and picks the correct Ruby version. Change it only if the game shows a script error or runs wrongly."
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -577,7 +577,7 @@ struct GameSettingsView: View {
                     .pickerStyle(.navigationLink)
 
                     Text(
-                        "Controls whether the engine rewrites Ruby 1.x grammar (case labels, hash rockets, kwarg shorthand) into a form Ruby 3 accepts. The 1.8 / 1.9 builds parse legacy syntax natively, so the picker is hidden when those interpreters are active. Switch to Legacy if a Pokemon Essentials game errors with `private method called for Kernel:Module` or similar."
+                        "Set whether the engine rewrites old Ruby 1.x code into a form Ruby 3 accepts. Ruby 1.8 and 1.9 read the old code directly, so this option only shows for Ruby 3. Switch to Legacy if a Pokemon Essentials game shows an error such as `private method called for Kernel:Module`."
                     )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -587,7 +587,7 @@ struct GameSettingsView: View {
         } header: {
             Text("Engine")
         } footer: {
-            Text("Low-level engine options that affect compatibility and loading.")
+            Text("Engine options that change how games load and how well they run.")
         }
     }
 
@@ -598,7 +598,7 @@ struct GameSettingsView: View {
                     title: "Fast forward",
                     isOn: fastForwardEnabledBinding,
                     description:
-                        "Adds a Fast forward toggle to the in-game menu. While on, the game runs at the speed below."
+                        "Add a Fast forward button to the in-game menu. While it is on, the game runs at the speed below."
                 )
 
                 if fastForwardEnabled {

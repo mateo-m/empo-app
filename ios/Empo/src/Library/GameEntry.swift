@@ -11,7 +11,7 @@ enum GameStatus: Hashable, Sendable {
 }
 
 /// Value-type result of a catalog scan pass. Scans run off the main
-/// actor, so they produce these Sendable snapshots; the main actor
+/// actor, so they produce these Sendable snapshots. The main actor
 /// merges them into existing `GameEntry` models via
 /// `GameEntry.apply(_:)` (or creates new models for newcomers).
 struct GameSnapshot: Sendable {
@@ -31,8 +31,8 @@ struct GameSnapshot: Sendable {
 /// `@Observable` reference semantics are the point of this type:
 /// Observation tracks which *properties* each view body reads, so a
 /// card that reads `importProgress` re-renders on every progress
-/// tick while the library container view — which reads membership
-/// and the sortable fields — is untouched. The previous design (a
+/// tick while the library container view, which reads membership
+/// and the sortable fields, is untouched. The previous design (a
 /// value struct inside `GameLibrary.games`) meant every per-entry
 /// mutation replaced an array element, which invalidated the whole
 /// library body dozens of times per second mid-import.
@@ -55,7 +55,7 @@ final class GameEntry: Identifiable {
     /// final `.deleting` state (the model is a class, so the view
     /// held it after removal). Instance identity turns the
     /// replacement into a remove + insert, so every rendered card
-    /// is bound to a model that is actually in `games`.
+    /// is bound to a model that is present in `games`.
     let viewIdentity = UUID()
 
     /// `Documents/Games/<title>/` for ready entries.
@@ -95,7 +95,7 @@ final class GameEntry: Identifiable {
 
     /// Set when this session watches the entry finish an import
     /// (importing -> ready in `apply`). Drives the one-shot shimmer
-    /// on the library artwork; the shimmer's completion clears it.
+    /// on the library artwork. The shimmer's completion clears it.
     /// Session-only by design - a relaunch shows no shimmer.
     var justImported = false
 
@@ -174,10 +174,10 @@ final class GameEntry: Identifiable {
     }
 }
 
-/// Identity for navigation and selection is the stable `id`; two
+/// Identity for navigation and selection is the stable `id`. Two
 /// live models never share an id at the same time (the library
-/// holds one model per container). Across time an id CAN repeat —
-/// a delete followed by a re-import of the same title — so the
+/// holds one model per container). Across time an id CAN repeat,
+/// a delete followed by a re-import of the same title, so the
 /// library's ForEach loops diff by `viewIdentity`, not by this.
 extension GameEntry: Hashable {
     static func == (lhs: GameEntry, rhs: GameEntry) -> Bool {

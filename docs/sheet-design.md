@@ -81,9 +81,9 @@ Top to bottom, each zone optional except the action:
      symbol as ONE centered block at the top of the content
      (welcome-sheet style - pass `emblem:` to `StandardSheet`).
      A bar title plus a floating symbol reads as two competing
-     anchors; never split them.
-2. **Prose** - `subheadline` secondary text, LEADING-aligned.
-   Reading content is always leading; only the identity block
+     anchors. Never split them.
+2. **Body text** - `subheadline` secondary text, LEADING-aligned.
+   Reading content is always leading. Only the identity block
    centers.
 3. **Card** - rows in a `secondarySystemGroupedBackground` card.
    Rows are leading-aligned: leading thumbnail (44pt, `Radius.sm`),
@@ -95,8 +95,8 @@ Top to bottom, each zone optional except the action:
 5. **Primary action** - one full-width button at the bottom
    (`SheetPrimaryButton`). Destructive actions get their own card
    above it, never a red primary button. Multi-step pickers may
-   confirm from the toolbar instead (`ImportRootPickerSheet`);
-   that is the system's picker pattern, not a violation.
+   confirm from the toolbar instead (`ImportRootPickerSheet`).
+   That is the system's picker pattern, not a break of this rule.
 
 ## Touch targets
 
@@ -117,15 +117,14 @@ Top to bottom, each zone optional except the action:
 ## Motion and feel
 
 - Scale animation effort to frequency. Rare sheets (a one-time
-  recovery) may add delight; everyday sheets (sort, image
-  sources) present with the system transition and nothing else;
-  actions the user repeats constantly animate minimally or not at
-  all.
-- Use the `Motion` tokens; do not invent durations. UI motion
-  stays at or under 300ms (`snappy`, `standard`); only decorative
-  ambience runs longer. Entrances ease out - never ease in.
+  recovery) may add delight. Everyday sheets (sort, image
+  sources) use the system transition and nothing else. Actions
+  the user repeats often animate very little or not at all.
+- Use the `Motion` tokens. Do not invent durations. UI motion
+  stays at or under 300ms (`snappy`, `standard`). Only decorative
+  movement runs longer. Entrances ease out, never ease in.
 - Be slow where the user decides, fast where the system responds.
-  A confirmation may breathe; feedback for a tap must be
+  A confirmation may take its time. Feedback for a tap must be
   immediate.
 - The system sheet handles drag physics (interruption, velocity
   dismissal, edge damping). Do not re-implement or fight it, and
@@ -148,7 +147,7 @@ Top to bottom, each zone optional except the action:
   library the sheet talks about.
 - A one-time sheet treats ANY dismissal (button or swipe) as
   acknowledgment. Derive `isPresented` from the pending state and
-  clear that state in the binding's setter; never rely on the
+  clear that state in the binding's setter. Never rely on the
   button alone.
 - Keep presentation logic out of large views: a sheet owns its
   loading, derived state, and dismissal in a self-contained

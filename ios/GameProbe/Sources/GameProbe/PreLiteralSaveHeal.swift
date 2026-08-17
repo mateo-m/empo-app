@@ -22,16 +22,16 @@ import Foundation
 ///     file away), and the heal never overwrites player data.
 ///   - Otherwise exactly one member is renamed to the base name:
 ///     newest modification time wins (renames never touch mtime,
-///     so mtime is true content age); ties go to the FEWEST
+///     so mtime is true content age). Ties go to the FEWEST
 ///     layers (a member with fewer layers joined the chain
-///     later); remaining ties break lexicographically.
+///     later). Remaining ties break lexicographically.
 ///   - Every other member stays on disk untouched, as a
 ///     Files-visible manual override.
 ///
 /// Content is deliberately NOT validated: chained names are not
 /// all Ruby Marshal saves (`config.ini.bak` chained too, because
 /// the engine treated every `.bak` as save-shaped). The heal
-/// undoes rename damage; it does not judge file contents.
+/// undoes rename damage. It does not judge file contents.
 public enum PreLiteralSaveHeal {
 
     /// One chain layer at the end of a name: `.pre-literal.bak`
@@ -53,7 +53,7 @@ public enum PreLiteralSaveHeal {
     public struct Outcome: Equatable, Sendable {
         /// Base names that got a member promoted back.
         public var promoted: [String] = []
-        /// Chained names whose promotion rename failed; they stay
+        /// Chained names whose promotion rename failed. They stay
         /// on disk under the chained name and the next launch
         /// retries.
         public var failures: [String] = []

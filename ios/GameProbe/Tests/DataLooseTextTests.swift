@@ -62,7 +62,7 @@ final class DataLooseTextTests: XCTestCase {
 
     func testArbitraryHighBytesNeverDecodeToNil() {
         // 0xFF is invalid as UTF-8 here and invalid as a Shift-JIS
-        // lead byte; the Latin-1 fallback maps every byte.
+        // lead byte. The Latin-1 fallback maps every byte.
         let junk = Data([0xFF, 0x00, 0x81, 0xAD, 0xFE])
         XCTAssertNotNil(junk.decodeAsLooseText())
 

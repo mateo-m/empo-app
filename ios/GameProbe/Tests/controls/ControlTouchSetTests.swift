@@ -4,7 +4,7 @@ import XCTest
 
 final class ControlTouchSetTests: XCTestCase {
 
-    /// An idle set tracks NOTHING — `isTracking` must not default to
+    /// An idle set tracks NOTHING. `isTracking` must not default to
     /// permissive when no touch is live, or late move samples from a
     /// lifted finger would keep flowing after touch-end.
     func testIdleSetTracksNothing() {
@@ -24,7 +24,7 @@ final class ControlTouchSetTests: XCTestCase {
     }
 
     /// A second finger on the same control is TRACKED, but it must
-    /// not report a second engagement — a button must not press twice
+    /// not report a second engagement. A button must not press twice
     /// and the pad must not restart its sequence.
     func testSecondTouchJoinsWithoutRepeatingTheEngagement() {
         var touches = ControlTouchSet<String>()
@@ -62,7 +62,7 @@ final class ControlTouchSetTests: XCTestCase {
         XCTAssertFalse(touches.isEngaged)
     }
 
-    /// An unknown touch lifting must not release the control — that
+    /// An unknown touch lifting must not release the control, that
     /// would drop held keys while a real finger is still down.
     func testUnknownTouchEndingChangesNothing() {
         var touches = ControlTouchSet<String>()
@@ -80,7 +80,7 @@ final class ControlTouchSetTests: XCTestCase {
         // The lifted finger's late move samples must be rejected too.
         XCTAssertFalse(touches.isTracking("a"))
         // touchesEnded and touchesCancelled can both arrive for one
-        // touch; the second must be a no-op, not a second release.
+        // touch. The second must be a no-op, not a second release.
         XCTAssertEqual(touches.end("a"), .notTracked)
     }
 
@@ -144,9 +144,9 @@ final class ControlHitShapeTests: XCTestCase {
         XCTAssertFalse(ControlHitShape.circleContains(width: 150, height: 150, x: 75, y: -1))
     }
 
-    /// The frame's corners are NOT hit-testable — corner touches fall
+    /// The frame's corners are NOT hit-testable. Corner touches fall
     /// through to whatever sits below the control. (3-4-5 triangle:
-    /// (120, 135) is at distance exactly 75, inside; the corner at
+    /// (120, 135) is at distance exactly 75, inside. The corner at
     /// distance 75 * sqrt(2) is far outside.)
     func testCornersFallOutsideTheCircle() {
         XCTAssertFalse(ControlHitShape.circleContains(width: 150, height: 150, x: 0, y: 0))
@@ -157,7 +157,7 @@ final class ControlHitShapeTests: XCTestCase {
     }
 
     /// Non-square bounds use the SHORTER side for the radius, still
-    /// centered in the full box. Both aspect ratios are pinned —
+    /// centered in the full box. Both aspect ratios are pinned.
     /// "shorter side" implemented as either fixed axis passes the
     /// other orientation.
     func testNonSquareBoundsUseShorterSide() {

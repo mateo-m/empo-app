@@ -17,7 +17,7 @@ public struct LayoutProfileStore {
 
     /// Extends the game-folder rule with a leading-`$` rejection so a
     /// profile can never collide with the pin sentinels. Returns nil
-    /// for an unusable name; never silently strips.
+    /// for an unusable name. Never silently strips.
     public static func validatedName(_ raw: String) -> String? {
         let name = raw.precomposedStringWithCanonicalMapping
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -90,7 +90,7 @@ public struct LayoutProfileStore {
     }
 
     /// The profile's touch section when the file exists and parses
-    /// valid; nil for missing OR invalid. `readProfile` sets
+    /// valid. Nil for missing OR invalid. `readProfile` sets
     /// `invalid` exactly when `touch` is nil, so this is the ONE
     /// predicate resolution callers need.
     public func validTouch(_ name: String) -> TouchSection? {
@@ -98,7 +98,7 @@ public struct LayoutProfileStore {
     }
 
     /// Reads a profile's touch section. Error findings go to the
-    /// profile's own log file; a `bindings` section is carried (for
+    /// profile's own log file. A `bindings` section is carried (for
     /// preservation on save) but ignored at resolution.
     public func readProfile(_ name: String) -> ProfileRead? {
         let url = controlsURL(name)
@@ -209,7 +209,7 @@ public struct LayoutProfileStore {
     // MARK: - Screen region
 
     /// nil when the file is absent. Invalid content parses to a
-    /// result with findings and nil regions; the caller logs.
+    /// result with findings and nil regions. The caller logs.
     public func readScreen(_ name: String) -> ScreenRegionFile.ReadResult? {
         guard let data = try? Data(contentsOf: screenURL(name)) else { return nil }
         return ScreenRegionFile.parse(data)

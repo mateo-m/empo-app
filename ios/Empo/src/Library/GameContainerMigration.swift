@@ -13,7 +13,7 @@ import GameProbe
 /// .mojibakeRenameTarget`), through the same planner, quarantine
 /// policy, and defaults-key transfer as the uuid migration. A
 /// successful rename also re-keys the game's profile-migration
-/// record entry and heals its shared data directory right away;
+/// record entry and heals its shared data directory right away.
 /// `DataDirectory.resolve` repeats the heal at game launch for
 /// anything this pass could not fix.
 ///
@@ -37,7 +37,7 @@ import GameProbe
 /// (`controlsLayout.<id>`, `controllerMap.<id>`) move with the
 /// canonical copy. All other per-game state (saves, settings,
 /// metadata, logs, controls manifest) lives inside the container
-/// and travels with the rename for free.
+/// and moves with the rename at no extra cost.
 ///
 /// Must run before anything enumerates `GameContainer.discover()`
 /// (library scan, save migration, crash tracker), so both singleton
@@ -117,7 +117,7 @@ enum GameContainerMigration {
             // keyed by the FULL folder name - that is the container
             // id for title-based names - so it doubles as the
             // legacy id here. The scalar check skips the INI read
-            // for the ASCII-named bulk of the library; mojibake
+            // for the ASCII-named bulk of the library. Mojibake
             // always contains scalars far above Latin.
             if folderName.unicodeScalars.contains(where: { $0.value >= 0x0370 }) {
                 let metadata = GameMetadata.load(from: GameContainer(url: url))
@@ -193,7 +193,7 @@ enum GameContainerMigration {
                 do {
                     try fm.moveItem(at: context.url, to: destination)
                 } catch {
-                    // Leave the tree under its legacy name; the next
+                    // Leave the tree under its legacy name. The next
                     // launch retries. Discovery still surfaces it
                     // (any directory is a container), so the game
                     // stays playable meanwhile - including its
@@ -240,7 +240,7 @@ enum GameContainerMigration {
 
     /// Move a duplicate legacy import - whole, saves included - out
     /// of the library into `Duplicate Games/`. Nothing is merged or
-    /// deleted; the user resolves duplicates manually in Files. The
+    /// deleted. The user resolves duplicates manually in Files. The
     /// move is recorded so the library can show the one-time
     /// explanatory alert (`pendingDuplicateNoticeNames`).
     private static func quarantineDuplicate(
@@ -252,7 +252,7 @@ enum GameContainerMigration {
         // a quarantined copy can hold the user's only copy of its
         // saves (it never launches, so the launch drain never
         // reaches it), and the alert promised the copies were
-        // preserved. Small price in quota; irreplaceable data.
+        // preserved. Small price in quota. Irreplaceable data.
         try? fm.createDirectory(at: duplicatesRootURL, withIntermediateDirectories: true)
 
         // Case-insensitive collision check, per `uniqueName`'s
@@ -338,7 +338,7 @@ enum GameContainerMigration {
     }
 
     /// Copy the per-game UserDefaults families to the new id,
-    /// returning the keys this call actually WROTE (so a failed
+    /// returning the keys this call WROTE (so a failed
     /// rename can roll exactly those back). An existing value
     /// under the new id wins - it belongs to a same-named game
     /// that already migrated. The old keys stay until

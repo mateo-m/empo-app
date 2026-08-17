@@ -147,7 +147,8 @@ struct DebugOverlayView: View {
     }
 
     /// Row that mirrors the FPS row layout: left-aligned label,
-    /// right-flexible graph. The graph autoscales between the
+    /// graph on the right that takes the rest of the width. The
+    /// graph autoscales between the
     /// minimum and maximum seen values, so small growth stays
     /// visible even as the baseline increases. That makes leak
     /// trends easy to spot.

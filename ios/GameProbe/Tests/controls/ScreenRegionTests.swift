@@ -128,7 +128,7 @@ final class ScreenRegionTests: XCTestCase {
     }
 
     func testParseEpsilonAtTheBoundary() {
-        // 0.3 + 0.7 can exceed 1 by floating-point noise; the
+        // 0.3 + 0.7 can exceed 1 by floating-point noise. The
         // epsilon keeps the entry valid.
         let result = ScreenRegionFile.parse(
             data(#"{ "version": 1, "portrait": { "x": 0.3, "y": 0, "w": 0.7, "h": 1 } }"#))
@@ -149,7 +149,7 @@ final class ScreenRegionTests: XCTestCase {
 
     func testParseRejectsBooleanAndStringNumbers() {
         // JSON booleans bridge to Int/Double via NSNumber on both
-        // platforms; the objCType guard must reject them.
+        // platforms. The objCType guard must reject them.
         for json in [#"{ "version": true }"#, #"{ "version": "1" }"#] {
             let result = ScreenRegionFile.parse(data(json))
             XCTAssertTrue(result.findings.contains { $0.hasPrefix("S002") }, json)
@@ -431,7 +431,7 @@ final class ScreenRegionTests: XCTestCase {
     }
 
     func testNamedPinIsTerminalOverTheDefault() {
-        // The pinned profile has no screen file; a default region
+        // The pinned profile has no screen file. A default region
         // exists. The pin is terminal: engine-auto, never the
         // default's region.
         store.createProfile("Mine", touch: sampleTouch())

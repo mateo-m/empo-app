@@ -3,7 +3,7 @@ import Foundation
 /// A game-picture region as fractions of the window, top-left
 /// origin. Dimensionless, so it survives rotation and device
 /// changes. `overlay` floats the touch controls OVER the game
-/// instead of reserving a zone below it — the player opts in per
+/// instead of reserving a zone below it. The player opts in per
 /// orientation when the region leaves no room for a controls zone.
 public struct ScreenRegion: Equatable, Sendable {
     public var x: Double
@@ -38,9 +38,9 @@ public enum ScreenPreset: String, CaseIterable, Sendable {
     case center
 }
 
-/// One orientation's screen placement — the single per-orientation
+/// One orientation's screen placement. The single per-orientation
 /// value in `screen.json`. A preset serializes as a bare string, a
-/// custom region as an object; same key either way.
+/// custom region as an object. Same key either way.
 public enum ScreenPlacement: Equatable, Sendable {
     case preset(ScreenPreset)
     case region(ScreenRegion)
@@ -58,7 +58,7 @@ public enum ScreenPlacement: Equatable, Sendable {
 }
 
 /// `Profiles/<Name>/screen.json`: Empo-private, profiles only. NOT
-/// part of the frozen controls v1 spec; the loader never reads it
+/// part of the frozen controls v1 spec. The loader never reads it
 /// from game folders. Strict parse with its own small `S` finding
 /// namespace. Invalid content counts as absent for resolution.
 public enum ScreenRegionFile {
@@ -114,7 +114,7 @@ public enum ScreenRegionFile {
         _ raw: Any?, key: String, findings: inout [String]
     ) -> ScreenPlacement? {
         guard let raw else { return nil }
-        // A bare string is a named preset; the rect gets computed
+        // A bare string is a named preset. The rect gets computed
         // per device at apply time.
         if let text = raw as? String {
             guard let preset = ScreenPreset(rawValue: text) else {
@@ -136,7 +136,7 @@ public enum ScreenRegionFile {
             findings.append("S004: '\(key)' is missing x/y/w/h numbers")
             return nil
         }
-        // Optional per-orientation flag; only a JSON true enables
+        // Optional per-orientation flag. Only a JSON true enables
         // it (numbers and strings stay ignored).
         let overlay = entry["overlay"].map { isJSONBool($0) && ($0 as? Bool) == true } ?? false
         let region = ScreenRegion(x: x, y: y, w: w, h: h, overlay: overlay).rounded()
@@ -154,8 +154,8 @@ public enum ScreenRegionFile {
     // MARK: - Serialize
 
     /// Stable bytes: fixed key order, fixed 4-decimal numbers. Only
-    /// the orientations that exist are written. Both nil returns nil
-    /// — the caller deletes the file instead of writing an empty one.
+    /// the orientations that exist are written. Both nil returns nil.
+    /// The caller deletes the file instead of writing an empty one.
     public static func serialize(
         portrait: ScreenPlacement?, landscape: ScreenPlacement?
     ) -> Data? {

@@ -50,7 +50,7 @@ final class GameFolderNameTests: XCTestCase {
 
     func testLongTitleCappedFromTheFront() {
         // Distinct head/tail so keeping the wrong end (suffix
-        // instead of prefix) fails, not just a wrong length.
+        // instead of prefix) fails, not only a wrong length.
         let long = "HEAD " + String(repeating: "a", count: 300) + " TAIL"
         let sanitized = GameFolderName.sanitize(long)
         XCTAssertEqual(sanitized.count, GameFolderName.maxLength)
@@ -74,7 +74,7 @@ final class GameFolderNameTests: XCTestCase {
 
     func testWindowsReservedStemsGetAnUnderscore() {
         XCTAssertEqual(GameFolderName.sanitize("NUL"), "NUL_")
-        // The match ignores case; the original case stays.
+        // The match ignores case. The original case stays.
         XCTAssertEqual(GameFolderName.sanitize("con"), "con_")
         XCTAssertEqual(GameFolderName.sanitize("COM3.txt"), "COM3_.txt")
         // The stem split takes only the FIRST dot segment.
@@ -103,7 +103,7 @@ final class GameFolderNameTests: XCTestCase {
     }
 
     func testEscapeRunsBeforeTheLengthCap() {
-        // "NUL." + 56 a's is 60 chars; the escape makes it 61, and
+        // "NUL." + 56 a's is 60 chars. The escape makes it 61, and
         // prefix(60) then trims one trailing "a". Escaping after the
         // cap would instead produce a 61-char result and break both
         // the cap and idempotence.
@@ -116,7 +116,7 @@ final class GameFolderNameTests: XCTestCase {
     // MARK: - Byte cap
 
     func testByteCapTrimsFourByteEmoji() {
-        // 70 emoji pass the 60-char cap at 60; 60 x 4 = 240 bytes,
+        // 70 emoji pass the 60-char cap at 60. 60 x 4 = 240 bytes,
         // so the byte cap trims down to 45 (180 / 4).
         let title = String(repeating: "🎮", count: 70)
         let sanitized = GameFolderName.sanitize(title)
@@ -127,7 +127,7 @@ final class GameFolderNameTests: XCTestCase {
     func testByteCapTrimsOnGraphemeBoundaries() {
         // A skin-tone cluster is 8 UTF-8 bytes and contains no
         // format characters, so it survives the character
-        // replacement intact. 22 clusters are 176 bytes; a 23rd
+        // replacement intact. 22 clusters are 176 bytes. A 23rd
         // would break the 180-byte cap. The trim must remove whole
         // clusters, never half of one.
         let cluster = "👍🏽"
@@ -221,7 +221,7 @@ final class GameFolderNameTests: XCTestCase {
     }
 
     func testUniqueNameProbes999CandidatesThenFallsBackToUUID() {
-        // The preferred name is probe 1; "Game 2"..."Game 999" are
+        // The preferred name is probe 1. "Game 2"..."Game 999" are
         // probes 2...999. The UUID fallback returns without another
         // probe.
         var probes = 0

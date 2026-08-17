@@ -35,13 +35,13 @@ public enum KirinControlsTranslator {
 
     public static func translate(data: Data, metrics: TouchZoneMetrics) -> Translation {
         if data.count > maxFileSize {
-            return Translation(manifest: nil, notes: ["file exceeds 128 KiB; ignored"])
+            return Translation(manifest: nil, notes: ["file is larger than 128 KiB, ignored"])
         }
 
         guard let text = String(data: data, encoding: .utf8),
             let root = JSON5LiteParser.parseObject(text)
         else {
-            return Translation(manifest: nil, notes: ["invalid Kirin touch controls file; ignored"])
+            return Translation(manifest: nil, notes: ["invalid Kirin touch controls file, ignored"])
         }
 
         var notes: [String] = []
@@ -126,7 +126,7 @@ public enum KirinControlsTranslator {
         let landscapeButtons = landscapeLayout?.buttons ?? []
 
         if portraitButtons.isEmpty && landscapeButtons.isEmpty {
-            return Translation(manifest: nil, notes: notes + ["no usable buttons; ignored"])
+            return Translation(manifest: nil, notes: notes + ["no usable buttons, ignored"])
         }
 
         var finalPortrait = portraitLayout

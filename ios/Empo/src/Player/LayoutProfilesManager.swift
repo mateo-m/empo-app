@@ -3,7 +3,7 @@ import GameProbe
 
 extension Notification.Name {
     /// Posted after a profile's content changes on disk. The object
-    /// is the originator; observers ignore their own posts. userInfo
+    /// is the originator. Observers ignore their own posts. userInfo
     /// carries `name`.
     static let layoutProfileDidChange = Notification.Name("layoutProfileDidChange")
 
@@ -109,7 +109,7 @@ enum LayoutProfilesManager {
         return profiles.filter { $0.localizedCaseInsensitiveContains(trimmed) }
     }
 
-    /// Creates a profile seeded from the builtin defaults — ONE
+    /// Creates a profile seeded from the builtin defaults. ONE
     /// home for the operation the settings list and the builtin
     /// viewer both offer.
     @discardableResult
@@ -155,7 +155,7 @@ enum LayoutProfilesManager {
     // MARK: - Builtins for the materializer
 
     /// The app's builtin default layouts as GameProbe values. The
-    /// materializer needs concrete W3C-keyed layouts; GameProbe has
+    /// materializer needs concrete W3C-keyed layouts. GameProbe has
     /// no scancode table for the app's defaults.
     nonisolated static func builtins() -> ProfileMaterializer.Builtins {
         ProfileMaterializer.Builtins(

@@ -85,7 +85,7 @@ enum Radius {
     static let sm: CGFloat = 8
     /// 12pt: cards, dialogs, sheets
     static let md: CGFloat = 12
-    /// 16pt: large cards, prominent containers
+    /// 16pt: large cards, outer containers
     static let lg: CGFloat = 16
     /// 24pt: hero elements, large artwork
     static let xl: CGFloat = 24

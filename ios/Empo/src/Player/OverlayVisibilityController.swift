@@ -4,7 +4,7 @@ import SwiftUI
 /// Holds the session's `OverlayVisibility` facts and writes the one
 /// binding the player sees.
 ///
-/// The input managers report what happened; the rule in GameProbe
+/// The input managers report what happened. The rule in GameProbe
 /// decides. Neither manager touches `controlsHidden` itself.
 @MainActor
 final class OverlayVisibilityController {

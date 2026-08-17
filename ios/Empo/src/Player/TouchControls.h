@@ -2,7 +2,7 @@
 //
 // This header used to include TCButton (on-screen action button) and
 // TCDPadView (on-screen directional pad). Both have been replaced by
-// SwiftUI + Liquid Glass equivalents in GameControls.swift; what's
+// SwiftUI + Liquid Glass equivalents in GameControls.swift. What's
 // left here is the invisible keyboard field that UIKit has to own
 // (for system-keyboard IME and scancode injection on key events).
 

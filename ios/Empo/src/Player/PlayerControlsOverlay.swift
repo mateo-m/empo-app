@@ -13,7 +13,7 @@ struct PlayerControlsOverlay: View {
     let controlsMinY: CGFloat
     let editMode: Bool
     /// Injected so the profile editor can fake per-orientation
-    /// insets; the player passes the live window value.
+    /// insets. The player passes the live window value.
     let safeArea: EdgeInsets
     /// The out-of-player editor: every action renders as
     /// available and no hit regions are published.
@@ -28,7 +28,7 @@ struct PlayerControlsOverlay: View {
         let separatedPositions = layout.separatedDisplayPositions(
             for: geo.size, safeArea: safeArea, controlsMinY: controlsMinY,
             // The separation pass stays off ONLY while a CONTROL
-            // drags (neighbors must not move under the finger; the
+            // drags (neighbors must not move under the finger, the
             // rigid collision owns that case). Everywhere else it
             // runs, so a crushed zone rearranges its controls
             // instead of clamping them into a stack.
@@ -84,7 +84,7 @@ struct PlayerControlsOverlay: View {
             .gesture(dpadDragGesture, including: editMode ? .all : .subviews)
     }
 
-    /// The movement control renders per style; everything around it
+    /// The movement control renders per style. Everything around it
     /// (position, drag, edit gestures, hit region) is shared.
     @ViewBuilder
     private func movementControl(size: CGFloat) -> some View {
@@ -202,7 +202,7 @@ struct PlayerControlsOverlay: View {
         draggedID.map(AnyHashable.init) ?? AnyHashable("dpad")
     }
 
-    /// The dragged control's stored center in absolute space; the
+    /// The dragged control's stored center in absolute space. The
     /// side memory seeds from it so the drag's FIRST event already
     /// knows its approach side.
     private func currentAbsoluteCenter(
@@ -228,7 +228,7 @@ struct PlayerControlsOverlay: View {
     }
 
     /// Shared drag pipeline: alternate the zone clamp and the rigid
-    /// collision until stable — either alone can undo the other at
+    /// collision until stable. Either alone can undo the other at
     /// the zone edges. An update that STILL collides after the
     /// solve (no free space on the approach side) is rejected: the
     /// control holds its last valid position instead of entering

@@ -3,7 +3,7 @@ import Foundation
 /// The record of what `PreLiteralSaveHeal` promoted, queued until
 /// the library shows its one-time recovery sheet. Pure data and
 /// policy: the app persists the encoded ledger (one UserDefaults
-/// blob) and renders the sheet; everything a test can pin lives
+/// blob) and renders the sheet. Everything a test can pin lives
 /// here.
 public enum SaveRecoveryLedger {
 
@@ -11,7 +11,7 @@ public enum SaveRecoveryLedger {
     public struct Record: Codable, Equatable, Identifiable, Sendable {
         /// Display name: the game the recovery belongs to.
         /// The healed data directory's leaf in every common case
-        /// (launch and per-game heals alike); the container
+        /// (launch and per-game heals alike). The container
         /// folder name only on the per-game FALLBACK path, where
         /// the healed directory is the container's `UserData/`
         /// and its leaf would name no game.
@@ -73,7 +73,7 @@ public enum SaveRecoveryLedger {
     }
 
     /// A missing or undecodable blob reads as an empty ledger: the
-    /// sheet then simply does not show, and the next heal writes a
+    /// sheet then does not show, and the next heal writes a
     /// fresh one.
     public static func decode(_ data: Data?) -> [Record] {
         guard let data else { return [] }

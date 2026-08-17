@@ -11,15 +11,15 @@
 # Shape: the two SDK trees build on PARALLEL runners (halving
 # wall-clock), then a stitch job verifies, packages, publishes, and
 # commits the pin straight to the dispatched branch. Parallelism
-# BETWEEN runners is safe — the "sequential, no parallel races" rule
+# BETWEEN runners is safe. The "sequential, no parallel races" rule
 # in the rebuild scripts protects shared state within one checkout,
 # and each runner has its own.
 #
 # Secrets:
 #   EMPO_DEPS_READ_TOKEN     read empo-deps (ANGLE headers for mkxp-core)
 #   EMPO_DEPS_PUBLISH_TOKEN  write empo-deps (create the release)
-#   EMPO_RELEASE_TOKEN       fine-grained PAT (Contents: RW here);
-#                            powers the direct pin commit
+#   EMPO_RELEASE_TOKEN       fine-grained PAT (Contents: RW here).
+#                            Powers the direct pin commit
 
 name: deps-publish
 
@@ -47,7 +47,7 @@ jobs:
     name: Build ${{ matrix.sdk }} tree
     # Dispatch-only workflow, so routing to a self-hosted Mac is safe:
     # fork PRs can never reach it (build.yml stays hosted-only).
-    # "self" queues until the registered Mac runner is online — pick
+    # "self" queues until the registered Mac runner is online. Pick
     # "hosted" when dispatching while it's offline.
     runs-on: ${{ github.event.inputs.runner == 'hosted' && 'macos-latest' || fromJSON('["self-hosted", "macOS"]') }}
     timeout-minutes: 300
@@ -82,7 +82,7 @@ jobs:
         # Fresh clones give sources and their checked-in autotools
         # outputs arbitrary sub-second mtime ordering, so make may
         # decide configure/Makefile.in are stale and regenerate them
-        # with whatever automake brew ships — which hard-errors on the
+        # with whatever automake brew ships, which hard-errors on the
         # version mismatch. We always build from the checked-in
         # generated files, so touch them (in dependency order) to be
         # strictly newer than their inputs. Local machines never hit

@@ -73,7 +73,7 @@ extension Data {
     }
 
     /// Punctuation and signs that appear in Western titles and INI
-    /// prose. Smart double quotes stay out: their Windows-1252
+    /// text. Smart double quotes stay out: their Windows-1252
     /// bytes (0x93/0x94) are common kanji lead bytes, and straight
     /// quotes dominate in INI files anyway.
     private static let westernPunctuation = Set<Unicode.Scalar>(

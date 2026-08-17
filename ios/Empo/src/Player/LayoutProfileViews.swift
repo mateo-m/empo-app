@@ -33,7 +33,7 @@ struct LayoutProfilePickerSheet: View {
                     }
                 } footer: {
                     Text(
-                        "Automatic uses the game's layout when it ships one, else your default profile, else the built-in layout."
+                        "Automatic uses the game's own layout first. No layout? Your default profile. No default? Empo's built-in one."
                     )
                 }
 
@@ -63,7 +63,7 @@ struct LayoutProfilePickerSheet: View {
         let store = LayoutProfilesManager.store
         pin = store.loadPin(forGameFolder: container.url).pin
         profiles = store.listProfiles()
-        // What Automatic yields, ignoring any pin — the SAME
+        // What Automatic yields, ignoring any pin. The SAME
         // resolver entry as the bound layout, so the row cannot
         // drift from what the player does.
         let ambient = LayoutResolution.resolve(
@@ -155,13 +155,13 @@ struct LayoutProfilesSettingsView: View {
                 } header: {
                     Text("Built in profiles")
                 } footer: {
-                    Text("Empo ships this layout. Games use it when nothing else applies.")
+                    Text("Empo comes with this layout. Games use it when nothing else applies.")
                 }
             }
 
             // ONE section with the ForEach as its direct content:
             // the rows read as one list, and List instantiates and
-            // diffs them lazily by their stable name IDs — the shape
+            // diffs them lazily by their stable name IDs. The shape
             // that stays smooth when the list grows.
             if !visibleProfiles.isEmpty {
                 Section("Custom profiles") {
@@ -334,7 +334,7 @@ enum EditorCanvas {
     }
 
     /// Synthetic WINDOW safe-area insets (notch and home indicator),
-    /// not the zone metrics — those already contain the game height
+    /// not the zone metrics. Those already contain the game height
     /// and toolbar line, and stacking them again empties the clamp
     /// band. The values match the reference device.
     static func safeArea(for orientation: ControlsOrientation) -> EdgeInsets {
@@ -365,7 +365,7 @@ enum EditorCanvas {
 /// Out-of-player profile editor: the real overlay components on a
 /// mock canvas. Its own `ControlsLayout` instance (the singleton may
 /// be bound to a paused game), synthetic metrics, full device-point
-/// layout with only the rendering scaled — so clamping matches the
+/// layout with only the rendering scaled, so clamping matches the
 /// player exactly.
 struct LayoutProfileEditorView: View {
     let profileName: String
@@ -408,7 +408,7 @@ struct LayoutProfileEditorView: View {
 
     /// The placement as a rect on the MOCK canvas. A preset
     /// computes against the reference canvas and the placeholder's
-    /// 4:3 aspect — the same per-device rule the player applies to
+    /// 4:3 aspect. The same per-device rule the player applies to
     /// the real window.
     private var screenRegion: ScreenRegion? {
         guard let placement = screenPlacement else { return nil }
@@ -440,9 +440,9 @@ struct LayoutProfileEditorView: View {
             width: region.w * size.width, height: region.h * size.height)
     }
 
-    /// The placeholder is the 4:3 fit INSIDE the region — the
-    /// engine letterboxes centered inside it — so the controls
-    /// clamp against what the player will actually show.
+    /// The placeholder is the 4:3 fit INSIDE the region, the
+    /// engine letterboxes centered inside it, so the controls
+    /// clamp against what the player will show.
     private var placeholderGameRect: CGRect {
         guard let regionRect = screenRegionRect else { return fakeGameRect }
         var width = regionRect.width
@@ -534,7 +534,7 @@ struct LayoutProfileEditorView: View {
             layout: layout,
             showAddSheet: $showAddSheet,
             // Reset is a per-game concept (unpin, or back to the
-            // ambient chain); the editor has neither. Rename and
+            // ambient chain). The editor has neither. Rename and
             // delete live in the profiles list.
             showResetConfirm: .constant(false),
             editingButton: $editingButton,
@@ -668,13 +668,13 @@ struct LayoutProfileEditorView: View {
 /// the scale-to-fit wrapper, the black canvas, the game-picture
 /// placeholder, and the controls overlay. `underControls` injects
 /// extra layers BETWEEN the placeholder and the controls (the
-/// editor's screen gizmo); the viewer leaves it empty.
+/// editor's screen gizmo). The viewer leaves it empty.
 struct EditorCanvasShell<UnderControls: View>: View {
     var layout: ControlsLayout
     var actions: PlayerActionRegistry
     let orientation: ControlsOrientation
     let editMode: Bool
-    /// nil uses the canvas's fake game rect; the editor passes its
+    /// nil uses the canvas's fake game rect. The editor passes its
     /// region-aware placeholder.
     var placeholderRect: CGRect?
     /// The profile's overlay choice, forwarded to the zone split.
@@ -803,7 +803,7 @@ struct BuiltinLayoutViewerView: View {
 
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text(
-                    "Empo ships this layout. A game uses it when the game ships no layout and no profile applies."
+                    "Empo comes with this layout. A game uses it when the game has no layout of its own and no profile applies."
                 )
                 Text(
                     "You cannot edit this layout. Empo keeps it unchanged as a fallback that works for every game. To make your own version, duplicate it as a profile and edit the copy."

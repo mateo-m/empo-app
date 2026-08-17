@@ -18,7 +18,7 @@ struct GameArtworkView: View {
     var shimmer: Bool = false
     var onShimmerFinished: (() -> Void)?
     /// Decode budget for the thumbnail (long-edge pixels). Cells and
-    /// list rows use the default; full-width surfaces (hero card)
+    /// list rows use the default. Full-width surfaces (hero card)
     /// pass `ImageCache.PixelBudget.hero`.
     var maxPixelSize: CGFloat = ImageCache.PixelBudget.cell
     /// Bump to force a reload when the artwork file is overwritten
@@ -74,7 +74,7 @@ struct GameArtworkView: View {
         guard shimmer else { return }
         guard artworkPath != nil && !importing else {
             // The shimmer cannot play (no artwork yet). Consume the
-            // one-shot flag anyway; a kept flag would survive the
+            // one-shot flag anyway. A kept flag would survive the
             // session and fire when artwork appears much later.
             onShimmerFinished?()
             return

@@ -41,7 +41,7 @@ struct ImportButton: View {
     var emptyStateHeight: CGFloat
     var emptyStateOffset: CGFloat
     /// Empty-state import status. Archive/root inspection is folded
-    /// into `validating`; `multipleGames` only appears once that
+    /// into `validating`. `multipleGames` only appears once that
     /// inspection has confirmed an ambiguous import that needs user
     /// input.
     var phase: Phase = .idle

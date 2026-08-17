@@ -11,13 +11,18 @@ import Foundation
 public enum DirectoryNameMatch {
 
     /// `name` when it exists verbatim in `existing` (or nothing
-    /// matches); otherwise the first existing case-insensitive
+    /// matches). Otherwise the first existing case-insensitive
     /// variant, picked in sorted order so the choice is stable
-    /// across launches; otherwise an existing mojibake variant
+    /// across launches. Otherwise an existing mojibake variant
     /// from the era when `decodeAsLooseText` decoded Windows-1252
     /// INI titles as Shift-JIS ("Pokémon" -> "Pok駑on"). Installs
     /// from that era hold saves under the mojibake name, and the
     /// corrected title must keep pointing at them.
+    ///
+    /// The last rule does the same job for invisible variation
+    /// selectors. A title that carried one produced a directory
+    /// with the selector in its name. The sanitizer now drops the
+    /// selector, so the clean name must still find that directory.
     public static func preferringExisting(_ name: String, among existing: [String]) -> String {
         if existing.contains(name) { return name }
         let key = name.lowercased()
@@ -26,6 +31,11 @@ public enum DirectoryNameMatch {
         }
         if let legacy = legacyMojibakeRendering(of: name), existing.contains(legacy) {
             return legacy
+        }
+        if let invisible = existing.sorted().first(where: {
+            $0 != name && $0.strippingInvisibleVariants() == name
+        }) {
+            return invisible
         }
         return name
     }

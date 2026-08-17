@@ -6,7 +6,7 @@ import Foundation
 /// the same no matter which path moved them.
 public enum UniqueFileName {
 
-    /// `Game.rxdata` + 2 -> `Game-2.rxdata`; `Save` + 2 -> `Save-2`.
+    /// `Game.rxdata` + 2 -> `Game-2.rxdata`. `Save` + 2 -> `Save-2`.
     /// The suffix lands before the LAST extension only:
     /// `a.b.rxdata` -> `a.b-2.rxdata`.
     public static func numbered(_ filename: String, index: Int) -> String {

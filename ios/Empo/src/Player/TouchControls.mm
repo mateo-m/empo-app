@@ -2,7 +2,7 @@
 //
 // Contains the invisible keyboard field (for system-keyboard IME) and
 // the keyboard accessory bar. The on-screen action button and D-pad
-// used to live here as UIKit views; they have been replaced by the
+// used to live here as UIKit views. They have been replaced by the
 // SwiftUI + Liquid Glass implementation in GameControls.swift.
 //
 // Engine communication goes through app_bridge.h functions.
@@ -89,7 +89,7 @@ static int scancodeForCharacter(unichar c) {
 
 @implementation TCAccessoryBar
 // UIKit controls the input accessory view's frame (height is fixed at
-// creation; dynamic resizing is ignored), but horizontal safe areas
+// creation, dynamic resizing is ignored), but horizontal safe areas
 // still propagate to it. In landscape the bar spans edge to edge, so
 // without this the leading buttons sit under the notch / Dynamic
 // Island. Inset each row to the safe area and center its content
@@ -113,7 +113,7 @@ static int scancodeForCharacter(unichar c) {
         f.size.width = availW;
         row.frame = f;
 
-        // Center short content; keep flush-left (scrollable) overflow.
+        // Center short content. Keep flush-left (scrollable) overflow.
         CGFloat pad = MAX(0, (availW - row.contentSize.width) / 2);
         row.contentInset = UIEdgeInsetsMake(0, pad, 0, pad);
         if (pad > 0)

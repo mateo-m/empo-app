@@ -26,7 +26,7 @@ public struct ControlTouchSet<TouchID: Hashable & Sendable>: Sendable {
     }
 
     /// Adds `id` to the control. Returns true when the control goes
-    /// from idle to engaged — the caller emits its touch-down side
+    /// from idle to engaged. The caller emits its touch-down side
     /// effects on that true. A later finger, or a duplicate begin,
     /// returns false.
     public mutating func begin(_ id: TouchID) -> Bool {

@@ -19,13 +19,13 @@
 // game: audio keeps playing through the lock screen and the
 // silent switch (matches Music app / Podcasts / Spotify
 // behavior). `MixWithOthers` lets the user keep their own music
-// running on top of the game if they want; if a game ships its
+// running on top of the game if they want. If a game ships its
 // own BGM, this is a friendlier default than ducking everything
 // else. Users who want exclusive audio can pause their music
 // from Control Center.
 //
 // Idempotent: calling it again before the first audio session
-// is activated is a no-op; calling after activation just updates
+// is activated is a no-op. Calling after activation only updates
 // the category. Safe to invoke multiple times.
 void mkxp_configureAudioSession(void) {
     AVAudioSession *session = [AVAudioSession sharedInstance];

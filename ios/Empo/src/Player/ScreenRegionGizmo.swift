@@ -4,7 +4,7 @@ import SwiftUI
 /// Edit-mode drag/resize gizmo for the screen region: the outline,
 /// the move surface, and the corner grabbers. Pure geometry: the
 /// parent supplies the rect to show and receives fraction regions
-/// through callbacks; ControlsLayout and the bridge applier stay in
+/// through callbacks. ControlsLayout and the bridge applier stay in
 /// the parent's hands, so the same gizmo works in the player and on
 /// the profile editor's mock canvas. The chips are a separate view
 /// (`ScreenRegionChips`) so the player can layer them ABOVE the
@@ -34,7 +34,7 @@ struct ScreenRegionGizmo: View {
     /// onChange below then finishes the drag, because a stuck
     /// `screenDragActive` would leave the edit toolbar disabled for
     /// the rest of the session. Move and resize track separately,
-    /// so one gesture ending cannot finish the other's drag; the
+    /// so one gesture ending cannot finish the other's drag. The
     /// owner token stops a second finger from clobbering the
     /// in-flight anchor.
     @GestureState private var moveGestureActive = false
@@ -58,7 +58,7 @@ struct ScreenRegionGizmo: View {
     }
 
     /// Captures the anchor on the first event of a drag, shrunk
-    /// into `allowedRect` — a stored rect that violates the limits
+    /// into `allowedRect`. A stored rect that violates the limits
     /// (cross-device restore, controls grown after authoring) must
     /// not invert the clamps. Returns false for events from a
     /// gesture that does not own the in-flight drag.
@@ -98,7 +98,7 @@ struct ScreenRegionGizmo: View {
             // it separates from bright game content. The gesture
             // surface is a larger invisible square so the target
             // stays easy to hit.
-            // Brackets on ALL FOUR corners, all draggable — the
+            // Brackets on ALL FOUR corners, all draggable. The
             // photo-crop convention users already know. Each one
             // sits fully inside the frame (the viewport edge can
             // never trim it) with an invisible 44 pt touch square.
@@ -142,7 +142,7 @@ struct ScreenRegionGizmo: View {
             .onEnded { _ in finishDrag() }
     }
 
-    /// The dragged corner moves; the opposite corner anchors.
+    /// The dragged corner moves. The opposite corner anchors.
     private func resizeGesture(for corner: Corner) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .updating($resizeGestureActive) { _, state, _ in state = true }
@@ -336,7 +336,7 @@ private struct CornerGrabber: Shape {
     }
 }
 
-/// The gizmo border. SQUARE corners — the game picture has square
+/// The gizmo border. SQUARE corners. The game picture has square
 /// edges, so a rounded frame would lie about the content. Each edge
 /// starts and ends with a HALF dash, so adjacent edges meet in a
 /// crisp L-shaped corner dash and all four corners look identical

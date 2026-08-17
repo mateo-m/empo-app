@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// Sends the resolved screen region for the active game to the
-/// engine bridge. Fractions are dimensionless window fractions; the
+/// engine bridge. Fractions are dimensionless window fractions. The
 /// engine ignores a region whose orientation tag does not match the
 /// window, so rotation can never paint the wrong orientation's
 /// region.
@@ -28,7 +28,7 @@ enum ScreenRegionApplier {
     /// A gizmo drag overrides the resolved region until it ends.
     private static var previewActive = false
     /// Resolution cache: the player's body reads `resolvedRegion`
-    /// per render, and a drag re-renders at frame rate — without
+    /// per render, and a drag re-renders at frame rate. Without
     /// the cache that is main-thread file IO at up to 120 Hz.
     /// Invalidated on the notifications, session boundaries, and
     /// `endPreview` (a save may have just written files).
@@ -69,7 +69,7 @@ enum ScreenRegionApplier {
     // MARK: - Apply
 
     /// Resolves and sends the region for the CURRENT orientation.
-    /// The bridge holds one region; rotation re-applies through the
+    /// The bridge holds one region. Rotation re-applies through the
     /// player's geometry change hook.
     static func apply() {
         guard activeContainer != nil, !previewActive else { return }
@@ -104,7 +104,7 @@ enum ScreenRegionApplier {
     /// The game picture's aspect ratio, from the engine's published
     /// gameRect (the letterboxed picture keeps the game's aspect
     /// whatever region holds it). Presets need it to compute their
-    /// rect; until the first publish they cannot apply.
+    /// rect. Until the first publish they cannot apply.
     private(set) static var gameAspect: CGFloat?
 
     static func gameRectChanged(_ rect: CGRect) {
@@ -189,7 +189,7 @@ enum ScreenRegionApplier {
     /// "Reset screen" glide: tween from the active region to the
     /// app-side ESTIMATE of automatic placement, then hand off to
     /// the engine's real auto (a sub-pixel correction at most). The
-    /// engine cannot animate its own relayout; interpolated preview
+    /// engine cannot animate its own relayout. Interpolated preview
     /// regions at ~60 Hz do it from here.
     static func animateResetToAuto(
         from start: ScreenRegion, toEstimate end: ScreenRegion, isPortrait: Bool
@@ -257,7 +257,7 @@ enum ScreenRegionApplier {
     }
 
     /// Shift-then-shrink into the safe area, in fraction space. In
-    /// landscape only the left/right insets apply — the engine's
+    /// landscape only the left/right insets apply. The engine's
     /// auto path ignores top/bottom there (the home indicator
     /// auto-hides), and clamping harder than auto would make a
     /// full-height region impossible to author.
@@ -295,7 +295,7 @@ enum ScreenRegionApplier {
             tokens.append(
                 center.addObserver(forName: name, object: nil, queue: .main) { _ in
                     MainActor.assumeIsolated {
-                        // Cheap full re-resolve; origin filtering is
+                        // Cheap full re-resolve. Origin filtering is
                         // unnecessary because apply() is idempotent
                         // and never writes files or posts back.
                         resolutionCache = nil

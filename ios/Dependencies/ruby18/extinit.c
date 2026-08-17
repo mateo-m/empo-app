@@ -4,8 +4,8 @@
  * common.make) and provides Init_ext() so they auto-initialize at
  * Ruby startup.
  *
- * The matching static stub `dmyext.c` (Ruby's source tree) is empty;
- * the build deletes that .o from libruby18-static.a so the real
+ * The matching static stub `dmyext.c` (Ruby's source tree) is empty.
+ * The build deletes that .o from libruby18-static.a so the real
  * Init_ext below wins at link time.
  *
  * iOS doesn't allow dlopen of arbitrary libraries, so we can't ship

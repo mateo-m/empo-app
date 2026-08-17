@@ -411,7 +411,7 @@ public enum ControlsManifestLoader {
                     severity: .warning,
                     code: .w007,
                     path: "/controller",
-                    message: "bindings and controller are the same section; controller is ignored"
+                    message: "bindings and controller are the same section, so controller is ignored"
                 )
             )
         }

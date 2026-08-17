@@ -12,10 +12,10 @@ import XCTest
 /// which dispatches dynamically - so overriding it here intercepts
 /// the swap. On corelibs Foundation both entry points are `public`
 /// (not `open`) and forward to an internal `_replaceItem`, so a
-/// subclass cannot intercept them; the tests detect that at runtime
+/// subclass cannot intercept them. The tests detect that at runtime
 /// via `swapIntercepted` and skip.
 private final class SwapInterceptingFileManager: FileManager {
-    /// Called with (target, staging) before the real replace; throw
+    /// Called with (target, staging) before the real replace. Throw
     /// to simulate a failed swap.
     var onSwap: ((URL, URL) throws -> Void)?
     private(set) var swapIntercepted = false
@@ -53,7 +53,7 @@ final class GameTreeUpdateTests: XCTestCase {
     }
 
     override func tearDown() {
-        // Fixtures set read-only modes; restore owner-write so the
+        // Fixtures set read-only modes. Restore owner-write so the
         // temp root always deletes cleanly.
         try? GameTreeUpdate.normalizeOwnerWritable(at: tempRoot)
         try? fm.removeItem(at: tempRoot)
@@ -366,7 +366,7 @@ final class GameTreeUpdateTests: XCTestCase {
         // permission on the PARENT DIRECTORY (a read-only file in a
         // writable directory deletes fine) - so the fixture locks
         // the directory. Windows-origin archives commonly land like
-        // this; without the staging tree's permission
+        // this. Without the staging tree's permission
         // normalization, the merge fails with EACCES.
         let target = try makeTree(
             "container/Game",
@@ -420,7 +420,7 @@ final class GameTreeUpdateTests: XCTestCase {
     func testStageAndSwapLandsADeliberateSaveTransfer() throws {
         // The opposite direction: the user packed a fresher save
         // into the archive on purpose. The newer incoming copy
-        // wins the save path; the stale installed copy survives
+        // wins the save path. The stale installed copy survives
         // beside it.
         let target = try makeTree("container/Game", files: ["Save01.rxdata": "stale save"])
         let source = try makeTree("incoming", files: ["Save01.rxdata": "fresh save"])
@@ -538,7 +538,7 @@ final class GameTreeUpdateTests: XCTestCase {
     func testStageAndSwapMidMergeFailureLeavesTargetUntouched() throws {
         // An unreadable source subdirectory makes the merge throw
         // after the staging copy exists. The failure path must leave
-        // the target byte-identical; the target is healthy, so the
+        // the target byte-identical. The target is healthy, so the
         // artifacts are swept.
         let target = try makeTree(
             "container/Game",
@@ -560,7 +560,7 @@ final class GameTreeUpdateTests: XCTestCase {
         if (try? fm.contentsOfDirectory(atPath: lockedSource.path)) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 directory is still readable; likely running as root")
+            throw XCTSkip("0o000 directory is still readable, likely running as root")
         }
 
         XCTAssertThrowsError(try GameTreeUpdate.stageAndSwap(newTree: source, over: target))
@@ -594,7 +594,7 @@ final class GameTreeUpdateTests: XCTestCase {
     /// Runs `stageAndSwap` through the intercepting FileManager and
     /// returns the thrown error. Skips the test when the platform
     /// offers no override seam (corelibs `replaceItemAt` is not
-    /// `open`); in that case the real swap ran and succeeded, so
+    /// `open`). In that case the real swap ran and succeeded, so
     /// nothing below the skip would hold.
     private func runFailingSwap(
         _ swapFM: SwapInterceptingFileManager, source: URL, target: URL
@@ -636,7 +636,7 @@ final class GameTreeUpdateTests: XCTestCase {
         // The pre-update tree is back at the target, byte-for-byte.
         XCTAssertEqual(contents(target, "Game.exe"), "v1")
         XCTAssertEqual(contents(target, "Save01.rxdata"), "precious save")
-        // The displaced copy moved home; the artifacts are swept.
+        // The displaced copy moved home. The artifacts are swept.
         XCTAssertFalse(fm.fileExists(atPath: displaced.path))
         XCTAssertFalse(
             fm.fileExists(
@@ -711,7 +711,7 @@ final class GameTreeUpdateTests: XCTestCase {
     func testSweepRestoresMergedTreeWhenSwapDiedBetweenRenames() throws {
         // replaceItemAt = rename target->backup, rename
         // staging->target, delete backup. A kill between the
-        // renames leaves NO target; the staging tree (fully merged)
+        // renames leaves NO target. The staging tree (fully merged)
         // must be restored, never swept.
         let parent = tempRoot.appendingPathComponent("container", isDirectory: true)
         let target = parent.appendingPathComponent("Game", isDirectory: true)
@@ -851,7 +851,7 @@ final class GameTreeUpdateTests: XCTestCase {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
             try? fm.removeItem(at: probe)
-            throw XCTSkip("0o555 directory is still writable; likely running as root")
+            throw XCTSkip("0o555 directory is still writable, likely running as root")
         }
 
         let outcome = GameTreeUpdate.sweepInterruptedUpdate(target: target)

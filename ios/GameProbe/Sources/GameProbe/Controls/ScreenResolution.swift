@@ -9,7 +9,7 @@ public enum ScreenProvenance: Equatable, Sendable {
 
 /// The screen chain, per orientation. It is NOT the controls chain:
 /// a pin is TERMINAL for the screen. A named pin without a screen
-/// entry means engine-auto — never the default profile's region —
+/// entry means engine-auto, never the default profile's region,
 /// so a profile can always express "stock placement" while a
 /// default region exists. `$game` also means engine-auto: games
 /// cannot dictate placement, and `$game` says "present this game

@@ -8,7 +8,7 @@ import Foundation
 ///     No header rewrite per app launch (the original cross-game
 ///     design needed one). Each line is a self-contained record.
 ///   - `<iso8601>.log`: per-session debug log when `debugLogs` is
-///     on. Filename uses just the timestamp because the parent
+///     on. Filename uses only the timestamp because the parent
 ///     dir already sits inside the game's own container
 ///     (`Games/<title>/Logs/`).
 ///
@@ -111,7 +111,7 @@ final class SessionLogger {
 
         let timestamp = Self.isoFormatter.string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
-        // The filename is just the timestamp. The parent dir
+        // The filename is only the timestamp. The parent dir
         // (`<container>/Logs/`) already lives inside
         // `Games/<title>/`, so a game name in the filename
         // would be redundant.

@@ -23,7 +23,7 @@ public enum GameFolderName {
     public static let maxLength = 60
 
     /// Byte cap for a sanitized name. APFS limits a path component
-    /// to 255 UTF-8 bytes; capping well below that leaves room for
+    /// to 255 UTF-8 bytes. Capping well below that leaves room for
     /// every suffix a caller appends (`uniqueName`'s " 999" or
     /// 37-character UUID, quarantine numbering, displaced-save
     /// markers).
@@ -70,7 +70,12 @@ public enum GameFolderName {
     ///
     /// Idempotent: `sanitize(sanitize(x)) == sanitize(x)`.
     public static func sanitize(_ title: String) -> String {
-        let replaced = title.unicodeScalars
+        // Invisible variants go FIRST, and they are removed rather
+        // than spaced. A selector draws nothing, so the reader sees
+        // no gap where it sat. See `InvisibleCharacters`.
+        let visible = title.strippingInvisibleVariants()
+
+        let replaced = visible.unicodeScalars
             .map { disallowed.contains($0) ? " " : String($0) }
             .joined()
 
@@ -113,7 +118,7 @@ public enum GameFolderName {
 
     /// `NUL` -> `NUL_`, `NUL.txt` -> `NUL_.txt`. The underscore
     /// breaks the device-name match on Windows without hurting
-    /// readability; appending to the stem (not the whole name)
+    /// readability. Appending to the stem (not the whole name)
     /// matters because Windows reserves the stem regardless of
     /// extension. Idempotent: `NUL_` has stem `NUL_`, no match.
     private static func escapedWindowsReservedStem(_ name: String) -> String {
@@ -131,7 +136,7 @@ public enum GameFolderName {
     /// then `<name> 2` ... `<name> 999`, then a UUID-suffixed
     /// fallback so the loop always terminates.
     ///
-    /// `isTaken` decides collisions; callers should compare
+    /// `isTaken` decides collisions. Callers should compare
     /// case-insensitively so "pokemon z" and "Pokemon Z" don't end
     /// up as distinct directories that collide on a
     /// case-insensitive filesystem.

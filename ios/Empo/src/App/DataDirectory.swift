@@ -40,7 +40,7 @@ import Synchronization
 /// settings, mod state - which is small and precious.
 enum DataDirectory {
 
-    /// Parent of `Data/`, `Games/`, and the rescue buckets; the
+    /// Parent of `Data/`, `Games/`, and the rescue buckets. The
     /// base every root below derives from, and the base the
     /// recovery ledger's `directory` paths are relative to.
     static let documentsRootURL: URL = FileManager.default
@@ -64,8 +64,8 @@ enum DataDirectory {
     /// mounts it behind each game's own `Fonts/`, and the compat
     /// layer routes Essentials font-installer writes into it. A
     /// font dropped here once serves the whole library. It stays
-    /// outside `Data/` because that tree holds per-game state;
-    /// fonts are system state and survive game deletion.
+    /// outside `Data/` because that tree holds per-game state.
+    /// Fonts are system state and survive game deletion.
     static let fontsRootURL: URL =
         documentsRootURL.appendingPathComponent("Fonts", isDirectory: true)
 
@@ -166,7 +166,7 @@ enum DataDirectory {
             isDirectory.boolValue
         else {
             NSLog(
-                "[DataDirectory] Cannot create %@; falling back to per-game UserData",
+                "[DataDirectory] Cannot create %@, falling back to per-game UserData",
                 resolved.path)
             let staging = container.userDataURL
             try? fm.createDirectory(at: staging, withIntermediateDirectories: true)
@@ -201,7 +201,7 @@ enum DataDirectory {
         let fm = FileManager.default
         let outcome = drainLock.withLock { _ -> PreLiteralSaveHeal.Outcome in
             // One walk over the whole tree, one lock window. The
-            // returned paths are Data/-relative; each promotion's
+            // returned paths are Data/-relative. Each promotion's
             // CONTAINING directory identifies its game (the leaf
             // is the app name even when an org level nests above
             // it).
@@ -264,7 +264,7 @@ enum DataDirectory {
 
     /// Queue a recovery for the one-time sheet. The merge policy
     /// and encoding live in `SaveRecoveryLedger` (GameProbe) where
-    /// the Linux CI tests pin them; this wrapper only adds the
+    /// the Linux CI tests pin them. This wrapper only adds the
     /// UserDefaults blob. Callers hold `drainLock`: the ledger
     /// update is read-modify-write and heals can run from detached
     /// delete tasks.
@@ -365,7 +365,7 @@ enum DataDirectory {
 
         var rescued = true
         if hasLeftoverContent(container.userDataURL) {
-            // Verify the shared destination before draining; the
+            // Verify the shared destination before draining. The
             // fallback path means the destination could not exist.
             let resolved = resolveAndPrepare(for: container)
             if resolved.path == container.userDataURL.path {
@@ -414,7 +414,7 @@ enum DataDirectory {
             isDirectory.boolValue
         else {
             NSLog(
-                "[DataDirectory] Cannot create rescue bucket %@; keeping saves in place",
+                "[DataDirectory] Cannot create rescue folder %@, keeping saves in place",
                 bucket.path)
             return
         }
@@ -471,7 +471,7 @@ enum DataDirectory {
     /// fallback) back into its fresh `Game/` tree. Called after a
     /// fresh import lands, before the first launch, so the game
     /// sees its saves on the first run. Complete restores remove
-    /// their emptied buckets; a partial restore keeps the rest for
+    /// their emptied buckets. A partial restore keeps the rest for
     /// the next import.
     static func restoreRescuedSaves(for container: GameContainer) {
         let fm = FileManager.default
@@ -490,7 +490,7 @@ enum DataDirectory {
                 outcome.movedCount,
                 outcome.failures.count)
         }
-        // An emptied root is clutter in the Files app; remove it
+        // An emptied root is clutter in the Files app. Remove it
         // only when the LAST bucket is gone.
         if ((try? fm.contentsOfDirectory(atPath: rescuedSavesRootURL.path)) ?? []).isEmpty {
             try? fm.removeItem(at: rescuedSavesRootURL)

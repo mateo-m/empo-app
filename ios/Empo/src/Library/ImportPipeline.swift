@@ -319,7 +319,7 @@ final class ImportPipeline {
     }
 
     /// Choices whose sanitized title matches an installed game.
-    /// Display classification for the picker's "Already in Library" step;
+    /// Display classification for the picker's "Already in Library" step.
     /// `planImports` re-derives the authoritative answer at confirm
     /// time.
     private static func updatingChoiceIDs(
@@ -377,7 +377,7 @@ final class ImportPipeline {
     /// games derive their data locations from the title in their
     /// INI, so a suffixed duplicate (`Testing 2`) would still call
     /// itself "Testing" and read the other copy's data. Suffixed
-    /// names are therefore never minted; every collision resolves
+    /// names are therefore never minted. Every collision resolves
     /// to an update or a refusal:
     ///
     ///   - A name owned by another **in-flight** import is refused
@@ -497,7 +497,7 @@ final class ImportPipeline {
         resolutionTask = nil
 
         // Confirmed replacements: swap the old entry for the import
-        // progress card (same id). The on-disk container stays; the
+        // progress card (same id). The on-disk container stays. The
         // import task merges the new files into it at move time.
         if let library {
             for plan in plans {
@@ -731,8 +731,8 @@ extension GameLibrary {
     }
 
     /// Errors surfaced from the import pipeline with display-ready
-    /// messages. Used to remap low-level Foundation errors (disk
-    /// full, permission denied) into text the user can act on.
+    /// messages. Used to change raw Foundation errors (disk full,
+    /// permission denied) into text the user can act on.
     enum ImportError: LocalizedError {
         case outOfSpace
 
@@ -804,8 +804,8 @@ extension GameLibrary {
             container ?? entry?.container ?? Self.containerOnDisk(importID: importID)
         removeLibraryEntry(id: importID)
 
-        // Consume (not just read) the marker: this hop owns it for
-        // failed selections; `finishBatch` only clears markers of
+        // Consume (not only read) the marker: this hop owns it for
+        // failed selections. `finishBatch` only clears markers of
         // selections that succeeded.
         let isReplacement = replacingImports.withLock { $0.remove(importID) != nil }
         if isReplacement {
@@ -818,7 +818,7 @@ extension GameLibrary {
     }
 
     /// Flip an entry into the inert `.deleting` state. The card
-    /// stays visible with a spinner while the rescue + delete run;
+    /// stays visible with a spinner while the rescue + delete run.
     /// `removeLibraryEntry` (success) or
     /// `restoreEntryAfterFailedDelete` (failure) resolves it.
     @MainActor
@@ -847,7 +847,7 @@ extension GameLibrary {
         if let artworkPath = games.first(where: { $0.id == id })?.artworkPath {
             // The source files are being deleted, so the disk sweep
             // can run off-main (see `DiskSweep`). Bulk deletes call
-            // this once per game; a synchronous walk here would put
+            // this once per game. A synchronous walk here would put
             // O(games x cache entries) disk I/O on the main actor.
             ImageCache.shared.evict(path: artworkPath, diskSweep: .background)
         }
@@ -894,7 +894,7 @@ extension GameLibrary {
             // game would then stay missing from the library until
             // some unrelated reload. (The id joined the set on the
             // main actor before this task started, user-initiated
-            // deletes only; removing an unregistered id is a
+            // deletes only. Removing an unregistered id is a
             // no-op.)
             await MainActor.run {
                 GameLibrary.shared.deletionsInFlight.withLock {
@@ -935,7 +935,7 @@ extension GameLibrary {
             // erase the only copy of the saves right after the
             // delete alert promised they survive.
             NSLog(
-                "[GameLibrary] Rescue of UserData failed for %@; delete aborted",
+                "[GameLibrary] Rescue of UserData failed for %@, delete stopped",
                 container.folderName)
             return .rescueFailed
         }
@@ -1451,13 +1451,13 @@ extension GameLibrary {
     /// no FIFO guarantee onto the main actor (an out-of-order write
     /// would snap the ring backwards), and the extractor degenerates
     /// to one callback per entry once its byte-based percentage
-    /// saturates — those arrive as equal values and are dropped
+    /// saturates. Those arrive as equal values and are dropped
     /// here instead of notifying observers.
     ///
     /// Strictly an UPDATE: an entry that is not currently importing
     /// stays untouched. A cancelled replacement re-surfaces the
     /// installed game's ready card while the import task keeps
-    /// running (replacements finish once past the swap); a late
+    /// running (replacements finish once past the swap). A late
     /// progress hop flipping that card back to importing would
     /// re-arm the stop button - and a second stop tap would delete
     /// the installed game through the abandon path, whose
@@ -1514,7 +1514,7 @@ extension GameLibrary {
         markEntryDeleting(id: live.id)
         // Registered BEFORE the detached delete starts so
         // `planImports` sees the id the moment the entry leaves
-        // the library; the delete task releases it when done.
+        // the library. The delete task releases it when done.
         deletionsInFlight.withLock { _ = $0.insert(live.id) }
         Self.deleteContainer(
             container,

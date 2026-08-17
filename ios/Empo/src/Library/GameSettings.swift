@@ -23,8 +23,8 @@ enum RenderScale: String, Codable, CaseIterable, Hashable {
     var description: String {
         switch self {
         case .x1: "Native game resolution."
-        case .x2: "Render at 2x the native size for sharper visuals on high-DPI screens."
-        case .x4: "Render at 4x the native size. Sharpest, but uses more GPU."
+        case .x2: "Draw the game at 2x its normal size. Sharper on high-resolution screens."
+        case .x4: "Draw the game at 4x its normal size. Sharpest, but harder on the battery."
         }
     }
 
@@ -190,7 +190,7 @@ struct GameSettings: Codable, Equatable {
     @Setting<Bool?, RestartFlag> var useModernRuby: Bool?
 
     /// Manual override for the per-game Ruby interpreter version.
-    /// nil = use auto-detection from import; 18 / 19 / 30 / 31 forces
+    /// nil = use auto-detection from import. 18 / 19 / 30 / 31 forces
     /// that interpreter. Surfaced as the "Ruby version" picker in
     /// GameSettingsView and read by `AppState.selectGame` (calls
     /// `mkxp_setActiveRubyVersion()` before engine boot).
@@ -210,7 +210,7 @@ struct GameSettings: Codable, Equatable {
 
     /// The game receives taps and drags on the game area as
     /// left-mouse input. This is harmless for games that never read
-    /// the mouse (mouse state just sits unread), so the default is ON.
+    /// the mouse (mouse state sits unread), so the default is ON.
     @Setting<Bool?, RuntimeFlag> var touchMouse: Bool?
 
     /// Make game scripts see `$joiplay = true` so they take their
