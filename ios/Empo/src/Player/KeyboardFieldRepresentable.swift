@@ -8,6 +8,9 @@ import SwiftUI
 /// the player still needs.
 struct KeyboardFieldRepresentable: UIViewRepresentable {
     var isActive: Bool
+    /// Scancodes the accessory bar must hide, asked fresh on every
+    /// keyboard presentation.
+    var excludedScancodes: () -> Set<Int32> = { [] }
     var onActivate: (() -> Void)?
 
     func makeUIView(context: Context) -> TCKeyboardField {
@@ -17,19 +20,50 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         field.spellCheckingType = UITextSpellCheckingType.no
         field.smartQuotesType = UITextSmartQuotesType.no
         field.smartDashesType = UITextSmartDashesType.no
+        field.smartInsertDeleteType = UITextSmartInsertDeleteType.no
         field.returnKeyType = UIReturnKeyType.default
-        field.inputAccessoryView = TCCreateKeyboardAccessoryView()
+        // Opt out of every system input service. iOS runs autofill
+        // heuristics on plain text fields and can flash its own
+        // chrome (an autofill "Continue" pill) around keyboard
+        // transitions. An empty content type turns the heuristics
+        // off. The rest disables predictions, Writing Tools, and the
+        // iPad shortcut bar, which have no meaning for game input.
+        field.textContentType = UITextContentType(rawValue: "")
+        field.inlinePredictionType = UITextInlinePredictionType.no
+        field.writingToolsBehavior = UIWritingToolsBehavior.none
+        field.inputAssistantItem.leadingBarButtonGroups = []
+        field.inputAssistantItem.trailingBarButtonGroups = []
+        // The field is invisible, but it is a real first responder
+        // in the middle of the player view. Arrow keys move its text
+        // selection, and the system caret and selection chrome would
+        // draw mid-screen. A clear tint hides that chrome even when
+        // the selection geometry overrides on TCKeyboardField are
+        // bypassed by the system's own selection interaction.
+        field.tintColor = UIColor.clear
+        field.inputAccessoryView = KeyboardAccessoryHostView(excludedScancodes: excludedScancodes)
         field.text = " "  // keep a space so backspace works
         field.delegate = context.coordinator
         return field
     }
 
     func updateUIView(_ field: TCKeyboardField, context: Context) {
+        // Refresh the closure before any responder change, so a new
+        // presentation reads current coverage. On-screen controls
+        // can hide or a controller can connect between two updates.
+        (field.inputAccessoryView as? KeyboardAccessoryHostView)?
+            .excludedScancodes = excludedScancodes
         if isActive && !field.isFirstResponder {
             onActivate?()
             field.becomeFirstResponder()
         } else if !isActive && field.isFirstResponder {
+            // Resign first, then hand the key window back to SDL.
+            // The reverse order leaves the input session open with
+            // no key window, and the keyboard window can flash its
+            // own UI during the dismissal. This is also the one
+            // choke point every keyboard-off path goes through,
+            // including the game-driven `Input.text_input` end.
             field.resignFirstResponder()
+            AppWindow.setAllowKeyWindow(false)
         }
     }
 

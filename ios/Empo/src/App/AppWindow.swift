@@ -190,12 +190,21 @@ class AppWindow: UIWindow {
 
     /// Returns UIKit key-window status to SDL after the overlay
     /// gives up `canBecomeKey` (e.g. loading -> playing).
+    ///
+    /// Never hand key status to a keyboard window. Once the system
+    /// keyboard has shown, its `UITextEffectsWindow` joins
+    /// `scene.windows`, and making it key while the keyboard
+    /// dismisses briefly wakes the keyboard's own UI (the Memoji
+    /// stickers splash with its "Continue" button).
     @objc static func resignKeyToSDL() {
         guard let overlay = instance, let scene = overlay.windowScene else { return }
-        for window in scene.windows where window !== overlay {
-            window.makeKey()
-            return
+        let candidates = scene.windows.filter { window in
+            guard window !== overlay else { return false }
+            let className = String(describing: type(of: window))
+            return !className.contains("TextEffects") && !className.contains("Keyboard")
         }
+        let sdl = candidates.first { String(describing: type(of: $0)).contains("SDL") }
+        (sdl ?? candidates.first)?.makeKey()
     }
 
     /// `EmpoSceneDelegate` calls this once at app startup when UIKit
