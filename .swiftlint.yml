@@ -28,7 +28,7 @@ disabled_rules:
   - identifier_name
   - type_name
 
-  # `// TODO:` is fine; we already have a TODO.md.
+  # `// TODO:` is fine. We already have a TODO.md.
   - todo
 
   # Trailing whitespace handled by swift-format.
@@ -43,7 +43,7 @@ disabled_rules:
   - opening_brace
   - closure_parameter_position
 
-  # Force casts / unwraps come up in iOS bridge code; rely on
+  # Force casts / unwraps come up in iOS bridge code. Rely on
   # code review instead of a blanket lint failure.
   - force_cast
   - force_try

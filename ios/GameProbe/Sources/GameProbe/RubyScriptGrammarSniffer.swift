@@ -212,7 +212,7 @@ public enum RubyScriptGrammarSniffer {
     /// script source.
     ///
     /// The set is conservative. Every entry must be a token that
-    /// a 1.8/1.9 parser cannot parse at all, not just one that
+    /// a 1.8/1.9 parser cannot parse at all, not only one that
     /// looks modern in style. A false positive here tags a
     /// vanilla 1.8 game as modern, and then the game will not
     /// boot.

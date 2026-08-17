@@ -2,7 +2,7 @@ import Foundation
 
 /// Moves the contents of a legacy per-game `UserData/` directory
 /// into the game's shared data directory. Pure directory logic in
-/// GameProbe so the Linux CI tests exercise it; the app side
+/// GameProbe so the Linux CI tests exercise it. The app side
 /// resolves the two URLs and logs the outcome.
 ///
 /// Guarantees:
@@ -120,7 +120,7 @@ public enum LegacyDataDrain {
             }
             if entryIsDir.boolValue != targetIsDir.boolValue {
                 // Type conflict: the destination entry is the live
-                // one; the incoming entry is archived whole.
+                // one. The incoming entry is archived whole.
                 displace(entry, near: target, relative: relative, outcome: &outcome, fm: fm)
                 continue
             }
@@ -138,7 +138,7 @@ public enum LegacyDataDrain {
             }
 
             // Otherwise the newer modification time wins the
-            // canonical name; ties go to the incoming file.
+            // canonical name. Ties go to the incoming file.
             let entryDate = modificationDate(of: entry, fm: fm)
             let targetDate = modificationDate(of: target, fm: fm)
             if entryDate >= targetDate {

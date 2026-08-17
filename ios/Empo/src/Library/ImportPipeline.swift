@@ -319,7 +319,7 @@ final class ImportPipeline {
     }
 
     /// Choices whose sanitized title matches an installed game.
-    /// Display classification for the picker's "Already in Library" step;
+    /// Display classification for the picker's "Already in Library" step.
     /// `planImports` re-derives the authoritative answer at confirm
     /// time.
     private static func updatingChoiceIDs(
@@ -377,7 +377,7 @@ final class ImportPipeline {
     /// games derive their data locations from the title in their
     /// INI, so a suffixed duplicate (`Testing 2`) would still call
     /// itself "Testing" and read the other copy's data. Suffixed
-    /// names are therefore never minted; every collision resolves
+    /// names are therefore never minted. Every collision resolves
     /// to an update or a refusal:
     ///
     ///   - A name owned by another **in-flight** import is refused
@@ -497,7 +497,7 @@ final class ImportPipeline {
         resolutionTask = nil
 
         // Confirmed replacements: swap the old entry for the import
-        // progress card (same id). The on-disk container stays; the
+        // progress card (same id). The on-disk container stays. The
         // import task merges the new files into it at move time.
         if let library {
             for plan in plans {
@@ -731,8 +731,8 @@ extension GameLibrary {
     }
 
     /// Errors surfaced from the import pipeline with display-ready
-    /// messages. Used to remap low-level Foundation errors (disk
-    /// full, permission denied) into text the user can act on.
+    /// messages. Used to change raw Foundation errors (disk full,
+    /// permission denied) into text the user can act on.
     enum ImportError: LocalizedError {
         case outOfSpace
 
@@ -804,8 +804,8 @@ extension GameLibrary {
             container ?? entry?.container ?? Self.containerOnDisk(importID: importID)
         removeLibraryEntry(id: importID)
 
-        // Consume (not just read) the marker: this hop owns it for
-        // failed selections; `finishBatch` only clears markers of
+        // Consume (not only read) the marker: this hop owns it for
+        // failed selections. `finishBatch` only clears markers of
         // selections that succeeded.
         let isReplacement = replacingImports.withLock { $0.remove(importID) != nil }
         if isReplacement {
@@ -818,7 +818,7 @@ extension GameLibrary {
     }
 
     /// Flip an entry into the inert `.deleting` state. The card
-    /// stays visible with a spinner while the rescue + delete run;
+    /// stays visible with a spinner while the rescue + delete run.
     /// `removeLibraryEntry` (success) or
     /// `restoreEntryAfterFailedDelete` (failure) resolves it.
     @MainActor
@@ -847,7 +847,7 @@ extension GameLibrary {
         if let artworkPath = games.first(where: { $0.id == id })?.artworkPath {
             // The source files are being deleted, so the disk sweep
             // can run off-main (see `DiskSweep`). Bulk deletes call
-            // this once per game; a synchronous walk here would put
+            // this once per game. A synchronous walk here would put
             // O(games x cache entries) disk I/O on the main actor.
             ImageCache.shared.evict(path: artworkPath, diskSweep: .background)
         }
@@ -887,15 +887,14 @@ extension GameLibrary {
         guard let container else { return }
         Task.detached(priority: .userInitiated) {
             let outcome = Self.performDelete(container, rescueSaves: rescueSaves)
-            // Release BEFORE any restore reload runs: the reload's
-            // scan consults `deletionsInFlight` live, and an id
-            // still registered would make the scan skip the very
-            // container the reload exists to bring back - the kept
-            // game would then stay missing from the library until
-            // some unrelated reload. (The id joined the set on the
-            // main actor before this task started, user-initiated
-            // deletes only; removing an unregistered id is a
-            // no-op.)
+            // Release BEFORE any restore reload runs. That reload's
+            // scan consults `deletionsInFlight` live, so a still-
+            // registered id would make it skip the very container it
+            // exists to bring back, and the kept game would stay
+            // missing until some unrelated reload. The id joined the
+            // set on the main actor before this task started, for
+            // user-initiated deletes only. Removing an unregistered
+            // id does nothing.
             await MainActor.run {
                 GameLibrary.shared.deletionsInFlight.withLock {
                     _ = $0.remove(container.id)
@@ -935,7 +934,7 @@ extension GameLibrary {
             // erase the only copy of the saves right after the
             // delete alert promised they survive.
             NSLog(
-                "[GameLibrary] Rescue of UserData failed for %@; delete aborted",
+                "[GameLibrary] Rescue of UserData failed for %@, delete stopped",
                 container.folderName)
             return .rescueFailed
         }
@@ -1415,27 +1414,23 @@ extension GameLibrary {
         }
     }
 
-    /// Swap in the card's artwork mid-extract, once the archive
-    /// has yielded a root-level `.exe` icon via `ExeIconSurfacer`.
-    /// Only `.exe` icons surface mid-import. `Graphics/Titles/*`
-    /// previews never do, because they would flash and then
-    /// get replaced by the final artwork pick. Can fire more than
-    /// once per import: the first non-utility `.exe` is a
-    /// tentative pick that a later `Game.exe` supersedes and
-    /// locks.
+    /// Swap in the card's artwork mid-extract, once the archive has
+    /// yielded a root-level `.exe` icon via `ExeIconSurfacer`. Only
+    /// `.exe` icons surface mid-import, because a `Graphics/Titles/*`
+    /// preview would flash and then lose to the final artwork pick.
+    /// Can fire more than once: the first non-utility `.exe` is a
+    /// tentative pick that a later `Game.exe` supersedes and locks.
     nonisolated func updateCardArtwork(_ importID: String, artworkPath: String) {
         Task { @MainActor in
             let lib = GameLibrary.shared
             guard let model = lib.games.first(where: { $0.id == importID }) else { return }
-            // The mid-extract sidecar sits at a fixed location
-            // (`<container>/Metadata/exe-icon.png`) and gets
-            // overwritten on disk when a later .exe in the archive
-            // supersedes the earlier pick (e.g. Reborn1950 ships
-            // [Patcher.exe (skipped), Reborn.exe, Game.exe]: Reborn
-            // writes first, Game.exe overwrites). The path string is
-            // unchanged across those writes, so the revision bump is
-            // what tells GameArtworkView to reload the (already
-            // evicted + re-prewarmed) contents.
+            // The mid-extract sidecar sits at a fixed path
+            // (`<container>/Metadata/exe-icon.png`), overwritten when
+            // a later .exe supersedes the earlier pick. Reborn1950
+            // ships [Patcher.exe (skipped), Reborn.exe, Game.exe], so
+            // Reborn writes first and Game.exe overwrites. The path
+            // string never changes, so the revision bump is what
+            // tells GameArtworkView to reload the contents.
             withAnimation {
                 model.artworkPath = artworkPath
                 model.artworkRevision += 1
@@ -1443,25 +1438,22 @@ extension GameLibrary {
         }
     }
 
-    /// Updates the extraction progress on the already-committed
-    /// progress card (not on `pendingImports`, which was cleared
-    /// once pre-flight passed). Ticks only re-render the card
-    /// bodies that read `importProgress`, not the library. The
-    /// monotonic guard matters twice over: unstructured tasks give
-    /// no FIFO guarantee onto the main actor (an out-of-order write
-    /// would snap the ring backwards), and the extractor degenerates
-    /// to one callback per entry once its byte-based percentage
-    /// saturates — those arrive as equal values and are dropped
-    /// here instead of notifying observers.
+    /// Updates extraction progress on the already-committed progress
+    /// card. `pendingImports` cleared once pre-flight passed. Ticks
+    /// re-render only the card bodies that read `importProgress`.
     ///
-    /// Strictly an UPDATE: an entry that is not currently importing
-    /// stays untouched. A cancelled replacement re-surfaces the
-    /// installed game's ready card while the import task keeps
-    /// running (replacements finish once past the swap); a late
-    /// progress hop flipping that card back to importing would
-    /// re-arm the stop button - and a second stop tap would delete
-    /// the installed game through the abandon path, whose
-    /// replacement marker the first tap already consumed.
+    /// The monotonic guard earns its keep twice: unstructured tasks
+    /// have no FIFO guarantee onto the main actor, so an out-of-order
+    /// write would snap the ring backwards, and the extractor
+    /// degenerates to one equal-valued callback per entry once its
+    /// byte percentage saturates.
+    ///
+    /// Strictly an UPDATE, so an entry that is not importing stays
+    /// untouched. A cancelled replacement re-surfaces the installed
+    /// game's ready card while its task runs on. A late hop flipping
+    /// that card back to importing would re-arm the stop button, and
+    /// a second stop tap would delete the installed game through the
+    /// abandon path, whose marker the first tap already consumed.
     nonisolated func updateCardProgress(_ importID: String, _ progress: Double) {
         Task { @MainActor in
             guard
@@ -1514,7 +1506,7 @@ extension GameLibrary {
         markEntryDeleting(id: live.id)
         // Registered BEFORE the detached delete starts so
         // `planImports` sees the id the moment the entry leaves
-        // the library; the delete task releases it when done.
+        // the library. The delete task releases it when done.
         deletionsInFlight.withLock { _ = $0.insert(live.id) }
         Self.deleteContainer(
             container,

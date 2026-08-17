@@ -71,17 +71,17 @@ public enum JoiPlayControlsTranslator {
 
     public static func translate(data: Data, metrics: TouchZoneMetrics) -> Translation {
         if data.count > maxFileSize {
-            return Translation(manifest: nil, notes: ["file exceeds 128 KiB; ignored"])
+            return Translation(manifest: nil, notes: ["file is larger than 128 KiB, ignored"])
         }
 
         guard let text = String(data: data, encoding: .utf8),
             let root = JSON5LiteParser.parseObject(text)
         else {
-            return Translation(manifest: nil, notes: ["invalid JoiPlay gamepad file; ignored"])
+            return Translation(manifest: nil, notes: ["invalid JoiPlay gamepad file, ignored"])
         }
 
         guard root.keys.contains(where: { knownKeys.contains($0) }) else {
-            return Translation(manifest: nil, notes: ["no JoiPlay keys; ignored"])
+            return Translation(manifest: nil, notes: ["no JoiPlay keys, ignored"])
         }
 
         var notes: [String] = []
@@ -92,7 +92,7 @@ public enum JoiPlayControlsTranslator {
                 scalePercent = scale
             } else {
                 scalePercent = 100
-                notes.append("btnScale is not a number; using default 100")
+                notes.append("btnScale is not a number, using default 100")
             }
         } else {
             scalePercent = 100
@@ -104,7 +104,7 @@ public enum JoiPlayControlsTranslator {
                 opacityPercent = opacity
             } else {
                 opacityPercent = 100
-                notes.append("btnOpacity is not a number; using default 100")
+                notes.append("btnOpacity is not a number, using default 100")
             }
         } else {
             opacityPercent = 100

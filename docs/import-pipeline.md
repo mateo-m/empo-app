@@ -9,7 +9,7 @@ There is no database: a game is a directory at `Documents/Games/<title>/`, named
 the game declares in its INI file and sanitized by `GameFolderName` (see `GameContainer.swift`).
 The library holds **one container per title** - some games derive their data locations from
 their INI title, so a suffixed duplicate would read the other copy's data. Before v0.5 the
-folder was `<uuid>-<slug>`; `GameContainerMigration` renames legacy trees at launch and, when
+folder was `<uuid>-<slug>`. `GameContainerMigration` renames older trees at launch and, when
 several resolve to the same title, keeps the most recently played one under the canonical name
 and moves the rest - whole, saves included - to the Files-visible `Documents/Duplicate Games/`,
 telling the user via a one-time library alert that lists the moved copies.
@@ -56,10 +56,10 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      card exists.
    - When more than one valid root exists, the stepped root-picker sheet appears
      (`ImportRootPickerSheet`): step one, **Add Games**, lists roots not in the library
-     (selection starts empty); step two, **Already in Library**, lists roots whose sanitized
+     (selection starts empty). Step two, **Already in Library**, lists roots whose sanitized
      title matches an installed game (selection starts full - importing them updates that
      install in place). A source with only one category shows only that step. The
-     classification (`ImportRootPrompt.updatingChoiceIDs`) is display-advisory; `planImports`
+     classification (`ImportRootPrompt.updatingChoiceIDs`) only guides the display. `planImports`
      re-derives it at confirm time. When exactly one root exists, the import starts
      automatically - and if that one game is installed, the plain "Game Already in Library"
      alert (`ImportReplacePrompt`) asks first. The alert also serves as a fallback for updates
@@ -71,7 +71,7 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      confirmed updates merge the new files into an APFS-cloned staging copy of `Game/` and swap
      in atomically (`GameImporter.stageAndSwapGameTree`), overwriting same-path files and
      keeping everything else (saves, settings, metadata, and game files the new version doesn't
-     ship); any failure before the swap leaves the installed tree untouched. Portable saves in
+     ship). Any failure before the swap leaves the installed tree untouched. Portable saves in
      the installed tree (`PortableGameSaves`) are protected during the merge: when the import
      also contains a file at a save's path, the newer file keeps the path and the other one is
      archived beside it as `<name>.empo-displaced[-N].bak` (the `LegacyDataDrain` rules), so an
@@ -79,7 +79,7 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      crash leftovers (`cleanupStaleUpdateStaging` → `GameTreeUpdate.sweepInterruptedUpdate`): a
      kill between the swap's two renames leaves no `Game/`, so the sweep RESTORES the merged
      staging tree (or the backup) before removing artifacts - never sweep-then-orphan-delete.
-     Declining an update drops just that selection, and updates already approved in the picker
+     Declining an update drops only that selection, and updates already approved in the picker
      survive a decline of the fallback alert. Suffixed names are never minted (one container per title): a
      second same-title selection in one batch is refused with an alert, as is an update that
      targets the currently open (playing/paused) game.
@@ -141,7 +141,7 @@ These invariants match the current code. Do not break them.
    (`NSFileWriteOutOfSpaceError` or POSIX `ENOSPC`) must surface as `ImportError.outOfSpace`. See
    the move catch and the outer catch in `pipelineImportGames`.
 4. **In-flight guard ordering**: the pipeline inserts an importID into `inFlightImports` before
-   it creates any container directory (in practice, before the detached task starts). It removes
+   it creates any container directory, which happens before the detached task starts. It removes
    the importID only after it moves the game fully and writes its metadata, but **before**
    `mergeImportedGame` or `reload` runs on the main actor. `reload()` passes the in-flight set as
    `skipIDs`. A concurrent scan thus never sees a container whose `Game/` subdir is not in place
@@ -156,7 +156,7 @@ These invariants match the current code. Do not break them.
    at the container path is never deleted). A replacement (`GameLibrary.replacingImports`)
    never deletes its container on failure or cancel: it is the installed game, saves included,
    and the staged atomic swap means its `Game/` tree is either fully updated or exactly as it
-   was. `abandonImport` re-surfaces the existing entry instead of deleting; it also consumes
+   was. `abandonImport` shows the existing entry again instead of deleting it. It also consumes
    the replacement marker, and `finishBatch` clears markers only for selections that
    succeeded - actors do not guarantee FIFO between independently enqueued jobs, so the
    marker's owner is always the code path that acts on it.

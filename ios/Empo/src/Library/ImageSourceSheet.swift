@@ -16,7 +16,7 @@ struct ImageSourceSheet: View {
     let onPickFile: () -> Void
     let onRemove: (() -> Void)?
 
-    /// Hide the "Take Photo" row when the device can't actually
+    /// Hide the "Take Photo" row when the device cannot
     /// launch the camera (iPad without a rear camera, Simulator).
     private var cameraAvailable: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)

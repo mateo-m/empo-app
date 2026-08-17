@@ -16,7 +16,7 @@ final class PreLiteralSaveHealTests: XCTestCase {
     }
 
     override func tearDown() {
-        // Failure fixtures drop permissions; restore them so the
+        // Failure fixtures drop permissions. Restore them so the
         // temp root always deletes cleanly.
         try? GameTreeUpdate.normalizeOwnerWritable(at: tempRoot)
         try? fm.removeItem(at: tempRoot)

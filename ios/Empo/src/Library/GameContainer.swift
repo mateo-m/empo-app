@@ -23,17 +23,17 @@ import GameProbe
 ///   │                      `Documents/Data/` tree at launch. Absent
 ///   │                      on fresh containers.
 ///   ├── EmpoState/         Empo-managed state:
-///   │                        - mkxp.json (generated config; merged
+///   │                        - mkxp.json (generated config, merged
 ///   │                          from Game/mkxp.json + per-game settings)
 ///   │                        - game_settings.json (per-game UI prefs)
 ///   │                        - .pokemon_essentials_detected (runtime
 ///   │                          marker written by pokemon_input.rb)
 ///   │                        - .session-active (crash-detection
-///   │                          marker; present while a session runs)
+///   │                          marker, present while a session runs)
 ///   ├── Logs/              Per-game session logs:
 ///   │                        - session-history.log (chronological
 ///   │                          list of session timestamps for this
-///   │                          game; appended per session)
+///   │                          game, appended per session)
 ///   │                        - <iso8601>.log (per-session debug log,
 ///   │                          one per launch when debug logs are on)
 ///   └── Metadata/          Per-game metadata:
@@ -56,7 +56,7 @@ struct GameContainer: Equatable, Hashable {
     /// Doubles as the stable, lookup-friendly id used everywhere
     /// outside of disk paths (UserDefaults keys, in-memory dicts,
     /// debug logs). Before v0.5 the folder was `<uuid>-<slug>` and
-    /// the id was the UUID prefix; `GameContainerMigration` renames
+    /// the id was the UUID prefix. `GameContainerMigration` renames
     /// those trees at launch.
     let folderName: String
 
@@ -103,7 +103,7 @@ struct GameContainer: Equatable, Hashable {
         empoStateURL.appendingPathComponent("game_settings.json")
     }
 
-    /// Player-edited touch layout + per-game controller overrides (SPEC §3).
+    /// Player-edited touch layout + per-game controller overrides (SPEC section 3).
     var userControlsURL: URL {
         empoStateURL.appendingPathComponent("controls.json")
     }
@@ -233,7 +233,7 @@ struct GameContainer: Equatable, Hashable {
     ///
     /// Idempotent: setting the flag on an already-excluded URL is
     /// a no-op. A missing URL is silently swallowed: a container
-    /// that hasn't been created yet just won't have the attribute,
+    /// that hasn't been created yet will not have the attribute,
     /// which is fine.
     func excludeFromBackup() {
         var values = URLResourceValues()
@@ -264,7 +264,7 @@ struct GameContainer: Equatable, Hashable {
         // Older builds wrote a snapshot of the developer's
         // mkxp.json as `mkxp.original.json` here and used it as a
         // merge base. We now read directly from `Game/mkxp.json`
-        // (the host never edits it; the game may), so the
+        // (the host never edits it, the game may), so the
         // snapshot is dead state. Clean it up opportunistically.
         let staleSnapshot = empoStateURL.appendingPathComponent("mkxp.original.json")
         try? FileManager.default.removeItem(at: staleSnapshot)

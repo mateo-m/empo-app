@@ -8,8 +8,8 @@
 # build. This check finds the same mismatch in seconds.
 #
 # Callers:
-#   scripts/hooks/pre-push.sh   local hook; uses the submodule checkout
-#   .github/workflows/ci.yml    submodule-guard job; sets ENGINE_REPO_DIR
+#   scripts/hooks/pre-push.sh   local hook. Uses the submodule checkout
+#   .github/workflows/ci.yml    submodule-guard job. Sets ENGINE_REPO_DIR
 #                               and GITLINK_SHA for its temporary clone
 set -euo pipefail
 

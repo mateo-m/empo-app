@@ -16,8 +16,8 @@ import UIKit
 ///
 /// Large sources also persist their downsampled result under
 /// Caches/ArtworkThumbnails so later launches skip the full-size
-/// decode. The OS may purge that directory under storage pressure;
-/// entries are simply regenerated on demand.
+/// decode. The OS may purge that directory under storage pressure.
+/// Entries are then rebuilt on demand.
 final class ImageCache: @unchecked Sendable {
     static let shared = ImageCache()
 
@@ -25,7 +25,7 @@ final class ImageCache: @unchecked Sendable {
     /// grid card (about a third of the screen width) and the 48pt list
     /// artwork with retina headroom. `hero` covers the full-width
     /// "Continue playing" card, the Game Info banner, and the loading
-    /// view backdrop — sized for the widest case, a 13" iPad in
+    /// view backdrop. Sized for the widest case, a 13" iPad in
     /// landscape (~1334pt content width @2x). Only one hero-budget
     /// image is typically alive at a time, so the larger decode
     /// (~8 MB worst case) doesn't threaten the cache ceiling.
@@ -193,7 +193,7 @@ final class ImageCache: @unchecked Sendable {
     /// and bump the path's generation so loads already mid-decode
     /// discard their (stale) result instead of re-populating the
     /// cache. The generation bump and memory purge are always
-    /// synchronous; `diskSweep` picks where the directory walk runs.
+    /// synchronous. `diskSweep` picks where the directory walk runs.
     func evict(path: String, diskSweep: DiskSweep = .sync) {
         generations.withLock { $0[path, default: 0] += 1 }
         for budget in [PixelBudget.cell, PixelBudget.hero] {
@@ -246,8 +246,8 @@ final class ImageCache: @unchecked Sendable {
         guard let image else { return nil }
 
         // An evict landed while we were decoding: the bytes we read
-        // are superseded. Don't publish them to memory or disk;
-        // return whatever the eviction's follow-up prewarm cached
+        // are superseded. Don't publish them to memory or disk.
+        // Return whatever the eviction's follow-up prewarm cached
         // (nil makes callers fall back to their placeholder until
         // the next load).
         let current = generations.withLock { $0[path] ?? 0 }
@@ -268,8 +268,8 @@ final class ImageCache: @unchecked Sendable {
         // An evict can also land between the pre-publish check and
         // the writes above. Re-verify and un-publish on mismatch so
         // stale bytes cannot outlive the eviction. This can race a
-        // newer load of the same key and drop ITS fresh entry too;
-        // that only costs one extra decode on the next read.
+        // newer load of the same key and drop ITS fresh entry too.
+        // That only costs one extra decode on the next read.
         let afterPublish = generations.withLock { $0[path] ?? 0 }
         guard afterPublish == generation else {
             cache.removeObject(forKey: key)
@@ -302,7 +302,7 @@ final class ImageCache: @unchecked Sendable {
     }
 
     /// Disk cache name embeds the source's mtime so an artwork file
-    /// replaced in place naturally misses the stale entry; `evict`
+    /// replaced in place naturally misses the stale entry. `evict`
     /// sweeps everything matching the path digest regardless of
     /// mtime or budget.
     private func diskCacheURL(path: String, maxPixelSize: CGFloat) -> URL? {

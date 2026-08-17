@@ -285,7 +285,7 @@ struct GameStatusIndicator: View {
     private var indicatorBody: some View {
         // Deleting shares the importing look: an indeterminate ring
         // (progress stays 0) around a glyph, inverted over the
-        // artwork - just without a stop control, because a running
+        // artwork, but without a stop control, because a running
         // delete cannot be cancelled.
         let showsRing = kind == .deleting || { if case .importing = kind { true } else { false } }()
         let core = ZStack {
@@ -362,7 +362,7 @@ extension GameStatusIndicator.Kind {
     /// the live extraction progress, and the session-paused flag, get
     /// the right visual kind. Keeps the "paused only makes sense on
     /// ready" rule in one place. `progress` is only consulted for
-    /// `.importing` — callers pass `game.importProgress` and the read
+    /// `.importing`. Callers pass `game.importProgress` and the read
     /// registers an Observation dependency precisely where the value
     /// is displayed.
     static func resolve(status: GameStatus, progress: Double, paused: Bool) -> Self {

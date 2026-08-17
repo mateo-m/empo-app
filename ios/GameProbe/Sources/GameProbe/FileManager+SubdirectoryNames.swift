@@ -6,7 +6,7 @@ extension FileManager {
     /// directory-name matching (`DirectoryNameMatch`, rescue-bucket
     /// scans), where a same-named FILE must not hijack a match - on
     /// case-sensitive APFS the directory can coexist with it and
-    /// gets created normally. Hidden entries are included; callers
+    /// gets created normally. Hidden entries are included. Callers
     /// that must skip them need their own listing. A missing or
     /// unreadable `url` reads as empty.
     public func subdirectoryNames(at url: URL) -> [String] {

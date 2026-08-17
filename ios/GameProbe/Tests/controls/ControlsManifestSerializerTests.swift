@@ -304,7 +304,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
 
     func testEmptyActionButtonsListRoundTrips() {
         // Pinned behavior: `[]` and an omitted key differ. nil means
-        // "inherit the game-shipped action buttons"; [] means "none"
+        // "inherit the game-shipped action buttons". [] means "none"
         // (the user deleted them all). Collapsing [] to an omitted
         // key would resurrect deleted buttons on the next load.
         var touch = sampleTouch()
@@ -324,7 +324,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
     func testGoldenOutputBytes() {
         // Byte-level pin for the wire format. A whitespace or
         // ordering change here rewrites every user file on its next
-        // save; change this expectation only on purpose.
+        // save. Change this expectation only on purpose.
         let touch = TouchSection(
             portrait: TouchLayout(
                 dpad: DPadSpec(x: 0.25, y: 0.75, size: 140, opacity: 1),

@@ -36,7 +36,7 @@ final class ImportNameResolutionTests: XCTestCase {
 
     func testSanitizedTitleMatchesInstalledName() {
         // The installed copy was imported as "Fate Another" (the
-        // sanitizer stripped the slash); a re-import of the raw
+        // sanitizer stripped the slash). A re-import of the raw
         // title must still match it.
         var batch = Set<String>()
         let outcome = ImportNameResolution.resolve(

@@ -7,7 +7,7 @@ import Foundation
 /// exercised by the Linux `swift test` CI job. On Darwin,
 /// `FileManager.copyItem` within one APFS volume is a
 /// copy-on-write clone, so staging a multi-gigabyte game costs
-/// roughly the size of the *new* files; on other platforms (tests)
+/// roughly the size of the *new* files. On other platforms (tests)
 /// it's a real copy, which is fine at test scale.
 public enum GameTreeUpdate {
 
@@ -117,7 +117,7 @@ public enum GameTreeUpdate {
             try fm.moveItem(at: entry, to: target)
         }
 
-        // The source directory is an empty husk now; its removal
+        // The source directory is an empty husk now. Its removal
         // failing is harmless (it lives in the import tmp dir).
         try? fm.removeItem(at: source)
     }
@@ -226,8 +226,8 @@ public enum GameTreeUpdate {
 
         do {
             try fm.copyItem(at: target, to: staging)
-            // The copy carries the original's POSIX bits;
-            // normalizing the staging tree lets the merge overwrite
+            // The copy carries the original's POSIX bits.
+            // Normalizing the staging tree lets the merge overwrite
             // read-only entries.
             try normalizeOwnerWritable(at: staging, fm: fm)
             let saveEntries = Set(PortableGameSaves.entryNames(atGameRoot: staging, fm: fm))
@@ -326,8 +326,8 @@ public enum GameTreeUpdate {
     /// Shared restore step: when no directory sits at `target`, move
     /// the best surviving artifact into place, in the caller's
     /// preference order. Crash recovery prefers staging (fully
-    /// merged - the swap only starts after the merge completes);
-    /// the in-flight failure path prefers the backup (see the
+    /// merged - the swap only starts after the merge completes).
+    /// The in-flight failure path prefers the backup (see the
     /// catch in `stageAndSwap`). A stray non-directory at `target`
     /// (a crash artifact of unknown origin) is moved aside first,
     /// but only when an artifact exists to restore - otherwise the
@@ -373,7 +373,7 @@ public enum GameTreeUpdate {
 
     /// Crash recovery for `stageAndSwap`. Apple documents no
     /// internal sequence for `replaceItemAt`, only that a failure
-    /// can leave the original away from its home; a kill mid-swap
+    /// can leave the original away from its home. A kill mid-swap
     /// can therefore leave NO tree at `target` while the artifacts
     /// survive. Sweeping blindly at that point would destroy the
     /// only copies of the game, so this restores first (staging

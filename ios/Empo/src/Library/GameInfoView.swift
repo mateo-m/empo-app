@@ -22,7 +22,7 @@ struct GameInfoView: View {
     @State private var needsLibraryRefresh = false
     /// Bumped whenever a custom image is saved or removed. Custom
     /// media lives at fixed filenames ("artwork.jpg"/"banner.jpg"),
-    /// so a replacement leaves every path unchanged; this token is
+    /// so a replacement leaves every path unchanged. This token is
     /// the signal that makes image-loading tasks refire anyway.
     @State private var customImageRefreshToken = 0
     @FocusState private var isTitleFocused: Bool
@@ -206,7 +206,7 @@ struct GameInfoView: View {
                                         // Ruby major.minor so multi-Ruby binaries
                                         // (which contain up to 4 RUBY_DESCRIPTION
                                         // strings, one per merged.o) report the
-                                        // version that'll actually run THIS game,
+                                        // version that will run THIS game,
                                         // not whichever string sits earliest in
                                         // the .rodata section.
                                         let majorMinor = rubyMajorMinorForGame()
@@ -360,8 +360,8 @@ struct GameInfoView: View {
                 }
             }
         }
-        // One surface for the whole sheet, stretch region included;
-        // a content-only background shows a second tone on pull-up.
+        // One surface for the whole sheet, stretch region included.
+        // A content-only background shows a second tone on pull-up.
         .presentationBackground(Color(.systemGroupedBackground))
         .onKeyPress(.escape) {
             if isEditingTitle {
@@ -515,7 +515,7 @@ struct GameInfoView: View {
             // No banner: fall through to the unified placeholder
             // (gradient + Empo mark). The artwork path
             // used to back-fill here, but the design rule is that
-            // banner == loading-view backdrop, just larger / not
+            // banner == loading-view backdrop, only larger / not
             // blurred, so the two surfaces stay visually
             // consistent. Banner-less games show the placeholder
             // here AND on the loading view (where it gets blurred

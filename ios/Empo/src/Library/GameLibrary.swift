@@ -25,7 +25,7 @@ struct PendingImport: Identifiable, Hashable {
     /// Placeholder model rendered in the grid/list while pre-flight
     /// validation runs. Container is nil because nothing is on disk
     /// yet. `importProgress` stays 0, which renders as the
-    /// indeterminate spinner inside `GameStatusIndicator` — the
+    /// indeterminate spinner inside `GameStatusIndicator`. The
     /// right visual read for the pre-flight phase. Created once (not
     /// per access) so SwiftUI sees one stable card identity across
     /// body passes.
@@ -95,7 +95,7 @@ class GameLibrary {
 
     /// When each entry last changed locally: `mergeImportedGame`
     /// publishes and `removeLibraryEntry` removals. Scans snapshot
-    /// the disk over seconds; a scan that started before a local
+    /// the disk over seconds. A scan that started before a local
     /// change must not overwrite it - or resurrect a deleted
     /// entry's ghost card (`applyScanResults`). Internal because
     /// `removeLibraryEntry` lives in another file.
@@ -118,8 +118,8 @@ class GameLibrary {
     /// removing (a multi-GB rm -rf takes seconds). `planImports`
     /// refuses matching titles and hides these containers from its
     /// installed list so a fast re-import cannot race the running
-    /// delete. Registered in `deleteGame` before the task starts;
-    /// released by the task when it finishes, aborts, or fails.
+    /// delete. Registered in `deleteGame` before the task starts.
+    /// Released by the task when it finishes, aborts, or fails.
     nonisolated let deletionsInFlight = Mutex(Set<String>())
 
     /// IDs of in-flight imports that update an installed game in
@@ -200,7 +200,7 @@ class GameLibrary {
 
     /// Merge a scan's results into `games`: apply snapshots to
     /// matching models field-by-field (so views only invalidate for
-    /// fields that actually changed), drop non-importing entries the
+    /// fields that changed), drop non-importing entries the
     /// scan no longer sees, append newcomers. Marks the initial scan
     /// complete since any applied pass answers the emptiness
     /// question.
@@ -210,7 +210,7 @@ class GameLibrary {
         // (an in-place update's container exists on disk for the
         // scan to see). Applying it would clobber the progress card
         // with a Play-able entry - or append a duplicate-id card -
-        // so drop those results; the import's own merge step
+        // so drop those results. The import's own merge step
         // publishes the final entry.
         let inFlight = inFlightImports.withLock { Set($0) }
         let deleting = deletionsInFlight.withLock { Set($0) }
@@ -291,7 +291,7 @@ class GameLibrary {
 
     /// Rebuild an entry's scan-time fields from disk (title,
     /// artwork, metadata) after something edited them, keeping the
-    /// in-memory status. Runs the disk reads off-main; the previous
+    /// in-memory status. Runs the disk reads off-main. The previous
     /// version rebuilt synchronously on the main thread.
     func refreshGameEntry(id: String) {
         guard let model = games.first(where: { $0.id == id }),

@@ -9,7 +9,7 @@ import Foundation
 /// Multi-touch: the pad holds the UNION of what each live touch
 /// resolves to, like a physical D-pad under two thumbs. Hold the
 /// right arm, put a second finger on the down arm, and the pad reads
-/// down+right; lift the right finger and DOWN stays held, with no
+/// down+right. Lift the right finger and DOWN stays held, with no
 /// need to lift the second finger and press again. Each touch keeps
 /// its own dead zone, ring and slide-off state, so one finger sliding
 /// off releases only what that finger held.
@@ -25,14 +25,14 @@ import Foundation
 ///     resolve to the nearest of the four main directions, never a
 ///     diagonal. Close to the pivot a few points of thumb wobble is
 ///     tens of degrees of angle, and an accidental diagonal is not
-///     benign — RGSS `Input.dir4` switches to the OTHER held
+///     benign. RGSS `Input.dir4` switches to the OTHER held
 ///     direction, so grazing a diagonal wedge steers a 4-way game
 ///     sideways. Deliberate diagonals pressed out on the pad are
 ///     unaffected. (PPSSPP's D-pad and Lemuroid's RadialGamePad
 ///     ship the same guard.)
 ///   - Slide-off: past `radius + slideOffMargin` every direction
 ///     releases, but the touch stays engaged so sliding back inside
-///     re-presses. The release batch emits once — the diff against
+///     re-presses. The release batch emits once. The diff against
 ///     `active` swallows repeats while the finger stays parked
 ///     beyond the edge.
 ///
@@ -40,14 +40,14 @@ import Foundation
 /// before ANY press. Callers must inject edges in array order so one
 /// finger moving between wedges never momentarily holds opposing
 /// directions. Two fingers on opposite arms DO hold both, exactly as
-/// a keyboard does with two arrow keys down; the game decides what
+/// a keyboard does with two arrow keys down. The game decides what
 /// that means.
 ///
 /// Stuck-key contract: a direction is held only while a live touch
 /// resolves to it, so the host MUST report every lift. Where UIKit
 /// can drop a touch end (the control was disabled, detached, or the
 /// touch vanished from the event), the host closes that touch
-/// itself — see `ControlTouchSet` and the capture layer.
+/// itself. See `ControlTouchSet` and the capture layer.
 public struct DPadTouchReducer: Sendable {
     public enum Direction: CaseIterable, Hashable, Sendable {
         case up, down, left, right
@@ -169,10 +169,10 @@ public struct DPadTouchReducer: Sendable {
 
     /// Applies a touch-down or touch-move sample for the touch `id`.
     /// `x`/`y` are in the D-pad's own coordinate space (center at
-    /// `size/2`, +y down); `size` is the D-pad's bounding-box side
+    /// `size/2`, +y down). `size` is the D-pad's bounding-box side
     /// length, passed per sample so a mid-session resize never leaves
     /// the reducer with stale geometry. An unknown `id` joins the
-    /// pad; a known one replaces its previous sample.
+    /// pad. A known one replaces its previous sample.
     public mutating func touchChanged(
         touch id: Int,
         x: Double,
@@ -268,7 +268,7 @@ public struct DPadTouchReducer: Sendable {
         let angle = atan2(dy, dx)
 
         // Cardinal-only ring: too close to the pivot for diagonal
-        // wedges to be trustworthy — resolve to the nearest main
+        // wedges to be trustworthy. Resolve to the nearest main
         // direction.
         if distance < radius * cardinalOnlyRadiusRatio {
             return DirectionSet(cardinalAngle: angle)

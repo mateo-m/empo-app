@@ -4,15 +4,15 @@ import Foundation
 /// path briefly lacked its trailing slash, so games concatenating
 /// `dir + filename` wrote saves named `UserDataGame.rxdata` at the
 /// container root. Pure logic in GameProbe so the Linux CI tests
-/// exercise it; `SaveMigration` in the app target drives it.
+/// exercise it. `SaveMigration` in the app target drives it.
 public enum ConcatenatedSaveRecovery {
 
     /// Marker inserted into backup names while recovering. Not a
     /// PE/RGSS save slot. Games ignore these files.
     public static let backupMarker = "empo-path-regression"
 
-    /// `UserDataGame.rxdata` -> `Game.rxdata`; nil when the name is
-    /// not a concatenation artifact. The prefix match is
+    /// `UserDataGame.rxdata` -> `Game.rxdata`. Returns nil when the
+    /// name is not a concatenation artifact. The prefix match is
     /// case-sensitive on purpose: the regression always produced
     /// the literal `UserData` prefix. A remainder starting with a
     /// dot is rejected - `UserData.rxdata` would otherwise recover
@@ -47,7 +47,7 @@ public enum ConcatenatedSaveRecovery {
 
     /// Merge one recovered save into its canonical location. The
     /// newer modification time wins the canonical name (ties go to
-    /// `source` - the crash-then-retry case); the loser stays
+    /// `source` - the crash-then-retry case). The loser stays
     /// beside it under a `backupName`. Nothing is ever deleted.
     public static func merge(
         source: URL,

@@ -7,7 +7,7 @@ import UIKit
 ///   1. **Add Games** - games not in the library yet. Selection
 ///      starts empty: the user says what they want.
 ///   2. **Already in Library** - games whose title matches an
-///      installed game; importing them updates that install in
+///      installed game. Importing them updates that install in
 ///      place (files the import contains are overwritten, saves
 ///      and settings are kept). Selection starts full: updating
 ///      is the expected default.

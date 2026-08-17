@@ -37,7 +37,7 @@ final class EditDragSolverTests: XCTestCase {
     }
 
     func testPointerCrossingCenterDoesNotTunnel() {
-        // The drag approaches from the right; the pointer lands PAST
+        // The drag approaches from the right. The pointer lands PAST
         // the obstacle's center on the far (left) side. Side memory
         // must keep the circle on the right rim.
         let obstacle = Solver.Circle(x: 100, y: 100, radius: 28)
@@ -114,7 +114,7 @@ final class EditDragSolverTests: XCTestCase {
     }
 
     func testWallExitPrefersTheApproachSide() {
-        // The drag comes from above the wall; the pointer dives deep
+        // The drag comes from above the wall. The pointer dives deep
         // into it. The exit must go back UP, not out the nearest edge.
         let wall = Solver.Rect(x: 100, y: 100, width: 200, height: 60)
         let result = Solver.resolvedCenter(

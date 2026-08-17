@@ -2,8 +2,8 @@
 # The release pipeline, end to end. Two ways in, same result:
 #
 #   * From a computer: scripts/release.sh <bump> cuts the release
-#     locally (bump + changelog + signed commit + tags) and pushes;
-#     the v*.*.* tag push lands here and CI does the rest.
+#     locally (bump + changelog + signed commit + tags) and pushes.
+#     The v*.*.* tag push lands here and CI does the rest.
 #   * From anywhere (e.g. a phone): workflow_dispatch with mode=cut
 #     runs the same cut in the `cut` job via API commits, which
 #     creates the same tags and flows into the same tag-push run.
@@ -23,8 +23,8 @@
 # Secrets:
 #   EMPO_DEPS_READ_TOKEN         read empo-deps (dep tarballs)
 #   EMPO_RELEASE_TOKEN           fine-grained PAT, Contents: RW on
-#                                THIS repo + mkxp-z-apple-mobile;
-#                                powers the cut and sync commits
+#                                THIS repo + mkxp-z-apple-mobile.
+#                                Powers the cut and sync commits
 #   DISCORD_RELEASE_WEBHOOK_URL  release announcements
 
 name: Release
@@ -217,7 +217,7 @@ jobs:
     name: Build + audit .ipa
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run')
     # Tag releases always build on hosted runners (laptop-independent
-    # releases are the point); dry runs may opt into the self-hosted
+    # releases are the point). Dry runs may opt into the self-hosted
     # Mac for speed.
     runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'self') && fromJSON('["self-hosted", "macOS"]') || 'macos-latest' }}
     timeout-minutes: 90
@@ -262,7 +262,7 @@ jobs:
           fi
           # The number baked into the binary is project.yml's
           # CURRENT_PROJECT_VERSION (set at cut time), NOT the commit
-          # count at the tag — the tag sits one commit later.
+          # count at the tag. The tag sits one commit later.
           BUILD="$(sed -n 's/.*CURRENT_PROJECT_VERSION: //p' ios/Empo/project.yml | head -n 1)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
@@ -305,7 +305,7 @@ jobs:
 
       - name: Create empty signing overrides
         # Signing.xcconfig is a gitignored per-machine file (see
-        # Signing.xcconfig.example); CI builds unsigned, so empty works.
+        # Signing.xcconfig.example). CI builds unsigned, so empty works.
         run: touch ios/Empo/Signing.xcconfig
 
       - name: Generate Xcode project
@@ -336,7 +336,7 @@ jobs:
       - name: Audit binary
         run: scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
 
-      # Ad-hoc signature with our entitlements blob embedded — the
+      # Ad-hoc signature with our entitlements blob embedded. The
       # template sideloaders (AltStore/Sideloadly/ESign) re-sign over.
       # See the detailed rationale in scripts/release.sh.
       - name: Sign + package .ipa
@@ -447,7 +447,7 @@ jobs:
             --date "$(date -u +%Y-%m-%d)" \
             --download-url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/${{ needs.build.outputs.ipa_name }}" \
             --description "$(cat changelog-section.md)"
-          # The Format gate (oxfmt) checks this file on main; keep the
+          # The Format gate (oxfmt) checks this file on main. Keep the
           # generated manifest formatted so the gate stays green.
           bunx oxfmt altstore-source.json
 
@@ -523,7 +523,7 @@ jobs:
         run: |
           set -e
           VERSION="${{ steps.version.outputs.version }}"
-          # Command substitution strips trailing newlines; printf puts
+          # Command substitution strips trailing newlines. Printf puts
           # exactly one back so the heredoc delimiter sits on its own
           # line (extract-changelog.sh output has no trailing newline).
           BODY="$(scripts/extract-changelog.sh "$VERSION")"

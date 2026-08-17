@@ -33,7 +33,7 @@ Explanations of the trickier architecture, in rough reading order:
 
 | Doc                                                  | What it covers                                                                     |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| [`how-it-works.mdx`](how-it-works.mdx)               | The architecture in one page, with pointers to each deep dive.                     |
+| [`how-it-works.mdx`](how-it-works.mdx)               | The architecture in one page, with links to each detailed note.                     |
 | [`multi-ruby.md`](multi-ruby.md)                     | Three Ruby interpreters in one binary, with per-game version detection and dispatch. |
 | [`sdl-ruby-workarounds.md`](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/sdl-ruby-workarounds.md) (engine repo) | Why SDL, the GL context, OpenAL, and the Ruby VM persist for the process lifetime. |
 | [`multi-session.md`](multi-session.md)               | Why cross-session play is disabled, and the neutralized quit paths.                |

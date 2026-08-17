@@ -37,7 +37,7 @@ extension MovementStyle {
 }
 
 /// Reducer tuning for the joystick style. The stick reuses
-/// `DPadTouchReducer` per sample; only these constants differ from
+/// `DPadTouchReducer` per sample. Only these constants differ from
 /// the d-pad defaults.
 ///
 /// - The cardinal-only ring shrinks to 0.3: a visible follow-nub

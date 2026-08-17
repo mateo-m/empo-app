@@ -34,7 +34,7 @@ final class PortableGameSavesTests: XCTestCase {
 
     func testRootSaveExtensionsDetectedRegardlessOfStem() throws {
         // Stems vary across games (Essentials, Uranium, Insurgence,
-        // localized Japanese stems); the extension is the stable part.
+        // localized Japanese stems). The extension is the stable part.
         try write(marshalBytes, to: "Game.rxdata")
         try write(marshalBytes, to: "Uranium_1.rxdata")
         try write(marshalBytes, to: "save_0_backup_1.rxdata")
@@ -85,7 +85,7 @@ final class PortableGameSavesTests: XCTestCase {
 
     func testUnnamedFolderDetectedByProbingItsContents() throws {
         // A localized or renamed save folder has no recognizable
-        // name; a Marshal-shaped child gives it away.
+        // name. A Marshal-shaped child gives it away.
         try write(marshalBytes, to: "セーブデータ/slot1.dat")
         try write(textBytes, to: "Mods/readme.txt")
 
@@ -123,7 +123,7 @@ final class PortableGameSavesTests: XCTestCase {
     }
 
     func testEmptyFilesFallBackToTheNameSignal() throws {
-        // An empty file has no magic to read; only a save-family
+        // An empty file has no magic to read. Only a save-family
         // extension keeps it (a truncated save is still a rescue
         // candidate by name).
         try write(Data(), to: "empty.sav")
@@ -156,7 +156,7 @@ final class PortableGameSavesTests: XCTestCase {
         if (try? FileHandle(forReadingFrom: root.appendingPathComponent("locked.sav"))) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 file is still readable; likely running as root")
+            throw XCTSkip("0o000 file is still readable, likely running as root")
         }
 
         XCTAssertEqual(
@@ -165,7 +165,7 @@ final class PortableGameSavesTests: XCTestCase {
     }
 
     func testFileNamedLikeASaveFolderIsExcluded() throws {
-        // The folder-name list applies to DIRECTORIES only; a plain
+        // The folder-name list applies to DIRECTORIES only. A plain
         // file named "Save" has neither the extension nor the magic.
         try write(textBytes, to: "Save")
 
@@ -173,7 +173,7 @@ final class PortableGameSavesTests: XCTestCase {
     }
 
     func testFolderNameMatchingIgnoresCase() throws {
-        // "SAVE" matches the save-folder list; "DATA" matches the
+        // "SAVE" matches the save-folder list. "DATA" matches the
         // engine list and is never entered.
         try write(marshalBytes, to: "SAVE/slot1.rxdata")
         try write(marshalBytes, to: "DATA/Scripts.rxdata")

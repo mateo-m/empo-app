@@ -7,7 +7,7 @@ import SwiftUI
 // which sits in SwiftUI's gesture graph alongside the overlay's
 // edit-mode tap/drag recognizers. The graph resolves competing
 // recognizers by deferring touch delivery until it can tell a tap
-// from a drag — the finger moving past the tap tolerance or lifting.
+// from a drag. The finger moving past the tap tolerance or lifting.
 // For game input that deferral is fatal: a tap became keydown+keyup
 // in the same engine event batch (invisible to RGSS `Input.update`),
 // and a motionless hold didn't engage until the finger drifted.
@@ -29,7 +29,7 @@ struct ControlTouchCapture: UIViewRepresentable {
     /// flag instead of being inserted/removed with an `if` branch.
     /// Edit mode toggles inside `withAnimation`, and a conditionally
     /// removed overlay would leave with an animated opacity
-    /// transition — touchable for the whole fade, injecting game
+    /// transition. Touchable for the whole fade, injecting game
     /// input AFTER the edit-mode release-all, and able to strand a
     /// mid-transition touch's keys when SwiftUI dismantles the view
     /// without delivering touchesEnded. `isUserInteractionEnabled`
@@ -81,7 +81,7 @@ final class ControlTouchCaptureView: UIView {
         backgroundColor = .clear
         isMultipleTouchEnabled = true
         // The SwiftUI content underneath carries the accessibility
-        // label and traits; this layer is invisible plumbing.
+        // label and traits. This layer is invisible plumbing.
         isAccessibilityElement = false
     }
 
@@ -123,7 +123,7 @@ final class ControlTouchCaptureView: UIView {
 
     /// Names a finger for the length of its sequence. UIKit keeps one
     /// `UITouch` instance per finger while it is down, so its object
-    /// identity is a stable key — and, unlike the object itself, an
+    /// identity is a stable key, and, unlike the object itself, an
     /// `Int` is safe to hold after the touch is recycled.
     private static func identifier(of touch: UITouch) -> Int {
         Int(bitPattern: ObjectIdentifier(touch))
@@ -132,7 +132,7 @@ final class ControlTouchCaptureView: UIView {
     /// Match the `.contentShape(Circle())` the controls declare: only
     /// the inscribed circle is hit-testable, so the frame's corners
     /// stay transparent to whatever sits below. Slide-off handling is
-    /// unaffected — once a touch begins inside, UIKit delivers the
+    /// unaffected. Once a touch begins inside, UIKit delivers the
     /// whole sequence here regardless of where the finger goes.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         ControlHitShape.circleContains(
@@ -189,8 +189,8 @@ final class ControlTouchCaptureView: UIView {
     /// Per-finger state ends that, so a dropped end would strand a
     /// key held for the rest of the session. The event carries every
     /// touch in the window with its current phase, so a tracked
-    /// finger that is absent from it, or already ended in it, is gone
-    /// — close it exactly as a real lift would. Runs after the
+    /// finger that is absent from it, or already ended in it, is gone.
+    /// Close it exactly as a real lift would. Runs after the
     /// explicit ends of every delivery, so no event can leave a dead
     /// finger behind.
     ///

@@ -34,13 +34,13 @@ final class MovementStickTuningTests: XCTestCase {
     }
 
     /// The style -> thresholds mapping the host samples with. The
-    /// d-pad takes the reducer defaults; only the stick differs.
+    /// d-pad takes the reducer defaults. Only the stick differs.
     func testTuningPerStyle() {
         let dpad = MovementStyle.dpad.tuning(size: 140)
         XCTAssertEqual(dpad.deadZoneRatio, DPadTouchReducer.defaultDeadZoneRatio)
         XCTAssertEqual(dpad.cardinalOnlyRadiusRatio, DPadTouchReducer.defaultCardinalOnlyRadiusRatio)
         XCTAssertEqual(dpad.slideOffMargin, DPadTouchReducer.defaultSlideOffMargin)
-        // The d-pad margin is fixed; the stick's scales with the size.
+        // The d-pad margin is fixed. The stick's scales with the size.
         XCTAssertEqual(MovementStyle.dpad.tuning(size: 400).slideOffMargin, dpad.slideOffMargin)
 
         let stick = MovementStyle.stick.tuning(size: 140)
@@ -50,7 +50,7 @@ final class MovementStickTuningTests: XCTestCase {
     }
 
     /// Sampling with a tuning value must land exactly where the same
-    /// thresholds do one by one — the host uses the short form.
+    /// thresholds do one by one. The host uses the short form.
     func testTuningSampleMatchesExplicitThresholds() {
         let size = 140.0
         var byTuning = DPadTouchReducer()
@@ -78,7 +78,7 @@ final class MovementStickTuningTests: XCTestCase {
 
     func testDiagonalUnlocksEarlierThanDPad() {
         // At 0.4 x radius, 45 degrees: the stick's 0.3 cardinal ring
-        // is behind us (diagonal allowed); the d-pad's 0.5 ring would
+        // is behind us (diagonal allowed). The d-pad's 0.5 ring would
         // still force a cardinal.
         let size = 140.0
         let offset = 0.4 * size / 2 * (0.5.squareRoot())
@@ -145,10 +145,10 @@ final class DPadTouchReducerTests: XCTestCase {
         XCTAssertEqual(reducer.active, .up)
     }
 
-    /// A tap is two separate emission batches — press edges on the
-    /// down sample, release edges on the end — never a collapsed
+    /// A tap is two separate emission batches, press edges on the
+    /// down sample, release edges on the end, never a collapsed
     /// no-op. (Down+up in one engine batch is invisible to RGSS
-    /// `Input.update`; a game like Pokemon Essentials needs the press
+    /// `Input.update`. A game like Pokemon Essentials needs the press
     /// to be observable on its own to turn the player in place.)
     func testTapEmitsPressAndReleaseAsSeparateBatches() {
         var reducer = DPadTouchReducer()
@@ -179,7 +179,7 @@ final class DPadTouchReducerTests: XCTestCase {
         }
     }
 
-    /// The wedge dial in order; wedge i covers ((2i-1) * pi/8,
+    /// The wedge dial in order. Wedge i covers ((2i-1) * pi/8,
     /// (2i+1) * pi/8) around its center at i * pi/4.
     private static let wedgeDial: [DPadTouchReducer.DirectionSet] = [
         .right, [.right, .down], .down, [.down, .left],
@@ -187,8 +187,8 @@ final class DPadTouchReducerTests: XCTestCase {
     ]
 
     /// Angles WITHIN a wedge (a few ulp clear of both boundaries) map
-    /// to exactly that wedge, against a literal expectation table —
-    /// not values round-tripped through the same initializer.
+    /// to exactly that wedge, against a literal expectation table.
+    /// Not values round-tripped through the same initializer.
     func testWedgeInteriorsMapExactly() {
         for (i, expected) in Self.wedgeDial.enumerated() {
             for offset in [-0.9, -0.5, 0, 0.5, 0.9] {
@@ -204,8 +204,8 @@ final class DPadTouchReducerTests: XCTestCase {
     /// perturb an input by one ulp, so an angle EXACTLY on a pi/8
     /// boundary is not guaranteed a side. The invariant that IS
     /// shipped: every input at or within one ulp of a boundary
-    /// resolves to one of the two wedges adjacent to that boundary —
-    /// never a gap (`[]`), never a non-adjacent set. Verified for the
+    /// resolves to one of the two wedges adjacent to that boundary.
+    /// Never a gap (`[]`), never a non-adjacent set. Verified for the
     /// positive dial and the equivalent negative (atan2-range) form
     /// of every boundary.
     func testWedgeBoundariesResolveToAnAdjacentWedge() {
@@ -245,7 +245,7 @@ final class DPadTouchReducerTests: XCTestCase {
     /// Same adjacency contract at the pi/4 boundaries as the 8-wedge
     /// map: normalization can perturb by one ulp, so an exact
     /// boundary angle resolves to one of the two neighboring
-    /// cardinals — never a diagonal, never empty.
+    /// cardinals. Never a diagonal, never empty.
     func testCardinalAngleBoundariesResolveToAnAdjacentCardinal() {
         let dial: [DPadTouchReducer.DirectionSet] = [.right, .down, .left, .up]
         let s = Double.pi / 4
@@ -270,7 +270,7 @@ final class DPadTouchReducerTests: XCTestCase {
         XCTAssertEqual(DPadTouchReducer.DirectionSet(cardinalAngle: .nan), [])
     }
 
-    /// atan2 output is negative for the whole upper half-plane; the
+    /// atan2 output is negative for the whole upper half-plane. The
     /// normalization must land those in the same wedges as their
     /// positive equivalents.
     func testNegativeAnglesNormalize() {
@@ -285,7 +285,7 @@ final class DPadTouchReducerTests: XCTestCase {
     /// dividend's sign, so an angle below -2pi that is not an exact
     /// multiple of 2pi is still negative after the +2pi
     /// normalization and matches no wedge, as does NaN. Both must
-    /// yield the EMPTY set — any direction here would be a phantom
+    /// yield the EMPTY set. Any direction here would be a phantom
     /// press from garbage input.
     func testOutOfRangeAndNonFiniteAnglesYieldNoDirections() {
         XCTAssertEqual(DPadTouchReducer.DirectionSet(angle: -9 * Double.pi / 4), [])
@@ -307,7 +307,7 @@ final class DPadTouchReducerTests: XCTestCase {
 
     // MARK: Geometry scaling
 
-    /// Every threshold derives from `size` — a reducer that hardcodes
+    /// Every threshold derives from `size`. A reducer that hardcodes
     /// the 150-point geometry the rest of this file uses would pass
     /// every other test. At size 300 the dead zone ends at 30, the
     /// radius is 150, and slide-off releases past 180.
@@ -370,7 +370,7 @@ final class DPadTouchReducerTests: XCTestCase {
     /// touch resolves to the nearest MAIN direction even at an angle
     /// the 8-wedge map would call diagonal. Both points below sit at
     /// distance 22.36, at angles deep inside the up+right diagonal
-    /// wedge; the ring picks the nearer axis instead.
+    /// wedge. The ring picks the nearer axis instead.
     func testInnerRingResolvesToNearestCardinal() {
         var reducer = DPadTouchReducer()
         // 26.6 degrees above the +x axis: right of the 45-degree line.
@@ -385,7 +385,7 @@ final class DPadTouchReducerTests: XCTestCase {
     /// The ring comparison is strict (`distance < ratio * radius`):
     /// AT the boundary the full 8-wedge map applies. 3-4-5 triangle
     /// at size 300 (ring radius 75): (195, 90) is at distance
-    /// exactly 75 -> diagonal allowed; (192, 94) is at 70 -> inside
+    /// exactly 75 -> diagonal allowed. (192, 94) is at 70 -> inside
     /// the ring, cardinal only.
     func testInnerRingBoundaryKeepsFullWedges() {
         var reducer = DPadTouchReducer()
@@ -398,7 +398,7 @@ final class DPadTouchReducerTests: XCTestCase {
     }
 
     /// Drifting inward across the ring at a diagonal angle drops
-    /// ONLY the off-axis component — the direction the cardinal map
+    /// ONLY the off-axis component. The direction the cardinal map
     /// keeps must never release and re-press (no stutter at the ring
     /// boundary).
     func testDriftIntoRingDropsOnlyTheOffAxisComponent() {
@@ -410,7 +410,7 @@ final class DPadTouchReducerTests: XCTestCase {
         XCTAssertEqual(reducer.active, .right)
     }
 
-    /// The ratio must actually be used: 0 disables the ring entirely
+    /// The ratio must be used: 0 disables the ring entirely
     /// (diagonals available right outside the dead zone), 1 extends
     /// it to the rim (diagonals unreachable).
     func testCustomCardinalOnlyRadiusRatioIsRespected() {
@@ -463,7 +463,7 @@ final class DPadTouchReducerTests: XCTestCase {
 
         // (75, -30): distance exactly 105 = radius + margin. The
         // comparison is strict (`>`), so the boundary itself is still
-        // inside — the direction must stay held.
+        // inside. The direction must stay held.
         XCTAssertEqual(reducer.touchChanged(touch: 1, x: 75, y: -30, size: size), [])
         XCTAssertEqual(reducer.active, .up)
 
@@ -547,7 +547,7 @@ final class DPadTouchReducerTests: XCTestCase {
 
     /// THE behaviour this reducer gained for two thumbs: hold the
     /// RIGHT arm, land a second finger on the DOWN arm, and the pad
-    /// holds both — like a physical D-pad. Lifting the first finger
+    /// holds both. Like a physical D-pad. Lifting the first finger
     /// keeps DOWN held, so the player never has to lift the second
     /// finger and press it again.
     func testSecondFingerAddsItsDirectionAndSurvivesTheFirstLift() {
@@ -568,7 +568,7 @@ final class DPadTouchReducerTests: XCTestCase {
 
     /// Opposite arms under two fingers hold both keys, exactly as a
     /// keyboard does with both arrow keys down. The reducer must not
-    /// invent a winner — the game decides.
+    /// invent a winner. The game decides.
     func testOppositeArmsUnderTwoFingersHoldBoth() {
         var reducer = DPadTouchReducer()
         _ = reducer.touchChanged(touch: 1, x: 15, y: 75, size: size)
@@ -654,7 +654,7 @@ final class DPadTouchReducerTests: XCTestCase {
         XCTAssertNil(reducer.leadTouchPoint)
     }
 
-    /// An unknown finger is silent — a late end after cancellation
+    /// An unknown finger is silent. A late end after cancellation
     /// must not release what a live finger holds.
     func testUnknownTouchEndingChangesNothing() {
         var reducer = DPadTouchReducer()
@@ -665,7 +665,7 @@ final class DPadTouchReducerTests: XCTestCase {
 
     // MARK: Parameter plumbing
 
-    /// Custom thresholds must actually be used — a reducer that
+    /// Custom thresholds must be used. A reducer that
     /// hardcodes the defaults would pass every other test.
     func testCustomDeadZoneRatioIsRespected() {
         var reducer = DPadTouchReducer()

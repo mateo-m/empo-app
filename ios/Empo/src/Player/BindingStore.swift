@@ -10,7 +10,7 @@ extension Notification.Name {
 }
 
 /// UserDefaults persistence for global binding overrides. Per-game
-/// overrides live in `EmpoState/controls.json` (SPEC §3, ticket 009).
+/// overrides live in `EmpoState/controls.json` (SPEC section 3, ticket 009).
 ///
 /// The stored shape is the manifest's own bindings object, read and
 /// written by `BindingMapCoder`, so a binding means the same thing
@@ -66,8 +66,8 @@ enum BindingStore {
         }
         let map = BindingMapCoder.decode(object) { source, issue in
             // Empo owns this file, so a rejected entry means a hand
-            // edit or an older shape. The manifest log is per game;
-            // this one is global, so it goes to the console.
+            // edit or an older shape. The manifest log is per game.
+            // This one is global, so it goes to the console.
             NSLog("bindings: dropped \(source) from stored map (\(issue))")
         }
         return map.entries.isEmpty ? nil : map

@@ -180,7 +180,7 @@ d-pad, because these games need arrow keys.
 `"style": "stick"` draws a joystick instead of the d-pad: a thumb
 nub that follows the finger. The key mapping and the 8-way direction
 math stay the same. The joystick allows diagonal movement closer to
-the center than the d-pad does. Empo added `style` in version 0.6; older versions ignore the
+the center than the d-pad does. Empo added `style` in version 0.6. Older versions ignore the
 field and draw a d-pad. An unknown style value is a warning and
 falls back to the d-pad, but note: when the player edits the layout,
 the next save writes the field back only if Empo knows the value.
@@ -273,7 +273,7 @@ never reports a controller at all.
 
 Name the key as the source to bind it. Point it at a controller element
 and the key inherits that button's binding, wherever the binding comes
-from — Empo's default, your manifest, or the player's own remap:
+from: Empo's default, your manifest, or the player's own remap:
 
 ```jsonc
 "bindings": {
@@ -349,7 +349,7 @@ games.
 
 `$toggleTouchControls` replaces the old name `$toggleOverlay`. Empo
 rewrites the old name in the player's own files once. Update your
-manifest to the new name; the old name now parses as an unknown
+manifest to the new name. The old name now parses as an unknown
 action (a warning, and the binding does nothing).
 
 ### Built-in map
@@ -427,7 +427,7 @@ settings and can apply to any game. A profile's file uses this same
 format, so players can share one as a single `controls.json`. Your
 `touch` section outranks the player's default profile, but a profile
 pinned to your game outranks your section. Empo's edit mode saves the
-player's edits into profiles; the old per-game copy in `EmpoState/`
+player's edits into profiles. The old per-game copy in `EmpoState/`
 still imports, but Empo no longer writes it.
 
 When your file provides layer 2, the Reset button in Empo's edit mode
@@ -486,10 +486,10 @@ controls did not show up, ask a tester for that log line.
 | W001 | Neither `touch` nor `bindings` present (warning) |
 | W002 | Label truncated to 8 characters (warning) |
 | W003 | Two buttons share one key (warning) |
-| W004 | Unknown action in `actionButtons`; that button is skipped (warning) |
-| W005 | Unknown action in `bindings`; the binding stays but does nothing (warning) |
-| W006 | Unknown `dpad` style; the d-pad renders instead (warning) |
-| W007 | Both `bindings` and `controller` present; `controller` is ignored (warning) |
+| W004 | Unknown action in `actionButtons`, so that button is skipped (warning) |
+| W005 | Unknown action in `bindings`, so the binding stays but does nothing (warning) |
+| W006 | Unknown `dpad` style, so the d-pad is drawn instead (warning) |
+| W007 | Both `bindings` and `controller` are present, so `controller` is ignored (warning) |
 
 Warnings never reject the file.
 

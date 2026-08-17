@@ -1,9 +1,9 @@
 import Foundation
 
 /// Computes a preset's rect for the CURRENT device: the aspect-fit
-/// rect inside the safe container, aligned per the preset — the
+/// rect inside the safe container, aligned per the preset. The
 /// same math as the engine's automatic placement. A preset never
-/// bakes device numbers into a profile; this runs at apply time,
+/// bakes device numbers into a profile. This runs at apply time,
 /// so one profile places the game right on an iPhone and an iPad
 /// alike.
 public enum ScreenPresetPlacement {
@@ -43,7 +43,7 @@ public enum ScreenPresetPlacement {
             case .topCenter: y = (topY + centerY) / 2
             }
         } else {
-            // Landscape auto centers the full height; the presets
+            // Landscape auto centers the full height. The presets
             // do not differ there.
             y = (availH - height) / 2
         }

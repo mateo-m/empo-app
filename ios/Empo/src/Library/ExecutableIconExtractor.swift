@@ -9,18 +9,17 @@ import UIKit
 /// than the first image under `Graphics/Titles/`, which is usually
 /// a title-screen still.
 ///
-/// The parser is intentionally narrow: it only touches the parts
-/// of the PE format needed to reach the resource section and the
-/// import table. Icons come from `RT_GROUP_ICON` + `RT_ICON`
-/// resources, reassembled into a standalone `.ico` blob for
-/// `UIImage(data:)`. We consult the import table so that, in
-/// games which ship multiple executables (e.g. Pokemon Uranium's
-/// `Uranium.exe` + `Patcher.exe`), we pick the one that imports
-/// `RGSS*.dll` and skip updater / installer binaries.
+/// The parser is deliberately narrow and touches only the parts of
+/// the PE format needed to reach the resource section and the import
+/// table. Icons come from `RT_GROUP_ICON` and `RT_ICON` resources,
+/// reassembled into a standalone `.ico` blob for `UIImage(data:)`.
+/// The import table decides which binary to read when a game ships
+/// several (Pokemon Uranium's `Uranium.exe` and `Patcher.exe`), by
+/// picking the one that imports `RGSS*.dll`.
 ///
-/// Anything unexpected (bad signatures, truncated data, overflows)
-/// returns nil rather than throwing so the caller can fall back to
-/// its existing artwork-resolution rules.
+/// Bad signatures, truncated data, and overflows all return nil
+/// rather than throw, so the caller can fall back to its existing
+/// artwork rules.
 enum ExecutableIconExtractor {
 
     /// Sidecar filename written into a game's `Metadata/` directory
@@ -30,17 +29,14 @@ enum ExecutableIconExtractor {
     /// outside `Game/` so the imported game tree stays untouched.
     static let sidecarFilename = GameContainer.exeIconSidecarFilename
 
-    /// Substrings commonly found in bundled helper binaries
-    /// (patchers, updaters, installers, launchers, RTP installers).
-    /// An `.exe` whose filename contains any of these is treated
-    /// as an auxiliary tool and skipped, even when it has an
-    /// icon. Match is case-insensitive.
+    /// Substrings found in bundled helper binaries: patchers,
+    /// updaters, installers, launchers, RTP installers. An `.exe`
+    /// whose name contains one is skipped as a side tool even when
+    /// it has an icon. Matching ignores case.
     ///
-    /// Not exhaustive but good enough for the RPG Maker ecosystem:
-    /// most "main binary vs. side tool" ambiguities come from a
-    /// handful of well-known naming patterns (Pokemon Uranium's
-    /// `Patcher.exe`, many fan games' `Launcher.exe`, RTP
-    /// `Setup.exe`, etc.).
+    /// Not a full list, but enough for the RPG Maker world, where
+    /// nearly every such ambiguity comes from a few well-known
+    /// names: `Patcher.exe`, `Launcher.exe`, RTP `Setup.exe`.
     private static let utilityKeywords: [String] = [
         "patcher", "patch",
         "updater", "update",
@@ -81,24 +77,21 @@ enum ExecutableIconExtractor {
     /// `<container>/Metadata/exe-icon.png`.
     ///
     /// Selection rule:
-    ///   1. `Game.exe` (case-insensitive) wins when present.
-    ///      That's the RPG Maker default and is unambiguously
-    ///      the game binary.
-    ///   2. Otherwise, the alphabetically-first `.exe` whose
-    ///      filename doesn't match a utility-keyword blocklist
-    ///      (`Patcher.exe`, `Launcher.exe`, `unins000.exe`, etc.).
+    ///   1. `Game.exe` wins when present, ignoring case. It is the
+    ///      RPG Maker default and always the game binary.
+    ///   2. Otherwise the alphabetically first `.exe` whose name
+    ///      misses the utility blocklist (`Patcher.exe`,
+    ///      `Launcher.exe`, `unins000.exe`).
     ///
-    /// Import-table inspection isn't used as the gate because
-    /// some games (Pokemon Uranium, JoiPlay-patched builds) load
-    /// the RGSS runtime dynamically via `LoadLibrary`, which
-    /// leaves the PE import table looking indistinguishable from
-    /// a generic Win32 app.
+    /// The import table is NOT the gate here, because some games
+    /// (Pokemon Uranium, JoiPlay-patched builds) load the RGSS
+    /// runtime through `LoadLibrary`, which leaves their import
+    /// table looking like any other Win32 app.
     ///
-    /// Returns the sidecar path on success, nil when no
-    /// qualifying executable has an embedded icon so the caller
-    /// falls back to its next artwork source (typically
-    /// `Graphics/Titles/`). Swallows errors to fit into the
-    /// caller's fall-back chain.
+    /// Returns the sidecar path, or nil when no qualifying
+    /// executable carries an icon, so the caller falls through to
+    /// its next artwork source. Errors stay swallowed to fit that
+    /// chain.
     @discardableResult
     static func writeSidecarIfPossible(in container: GameContainer) -> String? {
         let fm = FileManager.default
@@ -151,7 +144,7 @@ enum ExecutableIconExtractor {
 
 // MARK: - PEImage
 
-/// Minimal PE reader covering just the pieces used here:
+/// Small PE reader that covers only the pieces used here:
 ///   - section table (so RVAs can be translated to file offsets)
 ///   - data directories (used for the import table)
 ///   - resource tree walking (used for icon extraction)

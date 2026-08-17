@@ -5,7 +5,7 @@ import SwiftUI
 /// and the overlay rule they both feed.
 ///
 /// The player screen talks to this, not to the managers. Anything a
-/// session does to input — start, stop, rebind, suppress — is one
+/// session does to input (start, stop, rebind, suppress) is one
 /// call here instead of one call per device kind.
 @MainActor
 final class SessionInput {

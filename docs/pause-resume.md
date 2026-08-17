@@ -65,7 +65,7 @@ gl.ReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 mkxp_setSnapshot(pixels.data(), w, h);
 ```
 
-We read from the internal FBO (the engine's render target), not FBO 0 (the screen), because iOS gives undefined content for the on-screen framebuffer after `swapBuffers`. The engine's 2D projection maps Y from top to bottom, so the pixel data is already in the correct orientation. No vertical flip is needed.
+We read from the internal FBO, the engine's render target, and not from FBO 0, the screen. After `swapBuffers`, iOS leaves the on-screen framebuffer with undefined content. The engine's 2D projection maps Y from top to bottom, so the pixel data is already in the correct orientation. No vertical flip is needed.
 
 **Storage (bridge, `app_bridge.cpp`):**
 

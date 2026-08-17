@@ -10,6 +10,6 @@
 
 // libmspack (vendored) - CAB reader for self-extracting .exe game
 // installers in ArchiveExtractor. libarchive's CAB/LZX path is
-// broken on real-world RPG Maker installers; see
+// broken on real-world RPG Maker installers. See
 // vendor/libmspack/README.md.
 #import <mspack.h>

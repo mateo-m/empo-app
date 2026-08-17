@@ -2,13 +2,13 @@ import Foundation
 import GameController
 import GameProbe
 
-/// Host-side physical controller input (SPEC §10.2). Maps GCController
-/// elements to keyboard scancodes via the merged four-layer map (§9).
+/// Host-side physical controller input (SPEC section 10.2). Maps GCController
+/// elements to keyboard scancodes via the merged four-layer map (section 9).
 @MainActor
 final class ControllerInputManager {
     /// Dispatches action targets: (action id, pressed). Wired to
     /// `PlayerActionRegistry.handle`. Hold actions rely on the
-    /// release edge; see `releaseAllHeldKeys` for the paths where
+    /// release edge. See `releaseAllHeldKeys` for the paths where
     /// release edges cannot arrive.
     var actionHandler: ((String, Bool) -> Void)?
 
@@ -66,7 +66,7 @@ final class ControllerInputManager {
     private var disconnectObserver: NSObjectProtocol?
 
     /// Atomically swap the merged map. Keys held mid-press keep their
-    /// press-time scancode until release (SPEC §10.2 / ticket 004).
+    /// press-time scancode until release (SPEC section 10.2 / ticket 004).
     func updateResolvedMap(_ map: [String: ResolvedTarget]) {
         resolvedMap = map
     }
@@ -233,8 +233,8 @@ final class ControllerInputManager {
             // Basic and micro profiles miss the typed extended API. Read
             // them through the element dictionaries instead, which the
             // framework keys with the same GCInput names on every
-            // profile. The profile handler reports each element change;
-            // per-frame polling is not necessary and GameController
+            // profile. The profile handler reports each element change.
+            // Per-frame polling is not necessary and GameController
             // documents that handlers are the correct pattern.
             let profile = controller.physicalInputProfile
             profile.valueDidChangeHandler = { [weak self] profile, _ in
@@ -313,7 +313,7 @@ final class ControllerInputManager {
     ]
 
     /// Feeds a controller without the extended profile. Only the
-    /// elements the hardware exposes get fed; absent names stay
+    /// elements the hardware exposes get fed. Absent names stay
     /// untouched so the reducer never sees false releases.
     private func pollProfile(controllerID: String, profile: GCPhysicalInputProfile) {
         guard sessionActive, isAttached(profile.device as? GCController) else { return }

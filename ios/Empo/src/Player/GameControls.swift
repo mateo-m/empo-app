@@ -23,8 +23,8 @@ import SwiftUI
 //     state machine is covered by the Linux test suite. This file
 //     only renders its `active` set and injects the edges it
 //     returns, in order.
-//   - Edit mode disables the capture layer in place — an instant,
-//     unanimated cutoff that also cancels any in-flight touch — so
+//   - Edit mode disables the capture layer in place, an instant,
+//     unanimated cutoff that also cancels any in-flight touch, so
 //     the parent's drag gesture wins for repositioning.
 //   - Explicit release-all on disappear / edit-mode transition so
 //     keys never get stuck at the engine when SwiftUI reclaims the
@@ -73,7 +73,7 @@ struct ActionButton: View {
 
 /// Circular glass button bound to an Empo action instead of a game
 /// key. Renders the action's fixed SF Symbol. Hold actions emit a
-/// press/release pair; toggle and instant actions fire on press (the
+/// press/release pair. Toggle and instant actions fire on press (the
 /// registry decides per kind whether the release matters).
 /// Slide-off keeps a hold engaged, same as `ActionButton`.
 struct FunctionButton: View {
@@ -185,8 +185,8 @@ struct CircularControlButton<Face: View>: View {
                 // Slide-off keeps the input held by design: no
                 // location tracking while the finger moves.
                 onMoved: { _, _ in },
-                // A second finger on a held button changes nothing;
-                // the key comes up when the LAST one lifts.
+                // A second finger on a held button changes nothing.
+                // The key comes up when the LAST one lifts.
                 onEnded: { _, idle in
                     if idle {
                         releaseIfHeld()
@@ -242,9 +242,9 @@ struct CircularControlButton<Face: View>: View {
 /// Shared touch plumbing for both movement styles: ONE reducer, one
 /// capture overlay, the edit-mode and disappear releases, and the
 /// edge injection with its haptic policy. The styles are pure
-/// visuals fed the live state, so the injection contract — releases
-/// before presses, inject in array order, one buzz per new
-/// direction — lives in exactly one place.
+/// visuals fed the live state, so the injection contract lives in
+/// exactly one place. That contract is: release before press, inject
+/// in array order, and buzz once per new direction.
 ///
 /// Touch dispatch goes via the UIKit capture layer: a tap must press
 /// its direction on touch-down (a whole down/up pair delivered at
@@ -263,7 +263,7 @@ private struct MovementTouchState {
 private struct MovementTouchHost<Visual: View>: View {
     let size: CGFloat
     let editing: Bool
-    /// The reducer tuning differs per style; the state machine and
+    /// The reducer tuning differs per style. The state machine and
     /// the injection contract do not.
     let style: MovementStyle
     @ViewBuilder let visual: (MovementTouchState) -> Visual
@@ -310,9 +310,9 @@ private struct MovementTouchHost<Visual: View>: View {
                 tuning: style.tuning(size: size)))
     }
 
-    /// Inject the reducer's edges in array order — the reducer lists
+    /// Inject the reducer's edges in array order, the reducer lists
     /// releases before presses so a wedge transition never
-    /// momentarily holds opposing directions — and fire a haptic tap
+    /// momentarily holds opposing directions, and fire a haptic tap
     /// when a new direction enters the active set (one buzz per
     /// wedge transition rather than one continuous buzz while held).
     private func apply(_ edges: [DPadTouchReducer.Edge]) {

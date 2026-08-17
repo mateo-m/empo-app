@@ -141,7 +141,7 @@ final class LayoutProfilesTests: XCTestCase {
                     pinnedProfile: ("P", false), gameLayoutOccupied: false, defaultProfile: ("D", true))),
             LayoutChainResolver.Outcome(provenance: .defaultProfile("D"), fellThrough: true))
 
-        // $game forces the game level; its fallback skips the
+        // $game forces the game level. Its fallback skips the
         // default profile on purpose.
         XCTAssertEqual(
             LayoutChainResolver.resolve(
@@ -293,8 +293,8 @@ final class LayoutProfilesTests: XCTestCase {
         let result = ProfileMaterializer.materialize(
             user: user, manifest: manifest, builtins: builtins(), metrics: .reference)
 
-        // User dpad wins; buttons fall to the builtin (manifest has
-        // none either); actionButtons fall to the manifest.
+        // User dpad wins. Buttons fall to the builtin (manifest has
+        // none either). actionButtons fall to the manifest.
         XCTAssertEqual(result.portrait.dpad?.x, 0.3)
         XCTAssertEqual(result.portrait.buttons?.first?.key, "Enter")
         XCTAssertEqual(result.portrait.actionButtons?.first?.action, "$pauseMenu")

@@ -89,7 +89,7 @@ const schema = {
   title: "Empo controls manifest v1",
   description:
     "Per-game touch layout and input bindings for Empo (empo/controls.json). " +
-    "The Swift validator in GameProbe is authoritative; this schema supports editor autocomplete.",
+    "The Swift validator in GameProbe is authoritative. This schema supports editor autocomplete.",
   type: "object",
   additionalProperties: true,
   required: ["version"],
@@ -103,19 +103,19 @@ const schema = {
     touch: { $ref: "#/$defs/touchSection" },
     bindings: { $ref: "#/$defs/bindingMap" },
     controller: {
-      description: "First name of the bindings section. Still valid; bindings wins if both appear.",
+      description: "First name of the bindings section. Still valid, but bindings wins if both appear.",
       $ref: "#/$defs/bindingMap"
     }
   },
   $defs: {
     keyCode: {
-      description: "W3C KeyboardEvent.code string (SPEC §6).",
+      description: "W3C KeyboardEvent.code string (SPEC section 6).",
       type: "string",
       enum: keyCodes
     },
     action: {
       description:
-        "Host action string (SPEC §8). Valid in the bindings map; " +
+        "Host action string (SPEC section 8). Valid in the bindings map. " +
         "the touch-valid subset also works in actionButtons.",
       type: "string",
       enum: actions
@@ -196,7 +196,7 @@ const schema = {
       required: ["key", "x", "y"],
       properties: {
         label: {
-          description: "Display label (≤ 8 characters; longer labels are truncated at runtime).",
+          description: "Display label of 8 characters or fewer. Longer labels are cut at runtime.",
           type: "string",
           maxLength: 8
         },
@@ -220,7 +220,7 @@ const schema = {
         actionButtons: {
           description:
             "Buttons that trigger Empo actions. The 21-per-orientation cap counts " +
-            "buttons and actionButtons together; the runtime validator enforces the " +
+            "buttons and actionButtons together. The runtime validator enforces the " +
             "combined cap.",
           type: "array",
           maxItems: 21,
@@ -237,20 +237,20 @@ const schema = {
       }
     },
     controllerElement: {
-      description: "SDL controller element name (SPEC §7).",
+      description: "SDL controller element name (SPEC section 7).",
       type: "string",
       enum: controllerElements
     },
     bindingSource: {
       description:
-        "A controller element (SPEC §7) or a keyboard key (SPEC §6). " +
+        "A controller element (SPEC section 7) or a keyboard key (SPEC section 6). " +
         "A pad in keyboard mode reaches iOS as a keyboard, so its buttons are keys here.",
       type: "string",
       enum: [...controllerElements, ...keyCodes]
     },
     bindingMap: {
       type: "object",
-      description: "Patch overlay: only listed sources change; null unbinds.",
+      description: "Patch overlay: only listed sources change. A null value unbinds.",
       propertyNames: { $ref: "#/$defs/bindingSource" },
       additionalProperties: { $ref: "#/$defs/bindingTarget" }
     }

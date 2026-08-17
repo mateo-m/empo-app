@@ -62,7 +62,7 @@ final class UniqueFileNameTests: XCTestCase {
     }
 
     func testFirstAvailableFallsBackToUUIDAfter999Probes() {
-        // The preferred name is probe 1; indices 2...999 are probes
+        // The preferred name is probe 1. Indices 2...999 are probes
         // 2...999. After that the UUID fallback returns without
         // another probe.
         var probes = 0

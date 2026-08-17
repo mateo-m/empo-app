@@ -28,7 +28,7 @@ struct GameLoadingView: View {
     private static let cancelAppearDelay: Duration = .seconds(7)
 
     /// Same source image as the Game Info sheet's banner. By design
-    /// banner == loading-view backdrop (just darker + blurred), so
+    /// banner == loading-view backdrop (only darker + blurred), so
     /// banner-less games show the placeholder on both surfaces and
     /// banner-having games see their banner in both places. Loaded
     /// in `loadBannerImage` (metadata read + decode both touch disk,
@@ -197,7 +197,7 @@ struct GameLoadingView: View {
     private var cancelButton: some View {
         // Suppress the hint once an error alert is presenting or the
         // error content has taken over: RootView is showing the user
-        // what to do, so the "if loading is stuck..." line just
+        // what to do, so the "if loading is stuck..." line only
         // clutters the screen.
         if cancelVisible && appState.errorMessage == nil && !showErrorContent {
             // Previously a "Quit to library" button that called
@@ -268,7 +268,7 @@ struct GameLoadingView: View {
             // surfaces match. This view only blurs and darkens the
             // result. Skip the Ken Burns / blur path here because
             // the placeholder gradient is already soft and a blur
-            // would just muddy it. A scrim still goes on top so
+            // would only muddy it. A scrim still goes on top so
             // the foreground title text keeps contrast.
             ZStack {
                 GameArtworkView(

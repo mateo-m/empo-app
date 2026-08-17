@@ -1,7 +1,7 @@
 import Foundation
 
 /// Pure arbitration for the fast-forward actions. The host owns the
-/// engine bridge; this type only decides what to write to it.
+/// engine bridge. This type only decides what to write to it.
 ///
 /// Rules (plan: layout-profiles-pr1):
 /// - Every event derives the next state from the supplied bridge
@@ -66,7 +66,7 @@ public struct FastForwardArbiter: Equatable, Sendable {
     }
 
     /// Explicit latch-off (a stateful Toggle set to OFF). During a
-    /// hold the speed stays up (the hold owns it); with no hold a
+    /// hold the speed stays up (the hold owns it). With no hold a
     /// running engine stops.
     public mutating func latchCleared(bridgeMultiplier: Int) -> Write {
         latched = false

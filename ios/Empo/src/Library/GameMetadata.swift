@@ -58,7 +58,7 @@ struct GameMetadata: Codable {
     //
     // Stored as String, not the enum directly, so an older Empo
     // build reading metadata written by a newer one with an
-    // unknown case doesn't crash. It just sees a non-matching
+    // unknown case doesn't crash. It only sees a non-matching
     // string and re-detects with its own (older) heuristics.
     //
     // The `rubyVersionOverride` user setting still wins. This only
@@ -311,7 +311,7 @@ struct GameMetadata: Codable {
     ///      highest authority).
     ///   2. `Game.ini` `Scripts=` path extension. `.rxdata` = 1,
     ///      `.rvdata` = 2, `.rvdata2` = 3. Vanilla RPG Maker writes
-    ///      this; PE forks and most fan engines preserve it.
+    ///      this. PE forks and most fan engines preserve it.
     ///   3. Archive presence: `.rgssad` = 1, `.rgss2a` = 2,
     ///      `.rgss3a` = 3. Encrypted-script games often only ship
     ///      these and a stub Game.ini.

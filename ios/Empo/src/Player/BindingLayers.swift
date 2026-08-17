@@ -1,7 +1,7 @@
 import Foundation
 import GameProbe
 
-/// Builds the binding override layers, newest last (SPEC §9).
+/// Builds the binding override layers, newest last (SPEC section 9).
 /// `SessionInput` resolves them once and hands each runtime map to
 /// the path that reads it.
 @MainActor

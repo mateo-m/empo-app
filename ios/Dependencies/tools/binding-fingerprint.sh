@@ -4,13 +4,13 @@
 #
 #   - mkxp-z-apple-mobile/binding/*.{cpp,h}
 #   - mkxp-z-apple-mobile/hmode7/src/*.{cpp,h}
-#   - mkxp-z-apple-mobile/src/**/*.h   (headers the binding includes;
+#   - mkxp-z-apple-mobile/src/**/*.h   (headers the binding includes,
 #     a layout change here must rebuild the merged objects or the
 #     Xcode-compiled engine half sees a different ABI)
 #   - ios/Dependencies/multiruby/wrapper.cpp
 #
 # common.make writes this value to <libdir>/.mkxp-binding-fingerprint
-# after each merged.o build; scripts/verify-native-deps.sh recomputes
+# after each merged.o build. scripts/verify-native-deps.sh recomputes
 # it per build and fails when the merged objects are stale. Paths are
 # hashed relative to their tree root so the fingerprint is identical
 # across machines (prebuilt tarballs must verify on fresh clones).

@@ -2,8 +2,8 @@ import Foundation
 import GameProbe
 import UIKit
 
-/// JoiPlay archive runtime type. Any value outside the first-class
-/// cases is surfaced as `.unsupported(raw:)` so we can display a
+/// JoiPlay archive runtime type. Any value outside the known
+/// cases becomes `.unsupported(raw:)` so we can show a
 /// precise error. The supported set covers every RGSS version our
 /// mkxp-z engine handles (XP = RGSS1, VX = RGSS2, VX Ace = RGSS3).
 /// It also covers the explicit "mkxp-z" label JoiPlay uses for
@@ -72,7 +72,7 @@ struct JgpConfiguration: Codable {
 
     // RPG Maker subset
     let windowSize: String?  // "640x480"
-    let fontScale: String?  // stored as string in JGP; parsed to Double
+    let fontScale: String?  // stored as string in JGP. Parsed to Double
     let speedUp: String?  // "1", "2", "3" ...
     let smoothScaling: Bool?
     let vsync: Bool?
@@ -175,7 +175,7 @@ extension JgpConfiguration {
         // dimensions. The host also doesn't expose an aspect-ratio
         // override (RGSS games hardcode their layout to the
         // developer-chosen `scRes`, so feeding an arbitrary buffer
-        // size would just clip / leave gutters in the rendered
+        // size would only clip / leave gutters in the rendered
         // scene). We skip JGP `windowSize` entirely. The
         // user-facing Render scale picker is the supported way to
         // raise pixel density.

@@ -454,7 +454,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
 
     func testRenamedOldActionIDTakesUnknownPaths() {
         // Gate 2 ruling: no alias. The loader treats the old id as
-        // unknown everywhere; only the app-side migration rewrites it.
+        // unknown everywhere. Only the app-side migration rewrites it.
         let controllerJSON = #"{ "version": 1, "controller": { "back": "$toggleOverlay" } }"#
         let controllerResult = ControlsManifestLoader.parse(
             data: controllerJSON.data(using: .utf8)!)
@@ -489,7 +489,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
     }
 
     func testW006UnknownMovementStyleFallsBackToDPad() {
-        // Unknown string AND wrong type both warn and fall back; a
+        // Unknown string AND wrong type both warn and fall back. A
         // future style value must never reject the file here.
         for value in [#""floating""#, "5"] {
             let json = """
@@ -527,7 +527,7 @@ final class ControlsManifestLoaderTests: XCTestCase {
         // else. NOTE: this runs the NEW parser on both inputs. The
         // real old-version compat claim rests on the old binary's
         // orientation-level `default: continue`, which no test here
-        // can execute; that claim is verified by reading and stated
+        // can execute. That claim is verified by reading and stated
         // in docs/controls-format.md.
         let withActions = #"""
             { "version": 1, "touch": { "portrait": {

@@ -1,14 +1,9 @@
 import Foundation
 
-/// Coordinates RGSS engine-thread termination handshakes.
-/// `selectGame` then does not race new sessions against sessions
-/// that still terminate. Also surfaces a hang dialog (or
-/// force-quits) when the engine never acks.
-///
-/// Usage pattern:
-/// - `returnToLibrary()` calls `armHangWatchdog { msg in state.errorMessage = msg }`.
-/// - The bridge's engine-terminated callback calls `handleEngineTerminatedAck()` to cancel the watchdog and drain any pending `selectGame` awaiter.
-/// - `selectGame` calls `awaitEngineTermination()` before handing the new game path to the RGSS thread.
+/// Coordinates RGSS engine-thread termination handshakes, so
+/// `selectGame` does not race a new session against one that is
+/// still terminating. Surfaces a hang dialog, or force-quits, when
+/// the engine never acks.
 @MainActor
 final class EngineTerminationCoordinator {
     static let hangMessage =

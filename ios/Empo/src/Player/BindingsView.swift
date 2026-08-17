@@ -2,7 +2,7 @@ import GameProbe
 import SwiftUI
 
 /// Per-game / global binding screen (ticket 005). Controller buttons
-/// have fixed rows; keyboard keys arrive by being pressed.
+/// have fixed rows. Keyboard keys arrive by being pressed.
 struct BindingsView: View {
     let container: GameContainer?
     let gameTitle: String
@@ -198,7 +198,7 @@ struct BindingsView: View {
             return
                 "Remove all button overrides for \(gameTitle). Game defaults and global settings will apply again."
         case .allGames:
-            return "Remove all global button overrides. Empo defaults will apply until you remap again."
+            return "Remove every global button change. Empo's defaults apply until you set new buttons."
         }
     }
 

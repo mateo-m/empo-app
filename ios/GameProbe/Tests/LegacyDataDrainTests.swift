@@ -43,7 +43,7 @@ final class LegacyDataDrainTests: XCTestCase {
 
     /// Full recursive snapshot: relative path -> file content, or
     /// "<dir>" for directories. Comparing snapshots pins the WHOLE
-    /// final tree, not just the entries a test remembered to check.
+    /// final tree, not only the entries a test remembered to check.
     private func snapshot(_ root: URL) throws -> [String: String] {
         var result: [String: String] = [:]
         guard let enumerator = fm.enumerator(atPath: root.path) else { return result }
@@ -396,7 +396,7 @@ final class LegacyDataDrainTests: XCTestCase {
         if (try? fm.contentsOfDirectory(atPath: locked.path)) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 directory is still readable; likely running as root")
+            throw XCTSkip("0o000 directory is still readable, likely running as root")
         }
 
         let outcome = LegacyDataDrain.drain(from: source, into: destination)
@@ -434,7 +434,7 @@ final class LegacyDataDrainTests: XCTestCase {
         if (try? fm.contentsOfDirectory(atPath: locked.path)) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 directory is still readable; likely running as root")
+            throw XCTSkip("0o000 directory is still readable, likely running as root")
         }
 
         let outcome = LegacyDataDrain.drain(from: source, into: destination)
@@ -457,7 +457,7 @@ final class LegacyDataDrainTests: XCTestCase {
         if (try? fm.contentsOfDirectory(atPath: source.path)) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 directory is still readable; likely running as root")
+            throw XCTSkip("0o000 directory is still readable, likely running as root")
         }
 
         let outcome = LegacyDataDrain.drain(from: source, into: destination)

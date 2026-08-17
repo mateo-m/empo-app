@@ -2,8 +2,8 @@ import Foundation
 
 /// Detection of "portable mode" saves: save files some games keep
 /// NEXT TO their game files instead of in `System.data_directory`.
-/// The deletion rescue moves these out of the doomed `Game/` tree;
-/// nothing else may touch them - a still-installed game needs them
+/// The deletion rescue moves these out of the doomed `Game/` tree.
+/// Nothing else may touch them - a still-installed game needs them
 /// exactly where they are.
 ///
 /// Every RGSS save is a Ruby `Marshal` dump, and every Marshal
@@ -12,7 +12,7 @@ import Foundation
 /// vary wildly across games (`Game`, `Save1`, `Uranium_1`,
 /// `save_0_backup_1`, localized stems), but the extension family
 /// and the Marshal magic are stable. A false positive here merely
-/// preserves a file in the shared data directory; a false negative
+/// preserves a file in the shared data directory. A false negative
 /// deletes a player's save - so the signals form a union:
 ///
 ///   - Regular files at the game root with RGSS save extensions

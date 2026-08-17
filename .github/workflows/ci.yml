@@ -4,12 +4,12 @@
 # and build.yml, in one workflow with one trigger block.
 #
 # The ruleset's required context is a check-run name, which comes from
-# a JOB name — so the "CI" summary job at the bottom must keep that
+# a JOB name, so the "CI" summary job at the bottom must keep that
 # exact name. It is the only context a merge waits on, and it needs
 # every other job in this file.
 #
 # Requires secret EMPO_DEPS_READ_TOKEN (read access to empo-deps) for
-# the native + ANGLE tarballs; the engine-core prebuilt is public.
+# the native + ANGLE tarballs. The engine-core prebuilt is public.
 
 name: CI
 
@@ -21,7 +21,7 @@ on:
 
 # Several pinned actions (actions/cache, cirruslabs/swiftlint-action,
 # awalsh128/cache-apt-pkgs-action) still run on Node.js 20. GitHub is
-# forcing all JS actions to Node.js 24; opt in so the deprecation
+# forcing all JS actions to Node.js 24. Opt in so the deprecation
 # banner is silenced. Drop once every pinned action ships Node 24.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -35,7 +35,7 @@ jobs:
   # GameProbe tests, or a Simulator build, so those three jobs skip.
   #
   # The skip MUST be a job-level `if:`, never a workflow-level
-  # `paths-ignore`. The ruleset requires the "CI" context; a workflow
+  # `paths-ignore`. The ruleset requires the "CI" context. A workflow
   # that path-filters itself away never reports it, and the PR waits
   # forever for a status that cannot arrive. A job skipped by `if:`
   # still reports, and GitHub counts a skipped job as a success. The
@@ -159,7 +159,7 @@ jobs:
       - name: clang-format check
         # DoozyX is the canonical clang-format CI action. Pinning
         # clang-format 18 to match local (Apple clang-format 21 is
-        # also fine; the shipped .clang-format is style-stable).
+        # also fine, the shipped .clang-format is style-stable).
         uses: DoozyX/clang-format-lint-action@v0.20
         with:
           source: "ios/Empo/src ios/Empo/shims"
@@ -222,7 +222,7 @@ jobs:
 
       - name: yamllint
         run: |
-          # yamllint warnings shouldn't fail CI; only structural
+          # yamllint warnings shouldn't fail CI. Only structural
           # errors should. --strict promotes warnings to failures,
           # so we run twice: first to surface the issues, then
           # `|| true` to keep the soft-warn behaviour.
@@ -289,7 +289,7 @@ jobs:
       - name: Verify pins against empo-deps
         # gh ships preinstalled on GitHub-hosted ubuntu runners.
         # Tag-time verification (REQUIRE_PUBLISHED=1) happens in the
-        # Release workflow; here unpublished pins only warn.
+        # Release workflow. Here unpublished pins only warn.
         env:
           GH_TOKEN: ${{ secrets.EMPO_DEPS_READ_TOKEN || github.token }}
           REQUIRE_PUBLISHED: "0"
@@ -395,7 +395,7 @@ jobs:
 
       - name: Create empty signing overrides
         # Signing.xcconfig is a gitignored per-machine file (see
-        # Signing.xcconfig.example); CI builds unsigned, so empty works.
+        # Signing.xcconfig.example). CI builds unsigned, so empty works.
         run: touch ios/Empo/Signing.xcconfig
 
       - name: Generate Xcode project

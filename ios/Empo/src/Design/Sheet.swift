@@ -5,14 +5,14 @@ import SwiftUI
 /// one-surface background, intrinsic sizing, brand tint - and the
 /// `Sheet*` pieces below are the building blocks its content
 /// composes. A sheet built from these cannot spell the chrome
-/// wrong; the rules they encode live in `docs/sheet-design.md`.
+/// wrong. The rules they encode live in `docs/sheet-design.md`.
 ///
 /// Composition works like slots: the sheet declares WHAT it
 /// shows, the vocabulary decides HOW it looks.
 ///
 /// ```swift
 /// StandardSheet(title: "Saves Recovered", emblem: "checkmark.seal") {
-///     SheetProse("What happened and why.")
+///     SheetBodyText("What happened and why.")
 ///     SheetCard { /* rows */ }
 ///     SheetFootnote("The fine print.")
 ///     SheetPrimaryButton("Done") { dismiss() }
@@ -51,15 +51,15 @@ enum SheetSurface {
 ///   - With `emblem:`: the title joins the symbol as ONE centered
 ///     identity block at the top of the content (welcome-sheet
 ///     style). Splitting them - a bar title plus a floating
-///     symbol - reads as two competing anchors; never do that.
+///     symbol - reads as two competing anchors. Never do that.
 struct StandardSheet<Content: View>: View {
     let title: String
-    /// SF Symbol name for the identity block; nil keeps the title
-    /// in the navigation bar.
+    /// SF Symbol name for the identity block. A nil value keeps the
+    /// title in the navigation bar.
     var emblem: String?
     var surface: SheetSurface = .grouped
-    /// Extra height for navigation chrome; nil derives it from
-    /// the bar: the full bar allowance with a bar, just the
+    /// Extra height for navigation chrome. A nil value derives it from
+    /// the bar: the full bar allowance with a bar, only the
     /// grabber zone without one.
     var chromeAllowance: CGFloat?
     /// Optional top-trailing toolbar action.
@@ -69,7 +69,7 @@ struct StandardSheet<Content: View>: View {
     @State private var measuredHeight: CGFloat = 0
 
     /// An identity-block sheet with no toolbar action has an empty
-    /// bar; hiding it lets the sheet hug its content.
+    /// bar. Hiding it lets the sheet hug its content.
     private var barHidden: Bool {
         emblem != nil && trailingButton == nil
     }
@@ -144,8 +144,8 @@ private struct SheetIdentityBlock: View {
     }
 }
 
-/// Leading-aligned explanation prose under the emblem.
-struct SheetProse: View {
+/// Leading-aligned explanation text under the emblem.
+struct SheetBodyText: View {
     let text: String
 
     init(_ text: String) { self.text = text }

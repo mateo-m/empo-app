@@ -56,7 +56,7 @@ that for every game: the data directory is the shared `Documents/Data/<org>/<app
 to `Games/` in the Files app. The keys come from `Game/mkxp.json` merged with the per-game
 `EmpoState/mkxp.json` overlay (overlay wins). An org of `.` (or blank) contributes no path
 component. A missing `dataPathApp` falls back to the game's INI title, then to the game's
-library folder name. (Desktop mkxp-z falls back to the literal `mkxp-z` instead; on a device
+library folder name. (Desktop mkxp-z falls back to the literal `mkxp-z` instead. On a device
 with many installed games that would pool every title-less game into one directory, where
 their save files collide.) Existing directories match case-insensitively, so a release whose
 title changed only in case keeps its saves. Any two game releases that resolve to the same
@@ -71,7 +71,7 @@ Deleting a game does not delete its shared data directory.
 Some games keep their saves next to their own files instead ("portable mode"). When you
 delete such a game, Empo moves the save files it finds inside `Game/` into
 `Documents/Rescued Saves/<title>/`, with their structure intact. The bucket is named by the
-game's display title; a marker file inside it records the game's library folder name. When
+game's display title. A marker file inside it records the game's library folder name. When
 you import the same game again, Empo matches the bucket by that marker and moves the saves
 back into the new `Game/` tree. If Empo does not recognize a save file, the deletion removes
 it with the game.

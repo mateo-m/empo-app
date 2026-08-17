@@ -43,7 +43,7 @@ public struct TouchLayout: Equatable, Sendable {
 }
 
 /// Visual style of the single movement control. The file key stays
-/// `dpad` for both; `style` picks the renderer. Same key mapping and
+/// `dpad` for both. `style` picks the renderer. Same key mapping and
 /// direction math either way.
 public enum MovementStyle: String, Equatable, Sendable, CaseIterable, Codable {
     case dpad
@@ -129,8 +129,8 @@ public struct ActionButtonSpec: Equatable, Sendable {
 ///
 /// The `element` target is what makes one set of binds serve every
 /// pad. A controller in keyboard mode sends keys, so `"KeyJ": "a"`
-/// files that key under the A button, and every A binding — Empo's
-/// default, the game's manifest, the player's own — applies to it.
+/// files that key under the A button. Every A binding then applies
+/// to it: Empo's default, the game's manifest, and the player's own.
 public enum ControlsTarget: Equatable, Sendable {
     case key(String)
     case element(String)

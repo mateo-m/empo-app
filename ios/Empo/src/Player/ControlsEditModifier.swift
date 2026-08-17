@@ -132,7 +132,7 @@ enum ControlSizePresets {
         ("Small", 44), ("Medium", 50),
         ("Default", 56), ("Large", 68), ("Extra large", 80),
     ]
-    /// Matches the button progression's feel; the D-pad's default
+    /// Matches the button progression's feel. The D-pad's default
     /// (140pt) is the middle preset.
     static let dpad: [(String, CGFloat)] = [
         ("Small", 110), ("Medium", 125),
@@ -320,7 +320,7 @@ struct ButtonEditSheet: View {
 }
 
 /// Edit sheet for a function button. The action is fixed at add time
-/// (a read-only row shows its name and description); only size,
+/// (a read-only row shows its name and description). Only size,
 /// opacity, and delete apply.
 struct ActionButtonEditSheet: View {
     var layout: ControlsLayout

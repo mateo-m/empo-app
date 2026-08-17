@@ -13,7 +13,7 @@ enum GameViewEmbedder {
 
     static var isEmbedded: Bool { embeddedGameView != nil }
 
-    /// SDL's game view when reparented into `AppWindow`. Nil before embed.
+    /// SDL's game view when reparented into `AppWindow`, or nil before embed.
     static var embeddedView: UIView? { embeddedGameView }
 
     static func embedIfNeeded() -> Bool {

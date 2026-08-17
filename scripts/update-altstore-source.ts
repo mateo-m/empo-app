@@ -9,7 +9,7 @@
 // (AltStore validates this on download and refuses to install on mismatch).
 //
 // AltStore's source schema requires versions to be ordered newest-first
-// (per <https://faq.altstore.io/developers/make-a-source.md>); we honor
+// (per <https://faq.altstore.io/developers/make-a-source.md>). We honor
 // that by inserting at index 0 instead of appending.
 //
 // Usage:
@@ -69,7 +69,7 @@ const { values } = parseArgs({
 });
 
 // Pull every required flag through `requireFlag` so the rest of the
-// script works with plain `string` locals; that drops the
+// script works with plain `string` locals. That drops the
 // non-null-assertion ceremony at every use site and makes the
 // "missing flag" error message consistent.
 function requireFlag(name: string, value: string | undefined): string {
@@ -125,7 +125,7 @@ const minOSVersion = versions[0]?.minOSVersion;
 
 // Field order mirrors AltStore's documented version schema example
 // (version, buildVersion, date, localizedDescription, downloadURL,
-// size, minOSVersion); JSON.stringify preserves insertion order.
+// size, minOSVersion). JSON.stringify preserves insertion order.
 const entry: VersionEntry = {
   version,
   buildVersion: build,

@@ -38,7 +38,7 @@ struct SettingsView: View {
                         }
                     }
 
-                    // Title position only affects grid cards; the
+                    // Title position only affects grid cards. The
                     // list layout always puts the title next to the
                     // artwork. Hide the row when it would be a no-op.
                     if settings.libraryDisplayMode == .grid {
@@ -97,14 +97,14 @@ struct SettingsView: View {
                         title: "Diagnostics overlay",
                         isOn: $settings.diagnosticsOverlay,
                         description:
-                            "Adds a button to the in-game toolbar. The button toggles a draggable overlay with the title, Ruby version, renderer, and FPS."
+                            "Add a button to the in-game toolbar. The button shows or hides a movable panel with the title, Ruby version, graphics driver, and frame rate."
                     )
 
                     SettingsToggle(
-                        title: "Show viewport bounds",
+                        title: "Show unused screen area",
                         isOn: $settings.showViewportBounds,
                         description:
-                            "Fills the framebuffer area outside the game viewport with a color you choose."
+                            "Fill the screen area outside the game picture with a color you choose."
                     )
 
                     if settings.showViewportBounds {
@@ -125,7 +125,7 @@ struct SettingsView: View {
                         title: "Show touch zone",
                         isOn: $settings.showTouchZone,
                         description:
-                            "Outlines the area of the game screen where the app sends taps and drags to the game as mouse input."
+                            "Outline the part of the game screen where taps and drags act as mouse input."
                     )
 
                     SettingsToggle(

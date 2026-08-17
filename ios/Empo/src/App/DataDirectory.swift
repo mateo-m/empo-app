@@ -11,36 +11,34 @@ import Synchronization
 ///     Documents/Data/<org>/<app>/
 ///
 /// shared across containers and visible in the Files app next to
-/// `Games/`. That mirrors desktop mkxp-z, where `dataPathOrg` and
-/// `dataPathApp` from the game's effective mkxp config
-/// (`Game/mkxp.json` merged with the `EmpoState/mkxp.json` overlay)
-/// feed `SDL_GetPrefPath(org, app)` for every game: any two game
-/// releases that resolve to the same pair see the same data
-/// directory. Fan games rely on this to carry saves across
-/// versions - which matters more now that re-importing a new
-/// version replaces the old container.
+/// `Games/`. This mirrors desktop mkxp-z, where `dataPathOrg` and
+/// `dataPathApp` from the effective mkxp config (`Game/mkxp.json`
+/// merged with the `EmpoState/mkxp.json` overlay) feed
+/// `SDL_GetPrefPath(org, app)`. Two releases that resolve to the
+/// same pair share one directory, which is how fan games carry
+/// saves across versions. That matters more now that re-importing
+/// replaces the old container.
 ///
-/// Defaults mirror mkxp-z's: an org of `"."` (or blank) contributes
-/// no path component, and a missing `dataPathApp` falls back to the
-/// game's INI title, then to the container folder name (see
+/// Defaults mirror mkxp-z's: an org of `"."` or blank adds no path
+/// component, and a missing `dataPathApp` falls back to the INI
+/// title, then the container folder name. See
 /// `MkxpDataPath.sharedDirectoryComponents` for why the engine's
-/// own `"mkxp-z"` last resort is not used here). Existing children
-/// of `Data/` are reused case-insensitively so a case-only title
-/// change between releases keeps its saves, the way desktop
-/// Windows would.
+/// `"mkxp-z"` last resort is skipped. Children of `Data/` are
+/// reused case-insensitively, so a case-only title change keeps
+/// its saves the way desktop Windows would.
 ///
 /// The per-game `<container>/UserData/` directory is now a legacy
-/// staging area only: `SaveMigration` funnels old save locations
+/// staging area only. `SaveMigration` funnels old save locations
 /// into it at startup, and `resolveAndPrepare` drains it into the
-/// shared directory at launch (`LegacyDataDrain` - recursive
-/// merge, newer file wins, nothing deleted).
+/// shared directory at launch through `LegacyDataDrain`, which
+/// merges recursively, keeps the newer file, and deletes nothing.
 ///
-/// `Data/` is intentionally NOT excluded from backups (unlike
-/// `Games/`): it holds the data games choose to persist - saves,
-/// settings, mod state - which is small and precious.
+/// Unlike `Games/`, `Data/` is deliberately NOT excluded from
+/// backups. It holds what games choose to persist, meaning saves,
+/// settings, and mod state, which is small and precious.
 enum DataDirectory {
 
-    /// Parent of `Data/`, `Games/`, and the rescue buckets; the
+    /// Parent of `Data/`, `Games/`, and the rescue buckets. The
     /// base every root below derives from, and the base the
     /// recovery ledger's `directory` paths are relative to.
     static let documentsRootURL: URL = FileManager.default
@@ -64,8 +62,8 @@ enum DataDirectory {
     /// mounts it behind each game's own `Fonts/`, and the compat
     /// layer routes Essentials font-installer writes into it. A
     /// font dropped here once serves the whole library. It stays
-    /// outside `Data/` because that tree holds per-game state;
-    /// fonts are system state and survive game deletion.
+    /// outside `Data/` because that tree holds per-game state.
+    /// Fonts are system state and survive game deletion.
     static let fontsRootURL: URL =
         documentsRootURL.appendingPathComponent("Fonts", isDirectory: true)
 
@@ -166,7 +164,7 @@ enum DataDirectory {
             isDirectory.boolValue
         else {
             NSLog(
-                "[DataDirectory] Cannot create %@; falling back to per-game UserData",
+                "[DataDirectory] Cannot create %@, falling back to per-game UserData",
                 resolved.path)
             let staging = container.userDataURL
             try? fm.createDirectory(at: staging, withIntermediateDirectories: true)
@@ -201,7 +199,7 @@ enum DataDirectory {
         let fm = FileManager.default
         let outcome = drainLock.withLock { _ -> PreLiteralSaveHeal.Outcome in
             // One walk over the whole tree, one lock window. The
-            // returned paths are Data/-relative; each promotion's
+            // returned paths are Data/-relative. Each promotion's
             // CONTAINING directory identifies its game (the leaf
             // is the app name even when an org level nests above
             // it).
@@ -264,7 +262,7 @@ enum DataDirectory {
 
     /// Queue a recovery for the one-time sheet. The merge policy
     /// and encoding live in `SaveRecoveryLedger` (GameProbe) where
-    /// the Linux CI tests pin them; this wrapper only adds the
+    /// the Linux CI tests pin them. This wrapper only adds the
     /// UserDefaults blob. Callers hold `drainLock`: the ledger
     /// update is read-modify-write and heals can run from detached
     /// delete tasks.
@@ -306,32 +304,29 @@ enum DataDirectory {
         return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
     }
 
-    /// Rescue path for game deletion. Two save locations sit
-    /// inside the doomed container tree, and they go to DIFFERENT
-    /// homes:
+    /// Rescue path for game deletion. Two save locations sit inside
+    /// the doomed container tree, and they go to DIFFERENT homes:
     ///
-    ///   - `UserData/` (a pre-0.5 container that never launched
-    ///     under the shared-data scheme) holds env-derived saves:
-    ///     it drains into the shared `Data/` directory, where the
-    ///     engine serves them back to the game.
-    ///   - "Portable mode" saves games keep NEXT TO their game
-    ///     files (`Game/Game.rxdata`, a `Save Data/` folder - see
-    ///     `PortableGameSaves`) move into a
-    ///     `Rescued Saves/<title>/` bucket with their structure
-    ///     intact, so a later import of the same game can put them
-    ///     back into `Game/`. Only the deletion rescue may move
-    ///     these: an installed game needs them exactly where they
-    ///     are.
+    ///   - `UserData/`, from a pre-0.5 container that never launched
+    ///     under the shared-data scheme, holds env-derived saves. It
+    ///     drains into the shared `Data/` directory, where the engine
+    ///     serves them back to the game.
+    ///   - Portable-mode saves, which games keep NEXT TO their game
+    ///     files (`Game/Game.rxdata`, a `Save Data/` folder, see
+    ///     `PortableGameSaves`), move into `Rescued Saves/<title>/`
+    ///     with their structure intact, so a later import can put
+    ///     them back into `Game/`. Only the deletion rescue may move
+    ///     these, because an installed game needs them where they are.
     ///
-    /// Does nothing - and creates nothing - when there is nothing
-    /// to rescue.
+    /// Does nothing, and creates nothing, when there is nothing to
+    /// rescue.
     ///
-    /// Returns false when anything failed to move, including when
-    /// a destination itself cannot exist (for `UserData/`, the
-    /// fallback destination IS `UserData/`, and draining a
-    /// directory into itself proves nothing). The caller must NOT
-    /// delete the container in that case: silent save loss is
-    /// never on the table.
+    /// Returns false when anything failed to move, including when a
+    /// destination cannot exist. For `UserData/` the fallback
+    /// destination IS `UserData/`, and draining a directory into
+    /// itself proves nothing. The caller must NOT delete the
+    /// container in that case, because silent save loss is never on
+    /// the table.
     static func rescueUserDataBeforeDeletion(of container: GameContainer) -> Bool {
         let fm = FileManager.default
         let rescueStaging = container.url.appendingPathComponent(
@@ -365,7 +360,7 @@ enum DataDirectory {
 
         var rescued = true
         if hasLeftoverContent(container.userDataURL) {
-            // Verify the shared destination before draining; the
+            // Verify the shared destination before draining. The
             // fallback path means the destination could not exist.
             let resolved = resolveAndPrepare(for: container)
             if resolved.path == container.userDataURL.path {
@@ -414,7 +409,7 @@ enum DataDirectory {
             isDirectory.boolValue
         else {
             NSLog(
-                "[DataDirectory] Cannot create rescue bucket %@; keeping saves in place",
+                "[DataDirectory] Cannot create rescue folder %@, keeping saves in place",
                 bucket.path)
             return
         }
@@ -471,7 +466,7 @@ enum DataDirectory {
     /// fallback) back into its fresh `Game/` tree. Called after a
     /// fresh import lands, before the first launch, so the game
     /// sees its saves on the first run. Complete restores remove
-    /// their emptied buckets; a partial restore keeps the rest for
+    /// their emptied buckets. A partial restore keeps the rest for
     /// the next import.
     static func restoreRescuedSaves(for container: GameContainer) {
         let fm = FileManager.default
@@ -490,7 +485,7 @@ enum DataDirectory {
                 outcome.movedCount,
                 outcome.failures.count)
         }
-        // An emptied root is clutter in the Files app; remove it
+        // An emptied root is clutter in the Files app. Remove it
         // only when the LAST bucket is gone.
         if ((try? fm.contentsOfDirectory(atPath: rescuedSavesRootURL.path)) ?? []).isEmpty {
             try? fm.removeItem(at: rescuedSavesRootURL)

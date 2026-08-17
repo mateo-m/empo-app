@@ -1,7 +1,7 @@
 import Foundation
 import GameProbe
 
-/// Read/write `<container>/EmpoState/controls.json` (SPEC §3 user layer, ticket 009).
+/// Read/write `<container>/EmpoState/controls.json` (SPEC section 3 user layer, ticket 009).
 enum UserControlsFile {
     static let logFileName = "controls.json.log"
     static let logPrefix = "user controls.json:"

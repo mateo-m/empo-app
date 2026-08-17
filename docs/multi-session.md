@@ -17,9 +17,9 @@ An iOS app cannot kill itself and start again. Android emulators (JoiPlay) avoid
 - Game B runs in the same VM. It defines `class Foo < Baz`. Ruby raises `TypeError: superclass mismatch for class Foo`.
 - The set of leaked classes, monkey-patches, aliases, and disposed RGSS objects across two arbitrary games is unpredictable.
 
-A previous version shipped aggressive cross-session cleanup: constant-baseline diffing, a singleton-method baseline, the `MkxpNullMouse` shim for orphan globals, and intrusive-list detachment for disposables. It worked for narrow same-version game pairs. It failed on broader game sets, especially mixed-version sessions where the active Ruby's data structures differ between games.
+An earlier version cleaned up hard between sessions. It compared constants against a baseline, recorded a singleton-method baseline, used the `MkxpNullMouse` stand-in for leftover globals, and detached disposables from their lists. It worked for a few same-version game pairs. It failed on wider game sets, above all when two games used different Ruby versions, because the data structures differ.
 
-The decision: we show a clean alert that asks the user to force-close, instead of a half-working cross-session UX that breaks unpredictably. Future work can re-enable cross-session play in two ways: process forking (a separate PID per game), or a move of the engine's per-session VM state into a fully resettable container.
+The decision: show a clear alert that asks the player to close the app, rather than a half-working flow that fails at random. Two later options can bring cross-session play back. The app can fork a process, so each game gets its own PID. Or the engine can move its per-session VM state into a container it can reset in full.
 
 ## Disabled quit paths
 

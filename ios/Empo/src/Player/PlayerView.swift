@@ -58,7 +58,7 @@ struct PlayerView: View {
             // longer applies.
             let toolbarBtnSize = IconButtonSize.sm.points
             // An active screen region carries the profile's own
-            // overlay choice; nil keeps the geometry heuristic.
+            // overlay choice. A nil choice keeps the geometry heuristic.
             let activeScreenPlacement = layout.effectiveScreenPlacement(
                 stored: ScreenRegionApplier.resolvedPlacement(isPortrait: isPortrait))
             let forcedOverlay = activeScreenPlacement?.overlay
@@ -223,11 +223,11 @@ struct PlayerView: View {
                     )
                 }
 
-                // One-time heads-up: the game's own layout displaced
-                // the user's default profile.
+                // Tell the player once that the game's own layout
+                // replaced their default profile.
                 if layout.gameLayoutNoticePending && !editMode && !layout.importOfferPending {
                     noticeCapsule(hitRegionKey: "gameLayoutNotice", safeArea: safeArea) {
-                        Text("This game ships its own control layout; it is now active.")
+                        Text("This game comes with its own control layout. It is now active.")
                             .font(.footnote)
                             .foregroundStyle(.white)
                         Button("OK") {
@@ -261,14 +261,14 @@ struct PlayerView: View {
             // Push device orientation into ControlsLayout so it can
             // swap active/inactive per-orientation snapshots.
             // `initial: true` ensures the layout knows the orientation
-            // as soon as PlayerView appears, not just on rotation.
+            // as soon as PlayerView appears, not only on rotation.
             .onChange(of: isPortrait, initial: true) { _, nowPortrait in
                 layout.setOrientation(nowPortrait ? .portrait : .landscape)
                 // Rotation re-sends the region for the new
-                // orientation; the engine draws automatic placement
+                // orientation. The engine draws automatic placement
                 // until this call lands (orientation-tag guard).
                 // Mid-edit-session, the new orientation's pending
-                // edit outranks the resolved state; with nothing
+                // edit outranks the resolved state. With nothing
                 // pending, leaving preview mode re-applies from disk
                 // in both the preview and the normal case.
                 if let pending = layout.pendingScreenEdit {
@@ -287,8 +287,8 @@ struct PlayerView: View {
             // and translated layouts keep their estimate-based bands.
             .onChange(of: engineState.gameRect, initial: true) { _, rect in
                 layout.refreshForGameGeometryChange()
-                // Presets compute their rect from the game's aspect;
-                // the published picture rect carries it.
+                // Presets compute their rect from the game's aspect.
+                // The published picture rect carries it.
                 ScreenRegionApplier.gameRectChanged(rect)
             }
         }
@@ -444,8 +444,8 @@ struct PlayerView: View {
     /// render from the same effective rect, so the chips follow the
     /// outline mid-drag.
     private struct ScreenGizmoContext {
-        /// The placement in force (preset or custom); nil is
-        /// engine-auto.
+        /// The placement in force (preset or custom). A nil value
+        /// means the engine picks the placement.
         var effectivePlacement: ScreenPlacement?
         /// The placement as this device's rect (a preset computes
         /// per device).
@@ -464,8 +464,8 @@ struct PlayerView: View {
         let effectiveRegion = effectivePlacement.flatMap {
             ScreenRegionApplier.region(for: $0, isPortrait: isPortrait)
         }
-        // The outline draws the CLAMPED region — the same rect the
-        // applier sends — so it can never disagree with the picture
+        // The outline draws the CLAMPED region, the same rect the
+        // applier sends, so it can never disagree with the picture
         // when stored fractions fall outside this device's safe
         // area.
         let baseRect: CGRect = {
@@ -535,7 +535,7 @@ struct PlayerView: View {
                             isPortrait: isPortrait)
                     } else {
                         // Snapped back with no prior edit: nothing is
-                        // pending, so leave preview mode — a stuck
+                        // pending, so leave preview mode. A stuck
                         // preview would freeze the applier.
                         ScreenRegionApplier.endPreview()
                     }
@@ -595,15 +595,15 @@ struct PlayerView: View {
     }
 
     /// Where the engine's automatic placement will land, in window
-    /// fractions — the reset animation's target. Mirrors the fit in
+    /// fractions. The reset animation's target. Mirrors the fit in
     /// `recalculateScreenSize`: aspect-fit inside the safe-area
     /// container, vertical alignment in portrait, centered in
     /// landscape (top/bottom insets ignored there).
     private func estimatedAutoRegion(
         geoSize: CGSize, isPortrait: Bool, aspect: CGFloat
     ) -> ScreenRegion? {
-        // Automatic placement follows the game's engine alignment;
-        // the shared preset calculator holds the ONE copy of the
+        // Automatic placement follows the game's engine alignment.
+        // The shared preset calculator holds the ONE copy of the
         // fit-and-align math.
         let preset: ScreenPreset
         switch mkxp_getVerticalAlignment() {

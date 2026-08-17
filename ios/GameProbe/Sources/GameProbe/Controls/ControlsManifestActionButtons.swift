@@ -1,7 +1,7 @@
 import Foundation
 
 /// Parsing for the `actionButtons` arrays. Split from the main
-/// loader file for size; the shared placement fields keep the
+/// loader file for size. The shared placement fields keep the
 /// x/y/size/opacity rules identical to plain buttons.
 extension ControlsManifestLoader {
     /// The x/y/size/opacity fields every placeable control shares.
@@ -77,7 +77,7 @@ extension ControlsManifestLoader {
         }
 
         /// The buttons' trailing rule: a missing coordinate is a
-        /// V011 error, never a silent drop — a silently dropped
+        /// V011 error, never a silent drop. A silently dropped
         /// button would vanish from disk on the next
         /// load-modify-save cycle.
         func requireCoordinates(

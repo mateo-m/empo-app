@@ -99,7 +99,7 @@ final class ContainerMigrationPlannerTests: XCTestCase {
     }
 
     func testDatedBeatsUndatedAmongNeverPlayed() {
-        // Neither candidate was played; the one with a real
+        // Neither candidate was played. The one with a real
         // dateAdded must rank above the one with none.
         let groups = ContainerMigrationPlanner.plan(
             candidates: [

@@ -62,7 +62,7 @@ final class ConcatenatedSaveRecoveryTests: XCTestCase {
     }
 
     func testRemainderStripsThePrefixOnce() {
-        // A doubled prefix loses ONE layer per recovery pass; the
+        // A doubled prefix loses ONE layer per recovery pass. The
         // strip must not loop.
         XCTAssertEqual(
             ConcatenatedSaveRecovery.remainder(ofConcatenatedName: "UserDataUserDataGame.rxdata"),

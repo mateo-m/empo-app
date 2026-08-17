@@ -13,7 +13,7 @@ settings:
     CURRENT_PROJECT_VERSION: 641
     CLANG_CXX_LANGUAGE_STANDARD: c++14
     # `YES` / `NO` are Xcode's canonical boolean tokens for build
-    # settings; xcodebuild's parser treats them specially. yamllint
+    # settings. xcodebuild's parser treats them specially. yamllint
     # would prefer lower-case, but lowercasing here risks subtle
     # parser quirks downstream, so disable the rule for these lines.
     CLANG_ENABLE_OBJC_ARC: YES # yamllint disable-line rule:truthy
@@ -54,7 +54,7 @@ settings:
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/binding
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/shader
       # H-Mode7 port (//hmode7-apple-mobile submodule). Headers live
-      # next to the .cpp sources; the binding layer includes them via
+      # next to the .cpp sources. The binding layer includes them via
       # short names (hm7_apply_opacity.h etc.).
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/hmode7/src
       - $(PROJECT_DIR)/shims
@@ -68,7 +68,7 @@ settings:
       # SYSTEM_HEADER_SEARCH_PATHS below so Ruby resolves to 3.1
       # for the legacy direct-link path. Once the legacy path is
       # dropped (Phase F), this line and the SYSTEM_HEADER_SEARCH_PATHS
-      # entry both go away — only the per-Ruby merged.o targets
+      # entry both go away. Only the per-Ruby merged.o targets
       # need Ruby headers.
       - $(DEPENDENCY_SEARCH_PATH)/include/ruby31
       - $(DEPENDENCY_SEARCH_PATH)/include/SDL2
@@ -217,7 +217,7 @@ targets:
         # reflected in the app until a clean build.
         basedOnDependencyAnalysis: false
         # Register the generated Swift file with the target. It's
-        # gitignored so the `src` group scan won't pick it up; without
+        # gitignored so the `src` group scan won't pick it up. Without
         # this + the explicit source entry below, Release builds fail
         # with "Cannot find 'GitInfo' in scope".
         outputFiles:
@@ -278,7 +278,7 @@ targets:
             echo "    static let engineCoreFingerprint = \"$ENGINE_CORE_FP\""
             echo "}"
           )
-          # Only touch the file when the content actually changed so
+          # Only touch the file when the content changed so
           # downstream Swift compilation isn't invalidated on every
           # build when nothing relevant has shifted.
           if [ ! -f "$OUT" ] || [ "$(cat "$OUT")" != "$NEW" ]; then
@@ -292,7 +292,7 @@ targets:
       #   (invoked via `make -f <platform>.make mkxp-core` in
       #   ios/Dependencies, or hydrated from a published artifact per
       #   ios/Dependencies/engine/.version). Linked via -force_load in
-      #   OTHER_LDFLAGS below; staleness is caught per build by
+      #   OTHER_LDFLAGS below. Staleness is caught per build by
       #   scripts/verify-native-deps.sh against .mkxp-core-fingerprint.
       #
       # - Binding half (binding/*.cpp + hmode7/*.cpp, all Ruby-API
@@ -306,7 +306,7 @@ targets:
         type: group
       - path: src
         type: group
-      # Gitignored generated file; listed explicitly so xcodegen keeps
+      # Gitignored generated file. Listed explicitly so xcodegen keeps
       # it in Compile Sources after `src` group scans skip ignored paths.
       - path: src/App/GitInfo.generated.swift
         optional: true
@@ -316,7 +316,7 @@ targets:
         type: folder
         buildPhase: resources
       # Populated by the "Assemble Ruby stdlib" script phase from the
-      # prebuilt dep tree; gitignored (content is versioned by the
+      # prebuilt dep tree. Gitignored (content is versioned by the
       # native-deps pin, not this repo).
       - path: Ruby
         type: folder
@@ -340,7 +340,7 @@ targets:
         # capabilities, but having SOME .entitlements file in the
         # build means the signed binary always has an entitlements
         # blob present. Naive resigners (notably ESign) read this
-        # blob as their template; without it they synthesize an
+        # blob as their template. Without it they synthesize an
         # incomplete blob that breaks document picker's sandbox-
         # extension grants on the picked URL (Open does nothing for
         # files, spinner-forever for folders). Sideloadly + AltStore
@@ -380,7 +380,7 @@ targets:
           # Multi-Ruby Phase D: per-version binding+libruby merged
           # objects, one per supported Ruby (1.8 / 1.9 / 3.1).
           # Each exposes a single `_mkxp_get_script_binding_<NN>()`
-          # entry; everything else (libruby's `_rb_*` + mkxp-z
+          # entry. Everything else (libruby's `_rb_*` + mkxp-z
           # binding internals) is private-extern, hidden inside the
           # merged .o so versions coexist without symbol clashes.
           # Native Ruby 3.0 was dropped: the syntax-transform parser
@@ -394,9 +394,9 @@ targets:
           # setting (per-game detection in RubyVersionDetection.swift).
           # Default + UNSET fall through to 3.1, matching the legacy
           # behaviour before multi-Ruby. Adding 1.9 / 1.8 is a
-          # mechanical extension — drop the new merged.o here, add
+          # mechanical extension. Drop the new merged.o here, add
           # the case in `getActiveScriptBinding()`.
-          # Engine core (src/**) as a prebuilt static library — see
+          # Engine core (src/**) as a prebuilt static library. See
           # the note at the top of `sources`. -force_load keeps every
           # member (ObjC impls and constructors included) so behavior
           # matches the old compile-into-app layout exactly.

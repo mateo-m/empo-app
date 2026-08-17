@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Presents the one-time sheet after the pre-literal save heal
 /// restored renamed save files (an engine defect in v0.5.0-v0.6.0
-/// renamed saves to "*.pre-literal.bak" chains on devices; see
+/// renamed saves to "*.pre-literal.bak" chains on devices. See
 /// `PreLiteralSaveHeal`). Self-contained on purpose: it loads the
 /// pending ledger, matches artwork against the loaded library
 /// entries, and clears the ledger on any dismissal - the library
@@ -83,7 +83,7 @@ private struct SaveRecoverySheet: View {
             title: "Saves Recovered",
             emblem: "checkmark.arrow.trianglehead.counterclockwise"
         ) {
-            SheetProse(
+            SheetBodyText(
                 "A defect in earlier Empo versions renamed save files on this "
                     + "device, so games showed only \u{201C}New Game\u{201D}. "
                     + "Empo restored the most recent save file for each game "

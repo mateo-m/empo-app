@@ -56,7 +56,7 @@ public enum LayoutPinFile {
             }
             // The pin file sits in the game folder, so users can
             // hand-edit it. An unvalidated name would flow into
-            // profile path building; ".." must never do that.
+            // profile path building. ".." must never do that.
             let name = raw.precomposedStringWithCanonicalMapping
             guard LayoutProfileStore.validatedName(name) == name else {
                 return (.followChain, "layout_profile.json: invalid pin \(raw), following the chain")
@@ -102,7 +102,7 @@ public enum LayoutProvenance: Equatable, Sendable {
 /// and no caller re-joins names to levels.
 public enum LayoutChainResolver {
     public struct Levels: Sendable {
-        /// nil when the pin names no profile; else the pinned name
+        /// nil when the pin names no profile. Else the pinned name
         /// plus whether that profile's section exists and is valid.
         public var pinnedProfile: (name: String, valid: Bool)?
         /// Whether the game ships a usable layout at this level.

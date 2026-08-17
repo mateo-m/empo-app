@@ -1,6 +1,6 @@
 import Foundation
 
-/// FNV-1a 64 for migration dedupe lookups. Not cryptographic; the
+/// FNV-1a 64 for migration dedupe lookups. Not cryptographic. The
 /// caller compares canonical bytes before acting on a match.
 public enum FNV1a {
     public static func hash64(_ data: Data) -> String {
@@ -15,7 +15,7 @@ public enum FNV1a {
 /// Builds the fully materialized form of a game's touch layout:
 /// both orientations, and inside each `dpad`, `buttons`, and
 /// `actionButtons` all present. Profiles never store sparse
-/// sections — a sparse section resolves against whatever game it is
+/// sections. A sparse section resolves against whatever game it is
 /// pinned to, which breaks portability.
 public enum ProfileMaterializer {
     /// Concrete builtin defaults, injected by the app (GameProbe has
@@ -41,7 +41,7 @@ public enum ProfileMaterializer {
     }
 
     /// Materialization is total: both orientations are ALWAYS
-    /// present, and the type says so — no caller carries a dead
+    /// present, and the type says so. No caller carries a dead
     /// empty-layout fallback for a nil that cannot happen.
     public struct MaterializedTouch: Equatable, Sendable {
         public var portrait: TouchLayout
@@ -88,7 +88,7 @@ public enum ProfileMaterializer {
         )
     }
 
-    /// The serializer has no touch-only entry point; canonical bytes
+    /// The serializer has no touch-only entry point. Canonical bytes
     /// are always `serialize(touch:bindings: nil)`.
     public static func canonicalBytes(_ section: TouchSection) -> Data {
         ControlsManifestSerializer.serialize(touch: section, bindings: nil) ?? Data()
@@ -112,7 +112,7 @@ public enum ProfileMaterializer {
     }
 }
 
-/// `Documents/Profiles/.migration.json` — which games have been
+/// `Documents/Profiles/.migration.json`, which games have been
 /// migrated, with the canonical hash of what was migrated and the
 /// profile it went into.
 public struct MigrationRecord: Equatable, Sendable {
@@ -202,7 +202,7 @@ public enum ProfileMigration {
         public var pinFileExists: Bool
         public var record: MigrationRecord
         public var existingProfiles: [String]
-        /// Canonical bytes per profile; nil when unreadable.
+        /// Canonical bytes per profile, or nil when unreadable.
         public var profileCanonicalBytes: (String) -> Data?
         /// Screen-bearing profiles never dedupe-match: a migrated
         /// game's layout has no screen data, so pinning to one would
@@ -269,8 +269,8 @@ public enum ProfileMigration {
             return .recordOnly(hash: hash)
         }
 
-        // Dedupe: hash is only a shortcut; bytes decide. Profiles
-        // with a screen region are skipped — equal controls bytes do
+        // Dedupe: hash is only a shortcut. Bytes decide. Profiles
+        // with a screen region are skipped. Equal controls bytes do
         // not make them true duplicates of screen-less game content.
         let migrationProfiles = Set(context.record.games.values.compactMap(\.profile))
         for profile in context.existingProfiles {

@@ -136,7 +136,7 @@ A single interpreter that accepts both does not exist:
 - Ruby 1.8 native parses the syntax fine but lacks the runtime methods (no `force_encoding`).
 - Ruby 3.1 native has all the runtime methods but its parser rejects `when X:` outright.
 
-Ruby 3.1 with the syntax-transform parser patches is the only path that runs these games. The patches activate selectively at parse time, gated by a global. The runtime methods stay vanilla Ruby 3.1.
+Ruby 3.1 with the syntax-transform parser patches is the only path that runs these games. The patches activate selectively at parse time, gated by a global. The runtime methods stay plain Ruby 3.1.
 
 ### Why only on Ruby 3.1
 
@@ -150,7 +150,7 @@ The host sets the mode per session, before `mkxp_setGamePath()`:
 
 | Mode                             | When                                                                                                                                      | Effect                                                                                              |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `MKXP_SYNTAX_TRANSFORM_DISABLED` | Game routes to Ruby 3.1 and `useModernRuby = true` (auto-detected, or manually picked)                                                    | Vanilla Ruby 3.1 parsing. Modern grammar required.                                                  |
+| `MKXP_SYNTAX_TRANSFORM_DISABLED` | Game routes to Ruby 3.1 and `useModernRuby = true` (auto-detected, or manually picked)                                                    | Plain Ruby 3.1 parsing. The game must use modern grammar.                                                  |
 | `MKXP_SYNTAX_TRANSFORM_LEGACY`   | Game routes to Ruby 3.1 and `useModernRuby = false` (default for mixed-grammar PE forks)                                                  | Patches active. Parser accepts 1.8 grammar.                                                         |
 | `MKXP_SYNTAX_TRANSFORM_CUSTOM`   | Never set by the iOS host. Selected via mkxp.json's `syntaxTransformCustomVersion{Major,Minor,Teeny}` keys (desktop / test-harness path). | Patches active. They emulate the grammar of the configured Ruby version.                            |
 | `MKXP_SYNTAX_TRANSFORM_UNSET`    | Default at startup. The engine falls back to mkxp.json's value (legacy desktop path).                                                     | The iOS host always sets a real value, so UNSET stays as a guard for desktop / test-harness builds. |
@@ -175,7 +175,7 @@ The same preload also restores `Thread.critical` / `Thread.critical=` as no-ops 
 
 ## Cross-session play
 
-Currently disabled. After a clean engine exit, the iOS host shows an alert ("The game has ended or requested a restart. Close Empo from the app switcher and reopen it to continue.") instead of returning to the library. Cross-session reuse of a Ruby VM with a different game's scripts is fragile: the previous session's class definitions leak into the next session and cause superclass-mismatch errors and weirder issues.
+Currently disabled. After a clean engine exit, the iOS host shows an alert ("The game has ended or requested a restart. Close Empo from the app switcher and reopen it to continue.") instead of returning to the library. A Ruby VM does not survive a switch to a different game's scripts. Class definitions from the previous session leak into the next one. They then cause superclass-mismatch errors and other faults.
 
 A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method scrubbing, intrusive-list detachment for disposables, etc.). It worked for narrow game pairs but did not survive contact with a broader corpus, especially across different Ruby versions. Until that cleanup is reliable, the app asks the user to force-close and relaunch.
 

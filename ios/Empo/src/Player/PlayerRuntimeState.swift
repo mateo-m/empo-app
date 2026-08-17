@@ -7,7 +7,7 @@ import SwiftUI
 /// cheats. It used to live as `@State` in `PlayerView`, but SwiftUI
 /// recycles that view on pause/resume while the engine's multiplier
 /// and cheat flag are process-static. The bridge is the source of
-/// truth; this model re-derives from it at every safe point and on
+/// truth. This model re-derives from it at every safe point and on
 /// every activation, never from a cached flag.
 @MainActor
 @Observable
@@ -156,7 +156,7 @@ final class PlayerActionRegistry {
     /// One behavior record per action: availability, latched state,
     /// and the edge handler. Availability, dispatch, and the button
     /// face all read THIS table, so a new action registers in one
-    /// place — no kind-vs-id split across files.
+    /// place. No kind-vs-id split across files.
     private struct ActionBehavior {
         var isAvailable: () -> Bool = { true }
         var isActive: () -> Bool = { false }
@@ -194,7 +194,7 @@ final class PlayerActionRegistry {
     ]
 
     /// Whether the action does anything for the current game. An
-    /// unavailable action's touch button hides during play; a
+    /// unavailable action's touch button hides during play. A
     /// controller binding to one stays inert.
     func isAvailable(_ actionID: String) -> Bool {
         behaviors[actionID]?.isAvailable() ?? EmpoActionCatalog.allIDs.contains(actionID)
@@ -207,7 +207,7 @@ final class PlayerActionRegistry {
     }
 
     /// `pressed` is true on press edges. Hold actions also receive
-    /// the release edge; toggle and instant actions ignore it.
+    /// the release edge. Toggle and instant actions ignore it.
     func handle(_ actionID: String, pressed: Bool) {
         guard EmpoActionCatalog.action(id: actionID) != nil else {
             if pressed {
