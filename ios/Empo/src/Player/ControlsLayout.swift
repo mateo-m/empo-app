@@ -267,8 +267,8 @@ class ControlsLayout {
         return nil
     }
 
-    /// Editor instances inject synthetic metrics. Nil uses the live
-    /// screen state.
+    /// Editor instances inject synthetic metrics. A nil override
+    /// uses the live screen state.
     var metricsOverride: TouchZoneMetrics?
 
     /// True when the active game ships an accepted manifest with a `touch` section.

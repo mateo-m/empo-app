@@ -58,7 +58,7 @@ struct PlayerView: View {
             // longer applies.
             let toolbarBtnSize = IconButtonSize.sm.points
             // An active screen region carries the profile's own
-            // overlay choice. Nil keeps the geometry heuristic.
+            // overlay choice. A nil choice keeps the geometry heuristic.
             let activeScreenPlacement = layout.effectiveScreenPlacement(
                 stored: ScreenRegionApplier.resolvedPlacement(isPortrait: isPortrait))
             let forcedOverlay = activeScreenPlacement?.overlay

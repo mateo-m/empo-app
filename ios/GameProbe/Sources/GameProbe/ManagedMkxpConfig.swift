@@ -349,7 +349,7 @@ public enum ManagedMkxpConfig {
                     overlay = parsed
                 } else {
                     onUnparseableOverlay?(
-                        "ManagedMkxpConfig: cannot read EmpoState/mkxp.json, treating the overlay as absent"
+                        "ManagedMkxpConfig: cannot parse EmpoState/mkxp.json, treating the overlay as absent"
                     )
                 }
             }

@@ -11,8 +11,8 @@ public enum ConcatenatedSaveRecovery {
     /// PE/RGSS save slot. Games ignore these files.
     public static let backupMarker = "empo-path-regression"
 
-    /// `UserDataGame.rxdata` -> `Game.rxdata`. Nil when the name is
-    /// not a concatenation artifact. The prefix match is
+    /// `UserDataGame.rxdata` -> `Game.rxdata`. Returns nil when the
+    /// name is not a concatenation artifact. The prefix match is
     /// case-sensitive on purpose: the regression always produced
     /// the literal `UserData` prefix. A remainder starting with a
     /// dot is rejected - `UserData.rxdata` would otherwise recover

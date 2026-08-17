@@ -2,8 +2,8 @@
 //
 // Compiled separately for each Ruby version (3.0, 3.1, 1.9, 1.8) and
 // merged into that version's mkxp<NN>-merged.o. Exposes ONE
-// `extern "C"` function per Ruby version, `mkxp_get_script_binding_<NN>()`,
-// that returns a pointer to the version's `ScriptBinding` struct.
+// `extern "C"` function per Ruby version — `mkxp_get_script_binding_<NN>()`
+// — that returns a pointer to the version's `ScriptBinding` struct.
 //
 // This is the only globally-exported symbol from each merged .o.
 // Everything else (Ruby's `_rb_*`, mkxp-z binding internals like

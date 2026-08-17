@@ -90,7 +90,7 @@ public struct LayoutProfileStore {
     }
 
     /// The profile's touch section when the file exists and parses
-    /// valid. Nil for missing OR invalid. `readProfile` sets
+    /// valid, or nil for missing OR invalid. `readProfile` sets
     /// `invalid` exactly when `touch` is nil, so this is the ONE
     /// predicate resolution callers need.
     public func validTouch(_ name: String) -> TouchSection? {

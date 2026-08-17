@@ -64,7 +64,7 @@ public enum PreLiteralSaveHeal {
     }
 
     /// `"Game.rxdata.pre-literal.bak.pre-literal-2.bak"` ->
-    /// `("Game.rxdata", 2)`. Nil when the name carries no layer.
+    /// `("Game.rxdata", 2)`. Returns nil when the name carries no layer.
     public static func familyBase(of name: String) -> (base: String, layers: Int)? {
         var base = name
         var layers = 0

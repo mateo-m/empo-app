@@ -202,7 +202,7 @@ public enum ProfileMigration {
         public var pinFileExists: Bool
         public var record: MigrationRecord
         public var existingProfiles: [String]
-        /// Canonical bytes per profile. Nil when unreadable.
+        /// Canonical bytes per profile, or nil when unreadable.
         public var profileCanonicalBytes: (String) -> Data?
         /// Screen-bearing profiles never dedupe-match: a migrated
         /// game's layout has no screen data, so pinning to one would
