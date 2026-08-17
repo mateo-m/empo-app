@@ -342,9 +342,17 @@ private struct AccessoryKeyButton: View {
         .accessibilityValue(isLatched ? "locked" : "")
         .accessibilityHint(key.kind == .modifier ? "Touch and hold to lock the key down." : "")
         .onDisappear {
-            isPressed = false
             latchTask?.cancel()
             latchTask = nil
+            // The view can go away mid-press. A change in the hidden
+            // set re-splits the rows, and a key that only MOVES rows
+            // gets its view rebuilt, so no touch-up edge arrives. A
+            // locked modifier keeps its hold on purpose: the lock
+            // lives in the shared state and survives the rebuild.
+            if isPressed && !isLatched {
+                keys.release(key)
+            }
+            isPressed = false
         }
     }
 
