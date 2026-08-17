@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.2 - 2026-08-17
+
+### Bug Fixes
+
+- Pick up the Essentials mouse release fix (#122) (#127) ([`1b92ecd`](https://github.com/mateo-m/empo-app/commit/1b92ecd2a2f750a3981ef3b97d64e34183d095f0))
+- Pick up the whole-file CRLF read fix (#130) ([`c576390`](https://github.com/mateo-m/empo-app/commit/c5763902496990bf0016683946f5c11e3c7a06e7))
+
+### CI
+
+- Gate pull request titles on the commit convention (#124) ([`44740fc`](https://github.com/mateo-m/empo-app/commit/44740fcb60d44daee57994220044c8ebf20de2e4))
+- Skip code jobs on docs-only pull requests and gate merges on the whole workflow (#126) ([`010db63`](https://github.com/mateo-m/empo-app/commit/010db639dbd8b734bc5bead2d830c0ecb55068e1))
+
+### Documentation
+
+- Publish the documentation site on GitHub Pages (#125) ([`5993a47`](https://github.com/mateo-m/empo-app/commit/5993a475fa42d6ceeb48efe22b8ebc83ce0f3081))
+- Pick up the socket stub comment correction (#129) ([`2cf00dd`](https://github.com/mateo-m/empo-app/commit/2cf00dda6eef37648ee5b107d2702218713095df))
+
+### Features
+
+- Pick up the ws2_32 socket bridge (#128) ([`8e4501c`](https://github.com/mateo-m/empo-app/commit/8e4501c6253ddb302f89475c5e5ea7fceb397327))
+
 ## 0.6.1 - 2026-08-13
 
 ### Bug Fixes
