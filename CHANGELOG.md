@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.4 - 2026-08-18
+
+### Bug Fixes
+
+- Run 1.8-era scripts shipped with a Ruby 3 DLL (Realidea) (#135) ([`efcb308`](https://github.com/mateo-m/empo-app/commit/efcb30800c214ab49f90142f53ad914eae6cc88c))
+
 ## 0.6.3 - 2026-08-18
 
 ### Bug Fixes
