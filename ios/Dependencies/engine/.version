@@ -7,5 +7,5 @@
 # commit; build locally with:
 #   cd ios/Dependencies && make -f iphonesimulator.make mkxp-core
 #   cd ios/Dependencies && make -f iphoneos.make mkxp-core
-ENGINE_VERSION=engine-2026-08-18
-ENGINE_SHA256=32c0a368ea2b960a0b1b25dcb1e42aa448aaa078e45a4380abcd4dd22bdc699e
+ENGINE_VERSION=empo-v0.6.3
+ENGINE_SHA256=689f89d0be5c99a5124576922677c20f2c2f467a555a4b68caa9b6f5fed164f3
