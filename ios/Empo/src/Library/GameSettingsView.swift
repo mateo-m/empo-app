@@ -6,7 +6,7 @@ import SwiftUI
 ///   auto -> nil (use auto-detection from `metadata.rubyVersion`)
 ///   v18 / v19 / v31 -> force that interpreter version
 ///
-/// Detection lives in `RubyVersionDetection` and runs at import
+/// Detection lives in `GameScriptProfile` and runs at import
 /// time. This picker is the manual override when detection misses.
 enum RubyVersionPick: String, CaseIterable, Hashable {
     case auto

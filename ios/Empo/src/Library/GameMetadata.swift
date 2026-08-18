@@ -50,10 +50,10 @@ struct GameMetadata: Codable {
     // coreKind String pattern, same idea, different type).
     var rubyVersion: Int?
 
-    // Identifier (raw value of `RubyVersionDetection.Schema`) for
+    // Identifier (raw value of `GameScriptProfile.Schema`) for
     // the heuristic set this entry's `rubyVersion` was produced
     // by. Library load compares the stored string against
-    // `RubyVersionDetection.currentSchema.rawValue`. If it differs
+    // `GameScriptProfile.currentSchema.rawValue`. If it differs
     // (or is missing), we re-run detection and overwrite.
     //
     // Stored as String, not the enum directly, so an older Empo

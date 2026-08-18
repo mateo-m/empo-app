@@ -18,9 +18,12 @@ public enum GameScriptProfile {
         /// Unified profile module: one sniff drives the ruby version
         /// and the modern-script classification.
         case unified = "unified"
+        /// Read script grammar outranks bundled-runtime packaging
+        /// when the sniffer reached the source.
+        case sourceOverPackaging = "source-over-packaging"
     }
 
-    public static let currentSchema: Schema = .unified
+    public static let currentSchema: Schema = .sourceOverPackaging
 
     public struct Result {
         public let rubyVersion: Int
@@ -31,14 +34,20 @@ public enum GameScriptProfile {
     /// Analyzes `gameDirectory` once and returns Ruby dispatch and
     /// syntax-transform hints.
     public static func analyze(gameDirectory: URL) -> Result {
+        let fm = FileManager.default
         let grammar = RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory)
+        let runtime = BundledRubyRuntime.scan(gameDirectory: gameDirectory, fm: fm)
         let rubyVersion = detectRubyVersion(
             gameDirectory: gameDirectory,
-            grammar: grammar
+            grammar: grammar,
+            runtime: runtime,
+            fm: fm
         )
         let modern = detectModernRubyScripts(
-            gameDirectory: gameDirectory,
-            grammar: grammar
+            grammar: grammar,
+            runtime: runtime,
+            packedScripts: RubyScriptGrammarSniffer.hasPackedScriptArchive(
+                in: gameDirectory, fm: fm)
         )
         return Result(
             rubyVersion: rubyVersion,
@@ -51,11 +60,11 @@ public enum GameScriptProfile {
 
     private static func detectRubyVersion(
         gameDirectory: URL,
-        grammar: RubyScriptGrammarSniffer.Result
+        grammar: RubyScriptGrammarSniffer.Result,
+        runtime: BundledRubyRuntime,
+        fm: FileManager
     ) -> Int {
-        let fm = FileManager.default
-
-        if let bundledRuby = bundledRubyDLLVersion(at: gameDirectory, fm: fm) {
+        if let bundledRuby = runtime.dispatchVersion {
             return bundledRuby
         }
 
@@ -94,73 +103,108 @@ public enum GameScriptProfile {
 
     // MARK: - Modern Ruby scripts (formerly GameSettings)
 
+    /// The read source outranks packaging. A bundled Ruby 3
+    /// runtime says which interpreter the developer shipped, not
+    /// which grammar the scripts use: old fangames repackaged on a
+    /// modern mkxp-z build carry a Ruby 3 DLL next to 1.8-era
+    /// source (Realidea System ships `x64-msvcrt-ruby300.dll` with
+    /// `str[i]` byte reads) and need the legacy transform. So
+    /// packaging only decides when the sniffer could not read the
+    /// live source.
     private static func detectModernRubyScripts(
-        gameDirectory: URL,
-        grammar: RubyScriptGrammarSniffer.Result
+        grammar: RubyScriptGrammarSniffer.Result,
+        runtime: BundledRubyRuntime,
+        packedScripts: Bool
     ) -> Bool {
-        if grammar == .modern { return true }
-
-        let fm = FileManager.default
-
-        let modernRubyMarker = Data("ruby 3.".utf8)
-        let scanBudget = 64 * 1024 * 1024
-        for url in gameDirectory.directoryEntries(
-            matchingExtensions: ["dll", "dylib", "so"], fm: fm
-        ) {
-            guard let attrs = try? fm.attributesOfItem(atPath: url.path),
-                let size = attrs[.size] as? Int,
-                size <= scanBudget,
-                let data = try? Data(contentsOf: url, options: .alwaysMapped)
-            else { continue }
-            if data.range(of: modernRubyMarker) != nil { return true }
-        }
-
-        let dataDir = gameDirectory.appendingPathComponent("Data")
-        if !dataDir.directoryEntries(matchingExtensions: ["fpk"], fm: fm).isEmpty {
+        switch grammar {
+        case .modern:
             return true
+        case .legacy:
+            return false
+        case .inconclusive:
+            return runtime.embedsRuby3 || packedScripts
         }
-
-        let candidates = [
-            gameDirectory,
-            gameDirectory.appendingPathComponent("Scripts"),
-            dataDir,
-        ]
-
-        let modernRegex = try? NSRegularExpression(
-            pattern:
-                "(?:^|(?<=[(,{]))\\s*[a-z_][a-zA-Z0-9_]*:\\s+(-?\\d|\"|'|\\[|\\{|true|false|nil|:[a-zA-Z_]|[a-z_])",
-            options: [.anchorsMatchLines]
-        )
-        guard let regex = modernRegex else { return false }
-
-        let scanCap = 2000
-        for root in candidates {
-            guard fm.fileExists(atPath: root.path),
-                let enumerator = fm.enumerator(
-                    at: root,
-                    includingPropertiesForKeys: nil,
-                    options: [.skipsHiddenFiles])
-            else { continue }
-
-            var filesScanned = 0
-            for case let url as URL in enumerator {
-                if url.pathExtension.lowercased() != "rb" { continue }
-                filesScanned += 1
-                if filesScanned > scanCap { break }
-
-                guard let text = try? String(contentsOf: url, encoding: .utf8)
-                else { continue }
-
-                let range = NSRange(text.startIndex..., in: text)
-                if regex.firstMatch(in: text, options: [], range: range) != nil {
-                    return true
-                }
-            }
-        }
-        return false
     }
 
     // MARK: - Shared helpers
+
+    /// What the game ships as its own Ruby runtime, read once from
+    /// the libraries in the game root.
+    struct BundledRubyRuntime {
+        /// Dispatch version (18, 19, or 31) from a `*ruby<NNN>.dll`
+        /// file name. Nil when no such file exists.
+        let dispatchVersion: Int?
+        /// True when any bundled `.dll`, `.dylib`, or `.so`
+        /// carries the `"ruby 3."` version string. Modern custom
+        /// engines ship their own runtime (Pokemon Flux's
+        /// `x64-msvcrt-ruby310.dll`, macOS bundles'
+        /// `libruby.3.x.dylib`). Renaming does not defeat it.
+        /// Vanilla 1.8 and 1.9 binaries embed `"ruby 1.8."` or
+        /// `"ruby 1.9."`, so RGSS1/2/3 games do not match.
+        let embedsRuby3: Bool
+
+        static let none = BundledRubyRuntime(dispatchVersion: nil, embedsRuby3: false)
+
+        static func scan(gameDirectory: URL, fm: FileManager) -> BundledRubyRuntime {
+            let libraries = gameDirectory.directoryEntries(
+                matchingExtensions: ["dll", "dylib", "so"], fm: fm
+            )
+            guard !libraries.isEmpty else { return .none }
+            return BundledRubyRuntime(
+                dispatchVersion: dispatchVersion(in: libraries),
+                embedsRuby3: embedsRuby3(in: libraries, fm: fm)
+            )
+        }
+
+        private static func dispatchVersion(in libraries: [URL]) -> Int? {
+            let pattern = #"(?i)(?:^|-|_)ruby(\d{3})\.dll$"#
+            guard let regex = try? NSRegularExpression(pattern: pattern) else {
+                return nil
+            }
+            var bestMajor = -1
+            var bestMinor = -1
+            for url in libraries {
+                let name = url.lastPathComponent
+                let nsName = name as NSString
+                let range = NSRange(location: 0, length: nsName.length)
+                guard let m = regex.firstMatch(in: name, options: [], range: range),
+                    m.numberOfRanges >= 2
+                else { continue }
+                let digits = nsName.substring(with: m.range(at: 1))
+                guard digits.count == 3,
+                    let major = Int(String(digits.first!)),
+                    let minor = Int(String(digits[digits.index(after: digits.startIndex)]))
+                else {
+                    continue
+                }
+                if major > bestMajor || (major == bestMajor && minor > bestMinor) {
+                    bestMajor = major
+                    bestMinor = minor
+                }
+            }
+            guard bestMajor >= 0 else { return nil }
+            switch bestMajor {
+            case 1:
+                return bestMinor <= 8 ? 18 : 19
+            default:
+                return 31
+            }
+        }
+
+        private static func embedsRuby3(in libraries: [URL], fm: FileManager) -> Bool {
+            let modernRubyMarker = Data("ruby 3.".utf8)
+            let scanBudget = 64 * 1024 * 1024
+            for url in libraries {
+                guard let attrs = try? fm.attributesOfItem(atPath: url.path),
+                    let size = attrs[.size] as? Int,
+                    size <= scanBudget,
+                    let data = try? Data(contentsOf: url, options: .alwaysMapped)
+                else { continue }
+                if data.range(of: modernRubyMarker) != nil { return true }
+            }
+            return false
+        }
+    }
 
     private static func rubyVersionFromScriptExtension(
         at gameDirectory: URL,
@@ -229,48 +273,5 @@ public enum GameScriptProfile {
         let after = upper[range.upperBound...]
         guard let firstDigit = after.first else { return nil }
         return firstDigit.hexDigitValue
-    }
-
-    private static func bundledRubyDLLVersion(
-        at gameDirectory: URL,
-        fm: FileManager
-    ) -> Int? {
-        let entries = gameDirectory.directoryEntries(
-            matchingExtensions: ["dll"], fm: fm
-        )
-        let pattern = #"(?i)(?:^|-|_)ruby(\d{3})\.dll$"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return nil
-        }
-        var bestMajor = -1
-        var bestMinor = -1
-        for url in entries {
-            let name = url.lastPathComponent
-            let nsName = name as NSString
-            let range = NSRange(location: 0, length: nsName.length)
-            guard let m = regex.firstMatch(in: name, options: [], range: range),
-                m.numberOfRanges >= 2
-            else { continue }
-            let digits = nsName.substring(with: m.range(at: 1))
-            guard digits.count == 3,
-                let major = Int(String(digits.first!)),
-                let minor = Int(String(digits[digits.index(after: digits.startIndex)]))
-            else {
-                continue
-            }
-            if major > bestMajor || (major == bestMajor && minor > bestMinor) {
-                bestMajor = major
-                bestMinor = minor
-            }
-        }
-        guard bestMajor >= 0 else { return nil }
-        switch bestMajor {
-        case 1:
-            return bestMinor <= 8 ? 18 : 19
-        case 2, 3:
-            return 31
-        default:
-            return 31
-        }
     }
 }

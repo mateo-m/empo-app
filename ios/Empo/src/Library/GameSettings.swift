@@ -340,38 +340,9 @@ struct GameSettings: Codable, Equatable {
         }
     }
 
-    /// True when a freshly-imported game folder looks like it runs on
-    /// Ruby 3 (Reborn 19.5+, PE v20+, mkxp-z JGPs). Import uses this
-    /// to set `useModernRuby`, so the engine skips the 1.8 transform.
-    ///
-    /// Three signals, any one is enough:
-    ///
-    /// 1. A bundled Ruby 3.x runtime. Modern custom engines ship
-    ///    their own (Pokemon Flux's `x64-msvcrt-ruby310.dll`, macOS
-    ///    bundles' `libruby.3.x.dylib`), so every `.dll`, `.dylib`,
-    ///    and `.so` gets scanned for the bytes `"ruby 3."`. Renaming
-    ///    does not defeat it. Vanilla 1.8 and 1.9 binaries embed
-    ///    `"ruby 1.8."` or `"ruby 1.9."`, so RGSS1/2/3 games do not
-    ///    false-positive. RGSS and Ruby versions are independent.
-    ///
-    /// 2. `.fpk` packaging in `Data/`, the 7z format post-2020
-    ///    custom engines use (Pokemon Flux mounts scripts from
-    ///    `Data/Data_0.fpk`). Vanilla RPG Maker never does. This
-    ///    catches games that linked Ruby into the .exe statically
-    ///    and so escaped signal 1.
-    ///
-    /// 3. Loose `.rb` files with keyword-arg shorthand (`id: -1,`,
-    ///    `foo: "bar",`). Comments and strings rarely false-positive.
-    ///    A 1.8 game run as Ruby 3 still works except for the legacy
-    ///    constructs the transform would have rewritten, and the user
-    ///    can flip it back by hand.
-    static func detectModernRubyScripts(in gameDirectory: URL) -> Bool {
-        GameScriptProfile.analyze(gameDirectory: gameDirectory).modernRubyScripts
-    }
-
     /// Resolve the engine's `syntaxTransform` mode for this game.
-    /// Honors an explicit `useModernRuby` setting. Runs the .rb
-    /// scanner when the setting is nil ("auto").
+    /// Honors an explicit `useModernRuby` setting. Runs the script
+    /// profile when the setting is nil ("auto").
     ///
     /// Most PE fangames are written in Ruby 1.8 syntax and need
     /// the LEGACY transform so the engine rewrites old forms
@@ -397,7 +368,7 @@ struct GameSettings: Codable, Equatable {
         } else if let detected = autoDetectedModern {
             modern = detected
         } else {
-            modern = Self.detectModernRubyScripts(in: gameDirectory)
+            modern = GameScriptProfile.analyze(gameDirectory: gameDirectory).modernRubyScripts
         }
         return modern
             ? MKXP_SYNTAX_TRANSFORM_DISABLED
