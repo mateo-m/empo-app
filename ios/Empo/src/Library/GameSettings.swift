@@ -326,6 +326,12 @@ struct GameSettings: Codable, Equatable {
     /// Write the game's settings sidecar to
     /// `<container>/EmpoState/`.
     func save(to stateDirectory: URL) {
+        // The settings sheet can open before anything created
+        // `EmpoState/`. An atomic write into a missing directory
+        // fails silently, so create it first.
+        try? FileManager.default.createDirectory(
+            at: stateDirectory, withIntermediateDirectories: true
+        )
         let url = stateDirectory.appendingPathComponent(Self.settingsFilename)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

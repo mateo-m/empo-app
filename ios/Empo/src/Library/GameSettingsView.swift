@@ -321,6 +321,11 @@ struct GameSettingsView: View {
             }
             .onChange(of: settings) { save() }
             .onChange(of: engineSettings) { save() }
+            // A quick dismissal can tear the sheet down in the same
+            // update as the last toggle change. SwiftUI then drops
+            // that onChange delivery, and the change never reaches
+            // disk. Save once more on the way out.
+            .onDisappear { save() }
             .task {
                 refreshAutoDetection(forceRefresh: false)
             }

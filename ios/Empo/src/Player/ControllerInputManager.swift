@@ -35,6 +35,21 @@ final class ControllerInputManager {
     /// True once any controller has connected during this session.
     private(set) var hasHadControllerThisSession = false
 
+    /// True while at least one controller is attached.
+    var hasConnectedController: Bool {
+        !connectedControllers.isEmpty
+    }
+
+    /// Scancodes a connected controller can press through the merged
+    /// element map. The keyboard accessory bar hides these keys.
+    var boundKeyScancodes: Set<Int32> {
+        Set(
+            resolvedMap.values.compactMap { target in
+                if case .key(let scancode) = target { return scancode }
+                return nil
+            })
+    }
+
     /// SDL element names for optional hardware (paddles, touchpad) that
     /// at least one currently connected controller exposes.
     var exposedOptionalElements: Set<String> {

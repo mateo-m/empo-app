@@ -204,15 +204,19 @@ struct PlayerView: View {
                 )
                 .allowsHitTesting(showDebugOverlay)
 
-                if keyboardMode {
-                    KeyboardFieldRepresentable(
-                        isActive: keyboardMode,
-                        onActivate: {
-                            AppWindow.setAllowKeyWindow(true)
-                        }
-                    )
-                    .frame(width: 0, height: 0)
-                }
+                // Stays mounted in both keyboard states. Removing the
+                // field while it is first responder kills the input
+                // session mid-flight, and the orphaned keyboard window
+                // flashes its own UI (a Memoji education splash) on
+                // the way down. A mounted field resigns cleanly.
+                KeyboardFieldRepresentable(
+                    isActive: keyboardMode,
+                    excludedScancodes: { accessoryExcludedScancodes },
+                    onActivate: {
+                        AppWindow.setAllowKeyWindow(true)
+                    }
+                )
+                .frame(width: 0, height: 0)
 
                 // Fades out when the engine swaps its first post-resume frame
                 if let snapshot = resumeSnapshot {
@@ -739,11 +743,32 @@ struct PlayerView: View {
         resetToolbarIdleTimer()
     }
 
+    /// Keys the accessory bar must not repeat: everything the
+    /// visible on-screen controls cover, plus everything a connected
+    /// controller can press through its merged bindings.
+    private var accessoryExcludedScancodes: Set<Int32> {
+        var covered = Set<Int32>()
+        if !controlsHidden {
+            covered.formUnion([
+                Int32(MKXP_SCANCODE_UP), Int32(MKXP_SCANCODE_DOWN),
+                Int32(MKXP_SCANCODE_LEFT), Int32(MKXP_SCANCODE_RIGHT),
+            ])
+            for button in layout.buttons {
+                covered.insert(button.scancode)
+            }
+        }
+        if input.controller.hasConnectedController {
+            covered.formUnion(input.controller.boundKeyScancodes)
+        }
+        return covered
+    }
+
     private func toggleKeyboard() {
         keyboardMode.toggle()
-        if !keyboardMode {
-            AppWindow.setAllowKeyWindow(false)
-        }
+        // The key-window handoff to SDL happens inside
+        // `KeyboardFieldRepresentable.updateUIView`, after the field
+        // resigns. A handoff before the resign leaves the input
+        // session open with no key window behind it.
     }
 
     private func resetToolbarIdleTimer() {
