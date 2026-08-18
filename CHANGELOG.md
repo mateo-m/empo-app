@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.3 - 2026-08-18
+
+### Bug Fixes
+
+- Rebuild the keyboard toolbar so every key registers (#132) ([`3d71486`](https://github.com/mateo-m/empo-app/commit/3d7148675926241958bcf845602bec9e34351821))
+- Pick up probe case folding for games without a path cache (#134) ([`d5bfda0`](https://github.com/mateo-m/empo-app/commit/d5bfda0af016c4d13a7c2a4eaf8b94a7ecb6bf55))
+
+### Chores
+
+- Cleanup (#131) ([`19bd1a1`](https://github.com/mateo-m/empo-app/commit/19bd1a1f2ae656e5365e8b820fb4232ec19c0706))
+- Pin engine-2026-08-18 and native-2026-08-18 (#133) ([`060d352`](https://github.com/mateo-m/empo-app/commit/060d3525e3ccb090c8833a9cd03688f4e56cd53b))
+
 ## 0.6.2 - 2026-08-17
 
 ### Bug Fixes
