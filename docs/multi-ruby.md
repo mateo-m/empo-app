@@ -73,7 +73,7 @@ Individual setters (`mkxp_setActiveRubyVersion`, `mkxp_setSyntaxTransformMode`, 
 
    When a game bundles multiple DLLs, the highest version wins. Modern PE forks ship the mkxp-z runtime, which links against `x64-msvcrt-ruby310.dll`. Their `Game.ini` `Library=` field stays at the vestigial `RGSS104E.dll`, but the actual runtime is the bundled DLL. This signal is the strongest practical evidence of the Ruby version the developer tested against.
 
-2. **Script grammar sniff** via `RubyScriptGrammarSniffer.swift`. The sniffer decodes `Scripts.{rxdata,rvdata,rvdata2}` (Marshal + zlib) and reads loose `.rb` files. Modern Ruby 3.x tokens (`&.`, pattern-match `case ... in`, endless `def`, numbered block params, kwarg shorthand, `Hash#except`, `Array#filter_map`) give **31**. Pure-legacy source uses the data file extension as a prior. An inconclusive result (encrypted archive) falls through.
+2. **Script grammar sniff** via `RubyScriptGrammarSniffer.swift`. The sniffer decodes `Scripts.{rxdata,rvdata,rvdata2}` (Marshal + zlib) and reads loose `.rb` files. Modern Ruby 3.x tokens (`&.`, pattern-match `case ... in`, endless `def`, numbered block params, kwarg shorthand, `Hash#except`, `Array#filter_map`) give **31**. Pure-legacy source uses the data file extension as a prior. An inconclusive result (encrypted archive, or scripts packed in `Data/*.fpk`) falls through.
 
 3. **RGSS archive at project root**: `.rgssad` → 18, `.rgss2a` → 19, `.rgss3a` → 19. This signal applies when scripts live inside the encrypted archive and the sniffer cannot reach them.
 
@@ -94,13 +94,14 @@ enum Schema: String {
     case noStandaloneFramework = "no-standalone-framework"
     case dropRuby30 = "drop-ruby-30"
     case tightenGrammarSniff = "tighten-grammar-sniff"
-    case unified = "unified"  // current: one sniff for version + modern scripts
+    case unified = "unified"
+    case sourceOverPackaging = "source-over-packaging"  // current: read grammar outranks bundled runtime
 }
 
-static let currentSchema: Schema = .unified
+static let currentSchema: Schema = .sourceOverPackaging
 ```
 
-`GameMetadata` persists the detected version and `modernRubyScriptsDetected` alongside the `*DetectedSchema` raw strings. Library load compares the stored schema with the current one. On a mismatch, it re-runs detection. `RubyVersionDetection` remains as a thin delegate to `GameScriptProfile` for call-site compatibility.
+`GameMetadata` persists the detected version and `modernRubyScriptsDetected` alongside the `*DetectedSchema` raw strings. Library load compares the stored schema with the current one. On a mismatch, it re-runs detection. `GameScriptProfile` is the only entry point.
 
 `GameMetadata.init(from:)` is a manual implementation with field-level `try?`. A single field's type change between builds thus does not erase unrelated fields (`dateAdded`, `totalPlayTime`, etc.) on the next save.
 
@@ -120,7 +121,7 @@ The build isolates includes under `$(INCLUDEDIR)/ruby${VER}/`, so 1.8 and 1.9 do
 
 ## Syntax transform
 
-The Ruby 3.1 build applies a set of parser patches (34 files under `mkxp-z-apple-mobile/syntax-transform/3.1/`, originally [PR #304 by white-axe](https://github.com/mkxp-z/mkxp-z/pull/304)). These patches teach Ruby 3.1's parser to also accept Ruby 1.8 grammar. The 1.8 and 1.9 builds do not apply them. Those interpreters parse their native grammar without modification.
+The Ruby 3.1 build applies a set of parser patches (36 files under `mkxp-z-apple-mobile/syntax-transform/3.1/`, originally [PR #304 by white-axe](https://github.com/mkxp-z/mkxp-z/pull/304)). These patches teach Ruby 3.1's parser to also accept Ruby 1.8 grammar. The 1.8 and 1.9 builds do not apply them. Those interpreters parse their native grammar without modification.
 
 ### Why it exists
 
@@ -155,7 +156,7 @@ The host sets the mode per session, before `mkxp_setGamePath()`:
 | `MKXP_SYNTAX_TRANSFORM_CUSTOM`   | Never set by the iOS host. Selected via mkxp.json's `syntaxTransformCustomVersion{Major,Minor,Teeny}` keys (desktop / test-harness path). | Patches active. They emulate the grammar of the configured Ruby version.                            |
 | `MKXP_SYNTAX_TRANSFORM_UNSET`    | Default at startup. The engine falls back to mkxp.json's value (legacy desktop path).                                                     | The iOS host always sets a real value, so UNSET stays as a guard for desktop / test-harness builds. |
 
-`GameSettings.useModernRuby` is the per-game switch. `GameScriptProfile` and JGP import paths set it at import time from heuristics (bundled DLL filename, grammar sniff, `.fpk` packaging). The user can override it in the per-game settings sheet.
+`GameSettings.useModernRuby` is the per-game switch. `GameScriptProfile` and JGP import paths set it at import time from the grammar sniff first, then from packaging (bundled Ruby 3 runtime, `.fpk` archive) when the sniff could not read the live source. The user can override it in the per-game settings sheet.
 
 When the build does not define `MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES`, the patches are no-ops at the engine level. The 1.8 and 1.9 builds do not define it. Only the Ruby 3.1 build does.
 

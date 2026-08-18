@@ -5,7 +5,7 @@ import Foundation
 /// legacy (1.8/1.9 grammar). Each script entry holds zlib-deflated
 /// source in a Ruby Marshal envelope.
 ///
-/// `RubyVersionDetection` uses this to tell vanilla RPG Maker
+/// `GameScriptProfile` uses this to tell vanilla RPG Maker
 /// games apart from forks. In vanilla games, the file extension
 /// pins the Ruby version. Forks such as Pokemon Reborn 19.5+ and
 /// Pokemon Essentials v20+ keep the original RGSS data layout but
@@ -33,10 +33,11 @@ public enum RubyScriptGrammarSniffer {
         /// (`.rvdata`/`.rvdata2`).
         case legacy
 
-        /// The sniffer could not read or decode the Scripts file.
-        /// Causes: an encrypted archive with no unpack, a missing
-        /// file, a parse error, or an unknown Marshal tag. The
-        /// caller falls back to the extension, Game.ini, or the
+        /// The sniffer could not read the live source. Causes: an
+        /// encrypted archive with no unpack, a missing file, a
+        /// parse error, an unknown Marshal tag, or scripts packed
+        /// in a `Data/*.fpk` archive. The caller falls back to
+        /// packaging signals, the extension, Game.ini, or the
         /// default.
         case inconclusive
     }
@@ -45,8 +46,9 @@ public enum RubyScriptGrammarSniffer {
     /// files first. The mkxp-z runtime loads those on top of the
     /// compiled Scripts.rxdata, so they are the live source for
     /// forks that ship both. The sniffer then falls back to the
-    /// compiled `Scripts.{rxdata,rvdata,rvdata2}` file. It runs
-    /// the grammar classifier on the joined source.
+    /// compiled `Scripts.{rxdata,rvdata,rvdata2}` file, unless a
+    /// packed script archive makes that file a stale bootstrap.
+    /// It runs the grammar classifier on the joined source.
     static func sniff(gameDirectory: URL) -> Result {
         let fm = FileManager.default
 
@@ -61,6 +63,15 @@ public enum RubyScriptGrammarSniffer {
             if !source.isEmpty {
                 return classify(source: source)
             }
+        }
+
+        // Packed scripts. Post-2020 custom engines keep the real
+        // scripts in a 7z `Data/*.fpk` archive and mount it at
+        // run time (Pokemon Flux: `Data/Data_0.fpk`). The compiled
+        // Scripts file next to it is a small bootstrap, not the
+        // live source, so the sniffer must not classify it.
+        if hasPackedScriptArchive(in: gameDirectory, fm: fm) {
+            return .inconclusive
         }
 
         // Compiled Scripts file. Vanilla RPG Maker XP / VX /
@@ -87,6 +98,13 @@ public enum RubyScriptGrammarSniffer {
         "Scripts",
         "Data/Scripts",
     ]
+
+    /// True when `Data/` holds a packed script archive. Vanilla
+    /// RPG Maker never uses `.fpk`.
+    static func hasPackedScriptArchive(in gameDirectory: URL, fm: FileManager) -> Bool {
+        let dataDir = gameDirectory.appendingPathComponent("Data")
+        return !dataDir.directoryEntries(matchingExtensions: ["fpk"], fm: fm).isEmpty
+    }
 
     private static func locateCompiledScriptsFile(
         in gameDirectory: URL,
