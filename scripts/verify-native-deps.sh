@@ -108,7 +108,7 @@ done
 # Xcode build fails loudly instead. The check is content-based (not
 # mtime), so prebuilt tarballs still verify on fresh clones.
 FINGERPRINT_FILE="$LIB/.mkxp-binding-fingerprint"
-FINGERPRINT_SCRIPT="$REPO_ROOT/ios/Dependencies/tools/binding-fingerprint.sh"
+FINGERPRINT_SCRIPT="$REPO_ROOT/mkxp-z-apple-mobile/tools/binding-fingerprint.sh"
 if [[ -f "$FINGERPRINT_FILE" ]]; then
     recorded="$(cat "$FINGERPRINT_FILE")"
     current="$("$FINGERPRINT_SCRIPT")"

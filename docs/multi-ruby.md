@@ -37,7 +37,7 @@ ios/Dependencies/build-${SDK}/lib/
   mkxp31-merged.o   exports: _mkxp_get_script_binding_31
 ```
 
-The `ld -r --unexported_symbols_list` step hides every Ruby internal symbol, so the three versions do not clash at link time. Each `.o` exports exactly one global: the entry point that returns its version's `ScriptBinding` vtable. `ios/Dependencies/tools/generate-ruby-unexports.sh` generates the unexports from the per-version libruby + ext archives.
+The `ld -r -unexported_symbols_list` step hides every Ruby internal symbol, so the three versions do not clash at link time. Each `.o` exports exactly one global: the entry point that returns its version's `ScriptBinding` vtable. `mkxp-z-apple-mobile/tools/generate-ruby-unexports.sh` generates the unexports from the per-version libruby + ext archives.
 
 Build targets: `make mkxp18-merged`, `mkxp19-merged`, `mkxp31-merged`, or `mkxp-merged` for all three. See `ios/Dependencies/common.make` for the recipes.
 
@@ -107,13 +107,15 @@ static let currentSchema: Schema = .sourceOverPackaging
 
 ## Per-version compile
 
-Each Ruby version's binding objects compile against that version's headers:
+Each Ruby version's binding objects compile against that version's headers. `mkxp-z-apple-mobile/tools/build-binding-ios.sh` owns the recipe. It takes the version as an argument and sets the matching defines:
 
-```make
-MKXPZ_DEFINES_18 := -DMKXPZ_RUBY_VERSION_MAJOR=1 -DMKXPZ_RUBY_VERSION_MINOR=8 ...
-MKXPZ_DEFINES_19 := -DMKXPZ_RUBY_VERSION_MAJOR=1 -DMKXPZ_RUBY_VERSION_MINOR=9 ...
-MKXPZ_DEFINES_31 := -DMKXPZ_RUBY_VERSION_MAJOR=3 -DMKXPZ_RUBY_VERSION_MINOR=1 ...
+```sh
+tools/build-binding-ios.sh --ruby 18 --sdk iphonesimulator ...
+tools/build-binding-ios.sh --ruby 19 --sdk iphonesimulator ...
+tools/build-binding-ios.sh --ruby 31 --sdk iphonesimulator ...
 ```
+
+`ios/Dependencies/common.make` calls it three times and supplies only the SDK, the libruby archives, and the dependency header dirs.
 
 The same `binding/*.cpp` source compiles three times. Version-conditional code lives in `binding-util.h` (`mkxpUsingRuby18Encoding`, RAPI shims) and `binding-mri.cpp` (legacy method shims gated on the RAPI version).
 
@@ -193,9 +195,11 @@ Same-game re-entry is safe in principle (no class leak). But the iOS layer curre
   - `mkxp-z-apple-mobile/syntax-transform/3.1/*.patch` - 34 Ruby 3.1 source patches (kept).
   - `mkxp-z-apple-mobile/scripts/preload/platform_compat.rb` - Thread.critical / exit! shims.
 - **Build**:
-  - `ios/Dependencies/common.make` - per-version Ruby + merged.o build recipes.
+  - `mkxp-z-apple-mobile/tools/build-binding-ios.sh` - the per-version merged.o recipe.
+  - `mkxp-z-apple-mobile/multiruby/wrapper.cpp` - the one exported entry point per version.
+  - `ios/Dependencies/common.make` - per-version Ruby builds, and the calls into the engine recipe.
   - `ios/Dependencies/apply-ruby-patches.sh` - manifest-driven patch application.
-  - `ios/Dependencies/tools/generate-ruby-unexports.sh` - symbol-islanding helper.
+  - `mkxp-z-apple-mobile/tools/generate-ruby-unexports.sh` - symbol-islanding helper.
   - `ios/Dependencies/sources/ruby{,18,19}/` - Ruby submodules. `sources/ruby` is 3.1.
 - **iOS**:
   - `ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` - unified per-game detection.
