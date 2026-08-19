@@ -8,11 +8,11 @@ final class PreLiteralSaveHealTests: XCTestCase {
     private var tempRoot: URL!
     private let fm = FileManager.default
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         tempRoot = fm.temporaryDirectory
             .appendingPathComponent("PreLiteralSaveHealTests-\(UUID().uuidString)", isDirectory: true)
-        try? fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        try fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
     }
 
     override func tearDown() {
@@ -25,18 +25,33 @@ final class PreLiteralSaveHealTests: XCTestCase {
 
     // MARK: - Helpers
 
+    // A fixture that fails to write turns the checks below into
+    // checks against an empty directory, which most of them pass. So
+    // report the write error against the calling line instead of
+    // dropping it.
     @discardableResult
-    private func write(_ name: String, _ content: String, mtime: Date? = nil, in dir: URL? = nil) -> URL {
+    private func write(_ name: String, _ content: String, mtime: Date? = nil, in dir: URL? = nil,
+                       file: StaticString = #filePath, line: UInt = #line) -> URL {
         let url = (dir ?? tempRoot).appendingPathComponent(name)
-        try? content.write(to: url, atomically: true, encoding: .utf8)
-        if let mtime {
-            try? fm.setAttributes([.modificationDate: mtime], ofItemAtPath: url.path)
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            if let mtime {
+                try fm.setAttributes([.modificationDate: mtime], ofItemAtPath: url.path)
+            }
+        } catch {
+            XCTFail("could not write the fixture \(name): \(error)", file: file, line: line)
         }
         return url
     }
 
-    private func names(in dir: URL? = nil) -> Set<String> {
-        Set((try? fm.contentsOfDirectory(atPath: (dir ?? tempRoot).path)) ?? [])
+    private func names(in dir: URL? = nil,
+                       file: StaticString = #filePath, line: UInt = #line) -> Set<String> {
+        do {
+            return Set(try fm.contentsOfDirectory(atPath: (dir ?? tempRoot).path))
+        } catch {
+            XCTFail("could not read the directory: \(error)", file: file, line: line)
+            return []
+        }
     }
 
     // MARK: - familyBase
@@ -193,8 +208,8 @@ final class PreLiteralSaveHealTests: XCTestCase {
         let org = tempRoot.appendingPathComponent("PKMN Essentials", isDirectory: true)
         let app = org.appendingPathComponent("Nova", isDirectory: true)
         let anil = tempRoot.appendingPathComponent("Anil", isDirectory: true)
-        try? fm.createDirectory(at: app, withIntermediateDirectories: true)
-        try? fm.createDirectory(at: anil, withIntermediateDirectories: true)
+        XCTAssertNoThrow(try fm.createDirectory(at: app, withIntermediateDirectories: true))
+        XCTAssertNoThrow(try fm.createDirectory(at: anil, withIntermediateDirectories: true))
         write("Game.rxdata.pre-literal.bak", "nested save", mtime: Date(), in: app)
         write("Game2.rxdata.pre-literal.bak", "anil save", mtime: Date(), in: anil)
         write("Root.rxdata.pre-literal.bak", "root-level", mtime: Date())
@@ -263,7 +278,7 @@ final class PreLiteralSaveHealTests: XCTestCase {
 
     func testDirectoriesAreNotCandidates() {
         let trap = tempRoot.appendingPathComponent("Game.rxdata.pre-literal.bak", isDirectory: true)
-        try? fm.createDirectory(at: trap, withIntermediateDirectories: true)
+        XCTAssertNoThrow(try fm.createDirectory(at: trap, withIntermediateDirectories: true))
 
         let outcome = PreLiteralSaveHeal.heal(directory: tempRoot, fm: fm)
 

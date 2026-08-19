@@ -95,6 +95,7 @@ final class ContainerMigrationPlannerTests: XCTestCase {
             candidates: [candidate(id: "a", name: "Testing")],
             takenLowercasedNames: ["testing"]
         )
+        XCTAssertEqual(groups.count, 1)
         XCTAssertTrue(groups[0].titleAlreadyTaken)
     }
 
@@ -220,7 +221,7 @@ final class ContainerMigrationPlannerTests: XCTestCase {
 
     func testMojibakeFolderRenamesToCorrectedTitle() throws {
         guard DirectoryNameMatch.legacyMojibakeRendering(of: "Pokémon Empyrean") != nil else {
-            throw XCTSkip("Legacy encodings are unavailable on this platform")
+            try skipOrFail("Legacy encodings are unavailable on this platform")
         }
         XCTAssertEqual(
             ContainerMigrationPlanner.mojibakeRenameTarget(
@@ -255,7 +256,7 @@ final class ContainerMigrationPlannerTests: XCTestCase {
 
     func testRenameTargetSanitizesTheTitle() throws {
         guard DirectoryNameMatch.legacyMojibakeRendering(of: "Pokémon Empyrean") != nil else {
-            throw XCTSkip("Legacy encodings are unavailable on this platform")
+            try skipOrFail("Legacy encodings are unavailable on this platform")
         }
         // Sanitization replaces ":" before the mojibake comparison,
         // matching how the import named the folder in the first

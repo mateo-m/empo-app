@@ -275,8 +275,12 @@ jobs:
         with:
           toolchain: "6.2"
 
+      # Json5 is not in this list: its vendored-header check needs the
+      # engine submodule, and the package ships to iOS. The macOS
+      # Simulator build job runs it, submodule and all.
       - name: swift test
-        run: swift test --parallel
+        working-directory: ${{ github.workspace }}
+        run: scripts/run-swift-tests.sh ios/GameProbe
 
   deps-pins:
     name: Verify empo-deps release pins
@@ -364,6 +368,16 @@ jobs:
           echo "Using $XCODE"
           echo "DEVELOPER_DIR=$XCODE/Contents/Developer" >> "$GITHUB_ENV"
           DEVELOPER_DIR="$XCODE/Contents/Developer" xcodebuild -version
+
+      # macOS is the only runner that can run every check: Linux
+      # Foundation has no legacy text encodings, and the Linux job
+      # checks out no submodule. EMPO_TESTS_NO_SKIP=1 turns a skip
+      # here into a failure, so a check cannot go missing on both
+      # runners at once.
+      - name: Swift package tests, with no skips allowed
+        env:
+          EMPO_TESTS_NO_SKIP: "1"
+        run: scripts/run-swift-tests.sh
 
       - name: Install xcodegen
         run: brew install xcodegen

@@ -13,7 +13,7 @@ final class DataLooseTextTests: XCTestCase {
     func testShiftJISBytesDecodeCorrectly() throws {
         let title = "ポケットモンスター"
         guard let sjis = title.data(using: .shiftJIS) else {
-            throw XCTSkip("Shift-JIS encoding is unavailable on this platform")
+            try skipOrFail("Shift-JIS encoding is unavailable on this platform")
         }
         // The fixture must not be valid UTF-8, or the test would
         // exercise the wrong branch.
@@ -26,7 +26,7 @@ final class DataLooseTextTests: XCTestCase {
         // Shift-JIS kanji (駑). The Western decode must win here.
         let title = "Pokémon Empyrean"
         guard let cp1252 = title.data(using: .windowsCP1252) else {
-            throw XCTSkip("Windows-1252 encoding is unavailable on this platform")
+            try skipOrFail("Windows-1252 encoding is unavailable on this platform")
         }
         XCTAssertNil(String(data: cp1252, encoding: .utf8))
         XCTAssertNotNil(String(data: cp1252, encoding: .shiftJIS))
@@ -36,7 +36,7 @@ final class DataLooseTextTests: XCTestCase {
     func testWindows1252FullINIDecodesCorrectly() throws {
         let ini = "[Game]\r\nLibrary=RGSS104E.dll\r\nScripts=Data\\Scripts.rxdata\r\nTitle=Pokémon Empyrean\r\n"
         guard let cp1252 = ini.data(using: .windowsCP1252) else {
-            throw XCTSkip("Windows-1252 encoding is unavailable on this platform")
+            try skipOrFail("Windows-1252 encoding is unavailable on this platform")
         }
         XCTAssertEqual(cp1252.decodeAsLooseText(), ini)
     }
@@ -46,7 +46,7 @@ final class DataLooseTextTests: XCTestCase {
         // most of its bytes are ASCII.
         let ini = "[Game]\r\nLibrary=RGSS102J.dll\r\nTitle=ポケットモンスター\r\n"
         guard let sjis = ini.data(using: .shiftJIS) else {
-            throw XCTSkip("Shift-JIS encoding is unavailable on this platform")
+            try skipOrFail("Shift-JIS encoding is unavailable on this platform")
         }
         XCTAssertEqual(sjis.decodeAsLooseText(), ini)
     }
@@ -54,7 +54,7 @@ final class DataLooseTextTests: XCTestCase {
     func testHalfWidthKanaRunDecodesAsShiftJIS() throws {
         let title = "ﾎﾟｹｯﾄ"
         guard let sjis = title.data(using: .shiftJIS) else {
-            throw XCTSkip("Shift-JIS encoding is unavailable on this platform")
+            try skipOrFail("Shift-JIS encoding is unavailable on this platform")
         }
         XCTAssertNil(String(data: sjis, encoding: .utf8))
         XCTAssertEqual(sjis.decodeAsLooseText(), title)

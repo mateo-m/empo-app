@@ -61,7 +61,7 @@ final class ScreenRegionTests: XCTestCase {
         let result = ScreenRegionFile.parse(
             data(#"{ "version": 1, "landscape": { "x": 0, "y": 0, "w": 1, "h": 1 } }"#))
         XCTAssertNil(result.portrait)
-        XCTAssertNotNil(result.landscape)
+        XCTAssertEqual(result.landscape, .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)))
         XCTAssertTrue(result.findings.isEmpty)
     }
 
@@ -74,6 +74,8 @@ final class ScreenRegionTests: XCTestCase {
 
     func testParseGarbageIsS001() {
         let result = ScreenRegionFile.parse(data("not json"))
+        XCTAssertNil(result.portrait)
+        XCTAssertNil(result.landscape)
         XCTAssertTrue(result.findings.contains { $0.hasPrefix("S001") })
     }
 
@@ -124,7 +126,7 @@ final class ScreenRegionTests: XCTestCase {
                 }
                 """))
         XCTAssertNil(result.portrait)
-        XCTAssertNotNil(result.landscape)
+        XCTAssertEqual(result.landscape, .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)))
     }
 
     func testParseEpsilonAtTheBoundary() {
@@ -132,14 +134,14 @@ final class ScreenRegionTests: XCTestCase {
         // epsilon keeps the entry valid.
         let result = ScreenRegionFile.parse(
             data(#"{ "version": 1, "portrait": { "x": 0.3, "y": 0, "w": 0.7, "h": 1 } }"#))
-        XCTAssertNotNil(result.portrait)
+        XCTAssertEqual(result.portrait, .region(ScreenRegion(x: 0.3, y: 0, w: 0.7, h: 1)))
         XCTAssertTrue(result.findings.isEmpty)
     }
 
     func testParseUnknownKeyIsWS1AndDropsOnRewrite() throws {
         let result = ScreenRegionFile.parse(
             data(#"{ "version": 1, "zoom": 2, "portrait": { "x": 0, "y": 0, "w": 1, "h": 1 } }"#))
-        XCTAssertNotNil(result.portrait)
+        XCTAssertEqual(result.portrait, .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)))
         XCTAssertTrue(result.findings.contains { $0.hasPrefix("W-S1") })
 
         let rewritten = try XCTUnwrap(
@@ -216,7 +218,8 @@ final class ScreenRegionTests: XCTestCase {
         // 1.0 is exactly representable: Int(exactly:) admits it.
         let result = ScreenRegionFile.parse(
             data(#"{ "version": 1.0, "portrait": { "x": 0, "y": 0, "w": 1, "h": 1 } }"#))
-        XCTAssertNotNil(result.portrait)
+        XCTAssertEqual(result.portrait, .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)))
+        XCTAssertTrue(result.findings.isEmpty)
     }
 
     // MARK: - Presets

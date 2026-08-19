@@ -8,11 +8,11 @@ final class RescuedSavesTests: XCTestCase {
     private var tempRoot: URL!
     private let fm = FileManager.default
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         tempRoot = fm.temporaryDirectory
             .appendingPathComponent("RescuedSavesTests-\(UUID().uuidString)", isDirectory: true)
-        try? fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        try fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
     }
 
     override func tearDown() {
@@ -111,7 +111,7 @@ final class RescuedSavesTests: XCTestCase {
 
     func testMojibakeEraBucketMatchesTheCorrectedFolderName() throws {
         guard DirectoryNameMatch.legacyMojibakeRendering(of: "Pokémon Empyrean") != nil else {
-            throw XCTSkip("Legacy encodings are unavailable on this platform")
+            try skipOrFail("Legacy encodings are unavailable on this platform")
         }
         // Rescued before the INI decode fix: bucket and marker both
         // carry the mojibake name. The re-import arrives under the
