@@ -15,6 +15,10 @@
 # tests than the floor. Raise a floor when you add tests. Lower one
 # only on purpose, in the same commit that removes the tests.
 #
+# The floor differs by platform. A check that needs Darwin sits behind
+# `#if canImport(Darwin)` and compiles out on Linux, so the Linux
+# floor is lower by exactly the number of such checks.
+#
 # EMPO_TESTS_NO_SKIP=1 turns every host-capability skip into a
 # failure. See ios/GameProbe/Tests/SkipPolicy.swift. Set it on a host
 # that has the legacy text encodings and the engine submodule, which
@@ -25,8 +29,13 @@ set -e
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
-# package directory, floor
-ALL_PACKAGES="ios/GameProbe:676 ios/Json5:21"
+# package directory, floor on macOS, floor on Linux
+ALL_PACKAGES="ios/GameProbe:676:675 ios/Json5:21:21"
+
+case "$(uname -s)" in
+    Darwin) HOST=darwin ;;
+    *) HOST=other ;;
+esac
 
 die() {
     printf 'run-swift-tests: %s\n' "$1" >&2
@@ -40,7 +49,7 @@ else
     for wanted in "$@"; do
         match=""
         for entry in $ALL_PACKAGES; do
-            [ "${entry%:*}" = "$wanted" ] && match="$entry"
+            [ "${entry%%:*}" = "$wanted" ] && match="$entry"
         done
         [ -n "$match" ] || die "unknown package: $wanted"
         PACKAGES="$PACKAGES $match"
@@ -48,8 +57,13 @@ else
 fi
 
 for entry in $PACKAGES; do
-    dir="${entry%:*}"
-    floor="${entry##*:}"
+    dir="${entry%%:*}"
+    floors="${entry#*:}"
+    if [ "$HOST" = "darwin" ]; then
+        floor="${floors%%:*}"
+    else
+        floor="${floors##*:}"
+    fi
     printf '==> %s\n' "$dir"
 
     listed=$(cd "$dir" && swift test --list-tests | grep -c '/') ||
