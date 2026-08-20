@@ -380,8 +380,14 @@ $(BUILD_PREFIX)/.openssl-installed: $(OPENSSL_CONFIGURED)
 	$(MAKE) install_sw
 	touch $@
 
-$(OPENSSL_CONFIGURED): $(OPENSSL_DIR)/Configure
-	cd $(OPENSSL_DIR); $(MAKE) distclean 2>/dev/null || true
+# Extract a pristine tree for each SDK, instead of cleaning the last
+# one. `make distclean` left simulator objects in apps/libapps.a, and
+# the device link then failed with "built for 'iOS-simulator'". The
+# step also hid its own errors behind `|| true`. A fresh tree cannot
+# carry the other SDK's objects.
+$(OPENSSL_CONFIGURED): $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz
+	rm -rf $(OPENSSL_DIR)
+	cd $(DOWNLOADS) && tar xzf openssl-$(OPENSSL_VERSION).tar.gz
 	cd $(OPENSSL_DIR); \
 	./Configure $(OPENSSL_CONFIGURE_TARGET) no-shared no-dso \
 		--prefix="$(BUILD_PREFIX)" \
@@ -389,9 +395,6 @@ $(OPENSSL_CONFIGURED): $(OPENSSL_DIR)/Configure
 		--openssldir="$(BUILD_PREFIX)/ssl" \
 		$(OPENSSL_CONFIGURE_FLAGS)
 	$(MARK_SDK_CONFIGURED)
-
-$(OPENSSL_DIR)/Configure: $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz
-	cd $(DOWNLOADS) && tar xzf openssl-$(OPENSSL_VERSION).tar.gz
 
 $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz:
 	@mkdir -p $(DOWNLOADS)
@@ -537,6 +540,7 @@ $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 mkxp31-merged: init_dirs ruby     $(LIBDIR)/mkxp31-merged.o
 mkxp19-merged: init_dirs ruby19   $(LIBDIR)/mkxp19-merged.o
 mkxp18-merged: init_dirs ruby18   $(LIBDIR)/mkxp18-merged.o
+
 # The fingerprint stamp says every merged object matches the binding
 # sources. Only this target can say that, so only this target writes
 # it, and make reaches the recipe only after all three objects build.
