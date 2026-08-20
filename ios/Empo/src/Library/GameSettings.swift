@@ -166,8 +166,14 @@ extension KeyedDecodingContainer {
 /// Runtime.
 struct GameSettings: Codable, Equatable {
     // Display
-    /// portrait screen alignment. Host-side rendering, no engine input.
-    @Setting<VerticalAlignment?, RuntimeFlag> var verticalAlignment: VerticalAlignment?
+    /// Where the game sits on a portrait screen before a layout
+    /// profile places it. The sheet has no picker for this. Screen
+    /// position belongs to the layout editor now, and a pinned
+    /// profile region beats the alignment in `recalculateScreenSize`.
+    /// Nothing in the app writes this field. Only a settings file
+    /// from before the layout editor holds a value, and the engine
+    /// reads it at launch.
+    @Setting<VerticalAlignment?, RestartFlag> var verticalAlignment: VerticalAlignment?
 
     // Performance
     /// fast-forward multiplier (2-9, nil = disabled). Runtime-only,
@@ -206,7 +212,12 @@ struct GameSettings: Codable, Equatable {
     /// for games whose keyboard scene adds custom keys the soft
     /// keyboard can't drive. Routes through `mkxp_setUseInGameKeyboard`
     /// to `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
-    @Setting<Bool?, RuntimeFlag> var useInGameKeyboard: Bool?
+    ///
+    /// A bridge setter carries this value, but a restart is still
+    /// necessary. `pokemon_input.rb` reads the bridge once at
+    /// postload time and writes the constant. The value is then
+    /// locked for the session.
+    @Setting<Bool?, RestartFlag> var useInGameKeyboard: Bool?
 
     /// The game receives taps and drags on the game area as
     /// left-mouse input. This is harmless for games that never read
@@ -256,6 +267,38 @@ struct GameSettings: Codable, Equatable {
         rubyVersionOverride == nil && useModernRuby == nil
     }
 
+    /// `RuntimeFlag` fields that something re-pushes to the engine
+    /// while a game runs. `PlayerRuntimeState.reconcile` owns those
+    /// pushes and calls the check below to keep this list honest.
+    private static let runtimeAppliedFields: Set<String> = [
+        "speedMultiplier",
+        "touchMouse",
+    ]
+
+    /// Crashes debug builds when a `RuntimeFlag` field has no
+    /// applier. The flag promises the settings sheet that an edit
+    /// applies on resume, and the sheet hides its restart hint on the
+    /// strength of that promise. A field nobody re-pushes reaches the
+    /// engine at launch only, so the control looks live and does
+    /// nothing. That was the `touchMouse` bug.
+    static func assertRuntimeFieldsHaveAppliers() {
+        #if DEBUG
+        for child in Mirror(reflecting: GameSettings()).children {
+            guard let label = child.label,
+                let setting = child.value as? AnySetting,
+                !setting.requiresRestart
+            else { continue }
+            let key = fieldKey(label)
+            guard !runtimeAppliedFields.contains(key) else { continue }
+            assertionFailure(
+                "GameSettings.\(key) is RuntimeFlag but nothing re-applies it "
+                    + "mid-session - add the push to PlayerRuntimeState.reconcile "
+                    + "and name the field in runtimeAppliedFields"
+            )
+        }
+        #endif
+    }
+
     /// True if any `RestartFlag`-tagged field differs between `self`
     /// and `other`. The engine reads its config once at RGSS thread
     /// startup and never re-reads, so launch-time fields need a quit
@@ -302,14 +345,18 @@ struct GameSettings: Codable, Equatable {
     /// because the UI copy needs real review (acronyms like "VSync",
     /// multi-word phrases) and silent string drift on rename is worse
     /// than one entry per restart-required field.
+    /// Strips the leading underscore the property-wrapper machinery
+    /// prefixes onto Mirror labels, so `_touchMouse` reads back as
+    /// the declared name.
+    private static func fieldKey(_ mirrorLabel: String) -> String {
+        mirrorLabel.hasPrefix("_") ? String(mirrorLabel.dropFirst()) : mirrorLabel
+    }
+
     private static func displayLabel(forFieldLabel mirrorLabel: String) -> String {
-        // Strip the leading underscore the property-wrapper machinery
-        // prefixes onto Mirror labels.
-        let key =
-            mirrorLabel.hasPrefix("_")
-            ? String(mirrorLabel.dropFirst())
-            : mirrorLabel
+        let key = fieldKey(mirrorLabel)
         switch key {
+        case "useInGameKeyboard": return "In-game keyboard"
+        case "verticalAlignment": return "Screen position"
         case "postloadScripts": return "Postload scripts"
         case "useModernRuby": return "Ruby compatibility mode"
         case "rubyVersionOverride": return "Ruby version"
@@ -400,6 +447,13 @@ struct GameSettings: Codable, Equatable {
     var hasCustomizations: Bool {
         self != GameSettings()
     }
+
+    /// The value the engine bridge takes for `touchMouse`. Both the
+    /// launch push and `PlayerRuntimeState.reconcile` read this, so
+    /// the default lives in one place.
+    var touchMouseEnabled: Bool {
+        touchMouse ?? GameConfigDefaults.engineTouchMouse
+    }
 }
 
 /// Values from the game's mkxp.json. These are the developer's intended defaults.
@@ -422,4 +476,5 @@ struct GameConfigDefaults {
     static let enginePostloadScripts = true
     static let engineRenderScale = RenderScale.x1
     static let engineVerticalAlignment = VerticalAlignment.topCenter
+    static let engineTouchMouse = true
 }
