@@ -187,9 +187,6 @@ struct GameSettingsView: View {
     private var effectivePostloadScripts: Bool {
         settings.postloadScripts ?? GameConfigDefaults.enginePostloadScripts
     }
-    private var effectiveVerticalAlignment: VerticalAlignment {
-        settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
-    }
     private var effectiveRenderScale: RenderScale {
         engineSettings.renderScale ?? defaults.renderScale ?? GameConfigDefaults.engineRenderScale
     }
@@ -719,7 +716,7 @@ struct GameSettingsView: View {
 
     private var touchMouseBinding: Binding<Bool> {
         Binding(
-            get: { settings.touchMouse ?? true },
+            get: { settings.touchMouseEnabled },
             set: { settings.touchMouse = $0 }
         )
     }
@@ -788,13 +785,6 @@ struct GameSettingsView: View {
             set: { pick in
                 settings.useModernRuby = pick.useModernRubyValue
             }
-        )
-    }
-
-    private var verticalAlignmentBinding: Binding<VerticalAlignment> {
-        Binding(
-            get: { effectiveVerticalAlignment },
-            set: { settings.verticalAlignment = $0 }
         )
     }
 
@@ -872,44 +862,5 @@ struct GameSettingsView: View {
         metadata.refreshDetectedModernRubyScripts(in: container, forceRefresh: forceRefresh)
         autoDetectedVersion = metadata.rubyVersion
         autoDetectedModernScripts = metadata.modernRubyScriptsDetected
-    }
-}
-
-/// A tiny illustration showing where the game viewport sits on a phone silhouette.
-private struct VerticalAlignmentIllustration: View {
-    let alignment: VerticalAlignment
-
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            let phoneInset: CGFloat = 2
-            let innerW = w - phoneInset * 2
-            let innerH = h - phoneInset * 2
-            let gameH: CGFloat = innerH * 0.35
-
-            let gameY: CGFloat =
-                switch alignment {
-                case .top:
-                    phoneInset + 2
-                case .topCenter:
-                    phoneInset + (innerH - gameH) * 0.25
-                case .center:
-                    phoneInset + (innerH - gameH) / 2
-                }
-
-            ZStack {
-                // Phone outline
-                RoundedRectangle(cornerRadius: Radius.xs)
-                    .stroke(.secondary.opacity(0.5), lineWidth: 1)
-                    .frame(width: w, height: h)
-
-                // Game viewport
-                RoundedRectangle(cornerRadius: Spacing.xxs)
-                    .fill(.tint.opacity(0.6))
-                    .frame(width: innerW - 4, height: gameH)
-                    .position(x: w / 2, y: gameY + gameH / 2)
-            }
-        }
     }
 }
