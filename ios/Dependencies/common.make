@@ -537,7 +537,16 @@ $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 mkxp31-merged: init_dirs ruby     $(LIBDIR)/mkxp31-merged.o
 mkxp19-merged: init_dirs ruby19   $(LIBDIR)/mkxp19-merged.o
 mkxp18-merged: init_dirs ruby18   $(LIBDIR)/mkxp18-merged.o
+# The fingerprint stamp says every merged object matches the binding
+# sources. Only this target can say that, so only this target writes
+# it, and make reaches the recipe only after all three objects build.
+# A run that dies on the third version leaves the old stamp, and
+# scripts/verify-native-deps.sh then fails the Xcode build. Do not
+# move the write into build-binding-ios.sh: it builds one version per
+# run, and a partial build there stamped a set that was not there.
 mkxp-merged: mkxp18-merged mkxp19-merged mkxp31-merged
+	$(ENGINE)/tools/binding-fingerprint.sh > $(LIBDIR)/.mkxp-binding-fingerprint
+	@echo "mkxp-merged: stamped $(LIBDIR)/.mkxp-binding-fingerprint"
 mkxp-core: init_dirs $(LIBDIR)/libmkxpz-core.a
 
 # ---- Engine core static library --------------------------------------
