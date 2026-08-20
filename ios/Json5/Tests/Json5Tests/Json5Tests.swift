@@ -14,14 +14,22 @@ final class Json5Tests: XCTestCase {
         return try XCTUnwrap(object as? [String: Any])
     }
 
+    /// Input that the parser must reject.
+    ///
+    /// A thrown error fails the calling check. XCTSkip must not stand
+    /// in here: a skip reports the check as not run, so a parser that
+    /// stopped rejecting bad input would look clean.
+    private struct ParserAcceptedBadInput: Error {
+        let raw: String
+    }
+
     private func syntaxError(_ raw: String) throws -> Json5SyntaxError {
         do {
             _ = try Json5.normalizeToStrictJSON(raw)
         } catch let error as Json5SyntaxError {
             return error
         }
-        XCTFail("Expected a Json5SyntaxError for: \(raw)")
-        throw XCTSkip("unreachable")
+        throw ParserAcceptedBadInput(raw: raw)
     }
 
     // MARK: - JSON5 feature acceptance
@@ -251,7 +259,7 @@ final class Json5Tests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("mkxp-z-apple-mobile/src/util/json5pp.hpp")
         guard FileManager.default.fileExists(atPath: engine.path) else {
-            throw XCTSkip(
+            try skipOrFail(
                 "Engine submodule is not checked out at \(engine.path)")
         }
         let vendoredBytes = try Data(contentsOf: vendored)

@@ -7,11 +7,11 @@ final class ManagedMkxpConfigTests: XCTestCase {
 
     private var tempRoot: URL!
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         tempRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("ManagedMkxpConfigTests-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
     }
 
     override func tearDown() {

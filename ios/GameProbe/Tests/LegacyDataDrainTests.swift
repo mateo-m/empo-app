@@ -8,11 +8,11 @@ final class LegacyDataDrainTests: XCTestCase {
     private var tempRoot: URL!
     private let fm = FileManager.default
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         tempRoot = fm.temporaryDirectory
             .appendingPathComponent("LegacyDataDrainTests-\(UUID().uuidString)", isDirectory: true)
-        try? fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        try fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
     }
 
     override func tearDown() {
@@ -396,7 +396,7 @@ final class LegacyDataDrainTests: XCTestCase {
         if (try? fm.contentsOfDirectory(atPath: locked.path)) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 directory is still readable, likely running as root")
+            try skipOrFail("0o000 directory is still readable, likely running as root")
         }
 
         let outcome = LegacyDataDrain.drain(from: source, into: destination)
@@ -434,7 +434,7 @@ final class LegacyDataDrainTests: XCTestCase {
         if (try? fm.contentsOfDirectory(atPath: locked.path)) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 directory is still readable, likely running as root")
+            try skipOrFail("0o000 directory is still readable, likely running as root")
         }
 
         let outcome = LegacyDataDrain.drain(from: source, into: destination)
@@ -457,7 +457,7 @@ final class LegacyDataDrainTests: XCTestCase {
         if (try? fm.contentsOfDirectory(atPath: source.path)) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 directory is still readable, likely running as root")
+            try skipOrFail("0o000 directory is still readable, likely running as root")
         }
 
         let outcome = LegacyDataDrain.drain(from: source, into: destination)

@@ -8,12 +8,12 @@ final class ConcatenatedSaveRecoveryTests: XCTestCase {
     private var tempRoot: URL!
     private let fm = FileManager.default
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         tempRoot = fm.temporaryDirectory
             .appendingPathComponent(
                 "ConcatenatedSaveRecoveryTests-\(UUID().uuidString)", isDirectory: true)
-        try? fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        try fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
     }
 
     override func tearDown() {

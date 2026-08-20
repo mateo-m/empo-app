@@ -45,11 +45,11 @@ final class GameTreeUpdateTests: XCTestCase {
     private var tempRoot: URL!
     private let fm = FileManager.default
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         tempRoot = fm.temporaryDirectory
             .appendingPathComponent("GameTreeUpdateTests-\(UUID().uuidString)", isDirectory: true)
-        try? fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        try fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
     }
 
     override func tearDown() {
@@ -560,7 +560,7 @@ final class GameTreeUpdateTests: XCTestCase {
         if (try? fm.contentsOfDirectory(atPath: lockedSource.path)) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 directory is still readable, likely running as root")
+            try skipOrFail("0o000 directory is still readable, likely running as root")
         }
 
         XCTAssertThrowsError(try GameTreeUpdate.stageAndSwap(newTree: source, over: target))
@@ -606,7 +606,7 @@ final class GameTreeUpdateTests: XCTestCase {
             thrown = error as NSError
         }
         guard swapFM.swapIntercepted else {
-            throw XCTSkip(
+            try skipOrFail(
                 "FileManager subclasses cannot intercept replaceItemAt on this platform")
         }
         let error = try XCTUnwrap(thrown, "the intercepted swap must rethrow")
@@ -851,7 +851,7 @@ final class GameTreeUpdateTests: XCTestCase {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
             try? fm.removeItem(at: probe)
-            throw XCTSkip("0o555 directory is still writable, likely running as root")
+            try skipOrFail("0o555 directory is still writable, likely running as root")
         }
 
         let outcome = GameTreeUpdate.sweepInterruptedUpdate(target: target)
