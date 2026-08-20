@@ -66,8 +66,12 @@ for entry in $PACKAGES; do
     fi
     printf '==> %s\n' "$dir"
 
-    listed=$(cd "$dir" && swift test --list-tests | grep -c '/') ||
+    list=$(cd "$dir" && swift test --list-tests) ||
         die "$dir: could not list the tests"
+    # grep exits 1 when it matches nothing, and a package that lists
+    # no test is the case this floor exists to catch. Keep that from
+    # reading as a failure to list.
+    listed=$(printf '%s\n' "$list" | grep -c '/') || listed=0
     if [ "$listed" -lt "$floor" ]; then
         die "$dir lists $listed tests, expected at least $floor.
   Tests went missing. Add them back, or lower the floor on purpose."
