@@ -110,7 +110,12 @@ enum GameSession {
         // the bridge statics, so the region is set pre-boot.
         ScreenRegionApplier.beginSession(container: container)
         mkxp_setGameControllerCaptureEnabled(false)
-        mkxp_setTouchMouseEnabled(settings.touchMouse ?? true)
+        // Seed the touch-mouse atomic before boot.
+        // `mkxp_resetSessionState` above leaves it alone, so without
+        // this the new game inherits the previous game's value until
+        // `PlayerRuntimeState.reconcile` runs. That call owns every
+        // later push, including the one on resume.
+        mkxp_setTouchMouseEnabled(settings.touchMouseEnabled)
     }
 
     private static func logEngineConfigOverlay(

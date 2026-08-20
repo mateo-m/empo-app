@@ -3,12 +3,14 @@ import GameProbe
 import Observation
 import SwiftUI
 
-/// Session runtime state the player actions act on: fast forward and
-/// cheats. It used to live as `@State` in `PlayerView`, but SwiftUI
-/// recycles that view on pause/resume while the engine's multiplier
-/// and cheat flag are process-static. The bridge is the source of
-/// truth. This model re-derives from it at every safe point and on
-/// every activation, never from a cached flag.
+/// Session runtime state the player actions act on. It covers fast
+/// forward, cheats, and the per-game `RuntimeFlag` settings the
+/// engine re-reads while it runs. It used to live as `@State` in
+/// `PlayerView`, but SwiftUI recycles that view on pause/resume
+/// while the engine's multiplier and cheat flag are process-static.
+/// The bridge is the source of truth. This model re-derives from it
+/// at every safe point and on every activation, never from a cached
+/// flag.
 @MainActor
 @Observable
 final class PlayerRuntimeState {
@@ -34,12 +36,18 @@ final class PlayerRuntimeState {
         reconcile()
     }
 
-    /// Re-reads the per-game multiplier and adopts the bridge state.
-    /// Safe points only: session start, resume, More-sheet open. The
-    /// arbiter refuses to adopt mid-hold, so an in-progress hold
-    /// cannot convert into a latch.
+    /// Re-reads the per-game runtime settings and adopts the bridge
+    /// state. Safe points only: session start, resume, More-sheet
+    /// open. The arbiter refuses to adopt mid-hold, so an in-progress
+    /// hold cannot convert into a latch.
+    ///
+    /// This is the one place a `RuntimeFlag` setting re-reaches the
+    /// engine mid-session. The settings sheet only opens from the
+    /// library, so every runtime edit happens while the game is
+    /// paused and this call picks it up on resume.
     func reconcile() {
-        reloadMultiplier()
+        GameSettings.assertRuntimeFieldsHaveAppliers()
+        reloadPerGameSettings()
         let outcome = arbiter.reconcile(
             configuredMultiplier: fastForwardMultiplier,
             bridgeMultiplier: bridgeMultiplier()
@@ -119,12 +127,16 @@ final class PlayerRuntimeState {
 
     // MARK: - Bridge
 
-    private func reloadMultiplier() {
+    private func reloadPerGameSettings() {
         guard let container else {
             fastForwardMultiplier = nil
             return
         }
-        fastForwardMultiplier = GameSettings.load(from: container.empoStateURL).speedMultiplier
+        let settings = GameSettings.load(from: container.empoStateURL)
+        fastForwardMultiplier = settings.speedMultiplier
+        // `eventthread.cpp` reads this atomic on every synthesized
+        // mouse event, so the next frame sees the new value.
+        mkxp_setTouchMouseEnabled(settings.touchMouseEnabled)
     }
 
     private func refreshFastForwardActive() {
