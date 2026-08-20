@@ -117,6 +117,8 @@ tools/build-binding-ios.sh --ruby 31 --sdk iphonesimulator ...
 
 `ios/Dependencies/common.make` calls it three times and supplies only the SDK, the libruby archives, and the dependency header dirs.
 
+The launcher now runs scripts that live in the submodule. A gitlink that points at an engine commit older than this move breaks the build with `tools/binding-fingerprint.sh: No such file or directory`. Bump the submodule first, then build.
+
 The same `binding/*.cpp` source compiles three times. Version-conditional code lives in `binding-util.h` (`mkxpUsingRuby18Encoding`, RAPI shims) and `binding-mri.cpp` (legacy method shims gated on the RAPI version).
 
 The build isolates includes under `$(INCLUDEDIR)/ruby${VER}/`, so 1.8 and 1.9 do not see 3.1 headers.
