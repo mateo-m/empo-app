@@ -604,7 +604,7 @@ MKXPZ_BINDING_SRC_DEPS := \
     $(wildcard $(ENGINE)/binding/*.h) \
     $(wildcard $(ENGINE)/hmode7/src/*.cpp) \
     $(wildcard $(ENGINE)/hmode7/src/*.h) \
-    $(wildcard $(ENGINE)/multiruby/wrapper.cpp) \
+    $(ENGINE)/multiruby/wrapper.cpp \
     $(wildcard $(ENGINE)/src/*.h) \
     $(wildcard $(ENGINE)/src/*/*.h) \
     $(ENGINE)/tools/build-binding-ios.sh
