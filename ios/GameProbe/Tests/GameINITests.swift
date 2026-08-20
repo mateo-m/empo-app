@@ -191,7 +191,7 @@ final class GameINITests: XCTestCase {
     func testShiftJISTitleParses() throws {
         let title = "ポケットモンスター"
         guard let sjis = "[Game]\r\nTitle=\(title)\r\n".data(using: .shiftJIS) else {
-            throw XCTSkip("Shift-JIS encoding is unavailable on this platform")
+            try skipOrFail("Shift-JIS encoding is unavailable on this platform")
         }
         // The fixture must not be valid UTF-8. Otherwise this would
         // not pin the Shift-JIS leg of decodeAsLooseText.

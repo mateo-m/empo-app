@@ -34,7 +34,7 @@ final class DirectoryNameMatchTests: XCTestCase {
 
     func testLegacyMojibakeDirectoryIsReused() throws {
         guard DirectoryNameMatch.legacyMojibakeRendering(of: "Pokémon Empyrean") != nil else {
-            throw XCTSkip("Legacy encodings are unavailable on this platform")
+            try skipOrFail("Legacy encodings are unavailable on this platform")
         }
         // An install from the Shift-JIS-first decode era stored
         // saves under the mojibake name. The corrected title must

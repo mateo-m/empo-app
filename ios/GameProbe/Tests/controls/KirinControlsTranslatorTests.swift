@@ -238,10 +238,11 @@ final class KirinControlsTranslatorTests: XCTestCase {
         XCTAssertTrue(translation.notes.contains { $0.contains("no usable buttons") })
     }
 
-    func testMissingVersionStillTranslates() {
+    func testMissingVersionStillTranslates() throws {
         let json = #"{"rightGrid": {"slots": [29]}}"#
         let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)
-        XCTAssertNotNil(translation.manifest)
+        let buttons = try XCTUnwrap(translation.manifest?.touch?.portrait?.buttons)
+        XCTAssertEqual(buttons.count, 1)
     }
 
     // MARK: - Loader precedence

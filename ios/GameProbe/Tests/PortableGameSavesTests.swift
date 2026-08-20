@@ -156,7 +156,7 @@ final class PortableGameSavesTests: XCTestCase {
         if (try? FileHandle(forReadingFrom: root.appendingPathComponent("locked.sav"))) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
-            throw XCTSkip("0o000 file is still readable, likely running as root")
+            try skipOrFail("0o000 file is still readable, likely running as root")
         }
 
         XCTAssertEqual(
