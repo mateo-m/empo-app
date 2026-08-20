@@ -380,8 +380,14 @@ $(BUILD_PREFIX)/.openssl-installed: $(OPENSSL_CONFIGURED)
 	$(MAKE) install_sw
 	touch $@
 
-$(OPENSSL_CONFIGURED): $(OPENSSL_DIR)/Configure
-	cd $(OPENSSL_DIR); $(MAKE) distclean 2>/dev/null || true
+# Extract a pristine tree for each SDK, instead of cleaning the last
+# one. `make distclean` left simulator objects in apps/libapps.a, and
+# the device link then failed with "built for 'iOS-simulator'". The
+# step also hid its own errors behind `|| true`. A fresh tree cannot
+# carry the other SDK's objects.
+$(OPENSSL_CONFIGURED): $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz
+	rm -rf $(OPENSSL_DIR)
+	cd $(DOWNLOADS) && tar xzf openssl-$(OPENSSL_VERSION).tar.gz
 	cd $(OPENSSL_DIR); \
 	./Configure $(OPENSSL_CONFIGURE_TARGET) no-shared no-dso \
 		--prefix="$(BUILD_PREFIX)" \
@@ -389,9 +395,6 @@ $(OPENSSL_CONFIGURED): $(OPENSSL_DIR)/Configure
 		--openssldir="$(BUILD_PREFIX)/ssl" \
 		$(OPENSSL_CONFIGURE_FLAGS)
 	$(MARK_SDK_CONFIGURED)
-
-$(OPENSSL_DIR)/Configure: $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz
-	cd $(DOWNLOADS) && tar xzf openssl-$(OPENSSL_VERSION).tar.gz
 
 $(DOWNLOADS)/openssl-$(OPENSSL_VERSION).tar.gz:
 	@mkdir -p $(DOWNLOADS)
@@ -515,34 +518,39 @@ $(SOURCES)/ruby/configure: $(SOURCES)/ruby/configure.ac
 
 # Per-Ruby-version mkxp-z binding compile + libruby merge.
 #
-# Phase D of MULTI_RUBY_PLAN.md (gitignored): ship multiple Ruby
-# versions in one binary by compiling mkxp-z's binding code N times
-# (once against each Ruby's headers), merging each compile +
-# corresponding libruby into a single .o with `ld -r`, and demoting
-# every Ruby-defined symbol (`_rb_*`, `_ruby_*`, etc.) to local via
-# `-unexported_symbols_list`. Hidden Ruby symbols don't clash across
-# versions; each merged .o exposes only its own `Init_mkxpNN`-style
-# entry points to the host.
+# Ship several Ruby versions in one binary: compile the engine's
+# binding code once per Ruby version (each against that Ruby's
+# headers), merge each compile with its libruby into a single .o with
+# `ld -r`, and demote every Ruby-defined symbol to local via
+# `-unexported_symbols_list`. Hidden Ruby symbols cannot clash across
+# versions, so each merged .o exposes one entry point to the host.
 #
-# This target builds the per-version mkxp-z merged objects for
-# Ruby 1.8 / 1.9 / 3.1. Native Ruby 3.0 was dropped: the syntax-
-# transform parser patches only exist in the 3.1 source, so 3.0 +
-# Legacy compatibility was a silent no-op that confused users on
-# Pokemon Essentials forks. Auto-detect routes 3.0-bundling games
-# to 3.1 + Legacy.
-
-# Suppress the same warnings project.yml suppresses, so the per-Ruby
-# binding compile is no noisier than the in-Xcode build.
-MKXPZ_WARNFLAGS := \
-    -Wno-documentation -Wno-shorten-64-to-32 -Wno-deprecated-declarations \
-    -Wno-uninitialized -Wno-conditional-uninitialized -Wno-undefined-var-template \
-    -Wno-comma -Wno-switch -Wno-unused-const-variable \
-    -Wno-deprecated-literal-operator -Wno-unused-function
+# The recipe lives in the engine repo
+# ($(ENGINE)/tools/build-binding-ios.sh), the same way mkxp-core
+# delegates to build-core-ios.sh. This makefile supplies only SDK
+# paths, the libruby archives, and the dependency header dirs. See
+# $(ENGINE)/docs/multi-ruby.md.
+#
+# Ruby 1.8, 1.9 and 3.1 are built. Native Ruby 3.0 was dropped,
+# because the syntax-transform parser patches only exist in the 3.1
+# source. 3.0 plus Legacy compatibility was a silent no-op that
+# confused users on Pokemon Essentials forks. Auto-detect routes
+# 3.0-bundling games to 3.1 plus Legacy.
 
 mkxp31-merged: init_dirs ruby     $(LIBDIR)/mkxp31-merged.o
 mkxp19-merged: init_dirs ruby19   $(LIBDIR)/mkxp19-merged.o
 mkxp18-merged: init_dirs ruby18   $(LIBDIR)/mkxp18-merged.o
+
+# The fingerprint stamp says every merged object matches the binding
+# sources. Only this target can say that, so only this target writes
+# it, and make reaches the recipe only after all three objects build.
+# A run that dies on the third version leaves the old stamp, and
+# scripts/verify-native-deps.sh then fails the Xcode build. Do not
+# move the write into build-binding-ios.sh: it builds one version per
+# run, and a partial build there stamped a set that was not there.
 mkxp-merged: mkxp18-merged mkxp19-merged mkxp31-merged
+	$(ENGINE)/tools/binding-fingerprint.sh > $(LIBDIR)/.mkxp-binding-fingerprint
+	@echo "mkxp-merged: stamped $(LIBDIR)/.mkxp-binding-fingerprint"
 mkxp-core: init_dirs $(LIBDIR)/libmkxpz-core.a
 
 # ---- Engine core static library --------------------------------------
@@ -587,308 +595,65 @@ $(LIBDIR)/libmkxpz-core.a: $(MKXPZ_CORE_SRC_DEPS) $(ENGINE)/tools/build-core-ios
 # header the binding includes) makes `make mkxp-merged` rebuild the
 # .o files instead of silently reusing stale ones. Engine headers are
 # included because the Xcode-compiled engine half shares struct
-# layouts with the binding half; drifting apart is UB, not a link
-# error. tools/binding-fingerprint.sh hashes the same set so
-# scripts/verify-native-deps.sh can fail fast in the Xcode build.
+# layouts with the binding half. Drifting apart is UB, not a link
+# error. The engine's tools/binding-fingerprint.sh hashes the same
+# set, so scripts/verify-native-deps.sh can fail fast in the Xcode
+# build.
 MKXPZ_BINDING_SRC_DEPS := \
     $(wildcard $(ENGINE)/binding/*.cpp) \
     $(wildcard $(ENGINE)/binding/*.h) \
     $(wildcard $(ENGINE)/hmode7/src/*.cpp) \
     $(wildcard $(ENGINE)/hmode7/src/*.h) \
+    $(ENGINE)/multiruby/wrapper.cpp \
     $(wildcard $(ENGINE)/src/*.h) \
-    $(wildcard $(ENGINE)/src/*/*.h)
+    $(wildcard $(ENGINE)/src/*/*.h) \
+    $(ENGINE)/tools/build-binding-ios.sh
 
-MKXPZ_BINDING_FINGERPRINT := ${PWD}/tools/binding-fingerprint.sh
+# Dependency header dirs the binding needs on top of the engine's own,
+# which build-binding-ios.sh adds by itself. The per-Ruby header dir
+# goes in through --ruby-include, because the script decides where it
+# belongs in the search order.
+MKXPZ_BINDING_INCLUDES := \
+    --include $(INCLUDEDIR)/SDL2 \
+    --include $(INCLUDEDIR)/pixman-1 \
+    --include $(INCLUDEDIR)/uchardet \
+    --include $(INCLUDEDIR)/freetype2 \
+    --include $(INCLUDEDIR) \
+    --include ${PWD}/ANGLE/$(SDK)/include
 
-# Shared feature flags come from the engine's single source of truth,
-# src/mkxpz-buildconfig.h (force-included below). Only per-consumer
-# parameters stay as -D options in the per-Ruby lists.
-MKXPZ_BUILDCONFIG := -include $(ENGINE)/src/mkxpz-buildconfig.h
-
-# Ruby 3.1 — patched parser with syntax-transform support. Includes
-# are
-# anchored at the global $(INCLUDEDIR) (3.1's traditional install
-# location) rather than $(INCLUDEDIR)/ruby31, since the existing
-# `ruby` make target installs there. Once 3.1 is migrated to a
-# per-version subdir like 3.0, the include line gets updated.
-#
-# Per-Ruby parameter defines only. Includes
-# MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES (still needed for the 3.1 build
-# until syntax-transform/ is removed).
-BINDING_OBJDIR_31 := $(BUILD_PREFIX)/binding31
-
-MKXPZ_INCLUDES_31 := \
-    -I$(INCLUDEDIR)/ruby31 \
-    -I$(ENGINE) \
-    -I$(ENGINE)/src \
-    -I$(ENGINE)/src/audio \
-    -I$(ENGINE)/src/crypto \
-    -I$(ENGINE)/src/display \
-    -I$(ENGINE)/src/display/gl \
-    -I$(ENGINE)/src/display/libnsgif \
-    -I$(ENGINE)/src/etc \
-    -I$(ENGINE)/src/filesystem \
-    -I$(ENGINE)/src/input \
-    -I$(ENGINE)/src/net \
-    -I$(ENGINE)/src/system \
-    -I$(ENGINE)/src/theoraplay \
-    -I$(ENGINE)/src/util \
-    -I$(ENGINE)/binding \
-    -I$(ENGINE)/shader \
-    -I$(ENGINE)/hmode7/src \
-    -I$(INCLUDEDIR)/SDL2 \
-    -I$(INCLUDEDIR)/pixman-1 \
-    -I$(INCLUDEDIR)/uchardet \
-    -I$(INCLUDEDIR)/freetype2 \
-    -I$(INCLUDEDIR) \
-    -I${PWD}/ANGLE/$(SDK)/include
-
-MKXPZ_DEFINES_31 := \
-    $(MKXPZ_BUILDCONFIG) \
-    -DMKXPZ_VERSION='"1.0.0"' \
-    -DMKXPZ_GIT_HASH='"ios"' \
-    -DMKXPZ_RUBY_VERSION='"3.1"' \
-    -DMKXPZ_RUBY_VERSION_MAJOR=3 \
-    -DMKXPZ_RUBY_VERSION_MINOR=1 \
-    -DMKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES
+# One call per Ruby version. Everything that differs between them
+# lives in the engine script, keyed on --ruby.
+BUILD_BINDING = $(ENGINE)/tools/build-binding-ios.sh \
+    --sdk $(SDK) --arch $(ARCH) --min-os $(MINIMUM_REQUIRED) \
+    --out $(LIBDIR) --scratch $(BUILD_PREFIX) \
+    $(MKXPZ_BINDING_INCLUDES)
 
 $(LIBDIR)/mkxp31-merged.o: $(LIBDIR)/libruby.3.1-static.a \
                           $(LIBDIR)/libruby.3.1-ext.a \
-                          ${PWD}/multiruby/wrapper.cpp \
                           $(MKXPZ_BINDING_SRC_DEPS)
-	@echo "[mkxp31] Compiling binding/*.cpp + hmode7/*.cpp against Ruby 3.1..."
-	@mkdir -p $(BINDING_OBJDIR_31)
-	@for src in $(ENGINE)/binding/*.cpp $(ENGINE)/hmode7/src/*.cpp; do \
-	    obj=$(BINDING_OBJDIR_31)/$$(basename $$src .cpp).o; \
-	    echo "  -> $$(basename $$obj)"; \
-	    $(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
-	        -std=c++14 -fdeclspec -fobjc-arc -O3 \
-	        $(MKXPZ_INCLUDES_31) $(MKXPZ_DEFINES_31) $(MKXPZ_WARNFLAGS) \
-	        -c $$src -o $$obj || exit 1; \
-	done
-	@echo "[mkxp31] Compiling per-version wrapper..."
-	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
-	    -std=c++14 -fdeclspec -O3 \
-	    -DMULTIRUBY_SUFFIX=_31 \
-	    $(MKXPZ_INCLUDES_31) \
-	    -c ${PWD}/multiruby/wrapper.cpp \
-	    -o $(BINDING_OBJDIR_31)/_multiruby_wrapper.o
-	@echo "[mkxp31] Generating unexport list..."
-	${PWD}/tools/generate-ruby-unexports.sh \
-	    $(LIBDIR)/libruby.3.1-static.a $(LIBDIR)/libruby.3.1-ext.a \
-	    > $(BUILD_PREFIX)/ruby31-unexports.txt.raw
-	@nm -gU $(BINDING_OBJDIR_31)/*.o 2>/dev/null \
-	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
-	    | sort -u \
-	    | grep -v '^_mkxp_get_script_binding_31$$' \
-	    | grep -vE '^__Z(TI|TS|TV)|^___cxa_' \
-	    >> $(BUILD_PREFIX)/ruby31-unexports.txt.raw
-	@# Carve out symbols that need to remain externally visible:
-	@# main.cpp (Xcode-compiled) sets the syntax-transform target
-	@# version variables defined in libruby.3.1's parse.y patch.
-	@# Leaving them hidden inside mkxp31-merged.o is fine for the
-	@# binding's local use but breaks main.cpp's link. These exist
-	@# only in 3.1 (3.0 doesn't have the syntax-transform patches),
-	@# so there's no risk of duplicate-symbol clashes when both
-	@# merged.o files are linked together.
-	@grep -vE '^_mkxp_syntax_transform_target_ruby_version_(major|minor|teeny)$$' \
-	    $(BUILD_PREFIX)/ruby31-unexports.txt.raw \
-	    > $(BUILD_PREFIX)/ruby31-unexports.txt
-	@rm -f $(BUILD_PREFIX)/ruby31-unexports.txt.raw
-	@echo "[mkxp31] Merging via ld -r..."
-	@LD=$$(xcrun --sdk $(SDK) -f ld); \
-	"$$LD" -r -arch $(ARCH) \
-	    $(LD_PLATFORM_VERSION) \
-	    -syslibroot $(SYSROOT) \
-	    -unexported_symbols_list $(BUILD_PREFIX)/ruby31-unexports.txt \
-	    $(LIBDIR)/libruby.3.1-static.a \
-	    $(LIBDIR)/libruby.3.1-ext.a \
-	    $(BINDING_OBJDIR_31)/*.o \
-	    -o $(LIBDIR)/mkxp31-merged.o
-	@echo "[mkxp31] Verifying merged .o..."
-	@TGLOBALS=$$(nm $(LIBDIR)/mkxp31-merged.o | awk '$$2 == "T"' | sort -u | wc -l | tr -d ' '); \
-	echo "  global T symbols (should be 1: _mkxp_get_script_binding_31): $$TGLOBALS"
-	@nm $(LIBDIR)/mkxp31-merged.o | awk '$$2 == "T"' | head -3
-	@$(MKXPZ_BINDING_FINGERPRINT) > $(LIBDIR)/.mkxp-binding-fingerprint
-
-# Ruby 1.9 + 1.8 mkxp merged.o targets — same shape as 3.0/3.1 above.
-# RAPI macros in binding-util.h gate the C-API differences; we hand
-# each Ruby version its own header dir + matching MKXPZ_RUBY_VERSION
-# define.
-BINDING_OBJDIR_19 := $(BUILD_PREFIX)/binding19
-BINDING_OBJDIR_18 := $(BUILD_PREFIX)/binding18
-
-MKXPZ_INCLUDES_19 := \
-    -I$(INCLUDEDIR)/ruby19 \
-    -I$(ENGINE) \
-    -I$(ENGINE)/src \
-    -I$(ENGINE)/src/audio \
-    -I$(ENGINE)/src/crypto \
-    -I$(ENGINE)/src/display \
-    -I$(ENGINE)/src/display/gl \
-    -I$(ENGINE)/src/display/libnsgif \
-    -I$(ENGINE)/src/etc \
-    -I$(ENGINE)/src/filesystem \
-    -I$(ENGINE)/src/input \
-    -I$(ENGINE)/src/net \
-    -I$(ENGINE)/src/system \
-    -I$(ENGINE)/src/theoraplay \
-    -I$(ENGINE)/src/util \
-    -I$(ENGINE)/binding \
-    -I$(ENGINE)/shader \
-    -I$(ENGINE)/hmode7/src \
-    -I$(INCLUDEDIR)/SDL2 \
-    -I$(INCLUDEDIR)/pixman-1 \
-    -I$(INCLUDEDIR)/uchardet \
-    -I$(INCLUDEDIR)/freetype2 \
-    -I$(INCLUDEDIR) \
-    -I${PWD}/ANGLE/$(SDK)/include
-
-MKXPZ_DEFINES_19 := \
-    $(MKXPZ_BUILDCONFIG) \
-    -DMKXPZ_VERSION='"1.0.0"' \
-    -DMKXPZ_GIT_HASH='"ios"' \
-    -DMKXPZ_RUBY_VERSION='"1.9"' \
-    -DMKXPZ_RUBY_VERSION_MAJOR=1 \
-    -DMKXPZ_RUBY_VERSION_MINOR=9
-
-MKXPZ_INCLUDES_18 := \
-    -I$(ENGINE) \
-    -I$(ENGINE)/src \
-    -I$(ENGINE)/src/audio \
-    -I$(ENGINE)/src/crypto \
-    -I$(ENGINE)/src/display \
-    -I$(ENGINE)/src/display/gl \
-    -I$(ENGINE)/src/display/libnsgif \
-    -I$(ENGINE)/src/etc \
-    -I$(ENGINE)/src/filesystem \
-    -I$(ENGINE)/src/input \
-    -I$(ENGINE)/src/net \
-    -I$(ENGINE)/src/system \
-    -I$(ENGINE)/src/theoraplay \
-    -I$(ENGINE)/src/util \
-    -I$(ENGINE)/binding \
-    -I$(ENGINE)/shader \
-    -I$(ENGINE)/hmode7/src \
-    -I$(INCLUDEDIR)/SDL2 \
-    -I$(INCLUDEDIR)/pixman-1 \
-    -I$(INCLUDEDIR)/uchardet \
-    -I$(INCLUDEDIR)/freetype2 \
-    -I$(INCLUDEDIR) \
-    -I${PWD}/ANGLE/$(SDK)/include \
-    -I$(INCLUDEDIR)/ruby18
-
-MKXPZ_DEFINES_18 := \
-    $(MKXPZ_BUILDCONFIG) \
-    -DMKXPZ_VERSION='"1.0.0"' \
-    -DMKXPZ_GIT_HASH='"ios"' \
-    -DMKXPZ_RUBY_VERSION='"1.8"' \
-    -DMKXPZ_RUBY_VERSION_MAJOR=1 \
-    -DMKXPZ_RUBY_VERSION_MINOR=8
+	@$(BUILD_BINDING) --ruby 31 \
+	    --obj $(BUILD_PREFIX)/binding31 \
+	    --ruby-include $(INCLUDEDIR)/ruby31 \
+	    --static-lib $(LIBDIR)/libruby.3.1-static.a \
+	    --ext-lib $(LIBDIR)/libruby.3.1-ext.a
 
 $(LIBDIR)/mkxp19-merged.o: $(LIBDIR)/libruby19-static.a \
                           $(LIBDIR)/libruby19-ext.a \
-                          ${PWD}/multiruby/wrapper.cpp \
                           $(MKXPZ_BINDING_SRC_DEPS)
-	@echo "[mkxp19] Compiling binding/*.cpp + hmode7/*.cpp against Ruby 1.9..."
-	@mkdir -p $(BINDING_OBJDIR_19)
-	@for src in $(ENGINE)/binding/*.cpp $(ENGINE)/hmode7/src/*.cpp; do \
-	    obj=$(BINDING_OBJDIR_19)/$$(basename $$src .cpp).o; \
-	    echo "  -> $$(basename $$obj)"; \
-	    $(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
-	        -std=c++14 -fdeclspec -fobjc-arc -O3 \
-	        $(MKXPZ_INCLUDES_19) $(MKXPZ_DEFINES_19) $(MKXPZ_WARNFLAGS) \
-	        -c $$src -o $$obj || exit 1; \
-	done
-	@echo "[mkxp19] Compiling per-version wrapper..."
-	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
-	    -std=c++14 -fdeclspec -O3 \
-	    -DMULTIRUBY_SUFFIX=_19 \
-	    $(MKXPZ_INCLUDES_19) \
-	    -c ${PWD}/multiruby/wrapper.cpp \
-	    -o $(BINDING_OBJDIR_19)/_multiruby_wrapper.o
-	@echo "[mkxp19] Generating unexport list..."
-	${PWD}/tools/generate-ruby-unexports.sh \
-	    $(LIBDIR)/libruby19-static.a \
-	    > $(BUILD_PREFIX)/ruby19-unexports.txt
-	@# Also include ext.a's exports (Init_zlib etc.) so they don't
-	@# leak across merged.o boundaries.
-	${PWD}/tools/generate-ruby-unexports.sh \
-	    $(LIBDIR)/libruby19-ext.a \
-	    >> $(BUILD_PREFIX)/ruby19-unexports.txt
-	@nm -gU $(BINDING_OBJDIR_19)/*.o 2>/dev/null \
-	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
-	    | sort -u \
-	    | grep -v '^_mkxp_get_script_binding_19$$' \
-	    | grep -vE '^__Z(TI|TS|TV)|^___cxa_' \
-	    >> $(BUILD_PREFIX)/ruby19-unexports.txt
-	@echo "[mkxp19] Merging via ld -r..."
-	@LD=$$(xcrun --sdk $(SDK) -f ld); \
-	"$$LD" -r -arch $(ARCH) \
-	    $(LD_PLATFORM_VERSION) \
-	    -syslibroot $(SYSROOT) \
-	    -unexported_symbols_list $(BUILD_PREFIX)/ruby19-unexports.txt \
-	    $(LIBDIR)/libruby19-static.a \
-	    $(LIBDIR)/libruby19-ext.a \
-	    $(BINDING_OBJDIR_19)/*.o \
-	    -o $(LIBDIR)/mkxp19-merged.o
-	@echo "[mkxp19] Verifying merged .o..."
-	@TGLOBALS=$$(nm $(LIBDIR)/mkxp19-merged.o | awk '$$2 == "T"' | sort -u | wc -l | tr -d ' '); \
-	echo "  global T symbols (should be 1: _mkxp_get_script_binding_19): $$TGLOBALS"
-	@nm $(LIBDIR)/mkxp19-merged.o | awk '$$2 == "T"' | head -3
-	@$(MKXPZ_BINDING_FINGERPRINT) > $(LIBDIR)/.mkxp-binding-fingerprint
+	@$(BUILD_BINDING) --ruby 19 \
+	    --obj $(BUILD_PREFIX)/binding19 \
+	    --ruby-include $(INCLUDEDIR)/ruby19 \
+	    --static-lib $(LIBDIR)/libruby19-static.a \
+	    --ext-lib $(LIBDIR)/libruby19-ext.a
 
 $(LIBDIR)/mkxp18-merged.o: $(LIBDIR)/libruby18-static.a \
                           $(LIBDIR)/libruby18-ext.a \
-                          ${PWD}/multiruby/wrapper.cpp \
                           $(MKXPZ_BINDING_SRC_DEPS)
-	@echo "[mkxp18] Compiling binding/*.cpp + hmode7/*.cpp against Ruby 1.8..."
-	@mkdir -p $(BINDING_OBJDIR_18)
-	@for src in $(ENGINE)/binding/*.cpp $(ENGINE)/hmode7/src/*.cpp; do \
-	    obj=$(BINDING_OBJDIR_18)/$$(basename $$src .cpp).o; \
-	    echo "  -> $$(basename $$obj)"; \
-	    $(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
-	        -std=c++14 -fdeclspec -fobjc-arc -O3 \
-	        $(MKXPZ_INCLUDES_18) $(MKXPZ_DEFINES_18) $(MKXPZ_WARNFLAGS) \
-	        -c $$src -o $$obj || exit 1; \
-	done
-	@echo "[mkxp18] Compiling per-version wrapper..."
-	@$(CXX) -isysroot $(SYSROOT) $(TARGET_FLAG) \
-	    -std=c++14 -fdeclspec -O3 \
-	    -DMULTIRUBY_SUFFIX=_18 \
-	    $(MKXPZ_INCLUDES_18) \
-	    -c ${PWD}/multiruby/wrapper.cpp \
-	    -o $(BINDING_OBJDIR_18)/_multiruby_wrapper.o
-	@echo "[mkxp18] Generating unexport list..."
-	${PWD}/tools/generate-ruby-unexports.sh \
-	    $(LIBDIR)/libruby18-static.a \
-	    > $(BUILD_PREFIX)/ruby18-unexports.txt
-	@# Also include ext.a's exports (Init_zlib etc.) in the
-	@# unexport list so they don't leak across merged.o boundaries.
-	${PWD}/tools/generate-ruby-unexports.sh \
-	    $(LIBDIR)/libruby18-ext.a \
-	    >> $(BUILD_PREFIX)/ruby18-unexports.txt
-	@nm -gU $(BINDING_OBJDIR_18)/*.o 2>/dev/null \
-	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
-	    | sort -u \
-	    | grep -v '^_mkxp_get_script_binding_18$$' \
-	    | grep -vE '^__Z(TI|TS|TV)|^___cxa_' \
-	    >> $(BUILD_PREFIX)/ruby18-unexports.txt
-	@echo "[mkxp18] Merging via ld -r..."
-	@LD=$$(xcrun --sdk $(SDK) -f ld); \
-	"$$LD" -r -arch $(ARCH) \
-	    $(LD_PLATFORM_VERSION) \
-	    -syslibroot $(SYSROOT) \
-	    -unexported_symbols_list $(BUILD_PREFIX)/ruby18-unexports.txt \
-	    $(LIBDIR)/libruby18-static.a \
-	    $(LIBDIR)/libruby18-ext.a \
-	    $(BINDING_OBJDIR_18)/*.o \
-	    -o $(LIBDIR)/mkxp18-merged.o
-	@echo "[mkxp18] Verifying merged .o..."
-	@TGLOBALS=$$(nm $(LIBDIR)/mkxp18-merged.o | awk '$$2 == "T"' | sort -u | wc -l | tr -d ' '); \
-	echo "  global T symbols (should be 1: _mkxp_get_script_binding_18): $$TGLOBALS"
-	@nm $(LIBDIR)/mkxp18-merged.o | awk '$$2 == "T"' | head -3
-	@$(MKXPZ_BINDING_FINGERPRINT) > $(LIBDIR)/.mkxp-binding-fingerprint
+	@$(BUILD_BINDING) --ruby 18 \
+	    --obj $(BUILD_PREFIX)/binding18 \
+	    --ruby-include $(INCLUDEDIR)/ruby18 \
+	    --static-lib $(LIBDIR)/libruby18-static.a \
+	    --ext-lib $(LIBDIR)/libruby18-ext.a
 
 # Ruby 1.8 (submodule: sources/ruby18)
 ruby18: init_dirs $(LIBDIR)/libruby18-static.a $(LIBDIR)/libruby18-ext.a
