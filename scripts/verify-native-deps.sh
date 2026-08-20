@@ -108,7 +108,15 @@ done
 # Xcode build fails loudly instead. The check is content-based (not
 # mtime), so prebuilt tarballs still verify on fresh clones.
 FINGERPRINT_FILE="$LIB/.mkxp-binding-fingerprint"
-FINGERPRINT_SCRIPT="$REPO_ROOT/ios/Dependencies/tools/binding-fingerprint.sh"
+FINGERPRINT_SCRIPT="$REPO_ROOT/mkxp-z-apple-mobile/tools/binding-fingerprint.sh"
+# The script lives in the submodule. A clone that never fetched the
+# submodule, or a gitlink older than the move into the engine repo,
+# failed here with a bare "No such file or directory". Say what to do.
+if [[ ! -x "$FINGERPRINT_SCRIPT" ]]; then
+    fail "$FINGERPRINT_SCRIPT is missing or not executable. The engine \
+repo owns the binding fingerprint. Run: git submodule update --init \
+mkxp-z-apple-mobile"
+fi
 if [[ -f "$FINGERPRINT_FILE" ]]; then
     recorded="$(cat "$FINGERPRINT_FILE")"
     current="$("$FINGERPRINT_SCRIPT")"
