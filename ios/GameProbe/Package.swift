@@ -12,6 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/tsolomko/SWCompression.git", from: "4.9.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
         .package(path: "../Json5"),
     ],
     targets: [
@@ -22,6 +23,13 @@ let package = Package(
                 .product(
                     name: "SWCompression",
                     package: "SWCompression",
+                    condition: .when(platforms: [.linux])
+                ),
+                // Apple platforms get SHA-256 from CryptoKit, which
+                // is in the OS. Only Linux needs this package.
+                .product(
+                    name: "Crypto",
+                    package: "swift-crypto",
                     condition: .when(platforms: [.linux])
                 ),
             ]

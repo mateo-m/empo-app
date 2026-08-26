@@ -1,0 +1,62 @@
+{
+  "formatVersion": 2,
+  "mode": "slim",
+  "containerFolderName": "ゆめにっき Yume Nikki",
+  "identityAlias": "Yume Nikki",
+  "versionMarker": {
+    "gameINIHash": "3b572d5787b6f8345ac1324f5128abcd3461b193e6bf75ea8c0e1b62b14831de",
+    "jgpManifestVersion": "2",
+    "fileCount": 1284,
+    "totalSize": 734003200
+  },
+  "sharedDataDirectory": "Data/kikiyama/yumenikki",
+  "rescuedSavesBuckets": [
+    "Yume Nikki",
+    "ゆめにっき"
+  ],
+  "entries": [
+    {
+      "root": "container",
+      "path": "Game/Save01.rvdata2",
+      "size": 20480,
+      "modifiedAt": 1700000000000,
+      "hash": "938f7934f3328f54e648bd5812473be574ace4c4501e2e0c1a81e67fca77e2f8",
+      "compression": "zlib",
+      "partial": false,
+      "detectionSource": "classifier"
+    },
+    {
+      "root": "shared-data",
+      "path": "kikiyama/yumenikki/config.dat",
+      "size": 512,
+      "modifiedAt": 1700000123000,
+      "hash": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+      "compression": "stored",
+      "partial": true,
+      "detectionSource": "runtime-watch",
+      "chunks": [
+        "ba6e04391775aa27f39df72198b6394dbf99fc52a39f26acbd5f3d78983b745c",
+        "0f276ace01c571d7587f5417db6f19cb95c1ce4891f3cee9852d278ca385c442"
+      ]
+    },
+    {
+      "root": "rescued-saves",
+      "path": "Yume Nikki/Save02.rvdata2",
+      "size": 4096,
+      "modifiedAt": 1700000456000,
+      "hash": "7b8bd2f1214f09eda34e1f4b2fae887c7e751c3ebbc147b59b1275489506aeb8",
+      "compression": "stored",
+      "partial": false,
+      "detectionSource": "manual-mark"
+    },
+    {
+      "root": "container",
+      "path": "Game/Graphics/Titles/title.png",
+      "size": 262144,
+      "modifiedAt": 1699000000000,
+      "hash": "505ab479dfa87785001723a2a86e066dadd92d90f3766e07477db9edb3bc7c9c",
+      "compression": "stored",
+      "partial": false
+    }
+  ]
+}
