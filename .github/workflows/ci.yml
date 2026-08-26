@@ -275,6 +275,12 @@ jobs:
         with:
           toolchain: "6.2"
 
+      # GameProbe's CSQLite target compiles against sqlite3.h. Apple
+      # platforms get the header from the SDK. Linux gets it from this
+      # package. See ios/GameProbe/Sources/CSQLite/module.modulemap.
+      - name: Install SQLite headers
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
       # Json5 is not in this list: its vendored-header check needs the
       # engine submodule, and the package ships to iOS. The macOS
       # Simulator build job runs it, submodule and all.
