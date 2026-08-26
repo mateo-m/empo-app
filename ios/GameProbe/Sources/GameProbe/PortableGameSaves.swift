@@ -18,6 +18,12 @@ import Foundation
 ///   - Regular files at the game root with RGSS save extensions
 ///     (`.rxdata`, `.rvdata`, `.rvdata2`, `.bak` wrappers) - by
 ///     name, so even a truncated save or backup is preserved.
+///   - Regular files at the game root with a generic save
+///     extension (`.sav`, `.save`, `.savedata`) or a save-shaped
+///     stem (`save`, `save1`, `savefile2`, ...), whatever the
+///     extension. SPEC 3.6 of the cloud-backup design asks for
+///     these before ship, and the backup set of ticket 003 reads
+///     the same signals this rescue reads.
 ///   - Regular files at the game root whose first two bytes are
 ///     the Marshal magic, whatever their name.
 ///   - Root directories with conventional save-folder names,
@@ -34,6 +40,25 @@ public enum PortableGameSaves {
 
     private static let saveFolderNames: Set<String> = [
         "save", "saves", "save data", "savedata", "save game",
+        "save games", "savegame", "savegames", "saved games",
+        "saved_games", "save files", "savefiles", "save_data",
+    ]
+
+    /// Generic save extensions outside the RGSS family. A fangame
+    /// that rolls its own save writer nearly always lands on one of
+    /// these.
+    private static let saveExtensions: Set<String> = [
+        "sav", "save", "savedata", "savegame",
+    ]
+
+    /// Stems that name a save whatever the extension carries:
+    /// `save.dat`, `savefile.bin`, `save_3` with no extension. A
+    /// trailing number is a slot, so it is stripped before the
+    /// match.
+    private static let saveStems: Set<String> = [
+        "save", "saves", "savefile", "savedata", "savegame",
+        "save_data", "save_file", "save_game", "gamesave",
+        "game_save",
     ]
 
     private static let engineFolderNames: Set<String> = [
@@ -77,7 +102,40 @@ public enum PortableGameSaves {
 
     private static func isSaveShapedFile(name: String, at url: URL, fm: FileManager) -> Bool {
         if ConcatenatedSaveRecovery.isSaveFilename(name) { return true }
+        if hasGenericSaveName(name) { return true }
         return hasMarshalMagic(url)
+    }
+
+    /// The generic save signals of SPEC 3.6: a save extension, or a
+    /// save-shaped stem with any extension. A trailing `.bak` is
+    /// stripped first, the way the RGSS check strips it.
+    static func hasGenericSaveName(_ name: String) -> Bool {
+        var lower = name.lowercased()
+        while lower.hasSuffix(".bak") {
+            lower = String(lower.dropLast(4))
+        }
+        guard !lower.isEmpty, !lower.hasPrefix(".") else { return false }
+
+        let parts = lower.split(separator: ".", omittingEmptySubsequences: false)
+        if parts.count > 1, let last = parts.last, saveExtensions.contains(String(last)) {
+            return true
+        }
+        let stem = parts.count > 1 ? parts.dropLast().joined(separator: ".") : lower
+        return saveStems.contains(slotNumberRemoved(from: stem))
+    }
+
+    /// `save_3` -> `save`, `save1` -> `save`. The separator before
+    /// the number is optional, and a stem that is only digits stays
+    /// as it is.
+    private static func slotNumberRemoved(from stem: String) -> String {
+        var trimmed = Substring(stem)
+        while let last = trimmed.last, last.isNumber {
+            trimmed = trimmed.dropLast()
+        }
+        if let last = trimmed.last, last == "_" || last == "-" || last == " " {
+            trimmed = trimmed.dropLast()
+        }
+        return trimmed.isEmpty ? stem : String(trimmed)
     }
 
     private static func containsSaveShapedFile(_ directory: URL, fm: FileManager) -> Bool {

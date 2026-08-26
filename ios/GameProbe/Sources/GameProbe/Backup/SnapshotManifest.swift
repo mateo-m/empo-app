@@ -87,8 +87,11 @@ public struct SnapshotManifest: Codable, Equatable, Sendable {
         /// from one moment and its neighbours are from another, per
         /// 5.9. The path retries on the next run.
         public var partial: Bool
-        /// Which source found the member, per 3.6. A full-mode tree
-        /// carries none.
+        /// Which source found the member, per 3.6. `nil` where no
+        /// source found the member: the always-in files of 3.1, and
+        /// the rest of a full-mode tree. A full-mode entry that a
+        /// source did find keeps its label, because 7.2 reads it to
+        /// tell a partial save from a partial log.
         public var detectionSource: DetectionSource?
         /// Reserved. A later format version points an entry at a
         /// chunk list here, per 5.5 and 15.2. Version 1 never writes
