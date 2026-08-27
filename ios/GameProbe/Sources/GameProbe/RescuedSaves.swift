@@ -37,8 +37,20 @@ public enum RescuedSaves {
     public struct Identity: Codable, Equatable, Sendable {
         public let folderName: String
 
-        public init(folderName: String) {
+        /// The user deleted the game with its backups, per SPEC
+        /// 5.13, so this bucket stays out of the backup set. The
+        /// saves it holds would otherwise return to the remote on
+        /// the next run, because 3.1 puts the Rescued Saves tree in.
+        /// The bucket stays on disk, so a re-import on this device
+        /// still restores its saves.
+        ///
+        /// It is optional so a marker written before this flag
+        /// existed still decodes.
+        public var backupExcluded: Bool?
+
+        public init(folderName: String, backupExcluded: Bool? = nil) {
             self.folderName = folderName
+            self.backupExcluded = backupExcluded
         }
     }
 
@@ -51,6 +63,25 @@ public enum RescuedSaves {
         return fm.createFile(
             atPath: bucket.appendingPathComponent(markerName).path,
             contents: data)
+    }
+
+    /// Marks the bucket out of the backup set, per SPEC 5.13.
+    ///
+    /// A bucket with no readable marker gets one, so the exclusion
+    /// holds whether or not the rescue wrote an identity.
+    @discardableResult
+    public static func excludeFromBackup(bucket: URL, fm: FileManager = .default) -> Bool {
+        let found = readMarker(inBucket: bucket, fm: fm)
+        return writeMarker(
+            Identity(folderName: found?.folderName ?? bucket.lastPathComponent,
+                     backupExcluded: true),
+            inBucket: bucket, fm: fm)
+    }
+
+    /// Whether the delete of 5.13 took this bucket out of the backup
+    /// set.
+    public static func isExcludedFromBackup(bucket: URL, fm: FileManager = .default) -> Bool {
+        readMarker(inBucket: bucket, fm: fm)?.backupExcluded == true
     }
 
     public static func readMarker(

@@ -146,18 +146,23 @@ public actor TransferGate {
 public actor TransferLatch {
 
     private var isOpen: Bool
+    /// How many transfers pass before the latch starts to hold. The
+    /// default holds the first one. A test that has to stop a run at
+    /// a later call raises it.
+    private let holdFrom: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
     /// How many transfers reached the latch.
     public private(set) var arrivedCount = 0
 
-    public init(open: Bool = false) {
+    public init(open: Bool = false, holdFrom: Int = 1) {
         self.isOpen = open
+        self.holdFrom = max(1, holdFrom)
     }
 
     public func wait() async {
         arrivedCount += 1
-        guard !isOpen else { return }
+        guard !isOpen, arrivedCount >= holdFrom else { return }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             waiters.append(continuation)
         }

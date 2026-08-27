@@ -108,7 +108,9 @@ public enum BackupSetResolver {
         }
 
         for name in request.rescuedSavesBuckets.keys.sorted() {
-            guard let bucket = request.rescuedSavesBuckets[name] else { continue }
+            guard let bucket = request.rescuedSavesBuckets[name],
+                !RescuedSaves.isExcludedFromBackup(bucket: bucket, fm: fm)
+            else { continue }
             members += files(under: bucket, fm: fm).map {
                 BackupSetMember(
                     root: .rescuedSaves,
@@ -153,7 +155,9 @@ public enum BackupSetResolver {
         }
 
         for name in request.rescuedSavesBuckets.keys.sorted() {
-            guard let bucket = request.rescuedSavesBuckets[name] else { continue }
+            guard let bucket = request.rescuedSavesBuckets[name],
+                !RescuedSaves.isExcludedFromBackup(bucket: bucket, fm: fm)
+            else { continue }
             members += files(under: bucket, fm: fm).map {
                 BackupSetMember(
                     root: .preferences,

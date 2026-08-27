@@ -151,6 +151,7 @@ public actor FakeBackupTarget: BackupProvider {
             }
             try commit(staged: staged, to: path)
         }
+        committedPaths.append(path)
         if confirmsLater { pendingConfirmations.insert(path) }
     }
 
@@ -208,6 +209,21 @@ public actor FakeBackupTarget: BackupProvider {
 
     // MARK: - What a test drives
 
+    /// Every path a put wrote, in the order the puts committed.
+    ///
+    /// The write order of 5.8 is a rule about this list: the blobs
+    /// of a snapshot come first, and the manifest comes last.
+    public private(set) var committedPaths: [String] = []
+
+    public func forgetCommittedPaths() {
+        committedPaths = []
+    }
+
+    /// Every object the target holds, by path.
+    public nonisolated func objectPaths() -> [String] {
+        FakeBackupTarget.walk(objectsDirectory).map(\.path).sorted()
+    }
+
     public func addFault(_ fault: FakeTargetFault) {
         faults.append(fault)
     }
@@ -236,7 +252,7 @@ public actor FakeBackupTarget: BackupProvider {
     /// A second device's `writer.json` is what this is for: the
     /// claim of 5.12 names another device, and this device must find
     /// it there before its first write.
-    public func seed(path: String, contents: Data) throws {
+    public nonisolated func seed(path: String, contents: Data) throws {
         let url = fileURL(forPath: path)
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -245,7 +261,7 @@ public actor FakeBackupTarget: BackupProvider {
 
     /// The bytes at `path`, or `nil` where the target holds no
     /// object there.
-    public func contents(atPath path: String) -> Data? {
+    public nonisolated func contents(atPath path: String) -> Data? {
         try? Data(contentsOf: fileURL(forPath: path))
     }
 
@@ -258,7 +274,7 @@ public actor FakeBackupTarget: BackupProvider {
     }
 
     /// Every byte the target holds.
-    public func usedBytes() -> Int64 {
+    public nonisolated func usedBytes() -> Int64 {
         FakeBackupTarget.walk(objectsDirectory)
             .reduce(into: Int64(0)) { total, found in
                 total += FakeBackupTarget.fileSize(at: found.url)

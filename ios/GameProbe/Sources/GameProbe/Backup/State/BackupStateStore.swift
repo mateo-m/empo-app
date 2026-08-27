@@ -44,7 +44,7 @@ public enum BackupStateRebuild: Equatable, Sendable {
 public final class BackupStateStore {
 
     /// The schema this build writes. Raise it when a table changes.
-    public static let schemaVersion: Int32 = 1
+    public static let schemaVersion: Int32 = 2
 
     /// What the open did. `needsRebuildFromTarget` reads it.
     public let openOutcome: BackupStateOpen
@@ -141,6 +141,7 @@ public final class BackupStateStore {
             targetId TEXT NOT NULL,
             namespaceId TEXT NOT NULL,
             hash TEXT NOT NULL,
+            compression TEXT NOT NULL,
             provenAt REAL NOT NULL,
             PRIMARY KEY (targetId, namespaceId, hash)
         );
@@ -150,8 +151,21 @@ public final class BackupStateStore {
             snapshotId TEXT NOT NULL,
             uploadedBytes INTEGER NOT NULL,
             pendingPaths TEXT NOT NULL,
+            confirmedBlobs TEXT NOT NULL,
             updatedAt REAL NOT NULL,
             PRIMARY KEY (targetId, gameKey)
+        );
+        CREATE TABLE IF NOT EXISTS snapshot_ledger (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            snapshotId TEXT NOT NULL,
+            createdAt REAL NOT NULL,
+            oneOff INTEGER NOT NULL,
+            PRIMARY KEY (targetId, gameKey, snapshotId)
+        );
+        CREATE TABLE IF NOT EXISTS target_maintenance (
+            targetId TEXT NOT NULL PRIMARY KEY,
+            lastSweepAt REAL
         );
         CREATE TABLE IF NOT EXISTS dirty_game (
             gameKey TEXT NOT NULL PRIMARY KEY,
@@ -228,15 +242,26 @@ public final class BackupStateStore {
                     .blob(payload), .real(uploadedAt.timeIntervalSince1970),
                 ])
 
-            for hash in SweepPlan.referencedHashes(in: [manifest]).sorted() {
+            // The algorithm rides with the hash. A later run that
+            // reuses the blob has to name what the blob holds, and
+            // the hash alone cannot give that back.
+            var algorithms: [String: BlobCompression] = [:]
+            for entry in manifest.entries {
+                algorithms[entry.hash] = entry.compression
+                for chunk in entry.chunks ?? [] where algorithms[chunk] == nil {
+                    algorithms[chunk] = .stored
+                }
+            }
+            for hash in algorithms.keys.sorted() {
                 try database.run(
                     """
                     INSERT OR IGNORE INTO known_blob
-                        (targetId, namespaceId, hash, provenAt)
-                    VALUES (?, ?, ?, ?)
+                        (targetId, namespaceId, hash, compression, provenAt)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                     [
                         .text(targetId), .text(namespaceId), .text(hash),
+                        .text((algorithms[hash] ?? .stored).rawValue),
                         .real(uploadedAt.timeIntervalSince1970),
                     ])
             }
@@ -265,6 +290,14 @@ public final class BackupStateStore {
             uploadedAt: Date(timeIntervalSince1970: uploadedAt))
     }
 
+    /// Drops the diff base for one stream, so the next run writes
+    /// a full snapshot. The delete of 5.13 calls it.
+    public func clearUploadedManifest(targetId: String, gameKey: String) throws {
+        try database.run(
+            "DELETE FROM uploaded_manifest WHERE targetId = ? AND gameKey = ?",
+            [.text(targetId), .text(gameKey)])
+    }
+
     public func isBlobKnownPresent(
         hash: String, targetId: String, namespaceId: String
     ) throws -> Bool {
@@ -275,6 +308,21 @@ public final class BackupStateStore {
             """,
             [.text(targetId), .text(namespaceId), .text(hash)])
         return !rows.isEmpty
+    }
+
+    /// The algorithm a known blob went up with, or `nil` where this
+    /// namespace has no proof the blob is there.
+    public func knownBlobCompression(
+        hash: String, targetId: String, namespaceId: String
+    ) throws -> BlobCompression? {
+        let rows = try database.query(
+            """
+            SELECT compression FROM known_blob
+            WHERE targetId = ? AND namespaceId = ? AND hash = ?
+            """,
+            [.text(targetId), .text(namespaceId), .text(hash)])
+        guard let text = rows.first?.first?.string else { return nil }
+        return BlobCompression(rawValue: text)
     }
 
     public func knownBlobHashes(
@@ -292,18 +340,21 @@ public final class BackupStateStore {
         try database.run(
             """
             INSERT INTO run_checkpoint
-                (targetId, gameKey, snapshotId, uploadedBytes, pendingPaths, updatedAt)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (targetId, gameKey, snapshotId, uploadedBytes, pendingPaths,
+                 confirmedBlobs, updatedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (targetId, gameKey) DO UPDATE SET
                 snapshotId = excluded.snapshotId,
                 uploadedBytes = excluded.uploadedBytes,
                 pendingPaths = excluded.pendingPaths,
+                confirmedBlobs = excluded.confirmedBlobs,
                 updatedAt = excluded.updatedAt
             """,
             [
                 .text(checkpoint.targetId), .text(checkpoint.gameKey),
                 .text(checkpoint.snapshotId), .integer(checkpoint.uploadedBytes),
                 .text(Self.encodeList(checkpoint.pendingPaths)),
+                .text(Self.encodeList(checkpoint.confirmedBlobs.map(\.text))),
                 .real(checkpoint.updatedAt.timeIntervalSince1970),
             ])
     }
@@ -311,7 +362,7 @@ public final class BackupStateStore {
     public func checkpoint(targetId: String, gameKey: String) throws -> RunCheckpoint? {
         let rows = try database.query(
             """
-            SELECT snapshotId, uploadedBytes, pendingPaths, updatedAt
+            SELECT snapshotId, uploadedBytes, pendingPaths, confirmedBlobs, updatedAt
             FROM run_checkpoint WHERE targetId = ? AND gameKey = ?
             """,
             [.text(targetId), .text(gameKey)])
@@ -319,7 +370,8 @@ public final class BackupStateStore {
             let snapshotId = row[0].string,
             let uploadedBytes = row[1].int64,
             let paths = row[2].string,
-            let updatedAt = row[3].double
+            let blobs = row[3].string,
+            let updatedAt = row[4].double
         else { return nil }
         return RunCheckpoint(
             targetId: targetId,
@@ -327,6 +379,7 @@ public final class BackupStateStore {
             snapshotId: snapshotId,
             uploadedBytes: uploadedBytes,
             pendingPaths: Self.decodeList(paths),
+            confirmedBlobs: Self.decodeList(blobs).compactMap(ConfirmedBlob.init(text:)),
             updatedAt: Date(timeIntervalSince1970: updatedAt))
     }
 
@@ -580,6 +633,105 @@ public final class BackupStateStore {
             "DELETE FROM intent_record WHERE kind = ?", [.text(kind.rawValue)])
     }
 
+    // MARK: - The snapshot ledger
+
+    /// The snapshot ids one stream holds on one target, per SPEC
+    /// 5.10.
+    ///
+    /// The prune of 5.10 reads this instead of listing, because
+    /// `list` has five callers and the prune is not one of them, per
+    /// 8.1. A rebuilt cache knows fewer ids and therefore prunes
+    /// less, which loses nothing: the sweep of 5.11 still reclaims
+    /// the blobs, and a manifest nobody deletes still restores.
+    public func recordSnapshot(_ entry: SnapshotLedgerEntry) throws {
+        try database.run(
+            """
+            INSERT INTO snapshot_ledger
+                (targetId, gameKey, snapshotId, createdAt, oneOff)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (targetId, gameKey, snapshotId) DO UPDATE SET
+                createdAt = excluded.createdAt,
+                oneOff = excluded.oneOff
+            """,
+            [
+                .text(entry.targetId), .text(entry.gameKey), .text(entry.snapshotId),
+                .real(entry.createdAt.timeIntervalSince1970),
+                .integer(entry.isOneOff ? 1 : 0),
+            ])
+    }
+
+    /// Every snapshot the ledger holds for one stream, oldest first.
+    public func snapshots(targetId: String, gameKey: String) throws -> [SnapshotLedgerEntry] {
+        let rows = try database.query(
+            """
+            SELECT snapshotId, createdAt, oneOff FROM snapshot_ledger
+            WHERE targetId = ? AND gameKey = ? ORDER BY snapshotId
+            """,
+            [.text(targetId), .text(gameKey)])
+        return rows.compactMap { row in
+            guard let snapshotId = row[0].string,
+                let createdAt = row[1].double,
+                let oneOff = row[2].int64
+            else { return nil }
+            return SnapshotLedgerEntry(
+                targetId: targetId,
+                gameKey: gameKey,
+                snapshotId: snapshotId,
+                createdAt: Date(timeIntervalSince1970: createdAt),
+                isOneOff: oneOff != 0)
+        }
+    }
+
+    public func removeSnapshots(
+        targetId: String, gameKey: String, snapshotIds: [String]
+    ) throws {
+        try database.transaction {
+            for id in snapshotIds {
+                try database.run(
+                    """
+                    DELETE FROM snapshot_ledger
+                    WHERE targetId = ? AND gameKey = ? AND snapshotId = ?
+                    """,
+                    [.text(targetId), .text(gameKey), .text(id)])
+            }
+        }
+    }
+
+    /// Drops every row that describes what one namespace holds.
+    ///
+    /// The split of 5.12 calls it. No namespace may reference
+    /// another's blobs, so the new namespace starts from a full
+    /// upload, and every row that would suppress an upload has to
+    /// go. The run history and the staleness clocks belong to the
+    /// target and stay.
+    public func clearNamespaceState(targetId: String) throws {
+        let tables = ["uploaded_manifest", "known_blob", "run_checkpoint", "snapshot_ledger"]
+        try database.transaction {
+            for table in tables {
+                try database.run("DELETE FROM \(table) WHERE targetId = ?", [.text(targetId)])
+            }
+        }
+    }
+
+    // MARK: - Maintenance clocks
+
+    /// When the sweep of 5.11 last finished on this target.
+    public func lastSweep(targetId: String) throws -> Date? {
+        let rows = try database.query(
+            "SELECT lastSweepAt FROM target_maintenance WHERE targetId = ?",
+            [.text(targetId)])
+        return rows.first?[0].double.map { Date(timeIntervalSince1970: $0) }
+    }
+
+    public func recordSweep(targetId: String, at date: Date) throws {
+        try database.run(
+            """
+            INSERT INTO target_maintenance (targetId, lastSweepAt) VALUES (?, ?)
+            ON CONFLICT (targetId) DO UPDATE SET lastSweepAt = excluded.lastSweepAt
+            """,
+            [.text(targetId), .real(date.timeIntervalSince1970)])
+    }
+
     // MARK: - Targets
 
     /// Removes every row of one target. One database for every target
@@ -587,8 +739,9 @@ public final class BackupStateStore {
     /// price 6.2 names.
     public func removeTarget(targetId: String) throws {
         let tables = [
-            "uploaded_manifest", "known_blob", "run_checkpoint",
-            "pending_deletion", "staleness", "run_record", "intent_record",
+            "uploaded_manifest", "known_blob", "run_checkpoint", "snapshot_ledger",
+            "target_maintenance", "pending_deletion", "staleness", "run_record",
+            "intent_record",
         ]
         try database.transaction {
             for table in tables {

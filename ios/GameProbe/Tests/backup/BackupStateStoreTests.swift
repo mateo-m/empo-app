@@ -194,6 +194,32 @@ final class BackupStateStoreTests: XCTestCase {
             Set(hashes))
     }
 
+    func testAKnownBlobCarriesTheAlgorithmItWentUpWith() throws {
+        let store = try makeStore()
+        defer { store.close() }
+        var snapshot = manifest(hashes: [hash("one"), hash("two")])
+        snapshot.entries[1].compression = .stored
+
+        try store.recordUploadedManifest(
+            snapshot, snapshotId: "20260501T000000Z-aabbcc",
+            targetId: targetId, namespaceId: namespaceId, uploadedAt: now)
+
+        // The hash names the content, and 5.6 chooses the algorithm
+        // per blob, so a run that reuses a blob has to read back
+        // what the blob holds.
+        XCTAssertEqual(
+            try store.knownBlobCompression(
+                hash: hash("one"), targetId: targetId, namespaceId: namespaceId),
+            .zlib)
+        XCTAssertEqual(
+            try store.knownBlobCompression(
+                hash: hash("two"), targetId: targetId, namespaceId: namespaceId),
+            .stored)
+        XCTAssertNil(
+            try store.knownBlobCompression(
+                hash: hash("three"), targetId: targetId, namespaceId: namespaceId))
+    }
+
     func testTheLastUploadedManifestComesBackWhole() throws {
         let store = try makeStore()
         defer { store.close() }
@@ -244,6 +270,10 @@ final class BackupStateStoreTests: XCTestCase {
             snapshotId: "20260501T000000Z-aabbcc",
             uploadedBytes: 4_194_304,
             pendingPaths: ["Game/Save1.rvdata2", "Game/Save2.rvdata2"],
+            confirmedBlobs: [
+                ConfirmedBlob(hash: hash("one"), compression: .zlib),
+                ConfirmedBlob(hash: hash("two"), compression: .stored),
+            ],
             updatedAt: now)
 
         try store.saveCheckpoint(checkpoint)
@@ -251,6 +281,14 @@ final class BackupStateStoreTests: XCTestCase {
         XCTAssertEqual(try store.checkpoint(targetId: targetId, gameKey: "abc"), checkpoint)
         try store.clearCheckpoint(targetId: targetId, gameKey: "abc")
         XCTAssertNil(try store.checkpoint(targetId: targetId, gameKey: "abc"))
+    }
+
+    func testAConfirmedBlobReadsBackAsText() {
+        let blob = ConfirmedBlob(hash: hash("one"), compression: .zlib)
+
+        XCTAssertEqual(ConfirmedBlob(text: blob.text), blob)
+        XCTAssertNil(ConfirmedBlob(text: hash("one")))
+        XCTAssertNil(ConfirmedBlob(text: "\(hash("one")):brotli"))
     }
 
     func testADirtyGameClears() throws {
