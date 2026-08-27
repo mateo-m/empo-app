@@ -8,6 +8,10 @@ struct PlayerView: View {
     @Environment(\.pauseManager) private var pauseManager
     @Environment(\.appSettings) private var settings
     @State private var editMode = false
+    /// Mirrored here so entering edit mode with the preference on
+    /// can round the layout immediately (the toggle itself lives in
+    /// PlayerEditToolbar).
+    @AppStorage(DefaultsKey.controlsEditSnapToGrid) private var snapToGrid = false
     @State private var controlsHidden = false
     @State private var keyboardMode = false
     @State private var showDebugOverlay = false
@@ -293,6 +297,17 @@ struct PlayerView: View {
                 // Presets compute their rect from the game's aspect.
                 // The published picture rect carries it.
                 ScreenRegionApplier.gameRectChanged(rect)
+            }
+            .onChange(of: editMode) { _, editing in
+                // Entering with the preference already on applies the
+                // same rounding the toolbar toggle would. Exiting
+                // keeps what is on screen: endEditSession drops the
+                // restore record, so Done commits the snap.
+                guard editing, snapToGrid else { return }
+                layout.applyGridSnap(
+                    geoSize: geo.size,
+                    safeArea: safeArea,
+                    controlsMinY: controlsMinY)
             }
         }
         .ignoresSafeArea()

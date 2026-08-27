@@ -363,7 +363,10 @@ class ControlsLayout {
     }
     var dpadSize: CGFloat {
         get { active.dpadSize }
-        set { active.dpadSize = newValue }
+        set {
+            active.dpadSize =
+                gridSnapActive ? Self.gridSnappedDPadSize(newValue) : newValue
+        }
     }
     var dpadOpacity: Double {
         get { active.dpadOpacity }
@@ -499,6 +502,100 @@ class ControlsLayout {
             screenEdits.removeAll()
             activeScreenDrag = nil
             screenSync?.endPreview()
+        }
+        // Exit keeps the snapped values (Done while the toggle is
+        // on commits them), so only the restore record dies here.
+        gridSnapOriginals = [:]
+        gridSnapDPadOriginals = [:]
+        gridSnapActive = false
+    }
+
+    // MARK: - Grid snap state
+
+    /// One control's pre-snap size and center. The snap logic that
+    /// consumes this lives in ControlsLayout+GridSnap.swift; these
+    /// stored members back it from the main file (extensions cannot
+    /// add stored properties).
+    struct GridSnapOriginal {
+        var size: CGFloat
+        var relativeCenter: CGPoint
+    }
+
+    /// What applyGridSnap changed, keyed per control ID. The D-pad
+    /// has no UUID, so its originals key by orientation instead.
+    /// Non-empty ONLY while an edit session runs with the toggle on:
+    /// revertGridSnap empties it on untoggle, endEditSession empties
+    /// it on Done.
+    var gridSnapOriginals: [UUID: GridSnapOriginal] = [:]
+    var gridSnapDPadOriginals: [ControlsOrientation: GridSnapOriginal] = [:]
+
+    /// True between applyGridSnap and its revert/discard. An explicit
+    /// flag, NOT "the restore dicts are non-empty": mode and restore
+    /// bookkeeping are separate concerns, and inferring one from the
+    /// other breaks the moment a wholesale replacement (reset) clears
+    /// the record without leaving grid mode. The size mutators
+    /// consult this so a size picked from a sheet while the toggle is
+    /// on also lands on a multiple of the grid step.
+    var gridSnapActive = false
+
+    static func gridSnappedSize(_ value: CGFloat) -> CGFloat {
+        (value / ControlsZone.editGridStep).rounded() * ControlsZone.editGridStep
+    }
+
+    /// The D-pad's arms are exact thirds of its size (classic plus
+    /// proportions), so only sizes in steps of 30 put the inner
+    /// branch borders on the 10 pt lattice. Buttons stay on 10s.
+    static func gridSnappedDPadSize(_ value: CGFloat) -> CGFloat {
+        (value / 30).rounded() * 30
+    }
+
+    /// Restores one control's pre-snap values in whichever
+    /// orientation slot currently holds its ID (the user may have
+    /// rotated mid-session, moving IDs between the slots).
+    func restoreGridSnapOriginal(_ id: UUID, _ original: GridSnapOriginal) {
+        // An ID can sit in either orientation slot, so both get the
+        // lookup. The active slot forwards through the properties;
+        // the inactive slot is written in place.
+        if let index = buttons.firstIndex(where: { $0.id == id }) {
+            buttons[index].size = original.size
+            buttons[index].relativeCenter = original.relativeCenter
+        }
+        if let index = actionButtons.firstIndex(where: { $0.id == id }) {
+            actionButtons[index].size = original.size
+            actionButtons[index].relativeCenter = original.relativeCenter
+        }
+        if let index = inactive.buttons.firstIndex(where: { $0.id == id }) {
+            inactive.buttons[index].size = original.size
+            inactive.buttons[index].relativeCenter = original.relativeCenter
+        }
+        if let index = inactive.actionButtons.firstIndex(where: { $0.id == id }) {
+            inactive.actionButtons[index].size = original.size
+            inactive.actionButtons[index].relativeCenter = original.relativeCenter
+        }
+    }
+
+    /// Puts back exactly what applyGridSnap recorded and empties the
+    /// record. Controls added or deleted while the snap was on keep
+    /// their current values; they have nothing to go back to.
+    func revertGridSnap() {
+        let buttonOriginals = gridSnapOriginals
+        let dpadOriginals = gridSnapDPadOriginals
+        gridSnapOriginals = [:]
+        gridSnapDPadOriginals = [:]
+        gridSnapActive = false
+
+        for (id, original) in buttonOriginals {
+            restoreGridSnapOriginal(id, original)
+        }
+
+        for (orientation, original) in dpadOriginals {
+            if orientation == currentOrientation {
+                dpadSize = original.size
+                dpadRelativeCenter = original.relativeCenter
+            } else {
+                inactive.dpadSize = original.size
+                inactive.dpadRelativeCenter = original.relativeCenter
+            }
         }
     }
 
@@ -870,6 +967,14 @@ class ControlsLayout {
         // pin-change observer. Ambient resets re-apply from disk.
         abandonScreenEdits()
 
+        // A wholesale replacement invalidates the grid-snap restore
+        // record: reverting afterwards would resurrect pre-snap
+        // values over the reset. Same reasoning as the
+        // staggerGeneration bump.
+        gridSnapOriginals = [:]
+        gridSnapDPadOriginals = [:]
+        gridSnapActive = false
+
         if case .pinnedProfile = provenance, let container = currentContainer {
             LayoutProfilesManager.store.writePin(.followChain, forGameFolder: container.url)
             if let gameID = currentGameID {
@@ -1068,6 +1173,13 @@ class ControlsLayout {
     /// collision as rectangular walls, so a control cannot park
     /// underneath the header. Never persisted.
     var editChromeFrames: [CGRect] = []
+
+    /// The canvas geometry an edit surface last rendered with, so
+    /// the ADD flow can run a fresh control through the same
+    /// clamp + collision + chrome-wall solve a drag gets. Pushed by
+    /// PlayerControlsOverlay. Never persisted. The EditGeometry type
+    /// and its consumers live in ControlsLayout+GridSnap.swift.
+    var editGeometry: EditGeometry?
 
     /// The zone height the screen drag blocks at: the tallest
     /// control plus the clamp-band insets (fit-then-block, user
@@ -2232,7 +2344,8 @@ class ControlsLayout {
         }
         let button = ButtonModel(
             label: displayLabel, scancode: scancode,
-            relativeCenter: CGPoint(x: 0.5, y: 0.5), size: 56)
+            relativeCenter: resolvedSpawnRelativeCenter(size: newControlSize),
+            size: newControlSize)
         withAnimation(Motion.gentle) {
             buttons.append(button)
         }
@@ -2247,7 +2360,8 @@ class ControlsLayout {
         recordEditSnapshot()
         let button = ActionButtonModel(
             action: action,
-            relativeCenter: CGPoint(x: 0.5, y: 0.5), size: 56)
+            relativeCenter: resolvedSpawnRelativeCenter(size: newControlSize),
+            size: newControlSize)
         withAnimation(Motion.gentle) {
             actionButtons.append(button)
         }
@@ -2263,7 +2377,10 @@ class ControlsLayout {
         relativeCenter: CGPoint? = nil, opacity: Double? = nil
     ) {
         guard let index = actionButtons.firstIndex(where: { $0.id == id }) else { return }
-        if let size { actionButtons[index].size = size }
+        if let size {
+            actionButtons[index].size =
+                gridSnapActive ? Self.gridSnappedSize(size) : size
+        }
         if let relativeCenter { actionButtons[index].relativeCenter = relativeCenter }
         if let opacity { actionButtons[index].opacity = opacity }
     }
@@ -2275,7 +2392,9 @@ class ControlsLayout {
         guard let index = buttons.firstIndex(where: { $0.id == id }) else { return }
         if let label { buttons[index].label = label }
         if let scancode { buttons[index].scancode = scancode }
-        if let size { buttons[index].size = size }
+        if let size {
+            buttons[index].size = gridSnapActive ? Self.gridSnappedSize(size) : size
+        }
         if let relativeCenter { buttons[index].relativeCenter = relativeCenter }
         if let opacity { buttons[index].opacity = opacity }
     }
