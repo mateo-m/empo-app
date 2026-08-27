@@ -43,6 +43,10 @@ export default defineConfig({
         ],
       },
       {
+        label: "Legal",
+        items: ["/privacy", "/terms"],
+      },
+      {
         label: "Contributing",
         href: "https://github.com/mateo-m/empo-app/blob/main/CONTRIBUTING.md",
       },
