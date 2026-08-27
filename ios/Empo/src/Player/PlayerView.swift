@@ -21,7 +21,6 @@ struct PlayerView: View {
     /// etc.) restores it to full opacity via `resetToolbarIdleTimer()`.
     @State private var toolbarOpacity: Double = Alpha.toolbarDim
     @State private var toolbarIdleTask: Task<Void, Never>?
-    @State private var showQuitConfirm = false
     /// Action dispatch + the runtime state actions act on (fast
     /// forward, cheats). Both input paths (touch function buttons,
     /// controller action bindings) route through this registry.
@@ -41,8 +40,8 @@ struct PlayerView: View {
     @State private var draggingButtonID: UUID?
 
     /// More-menu sheet (toolbar -> ellipsis button). Houses pause /
-    /// cheats / fast-forward / debug-overlay / quit so the toolbar
-    /// itself stays trimmed to keyboard / edit / hide / more.
+    /// cheats / fast-forward / debug-overlay so the toolbar itself
+    /// stays trimmed to keyboard / edit / hide / more.
     @State private var showMoreSheet = false
     @State private var showControllerRemap = false
     @State private var showLayoutProfilePicker = false
@@ -384,15 +383,6 @@ struct PlayerView: View {
                 startSnapshotFade()
             }
         }
-        .alert("Return to Library", isPresented: $showQuitConfirm) {
-            Button("Cancel", role: .cancel) {}
-            Button("Quit", role: .destructive) {
-                appState.returnToLibrary()
-            }
-            .keyboardShortcut(.defaultAction)
-        } message: {
-            Text("Do you want to quit the current game?")
-        }
         .sheet(isPresented: $showMoreSheet) {
             PlayerMoreSheet(
                 gameTitle: appState.selectedGame?.title ?? "Game",
@@ -406,8 +396,7 @@ struct PlayerView: View {
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { appState.requestPause() },
-                onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) },
-                onQuit: { showQuitConfirm = true }
+                onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) }
             )
         }
         .sheet(isPresented: $showLayoutProfilePicker) {

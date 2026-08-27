@@ -3,7 +3,7 @@ import SwiftUI
 /// Bottom sheet of secondary in-game actions reachable from the
 /// player toolbar's "Menu" button. Houses options that don't earn a
 /// permanent toolbar slot: pause, cheats, debug overlay, fast
-/// forward, quit. Toggles update host state directly. Tap actions
+/// forward. Toggles update host state directly. Tap actions
 /// dismiss the sheet via `dismiss()` so the user lands back in the
 /// game.
 ///
@@ -12,10 +12,10 @@ import SwiftUI
 /// styled `Button`s inside a VStack with
 /// `.fixedSize(horizontal: false, vertical: true)`.
 struct PlayerMoreSheet: View {
-    /// Display title of the running game. The destructive section's
-    /// row labels interpolate it ("Pause <title>" / "Quit <title>")
-    /// so the user sees exactly what they act on. Falls back to
-    /// "Game" if `selectedGame` is nil at present time.
+    /// Display title of the running game. The pause row interpolates
+    /// it ("Pause <title>") so the user sees exactly what they act
+    /// on. Falls back to "Game" if `selectedGame` is nil at present
+    /// time.
     let gameTitle: String
     @Binding var showDebugOverlay: Bool
     @Binding var fastForwardActive: Bool
@@ -27,7 +27,6 @@ struct PlayerMoreSheet: View {
     let onLayoutProfile: () -> Void
     let onPause: () -> Void
     let onCheats: () -> Void
-    let onQuit: () -> Void
 
     @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
@@ -59,8 +58,6 @@ struct PlayerMoreSheet: View {
         let fastFwd = (fastForwardMultiplier ?? 0) >= 2
         let diag = settings.diagnosticsOverlay
         let pause = true
-        // gameQuit is currently forced off in `body`. If/when it
-        // returns, mirror its gate here.
         return cheats || fastFwd || diag || pause || controllerRemapAvailable
     }
 
@@ -112,51 +109,29 @@ struct PlayerMoreSheet: View {
                 // the translucent chrome the user expects from a
                 // bottom sheet. The grouping still reads as a unit
                 // because of the inter-row dividers and the gap
-                // between this card and the destructive section
-                // below.
+                // between this card and the pause card below.
                 .clipShape(.rect(cornerRadius: Radius.md))
 
-                // Session-ending actions grouped together. Pause
-                // takes the user back to the library (game stays
-                // suspended). Quit tears the engine down. Both name
-                // the running game so it is clear which session
-                // they act on.
-                // Pause: graduated from experimental in May 2026,
-                // always enabled now.
-                let pauseEnabled = true
-                // gameQuit is off. See the ExperimentalFeature comment
-                // in AppSettings.swift. We force it false so the
-                // in-game Quit toolbar button stays hidden.
-                let quitEnabled = false
-                if pauseEnabled || quitEnabled {
-                    VStack(spacing: 0) {
-                        InterleavedRows(
-                            separator: { rowSeparator },
-                            content: {
-                                if pauseEnabled {
-                                    MenuRow(
-                                        icon: "pause.fill",
-                                        label: "Pause \(gameTitle)"
-                                    ) {
-                                        onPause()
-                                        dismiss()
-                                    }
-                                }
-                                if quitEnabled {
-                                    MenuRow(
-                                        icon: "xmark.circle.fill",
-                                        label: "Quit \(gameTitle)",
-                                        role: .destructive
-                                    ) {
-                                        dismiss()
-                                        onQuit()
-                                    }
-                                }
+                // Pause takes the user back to the library and the
+                // game stays suspended. The row names the running
+                // game so it is clear which session it acts on.
+                // Pause graduated from experimental in May 2026 and
+                // is always enabled now.
+                VStack(spacing: 0) {
+                    InterleavedRows(
+                        separator: { rowSeparator },
+                        content: {
+                            MenuRow(
+                                icon: "pause.fill",
+                                label: "Pause \(gameTitle)"
+                            ) {
+                                onPause()
+                                dismiss()
                             }
-                        )
-                    }
-                    .clipShape(.rect(cornerRadius: Radius.md))
+                        }
+                    )
                 }
+                .clipShape(.rect(cornerRadius: Radius.md))
             }
             .padding(Spacing.xl)
             .intrinsicSheetContent(measuredHeight: $measuredHeight)

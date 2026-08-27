@@ -1,13 +1,13 @@
 ---
 title: Multi-session
-description: Why Empo plays one game for each process, which quit paths it neutralizes, and what must change before cross-session play returns.
+description: Why Empo plays one game for each process, which quit paths it removed, and what must change before cross-session play returns.
 ---
 
 ## Status
 
 Cross-session play is **disabled**. After a clean game exit, Empo shows an alert ("close from app switcher to play again"). It does not return to the library. To start a different game, the user must force-close the app and open it again.
 
-A feature flag parks the original UX ("drop to library, pick another game in the same process") until Ruby state cleanup is reliable.
+The original UX ("drop to library, pick another game in the same process") is gone from the code until Ruby state cleanup is reliable.
 
 ## Why this is hard
 
@@ -21,17 +21,20 @@ An earlier version cleaned up hard between sessions. It compared constants again
 
 The decision: show a clear alert that asks the player to close the app, rather than a half-working flow that fails at random. Two later options can bring cross-session play back. The app can fork a process, so each game gets its own PID. Or the engine can move its per-session VM state into a container it can reset in full.
 
-## Disabled quit paths
+## Removed quit paths
 
-In May 2026 we disabled every UI path that triggers `AppState.returnToLibrary()` mid-game. The function itself remains:
+In May 2026 we disabled every UI path that triggers a mid-game quit. In August 2026 we removed the code behind them, because a disabled path is code no test covers and no user reaches. These went:
 
-- **In-game Quit toolbar button** - `PlayerMoreSheet.swift` hard-codes `quitEnabled = false`. We planned a `gameQuit` experimental feature, but it never landed. We later removed the experimental-features machinery (see the note in `AppSettings.swift`).
-- **Library "Quit and play" alert** - the "A game is paused" alert in `GameLibraryView.swift` is informational only. The "Quit and play" button is commented out.
-- **Long-press context-menu Quit** - commented out in `GameContextMenu.swift`.
+- **`AppState.returnToLibrary()`** and its `tearDownSessionState()` helper. The engine-terminated handler now owns the one teardown that runs.
+- **`EngineSessionCoordinator.beginReturnToLibrary()`** and `armHangWatchdogIfNeeded()`. Nothing calls `mkxp_requestTerminate()` any more, so the `terminationExpected` flag went with them.
+- **`EngineTerminationCoordinator`**, the whole class. It serialized an app-requested terminate against the next `selectGame`. With no app-requested terminate, and with `selectGame` refusing a second launch while a game is paused, the RGSS thread is always parked in `waitForGamePath` when `launchGamePath` runs.
+- **In-game Quit toolbar button** - the row in `PlayerMoreSheet.swift`, its `onQuit` closure, and the "Return to Library" confirmation alert in `PlayerView.swift`.
+- **Library "Quit and play" alert** - the "A game is paused" alert in `GameLibraryView.swift` is informational only.
+- **Long-press context-menu Quit** - gone from `GameContextMenu.swift`.
 - **Loading-hang escape** - `GameLoadingView.swift` shows a static "close Empo from the app switcher" label. The old escape button also armed a programmatic force-quit helper. We deleted that helper because App Store guideline 2.5.1 forbids apps that terminate themselves.
 - **Error-alert OK while a game runs** - `RootView.swift` only dismisses the alert and tells the user to close the app from the app switcher.
 
-The engine-side cross-session cleanup machinery (`pokemon_session_reset.rb`, the session-2+ paths in `binding-mri.cpp`) stays in place but never triggers. The call sites have inline cross-references. Find them with `rg "cross-session Ruby state cleanup" ios/Empo/src/`.
+To bring cross-session play back, rebuild these from this file and from the git history. The engine-side cleanup machinery (`pokemon_session_reset.rb`, the session-2+ paths in `binding-mri.cpp`) stays in place but never triggers.
 
 ## What still happens at engine shutdown
 

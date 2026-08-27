@@ -27,8 +27,6 @@ final class EngineSessionCoordinator {
 
     private let crashTracker = CrashTracker()
     private let sessionLogger = SessionLogger()
-    private let termination = EngineTerminationCoordinator()
-    private var terminationExpected = false
     private var textInputModeHandler: ((Bool) -> Void)?
     private var inputBridgesInstalled = false
     /// Per-scancode press start times. Light taps release before the
@@ -98,31 +96,15 @@ final class EngineSessionCoordinator {
         GameSaveWatch.shared.beginSession(container: input.container)
     }
 
-    func launchGamePath(_ path: String) async {
-        await termination.awaitEngineTermination()
+    /// Hands the RGSS thread its game path.
+    ///
+    /// There is no wait for an earlier session to tear down. Empo
+    /// plays one game for each process, per `docs/multi-session.md`,
+    /// and `selectGame` refuses a second launch while a game is
+    /// paused or an exit alert is up. So the thread is always parked
+    /// in `waitForGamePath` when this runs.
+    func launchGamePath(_ path: String) {
         mkxp_setGamePath(path)
-    }
-
-    /// Returns whether the engine thread was still running before terminate.
-    func beginReturnToLibrary(selectedContainer: GameContainer?) -> Bool {
-        clearPendingKeyHolds()
-        recordSessionPlayTime(for: delegate?.coordinatorActiveSessionGame)
-        GameSaveWatch.shared.endSession()
-        if let selectedContainer {
-            crashTracker.removeMarker(for: selectedContainer)
-        }
-
-        let engineWasRunning = mkxp_isEngineTerminated() == 0
-        if engineWasRunning {
-            terminationExpected = true
-            mkxp_requestTerminate()
-        }
-        return engineWasRunning
-    }
-
-    func armHangWatchdogIfNeeded(engineWasRunning: Bool, onHang: @escaping @MainActor (String) -> Void) {
-        guard engineWasRunning else { return }
-        termination.armHangWatchdog(onHang: onHang)
     }
 
     func requestPause() {
@@ -322,7 +304,6 @@ final class EngineSessionCoordinator {
     }
 
     private func handleEngineTerminated() {
-        termination.handleEngineTerminatedAck()
         recordSessionPlayTime(for: delegate?.coordinatorActiveSessionGame)
         GameSaveWatch.shared.endSession()
         if let container = delegate?.coordinatorSelectedGame?.container {
@@ -330,12 +311,14 @@ final class EngineSessionCoordinator {
         }
         GameLibrary.shared.reload()
 
-        let phase = delegate?.coordinatorPhase
-        if !terminationExpected && phase != nil {
+        // The app never asks the engine to terminate: Empo plays one
+        // game for each process, per `docs/multi-session.md`. So
+        // every termination comes from the game itself or from a
+        // crash, and both surface the alert.
+        if delegate?.coordinatorPhase != nil {
             let cleanExit = mkxp_didEngineExitCleanly() != 0
             delegate?.coordinatorEngineTerminatedUnexpectedly(cleanExit: cleanExit)
         }
-        terminationExpected = false
     }
 
     private static func capturePauseSnapshot() -> UIImage? {

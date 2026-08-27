@@ -1364,19 +1364,10 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Text("Empo is still validating the game. If you cancel, the import stops.")
             }
             .alert("A game is paused", isPresented: $showPausedGameAlert) {
+                // The alert is informational. To play another game the
+                // user resumes the paused one from its card, or
+                // force-closes the app. See `docs/multi-session.md`.
                 Button("OK", role: .cancel, action: onDismissPausedGameAlert)
-                // "Quit and play" disabled until cross-session Ruby
-                // state cleanup is reliable. See ExperimentalFeature
-                // comment in AppSettings.swift. Users have to resume
-                // the paused game (tapping its card) or force-close
-                // the app to play a different one.
-                // Button("Quit and play") {
-                //     guard let game = pendingGame else { return }
-                //     pendingGame = nil
-                //     appState.returnToLibrary()
-                //     appState.selectGame(game)
-                //     path.append(game)
-                // }
             } message: {
                 if let pausedGame {
                     Text(

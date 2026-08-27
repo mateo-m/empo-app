@@ -83,7 +83,7 @@ protocol SettingFlag {
 
 /// Engine reads this from `mkxp.json` once at RGSS thread startup.
 /// Mid-session edits hit the JSON but the running engine keeps its
-/// launch-time copy until the next quit.
+/// launch-time copy until the app closes and opens again.
 enum RestartFlag: SettingFlag {
     static let requiresRestart = true
 }
@@ -301,8 +301,8 @@ struct GameSettings: Codable, Equatable {
 
     /// True if any `RestartFlag`-tagged field differs between `self`
     /// and `other`. The engine reads its config once at RGSS thread
-    /// startup and never re-reads, so launch-time fields need a quit
-    /// + relaunch. Runtime fields apply on resume.
+    /// startup and never re-reads, so launch-time fields need the
+    /// app to close and open again. Runtime fields apply on resume.
     func differsInRestartRequiredFields(from other: GameSettings) -> Bool {
         !restartRequiredFieldsChanged(from: other).isEmpty
     }
