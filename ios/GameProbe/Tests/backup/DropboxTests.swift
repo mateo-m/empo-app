@@ -296,6 +296,76 @@ final class DropboxTests: XCTestCase {
         XCTAssertEqual(Dropbox.headerSafe(#"{"path":"/Empo/né"}"#), #"{"path":"/Empo/n\u00e9"}"#)
     }
 
+    // MARK: - The upload session that outlives the process, per 9.2
+
+    func testUsableSessionResumesFromItsOffset() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let session = DropboxUploadSession(
+            sessionId: "s1", offset: 32 * 1024 * 1024,
+            fileSize: 200 * 1024 * 1024, startedAt: now)
+        XCTAssertTrue(session.isUsable(at: now, forFileOfSize: 200 * 1024 * 1024))
+    }
+
+    func testSessionOfAnotherFileSizeIsNotUsable() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let session = DropboxUploadSession(
+            sessionId: "s1", offset: 32 * 1024 * 1024,
+            fileSize: 200 * 1024 * 1024, startedAt: now)
+        XCTAssertFalse(session.isUsable(at: now, forFileOfSize: 199 * 1024 * 1024))
+    }
+
+    func testSessionPastSevenDaysIsNotUsable() {
+        let started = Date(timeIntervalSince1970: 1_000_000)
+        let session = DropboxUploadSession(
+            sessionId: "s1", offset: 32 * 1024 * 1024,
+            fileSize: 200 * 1024 * 1024, startedAt: started)
+        let inside = started.addingTimeInterval(DropboxUploadSession.lifetime - 1)
+        let outside = started.addingTimeInterval(DropboxUploadSession.lifetime)
+        XCTAssertTrue(session.isUsable(at: inside, forFileOfSize: 200 * 1024 * 1024))
+        XCTAssertFalse(session.isUsable(at: outside, forFileOfSize: 200 * 1024 * 1024))
+    }
+
+    func testSessionAtZeroOrAtTheEndIsNotUsable() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let size: Int64 = 200 * 1024 * 1024
+        for offset in [Int64(0), size] {
+            let session = DropboxUploadSession(
+                sessionId: "s1", offset: offset, fileSize: size, startedAt: now)
+            XCTAssertFalse(session.isUsable(at: now, forFileOfSize: size))
+        }
+    }
+
+    func testSessionWithNoIdIsNotUsable() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let session = DropboxUploadSession(
+            sessionId: "", offset: 32, fileSize: 200, startedAt: now)
+        XCTAssertFalse(session.isUsable(at: now, forFileOfSize: 200))
+    }
+
+    func testADeadSessionIsTheOneDropboxCannotFindOrAlreadyClosed() {
+        XCTAssertTrue(DropboxUploadSession.isDead(errorSummary: "not_found/"))
+        XCTAssertTrue(DropboxUploadSession.isDead(errorSummary: "closed/"))
+        // `incorrect_offset` carries `correct_offset`, so the session
+        // lives and only the cursor was wrong.
+        XCTAssertFalse(DropboxUploadSession.isDead(errorSummary: "incorrect_offset/"))
+        XCTAssertFalse(DropboxUploadSession.isDead(errorSummary: "too_many_write_operations/"))
+    }
+
+    func testAResumedSessionChunksTheRestOfTheFile() {
+        let size: Int64 = 200 * 1024 * 1024
+        let rest = Dropbox.chunks(ofFileSize: size, from: 32 * 1024 * 1024)
+        XCTAssertEqual(rest.first?.offset, 32 * 1024 * 1024)
+        XCTAssertEqual(rest.last?.endOffset, size)
+    }
+
+    func testASessionRecordSurvivesJSON() throws {
+        let session = DropboxUploadSession(
+            sessionId: "s1", offset: 48, fileSize: 96,
+            startedAt: Date(timeIntervalSince1970: 1_000_000))
+        let data = try JSONEncoder().encode(session)
+        XCTAssertEqual(try JSONDecoder().decode(DropboxUploadSession.self, from: data), session)
+    }
+
     // MARK: - Helpers
 
     private func page(names: [String], cursor: String, hasMore: Bool) -> DropboxListPage {

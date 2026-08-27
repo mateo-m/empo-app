@@ -170,9 +170,24 @@ actor DropboxTarget: BackupProvider {
         let scratch = Self.scratchDirectory()
         defer { try? FileManager.default.removeItem(at: scratch) }
 
+        let store = DropboxUploadSessionStore.shared
         var left = chunks
         var sessionId: String?
         var offset: Int64 = 0
+        var startedAt = Date()
+
+        // A chunked upload needs the app to run code between chunks,
+        // and iOS ends a suspended app whenever it wants. Carry on
+        // from the cursor the last process wrote, per 9.2.
+        if let saved = await store.session(forPath: path, fileSize: size) {
+            sessionId = saved.sessionId
+            offset = saved.offset
+            startedAt = saved.startedAt
+            left = Dropbox.chunks(ofFileSize: size, from: saved.offset)
+            BackupLog.line(
+                "DropboxTarget",
+                "the upload carries on from \(saved.offset) of \(size) bytes")
+        }
 
         while let chunk = left.first {
             let piece = try Self.piece(of: localFile, chunk: chunk, in: scratch)
@@ -200,6 +215,26 @@ actor DropboxTarget: BackupProvider {
                 if sessionId == nil { sessionId = Self.sessionId(inBody: answer.body) }
                 offset = chunk.endOffset
                 left.removeFirst()
+                if let sessionId {
+                    await store.remember(
+                        DropboxUploadSession(
+                            sessionId: sessionId, offset: offset,
+                            fileSize: size, startedAt: startedAt),
+                        forPath: path)
+                }
+                continue
+            }
+
+            // A session Dropbox cannot find is gone, and every byte
+            // with it. Drop the cursor and open a new session.
+            if DropboxUploadSession.isDead(
+                errorSummary: Dropbox.errorSummary(inBody: answer.body))
+            {
+                await store.forget(path: path)
+                sessionId = nil
+                offset = 0
+                startedAt = Date()
+                left = chunks
                 continue
             }
 
@@ -214,9 +249,12 @@ actor DropboxTarget: BackupProvider {
         }
 
         guard let sessionId else {
+            await store.forget(path: path)
             throw BackupProviderError.rejected(message: "Dropbox opened no upload session")
         }
         try await finish(sessionId: sessionId, offset: offset, path: path, scratch: scratch)
+        // The commit landed, so the cursor names nothing now.
+        await store.forget(path: path)
     }
 
     private func finish(
