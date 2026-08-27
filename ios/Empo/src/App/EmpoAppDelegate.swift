@@ -23,7 +23,10 @@ final class EmpoAppDelegate: SDLUIKitDelegate {
             application, didFinishLaunchingWithOptions: launchOptions)
         // SDL defers its own `postFinishLaunch` by a run loop turn, so
         // this line still runs inside launch.
-        MainActor.assumeIsolated { BackupTaskScheduler.register() }
+        MainActor.assumeIsolated {
+            BackupTaskScheduler.register()
+            BackupNotifier.start()
+        }
         return started
     }
 

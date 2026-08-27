@@ -15,6 +15,30 @@ import UserNotifications
 @MainActor
 enum BackupNotifier {
 
+    /// Shows a banner for a notification that posts while Empo is
+    /// open.
+    ///
+    /// 7.11 says a cause posts "from the nightly task or the
+    /// foreground pass". A foreground pass runs while the app is
+    /// open, and iOS shows no banner then unless a delegate asks for
+    /// one. Without this the foreground half of that sentence posts
+    /// nothing the user can see.
+    private final class Presenter: NSObject, UNUserNotificationCenterDelegate {
+        func userNotificationCenter(
+            _ center: UNUserNotificationCenter, willPresent notification: UNNotification
+        ) async -> UNNotificationPresentationOptions {
+            [.banner, .sound]
+        }
+    }
+
+    private static let presenter = Presenter()
+
+    /// Takes the notification centre. iOS wants the delegate in place
+    /// before launch ends, so the app delegate calls this.
+    static func start() {
+        UNUserNotificationCenter.current().delegate = presenter
+    }
+
     /// Empo asks after the user configures their first target, never
     /// at first launch.
     static func askForPermissionIfNeeded(configuredTargetCount: Int) async {
@@ -43,6 +67,9 @@ enum BackupNotifier {
         var ledger = (try? store.notificationLedger()) ?? BackupNotificationLedger()
         let toPost = ledger.post(causes: causes, targetId: targetId)
         try? store.saveNotificationLedger(ledger)
+        BackupLog.line(
+            "BackupNotifier",
+            "\(targetLabel) carries \(causes.count) cause, posts \(toPost.count)")
         for cause in toPost {
             post(cause, targetLabel: targetLabel)
         }
