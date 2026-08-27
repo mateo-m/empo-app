@@ -59,7 +59,7 @@ final class BackupScheduler {
 
     private init() {}
 
-    /// Ticket 008 sets this.
+    /// What one pass does. Ticket 008 set it to `BackupPass`.
     var runner: (any BackupRunning)?
 
     /// Why staging is not running, per 7.5 and 7.6, or `nil` while
@@ -93,10 +93,13 @@ final class BackupScheduler {
         BackupRoot.prepare()
         BackupNetwork.start()
         BackupTransferSession.shared.start()
+        ICloudDriveGate.shared.start()
+        runner = BackupPass.shared
         observeAppLifetime()
         BackupTaskScheduler.scheduleNightly()
         countTheRunsThatVanished()
         log("the schedule started")
+        addTheICloudTargetForADeviceCheck()
         pressTheButtonForADeviceCheck()
     }
 
@@ -109,6 +112,40 @@ final class BackupScheduler {
     private func pressTheButtonForADeviceCheck() {
         guard UserDefaults.standard.bool(forKey: "backupPressNow") else { return }
         pressBackUpNow(.library)
+    }
+
+    /// Adds the iCloud Drive target when the process starts with
+    /// `-backupAddICloud YES`, and writes each step of the
+    /// permission check of 8.7 to the log.
+    ///
+    /// The device check of ticket 008 has to add a target, and
+    /// ticket 016 brings the add flow that carries the sheet. Delete
+    /// this when the screen lands.
+    private func addTheICloudTargetForADeviceCheck() {
+        guard UserDefaults.standard.bool(forKey: "backupAddICloud") else { return }
+        Task {
+            guard let provider = await ICloudDriveGate.shared.target() else {
+                self.log("iCloud is not available on this device")
+                return
+            }
+            let descriptor = TargetDescriptor(
+                id: "icloud-drive",
+                provider: .iCloudDrive,
+                label: "iCloud Drive",
+                accountHint: "this device",
+                root: ICloudDrive.root)
+            guard
+                let result = try? await BackupTargets.addAfterPermissionCheck(
+                    descriptor, provider: provider)
+            else {
+                self.log("the permission check could not run")
+                return
+            }
+            for step in result.steps {
+                self.log("the permission check: \(step.label) \(step.outcome)")
+            }
+            self.log("the target was added: \(result.allowsAdd)")
+        }
     }
 
     private func observeAppLifetime() {

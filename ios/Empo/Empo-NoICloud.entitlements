@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+	The entitlements file for a machine whose Apple Developer team
+	cannot register the iCloud container `iCloud.sh.mateo.empo`. Point
+	`EMPO_ENTITLEMENTS` at this file in your own Signing.xcconfig. See
+	Signing.xcconfig.example.
+
+	The dict stays empty, and it must not become a missing file. A
+	build with no entitlements file at all signs with no entitlements
+	blob, and a naive resigner then synthesizes an incomplete one that
+	breaks the document picker. Empo.entitlements carries the same
+	note.
+
+	The iCloud target hides itself at runtime here, per SPEC 9.1: with
+	no entitlement the container URL is nil, the gate closes, and the
+	add flow drops the iCloud entry.
+-->
+<plist version="1.0">
+<dict>
+</dict>
+</plist>

@@ -16,3 +16,10 @@
 // Uncomment and fill in:
 // DEVELOPMENT_TEAM = YOUR10CHARID
 // PRODUCT_BUNDLE_IDENTIFIER = sh.mateo.empo.dev
+
+// Optional: point at the entitlements file with no iCloud keys when
+// your team cannot register the container `iCloud.sh.mateo.empo`.
+// The default is Empo.entitlements, which holds them. With this
+// override the iCloud target hides itself at runtime, per SPEC 9.1.
+//
+// EMPO_ENTITLEMENTS = Empo-NoICloud.entitlements

@@ -336,17 +336,21 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
-        # Empty entitlements file by design: the app has no special
-        # capabilities, but having SOME .entitlements file in the
-        # build means the signed binary always has an entitlements
-        # blob present. Naive resigners (notably ESign) read this
-        # blob as their template. Without it they synthesize an
-        # incomplete blob that breaks document picker's sandbox-
-        # extension grants on the picked URL (Open does nothing for
-        # files, spinner-forever for folders). Sideloadly + AltStore
-        # synthesize correctly so they work regardless, but shipping
-        # an explicit file unblocks ESign too.
-        CODE_SIGN_ENTITLEMENTS: Empo.entitlements
+        # The file carries the iCloud keys of SPEC 9.1, and it must
+        # never go missing. A build with SOME .entitlements file
+        # always signs with an entitlements blob. Naive resigners
+        # (notably ESign) read that blob as their template. Without
+        # it they synthesize an incomplete one that breaks document
+        # picker's sandbox-extension grants on the picked URL (Open
+        # does nothing for files, spinner-forever for folders).
+        # Sideloadly + AltStore synthesize correctly so they work
+        # regardless, but shipping an explicit file unblocks ESign
+        # too.
+        # A team that cannot register the iCloud container points
+        # EMPO_ENTITLEMENTS at Empo-NoICloud.entitlements in its own
+        # Signing.xcconfig. CI leaves that file empty, so the default
+        # applies and the unsigned build carries the iCloud keys.
+        CODE_SIGN_ENTITLEMENTS: $(EMPO_ENTITLEMENTS:default=Empo.entitlements)
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/Empo-Bridging-Header.h
         OTHER_LDFLAGS:

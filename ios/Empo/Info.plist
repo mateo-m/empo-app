@@ -52,6 +52,18 @@
 	<string>Take a photo to use as custom game artwork or banner.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Some games offer local multiplayer, which needs permission to find other players on your network.</string>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.sh.mateo.empo</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Empo</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
