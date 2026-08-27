@@ -134,7 +134,7 @@ final class BackupScheduler {
             log("this build carries no Dropbox app key")
             return
         }
-        guard let presenter = Self.frontViewController() else {
+        guard let presenter = await DropboxSignIn.screenForTheSheet() else {
             log("Dropbox found no screen to sign in from")
             return
         }
@@ -149,7 +149,7 @@ final class BackupScheduler {
             let signedIn = try await DropboxGate.shared.signIn(
                 targetId: descriptor.id, presenting: presenter)
             guard signedIn else {
-                log("the Dropbox sign-in stopped")
+                log("the user closed the Dropbox browser")
                 return
             }
         } catch {
@@ -175,19 +175,6 @@ final class BackupScheduler {
             log("the free space: \(quota.usedBytes) used of \(quota.limitBytes ?? -1)")
         }
         log("the target was added: \(result.allowsAdd)")
-    }
-
-    /// The view controller a sheet can come up from.
-    private static func frontViewController() -> UIViewController? {
-        for scene in UIApplication.shared.connectedScenes {
-            guard let windowScene = scene as? UIWindowScene else { continue }
-            for window in windowScene.windows where window.isKeyWindow {
-                var top = window.rootViewController
-                while let next = top?.presentedViewController { top = next }
-                if let top { return top }
-            }
-        }
-        return nil
     }
 
     /// Adds the iCloud Drive target and writes each step of the

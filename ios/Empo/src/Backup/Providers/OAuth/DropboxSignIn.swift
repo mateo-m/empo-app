@@ -61,6 +61,51 @@ final class DropboxSignIn {
         return took
     }
 
+    /// How long a sign-in waits for the app to reach the foreground.
+    private static let activeWait: TimeInterval = 10
+    private static let activePollWait: TimeInterval = 0.2
+
+    /// Answers the screen a sheet can come up from.
+    ///
+    /// AppAuth presents an `ASWebAuthenticationSession`, and that
+    /// closes at once when the app is not active yet. A caller that
+    /// runs at scene connect is therefore too early, so this waits.
+    ///
+    /// It answers `nil` when the app never became active.
+    static func screenForTheSheet() async -> UIViewController? {
+        var left = activeWait
+        while left > 0 {
+            if UIApplication.shared.applicationState == .active,
+                let front = frontViewController(), front.viewIfLoaded?.window != nil
+            {
+                return front
+            }
+            try? await Task.sleep(for: .seconds(activePollWait))
+            left -= activePollWait
+        }
+        return nil
+    }
+
+    private static func frontViewController() -> UIViewController? {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows where window.isKeyWindow {
+                var top = window.rootViewController
+                while let next = top?.presentedViewController { top = next }
+                if let top { return top }
+            }
+        }
+        return nil
+    }
+
+    /// Whether the user closed the browser instead of signing in.
+    private static func isCancel(_ error: Error) -> Bool {
+        let error = error as NSError
+        guard error.domain == OIDGeneralErrorDomain else { return false }
+        return error.code == OIDErrorCode.userCanceledAuthorizationFlow.rawValue
+            || error.code == OIDErrorCode.programCanceledAuthorizationFlow.rawValue
+    }
+
     /// Signs in and answers the tokens, or `nil` where the user
     /// stopped.
     func signIn(presenting viewController: UIViewController) async throws -> OAuthTokens? {
@@ -94,6 +139,13 @@ final class DropboxSignIn {
                 byPresenting: request, presenting: viewController
             ) { state, error in
                 if let error, state == nil {
+                    // A user who closes the browser stopped the
+                    // sign-in. Nothing failed, so the target stays as
+                    // it was and the add flow of 13.7 shows no error.
+                    if Self.isCancel(error) {
+                        continuation.resume(returning: nil)
+                        return
+                    }
                     continuation.resume(throwing: error)
                     return
                 }
