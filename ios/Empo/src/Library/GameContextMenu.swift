@@ -34,17 +34,6 @@ struct GameContextMenuModifier: ViewModifier {
                         Label(isPaused ? "Resume" : "Play", systemImage: "play.fill")
                     }
 
-                    // Context-menu Quit disabled until cross-session
-                    // Ruby state cleanup is reliable. See
-                    // ExperimentalFeature comment in AppSettings.swift.
-                    // if isPaused {
-                    //     Button(role: .destructive) {
-                    //         appState.returnToLibrary()
-                    //     } label: {
-                    //         Label("Quit", systemImage: "stop.fill")
-                    //     }
-                    // }
-
                     Divider()
 
                     Button {

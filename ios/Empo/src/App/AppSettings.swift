@@ -111,9 +111,9 @@ enum AppTheme: String, CaseIterable {
 // We removed the `ExperimentalFeature` enum and its `isEnabled` /
 // `setEnabled` machinery in May 2026, after `gamePause` and
 // `cheats` graduated to always-on. No experimental toggles remain.
-// We also planned `gameQuit` as an experimental feature, but it
-// never landed (cross-session Ruby state cleanup blocks it, see
-// docs/multi-session.md).
+// We also planned `gameQuit` as an experimental feature. It never
+// landed, and we removed the quit paths in August 2026. See
+// docs/multi-session.md.
 //
 // To bring back an opt-in experimental toggle later, restore:
 //   - this enum (cases + `label` + `description` + `id`)

@@ -29,7 +29,7 @@ Both modes use the same engine-side mechanism (a condvar block). They differ in 
 
 ### Audio: the context must stay current
 
-Apple's iOS OpenAL implementation starts audio hardware activity the moment `alcMakeContextCurrent(ctx)` restores a context. Source state, suspend calls, and listener gain do not matter. This caused an audible blip when the user quit a paused game to start another.
+Apple's iOS OpenAL implementation starts audio hardware activity the moment `alcMakeContextCurrent(ctx)` restores a context. Source state, suspend calls, and listener gain do not matter. This caused an audible blip on resume. We found it back when the user could still quit a paused game to start another.
 
 The fix: **never touch the OpenAL context**. No `alcMakeContextCurrent(NULL)`, no `alcMakeContextCurrent(ctx)`. The context stays current the entire time. We pause and resume individual sources instead:
 
@@ -119,9 +119,9 @@ The snapshot sits at the same `engineState.gameRect` in both views, so the hando
 | `mkxp-z-apple-mobile/src/app_bridge.cpp`       | Condvar, audio pause/resume, snapshot storage                                       |
 | `mkxp-z-apple-mobile/src/app_bridge.h`         | Bridge API declarations                                                             |
 | `ios/Empo/src/App/PauseManager.swift`          | User-initiated pause/resume state, `requestPause()`, `resume()`, snapshot ownership |
-| `ios/Empo/src/App/AppState.swift`              | `returnToLibrary()`, paused callback registration, snapshot conversion              |
+| `ios/Empo/src/App/AppState.swift`              | `requestPause()`, `resumePausedGame()`, paused callback registration, snapshot conversion |
 | `ios/Empo/src/App/EngineState.swift`           | Background pause/resume (`requestBackgroundPause()`, `resumeFromBackground()`)      |
 | `ios/Empo/src/Library/GameLoadingView.swift`   | Snapshot at `engineState.gameRect` during hero zoom (stage 1)                       |
 | `ios/Empo/src/Library/GameLibraryView.swift`   | `handleGameTap()` - resume flow entry point                                         |
-| `ios/Empo/src/Player/PlayerView.swift`         | Snapshot fade-out overlay with controls (stage 2), pause button, quit button        |
+| `ios/Empo/src/Player/PlayerView.swift`         | Snapshot fade-out overlay with controls (stage 2), pause button                     |
 | `ios/Empo/src/App/RootView.swift`              | Phase-based visibility (library vs. player), background pause triggers              |

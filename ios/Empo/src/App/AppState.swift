@@ -136,8 +136,10 @@ class AppState {
             )
         )
 
+        // The hop to the next main-actor turn lets SwiftUI commit
+        // `phase = .loading` before the engine takes the path.
         Task { @MainActor in
-            await session.launchGamePath(game.path)
+            session.launchGamePath(game.path)
         }
     }
 
@@ -170,35 +172,6 @@ class AppState {
         errorMessage = nil
     }
 
-    func returnToLibrary() {
-        let engineWasRunning = session.beginReturnToLibrary(
-            selectedContainer: selectedGame?.container
-        )
-        tearDownSessionState()
-        session.armHangWatchdogIfNeeded(engineWasRunning: engineWasRunning) { [weak self] message in
-            self?.errorMessage = message
-        }
-    }
-
-    /// Resets per-session UI state without a touch on the engine or
-    /// the crash marker. The explicit `returnToLibrary` path and the
-    /// engine-initiated clean-exit path (game's own "Exit to
-    /// desktop" menu, font-install restart, etc.) share it. Both
-    /// then drop back to the library through the same transition.
-    private func tearDownSessionState() {
-        selectedGame = nil
-        // Unbind the controls layout. Library-screen UI that reads
-        // it then sees a neutral default, and mutations (they should
-        // not occur, but still) do not write to the last-played
-        // game's slot. `switchGame(nil)` also flushes any pending
-        // edits.
-        ControlsLayout.shared.switchGame(id: nil, container: nil)
-        ScreenRegionApplier.endSession()
-        engineReady = false
-        PauseManager.shared.reset()
-        phase = nil
-    }
-
     // MARK: - Pause lifecycle
 
     /// Toggle the pause menu. Same path as the on-screen pause control (SPEC section 8).
@@ -214,9 +187,9 @@ class AppState {
         // Pause graduated from experimental in May 2026. It is
         // always enabled. The only gate is "a game is playing."
         guard phase == .playing else { return }
-        // Pause is the primary return-to-library path (in-game Quit
-        // is disabled). Flush play time here so last-played and
-        // totals update even though the engine keeps running.
+        // Pause is the only return-to-library path. Flush play time
+        // here so last-played and totals update even though the
+        // engine keeps running.
         session.recordSessionPlayTime(for: activeSessionGame)
         EngineState.shared.isBackgroundPause = false
         session.requestPause()
@@ -241,11 +214,11 @@ class AppState {
     /// PlayerView picks it up as a fade-out overlay, so there is no
     /// flash at handoff.
     ///
-    /// The `pm.pausedGame == nil` guard in the Task prevents a stray
-    /// `phase = .playing` after the user cancels mid-resume with a
-    /// return to the library. Before, the chained asyncAfter calls
-    /// could race past `returnToLibrary()` and put the app back into
-    /// .playing with no game loaded.
+    /// The `pm.pausedGame == nil` guard in the Task keeps a stray
+    /// `phase = .playing` out after the session ends mid-resume.
+    /// Before the guard, the chained asyncAfter calls could race
+    /// past the teardown and put the app back into .playing with no
+    /// game loaded.
     func resumePausedGame() {
         let pm = PauseManager.shared
         guard pm.pausedGame != nil else { return }
@@ -344,7 +317,13 @@ extension AppState: EngineSessionCoordinatorDelegate {
             sessionHadError = true
         }
         selectedGame = nil
+        // Unbind the controls layout. Library-screen UI that reads
+        // it then sees a neutral default, and mutations (they should
+        // not occur, but still) do not write to the last-played
+        // game's slot. `switchGame(nil)` also flushes any pending
+        // edits.
         ControlsLayout.shared.switchGame(id: nil, container: nil)
+        ScreenRegionApplier.endSession()
         engineReady = false
         PauseManager.shared.reset()
     }

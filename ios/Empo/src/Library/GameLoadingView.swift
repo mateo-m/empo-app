@@ -200,25 +200,11 @@ struct GameLoadingView: View {
         // what to do, so the "if loading is stuck..." line only
         // clutters the screen.
         if cancelVisible && appState.errorMessage == nil && !showErrorContent {
-            // Previously a "Quit to library" button that called
-            // returnToLibrary + a hard-deadline force-quit helper.
-            // Replaced with a static label because:
-            //
-            // 1. returnToLibrary triggers the cross-session Ruby
-            //    state cleanup machinery, which we no longer trust
-            //    after parking the mruby experiment (see
-            //    docs/multi-session.md). Lingering state from a hung
-            //    game would leak into the next session.
-            // 2. The force-quit helper called the system exit
-            //    function, which violates App Store guideline 2.5.1
-            //    ("Apps should not terminate themselves
-            //    programmatically"). That helper has been removed
-            //    entirely. See docs/multi-session.md.
-            //
-            // The label below tells the user to close Empo from the
-            // app switcher, which is the iOS-sanctioned way to
-            // force-close. Same pattern RootView uses for
-            // engineHung errors.
+            // A static label, not a button. Empo has no quit path,
+            // and an app may not close itself: App Store guideline
+            // 2.5.1 forbids it. So the label tells the user to close
+            // Empo from the app switcher, which is the way iOS
+            // allows. See `docs/multi-session.md`.
             Text("If loading is stuck, close Empo from the app switcher and reopen.")
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.8))
