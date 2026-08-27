@@ -11,6 +11,11 @@ private struct EmptyStateHeightKey: PreferenceKey {
 struct GameLibraryView: View {
     var heroNamespace: Namespace.ID
     var splashDismissed: Bool = true
+    /// True once a play session settled. The view stays mounted and
+    /// keeps its navigation stack, but the loading destination
+    /// renders nothing, so no animation composites over the embedded
+    /// game view. See `RootView.libraryDormant`.
+    var dormant: Bool = false
     @Environment(\.appState) private var appState
     @Environment(\.gameLibrary) private var library
     @Environment(\.appSettings) private var settings
@@ -148,6 +153,14 @@ struct GameLibraryView: View {
         NavigationStack(path: $path) {
             navigationContent
         }
+        // Nothing of the library draws while a game plays. The
+        // handoff fade in `RootView` can still be settling when the
+        // loading view goes dormant, and the grid behind it would
+        // show for a frame or two. This reads `dormant` and not the
+        // phase on purpose: the pause sets the phase inside an
+        // animation, and an opacity keyed on it would fade in over
+        // the root background `AppWindow` paints.
+        .opacity(dormant ? 0 : 1)
     }
 
     private var navigationContent: some View {
@@ -160,7 +173,7 @@ struct GameLibraryView: View {
                 // to the grid/list item source id since that's the one
                 // always visible in the library.
                 let source = tappedSource[game.id] ?? .item
-                GameLoadingView(game: game)
+                GameLoadingView(game: game, dormant: dormant)
                     .navigationTransition(
                         .zoom(
                             sourceID: source.transitionID(for: game.id),
@@ -952,7 +965,7 @@ struct GameLibraryView: View {
         tappedSource[game.id] = source
         if pauseManager.pausedGame?.id == game.id {
             appState.resumePausedGame()
-            path.append(game)
+            push(game)
         } else if pauseManager.pausedGame != nil {
             pendingGame = game
             showPausedGameAlert = true
@@ -965,8 +978,15 @@ struct GameLibraryView: View {
             showRTPRequiredAlert = true
         } else {
             appState.selectGame(game)
-            path.append(game)
+            push(game)
         }
+    }
+
+    /// Pushes the loading view. The root gets its paint first, so
+    /// the zoom transition has a background to round.
+    private func push(_ game: GameEntry) {
+        AppWindow.paintRootForZoom()
+        path.append(game)
     }
 
     private func continueDespiteRTPWarning() {
@@ -974,7 +994,7 @@ struct GameLibraryView: View {
         rtpWarnedGame = nil
         rtpWarnedRequirement = nil
         appState.selectGame(game)
-        path.append(game)
+        push(game)
     }
 
     private func refreshGameSizes() {

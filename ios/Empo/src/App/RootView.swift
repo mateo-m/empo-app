@@ -22,10 +22,23 @@ struct RootView: View {
     @State private var showSplash: Bool
     @State private var splashExiting = false
     @State private var splashDismissed: Bool
-    /// The library stays mounted through the loading→playing fade.
-    /// It then unmounts, so Ken Burns / NavigationStack stop
-    /// compositing over the embedded game view.
-    @State private var libraryMounted = true
+    /// The library goes quiet after the loading→playing fade. It
+    /// stays mounted and keeps its navigation stack, but the pushed
+    /// loading view renders nothing, so Ken Burns and the container
+    /// fill stop compositing over the embedded game view.
+    ///
+    /// An earlier version took the whole library out of the tree
+    /// instead. That threw the navigation path away, so the library
+    /// came back at the root and the pause showed no reverse zoom.
+    /// Putting the path back by hand was not enough either: a
+    /// rebuilt stack keeps no record of the push, so the zoom went
+    /// to the middle of the screen instead of to the card.
+    @State private var libraryDormant = false
+    /// Drives the handoff fade. It is a state of its own, not a read
+    /// of the phase, so the way back can snap. `AppWindow` paints the
+    /// root background for the zoom transition, and a fade in over
+    /// that colour reads as a white flash.
+    @State private var libraryFaded = false
 
     init() {
         let recovering = AppState.shared.pendingCrashRecovery
@@ -46,17 +59,24 @@ struct RootView: View {
             // device even when every child view is "clear".
             Color.clear.ignoresSafeArea()
 
-            // Fade the library out on play (loading banner handoff).
-            // Then unmount after the spring, so Ken Burns /
-            // NavigationStack do not keep running over the embedded
-            // game view. Remounts on pause/return. GameLibraryView
-            // clears the path.
-            if libraryMounted {
-                GameLibraryView(heroNamespace: hero, splashDismissed: splashDismissed)
-                    .opacity(appState.phase == .playing ? 0 : 1)
-                    .allowsHitTesting(appState.phase != .playing)
-                    .transition(.identity)
-            }
+            // Fade the library out on play (loading banner
+            // handoff). It then goes dormant after the spring, so
+            // Ken Burns does not keep running over the embedded game
+            // view. It never leaves the tree: the pause pops the
+            // pushed game, and that pop needs the same navigation
+            // stack the push used.
+            GameLibraryView(
+                heroNamespace: hero,
+                splashDismissed: splashDismissed,
+                dormant: libraryDormant
+            )
+            // Flatten first. Without this, the fade applies to
+            // each layer on its own, so the loading banner turns
+            // see-through over the grid and the library shows for a
+            // moment before the game does.
+            .compositingGroup()
+            .opacity(libraryFaded ? 0 : 1)
+            .allowsHitTesting(appState.phase != .playing)
 
             // Instant appear: the library fades out underneath without
             // a cross-fade dim on the controls.
@@ -72,15 +92,29 @@ struct RootView: View {
         .tint(.brand)
         .onChange(of: appState.phase) { _, phase in
             if phase == .playing {
+                // GameLoadingView flips the phase inside a spring of
+                // 0.15–0.30s. This change runs after that
+                // transaction, so it needs a spring of its own.
+                withAnimation(.spring(duration: 0.3, bounce: 0)) {
+                    libraryFaded = true
+                }
                 // Slightly longer than GameLoadingView's handoff spring
-                // (0.15–0.30s) so the fade finishes before unmount.
+                // (0.15–0.30s) so the fade finishes first.
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(400))
                     guard appState.phase == .playing else { return }
-                    libraryMounted = false
+                    libraryDormant = true
                 }
             } else {
-                libraryMounted = true
+                // No fade on the way back. The pause plays the zoom
+                // in reverse, and the library must be there in full
+                // for it, not dissolving in over the root colour.
+                var instant = Transaction()
+                instant.disablesAnimations = true
+                withTransaction(instant) {
+                    libraryFaded = false
+                    libraryDormant = false
+                }
             }
         }
         .overlay {
