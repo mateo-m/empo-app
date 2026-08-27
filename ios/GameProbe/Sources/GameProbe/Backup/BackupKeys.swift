@@ -137,7 +137,7 @@ public enum BackupKeys {
         )
     }
 
-    private static func randomHex(characters: Int) -> String {
+    static func randomHex(characters: Int) -> String {
         var generator = SystemRandomNumberGenerator()
         var out = ""
         out.reserveCapacity(characters)

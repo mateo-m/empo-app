@@ -30,7 +30,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
 # package directory, floor on macOS, floor on Linux
-ALL_PACKAGES="ios/GameProbe:923:922 ios/Json5:21:21"
+ALL_PACKAGES="ios/GameProbe:979:978 ios/Json5:21:21"
 
 case "$(uname -s)" in
     Darwin) HOST=darwin ;;
