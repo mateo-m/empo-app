@@ -23,11 +23,10 @@ enum BackupTaskScheduler {
 
     static var nightlyIdentifier: String { "\(bundleId).backup.nightly" }
 
-    /// A continued-processing request wants a wildcard prefix, and
-    /// each press submits its own identifier below it.
+    /// The family of every manual identifier. `Info.plist` advertises
+    /// it as `<this>.*`, and each press submits one identifier below
+    /// it.
     static var manualPrefix: String { "\(bundleId).backup.manual" }
-
-    static var manualWildcard: String { "\(manualPrefix).*" }
 
     /// The press travels in the identifier, so a task that starts
     /// after Empo restarts still knows what the user asked for. A
@@ -55,13 +54,21 @@ enum BackupTaskScheduler {
 
     // MARK: - Registration
 
-    /// Registers both launch handlers.
+    /// Registers the overnight launch handler.
     ///
     /// `BGTaskScheduler` wants every handler in place before launch
     /// ends, so the app delegate calls this from
     /// `application(_:didFinishLaunchingWithOptions:)`. A second call
     /// for the same identifier kills the app, so the flag below stops
     /// one.
+    ///
+    /// The manual handler is not here. `BGTaskScheduler` refuses a
+    /// registration whose identifier holds a `*`, and the concrete
+    /// identifier of a press is not known until the press. Continued
+    /// processing is the one kind of task the framework lets an app
+    /// register after launch, per its header, so `submitManual`
+    /// registers each identifier as it needs it. The press comes from
+    /// a running app, so the handler is always in place in time.
     static func register() {
         guard !didRegister else { return }
         didRegister = true
@@ -73,19 +80,13 @@ enum BackupTaskScheduler {
             guard let task = task as? BGProcessingTask else { return }
             Task { @MainActor in handleNightly(task) }
         }
-
-        if #available(iOS 26.0, *) {
-            BGTaskScheduler.shared.register(
-                forTaskWithIdentifier: manualWildcard,
-                using: nil
-            ) { task in
-                guard let task = task as? BGContinuedProcessingTask else { return }
-                Task { @MainActor in handleManual(task) }
-            }
-        }
     }
 
     private static var didRegister = false
+
+    /// The manual identifiers that already have a handler. A second
+    /// registration of one identifier kills the app.
+    private static var registeredPresses: Set<String> = []
 
     // MARK: - The overnight pass
 
@@ -142,8 +143,10 @@ enum BackupTaskScheduler {
     @discardableResult
     static func submitManual(_ press: ManualBackupPress) -> Bool {
         guard #available(iOS 26.0, *) else { return false }
+        let taskIdentifier = identifier(for: press)
+        registerPress(taskIdentifier)
         let request = BGContinuedProcessingTaskRequest(
-            identifier: identifier(for: press),
+            identifier: taskIdentifier,
             title: BackupTriggerPlan.taskTitle(for: press),
             subtitle: startingLine)
         // The queue strategy waits for room instead of failing. iOS
@@ -164,6 +167,23 @@ enum BackupTaskScheduler {
 
     /// What the Live Activity shows before the first file moves.
     static let startingLine = "Starting"
+
+    /// Gives one press identifier its handler, once.
+    ///
+    /// `Info.plist` advertises the family as
+    /// `<bundle id>.backup.manual.*`, and the wildcard there covers
+    /// every identifier this makes.
+    @available(iOS 26.0, *)
+    private static func registerPress(_ taskIdentifier: String) {
+        guard registeredPresses.insert(taskIdentifier).inserted else { return }
+        BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: taskIdentifier,
+            using: nil
+        ) { task in
+            guard let task = task as? BGContinuedProcessingTask else { return }
+            Task { @MainActor in handleManual(task) }
+        }
+    }
 
     @available(iOS 26.0, *)
     private static func handleManual(_ task: BGContinuedProcessingTask) {

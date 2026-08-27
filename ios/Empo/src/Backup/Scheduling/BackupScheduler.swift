@@ -191,6 +191,7 @@ final class BackupScheduler {
         switch ResourcePolicy.stagingGate(conditions) {
         case .pause(let reason):
             pause = reason
+            log("%@ paused: %@", trigger.rawValue, reason.line)
             close(progress)
             return false
         case .run:
@@ -204,7 +205,14 @@ final class BackupScheduler {
         networkCause = ResourcePolicy.blockedCause(
             policy: BackupNetwork.policy, isOnCellular: BackupNetwork.isOnCellular)
 
+        log(
+            "%@ runs, network %@",
+            trigger.rawValue, networkCause == nil ? "clear" : BackupNetwork.waitingLine)
+
         guard let runner else {
+            // Ticket 008 brings the first provider. Until then the
+            // gates run and the pass stops here.
+            log("%@ has no runner yet", trigger.rawValue)
             close(progress)
             return false
         }
@@ -222,6 +230,13 @@ final class BackupScheduler {
         record(result.didFinish ? .succeeded : .otherFailure)
         report(result.targets)
         return result.didFinish
+    }
+
+    /// The one line a device check reads. The Backups screen of
+    /// ticket 016 shows the same state on screen.
+    private func log(_ format: String, _ arguments: CVarArg...) {
+        guard AppSettings.shared.debugLogs else { return }
+        NSLog("[BackupScheduler] %@", String(format: format, arguments: arguments))
     }
 
     /// A continued-processing task that stops reporting progress is
