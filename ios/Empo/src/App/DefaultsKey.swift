@@ -21,6 +21,9 @@ enum DefaultsKey {
     static let controllerHaptics = "controllerHaptics"
     static let caBundleLastRefresh = "caBundleLastRefresh"
 
+    /// Controls edit mode: drags land on a fixed grid. Bool.
+    static let controlsEditSnapToGrid = "controlsEditSnapToGrid"
+
     // MARK: - Disclaimer
 
     static let disclaimerAcknowledgedVersion = "disclaimerAcknowledgedVersion"

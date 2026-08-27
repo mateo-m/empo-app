@@ -15,6 +15,9 @@ enum ControlsZone {
     static let minLandscapeInset: CGFloat = 12.0
     static let fallbackDeviceCornerRadius: CGFloat = 55.0
     static let dragScaleFactor: CGFloat = 1.08
+    /// Snap-to-grid step for control drags in edit mode. Small
+    /// enough for fine placement, large enough to feel the pull.
+    static let editGridStep: CGFloat = 10.0
 
     /// Minimum vertical space below the game rect required to place
     /// the toolbar + controls in the dedicated zone below the game.
@@ -117,6 +120,24 @@ enum ControlsZone {
         let x = geoSize.width - rightInset - toolbarEdgePad - totalW / 2
         let y = topInset + toolbarEdgePad + btnSize / 2
         return CGPoint(x: x, y: y)
+    }
+
+    /// Align a control onto the edit grid by its TOP-LEFT EDGE, not
+    /// its center: borders then sit on lattice lines whatever the
+    /// control's size, instead of drifting by size/2. The lattice
+    /// anchors at the zone's top-left, so the same drag lands on the
+    /// same points whatever the safe-area insets are.
+    static func snappedToEditGrid(
+        _ point: CGPoint, controlSize: CGFloat, geoSize: CGSize,
+        safeArea: EdgeInsets, controlsMinY: CGFloat
+    ) -> CGPoint {
+        let zone = bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
+        let half = controlSize / 2
+        return CGPoint(
+            x: zone.minX + ((point.x - half - zone.minX) / editGridStep).rounded()
+                * editGridStep + half,
+            y: zone.minY + ((point.y - half - zone.minY) / editGridStep).rounded()
+                * editGridStep + half)
     }
 
     static func absolutePosition(

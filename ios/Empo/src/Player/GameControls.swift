@@ -337,9 +337,11 @@ struct DPad: View {
     let editing: Bool
 
     /// Width of each arm of the plus, as a fraction of the total
-    /// bounding box. 0.36 gives balanced proportions where the center
-    /// square feels integral to the arms rather than a visual seam.
-    private let armFraction: CGFloat = 0.36
+    /// bounding box. Exact thirds: with the D-pad's size snapped to
+    /// a multiple of 30 while the grid is on, every border of the
+    /// plus - outer frame AND inner branches - lands on the 10 pt
+    /// edit lattice.
+    private let armFraction: CGFloat = 1.0 / 3.0
 
     /// Corner radius of the plus's OUTER corners (arm tips), as a
     /// fraction of armWidth.
@@ -350,9 +352,9 @@ struct DPad: View {
 
     /// Inner-corner fillet radius, as a fraction of armWidth. Rounds
     /// the four notches between the arms so the plus-to-square
-    /// transitions don't feel sharp. Small values (0.05-0.15) give
-    /// a subtle fillet. 0 keeps the notches perfectly square.
-    private let innerCornerFraction: CGFloat = 0.1
+    /// transitions don't feel sharp. Matches cornerFraction, so a
+    /// notch curves exactly as much as an arm tip.
+    private let innerCornerFraction: CGFloat = 0.25
 
     var body: some View {
         MovementTouchHost(size: size, editing: editing, style: .dpad) { state in
@@ -366,7 +368,6 @@ struct DPad: View {
             cornerFraction: cornerFraction,
             innerCornerFraction: innerCornerFraction
         )
-
         let pressed = !active.isEmpty
 
         // Everything here lives inside a single scaled ZStack so the
