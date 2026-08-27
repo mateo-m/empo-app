@@ -44,7 +44,7 @@ public enum BackupStateRebuild: Equatable, Sendable {
 public final class BackupStateStore {
 
     /// The schema this build writes. Raise it when a table changes.
-    public static let schemaVersion: Int32 = 2
+    public static let schemaVersion: Int32 = 3
 
     /// What the open did. `needsRebuildFromTarget` reads it.
     public let openOutcome: BackupStateOpen
@@ -205,6 +205,17 @@ public final class BackupStateStore {
             uploadedBytes INTEGER NOT NULL,
             createdAt REAL NOT NULL,
             asked INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS scheduler_state (
+            key TEXT NOT NULL PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS partial_tally (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            path TEXT NOT NULL,
+            runs INTEGER NOT NULL,
+            PRIMARY KEY (targetId, gameKey, path)
         );
         CREATE INDEX IF NOT EXISTS run_record_startedAt ON run_record (startedAt);
         """
@@ -507,6 +518,93 @@ public final class BackupStateStore {
             partialSince: date(row[2]))
     }
 
+    // MARK: - The scheduler's own state, per SPEC 7.10 and 7.11
+
+    /// The keys `scheduler_state` holds.
+    private enum SchedulerKey: String {
+        /// The consecutive runs lost to a force quit, per 7.10.
+        case interruptedRunTally = "interrupted-run-tally"
+        /// The notifications already posted, per 7.11. A key that
+        /// leaves the list arms its cause again.
+        case notificationLedger = "notification-ledger"
+    }
+
+    private func schedulerValue(_ key: SchedulerKey) throws -> String? {
+        let rows = try database.query(
+            "SELECT value FROM scheduler_state WHERE key = ?", [.text(key.rawValue)])
+        return rows.first?[0].string
+    }
+
+    private func setSchedulerValue(_ value: String, for key: SchedulerKey) throws {
+        try database.run(
+            """
+            INSERT INTO scheduler_state (key, value) VALUES (?, ?)
+            ON CONFLICT (key) DO UPDATE SET value = excluded.value
+            """,
+            [.text(key.rawValue), .text(value)])
+    }
+
+    public func interruptedRunTally() throws -> InterruptedRunTally {
+        let text = try schedulerValue(.interruptedRunTally) ?? "0"
+        return InterruptedRunTally(count: Int(text) ?? 0)
+    }
+
+    public func saveInterruptedRunTally(_ tally: InterruptedRunTally) throws {
+        try setSchedulerValue(String(tally.count), for: .interruptedRunTally)
+    }
+
+    public func notificationLedger() throws -> BackupNotificationLedger {
+        guard let text = try schedulerValue(.notificationLedger), !text.isEmpty else {
+            return BackupNotificationLedger()
+        }
+        return BackupNotificationLedger(
+            postedKeys: Set(text.split(separator: "\n").map(String.init)))
+    }
+
+    public func saveNotificationLedger(_ ledger: BackupNotificationLedger) throws {
+        try setSchedulerValue(
+            ledger.postedKeys.sorted().joined(separator: "\n"), for: .notificationLedger)
+    }
+
+    // MARK: - The partial-path clock of SPEC 7.2
+
+    /// How many consecutive runs each save member came back partial
+    /// on, for one game on one target.
+    public func partialTally(targetId: String, gameKey: String) throws -> [String: Int] {
+        let rows = try database.query(
+            "SELECT path, runs FROM partial_tally WHERE targetId = ? AND gameKey = ?",
+            [.text(targetId), .text(gameKey)])
+        var tally: [String: Int] = [:]
+        for row in rows {
+            guard let path = row[0].string, let runs = row[1].int64 else { continue }
+            tally[path] = Int(runs)
+        }
+        return tally
+    }
+
+    /// Replaces the whole tally for one game on one target.
+    ///
+    /// It replaces rather than merges, because the count is
+    /// consecutive: a path the run no longer reports partial must
+    /// lose its count, per 7.2.
+    public func savePartialTally(
+        _ tally: [String: Int], targetId: String, gameKey: String
+    ) throws {
+        try database.transaction {
+            try database.run(
+                "DELETE FROM partial_tally WHERE targetId = ? AND gameKey = ?",
+                [.text(targetId), .text(gameKey)])
+            for (path, runs) in tally.sorted(by: { $0.key < $1.key }) {
+                try database.run(
+                    """
+                    INSERT INTO partial_tally (targetId, gameKey, path, runs)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    [.text(targetId), .text(gameKey), .text(path), .integer(Int64(runs))])
+            }
+        }
+    }
+
     // MARK: - Run history
 
     public func recordRun(_ run: BackupRunRecord) throws {
@@ -741,7 +839,7 @@ public final class BackupStateStore {
         let tables = [
             "uploaded_manifest", "known_blob", "run_checkpoint", "snapshot_ledger",
             "target_maintenance", "pending_deletion", "staleness", "run_record",
-            "intent_record",
+            "intent_record", "partial_tally",
         ]
         try database.transaction {
             for table in tables {

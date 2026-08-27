@@ -4,6 +4,9 @@
 #import "app_bridge.h"
 #import "TouchControls.h"
 
+// The SDL app delegate, so `EmpoAppDelegate` can subclass it.
+#import "EmpoAppDelegate.h"
+
 // libarchive - for zip/7z/rar extraction in ArchiveExtractor.
 #import <archive.h>
 #import <archive_entry.h>

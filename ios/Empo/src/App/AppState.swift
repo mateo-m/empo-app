@@ -305,6 +305,9 @@ extension AppState: EngineSessionCoordinatorDelegate {
     }
 
     func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool) {
+        // The backup backbone of SPEC 7.3 runs at session end. The
+        // game goes away below, so read it first.
+        let played = activeSessionGame
         // Both clean and crash exits surface an alert that routes
         // through RootView's dismiss-only branch (phase != nil).
         // Cross-session play is disabled (`docs/multi-session.md`),
@@ -334,6 +337,9 @@ extension AppState: EngineSessionCoordinatorDelegate {
         ScreenRegionApplier.endSession()
         engineReady = false
         PauseManager.shared.reset()
+        // Last, because 7.6 counts a paused session as live and
+        // `reset()` is what ends it.
+        BackupScheduler.shared.playSessionDidEnd(game: played)
     }
 
     func coordinatorGameRectDidChange(_ rect: CGRect) {

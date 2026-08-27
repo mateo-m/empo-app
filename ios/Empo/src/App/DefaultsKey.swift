@@ -24,6 +24,18 @@ enum DefaultsKey {
     /// Controls edit mode: drags land on a fixed grid. Bool.
     static let controlsEditSnapToGrid = "controlsEditSnapToGrid"
 
+    // MARK: - Cloud backups
+
+    /// "Back up over cellular", the one app-wide network switch of
+    /// SPEC 7.4. Bool, off by default. There is no per-target
+    /// override, and Low Data Mode has no toggle at all.
+    static let backupOverCellular = "backupOverCellular"
+
+    /// Empo already asked for notification permission. It asks after
+    /// the user configures their first backup target, never at first
+    /// launch, per SPEC 7.11. Bool.
+    static let backupNotificationsAsked = "backupNotificationsAsked"
+
     // MARK: - Disclaimer
 
     static let disclaimerAcknowledgedVersion = "disclaimerAcknowledgedVersion"

@@ -519,4 +519,47 @@ final class BackupStateStoreTests: XCTestCase {
 
         XCTAssertEqual(try store.runHistory(), [record])
     }
+    // MARK: - The scheduler's own state, per SPEC 7.10 and 7.11
+
+    func testTheInterruptedRunTallySurvivesAReopen() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        XCTAssertEqual(try store.interruptedRunTally().count, 0)
+        try store.saveInterruptedRunTally(InterruptedRunTally(count: 3))
+        XCTAssertEqual(try store.interruptedRunTally().count, 3)
+        try store.saveInterruptedRunTally(InterruptedRunTally(count: 0))
+        XCTAssertEqual(try store.interruptedRunTally().count, 0)
+    }
+
+    func testTheNotificationLedgerRoundTrips() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        XCTAssertEqual(try store.notificationLedger(), BackupNotificationLedger())
+        var ledger = BackupNotificationLedger()
+        _ = ledger.post(causes: [.signInDead], targetId: "t1")
+        _ = ledger.post(causes: [.deviceStorageLow], targetId: "t2")
+        try store.saveNotificationLedger(ledger)
+        XCTAssertEqual(try store.notificationLedger(), ledger)
+    }
+
+    func testThePartialTallyReplacesRatherThanMerges() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        try store.savePartialTally(
+            ["Game/a.rvdata2": 2, "Game/b.rvdata2": 1], targetId: "t1", gameKey: "g")
+        XCTAssertEqual(
+            try store.partialTally(targetId: "t1", gameKey: "g"),
+            ["Game/a.rvdata2": 2, "Game/b.rvdata2": 1])
+        try store.savePartialTally(["Game/a.rvdata2": 3], targetId: "t1", gameKey: "g")
+        XCTAssertEqual(
+            try store.partialTally(targetId: "t1", gameKey: "g"), ["Game/a.rvdata2": 3])
+    }
+
+    func testRemovingATargetDropsItsPartialTally() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        try store.savePartialTally(["Game/a.rvdata2": 2], targetId: "t1", gameKey: "g")
+        try store.removeTarget(targetId: "t1")
+        XCTAssertEqual(try store.partialTally(targetId: "t1", gameKey: "g"), [:])
+    }
 }
