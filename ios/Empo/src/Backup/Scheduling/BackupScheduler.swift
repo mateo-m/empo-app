@@ -227,6 +227,7 @@ final class BackupScheduler {
             // Ticket 008 brings the first provider. Until then the
             // gates run and the pass stops here.
             log("%@ has no runner yet", trigger.rawValue)
+            await holdTheLiveActivityForADeviceCheck(progress)
             close(progress)
             return false
         }
@@ -244,6 +245,26 @@ final class BackupScheduler {
         record(result.didFinish ? .succeeded : .otherFailure)
         report(result.targets)
         return result.didFinish
+    }
+
+    /// Walks the progress of a continued-processing task for a
+    /// minute, when the process starts with `-backupHoldManual YES`.
+    ///
+    /// The device check of ticket 007 has to see the Live Activity
+    /// the system draws for the task. A pass with no runner ends in
+    /// milliseconds, which is too fast to see. Delete this when
+    /// ticket 016 lands.
+    private func holdTheLiveActivityForADeviceCheck(_ progress: Progress?) async {
+        guard let progress else { return }
+        guard UserDefaults.standard.bool(forKey: "backupHoldManual") else { return }
+        let steps: Int64 = 60
+        progress.totalUnitCount = steps
+        for step in 1...steps {
+            guard !Task.isCancelled else { return }
+            progress.completedUnitCount = step
+            log("the Live Activity shows %ld of %ld", step, steps)
+            try? await Task.sleep(for: .seconds(1))
+        }
     }
 
     /// The one line a device check reads. The Backups screen of
