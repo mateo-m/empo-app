@@ -23,6 +23,20 @@ settings:
     # scheme `db-<key>` in Info.plist. An empty key hides Dropbox from
     # the add flow at runtime, the same way 9.1 gates iCloud Drive.
     DROPBOX_APP_KEY: fhropb11pgietj1
+    # The Google Drive OAuth client id of SPEC 9.3. A PKCE client
+    # holds no secret, so the id is public and lives here. Google
+    # gives an iOS client the reversed form of its own id, and
+    # Info.plist registers that as the callback scheme. An empty id
+    # hides Google Drive from the add flow at runtime.
+    #
+    # The checklist to fill it is in 9.3: create a Google Cloud
+    # project, enable the Drive API, create an iOS OAuth client, and
+    # set the consent screen to External with `drive.file` alone.
+    GOOGLE_DRIVE_CLIENT_ID: ""
+    # The reversed client id, which is `com.googleusercontent.apps.`
+    # plus the id without its `.apps.googleusercontent.com` tail.
+    # Info.plist cannot compute it, so it is set beside the id.
+    GOOGLE_DRIVE_REDIRECT_SCHEME: ""
     CLANG_CXX_LANGUAGE_STANDARD: c++14
     # `YES` / `NO` are Xcode's canonical boolean tokens for build
     # settings. xcodebuild's parser treats them specially. yamllint

@@ -159,9 +159,40 @@ final class BackupTransferSession: NSObject {
 struct HTTPAnswer: Sendable {
     let status: Int
     let body: Data
-    let retryAfterHeader: String?
+    /// Every response header. A provider reads the ones it needs:
+    /// `Retry-After` for the throttle of 8.6, and, on Google Drive,
+    /// `Location` for a new upload session and `Range` for the offset
+    /// a broken one reached, per 9.3.
+    let headers: [String: String]
+
+    init(status: Int, body: Data, headers: [String: String] = [:]) {
+        self.status = status
+        self.body = body
+        self.headers = headers
+    }
+
+    init(status: Int, body: Data, response: HTTPURLResponse) {
+        self.init(status: status, body: body, headers: Self.headers(of: response))
+    }
 
     var isSuccess: Bool { (200..<300).contains(status) }
+
+    /// One header by name. HTTP header names are case-insensitive,
+    /// and a service may send `location` or `Location`.
+    func header(_ name: String) -> String? {
+        headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+
+    var retryAfterHeader: String? { header("Retry-After") }
+
+    private static func headers(of response: HTTPURLResponse) -> [String: String] {
+        var found: [String: String] = [:]
+        for (key, value) in response.allHeaderFields {
+            guard let name = key as? String else { continue }
+            found[name] = String(describing: value)
+        }
+        return found
+    }
 }
 
 extension BackupTransferSession: URLSessionDataDelegate {
@@ -192,7 +223,7 @@ extension BackupTransferSession: URLSessionDataDelegate {
                 HTTPAnswer(
                     status: http.statusCode,
                     body: body(ofTask: task.taskIdentifier),
-                    retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"))))
+                    response: http)))
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {

@@ -45,10 +45,7 @@ final class BackupAPISession: Sendable {
         do {
             let (data, response) = try await answer(for: request)
             guard let http = response as? HTTPURLResponse else { throw BackupProviderError.offline }
-            return HTTPAnswer(
-                status: http.statusCode,
-                body: data,
-                retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"))
+            return HTTPAnswer(status: http.statusCode, body: data, response: http)
         } catch let error as BackupProviderError {
             throw error
         } catch {
@@ -75,9 +72,7 @@ final class BackupAPISession: Sendable {
                 // The body carries the reason, not the file.
                 let body = (try? Data(contentsOf: temporary)) ?? Data()
                 try? FileManager.default.removeItem(at: temporary)
-                return HTTPAnswer(
-                    status: http.statusCode, body: body,
-                    retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"))
+                return HTTPAnswer(status: http.statusCode, body: body, response: http)
             }
 
             let manager = FileManager.default
@@ -87,7 +82,7 @@ final class BackupAPISession: Sendable {
                 try manager.removeItem(at: localFile)
             }
             try manager.moveItem(at: temporary, to: localFile)
-            return HTTPAnswer(status: http.statusCode, body: Data(), retryAfterHeader: nil)
+            return HTTPAnswer(status: http.statusCode, body: Data(), response: http)
         } catch let error as BackupProviderError {
             throw error
         } catch {

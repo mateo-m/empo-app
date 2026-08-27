@@ -104,21 +104,25 @@ final class BackupScheduler {
 
     /// Runs the launch arguments a device check needs, in order.
     ///
-    /// `-backupAddICloud YES` and `-backupAddDropbox YES` add a
-    /// target through the permission check of 8.7.
-    /// `-backupPressNow YES` then presses "Back up now". An add
-    /// finishes first, because a press that beat it would find no
-    /// target and the pass would end at once.
+    /// `-backupAddICloud YES`, `-backupAddDropbox YES`, and
+    /// `-backupAddGoogleDrive YES` add a target through the
+    /// permission check of 8.7. `-backupPressNow YES` then presses
+    /// "Back up now". An add finishes first, because a press that
+    /// beat it would find no target and the pass would end at once.
     ///
     /// Tickets 016 and 017 bring the screens that carry all of them.
     /// Delete this when they land, with the two holds beside it.
     private func runTheDeviceCheck() {
         let addsICloud = UserDefaults.standard.bool(forKey: "backupAddICloud")
         let addsDropbox = UserDefaults.standard.bool(forKey: "backupAddDropbox")
+        let addsGoogleDrive = UserDefaults.standard.bool(forKey: "backupAddGoogleDrive")
         let presses = UserDefaults.standard.bool(forKey: "backupPressNow")
         let uploadsBig = UserDefaults.standard.bool(forKey: "backupBigUpload")
         let rearms = UserDefaults.standard.bool(forKey: "backupRearmNotifications")
-        guard addsICloud || addsDropbox || presses || uploadsBig || rearms else { return }
+        guard addsICloud || addsDropbox || addsGoogleDrive || presses || uploadsBig || rearms
+        else {
+            return
+        }
 
         // A cause posts once, per 7.11, so a second device check on
         // the same cause stays silent. This re-arms the ledger the
@@ -136,6 +140,7 @@ final class BackupScheduler {
                 configuredTargetCount: BackupTargets.load().count)
             if addsICloud { await self.addTheICloudTarget() }
             if addsDropbox { await self.addTheDropboxTarget() }
+            if addsGoogleDrive { await self.addTheGoogleDriveTarget() }
             if uploadsBig { await self.uploadOneBigFile() }
             if presses { self.pressBackUpNow(.library) }
         }
@@ -145,16 +150,23 @@ final class BackupScheduler {
     ///
     /// Dropbox takes one `files/upload` up to 150 MiB. A larger file
     /// takes `upload_session/start`, an `append_v2` per chunk, and
-    /// `finish`, so 200 MiB proves the second path.
+    /// `finish`, so 200 MiB proves the second path. Google Drive
+    /// takes a simple upload up to 5 MB, per 9.3, so the same file
+    /// proves its resumable path too.
     private static let bigUploadBytes = 200 * 1024 * 1024
 
-    /// Puts one file over 150 MiB, confirms it, and deletes it.
+    /// Puts one large file, confirms it, and deletes it.
     ///
     /// A small library never reaches the limit, so a real game cannot
-    /// prove the upload session. This writes the bytes instead.
+    /// prove the chunked upload. This writes the bytes instead.
+    ///
+    /// `-backupBigUploadProvider google-drive` names the target. It
+    /// takes Dropbox by default, because ticket 009 wrote the check.
     private func uploadOneBigFile() async {
-        guard let descriptor = BackupTargets.load().first(where: { $0.provider == .dropbox }) else {
-            log("the big upload found no Dropbox target")
+        let name = UserDefaults.standard.string(forKey: "backupBigUploadProvider")
+        let kind = name.flatMap(BackupProviderKind.init(rawValue:)) ?? .dropbox
+        guard let descriptor = BackupTargets.load().first(where: { $0.provider == kind }) else {
+            log("the big upload found no \(kind.rawValue) target")
             return
         }
         guard let provider = await BackupTargets.provider(for: descriptor) else {
@@ -211,7 +223,7 @@ final class BackupScheduler {
             log("this build carries no Dropbox app key")
             return
         }
-        guard let presenter = await DropboxSignIn.screenForTheSheet() else {
+        guard let presenter = await OAuthSignIn.screenForTheSheet() else {
             log("Dropbox found no screen to sign in from")
             return
         }
@@ -238,6 +250,14 @@ final class BackupScheduler {
             log("Dropbox signed in and still cannot open")
             return
         }
+        await reportThePermissionCheck(descriptor, provider: provider)
+    }
+
+    /// Runs the permission check of 8.7 and writes every step to the
+    /// log a device check reads.
+    private func reportThePermissionCheck(
+        _ descriptor: TargetDescriptor, provider: some BackupProvider
+    ) async {
         guard
             let result = try? await BackupTargets.addAfterPermissionCheck(
                 descriptor, provider: provider)
@@ -252,6 +272,45 @@ final class BackupScheduler {
             log("the free space: \(quota.usedBytes) used of \(quota.limitBytes ?? -1)")
         }
         log("the target was added: \(result.allowsAdd)")
+    }
+
+    /// Signs in to Google Drive and adds the target, per 8.10 and 9.3.
+    ///
+    /// The sign-in needs a view controller to present its browser, so
+    /// this waits for the scene to draw one.
+    private func addTheGoogleDriveTarget() async {
+        guard GoogleDriveSignIn.isConfigured else {
+            log("this build carries no Google Drive client id")
+            return
+        }
+        guard let presenter = await OAuthSignIn.screenForTheSheet() else {
+            log("Google Drive found no screen to sign in from")
+            return
+        }
+
+        let descriptor = TargetDescriptor(
+            id: "google-drive",
+            provider: .googleDrive,
+            label: "Google Drive",
+            accountHint: "this account",
+            root: GoogleDrive.root)
+        do {
+            let signedIn = try await GoogleDriveGate.shared.signIn(
+                targetId: descriptor.id, presenting: presenter)
+            guard signedIn else {
+                log("the user closed the Google Drive browser")
+                return
+            }
+        } catch {
+            log("the Google Drive sign-in failed: \(error.localizedDescription)")
+            return
+        }
+
+        guard let provider = GoogleDriveGate.shared.target(for: descriptor) else {
+            log("Google Drive signed in and still cannot open")
+            return
+        }
+        await reportThePermissionCheck(descriptor, provider: provider)
     }
 
     /// Adds the iCloud Drive target and writes each step of the

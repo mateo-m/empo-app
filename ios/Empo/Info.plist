@@ -52,6 +52,20 @@
 				<string>db-$(DROPBOX_APP_KEY)</string>
 			</array>
 		</dict>
+		<dict>
+			<!-- The Google Drive OAuth callback of SPEC 8.10 and 9.3.
+			     Google gives an iOS client the reversed form of its own
+			     id, and that is the scheme the callback comes back on.
+			     It is a custom scheme and never an https link. -->
+			<key>CFBundleTypeRole</key>
+			<string>None</string>
+			<key>CFBundleURLName</key>
+			<string>sh.mateo.empo.googledrive</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(GOOGLE_DRIVE_REDIRECT_SCHEME)</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
@@ -60,6 +74,11 @@
 	     the add flow at runtime. -->
 	<key>EmpoDropboxAppKey</key>
 	<string>$(DROPBOX_APP_KEY)</string>
+	<!-- The Google Drive OAuth client id of SPEC 9.3. A PKCE client
+	     holds no secret, so this id is public. An empty id hides
+	     Google Drive from the add flow at runtime. -->
+	<key>EmpoGoogleDriveClientId</key>
+	<string>$(GOOGLE_DRIVE_CLIENT_ID)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

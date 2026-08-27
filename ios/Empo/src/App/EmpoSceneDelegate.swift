@@ -24,7 +24,7 @@ final class EmpoSceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// needs the Associated Domains entitlement and a sideloaded
     /// build does not hold it.
     func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
-        for context in contexts where DropboxSignIn.shared.resume(with: context.url) {
+        for context in contexts where OAuthSignIn.shared.resume(with: context.url) {
             return
         }
     }
