@@ -32,11 +32,11 @@ settings:
     # The checklist to fill it is in 9.3: create a Google Cloud
     # project, enable the Drive API, create an iOS OAuth client, and
     # set the consent screen to External with `drive.file` alone.
-    GOOGLE_DRIVE_CLIENT_ID: ""
+    GOOGLE_DRIVE_CLIENT_ID: 658190564191-849rvfnvehedkh4u9mk3n8tsibeq1ers.apps.googleusercontent.com
     # The reversed client id, which is `com.googleusercontent.apps.`
     # plus the id without its `.apps.googleusercontent.com` tail.
     # Info.plist cannot compute it, so it is set beside the id.
-    GOOGLE_DRIVE_REDIRECT_SCHEME: ""
+    GOOGLE_DRIVE_REDIRECT_SCHEME: com.googleusercontent.apps.658190564191-849rvfnvehedkh4u9mk3n8tsibeq1ers
     CLANG_CXX_LANGUAGE_STANDARD: c++14
     # `YES` / `NO` are Xcode's canonical boolean tokens for build
     # settings. xcodebuild's parser treats them specially. yamllint
@@ -121,6 +121,8 @@ settings:
       # Local device installs: use a dev bundle ID a personal team can
       # register. Override in the gitignored Signing.xcconfig if needed.
       PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev
+      GOOGLE_DRIVE_REDIRECT_SCHEME: com.googleusercontent.apps.658190564191-qhd54l38krfmrhep2jbftfsctqlo77a9
+      GOOGLE_DRIVE_CLIENT_ID: 658190564191-qhd54l38krfmrhep2jbftfsctqlo77a9.apps.googleusercontent.com
       ENABLE_TESTABILITY: YES # yamllint disable-line rule:truthy
     Release:
       OTHER_CFLAGS: "-fdeclspec -O3"
