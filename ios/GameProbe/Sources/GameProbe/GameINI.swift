@@ -24,35 +24,37 @@ public enum GameINI {
     ///   - Value-seeking: an ini without the requested value
     ///     (a settings or installer ini) does not end the scan.
     public static func parseINIValue(at gameDir: URL, section: String, key: String) -> String? {
-        let fm = FileManager.default
-        guard let items = try? fm.contentsOfDirectory(atPath: gameDir.path) else {
-            return nil
-        }
-        // The primary ini comes from the directory LISTING, never
-        // from a `fileExists("Game.ini")` probe: that probe is
-        // case-insensitive on Darwin and case-sensitive on
-        // iOS/Linux, so a lowercase `game.ini` would change
-        // priority between the platforms. The listing-based pick
-        // behaves identically everywhere.
-        let candidates =
-            items
-            .filter { $0.lowercased().hasSuffix(".ini") }
-            .sorted()
-        let primary = candidates.first { $0.lowercased() == "game.ini" }
-        if let primary,
-            let value = parseINIValue(
-                in: gameDir.appendingPathComponent(primary), section: section, key: key)
-        {
-            return value
-        }
-        for item in candidates where item != primary {
-            if let value = parseINIValue(
-                in: gameDir.appendingPathComponent(item), section: section, key: key)
-            {
+        for ini in iniFileURLs(at: gameDir) {
+            if let value = parseINIValue(in: ini, section: section, key: key) {
                 return value
             }
         }
         return nil
+    }
+
+    /// The INI files of a game directory, in the order every reader
+    /// must use: `Game.ini` first, then every other `*.ini` sorted
+    /// by name.
+    ///
+    /// The primary ini comes from the directory LISTING, never from
+    /// a `fileExists("Game.ini")` probe: that probe is
+    /// case-insensitive on Darwin and case-sensitive on iOS/Linux,
+    /// so a lowercase `game.ini` would change priority between the
+    /// platforms. The listing-based pick behaves identically
+    /// everywhere.
+    public static func iniFileURLs(at gameDir: URL, fm: FileManager = .default) -> [URL] {
+        guard let items = try? fm.contentsOfDirectory(atPath: gameDir.path) else {
+            return []
+        }
+        let candidates =
+            items
+            .filter { $0.lowercased().hasSuffix(".ini") }
+            .sorted()
+        guard let primary = candidates.first(where: { $0.lowercased() == "game.ini" }) else {
+            return candidates.map { gameDir.appendingPathComponent($0) }
+        }
+        let ordered = [primary] + candidates.filter { $0 != primary }
+        return ordered.map { gameDir.appendingPathComponent($0) }
     }
 
     /// Reads `[section] key=value` from a Game.ini file. The parser

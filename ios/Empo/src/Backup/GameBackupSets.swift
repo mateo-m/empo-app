@@ -28,6 +28,7 @@ enum GameBackupSets {
             containerURL: container.url,
             mode: mode,
             sharedDataDirectory: DataDirectory.resolve(for: container),
+            documentsRoot: DataDirectory.documentsRootURL,
             rescuedSavesBuckets: buckets,
             manualMarks: intent.manualMarks,
             runtimeWatchPaths: GameSaveWatch.shared.joinedPaths(forGame: container.id))

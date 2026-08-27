@@ -12,6 +12,11 @@ public struct GameBackupSetRequest: Sendable {
     public var mode: BackupMode
     /// The shared data directory the game resolved to, per 4.5.
     public var sharedDataDirectory: URL?
+    /// `Documents/`, so the header records the shared path the way
+    /// 4.5 wants it: relative to `Documents/`, because the absolute
+    /// path holds an app-container id no second device can rebuild.
+    /// Without it the header falls back to the absolute path.
+    public var documentsRoot: URL?
     /// The Rescued Saves buckets that match this game, per 4.5,
     /// keyed by bucket name.
     public var rescuedSavesBuckets: [String: URL]
@@ -29,6 +34,7 @@ public struct GameBackupSetRequest: Sendable {
         containerURL: URL,
         mode: BackupMode,
         sharedDataDirectory: URL? = nil,
+        documentsRoot: URL? = nil,
         rescuedSavesBuckets: [String: URL] = [:],
         manualMarks: [String] = [],
         runtimeWatchPaths: [String] = []
@@ -36,6 +42,7 @@ public struct GameBackupSetRequest: Sendable {
         self.containerURL = containerURL
         self.mode = mode
         self.sharedDataDirectory = sharedDataDirectory
+        self.documentsRoot = documentsRoot
         self.rescuedSavesBuckets = rescuedSavesBuckets
         self.manualMarks = manualMarks
         self.runtimeWatchPaths = runtimeWatchPaths
@@ -114,7 +121,7 @@ public enum BackupSetResolver {
         return GameBackupSet(
             mode: request.mode,
             members: sorted(members),
-            sharedDataDirectory: request.sharedDataDirectory?.path,
+            sharedDataDirectory: recordedSharedPath(request),
             rescuedSavesBuckets: request.rescuedSavesBuckets.keys.sorted())
     }
 
@@ -157,6 +164,14 @@ public enum BackupSetResolver {
         }
 
         return GameBackupSet(mode: .slim, members: sorted(members))
+    }
+
+    /// The shared data directory as the manifest header records it,
+    /// per 4.5.
+    private static func recordedSharedPath(_ request: GameBackupSetRequest) -> String? {
+        guard let shared = request.sharedDataDirectory else { return nil }
+        guard let documents = request.documentsRoot else { return shared.path }
+        return ExternalMembers.recordedPath(of: shared, documentsRoot: documents)
     }
 
     // MARK: - The container
