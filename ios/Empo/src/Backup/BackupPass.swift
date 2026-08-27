@@ -96,7 +96,8 @@ final class BackupPass: BackupRunning {
         let result = await engine.run(request)
         log(
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
-                + "\(result.streams.count) streams")
+                + "\(result.streams.count) streams"
+                + (result.stop.map { ", stop \($0)" } ?? ""))
         return result
     }
 

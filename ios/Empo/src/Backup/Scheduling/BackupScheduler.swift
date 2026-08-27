@@ -117,9 +117,23 @@ final class BackupScheduler {
         let addsDropbox = UserDefaults.standard.bool(forKey: "backupAddDropbox")
         let presses = UserDefaults.standard.bool(forKey: "backupPressNow")
         let uploadsBig = UserDefaults.standard.bool(forKey: "backupBigUpload")
-        guard addsICloud || addsDropbox || presses || uploadsBig else { return }
+        let rearms = UserDefaults.standard.bool(forKey: "backupRearmNotifications")
+        guard addsICloud || addsDropbox || presses || uploadsBig || rearms else { return }
+
+        // A cause posts once, per 7.11, so a second device check on
+        // the same cause stays silent. This re-arms the ledger the
+        // way a rebuilt cache does.
+        if rearms, let store = self.store {
+            try? store.saveNotificationLedger(BackupNotificationLedger())
+            log("the notification ledger is empty again")
+        }
 
         Task {
+            // Ticket 016 brings the add flow that asks. Until then a
+            // device check has no other way to reach the permission,
+            // and the notification of 7.11 cannot fire without it.
+            await BackupNotifier.askForPermissionIfNeeded(
+                configuredTargetCount: BackupTargets.load().count)
             if addsICloud { await self.addTheICloudTarget() }
             if addsDropbox { await self.addTheDropboxTarget() }
             if uploadsBig { await self.uploadOneBigFile() }
