@@ -11,9 +11,9 @@ import GameProbe
 /// misses a directory the game makes while it runs.
 ///
 /// So this reads the size and the modified time of `Game/` at
-/// session start and again at session end, and takes the difference.
-/// The cost is one stat pass per session on each side, off the main
-/// actor, and no descriptor at all. It changes no engine code:
+/// session start and again at each later reading, and takes the
+/// difference. The cost is one stat pass for each reading, off the
+/// main actor, and no descriptor at all. It changes no engine code:
 /// `mkxp-z-apple-mobile` stays launcher-agnostic.
 ///
 /// The watch runs in slim mode only. Full mode holds the whole tree
@@ -40,13 +40,23 @@ final class GameSaveWatch {
 
     private struct Session {
         let container: GameContainer
-        let startedAt: Date
-        var reading: Task<[String: FileStamp], Never>
+        /// The time the baseline pass started. `RuntimeWatch` counts
+        /// a file changed at or after it as written, which covers a
+        /// write that lands while the pass walks the tree.
+        var readingStartedAt: Date
+        var baseline: Task<[String: FileStamp], Never>
+    }
+
+    /// One pass over the tree: what it found, and what the rules
+    /// made of it.
+    private struct Pass: Sendable {
+        let after: [String: FileStamp]
+        let result: RuntimeWatchResult?
     }
 
     // MARK: - The session
 
-    /// Takes the first reading. `EngineSessionCoordinator` calls
+    /// Takes the baseline reading. `EngineSessionCoordinator` calls
     /// this as it configures the engine, so the reading runs beside
     /// the launch and not in front of it.
     func beginSession(container: GameContainer) {
@@ -57,50 +67,69 @@ final class GameSaveWatch {
         let gameURL = container.gameURL
         session = Session(
             container: container,
-            startedAt: Date(),
-            reading: Task.detached(priority: .utility) {
+            readingStartedAt: Date(),
+            baseline: Task.detached(priority: .utility) {
                 Self.readTree(at: gameURL)
             })
     }
 
-    /// Takes the second reading and applies the rules of 3.6. The
-    /// call is safe with no session open, because the return path
-    /// and the engine-termination path both reach it.
-    func endSession() {
-        guard let session else { return }
-        self.session = nil
-
-        let container = session.container
-        let startedAt = session.startedAt
-        let reading = session.reading
+    /// Reads the tree again, applies the rules of 3.6, and keeps the
+    /// session open with this reading as the new baseline.
+    ///
+    /// Empo has no quit: a session ends when the game exits itself,
+    /// when it crashes, or when the user closes the app from the app
+    /// switcher, per `docs/multi-session.md`. The last one gives no
+    /// callback, so the watch reads at every point where it can lose
+    /// the chance. `AppState.flushSessionPlayTimeForBackground`
+    /// keeps play time the same way.
+    ///
+    /// Repeat calls are safe. A path that already joined is in the
+    /// set, so a second reading of the same write changes nothing.
+    func takeReading() {
+        guard let open = session else { return }
+        let container = open.container
+        let baseline = open.baseline
+        let since = open.readingStartedAt
         let alreadyJoined = joinedPathsByGame[container.id] ?? []
+        let passStartedAt = Date()
+
+        let pass = Task.detached(priority: .utility) { () -> Pass in
+            let before = await baseline.value
+            return Self.pass(
+                container: container, before: before, since: since,
+                alreadyJoined: alreadyJoined)
+        }
+        session?.baseline = Task.detached(priority: .utility) { await pass.value.after }
+        session?.readingStartedAt = passStartedAt
 
         Task { [weak self] in
-            let before = await reading.value
-            let result = await Task.detached(priority: .utility) {
-                Self.watchResult(
-                    container: container, before: before, startedAt: startedAt,
-                    alreadyJoined: alreadyJoined)
-            }.value
-            guard let result else { return }
+            guard let result = await pass.value.result else { return }
             self?.apply(result, forGame: container.id)
         }
     }
 
-    /// The second reading and the rules, off the main actor. The
-    /// pass stats the whole game tree, so it must not run where the
-    /// UI runs.
-    nonisolated private static func watchResult(
+    /// Takes a last reading and closes the session. The call is safe
+    /// with no session open, because the engine-termination path
+    /// reaches it after a reading may have already run.
+    func endSession() {
+        guard session != nil else { return }
+        takeReading()
+        session = nil
+    }
+
+    /// One pass and the rules, off the main actor. The pass stats
+    /// the whole game tree, so it must not run where the UI runs.
+    nonisolated private static func pass(
         container: GameContainer,
         before: [String: FileStamp],
-        startedAt: Date,
+        since: Date,
         alreadyJoined: Set<String>
-    ) -> RuntimeWatchResult? {
+    ) -> Pass {
         let after = readTree(at: container.gameURL)
         let intent = GameBackupIntent.load(from: container.empoStateURL)
-        guard intent.mode == .slim else { return nil }
+        guard intent.mode == .slim else { return Pass(after: after, result: nil) }
 
-        let written = RuntimeWatch.writtenPaths(before: before, after: after, since: startedAt)
+        let written = RuntimeWatch.writtenPaths(before: before, after: after, since: since)
         let files = written.compactMap { path -> BackupSetResolver.WalkedFile? in
             guard let stamp = after[path] else { return nil }
             return BackupSetResolver.WalkedFile(
@@ -111,14 +140,27 @@ final class GameSaveWatch {
             alreadyJoined
             .union(BackupSetResolver.classifierMatches(containerURL: container.url))
             .union(intent.manualMarks)
-        return RuntimeWatch.result(
+        let result = RuntimeWatch.result(
             written: files,
             mode: .slim,
             declined: Set(intent.declinedSuggestions),
             alreadyInSet: inSet)
+        return Pass(after: after, result: result)
     }
 
     private func apply(_ result: RuntimeWatchResult, forGame containerId: String) {
+        // The Backups screen and the Backup sheet do not exist yet,
+        // so this line is the only place a join shows. Tickets 016
+        // and 018 read the same numbers into the UI.
+        if AppSettings.shared.debugLogs, !result.isEmpty {
+            NSLog(
+                "[GameSaveWatch] %@: %ld joined, %ld to ask, %ld suggested: %@",
+                containerId,
+                result.joined.count,
+                result.asks.count,
+                result.suggestions.count,
+                (result.joined + result.asks).joined(separator: ", "))
+        }
         if !result.joined.isEmpty {
             joinedPathsByGame[containerId, default: []].formUnion(result.joined)
         }

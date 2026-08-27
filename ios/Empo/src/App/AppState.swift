@@ -172,7 +172,6 @@ class AppState {
         errorMessage = nil
     }
 
-
     // MARK: - Pause lifecycle
 
     /// Toggle the pause menu. Same path as the on-screen pause control (SPEC section 8).
@@ -192,6 +191,10 @@ class AppState {
         // here so last-played and totals update even though the
         // engine keeps running.
         session.recordSessionPlayTime(for: activeSessionGame)
+        // The runtime watch of SPEC 3.6 reads here too. The pause is
+        // the only way back to the library, so it is the last point
+        // the app controls before the user may close it.
+        GameSaveWatch.shared.takeReading()
         EngineState.shared.isBackgroundPause = false
         session.requestPause()
     }
@@ -261,6 +264,10 @@ class AppState {
     func flushSessionPlayTimeForBackground() {
         guard activeSessionGame != nil else { return }
         session.recordSessionPlayTime(for: activeSessionGame)
+        // Same reason as the play time: the user can close Empo from
+        // the app switcher, and no callback follows. A save the game
+        // wrote before that must still join the set of SPEC 3.6.
+        GameSaveWatch.shared.takeReading()
     }
 
     /// Restarts the session timer after the app returns from the
