@@ -7,7 +7,8 @@ import GameProbe
 /// `TargetDescriptorFile` in GameProbe holds the file and its shape.
 /// This file answers the one question only iOS can: which provider a
 /// descriptor opens right now. Today that is iCloud Drive, Dropbox,
-/// and Google Drive. Tickets 011 to 013 add the rest.
+/// Google Drive, and the S3-compatible services. Tickets 012 and 013
+/// add the rest.
 @MainActor
 enum BackupTargets {
 
@@ -42,8 +43,10 @@ enum BackupTargets {
             return DropboxGate.shared.target(for: target)
         case .googleDrive:
             return GoogleDriveGate.shared.target(for: target)
-        case .s3, .webdav, .sftp:
-            // Tickets 011 to 013.
+        case .s3:
+            return S3Gate.shared.target(for: target)
+        case .webdav, .sftp:
+            // Tickets 012 and 013.
             return nil
         }
     }

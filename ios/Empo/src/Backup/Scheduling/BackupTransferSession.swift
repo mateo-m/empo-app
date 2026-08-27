@@ -236,13 +236,19 @@ extension BackupTransferSession: URLSessionDataDelegate {
     /// answer at all. A request that did get one goes back whole, and
     /// the provider reads its own body.
     private static func providerError(_ error: Error) -> BackupProviderError {
-        switch (error as NSError).code {
+        let error = error as NSError
+        switch error.code {
         case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost,
             NSURLErrorTimedOut, NSURLErrorCannotConnectToHost,
             NSURLErrorDataNotAllowed, NSURLErrorInternationalRoamingOff:
             return .offline
         default:
-            return .rejected(message: error.localizedDescription)
+            // A certificate the system does not trust says so once,
+            // with the line of 8.11. A user who typed their own
+            // address is the one who needs to read it.
+            return TransportSecurity.certificateError(
+                urlErrorCode: error.code, description: error.localizedDescription)
+                ?? .rejected(message: error.localizedDescription)
         }
     }
 

@@ -104,11 +104,12 @@ final class BackupScheduler {
 
     /// Runs the launch arguments a device check needs, in order.
     ///
-    /// `-backupAddICloud YES`, `-backupAddDropbox YES`, and
-    /// `-backupAddGoogleDrive YES` add a target through the
-    /// permission check of 8.7. `-backupPressNow YES` then presses
-    /// "Back up now". An add finishes first, because a press that
-    /// beat it would find no target and the pass would end at once.
+    /// `-backupAddICloud YES`, `-backupAddDropbox YES`,
+    /// `-backupAddGoogleDrive YES`, and `-backupAddS3 YES` add a
+    /// target through the permission check of 8.7.
+    /// `-backupPressNow YES` then presses "Back up now". An add
+    /// finishes first, because a press that beat it would find no
+    /// target and the pass would end at once.
     ///
     /// Tickets 016 and 017 bring the screens that carry all of them.
     /// Delete this when they land, with the two holds beside it.
@@ -116,12 +117,25 @@ final class BackupScheduler {
         let addsICloud = UserDefaults.standard.bool(forKey: "backupAddICloud")
         let addsDropbox = UserDefaults.standard.bool(forKey: "backupAddDropbox")
         let addsGoogleDrive = UserDefaults.standard.bool(forKey: "backupAddGoogleDrive")
+        let addsS3 = UserDefaults.standard.bool(forKey: "backupAddS3")
         let presses = UserDefaults.standard.bool(forKey: "backupPressNow")
         let uploadsBig = UserDefaults.standard.bool(forKey: "backupBigUpload")
         let rearms = UserDefaults.standard.bool(forKey: "backupRearmNotifications")
-        guard addsICloud || addsDropbox || addsGoogleDrive || presses || uploadsBig || rearms
+        guard
+            addsICloud || addsDropbox || addsGoogleDrive || addsS3 || presses || uploadsBig
+                || rearms
         else {
             return
+        }
+
+        // `-backupS3SmallParts YES` lowers the two upload numbers of
+        // 9.4, so the big upload takes the multipart path with a file
+        // a phone can write. A real 5 GiB file is not a device check.
+        if UserDefaults.standard.bool(forKey: "backupS3SmallParts") {
+            let sixteenMebibytes: Int64 = 16 * 1024 * 1024
+            S3Gate.shared.useSmallParts(
+                singleUploadLimit: sixteenMebibytes, partBase: sixteenMebibytes)
+            log("S3 uploads in parts of 16 MiB for this check")
         }
 
         // A cause posts once, per 7.11, so a second device check on
@@ -141,6 +155,7 @@ final class BackupScheduler {
             if addsICloud { await self.addTheICloudTarget() }
             if addsDropbox { await self.addTheDropboxTarget() }
             if addsGoogleDrive { await self.addTheGoogleDriveTarget() }
+            if addsS3 { await self.addTheS3Target() }
             if uploadsBig { await self.uploadOneBigFile() }
             if presses { self.pressBackUpNow(.library) }
         }
@@ -160,8 +175,8 @@ final class BackupScheduler {
     /// A small library never reaches the limit, so a real game cannot
     /// prove the chunked upload. This writes the bytes instead.
     ///
-    /// `-backupBigUploadProvider google-drive` names the target. It
-    /// takes Dropbox by default, because ticket 009 wrote the check.
+    /// `-backupBigUploadProvider s3` names the target. It takes
+    /// Dropbox by default, because ticket 009 wrote the check.
     private func uploadOneBigFile() async {
         let name = UserDefaults.standard.string(forKey: "backupBigUploadProvider")
         let kind = name.flatMap(BackupProviderKind.init(rawValue:)) ?? .dropbox
@@ -311,6 +326,59 @@ final class BackupScheduler {
             return
         }
         await reportThePermissionCheck(descriptor, provider: provider)
+    }
+
+    /// Adds an S3-compatible target and writes each step of the
+    /// permission check of 8.7 to the log, per 9.4.
+    ///
+    /// S3 has no browser step. The user types the bucket and the
+    /// access key, so a device check types them as launch arguments
+    /// until ticket 016 draws the form:
+    /// `-backupS3Address https://s3.eu-west-1.amazonaws.com`,
+    /// `-backupS3Bucket my-saves`, `-backupS3Region eu-west-1`,
+    /// `-backupS3AccessKeyId ...`, `-backupS3SecretAccessKey ...`,
+    /// and the optional `-backupS3Root empo` and
+    /// `-backupS3PathStyle YES`.
+    private func addTheS3Target() async {
+        let defaults = UserDefaults.standard
+        guard
+            let address = defaults.string(forKey: "backupS3Address").flatMap(URL.init(string:)),
+            let bucketName = defaults.string(forKey: "backupS3Bucket"),
+            let keyId = defaults.string(forKey: "backupS3AccessKeyId"),
+            let secret = defaults.string(forKey: "backupS3SecretAccessKey")
+        else {
+            log("the S3 check needs an address, a bucket, and an access key")
+            return
+        }
+
+        let bucket = S3Bucket(
+            address: address,
+            region: defaults.string(forKey: "backupS3Region") ?? "auto",
+            name: bucketName,
+            usesPathStyle: defaults.object(forKey: "backupS3PathStyle") == nil
+                ? S3Bucket.prefersPathStyle(address: address)
+                : defaults.bool(forKey: "backupS3PathStyle"))
+        let connection = S3Connection(
+            bucket: bucket,
+            credentials: S3SigV4.Credentials(accessKeyId: keyId, secretAccessKey: secret))
+
+        if let refusal = bucket.refusal {
+            log("the S3 check refuses this bucket: \(refusal)")
+            return
+        }
+
+        let descriptor = TargetDescriptor(
+            id: "s3",
+            provider: .s3,
+            label: bucketName,
+            accountHint: connection.accountHint,
+            root: defaults.string(forKey: "backupS3Root") ?? "")
+        do {
+            let provider = try S3Gate.shared.connect(connection, targetId: descriptor.id)
+            await reportThePermissionCheck(descriptor, provider: provider)
+        } catch {
+            log("the S3 key could not go in the Keychain: \(error)")
+        }
     }
 
     /// Adds the iCloud Drive target and writes each step of the
