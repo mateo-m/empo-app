@@ -116,13 +116,76 @@ final class BackupScheduler {
         let addsICloud = UserDefaults.standard.bool(forKey: "backupAddICloud")
         let addsDropbox = UserDefaults.standard.bool(forKey: "backupAddDropbox")
         let presses = UserDefaults.standard.bool(forKey: "backupPressNow")
-        guard addsICloud || addsDropbox || presses else { return }
+        let uploadsBig = UserDefaults.standard.bool(forKey: "backupBigUpload")
+        guard addsICloud || addsDropbox || presses || uploadsBig else { return }
 
         Task {
             if addsICloud { await self.addTheICloudTarget() }
             if addsDropbox { await self.addTheDropboxTarget() }
+            if uploadsBig { await self.uploadOneBigFile() }
             if presses { self.pressBackUpNow(.library) }
         }
+    }
+
+    /// How large the file of the big-upload check is.
+    ///
+    /// Dropbox takes one `files/upload` up to 150 MiB. A larger file
+    /// takes `upload_session/start`, an `append_v2` per chunk, and
+    /// `finish`, so 200 MiB proves the second path.
+    private static let bigUploadBytes = 200 * 1024 * 1024
+
+    /// Puts one file over 150 MiB, confirms it, and deletes it.
+    ///
+    /// A small library never reaches the limit, so a real game cannot
+    /// prove the upload session. This writes the bytes instead.
+    private func uploadOneBigFile() async {
+        guard let descriptor = BackupTargets.load().first(where: { $0.provider == .dropbox }) else {
+            log("the big upload found no Dropbox target")
+            return
+        }
+        guard let provider = await BackupTargets.provider(for: descriptor) else {
+            log("the big upload could not open the target")
+            return
+        }
+
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("big-upload-check.bin")
+        defer { try? FileManager.default.removeItem(at: file) }
+        guard Self.writeZeroes(Self.bigUploadBytes, to: file) else {
+            log("the big upload could not write its file")
+            return
+        }
+        log("the big upload starts, \(Self.bigUploadBytes) bytes")
+
+        let path = BackupNamespacePaths.join(
+            BackupNamespacePaths.join(descriptor.root, BackupNamespacePaths.empoDirectoryName),
+            "big-upload-check.bin")
+        do {
+            try await provider.put(localFile: file, path: path)
+            let confirmation = try await provider.confirm(path: path)
+            log("the big upload confirms \(confirmation)")
+            let found = try await provider.list(prefix: path)
+            log("the big upload lists \(found.count) object, \(found.first?.sizeBytes ?? -1) bytes")
+            try await provider.delete(paths: [path])
+            log("the big upload deleted its file")
+        } catch {
+            log("the big upload failed: \(error)")
+        }
+    }
+
+    /// Writes a file of zeroes without holding it all in memory.
+    private static func writeZeroes(_ bytes: Int, to file: URL) -> Bool {
+        let chunk = Data(count: 4 * 1024 * 1024)
+        FileManager.default.createFile(atPath: file.path, contents: nil)
+        guard let handle = try? FileHandle(forWritingTo: file) else { return false }
+        defer { try? handle.close() }
+        var left = bytes
+        while left > 0 {
+            let size = min(left, chunk.count)
+            guard (try? handle.write(contentsOf: chunk.prefix(size))) != nil else { return false }
+            left -= size
+        }
+        return true
     }
 
     /// Signs in to Dropbox and adds the target, per 8.10 and 9.2.
