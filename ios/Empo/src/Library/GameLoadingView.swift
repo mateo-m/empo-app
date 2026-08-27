@@ -4,6 +4,11 @@ struct GameLoadingView: View {
     enum Mode { case loading, resuming }
 
     let game: GameEntry
+    /// True once the play session settled. The view stays pushed, so
+    /// the pause can pop it and play the zoom in reverse, but it
+    /// draws nothing: the Ken Burns pan and the container fill would
+    /// otherwise composite over the embedded game view.
+    var dormant: Bool = false
     @Environment(\.appState) private var appState
     @Environment(\.engineState) private var engineState
     @Environment(\.pauseManager) private var pauseManager
@@ -64,22 +69,42 @@ struct GameLoadingView: View {
 
     var body: some View {
         ZStack {
-            // Keep banner/scrim mounted through the playing handoff so
-            // RootView's opacity fade has something to dissolve. Clear
-            // only the NavigationStack container fill. An opaque
-            // UIKit backdrop would otherwise flash black under the fade.
-            Color.black.ignoresSafeArea()
-                .opacity(isPlayingPhase ? 0 : 1)
+            // A full-size clear layer, so the pushed view keeps its
+            // frame while it is dormant. The pop needs that frame to
+            // animate from.
+            Color.clear.ignoresSafeArea()
 
-            switch mode {
-            case .loading: loadingContent
-            case .resuming: resumeContent
+            if !dormant {
+                Group {
+                    // Keep banner/scrim mounted through the playing handoff so
+                    // RootView's opacity fade has something to dissolve. Clear
+                    // only the NavigationStack container fill. An opaque
+                    // UIKit backdrop would otherwise flash black under the fade.
+                    Color.black.ignoresSafeArea()
+                        .opacity(isPlayingPhase ? 0 : 1)
+
+                    switch mode {
+                    case .loading: loadingContent
+                    case .resuming: resumeContent
+                    }
+                }
+                // The pause wakes this content inside an animation.
+                // The default insertion is a fade, which shows as a
+                // black gap over the game before the snapshot lands.
+                .transition(.identity)
             }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
         .containerBackground(isPlayingPhase ? .clear : .black, for: .navigation)
+        // The pause sets the phase inside an animation. The black
+        // must not fade in with it: `AppWindow` paints the root
+        // background for the zoom transition, and a fade shows that
+        // background as a flash while the game view is already
+        // gone. The library fades as one unit in `RootView`, so
+        // an instant switch here has no cost on the way in.
+        .animation(nil, value: isPlayingPhase)
         .task(id: game.id) { await loadBannerImage() }
     }
 

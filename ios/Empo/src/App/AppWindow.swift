@@ -315,8 +315,29 @@ class AppWindow: UIWindow {
             window.layer.isOpaque = false
             if let root = window.rootViewController?.view {
                 clearPassThroughBackdrop(in: root)
+                // `paintRootForZoom` painted the root at the tap.
+                // Leave that paint alone while the game loads, and
+                // clear it once the app is back at the library, so
+                // the pause never fades the library in over it.
+                if AppState.shared.phase == nil {
+                    root.backgroundColor = .clear
+                }
             }
         }
+    }
+
+    /// Paints the root before the library pushes a game.
+    ///
+    /// The zoom transition scales the library down and rounds it
+    /// with a radius on the root layer. A radius rounds the
+    /// background of that layer alone, and a cleared root has none,
+    /// so the library kept square corners. The transition reads the
+    /// layer as it stands at the push, so the paint must land before
+    /// it and not on the phase change, which comes one hop later.
+    /// Clipping instead of painting does not work: the transition
+    /// sets `masksToBounds` itself.
+    static func paintRootForZoom() {
+        hostView?.backgroundColor = .systemBackground
     }
 
     /// Strip opaque UIKit backdrops SwiftUI installs on hosting views.
