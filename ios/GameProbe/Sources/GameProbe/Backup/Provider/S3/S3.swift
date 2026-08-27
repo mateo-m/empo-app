@@ -516,8 +516,4 @@ public enum S3 {
             name: "usesPathStyle", label: "Put the bucket name in the path", kind: .toggle,
             isRequired: false),
     ]
-
-    /// What the target screen shows in place of a usage bar, per
-    /// 13.6. This target answers no space query.
-    public static let noSpaceQueryLine = "This service does not report free space."
 }

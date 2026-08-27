@@ -533,7 +533,8 @@ final class S3Tests: XCTestCase {
 
     func testTheTargetScreenSaysWhyItShowsNoFreeSpace() {
         // 13.6 shows the bytes Empo wrote, plus this line.
-        XCTAssertEqual(S3.noSpaceQueryLine, "This service does not report free space.")
+        XCTAssertEqual(
+            TargetCapabilities.noSpaceQueryLine, "This service does not report free space.")
     }
 }
 

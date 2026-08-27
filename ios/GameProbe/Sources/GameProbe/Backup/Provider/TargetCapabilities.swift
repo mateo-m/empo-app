@@ -45,6 +45,16 @@ public struct TargetCapabilities: Equatable, Sendable {
         self.foldsCase = foldsCase
     }
 
+    /// What the target screen shows in place of a usage bar, per
+    /// 13.6. A row that cannot be filled is absent, and a missing
+    /// usage bar would read as a loading failure, so a target that
+    /// answers no space query says why.
+    ///
+    /// It lives here and not on one provider, because 9.7 names two
+    /// providers that never answer and two more that answer on some
+    /// servers alone.
+    public static let noSpaceQueryLine = "This service does not report free space."
+
     /// The error a file of this size earns, or `nil` when it fits.
     ///
     /// Every provider calls this before it moves a byte. A file over

@@ -105,8 +105,9 @@ final class BackupScheduler {
     /// Runs the launch arguments a device check needs, in order.
     ///
     /// `-backupAddICloud YES`, `-backupAddDropbox YES`,
-    /// `-backupAddGoogleDrive YES`, and `-backupAddS3 YES` add a
-    /// target through the permission check of 8.7.
+    /// `-backupAddGoogleDrive YES`, `-backupAddS3 YES`, and
+    /// `-backupAddWebDAV YES` add a target through the permission
+    /// check of 8.7.
     /// `-backupPressNow YES` then presses "Back up now". An add
     /// finishes first, because a press that beat it would find no
     /// target and the pass would end at once.
@@ -118,12 +119,13 @@ final class BackupScheduler {
         let addsDropbox = UserDefaults.standard.bool(forKey: "backupAddDropbox")
         let addsGoogleDrive = UserDefaults.standard.bool(forKey: "backupAddGoogleDrive")
         let addsS3 = UserDefaults.standard.bool(forKey: "backupAddS3")
+        let addsWebDAV = UserDefaults.standard.bool(forKey: "backupAddWebDAV")
         let presses = UserDefaults.standard.bool(forKey: "backupPressNow")
         let uploadsBig = UserDefaults.standard.bool(forKey: "backupBigUpload")
         let rearms = UserDefaults.standard.bool(forKey: "backupRearmNotifications")
         guard
-            addsICloud || addsDropbox || addsGoogleDrive || addsS3 || presses || uploadsBig
-                || rearms
+            addsICloud || addsDropbox || addsGoogleDrive || addsS3 || addsWebDAV || presses
+                || uploadsBig || rearms
         else {
             return
         }
@@ -156,6 +158,7 @@ final class BackupScheduler {
             if addsDropbox { await self.addTheDropboxTarget() }
             if addsGoogleDrive { await self.addTheGoogleDriveTarget() }
             if addsS3 { await self.addTheS3Target() }
+            if addsWebDAV { await self.addTheWebDAVTargets() }
             if uploadsBig { await self.uploadOneBigFile() }
             if presses { self.pressBackUpNow(.library) }
         }
@@ -387,6 +390,77 @@ final class BackupScheduler {
             await reportThePermissionCheck(descriptor, provider: provider)
         } catch {
             log("the S3 key could not go in the Keychain: \(error)")
+        }
+    }
+
+    /// Adds one WebDAV target per address and writes each step of the
+    /// permission check of 8.7 to the log, per 9.5.
+    ///
+    /// The device check of ticket 012 wants two servers at once: one
+    /// that answers RFC 4331 and one that does not. So the address
+    /// argument takes a list, and each address makes a target of its
+    /// own.
+    ///
+    /// WebDAV has no browser step. The user types the address and the
+    /// password, so a device check types them as launch arguments
+    /// until ticket 016 draws the form:
+    /// `-backupWebDAVAddresses "https://a/dav https://b/dav"`,
+    /// `-backupWebDAVUser alice`, `-backupWebDAVPassword ...`, and
+    /// the optional `-backupWebDAVRoot empo`. A second user name or
+    /// password for the second server goes in
+    /// `-backupWebDAVUser2` and `-backupWebDAVPassword2`.
+    private func addTheWebDAVTargets() async {
+        let defaults = UserDefaults.standard
+        let addresses = (defaults.string(forKey: "backupWebDAVAddresses") ?? "")
+            .split(separator: " ")
+            .compactMap { URL(string: String($0)) }
+        guard !addresses.isEmpty else {
+            log("the WebDAV check needs at least one address")
+            return
+        }
+
+        for (number, address) in addresses.enumerated() {
+            let suffix = number == 0 ? "" : String(number + 1)
+            guard
+                let user = defaults.string(forKey: "backupWebDAVUser" + suffix)
+                    ?? defaults.string(forKey: "backupWebDAVUser"),
+                let password = defaults.string(forKey: "backupWebDAVPassword" + suffix)
+                    ?? defaults.string(forKey: "backupWebDAVPassword")
+            else {
+                log("the WebDAV check needs a user name and a password for \(address)")
+                continue
+            }
+            await addOneWebDAVTarget(
+                address: address, user: user, password: password, number: number)
+        }
+    }
+
+    private func addOneWebDAVTarget(
+        address: URL, user: String, password: String, number: Int
+    ) async {
+        let server = WebDAVServer(address: address, username: user)
+        let connection = WebDAVConnection(server: server, password: password)
+        if let refusal = server.refusal {
+            log("the WebDAV check refuses \(address): \(refusal)")
+            return
+        }
+
+        let descriptor = TargetDescriptor(
+            id: number == 0 ? "webdav" : "webdav-\(number + 1)",
+            provider: .webdav,
+            label: address.host ?? "WebDAV",
+            accountHint: connection.accountHint,
+            root: UserDefaults.standard.string(forKey: "backupWebDAVRoot") ?? "")
+        do {
+            let provider = try WebDAVGate.shared.connect(connection, targetId: descriptor.id)
+            await reportThePermissionCheck(descriptor, provider: provider)
+            // 9.7 makes the space query a fact about the server. The
+            // log names what this one answered, so the check of
+            // ticket 012 can read it back.
+            let answers = WebDAVGate.shared.target(for: descriptor)?.capabilities.canQueryQuota
+            log("the WebDAV server at \(address.host ?? "") reports free space: \(answers ?? false)")
+        } catch {
+            log("the WebDAV password could not go in the Keychain: \(error)")
         }
     }
 

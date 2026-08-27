@@ -7,8 +7,8 @@ import GameProbe
 /// `TargetDescriptorFile` in GameProbe holds the file and its shape.
 /// This file answers the one question only iOS can: which provider a
 /// descriptor opens right now. Today that is iCloud Drive, Dropbox,
-/// Google Drive, and the S3-compatible services. Tickets 012 and 013
-/// add the rest.
+/// Google Drive, the S3-compatible services, and WebDAV. Ticket 013
+/// adds SFTP.
 @MainActor
 enum BackupTargets {
 
@@ -45,8 +45,10 @@ enum BackupTargets {
             return GoogleDriveGate.shared.target(for: target)
         case .s3:
             return S3Gate.shared.target(for: target)
-        case .webdav, .sftp:
-            // Tickets 012 and 013.
+        case .webdav:
+            return WebDAVGate.shared.target(for: target)
+        case .sftp:
+            // Ticket 013.
             return nil
         }
     }
@@ -76,6 +78,12 @@ enum BackupTargets {
             probePath: PermissionCheck.makeProbePath(root: target.root),
             scratchDirectory: BackupRoot.staging)
         guard result.allowsAdd else { return result }
+        // WebDAV and SFTP answer the space query on some servers and
+        // not on others, so the check that just ran is what sets
+        // `canQueryQuota` for this target, per 8.3 and 9.7.
+        if target.provider == .webdav {
+            WebDAVGate.shared.rememberTheSpaceQuery(result.canQueryQuota, targetId: target.id)
+        }
         try add(target)
         return result
     }
