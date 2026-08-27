@@ -103,8 +103,11 @@ enum BackupTaskScheduler {
         request.earliestBeginDate = nextNight(after: now)
         do {
             try BGTaskScheduler.shared.submit(request)
+            BackupLog.line(
+                "BackupTaskScheduler",
+                "the overnight task is queued for \(request.earliestBeginDate ?? Date())")
         } catch {
-            NSLog("[BackupTaskScheduler] the overnight request failed: %@", "\(error)")
+            BackupLog.line("BackupTaskScheduler", "the overnight request failed: \(error)")
         }
     }
 
@@ -120,6 +123,7 @@ enum BackupTaskScheduler {
     }
 
     private static func handleNightly(_ task: BGProcessingTask) {
+        BackupLog.line("BackupTaskScheduler", "the overnight task started")
         // Ask for tomorrow first. A crash below must not end the
         // series.
         scheduleNightly()
@@ -158,9 +162,10 @@ enum BackupTaskScheduler {
         // moves bytes and never draws.
         do {
             try BGTaskScheduler.shared.submit(request)
+            BackupLog.line("BackupTaskScheduler", "the manual task \(taskIdentifier) is queued")
             return true
         } catch {
-            NSLog("[BackupTaskScheduler] the manual request failed: %@", "\(error)")
+            BackupLog.line("BackupTaskScheduler", "the manual request failed: \(error)")
             return false
         }
     }
@@ -187,6 +192,7 @@ enum BackupTaskScheduler {
 
     @available(iOS 26.0, *)
     private static func handleManual(_ task: BGContinuedProcessingTask) {
+        BackupLog.line("BackupTaskScheduler", "the manual task started, title \(task.title)")
         guard let press = press(identifier: task.identifier, title: task.title) else {
             task.setTaskCompleted(success: false)
             return

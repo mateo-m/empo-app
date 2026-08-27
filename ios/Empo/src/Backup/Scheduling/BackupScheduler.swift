@@ -96,6 +96,19 @@ final class BackupScheduler {
         observeAppLifetime()
         BackupTaskScheduler.scheduleNightly()
         countTheRunsThatVanished()
+        log("the schedule started")
+        pressTheButtonForADeviceCheck()
+    }
+
+    /// Presses "Back up now" when the process starts with
+    /// `-backupPressNow YES`.
+    ///
+    /// The device check of ticket 007 needs the manual trigger, and
+    /// ticket 016 brings the screen that carries the button. Delete
+    /// this when the screen lands.
+    private func pressTheButtonForADeviceCheck() {
+        guard UserDefaults.standard.bool(forKey: "backupPressNow") else { return }
+        pressBackUpNow(.library)
     }
 
     private func observeAppLifetime() {
@@ -147,6 +160,7 @@ final class BackupScheduler {
     private func runUnderTheGrant(_ trigger: BackupTrigger) async {
         await BackupBackgroundTask.run(named: "backup.\(trigger.rawValue)") {
             await BackupScheduler.shared.run(trigger: trigger)
+            await BackupBackgroundTask.holdForADeviceCheck()
         }
     }
 
@@ -236,7 +250,7 @@ final class BackupScheduler {
     /// ticket 016 shows the same state on screen.
     private func log(_ format: String, _ arguments: CVarArg...) {
         guard AppSettings.shared.debugLogs else { return }
-        NSLog("[BackupScheduler] %@", String(format: format, arguments: arguments))
+        BackupLog.line("BackupScheduler", String(format: format, arguments: arguments))
     }
 
     /// A continued-processing task that stops reporting progress is

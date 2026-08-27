@@ -25,8 +25,10 @@ enum BackupBackgroundTask {
     /// What 7.3 plans for, in seconds of local work.
     static let plannedSeconds: TimeInterval = 30
 
-    /// The shortest grant this app run saw, or `nil` before the
-    /// first one. The device check of ticket 007 reads it.
+    /// The shortest grant this app run saw, or `nil` while no grant
+    /// has ended yet. iOS calls the expiry handler about five seconds
+    /// before the grant really ends, so this is the time a run can
+    /// use. The device check of ticket 007 reads it.
     private(set) static var shortestGrantSeconds: TimeInterval?
 
     /// Runs `body` under a background task and reports whether it
@@ -41,8 +43,6 @@ enum BackupBackgroundTask {
     ) async -> Bool {
         let application = UIApplication.shared
         let startedAt = Date()
-        let granted = application.backgroundTimeRemaining
-        log("grant \(seconds(granted)) at start of \(name)")
 
         var identifier = UIBackgroundTaskIdentifier.invalid
         let work = Task { await body() }
@@ -63,15 +63,38 @@ enum BackupBackgroundTask {
             return false
         }
 
+        // The number is only real after the task starts. In the
+        // foreground, and under a debugger, iOS reports an unlimited
+        // grant.
+        log("grant \(seconds(application.backgroundTimeRemaining)) at start of \(name)")
+
         await work.value
         let finished = !work.isCancelled
         if identifier != .invalid {
-            record(Date().timeIntervalSince(startedAt))
+            log("\(name) ended after \(seconds(Date().timeIntervalSince(startedAt)))")
             application.endBackgroundTask(identifier)
         }
         return finished
     }
 
+    /// Holds the grant open and logs the time left every five
+    /// seconds, when the process starts with `-backupHoldGrant YES`.
+    ///
+    /// The device check of ticket 007 measures the grant this way.
+    /// `backgroundTimeRemaining` reads as unlimited while the app
+    /// still runs in the foreground, so one reading at the start
+    /// proves nothing. Nothing but the device check calls this.
+    static func holdForADeviceCheck() async {
+        guard UserDefaults.standard.bool(forKey: "backupHoldGrant") else { return }
+        while !Task.isCancelled {
+            let left = UIApplication.shared.backgroundTimeRemaining
+            log("the hold sees \(seconds(left)) left")
+            try? await Task.sleep(for: .seconds(5))
+        }
+        log("the hold stopped")
+    }
+
+    /// Keeps the shortest grant that ended.
     private static func record(_ used: TimeInterval) {
         shortestGrantSeconds = min(shortestGrantSeconds ?? used, used)
     }
@@ -83,6 +106,6 @@ enum BackupBackgroundTask {
     /// Always logged, whatever the debug setting says. The device
     /// check of ticket 007 has to read it on a clean install.
     private static func log(_ message: String) {
-        NSLog("[BackupBackgroundTask] %@", message)
+        BackupLog.line("BackupBackgroundTask", message)
     }
 }
