@@ -17,4 +17,15 @@ final class EmpoSceneDelegate: UIResponder, UIWindowSceneDelegate {
         // so it starts once the scene connects.
         BackupScheduler.shared.start()
     }
+
+    /// Takes the OAuth callback of SPEC 8.10.
+    ///
+    /// The callback is a custom URL scheme, because an https link
+    /// needs the Associated Domains entitlement and a sideloaded
+    /// build does not hold it.
+    func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
+        for context in contexts where DropboxSignIn.shared.resume(with: context.url) {
+            return
+        }
+    }
 }

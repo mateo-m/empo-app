@@ -26,9 +26,19 @@ final class BackupTransferSession: NSObject {
 
     /// What the daemon holds for one transfer, so a delegate
     /// callback finds its caller again.
-    private struct PendingTransfer {
+    ///
+    /// The body accumulates, because a provider reads its own reason
+    /// out of it. Dropbox writes `error_summary` there, and a 409
+    /// says nothing without it, per 9.2.
+    private final class PendingTransfer {
         let path: String
-        let resume: (Result<Void, BackupProviderError>) -> Void
+        let resume: (Result<HTTPAnswer, BackupProviderError>) -> Void
+        var body = Data()
+
+        init(path: String, resume: @escaping (Result<HTTPAnswer, BackupProviderError>) -> Void) {
+            self.path = path
+            self.resume = resume
+        }
     }
 
     private var pending: [Int: PendingTransfer] = [:]
@@ -78,18 +88,25 @@ final class BackupTransferSession: NSObject {
 
     /// Uploads one file. The task outlives the app, so the caller's
     /// continuation resumes from the delegate.
-    func upload(file: URL, request: URLRequest, path: String) async throws {
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
+    ///
+    /// It throws on a transport failure alone. An HTTP status the
+    /// service answered comes back whole, because only the provider
+    /// knows what its own body means, per 8.4.
+    func upload(
+        file: URL, request: URLRequest, path: String
+    ) async throws(BackupProviderError) -> HTTPAnswer {
+        let result = await withCheckedContinuation {
+            (continuation: CheckedContinuation<Result<HTTPAnswer, BackupProviderError>, Never>) in
             let task = session.uploadTask(with: self.request(request), fromFile: file)
             task.taskDescription = path
             lock.lock()
-            pending[task.taskIdentifier] = PendingTransfer(path: path) { result in
-                continuation.resume(with: result)
+            pending[task.taskIdentifier] = PendingTransfer(path: path) { answer in
+                continuation.resume(returning: answer)
             }
             lock.unlock()
             task.resume()
         }
+        return try result.get()
     }
 
     /// The tasks the daemon still holds for this app.
@@ -116,30 +133,66 @@ final class BackupTransferSession: NSObject {
         start()
     }
 
-    private func finish(taskIdentifier: Int, with result: Result<Void, BackupProviderError>) {
+    private func finish(
+        taskIdentifier: Int, with result: Result<HTTPAnswer, BackupProviderError>
+    ) {
         lock.lock()
         let transfer = pending.removeValue(forKey: taskIdentifier)
         lock.unlock()
         transfer?.resume(result)
     }
+
+    private func collect(_ data: Data, taskIdentifier: Int) {
+        lock.lock()
+        pending[taskIdentifier]?.body.append(data)
+        lock.unlock()
+    }
+
+    private func body(ofTask taskIdentifier: Int) -> Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return pending[taskIdentifier]?.body ?? Data()
+    }
+}
+
+/// What a service answered, before any provider reads it.
+struct HTTPAnswer: Sendable {
+    let status: Int
+    let body: Data
+    let retryAfterHeader: String?
+
+    var isSuccess: Bool { (200..<300).contains(status) }
 }
 
 extension BackupTransferSession: URLSessionDataDelegate {
 
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        collect(data, taskIdentifier: dataTask.taskIdentifier)
+    }
+
     func urlSession(
         _ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?
     ) {
-        if let error {
+        let http = task.response as? HTTPURLResponse
+        if let error, http == nil {
+            // No answer at all. The device could not reach the
+            // service, so 8.4 decides from the transport error.
             finish(
                 taskIdentifier: task.taskIdentifier,
-                with: .failure(Self.providerError(error, response: task.response)))
+                with: .failure(Self.providerError(error)))
             return
         }
-        if let failure = Self.providerError(status: task.response) {
-            finish(taskIdentifier: task.taskIdentifier, with: .failure(failure))
+        guard let http else {
+            finish(taskIdentifier: task.taskIdentifier, with: .failure(.offline))
             return
         }
-        finish(taskIdentifier: task.taskIdentifier, with: .success(()))
+        finish(
+            taskIdentifier: task.taskIdentifier,
+            with: .success(
+                HTTPAnswer(
+                    status: http.statusCode,
+                    body: body(ofTask: task.taskIdentifier),
+                    retryAfterHeader: http.value(forHTTPHeaderField: "Retry-After"))))
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
@@ -148,12 +201,10 @@ extension BackupTransferSession: URLSessionDataDelegate {
         DispatchQueue.main.async { completion?() }
     }
 
-    /// The transport error kinds of 8.4. A provider maps its own
-    /// body on top. This covers what URLSession answers on its own.
-    private static func providerError(
-        _ error: Error, response: URLResponse?
-    ) -> BackupProviderError {
-        if let failure = providerError(status: response) { return failure }
+    /// The transport error kinds of 8.4, for a request that got no
+    /// answer at all. A request that did get one goes back whole, and
+    /// the provider reads its own body.
+    private static func providerError(_ error: Error) -> BackupProviderError {
         switch (error as NSError).code {
         case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost,
             NSURLErrorTimedOut, NSURLErrorCannotConnectToHost,
@@ -164,23 +215,4 @@ extension BackupTransferSession: URLSessionDataDelegate {
         }
     }
 
-    private static func providerError(status response: URLResponse?) -> BackupProviderError? {
-        guard let http = response as? HTTPURLResponse else { return nil }
-        switch http.statusCode {
-        case 200..<300:
-            return nil
-        case 401, 403:
-            return .authExpired
-        case 404:
-            return .notFound
-        case 429, 503:
-            let retryAfter =
-                http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init) ?? 5
-            return .throttled(retryAfter: retryAfter)
-        case 507:
-            return .outOfSpace
-        default:
-            return .rejected(message: "the target answered \(http.statusCode)")
-        }
-    }
 }

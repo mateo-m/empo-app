@@ -23,3 +23,10 @@
 // override the iCloud target hides itself at runtime, per SPEC 9.1.
 //
 // EMPO_ENTITLEMENTS = Empo-NoICloud.entitlements
+
+// Optional: the Dropbox app key of SPEC 9.2. A PKCE client holds no
+// secret, so the key is public and the shipping key lives in
+// project.yml. Set this to test against a Dropbox app of your own.
+// An empty key hides Dropbox from the add flow at runtime.
+//
+// DROPBOX_APP_KEY = your_app_key

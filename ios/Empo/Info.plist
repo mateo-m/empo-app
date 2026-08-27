@@ -36,8 +36,30 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<!-- The Dropbox OAuth callback of SPEC 8.10. It is a custom
+			     scheme and never an https link, because an https callback
+			     needs the Associated Domains entitlement, which a
+			     sideloaded build does not hold. -->
+			<key>CFBundleTypeRole</key>
+			<string>None</string>
+			<key>CFBundleURLName</key>
+			<string>sh.mateo.empo.dropbox</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>db-$(DROPBOX_APP_KEY)</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- The Dropbox app key of SPEC 9.2. A PKCE client holds no
+	     secret, so this key is public. An empty key hides Dropbox from
+	     the add flow at runtime. -->
+	<key>EmpoDropboxAppKey</key>
+	<string>$(DROPBOX_APP_KEY)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>

@@ -6,8 +6,8 @@ import GameProbe
 ///
 /// `TargetDescriptorFile` in GameProbe holds the file and its shape.
 /// This file answers the one question only iOS can: which provider a
-/// descriptor opens right now. Today that is iCloud Drive alone.
-/// Tickets 009 to 013 add the rest.
+/// descriptor opens right now. Today that is iCloud Drive and
+/// Dropbox. Tickets 010 to 013 add the rest.
 @MainActor
 enum BackupTargets {
 
@@ -38,8 +38,10 @@ enum BackupTargets {
         switch target.provider {
         case .iCloudDrive:
             return await ICloudDriveGate.shared.target()
-        case .dropbox, .googleDrive, .s3, .webdav, .sftp:
-            // Tickets 009 to 013.
+        case .dropbox:
+            return DropboxGate.shared.target(for: target)
+        case .googleDrive, .s3, .webdav, .sftp:
+            // Tickets 010 to 013.
             return nil
         }
     }
@@ -65,7 +67,9 @@ enum BackupTargets {
         _ target: TargetDescriptor, provider: some BackupProvider
     ) async throws -> PermissionCheckResult {
         let result = await PermissionCheck.run(
-            on: provider, scratchDirectory: BackupRoot.staging)
+            on: provider,
+            probePath: PermissionCheck.makeProbePath(root: target.root),
+            scratchDirectory: BackupRoot.staging)
         guard result.allowsAdd else { return result }
         try add(target)
         return result

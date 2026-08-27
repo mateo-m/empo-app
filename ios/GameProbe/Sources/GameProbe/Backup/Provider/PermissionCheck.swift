@@ -100,12 +100,18 @@ public enum PermissionCheck {
     /// leftover from a failed delete says what it is.
     public static let probeContents = Data("empo permission check".utf8)
 
-    /// A probe path under the fixed root.
+    /// A probe path under the fixed root of 8.7.
+    ///
+    /// The root belongs in the path, because a provider takes a whole
+    /// path and never adds a prefix of its own. The engine builds its
+    /// paths the same way, through `BackupNamespacePaths`.
     ///
     /// The suffix is random so that two devices which check at the
     /// same moment do not delete each other's probe.
-    public static func makeProbePath() -> String {
-        "Empo/permission-check-\(BackupKeys.randomHex(characters: 8))"
+    public static func makeProbePath(root: String = "") -> String {
+        let name = "permission-check-\(BackupKeys.randomHex(characters: 8))"
+        return BackupNamespacePaths.join(
+            BackupNamespacePaths.join(root, BackupNamespacePaths.empoDirectoryName), name)
     }
 
     public static func run(

@@ -102,24 +102,92 @@ final class BackupScheduler {
         runTheDeviceCheck()
     }
 
-    /// Runs the two launch arguments a device check needs, in order.
+    /// Runs the launch arguments a device check needs, in order.
     ///
-    /// `-backupAddICloud YES` adds the iCloud target through the
-    /// permission check of 8.7. `-backupPressNow YES` then presses
-    /// "Back up now". The add finishes first, because a press that
-    /// beat it would find no target and the pass would end at once.
+    /// `-backupAddICloud YES` and `-backupAddDropbox YES` add a
+    /// target through the permission check of 8.7.
+    /// `-backupPressNow YES` then presses "Back up now". An add
+    /// finishes first, because a press that beat it would find no
+    /// target and the pass would end at once.
     ///
-    /// Tickets 016 and 017 bring the screens that carry both. Delete
-    /// this when they land, with the two holds beside it.
+    /// Tickets 016 and 017 bring the screens that carry all of them.
+    /// Delete this when they land, with the two holds beside it.
     private func runTheDeviceCheck() {
         let addsICloud = UserDefaults.standard.bool(forKey: "backupAddICloud")
+        let addsDropbox = UserDefaults.standard.bool(forKey: "backupAddDropbox")
         let presses = UserDefaults.standard.bool(forKey: "backupPressNow")
-        guard addsICloud || presses else { return }
+        guard addsICloud || addsDropbox || presses else { return }
 
         Task {
             if addsICloud { await self.addTheICloudTarget() }
+            if addsDropbox { await self.addTheDropboxTarget() }
             if presses { self.pressBackUpNow(.library) }
         }
+    }
+
+    /// Signs in to Dropbox and adds the target, per 8.10 and 9.2.
+    ///
+    /// The sign-in needs a view controller to present its browser, so
+    /// this waits for the scene to draw one.
+    private func addTheDropboxTarget() async {
+        guard DropboxSignIn.isConfigured else {
+            log("this build carries no Dropbox app key")
+            return
+        }
+        guard let presenter = Self.frontViewController() else {
+            log("Dropbox found no screen to sign in from")
+            return
+        }
+
+        let descriptor = TargetDescriptor(
+            id: "dropbox",
+            provider: .dropbox,
+            label: "Dropbox",
+            accountHint: "this account",
+            root: Dropbox.root)
+        do {
+            let signedIn = try await DropboxGate.shared.signIn(
+                targetId: descriptor.id, presenting: presenter)
+            guard signedIn else {
+                log("the Dropbox sign-in stopped")
+                return
+            }
+        } catch {
+            log("the Dropbox sign-in failed: \(error.localizedDescription)")
+            return
+        }
+
+        guard let provider = DropboxGate.shared.target(for: descriptor) else {
+            log("Dropbox signed in and still cannot open")
+            return
+        }
+        guard
+            let result = try? await BackupTargets.addAfterPermissionCheck(
+                descriptor, provider: provider)
+        else {
+            log("the permission check could not run")
+            return
+        }
+        for step in result.steps {
+            log("the permission check: \(step.label) \(step.outcome)")
+        }
+        if let quota = result.quota {
+            log("the free space: \(quota.usedBytes) used of \(quota.limitBytes ?? -1)")
+        }
+        log("the target was added: \(result.allowsAdd)")
+    }
+
+    /// The view controller a sheet can come up from.
+    private static func frontViewController() -> UIViewController? {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows where window.isKeyWindow {
+                var top = window.rootViewController
+                while let next = top?.presentedViewController { top = next }
+                if let top { return top }
+            }
+        }
+        return nil
     }
 
     /// Adds the iCloud Drive target and writes each step of the

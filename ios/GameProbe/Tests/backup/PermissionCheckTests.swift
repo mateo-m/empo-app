@@ -168,6 +168,20 @@ final class PermissionCheckTests: XCTestCase {
         XCTAssertTrue(first.hasPrefix("Empo/permission-check-"))
         XCTAssertNotEqual(first, second, "two devices must not delete each other's probe")
     }
+
+    func testTheProbeSitsUnderTheTargetRoot() {
+        let path = PermissionCheck.makeProbePath(root: "Documents/Empo Backups")
+
+        // 8.7 puts the probe under the root. The provider adds no
+        // prefix of its own, so the root belongs in the path, the
+        // same way `BackupNamespacePaths` builds an engine path.
+        XCTAssertTrue(path.hasPrefix("Documents/Empo Backups/Empo/permission-check-"))
+    }
+
+    func testAnEmptyRootPutsTheProbeAtTheTopOfTheTarget() {
+        XCTAssertTrue(
+            PermissionCheck.makeProbePath(root: "").hasPrefix("Empo/permission-check-"))
+    }
 }
 
 /// A provider that takes a write and keeps nothing. It is the one

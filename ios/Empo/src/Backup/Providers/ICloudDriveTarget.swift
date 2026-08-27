@@ -23,17 +23,17 @@ actor ICloudDriveTarget: BackupProvider {
     private static let downloadWait: TimeInterval = 60
     private static let downloadPollWait: TimeInterval = 0.5
 
-    /// `<container>/Documents/Empo Backups/`, the fixed root of 8.7.
+    /// The ubiquity container. Every path a caller gives already
+    /// carries the fixed root of 8.7, because the engine builds it in
+    /// through `BackupNamespacePaths` and the permission check builds
+    /// it in through `makeProbePath(root:)`. A second prefix here
+    /// would write `Documents/Empo Backups` twice.
     private let root: URL
     private let watch: ICloudUploadWatch
     private let gate = TransferGate()
 
     init(containerURL: URL, watch: ICloudUploadWatch) {
-        var url = containerURL
-        for part in ICloudDrive.root.split(separator: "/") {
-            url = url.appendingPathComponent(String(part), isDirectory: true)
-        }
-        self.root = url
+        self.root = containerURL
         self.watch = watch
     }
 
