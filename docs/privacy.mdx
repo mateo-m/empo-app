@@ -1,0 +1,65 @@
+---
+title: Privacy policy
+description: What Empo collects, what leaves your device, and who can read your backups.
+sidebar:
+  icon: shield
+---
+
+Empo runs on your iPhone or iPad. There is no Empo account and no Empo server.
+
+Last update: 27 August 2026.
+
+## What Empo collects
+
+Nothing. Empo has no analytics, no crash reporting service, and no advertising.
+
+Your games, your save files, and your settings stay in the app container on the
+device. iOS backs that container up to your own iCloud backup if you turn iCloud
+backup on. That is an Apple feature, and Empo does not control it.
+
+## What leaves the device
+
+Empo makes three kinds of network request.
+
+A version check reads the latest release of the Empo repository from
+`api.github.com`. GitHub sees the request and the IP address it came from.
+
+A certificate refresh reads `cacert.pem` from `curl.se`. Games need it for HTTPS.
+The curl project sees the request and the IP address it came from.
+
+A cloud backup sends the files you chose to the cloud account you connected. Read
+the next part for that.
+
+Empo sends none of these to a server that Empo owns, because there is no such
+server.
+
+## Cloud backups
+
+A cloud backup is off until you add a target and sign in. Empo then writes your
+backup files to that account. The account is yours. The provider of that account
+holds the data under its own privacy policy, not this one.
+
+Empo asks each provider for the smallest permission that does the job. On Google
+Drive that is the `drive.file` scope. It gives Empo access only to the files
+Empo itself created in an `Empo Backups` folder. Empo cannot read, list, or
+delete any other file in your Drive.
+
+Empo keeps the sign-in tokens for a provider in the iOS Keychain on the device.
+It never sends a token anywhere except to that provider.
+
+Remove a target in Empo to stop new backups. Sign out of Empo from your provider
+account page to cancel the permission. Delete the `Empo Backups` folder in your
+provider to remove the files Empo wrote.
+
+## Children
+
+Empo is not directed at children under 13 and collects no data from anybody.
+
+## Changes
+
+A change to this policy shows here with a new date at the top.
+
+## Contact
+
+Open an issue at [github.com/mateo-m/empo-app](https://github.com/mateo-m/empo-app/issues),
+or ask on the [Discord server](https://discord.gg/m3YnpXMxrB).
