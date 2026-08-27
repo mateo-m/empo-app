@@ -99,53 +99,53 @@ final class BackupScheduler {
         BackupTaskScheduler.scheduleNightly()
         countTheRunsThatVanished()
         log("the schedule started")
-        addTheICloudTargetForADeviceCheck()
-        pressTheButtonForADeviceCheck()
+        runTheDeviceCheck()
     }
 
-    /// Presses "Back up now" when the process starts with
-    /// `-backupPressNow YES`.
+    /// Runs the two launch arguments a device check needs, in order.
     ///
-    /// The device check of ticket 007 needs the manual trigger, and
-    /// ticket 016 brings the screen that carries the button. Delete
-    /// this when the screen lands.
-    private func pressTheButtonForADeviceCheck() {
-        guard UserDefaults.standard.bool(forKey: "backupPressNow") else { return }
-        pressBackUpNow(.library)
-    }
+    /// `-backupAddICloud YES` adds the iCloud target through the
+    /// permission check of 8.7. `-backupPressNow YES` then presses
+    /// "Back up now". The add finishes first, because a press that
+    /// beat it would find no target and the pass would end at once.
+    ///
+    /// Tickets 016 and 017 bring the screens that carry both. Delete
+    /// this when they land, with the two holds beside it.
+    private func runTheDeviceCheck() {
+        let addsICloud = UserDefaults.standard.bool(forKey: "backupAddICloud")
+        let presses = UserDefaults.standard.bool(forKey: "backupPressNow")
+        guard addsICloud || presses else { return }
 
-    /// Adds the iCloud Drive target when the process starts with
-    /// `-backupAddICloud YES`, and writes each step of the
-    /// permission check of 8.7 to the log.
-    ///
-    /// The device check of ticket 008 has to add a target, and
-    /// ticket 016 brings the add flow that carries the sheet. Delete
-    /// this when the screen lands.
-    private func addTheICloudTargetForADeviceCheck() {
-        guard UserDefaults.standard.bool(forKey: "backupAddICloud") else { return }
         Task {
-            guard let provider = await ICloudDriveGate.shared.target() else {
-                self.log("iCloud is not available on this device")
-                return
-            }
-            let descriptor = TargetDescriptor(
-                id: "icloud-drive",
-                provider: .iCloudDrive,
-                label: "iCloud Drive",
-                accountHint: "this device",
-                root: ICloudDrive.root)
-            guard
-                let result = try? await BackupTargets.addAfterPermissionCheck(
-                    descriptor, provider: provider)
-            else {
-                self.log("the permission check could not run")
-                return
-            }
-            for step in result.steps {
-                self.log("the permission check: \(step.label) \(step.outcome)")
-            }
-            self.log("the target was added: \(result.allowsAdd)")
+            if addsICloud { await self.addTheICloudTarget() }
+            if presses { self.pressBackUpNow(.library) }
         }
+    }
+
+    /// Adds the iCloud Drive target and writes each step of the
+    /// permission check of 8.7 to the log.
+    private func addTheICloudTarget() async {
+        guard let provider = await ICloudDriveGate.shared.target() else {
+            log("iCloud is not available on this device")
+            return
+        }
+        let descriptor = TargetDescriptor(
+            id: "icloud-drive",
+            provider: .iCloudDrive,
+            label: "iCloud Drive",
+            accountHint: "this device",
+            root: ICloudDrive.root)
+        guard
+            let result = try? await BackupTargets.addAfterPermissionCheck(
+                descriptor, provider: provider)
+        else {
+            log("the permission check could not run")
+            return
+        }
+        for step in result.steps {
+            log("the permission check: \(step.label) \(step.outcome)")
+        }
+        log("the target was added: \(result.allowsAdd)")
     }
 
     private func observeAppLifetime() {
