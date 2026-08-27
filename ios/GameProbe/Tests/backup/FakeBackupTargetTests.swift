@@ -159,7 +159,7 @@ final class FakeBackupTargetTests: XCTestCase {
         try await target.put(localFile: try localFile("old"), path: blobPath)
 
         await target.addFault(
-            FakeTargetFault(operation: .put, error: .offline, stage: .beforeCommit))
+            FakeTargetFault(operation: .put, error: .offline, phase: .commit))
 
         let newFile = try localFile("new")
         do {
@@ -390,6 +390,65 @@ final class FakeBackupTargetTests: XCTestCase {
         XCTAssertEqual(listed.count, 12)
     }
 
+    func testAThrottleAtTheCommitIsHonoredToo() async throws {
+        let clock = FakeBackupClock()
+        let target = FakeBackupTarget(
+            directory: tempRoot.appendingPathComponent("commit", isDirectory: true),
+            clock: clock,
+            attempts: 3)
+        // A real provider commits with a request of its own, and
+        // that request answers 429 like any other.
+        await target.addFault(
+            FakeTargetFault(
+                operation: .put, error: .throttled(retryAfter: 6), phase: .commit, times: 2))
+
+        try await target.put(localFile: try localFile("blob"), path: blobPath)
+
+        let waits = await clock.waits
+        XCTAssertEqual(waits, [6, 6])
+        let listed = try await target.list(prefix: "")
+        XCTAssertEqual(listed.map(\.path), [blobPath])
+    }
+
+    func testAThrottledListIsHonoredAndTakesNoTransferSlot() async throws {
+        let clock = FakeBackupClock()
+        let target = FakeBackupTarget(
+            directory: tempRoot.appendingPathComponent("listed", isDirectory: true),
+            clock: clock,
+            attempts: 3)
+        await target.addFault(
+            FakeTargetFault(operation: .list, error: .throttled(retryAfter: 2), times: 2))
+
+        let listed = try await target.list(prefix: "")
+
+        XCTAssertTrue(listed.isEmpty)
+        let waits = await clock.waits
+        XCTAssertEqual(waits, [2, 2])
+        let peak = await target.peakInFlight
+        XCTAssertEqual(peak, 0, "a list moves no file")
+    }
+
+    func testAThrottledDeleteAndQuotaAreHonoredToo() async throws {
+        let clock = FakeBackupClock()
+        let target = FakeBackupTarget(
+            directory: tempRoot.appendingPathComponent("batch", isDirectory: true),
+            quotaLimitBytes: 500,
+            clock: clock,
+            attempts: 2)
+        await target.addFault(
+            FakeTargetFault(operation: .delete, error: .throttled(retryAfter: 3), times: 1))
+        await target.addFault(
+            FakeTargetFault(operation: .quota, error: .throttled(retryAfter: 8), times: 1))
+
+        try await target.put(localFile: try localFile("blob"), path: blobPath)
+        try await target.delete(paths: [blobPath])
+        let quota = try await target.quota()
+
+        XCTAssertEqual(quota, QuotaReading(usedBytes: 0, limitBytes: 500))
+        let waits = await clock.waits
+        XCTAssertEqual(waits, [3, 8])
+    }
+
     func testTheTargetHonorsRetryAfterWithNoRealSleep() async throws {
         let clock = FakeBackupClock()
         let target = FakeBackupTarget(
@@ -398,7 +457,7 @@ final class FakeBackupTargetTests: XCTestCase {
             attempts: 3)
         await target.addFault(
             FakeTargetFault(
-                operation: .put, error: .throttled(retryAfter: 9), stage: .beforeTransfer,
+                operation: .put, error: .throttled(retryAfter: 9), phase: .upload,
                 times: 2))
 
         try await target.put(localFile: try localFile("blob"), path: blobPath)

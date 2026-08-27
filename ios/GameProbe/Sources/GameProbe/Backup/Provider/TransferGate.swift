@@ -21,13 +21,27 @@ public struct SystemBackupClock: BackupClock {
 
 /// The in-flight limit and the throttle wait of SPEC 8.6.
 ///
-/// Four transfers per target at a time, and a `Retry-After` the
-/// provider honors instead of passing to the engine. Every provider
-/// owns one gate and routes `put` and `get` through it.
+/// The gate does two jobs, and they do not cover the same calls:
 ///
-/// A run that is still throttled after `attempts` tries throws
+/// - Four transfers per target at a time. A transfer is a `put` or
+///   a `get`, because those are the two operations that move a
+///   file. Use `transfer`.
+/// - `Retry-After` on every call the service can throttle, which is
+///   every call it answers. `list`, `delete`, and `quota` move no
+///   file, so they take no slot. Use `request`.
+///
+/// Every provider owns one gate. **Put the whole operation inside
+/// the body, both phases of a `put`.** The commit is a request of
+/// its own on Dropbox and on Google Drive, and it answers 429 like
+/// any other, so a commit outside the gate would pass a throttle to
+/// the engine that the provider must honor itself.
+///
+/// A call that is still throttled after `attempts` tries throws
 /// `throttled` to the engine, which waits the stated time and keeps
 /// the run, per 8.4.
+///
+/// Retrying a `put` costs the bytes again. That is the price 8.1
+/// states when it keeps resumability inside the provider.
 public actor TransferGate {
 
     /// The fixed limit of 8.6.
@@ -55,20 +69,39 @@ public actor TransferGate {
         self.clock = clock
     }
 
-    /// Runs one transfer under the limit, and retries it while the
-    /// service throttles.
-    public func run<T: Sendable>(
+    /// Runs one `put` or one `get`. It takes a slot and it honors
+    /// `Retry-After`.
+    public func transfer<T: Sendable>(
+        _ body: @Sendable () async throws(BackupProviderError) -> T
+    ) async throws(BackupProviderError) -> T {
+        try await honorThrottle(takesSlot: true, body)
+    }
+
+    /// Runs one call that moves no file: `list`, `delete`, or
+    /// `quota`. It honors `Retry-After` and it takes no slot,
+    /// because the limit of 8.6 counts transfers.
+    public func request<T: Sendable>(
+        _ body: @Sendable () async throws(BackupProviderError) -> T
+    ) async throws(BackupProviderError) -> T {
+        try await honorThrottle(takesSlot: false, body)
+    }
+
+    private func honorThrottle<T: Sendable>(
+        takesSlot: Bool,
         _ body: @Sendable () async throws(BackupProviderError) -> T
     ) async throws(BackupProviderError) -> T {
         var attempt = 1
         while true {
-            await acquire()
+            if takesSlot { await acquire() }
             do {
                 let value = try await body()
-                release()
+                if takesSlot { release() }
                 return value
             } catch {
-                release()
+                // The slot goes back before the wait. A throttled
+                // transfer that held its slot would cut the target
+                // to three.
+                if takesSlot { release() }
                 guard case .throttled(let retryAfter) = error, attempt < attempts else {
                     throw error
                 }

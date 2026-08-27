@@ -22,13 +22,13 @@ public struct FakeTargetFault: Equatable, Sendable {
         case quota
     }
 
-    /// Where inside `put` the fault fires. `put` is two phases, per
-    /// 8.1, and the two points behave differently: a fault before
-    /// the transfer moves no byte, and a fault before the commit
-    /// leaves the old content in place, per 8.2.
-    public enum PutStage: String, Equatable, Sendable {
-        case beforeTransfer
-        case beforeCommit
+    /// Which phase of `put` the fault fires in. `put` is two
+    /// phases, per 8.1, and the two behave differently: a failed
+    /// upload moves no byte to the path, and a failed commit leaves
+    /// the old content in place, per 8.2.
+    public enum PutPhase: String, Equatable, Sendable {
+        case upload
+        case commit
     }
 
     public var operation: Operation
@@ -36,7 +36,7 @@ public struct FakeTargetFault: Equatable, Sendable {
     /// every path.
     public var pathContains: String?
     public var error: BackupProviderError
-    public var stage: PutStage
+    public var phase: PutPhase
     /// How many times it fires, or `nil` for every call.
     public var times: Int?
 
@@ -44,13 +44,13 @@ public struct FakeTargetFault: Equatable, Sendable {
         operation: Operation,
         error: BackupProviderError,
         pathContains: String? = nil,
-        stage: PutStage = .beforeTransfer,
+        phase: PutPhase = .upload,
         times: Int? = nil
     ) {
         self.operation = operation
         self.pathContains = pathContains
         self.error = error
-        self.stage = stage
+        self.phase = phase
         self.times = times
     }
 
@@ -111,17 +111,22 @@ public actor FakeBackupTarget: BackupProvider {
     // MARK: - The six operations
 
     public func list(prefix: String) async throws(BackupProviderError) -> [RemoteObject] {
-        try fire(.list, path: prefix, stage: nil)
         let reportsAge = capabilities.reportsObjectAge
-        return FakeBackupTarget.walk(objectsDirectory)
-            .filter { $0.path.hasPrefix(prefix) }
-            .map { found in
-                RemoteObject(
-                    path: found.path,
-                    sizeBytes: FakeBackupTarget.fileSize(at: found.url),
-                    modifiedAt: reportsAge ? FakeBackupTarget.modifiedDate(at: found.url) : nil)
-            }
-            .sorted { $0.path < $1.path }
+        let root = objectsDirectory
+        return try await gate.request {
+            [self] () async throws(BackupProviderError) -> [RemoteObject] in
+            if let error = await fault(.list, path: prefix, phase: nil) { throw error }
+            return FakeBackupTarget.walk(root)
+                .filter { $0.path.hasPrefix(prefix) }
+                .map { found in
+                    RemoteObject(
+                        path: found.path,
+                        sizeBytes: FakeBackupTarget.fileSize(at: found.url),
+                        modifiedAt: reportsAge
+                            ? FakeBackupTarget.modifiedDate(at: found.url) : nil)
+                }
+                .sorted { $0.path < $1.path }
+        }
     }
 
     public func put(localFile: URL, path: String) async throws(BackupProviderError) {
@@ -131,30 +136,29 @@ public actor FakeBackupTarget: BackupProvider {
 
         let staged = stagingDirectory.appendingPathComponent(UUID().uuidString)
         let latch = self.latch
-        try await gate.run { [self] () async throws(BackupProviderError) in
-            // The refusal sits inside the gate, because a service
-            // that throttles does it when the transfer starts, and
-            // the gate is what honors `Retry-After`, per 8.6.
-            try await fire(.put, path: path, stage: .beforeTransfer)
+        // Both phases run inside one slot. A real provider commits
+        // with a request of its own, and that request answers 429
+        // like any other, so the gate must cover it.
+        try await gate.transfer { [self] () async throws(BackupProviderError) in
+            if let error = await fault(.put, path: path, phase: .upload) { throw error }
             await latch?.wait()
             try FakeBackupTarget.copyFile(from: localFile, to: staged)
+            if let error = await fault(.put, path: path, phase: .commit) {
+                // The staged copy never becomes the object, so the
+                // path still holds the old content, per 8.2.
+                try? FileManager.default.removeItem(at: staged)
+                throw error
+            }
+            try commit(staged: staged, to: path)
         }
-
-        do {
-            try fire(.put, path: path, stage: .beforeCommit)
-        } catch {
-            // The staged copy never becomes the object, so the path
-            // still holds the old content, per 8.2.
-            try? FileManager.default.removeItem(at: staged)
-            throw error
-        }
-
-        try commit(staged: staged, to: path)
         if confirmsLater { pendingConfirmations.insert(path) }
     }
 
+    /// It takes no slot and no throttle wait. Five of the six v1
+    /// providers confirm at their commit and make no call here, and
+    /// the sixth reads a local metadata query, per 8.5 and 9.1.
     public func confirm(path: String) async throws(BackupProviderError) -> PutConfirmation {
-        try fire(.confirm, path: path, stage: nil)
+        if let error = fault(.confirm, path: path, phase: nil) { throw error }
         guard FileManager.default.fileExists(atPath: fileURL(forPath: path).path) else {
             throw BackupProviderError.notFound
         }
@@ -167,27 +171,39 @@ public actor FakeBackupTarget: BackupProvider {
             throw BackupProviderError.notFound
         }
         let latch = self.latch
-        try await gate.run { [self] () async throws(BackupProviderError) in
-            try await fire(.get, path: path, stage: nil)
+        try await gate.transfer { [self] () async throws(BackupProviderError) in
+            if let error = await fault(.get, path: path, phase: nil) { throw error }
             await latch?.wait()
             try FakeBackupTarget.copyFile(from: source, to: localFile)
         }
     }
 
     public func delete(paths: [String]) async throws(BackupProviderError) {
-        for path in paths {
-            try fire(.delete, path: path, stage: nil)
-        }
-        for path in paths {
-            try? FileManager.default.removeItem(at: fileURL(forPath: path))
-            pendingConfirmations.remove(path)
+        try await gate.request { [self] () async throws(BackupProviderError) in
+            for path in paths {
+                if let error = await fault(.delete, path: path, phase: nil) { throw error }
+            }
+            await removeObjects(paths)
         }
     }
 
     public func quota() async throws(BackupProviderError) -> QuotaReading? {
-        try fire(.quota, path: nil, stage: nil)
+        try await gate.request { [self] () async throws(BackupProviderError) -> QuotaReading? in
+            if let error = await fault(.quota, path: nil, phase: nil) { throw error }
+            return await currentQuota()
+        }
+    }
+
+    private func currentQuota() -> QuotaReading? {
         guard let quotaLimitBytes else { return nil }
         return QuotaReading(usedBytes: usedBytes(), limitBytes: quotaLimitBytes)
+    }
+
+    private func removeObjects(_ paths: [String]) {
+        for path in paths {
+            try? FileManager.default.removeItem(at: fileURL(forPath: path))
+            pendingConfirmations.remove(path)
+        }
     }
 
     // MARK: - What a test drives
@@ -269,15 +285,20 @@ public actor FakeBackupTarget: BackupProvider {
 
     // MARK: - Inside
 
-    private func fire(
+    /// The error this call must report, or `nil` where no fault
+    /// matches it.
+    ///
+    /// It returns the error rather than throwing it, so a caller
+    /// can clean up before the error leaves.
+    private func fault(
         _ operation: FakeTargetFault.Operation,
         path: String?,
-        stage: FakeTargetFault.PutStage?
-    ) throws(BackupProviderError) {
+        phase: FakeTargetFault.PutPhase?
+    ) -> BackupProviderError? {
         for index in faults.indices {
             let fault = faults[index]
             guard fault.operation == operation else { continue }
-            if let stage, fault.stage != stage { continue }
+            if let phase, fault.phase != phase { continue }
             if let wanted = fault.pathContains {
                 guard let path, path.contains(wanted) else { continue }
             }
@@ -285,11 +306,12 @@ public actor FakeBackupTarget: BackupProvider {
                 guard times > 0 else { continue }
                 faults[index].times = times - 1
             }
-            throw fault.error
+            return fault.error
         }
+        return nil
     }
 
-    private func commit(staged: URL, to path: String) throws(BackupProviderError) {
+    private nonisolated func commit(staged: URL, to path: String) throws(BackupProviderError) {
         let destination = fileURL(forPath: path)
         do {
             try FileManager.default.createDirectory(

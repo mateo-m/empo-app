@@ -38,7 +38,7 @@ final class TransferGateTests: XCTestCase {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<12 {
                 group.addTask {
-                    try? await gate.run { await latch.wait() }
+                    try? await gate.transfer { await latch.wait() }
                 }
             }
 
@@ -65,7 +65,7 @@ final class TransferGateTests: XCTestCase {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<20 {
                 group.addTask {
-                    try? await gate.run { _ = await counter.next() }
+                    try? await gate.transfer { _ = await counter.next() }
                 }
             }
         }
@@ -81,7 +81,7 @@ final class TransferGateTests: XCTestCase {
         let startedAt = Date()
 
         do {
-            try await gate.run { () async throws(BackupProviderError) in
+            try await gate.transfer { () async throws(BackupProviderError) in
                 let attempt = await counter.next()
                 if attempt < 3 { throw BackupProviderError.throttled(retryAfter: 7) }
             }
@@ -103,7 +103,7 @@ final class TransferGateTests: XCTestCase {
         let gate = TransferGate(attempts: 3, clock: clock)
 
         do {
-            try await gate.run { () async throws(BackupProviderError) in
+            try await gate.transfer { () async throws(BackupProviderError) in
                 throw BackupProviderError.throttled(retryAfter: 5)
             }
             XCTFail("the gate must give up after its tries")
@@ -124,7 +124,7 @@ final class TransferGateTests: XCTestCase {
         let counter = AttemptCounter()
 
         do {
-            try await gate.run { () async throws(BackupProviderError) in
+            try await gate.transfer { () async throws(BackupProviderError) in
                 _ = await counter.next()
                 throw BackupProviderError.permissionDenied
             }
@@ -139,13 +139,56 @@ final class TransferGateTests: XCTestCase {
         XCTAssertTrue(waits.isEmpty)
     }
 
+    func testACallThatMovesNoFileWaitsWithoutTakingASlot() async {
+        let clock = FakeBackupClock()
+        let gate = TransferGate(attempts: 3, clock: clock)
+        let counter = AttemptCounter()
+
+        do {
+            try await gate.request { () async throws(BackupProviderError) in
+                let attempt = await counter.next()
+                if attempt < 3 { throw BackupProviderError.throttled(retryAfter: 4) }
+            }
+        } catch {
+            XCTFail("the third try clears the throttle: \(error)")
+        }
+
+        let waits = await clock.waits
+        XCTAssertEqual(waits, [4, 4])
+        // `list`, `delete`, and `quota` move no file, so the limit
+        // of four never counts them.
+        let peak = await gate.peakInFlight
+        XCTAssertEqual(peak, 0)
+    }
+
+    func testAnyNumberOfRequestsRunAtOnce() async {
+        let gate = TransferGate()
+        let latch = TransferLatch()
+
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<12 {
+                group.addTask {
+                    try? await gate.request { await latch.wait() }
+                }
+            }
+
+            let arrived = await latch.waitForArrivals(12)
+            XCTAssertTrue(arrived, "no request waits on a transfer slot")
+
+            await latch.open()
+        }
+
+        let peak = await gate.peakInFlight
+        XCTAssertEqual(peak, 0)
+    }
+
     func testATransferThatThrottlesGivesItsSlotUpWhileItWaits() async {
         let clock = FakeBackupClock()
         let gate = TransferGate(attempts: 2, clock: clock)
 
         // One throttled transfer must not hold a slot through its
         // wait, or a target that throttles once would run at three.
-        try? await gate.run { () async throws(BackupProviderError) in
+        try? await gate.transfer { () async throws(BackupProviderError) in
             throw BackupProviderError.throttled(retryAfter: 1)
         }
 
