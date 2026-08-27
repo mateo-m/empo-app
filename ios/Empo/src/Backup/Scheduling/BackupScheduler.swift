@@ -170,6 +170,14 @@ final class BackupScheduler {
     /// proves its resumable path too.
     private static let bigUploadBytes = 200 * 1024 * 1024
 
+    /// The size the check writes. `-backupBigUploadMebibytes 1000`
+    /// raises it, so a transfer runs long enough for the app to die
+    /// in the middle of it, per step 3 of the S3 device check.
+    private static var bigUploadSize: Int {
+        let asked = UserDefaults.standard.integer(forKey: "backupBigUploadMebibytes")
+        return asked > 0 ? asked * 1024 * 1024 : bigUploadBytes
+    }
+
     /// Puts one large file, confirms it, and deletes it.
     ///
     /// A small library never reaches the limit, so a real game cannot
@@ -192,11 +200,12 @@ final class BackupScheduler {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("big-upload-check.bin")
         defer { try? FileManager.default.removeItem(at: file) }
-        guard Self.writeZeroes(Self.bigUploadBytes, to: file) else {
+        let bytes = Self.bigUploadSize
+        guard Self.writeZeroes(bytes, to: file) else {
             log("the big upload could not write its file")
             return
         }
-        log("the big upload starts, \(Self.bigUploadBytes) bytes")
+        log("the big upload starts, \(bytes) bytes")
 
         let path = BackupNamespacePaths.join(
             BackupNamespacePaths.join(descriptor.root, BackupNamespacePaths.empoDirectoryName),
