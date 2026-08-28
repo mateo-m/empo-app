@@ -81,6 +81,9 @@ class AppState {
         guard phase == nil, pauseManager.pausedGame == nil else { return }
         guard let container = game.container else { return }
         SaveMigration.migrateLegacySavesIfNeeded(for: container)
+        // The hard stop of 7.6. A restore in flight stops at once,
+        // and it keeps its record and its staged blobs.
+        RestoreCoordinator.shared.stopForGameLaunch()
         selectedGame = game
         sessionHadError = false
         // Bind the controls layout to this game so edits during play

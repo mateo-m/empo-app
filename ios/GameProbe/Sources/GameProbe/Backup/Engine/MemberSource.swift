@@ -49,15 +49,26 @@ public struct MemberSource: Sendable {
     /// The file one member names, or `nil` where this device holds
     /// no root for it.
     public func url(of member: BackupSetMember) -> URL? {
-        switch member.root {
+        url(root: member.root, path: member.path)
+    }
+
+    /// The file one manifest entry names. A restore reads it the
+    /// same way a run does, per 11.1, because both name the same
+    /// roots.
+    public func url(of entry: SnapshotManifest.Entry) -> URL? {
+        url(root: entry.root, path: entry.path)
+    }
+
+    public func url(root: EntryRoot, path: String) -> URL? {
+        switch root {
         case .container:
-            return container?.appendingPathComponent(member.path)
+            return container?.appendingPathComponent(path)
         case .sharedData:
-            return sharedData?.appendingPathComponent(member.path)
+            return sharedData?.appendingPathComponent(path)
         case .rescuedSaves:
-            return bucketFile(member.path)
+            return bucketFile(path)
         case .preferences:
-            return preferencesFile(member.path)
+            return preferencesFile(path)
         }
     }
 

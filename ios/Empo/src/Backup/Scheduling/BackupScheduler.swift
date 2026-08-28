@@ -75,7 +75,9 @@ final class BackupScheduler {
     static let interruptedDetail = "the run stopped when Empo closed"
 
     private var didStart = false
-    private var isRunning = false
+    /// Whether a pass is in flight. The manual restore door of
+    /// 11.3 closes while one is, per the third row of that section.
+    private(set) var isRunning = false
     private var foregroundWait: Task<Void, Never>?
     private lazy var store: BackupStateStore? = try? BackupRoot.openStateStore()
 
