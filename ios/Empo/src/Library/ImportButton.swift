@@ -197,7 +197,7 @@ struct ImportButton: View {
             width: collapsed ? AppSize.toolbarButton : nil,
             height: collapsed ? AppSize.toolbarButton : nil
         )
-        .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
+        .modifier(ImportButtonGlass())
         .darkGlass()
     }
 
@@ -214,4 +214,14 @@ struct ImportButton: View {
 private struct ImportButtonSquash {
     var scaleX: CGFloat = 1.0
     var scaleY: CGFloat = 1.0
+}
+
+private struct ImportButtonGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
+        } else {
+            content.legacyGlassFallback(in: .capsule, tint: .brand)
+        }
+    }
 }

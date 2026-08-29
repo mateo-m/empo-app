@@ -313,9 +313,17 @@ struct GameStatusIndicator: View {
         case .paused:
             // Inverted scheme tint so the paused badge reads stronger
             // than the ambient ready state.
-            core.glassEffect(.regular.tint(pausedBackgroundTint), in: .circle)
+            if #available(iOS 26.0, *) {
+                core.glassEffect(.regular.tint(pausedBackgroundTint), in: .circle)
+            } else {
+                core.legacyGlassFallback(in: Circle(), tint: pausedBackgroundTint)
+            }
         case .ready, .invalid:
-            core.glassEffect(.regular, in: .circle)
+            if #available(iOS 26.0, *) {
+                core.glassEffect(.regular, in: .circle)
+            } else {
+                core.legacyGlassFallback(in: Circle())
+            }
         }
     }
 

@@ -33,7 +33,7 @@ struct LibrarySearchBar: View {
             }
             .padding(.horizontal, Spacing.lg)
             .frame(height: searchBarHeight)
-            .glassEffect(.regular.interactive(), in: .capsule)
+            .modifier(SearchBarGlass())
 
             IconButton("arrow.up.arrow.down", style: .outline) {
                 showSortSheet = true
@@ -52,5 +52,15 @@ struct LibrarySearchBar: View {
         .padding(.horizontal)
         .padding(.bottom, Spacing.xs)
         .tint(.primary)
+    }
+}
+
+private struct SearchBarGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: .capsule)
+        } else {
+            content.legacyGlassFallback(in: .capsule)
+        }
     }
 }

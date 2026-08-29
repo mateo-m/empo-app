@@ -138,9 +138,17 @@ struct CircularControlButton<Face: View>: View {
             Circle()
                 .fill(Color.black)
 
-            Circle()
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: .circle)
+            Group {
+                if #available(iOS 26.0, *) {
+                    Circle()
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                } else {
+                    Circle()
+                        .fill(.clear)
+                        .legacyGlassFallback(in: Circle())
+                }
+            }
 
             // Press highlight matching the D-pad arm gradient
             // (white 0.28 at the rim → clear toward the center).
@@ -382,9 +390,17 @@ struct DPad: View {
             plus
                 .fill(Color.black)
 
-            plus
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: plus)
+            Group {
+                if #available(iOS 26.0, *) {
+                    plus
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: plus)
+                } else {
+                    plus
+                        .fill(.clear)
+                        .legacyGlassFallback(in: plus)
+                }
+            }
 
             // Frame arm highlights to each arm's local rect so
             // tip→center UnitPoints are identical for every direction.
@@ -489,9 +505,17 @@ struct Joystick: View {
             Circle()
                 .fill(Color.black)
 
-            Circle()
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: .circle)
+            Group {
+                if #available(iOS 26.0, *) {
+                    Circle()
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                } else {
+                    Circle()
+                        .fill(.clear)
+                        .legacyGlassFallback(in: Circle())
+                }
+            }
 
             // Direction chevrons on the base ring. The active one
             // brightens, same visual language as the D-pad's arms.

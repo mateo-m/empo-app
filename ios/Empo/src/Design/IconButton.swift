@@ -82,14 +82,26 @@ private struct IconGlassModifier: ViewModifier {
     let hasAction: Bool
 
     func body(content: Content) -> some View {
-        switch style {
-        case .primary:
-            content.glassEffect(.regular.tint(.brand).interactive(), in: .circle)
-        case .secondary:
-            content.glassEffect(
-                .regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .circle)
-        case .outline:
-            content.glassEffect(hasAction ? .regular.interactive() : .regular, in: .circle)
+        if #available(iOS 26.0, *) {
+            switch style {
+            case .primary:
+                content.glassEffect(.regular.tint(.brand).interactive(), in: .circle)
+            case .secondary:
+                content.glassEffect(
+                    .regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .circle)
+            case .outline:
+                content.glassEffect(hasAction ? .regular.interactive() : .regular, in: .circle)
+            }
+        } else {
+            switch style {
+            case .primary:
+                content.legacyGlassFallback(in: Circle(), tint: .brand)
+            case .secondary:
+                content.legacyGlassFallback(
+                    in: Circle(), tint: .brand.opacity(Alpha.brandTintBackground))
+            case .outline:
+                content.legacyGlassFallback(in: Circle())
+            }
         }
     }
 }

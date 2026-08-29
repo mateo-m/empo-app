@@ -267,26 +267,37 @@ struct ScreenRegionChips: View {
     var onToggleOverlay: (() -> Void)?
 
     var body: some View {
+        let screenLabelBase = Text("Screen")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(Color.brand)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, 2)
+
         ZStack {
-            Text("Screen")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.brand)
-                .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, 2)
-                .glassEffect(.regular, in: .capsule)
-                .position(x: rect.midX, y: rect.minY + 14)
-                .allowsHitTesting(false)
+            Group {
+                if #available(iOS 26.0, *) {
+                    screenLabelBase.glassEffect(.regular, in: .capsule)
+                } else {
+                    screenLabelBase.legacyGlassFallback(in: .capsule)
+                }
+            }
+            .position(x: rect.midX, y: rect.minY + 14)
+            .allowsHitTesting(false)
 
             if showsReset {
                 Button {
                     onReset()
                 } label: {
-                    Label("Reset screen", systemImage: "arrow.counterclockwise")
+                    let resetBase = Label("Reset screen", systemImage: "arrow.counterclockwise")
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, Spacing.xs)
                         .foregroundStyle(.white)
-                        .glassEffect(.regular.interactive(), in: .capsule)
+                    if #available(iOS 26.0, *) {
+                        resetBase.glassEffect(.regular.interactive(), in: .capsule)
+                    } else {
+                        resetBase.legacyGlassFallback(in: .capsule)
+                    }
                 }
                 // Top area, below the "Screen" label: the bottom
                 // corner belongs to the resize grabber, and at the
@@ -299,7 +310,7 @@ struct ScreenRegionChips: View {
                 Button {
                     onToggleOverlay()
                 } label: {
-                    Label(
+                    let overlayBase = Label(
                         "Controls over game",
                         systemImage: overlayOn
                             ? "checkmark.circle.fill" : "circle"
@@ -308,7 +319,11 @@ struct ScreenRegionChips: View {
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, Spacing.xs)
                     .foregroundStyle(overlayOn ? Color.brand : .white)
-                    .glassEffect(.regular.interactive(), in: .capsule)
+                    if #available(iOS 26.0, *) {
+                        overlayBase.glassEffect(.regular.interactive(), in: .capsule)
+                    } else {
+                        overlayBase.legacyGlassFallback(in: .capsule)
+                    }
                 }
                 .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
                 .accessibilityLabel(

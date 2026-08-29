@@ -36,17 +36,24 @@ struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let base = configuration.label
             .font(size.font.weight(.semibold))
             .multilineTextAlignment(.center)
             .foregroundStyle(.white)
             .padding(.horizontal, size.horizontalPadding)
             .padding(.vertical, size.verticalPadding)
-            .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
-            .opacity(isEnabled ? 1 : Alpha.disabled)
-            .onChange(of: configuration.isPressed) { _, pressed in
-                if pressed { Haptics.tap() }
+
+        return Group {
+            if #available(iOS 26.0, *) {
+                base.glassEffect(.regular.tint(tint).interactive(), in: .capsule)
+            } else {
+                base.legacyGlassFallback(in: .capsule, tint: tint)
             }
+        }
+        .opacity(isEnabled ? 1 : Alpha.disabled)
+        .onChange(of: configuration.isPressed) { _, pressed in
+            if pressed { Haptics.tap() }
+        }
     }
 }
 
@@ -65,17 +72,25 @@ struct SecondaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let base = configuration.label
             .font(size.font.weight(.medium))
             .multilineTextAlignment(.center)
             .foregroundStyle(tint)
             .padding(.horizontal, size.horizontalPadding)
             .padding(.vertical, size.verticalPadding)
-            .glassEffect(.regular.tint(tint.opacity(Alpha.brandTintBackground)).interactive(), in: .capsule)
-            .opacity(isEnabled ? 1 : Alpha.disabled)
-            .onChange(of: configuration.isPressed) { _, pressed in
-                if pressed { Haptics.tap() }
+        let glassTint = tint.opacity(Alpha.brandTintBackground)
+
+        return Group {
+            if #available(iOS 26.0, *) {
+                base.glassEffect(.regular.tint(glassTint).interactive(), in: .capsule)
+            } else {
+                base.legacyGlassFallback(in: .capsule, tint: glassTint)
             }
+        }
+        .opacity(isEnabled ? 1 : Alpha.disabled)
+        .onChange(of: configuration.isPressed) { _, pressed in
+            if pressed { Haptics.tap() }
+        }
     }
 }
 
