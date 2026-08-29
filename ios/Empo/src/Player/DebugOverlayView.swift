@@ -116,7 +116,7 @@ struct DebugOverlayView: View {
             }
         }
         .padding(Spacing.md + Spacing.xxs)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
+        .modifier(DebugOverlayGlass())
         .darkGlass()
         .background(
             GeometryReader { proxy in
@@ -320,6 +320,16 @@ struct DebugOverlayView: View {
     private var metalDeviceLine: String? {
         let device = String(cString: mkxp_getMetalDeviceName())
         return device == "unknown" ? nil : device
+    }
+}
+
+private struct DebugOverlayGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
+        } else {
+            content.legacyGlassFallback(in: RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
+        }
     }
 }
 

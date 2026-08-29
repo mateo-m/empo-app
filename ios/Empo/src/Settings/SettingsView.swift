@@ -567,13 +567,19 @@ private struct BrandGlassModifier: ViewModifier {
     let tint: Color
 
     func body(content: Content) -> some View {
-        if interactive {
-            content
-                .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
-                .darkGlass()
+        if #available(iOS 26.0, *) {
+            if interactive {
+                content
+                    .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
+                    .darkGlass()
+            } else {
+                content
+                    .glassEffect(.regular.tint(tint), in: .capsule)
+                    .darkGlass()
+            }
         } else {
             content
-                .glassEffect(.regular.tint(tint), in: .capsule)
+                .legacyGlassFallback(in: Capsule(), tint: tint)
                 .darkGlass()
         }
     }

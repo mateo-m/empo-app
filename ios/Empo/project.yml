@@ -12,7 +12,7 @@ packages:
 options:
   bundleIdPrefix: sh.mateo
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "18.0"
   createIntermediateGroups: true
 settings:
   base:

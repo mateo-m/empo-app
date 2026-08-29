@@ -152,13 +152,19 @@ struct PlayerEditToolbar: View {
             // Blast-radius banner: a pinned profile's edits reach
             // every game using it. Ambient edits mint a new profile.
             // Its own small pill, so the button capsule stays clean.
-            Text(editBannerText)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.85))
-                .lineLimit(1)
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.xs)
-                .glassEffect(.regular, in: .capsule)
+            Group {
+                let bannerBase = Text(editBannerText)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .lineLimit(1)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.xs)
+                if #available(iOS 26.0, *) {
+                    bannerBase.glassEffect(.regular, in: .capsule)
+                } else {
+                    bannerBase.legacyGlassFallback(in: .capsule)
+                }
+            }
                 .onGeometryChange(
                     for: CGRect.self, of: { $0.frame(in: .global) },
                     action: {
@@ -247,12 +253,16 @@ struct PlayerEditToolbar: View {
             Button {
                 onDone()
             } label: {
-                Text("Done")
+                let doneBase = Text("Done")
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, Spacing.lg)
                     .frame(height: IconButtonSize.sm.points)
-                    .glassEffect(.regular.tint(.success).interactive(), in: .capsule)
+                if #available(iOS 26.0, *) {
+                    doneBase.glassEffect(.regular.tint(.success).interactive(), in: .capsule)
+                } else {
+                    doneBase.legacyGlassFallback(in: .capsule, tint: .success)
+                }
             }
         }
         // Pin the glass to the dark variant, matching the play

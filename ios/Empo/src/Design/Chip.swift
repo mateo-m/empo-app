@@ -38,14 +38,21 @@ struct Chip: View {
         .foregroundStyle(.white)
 
         if isIconOnly {
-            content
-                .padding(Spacing.sm)
-                .glassEffect(.regular.tint(tint), in: .circle)
+            let padded = content.padding(Spacing.sm)
+            if #available(iOS 26.0, *) {
+                padded.glassEffect(.regular.tint(tint), in: .circle)
+            } else {
+                padded.legacyGlassFallback(in: .circle, tint: tint)
+            }
         } else {
-            content
+            let padded = content
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.xs)
-                .glassEffect(.regular.tint(tint), in: .capsule)
+            if #available(iOS 26.0, *) {
+                padded.glassEffect(.regular.tint(tint), in: .capsule)
+            } else {
+                padded.legacyGlassFallback(in: .capsule, tint: tint)
+            }
         }
     }
 }

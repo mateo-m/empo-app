@@ -366,9 +366,17 @@ private struct AccessoryKeyButton: View {
             shape
                 .fill(colorScheme == .dark ? Color.black : Color.white)
 
-            shape
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: shape)
+            Group {
+                if #available(iOS 26.0, *) {
+                    shape
+                        .fill(.clear)
+                        .glassEffect(.regular.interactive(), in: shape)
+                } else {
+                    shape
+                        .fill(.clear)
+                        .legacyGlassFallback(in: shape)
+                }
+            }
 
             // A locked modifier turns solid accent. This layer sits
             // above the glass: under it, the material washes the

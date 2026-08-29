@@ -1,0 +1,525 @@
+diff --git a/ios/Empo/project.yml b/ios/Empo/project.yml
+index 8b8d5a7..38641a7 100644
+--- a/ios/Empo/project.yml
++++ b/ios/Empo/project.yml
+@@ -12,7 +12,7 @@ packages:
+ options:
+   bundleIdPrefix: sh.mateo
+   deploymentTarget:
+-    iOS: "26.0"
++    iOS: "18.0"
+   createIntermediateGroups: true
+ settings:
+   base:
+diff --git a/ios/Empo/src/Design/Button.swift b/ios/Empo/src/Design/Button.swift
+index 6223cd1..c518966 100644
+--- a/ios/Empo/src/Design/Button.swift
++++ b/ios/Empo/src/Design/Button.swift
+@@ -36,17 +36,24 @@ struct PrimaryButtonStyle: ButtonStyle {
+     @Environment(\.isEnabled) private var isEnabled
+ 
+     func makeBody(configuration: Configuration) -> some View {
+-        configuration.label
++        let base = configuration.label
+             .font(size.font.weight(.semibold))
+             .multilineTextAlignment(.center)
+             .foregroundStyle(.white)
+             .padding(.horizontal, size.horizontalPadding)
+             .padding(.vertical, size.verticalPadding)
+-            .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
+-            .opacity(isEnabled ? 1 : Alpha.disabled)
+-            .onChange(of: configuration.isPressed) { _, pressed in
+-                if pressed { Haptics.tap() }
++
++        return Group {
++            if #available(iOS 26.0, *) {
++                base.glassEffect(.regular.tint(tint).interactive(), in: .capsule)
++            } else {
++                base.legacyGlassFallback(in: .capsule, tint: tint)
+             }
++        }
++        .opacity(isEnabled ? 1 : Alpha.disabled)
++        .onChange(of: configuration.isPressed) { _, pressed in
++            if pressed { Haptics.tap() }
++        }
+     }
+ }
+ 
+@@ -65,17 +72,25 @@ struct SecondaryButtonStyle: ButtonStyle {
+     @Environment(\.isEnabled) private var isEnabled
+ 
+     func makeBody(configuration: Configuration) -> some View {
+-        configuration.label
++        let base = configuration.label
+             .font(size.font.weight(.medium))
+             .multilineTextAlignment(.center)
+             .foregroundStyle(tint)
+             .padding(.horizontal, size.horizontalPadding)
+             .padding(.vertical, size.verticalPadding)
+-            .glassEffect(.regular.tint(tint.opacity(Alpha.brandTintBackground)).interactive(), in: .capsule)
+-            .opacity(isEnabled ? 1 : Alpha.disabled)
+-            .onChange(of: configuration.isPressed) { _, pressed in
+-                if pressed { Haptics.tap() }
++        let glassTint = tint.opacity(Alpha.brandTintBackground)
++
++        return Group {
++            if #available(iOS 26.0, *) {
++                base.glassEffect(.regular.tint(glassTint).interactive(), in: .capsule)
++            } else {
++                base.legacyGlassFallback(in: .capsule, tint: glassTint)
+             }
++        }
++        .opacity(isEnabled ? 1 : Alpha.disabled)
++        .onChange(of: configuration.isPressed) { _, pressed in
++            if pressed { Haptics.tap() }
++        }
+     }
+ }
+ 
+diff --git a/ios/Empo/src/Design/Chip.swift b/ios/Empo/src/Design/Chip.swift
+index 3c2a1f2..ea8c0b6 100644
+--- a/ios/Empo/src/Design/Chip.swift
++++ b/ios/Empo/src/Design/Chip.swift
+@@ -38,14 +38,21 @@ struct Chip: View {
+         .foregroundStyle(.white)
+ 
+         if isIconOnly {
+-            content
+-                .padding(Spacing.sm)
+-                .glassEffect(.regular.tint(tint), in: .circle)
++            let padded = content.padding(Spacing.sm)
++            if #available(iOS 26.0, *) {
++                padded.glassEffect(.regular.tint(tint), in: .circle)
++            } else {
++                padded.legacyGlassFallback(in: .circle, tint: tint)
++            }
+         } else {
+-            content
++            let padded = content
+                 .padding(.horizontal, Spacing.md)
+                 .padding(.vertical, Spacing.xs)
+-                .glassEffect(.regular.tint(tint), in: .capsule)
++            if #available(iOS 26.0, *) {
++                padded.glassEffect(.regular.tint(tint), in: .capsule)
++            } else {
++                padded.legacyGlassFallback(in: .capsule, tint: tint)
++            }
+         }
+     }
+ }
+diff --git a/ios/Empo/src/Design/GlassCompat.swift b/ios/Empo/src/Design/GlassCompat.swift
+new file mode 100644
+index 0000000..fc82a9b
+--- /dev/null
++++ b/ios/Empo/src/Design/GlassCompat.swift
+@@ -0,0 +1,18 @@
++import SwiftUI
++
++/// Material-based approximation of Liquid Glass for iOS versions before 26,
++/// where `View.glassEffect(_:in:)` doesn't exist. Mirrors the rough visual
++/// weight of `.regular` glass (translucent fill + faint edge) without
++/// depending on any iOS-26-only SwiftUI symbol.
++extension View {
++    @ViewBuilder
++    func legacyGlassFallback<S: Shape>(in shape: S, tint: Color? = nil) -> some View {
++        self
++            .background(
++                shape
++                    .fill(.ultraThinMaterial)
++                    .overlay(shape.fill((tint ?? .white).opacity(tint == nil ? 0 : 0.16)))
++            )
++            .overlay(shape.strokeBorder(.white.opacity(0.14), lineWidth: 0.5))
++    }
++}
+diff --git a/ios/Empo/src/Design/IconButton.swift b/ios/Empo/src/Design/IconButton.swift
+index 9bac97d..e1dda5b 100644
+--- a/ios/Empo/src/Design/IconButton.swift
++++ b/ios/Empo/src/Design/IconButton.swift
+@@ -82,14 +82,26 @@ private struct IconGlassModifier: ViewModifier {
+     let hasAction: Bool
+ 
+     func body(content: Content) -> some View {
+-        switch style {
+-        case .primary:
+-            content.glassEffect(.regular.tint(.brand).interactive(), in: .circle)
+-        case .secondary:
+-            content.glassEffect(
+-                .regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .circle)
+-        case .outline:
+-            content.glassEffect(hasAction ? .regular.interactive() : .regular, in: .circle)
++        if #available(iOS 26.0, *) {
++            switch style {
++            case .primary:
++                content.glassEffect(.regular.tint(.brand).interactive(), in: .circle)
++            case .secondary:
++                content.glassEffect(
++                    .regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .circle)
++            case .outline:
++                content.glassEffect(hasAction ? .regular.interactive() : .regular, in: .circle)
++            }
++        } else {
++            switch style {
++            case .primary:
++                content.legacyGlassFallback(in: Circle(), tint: .brand)
++            case .secondary:
++                content.legacyGlassFallback(
++                    in: Circle(), tint: .brand.opacity(Alpha.brandTintBackground))
++            case .outline:
++                content.legacyGlassFallback(in: Circle())
++            }
+         }
+     }
+ }
+diff --git a/ios/Empo/src/Library/GameCard.swift b/ios/Empo/src/Library/GameCard.swift
+index 72ad8ad..3db76d5 100644
+--- a/ios/Empo/src/Library/GameCard.swift
++++ b/ios/Empo/src/Library/GameCard.swift
+@@ -313,9 +313,17 @@ struct GameStatusIndicator: View {
+         case .paused:
+             // Inverted scheme tint so the paused badge reads stronger
+             // than the ambient ready state.
+-            core.glassEffect(.regular.tint(pausedBackgroundTint), in: .circle)
++            if #available(iOS 26.0, *) {
++                core.glassEffect(.regular.tint(pausedBackgroundTint), in: .circle)
++            } else {
++                core.legacyGlassFallback(in: Circle(), tint: pausedBackgroundTint)
++            }
+         case .ready, .invalid:
+-            core.glassEffect(.regular, in: .circle)
++            if #available(iOS 26.0, *) {
++                core.glassEffect(.regular, in: .circle)
++            } else {
++                core.legacyGlassFallback(in: Circle())
++            }
+         }
+     }
+ 
+diff --git a/ios/Empo/src/Library/ImportButton.swift b/ios/Empo/src/Library/ImportButton.swift
+index cbfef6b..e26eaeb 100644
+--- a/ios/Empo/src/Library/ImportButton.swift
++++ b/ios/Empo/src/Library/ImportButton.swift
+@@ -197,7 +197,7 @@ struct ImportButton: View {
+             width: collapsed ? AppSize.toolbarButton : nil,
+             height: collapsed ? AppSize.toolbarButton : nil
+         )
+-        .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
++        .modifier(ImportButtonGlass())
+         .darkGlass()
+     }
+ 
+@@ -215,3 +215,13 @@ private struct ImportButtonSquash {
+     var scaleX: CGFloat = 1.0
+     var scaleY: CGFloat = 1.0
+ }
++
++private struct ImportButtonGlass: ViewModifier {
++    func body(content: Content) -> some View {
++        if #available(iOS 26.0, *) {
++            content.glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
++        } else {
++            content.legacyGlassFallback(in: .capsule, tint: .brand)
++        }
++    }
++}
+diff --git a/ios/Empo/src/Library/LibrarySearchBar.swift b/ios/Empo/src/Library/LibrarySearchBar.swift
+index 337f96a..2437afe 100644
+--- a/ios/Empo/src/Library/LibrarySearchBar.swift
++++ b/ios/Empo/src/Library/LibrarySearchBar.swift
+@@ -33,7 +33,7 @@ struct LibrarySearchBar: View {
+             }
+             .padding(.horizontal, Spacing.lg)
+             .frame(height: searchBarHeight)
+-            .glassEffect(.regular.interactive(), in: .capsule)
++            .modifier(SearchBarGlass())
+ 
+             IconButton("arrow.up.arrow.down", style: .outline) {
+                 showSortSheet = true
+@@ -54,3 +54,13 @@ struct LibrarySearchBar: View {
+         .tint(.primary)
+     }
+ }
++
++private struct SearchBarGlass: ViewModifier {
++    func body(content: Content) -> some View {
++        if #available(iOS 26.0, *) {
++            content.glassEffect(.regular.interactive(), in: .capsule)
++        } else {
++            content.legacyGlassFallback(in: .capsule)
++        }
++    }
++}
+diff --git a/ios/Empo/src/Player/DebugOverlayView.swift b/ios/Empo/src/Player/DebugOverlayView.swift
+index 28086b9..5fc1ddf 100644
+--- a/ios/Empo/src/Player/DebugOverlayView.swift
++++ b/ios/Empo/src/Player/DebugOverlayView.swift
+@@ -116,7 +116,7 @@ struct DebugOverlayView: View {
+             }
+         }
+         .padding(Spacing.md + Spacing.xxs)
+-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
++        .modifier(DebugOverlayGlass())
+         .darkGlass()
+         .background(
+             GeometryReader { proxy in
+@@ -323,6 +323,16 @@ struct DebugOverlayView: View {
+     }
+ }
+ 
++private struct DebugOverlayGlass: ViewModifier {
++    func body(content: Content) -> some View {
++        if #available(iOS 26.0, *) {
++            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
++        } else {
++            content.legacyGlassFallback(in: RoundedRectangle(cornerRadius: Radius.sm + Spacing.xxs))
++        }
++    }
++}
++
+ struct FPSRingBuffer {
+     let capacity: Int
+     private var buffer: [Double]
+diff --git a/ios/Empo/src/Player/GameControls.swift b/ios/Empo/src/Player/GameControls.swift
+index 19c2802..62d5ae8 100644
+--- a/ios/Empo/src/Player/GameControls.swift
++++ b/ios/Empo/src/Player/GameControls.swift
+@@ -138,9 +138,17 @@ struct CircularControlButton<Face: View>: View {
+             Circle()
+                 .fill(Color.black)
+ 
+-            Circle()
+-                .fill(.clear)
+-                .glassEffect(.regular.interactive(), in: .circle)
++            Group {
++                if #available(iOS 26.0, *) {
++                    Circle()
++                        .fill(.clear)
++                        .glassEffect(.regular.interactive(), in: .circle)
++                } else {
++                    Circle()
++                        .fill(.clear)
++                        .legacyGlassFallback(in: Circle())
++                }
++            }
+ 
+             // Press highlight matching the D-pad arm gradient
+             // (white 0.28 at the rim → clear toward the center).
+@@ -382,9 +390,17 @@ struct DPad: View {
+             plus
+                 .fill(Color.black)
+ 
+-            plus
+-                .fill(.clear)
+-                .glassEffect(.regular.interactive(), in: plus)
++            Group {
++                if #available(iOS 26.0, *) {
++                    plus
++                        .fill(.clear)
++                        .glassEffect(.regular.interactive(), in: plus)
++                } else {
++                    plus
++                        .fill(.clear)
++                        .legacyGlassFallback(in: plus)
++                }
++            }
+ 
+             // Frame arm highlights to each arm's local rect so
+             // tip→center UnitPoints are identical for every direction.
+@@ -489,9 +505,17 @@ struct Joystick: View {
+             Circle()
+                 .fill(Color.black)
+ 
+-            Circle()
+-                .fill(.clear)
+-                .glassEffect(.regular.interactive(), in: .circle)
++            Group {
++                if #available(iOS 26.0, *) {
++                    Circle()
++                        .fill(.clear)
++                        .glassEffect(.regular.interactive(), in: .circle)
++                } else {
++                    Circle()
++                        .fill(.clear)
++                        .legacyGlassFallback(in: Circle())
++                }
++            }
+ 
+             // Direction chevrons on the base ring. The active one
+             // brightens, same visual language as the D-pad's arms.
+diff --git a/ios/Empo/src/Player/KeyboardAccessoryBar.swift b/ios/Empo/src/Player/KeyboardAccessoryBar.swift
+index 70a5069..be3b2e5 100644
+--- a/ios/Empo/src/Player/KeyboardAccessoryBar.swift
++++ b/ios/Empo/src/Player/KeyboardAccessoryBar.swift
+@@ -366,9 +366,17 @@ private struct AccessoryKeyButton: View {
+             shape
+                 .fill(colorScheme == .dark ? Color.black : Color.white)
+ 
+-            shape
+-                .fill(.clear)
+-                .glassEffect(.regular.interactive(), in: shape)
++            Group {
++                if #available(iOS 26.0, *) {
++                    shape
++                        .fill(.clear)
++                        .glassEffect(.regular.interactive(), in: shape)
++                } else {
++                    shape
++                        .fill(.clear)
++                        .legacyGlassFallback(in: shape)
++                }
++            }
+ 
+             // A locked modifier turns solid accent. This layer sits
+             // above the glass: under it, the material washes the
+diff --git a/ios/Empo/src/Player/PlayerToolbar.swift b/ios/Empo/src/Player/PlayerToolbar.swift
+index be8a833..b8aa33d 100644
+--- a/ios/Empo/src/Player/PlayerToolbar.swift
++++ b/ios/Empo/src/Player/PlayerToolbar.swift
+@@ -152,13 +152,19 @@ struct PlayerEditToolbar: View {
+             // Blast-radius banner: a pinned profile's edits reach
+             // every game using it. Ambient edits mint a new profile.
+             // Its own small pill, so the button capsule stays clean.
+-            Text(editBannerText)
+-                .font(.caption2)
+-                .foregroundStyle(.white.opacity(0.85))
+-                .lineLimit(1)
+-                .padding(.horizontal, Spacing.md)
+-                .padding(.vertical, Spacing.xs)
+-                .glassEffect(.regular, in: .capsule)
++            Group {
++                let bannerBase = Text(editBannerText)
++                    .font(.caption2)
++                    .foregroundStyle(.white.opacity(0.85))
++                    .lineLimit(1)
++                    .padding(.horizontal, Spacing.md)
++                    .padding(.vertical, Spacing.xs)
++                if #available(iOS 26.0, *) {
++                    bannerBase.glassEffect(.regular, in: .capsule)
++                } else {
++                    bannerBase.legacyGlassFallback(in: .capsule)
++                }
++            }
+                 .onGeometryChange(
+                     for: CGRect.self, of: { $0.frame(in: .global) },
+                     action: {
+@@ -247,12 +253,16 @@ struct PlayerEditToolbar: View {
+             Button {
+                 onDone()
+             } label: {
+-                Text("Done")
++                let doneBase = Text("Done")
+                     .font(.footnote.weight(.bold))
+                     .foregroundStyle(.white)
+                     .padding(.horizontal, Spacing.lg)
+                     .frame(height: IconButtonSize.sm.points)
+-                    .glassEffect(.regular.tint(.success).interactive(), in: .capsule)
++                if #available(iOS 26.0, *) {
++                    doneBase.glassEffect(.regular.tint(.success).interactive(), in: .capsule)
++                } else {
++                    doneBase.legacyGlassFallback(in: .capsule, tint: .success)
++                }
+             }
+         }
+         // Pin the glass to the dark variant, matching the play
+diff --git a/ios/Empo/src/Player/ScreenRegionGizmo.swift b/ios/Empo/src/Player/ScreenRegionGizmo.swift
+index 23659f3..2cc7374 100644
+--- a/ios/Empo/src/Player/ScreenRegionGizmo.swift
++++ b/ios/Empo/src/Player/ScreenRegionGizmo.swift
+@@ -267,26 +267,37 @@ struct ScreenRegionChips: View {
+     var onToggleOverlay: (() -> Void)?
+ 
+     var body: some View {
++        let screenLabelBase = Text("Screen")
++            .font(.caption2.weight(.semibold))
++            .foregroundStyle(Color.brand)
++            .padding(.horizontal, Spacing.sm)
++            .padding(.vertical, 2)
++
+         ZStack {
+-            Text("Screen")
+-                .font(.caption2.weight(.semibold))
+-                .foregroundStyle(Color.brand)
+-                .padding(.horizontal, Spacing.sm)
+-                .padding(.vertical, 2)
+-                .glassEffect(.regular, in: .capsule)
+-                .position(x: rect.midX, y: rect.minY + 14)
+-                .allowsHitTesting(false)
++            Group {
++                if #available(iOS 26.0, *) {
++                    screenLabelBase.glassEffect(.regular, in: .capsule)
++                } else {
++                    screenLabelBase.legacyGlassFallback(in: .capsule)
++                }
++            }
++            .position(x: rect.midX, y: rect.minY + 14)
++            .allowsHitTesting(false)
+ 
+             if showsReset {
+                 Button {
+                     onReset()
+                 } label: {
+-                    Label("Reset screen", systemImage: "arrow.counterclockwise")
++                    let resetBase = Label("Reset screen", systemImage: "arrow.counterclockwise")
+                         .font(.caption2.weight(.semibold))
+                         .padding(.horizontal, Spacing.sm)
+                         .padding(.vertical, Spacing.xs)
+                         .foregroundStyle(.white)
+-                        .glassEffect(.regular.interactive(), in: .capsule)
++                    if #available(iOS 26.0, *) {
++                        resetBase.glassEffect(.regular.interactive(), in: .capsule)
++                    } else {
++                        resetBase.legacyGlassFallback(in: .capsule)
++                    }
+                 }
+                 // Top area, below the "Screen" label: the bottom
+                 // corner belongs to the resize grabber, and at the
+@@ -299,7 +310,7 @@ struct ScreenRegionChips: View {
+                 Button {
+                     onToggleOverlay()
+                 } label: {
+-                    Label(
++                    let overlayBase = Label(
+                         "Controls over game",
+                         systemImage: overlayOn
+                             ? "checkmark.circle.fill" : "circle"
+@@ -308,7 +319,11 @@ struct ScreenRegionChips: View {
+                     .padding(.horizontal, Spacing.sm)
+                     .padding(.vertical, Spacing.xs)
+                     .foregroundStyle(overlayOn ? Color.brand : .white)
+-                    .glassEffect(.regular.interactive(), in: .capsule)
++                    if #available(iOS 26.0, *) {
++                        overlayBase.glassEffect(.regular.interactive(), in: .capsule)
++                    } else {
++                        overlayBase.legacyGlassFallback(in: .capsule)
++                    }
+                 }
+                 .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
+                 .accessibilityLabel(
+diff --git a/ios/Empo/src/Settings/SettingsView.swift b/ios/Empo/src/Settings/SettingsView.swift
+index e6a237c..92ca85f 100644
+--- a/ios/Empo/src/Settings/SettingsView.swift
++++ b/ios/Empo/src/Settings/SettingsView.swift
+@@ -567,13 +567,19 @@ private struct BrandGlassModifier: ViewModifier {
+     let tint: Color
+ 
+     func body(content: Content) -> some View {
+-        if interactive {
+-            content
+-                .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
+-                .darkGlass()
++        if #available(iOS 26.0, *) {
++            if interactive {
++                content
++                    .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
++                    .darkGlass()
++            } else {
++                content
++                    .glassEffect(.regular.tint(tint), in: .capsule)
++                    .darkGlass()
++            }
+         } else {
+             content
+-                .glassEffect(.regular.tint(tint), in: .capsule)
++                .legacyGlassFallback(in: Capsule(), tint: tint)
+                 .darkGlass()
+         }
+     }
