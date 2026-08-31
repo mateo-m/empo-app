@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.6.5",
+          "buildVersion": "663",
+          "date": "2026-08-31",
+          "localizedDescription": "### Bug Fixes\n\n- Apply touch mouse on resume, mark the keyboard restart-only (#138) ([`3c35ae1`](https://github.com/mateo-m/empo-app/commit/3c35ae1d3be95ffbd93ab0568187ecee2f881d7a))\n- Keep the zoom transition through a play session ([`ea246ed`](https://github.com/mateo-m/empo-app/commit/ea246ed67bf654387f6a67267d5b89e6237340dc))\n- Bump to the Array#nitems fix for legacy scripts ([`5b4e6fd`](https://github.com/mateo-m/empo-app/commit/5b4e6fd45b283ea5604210109748ed8e3d59e969))\n\n### Chores\n\n- Let the engine repo own the binding build recipe (#137) ([`4c1e2eb`](https://github.com/mateo-m/empo-app/commit/4c1e2ebebe7c3fef3c77b0fda4edec2ae32e7772))\n- Add the Google Search Console verification file ([`fa0679e`](https://github.com/mateo-m/empo-app/commit/fa0679e8dcefe1a634cb2d8b25cde56576ab73b2))\n- Move the Search Console verification to the new owner ([`e35021e`](https://github.com/mateo-m/empo-app/commit/e35021e4f8790037cd616a227bdd1ef3c5cd0f85))\n- Pin native-2026-08-31 native prebuilts ([`598b816`](https://github.com/mateo-m/empo-app/commit/598b81613d278f93089f551d71e9a3b9ceb9a391))\n\n### Documentation\n\n- Add the privacy policy and the terms of use ([`2cf4356`](https://github.com/mateo-m/empo-app/commit/2cf4356e31a85107ae024328b2527ce115c49ab7))\n\n### Features\n\n- Snap edit-mode drags and sizes to a grid ([`153f3a7`](https://github.com/mateo-m/empo-app/commit/153f3a769e238ef5a9820f58e5288615b4944e6e))\n\n### Other\n\n- Forbid silent skips and empty runs in the Swift suites (#136) ([`52761f7`](https://github.com/mateo-m/empo-app/commit/52761f73d155700245ca98a4a927c11b32fdc323))\n\n### Refactor\n\n- Remove the dead quit paths ([`5281817`](https://github.com/mateo-m/empo-app/commit/52818172db48ae697706f6fd8bb0af46db1b099b))",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.6.5/Empo-0.6.5-unsigned.ipa",
+          "size": 19360611,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.6.4",
           "buildVersion": "650",
           "date": "2026-08-18",
