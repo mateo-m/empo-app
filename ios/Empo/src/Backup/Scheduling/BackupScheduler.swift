@@ -78,8 +78,18 @@ final class BackupScheduler {
     /// Whether a pass is in flight. The manual restore door of
     /// 11.3 closes while one is, per the third row of that section.
     private(set) var isRunning = false
+    /// The games the pass in flight covers, per 13.17. A game in
+    /// this set locks what writes its container.
+    private(set) var runningGameKeys: Set<String> = []
     private var foregroundWait: Task<Void, Never>?
+    private var runTask: Task<Void, Never>?
     private lazy var store: BackupStateStore? = try? BackupRoot.openStateStore()
+
+    /// The pass tells the scheduler what it covers, so the Backup
+    /// sheet of 13.15 can lock the games it writes.
+    func passCovers(gameKeys: Set<String>) {
+        runningGameKeys = gameKeys
+    }
 
     // MARK: - Launch
 
@@ -567,7 +577,18 @@ final class BackupScheduler {
         guard !BackupTaskScheduler.submitManual(press) else { return }
         // The system refused the task, so the pass runs in the
         // foreground and hands its uploads to the background session.
-        Task { await run(trigger: .manual, press: press) }
+        runTask = Task { await run(trigger: .manual, press: press) }
+    }
+
+    /// Pause, from the run block of 13.4 or the Backup sheet of
+    /// 13.15.
+    ///
+    /// The engine reads `Task.isCancelled` at every file boundary,
+    /// per 7.6, so a cancel leaves whole files behind and the
+    /// checkpoint of 6.5 carries the rest to the next run.
+    func pauseTheRun() {
+        runTask?.cancel()
+        runTask = nil
     }
 
     // MARK: - One pass
@@ -614,7 +635,10 @@ final class BackupScheduler {
         }
 
         isRunning = true
-        defer { isRunning = false }
+        defer {
+            isRunning = false
+            runningGameKeys = []
+        }
         progress?.totalUnitCount = 1
 
         let result = await runner.runBackup(

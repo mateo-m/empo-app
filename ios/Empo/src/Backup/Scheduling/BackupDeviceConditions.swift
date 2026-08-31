@@ -59,4 +59,11 @@ extension EngineSessionCoordinator {
     var isSessionLive: Bool {
         delegate?.coordinatorActiveSessionGame != nil
     }
+
+    /// The game the player is in, whether it plays or sits paused in
+    /// the library. The Backup sheet of 13.17 names it in the one
+    /// footer line that says why the actions wait.
+    var openGameName: String? {
+        delegate?.coordinatorActiveSessionGame?.title
+    }
 }

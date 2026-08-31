@@ -68,6 +68,12 @@ public enum VersionMarkerBuilder {
         snapshot: SnapshotManifest.VersionMarker,
         local: SnapshotManifest.VersionMarker
     ) -> Bool {
-        mode == .full && snapshot != local
+        warnsBeforeRestore(mode: mode, differs: snapshot != local)
+    }
+
+    /// The same rule where the caller already compared the two
+    /// markers.
+    public static func warnsBeforeRestore(mode: BackupMode, differs: Bool) -> Bool {
+        mode == .full && differs
     }
 }

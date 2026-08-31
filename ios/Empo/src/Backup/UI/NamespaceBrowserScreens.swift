@@ -23,9 +23,16 @@ struct NamespaceGamesScreen: View {
                 ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
                     NavigationLink {
                         SnapshotListScreen(
-                            model: model,
                             title: section.game?.folderName ?? RestorePicker.otherSnapshotsHeading,
-                            rows: section.rows)
+                            gameName: section.game?.folderName
+                                ?? RestorePicker.otherSnapshotsHeading,
+                            rows: section.rows,
+                            availability: RestoreCoordinator.shared.availability(
+                                gameKey: section.game?.gameKey ?? ""),
+                            restore: { row, scope, replacesTheTree in
+                                await model.restore(
+                                    row, scope: scope, replacesTheTree: replacesTheTree)
+                            })
                     } label: {
                         VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text(section.game?.folderName ?? RestorePicker.otherSnapshotsHeading)
@@ -50,9 +57,11 @@ struct NamespaceGamesScreen: View {
 /// One game's snapshots under day headers, per 11.6.
 struct SnapshotListScreen: View {
 
-    let model: BackupsScreenModel
     let title: String
+    let gameName: String
     let rows: [SnapshotRow]
+    let availability: RestoreAvailability
+    let restore: (SnapshotRow, RestoreScope, Bool) async -> RestoreOutcome
 
     @State private var chosen: SnapshotRow?
 
@@ -89,67 +98,12 @@ struct SnapshotListScreen: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $chosen) { row in
-            RestoreSnapshotSheet(model: model, row: row)
+            RestoreSnapshotSheet(
+                row: row, gameName: gameName, availability: availability, restore: restore)
         }
     }
 }
 
 extension SnapshotRow: @retroactive Identifiable {
     public var id: String { snapshotId }
-}
-
-/// The one question before a restore starts: how much of the
-/// snapshot goes back, per 11.3.
-private struct RestoreSnapshotSheet: View {
-
-    let model: BackupsScreenModel
-    let row: SnapshotRow
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var scope: RestoreScope = .savesAndSettings
-    @State private var outcome: RestoreOutcome?
-
-    private var availability: RestoreAvailability {
-        RestoreCoordinator.shared.availability(gameKey: row.identity.gameKey)
-    }
-
-    var body: some View {
-        StandardSheet(
-            title: "Restore this backup?",
-            trailingButton: SheetBarAction("Cancel") { dismiss() }
-        ) {
-            SheetBodyText(
-                "\(BackupText.date(row.createdAt)) at \(BackupText.time(row.createdAt)), "
-                    + BackupText.bytes(row.bytesToDownload))
-            Picker("What to restore", selection: $scope) {
-                Text("Saves and settings").tag(RestoreScope.savesAndSettings)
-                Text("The whole game").tag(RestoreScope.wholeGame)
-            }
-            .pickerStyle(.segmented)
-            if let line = availability.line {
-                SheetFootnote(line)
-            }
-            if let outcome {
-                SheetFootnote(Self.line(of: outcome))
-            }
-            SheetPrimaryButton("Restore") {
-                Task {
-                    outcome = await model.restore(row, scope: scope)
-                    if case .finished = outcome { dismiss() }
-                }
-            }
-            .disabled(!availability.isAvailable)
-        }
-    }
-
-    private static func line(of outcome: RestoreOutcome) -> String {
-        switch outcome {
-        case .finished(let result):
-            return RestoreNotices.partialPathsLine(count: result.partialPathCount) ?? "Restored."
-        case .notEnoughSpace(let shortfall):
-            return "This device needs \(BackupText.bytes(shortfall.missingBytes)) more free space."
-        case .stopped: return "The restore stopped."
-        case .failed(let message): return message
-        }
-    }
 }

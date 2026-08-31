@@ -85,8 +85,16 @@ public enum VersionMarkerSheet {
         snapshot: SnapshotManifest.VersionMarker,
         local: SnapshotManifest.VersionMarker
     ) -> Bool {
+        shows(mode: mode, scope: scope, markerDiffers: snapshot != local)
+    }
+
+    /// The same rule from a picker row of 11.6, which carries the
+    /// compare result instead of the two markers.
+    public static func shows(
+        mode: BackupMode, scope: RestoreScope, markerDiffers: Bool
+    ) -> Bool {
         guard scope == .wholeGame else { return false }
         return VersionMarkerBuilder.warnsBeforeRestore(
-            mode: mode, snapshot: snapshot, local: local)
+            mode: mode, differs: markerDiffers)
     }
 }

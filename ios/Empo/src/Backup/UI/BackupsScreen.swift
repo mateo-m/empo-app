@@ -12,6 +12,8 @@ struct BackupsScreen: View {
     @State private var showsAddSheet = false
     @State private var addedTarget: PermissionCheckOutcomeSheet?
     @State private var isRunning = BackupScheduler.shared.isRunning
+    /// The games the ask of 3.5 still waits on, per the press below.
+    @State private var waiting: [BackupModeAsk] = []
     @AppStorage(DefaultsKey.backupOverCellular) private var overCellular = false
     @State private var retention = BackupSettings.retention
 
@@ -54,11 +56,28 @@ struct BackupsScreen: View {
         .sheet(item: $addedTarget) { outcome in
             PermissionCheckSheet(targetLabel: outcome.targetLabel, result: outcome.result)
         }
+        .sheet(item: firstAsk) { ask in
+            FirstBackupAskSheet(
+                model: BackupSheetModel(container: ask.container, gameName: ask.gameName),
+                ask: ask.ask)
+        }
         .sheet(isPresented: $model.showsTheNotificationSheet) {
             NotificationAskSheet { answer in
                 Task { await model.answerTheNotificationSheet(answer) }
             }
         }
+    }
+
+    /// The queue of asks. Each answer, and each dismissal, moves to
+    /// the next game. The run starts once the queue empties, because
+    /// a dismissal is an answer the user chose not to give.
+    private var firstAsk: Binding<BackupModeAsk?> {
+        Binding(
+            get: { waiting.first },
+            set: { _ in
+                if !waiting.isEmpty { waiting.removeFirst() }
+                if waiting.isEmpty { startTheRun() }
+            })
     }
 
     // MARK: - The empty state, per 13.14
@@ -139,8 +158,7 @@ struct BackupsScreen: View {
     private var backUpNowSection: some View {
         Section {
             Button {
-                model.backUpNow()
-                isRunning = true
+                Task { await press() }
             } label: {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text("Back up now")
@@ -152,6 +170,20 @@ struct BackupsScreen: View {
             }
             .disabled(!model.canBackUpNow)
         }
+    }
+
+    /// The press asks about every game that never answered the ask
+    /// of 3.5 before it starts the run, because a run skips such a
+    /// game.
+    private func press() async {
+        waiting = await model.gamesWaitingForTheAsk()
+        guard waiting.isEmpty else { return }
+        startTheRun()
+    }
+
+    private func startTheRun() {
+        model.backUpNow()
+        isRunning = true
     }
 
     // MARK: - The target list, per 13.5

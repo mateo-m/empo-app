@@ -243,6 +243,7 @@ struct GameSettingsView: View {
         NavigationStack {
             Form {
                 gameplaySection
+                backupSection
                 displaySection
                 layoutSection
                 performanceSection
@@ -325,6 +326,9 @@ struct GameSettingsView: View {
             .onDisappear { save() }
             .task {
                 refreshAutoDetection(forceRefresh: false)
+                let model = BackupSheetModel(container: game.container!, gameName: game.title)
+                await model.refresh()
+                backupModel = model
             }
         }
         .tint(.brand)
@@ -590,6 +594,36 @@ struct GameSettingsView: View {
             Text("Engine")
         } footer: {
             Text("Engine options that change how games load and how well they run.")
+        }
+    }
+
+    @State private var showBackupSheet = false
+    @State private var backupModel: BackupSheetModel?
+
+    /// The one value row of SPEC 13.15. Its detail text is the
+    /// status line the Backup sheet shows, so the row and the sheet
+    /// always say the same thing.
+    @ViewBuilder private var backupSection: some View {
+        if let backupModel {
+            Section {
+                Button {
+                    showBackupSheet = true
+                } label: {
+                    HStack {
+                        Text("Backup")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(backupModel.line)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .sheet(isPresented: $showBackupSheet) {
+                    BackupSheet(model: backupModel)
+                }
+            } footer: {
+                Text("Copy this game's saves to a service you already use.")
+            }
         }
     }
 

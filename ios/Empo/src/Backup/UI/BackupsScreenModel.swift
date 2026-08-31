@@ -125,6 +125,34 @@ final class BackupsScreenModel {
         BackupScheduler.shared.pressBackUpNow(.library)
     }
 
+    /// The games this press would cover that never answered the ask
+    /// of 3.5, in library order.
+    ///
+    /// A run skips such a game, so the press asks first and starts
+    /// the run once nothing waits. The Backup sheet never fires this
+    /// ask, per 13.15, and its mode row answers it instead.
+    func gamesWaitingForTheAsk() async -> [BackupModeAsk] {
+        let thresholds = BackupTargets.thresholds()
+        guard !thresholds.isEmpty else { return [] }
+        var waiting: [BackupModeAsk] = []
+        for container in GameContainer.discover() {
+            let resolution = await GameBackupSets.resolveMode(
+                for: container, targets: thresholds)
+            guard case .ask(let ask) = resolution else { continue }
+            waiting.append(
+                BackupModeAsk(
+                    container: container,
+                    gameName: Self.name(of: container),
+                    ask: ask))
+        }
+        return waiting
+    }
+
+    private static func name(of container: GameContainer) -> String {
+        let metadata = GameMetadata.load(from: container)
+        return metadata.customTitle ?? metadata.baseTitle ?? container.folderName
+    }
+
     // MARK: - Writing
 
     func setPaused(_ isPaused: Bool, targetId: String) async {
@@ -200,7 +228,7 @@ final class BackupsScreenModel {
         let mine = try? BackupKeychain.namespaceId()
         let deviceId = UIDevice.current.identifierForVendor?.uuidString
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
-        return try await scan.namespaces().map { scanned in
+        return try await scan.namespaces(localMarkers: Self.localMarkers()).map { scanned in
             let rows = scanned.gameRows + scanned.preferencesRows
             return BackupNamespaceRow(
                 namespaceId: scanned.id,
@@ -220,20 +248,37 @@ final class BackupsScreenModel {
         guard let descriptor = items.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor),
             let scanned = try? await RestoreScan(provider: provider, descriptor: descriptor)
-                .namespaces().first(where: { $0.id == namespaceId })
+                .namespaces(localMarkers: Self.localMarkers())
+                .first(where: { $0.id == namespaceId })
         else { return [] }
         return RestorePicker.sections(
             scanned.gameRows, among: GameIdentities.installedIdentities())
     }
 
+    /// The marker of every installed tree, so a row can carry the
+    /// version-marker flag of 11.10.
+    private static func localMarkers() -> [String: SnapshotManifest.VersionMarker] {
+        var markers: [String: SnapshotManifest.VersionMarker] = [:]
+        for container in GameContainer.discover() {
+            markers[BackupKeys.gameKey(containerFolderName: container.folderName)] =
+                GameIdentities.versionMarker(for: container)
+        }
+        return markers
+    }
+
     /// Restores one snapshot into the game it matches, per 11.3.
-    func restore(_ row: SnapshotRow, scope: RestoreScope) async -> RestoreOutcome {
+    ///
+    /// `replacesTheTree` carries the version-marker answer of 11.10
+    /// where that sheet fired.
+    func restore(
+        _ row: SnapshotRow, scope: RestoreScope, replacesTheTree: Bool = false
+    ) async -> RestoreOutcome {
         guard let descriptor = items.first(where: { $0.id == row.targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor)
         else { return .failed("this target is not configured on this device") }
         return await RestoreCoordinator.shared.restore(
             row, into: GameIdentities.match(row.identity), provider: provider,
-            descriptor: descriptor, scope: scope)
+            descriptor: descriptor, scope: scope, replacesTheTree: replacesTheTree)
     }
 
     /// The banner of 13.13, from the namespaces one target holds.

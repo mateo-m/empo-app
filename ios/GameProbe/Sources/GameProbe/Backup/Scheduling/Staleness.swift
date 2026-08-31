@@ -56,6 +56,21 @@ public enum StaleCause: Equatable, Sendable {
         }
     }
 
+    /// The cause a target's last failure of 13.5 leaves on every
+    /// game that target carries.
+    ///
+    /// A rights block asks for a sign-in, the way the notification
+    /// rule of 7.11 does. A rejection and an unreachable target say
+    /// nothing about the game, so the clock alone speaks for it.
+    public static func of(_ failure: TargetFailure?) -> StaleCause? {
+        switch failure {
+        case .none: return nil
+        case .needsSignIn, .blockedByPermissions: return .needsSignIn
+        case .full: return .targetBlocked
+        case .rejected, .unreachable: return nil
+        }
+    }
+
     /// The one action the 21-day banner carries, per 7.1.
     public var action: StaleAction {
         switch self {
