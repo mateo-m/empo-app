@@ -150,8 +150,11 @@ public enum BackupRunStop: Error, Equatable, Sendable {
     case readOnlyFormat(FormatAccess.Restriction)
     /// The token or the password no longer works, per 8.4.
     case needsSignIn
-    /// Quota or cap reached after the prune ladder of 5.14 ran out.
+    /// The scope or the folder rights do not cover the operation,
+    /// per 8.4. A re-sign-in with full access is what fixes it.
     case blocked(reason: String)
+    /// Quota or cap reached after the prune ladder of 5.14 ran out.
+    case full(reason: String)
     /// A space query answered before staging and the run cannot fit,
     /// per 5.14.
     case quotaShortfall(QuotaCheck.Shortfall)

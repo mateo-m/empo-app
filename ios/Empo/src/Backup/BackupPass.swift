@@ -84,6 +84,7 @@ final class BackupPass: BackupRunning {
             deviceId: Self.deviceId,
             deviceName: UIDevice.current.name,
             deviceModel: UIDevice.current.model,
+            retentionPreset: BackupSettings.retention,
             freeSpaceBytes: Self.freeSpaceBytes,
             preferences: GameBackupSets.libraryRequest(),
             games: games)
@@ -162,7 +163,7 @@ final class BackupPass: BackupRunning {
         switch result.stop {
         case .needsSignIn:
             causes.insert(.signInDead)
-        case .blocked, .quotaShortfall:
+        case .blocked, .full, .quotaShortfall:
             causes.insert(.targetBlocked)
         case .none, .writerConflict, .readOnlyFormat, .offline, .rejected:
             break

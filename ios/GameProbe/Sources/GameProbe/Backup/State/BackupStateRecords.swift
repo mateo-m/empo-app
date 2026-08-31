@@ -185,3 +185,38 @@ public struct StalenessClock: Equatable, Sendable {
         self.partialSince = partialSince
     }
 }
+
+/// What the target row of SPEC 13.5 shows between runs.
+public struct TargetStatusRecord: Equatable, Sendable {
+    public var targetId: String
+    public var failure: TargetFailure?
+    public var failedAt: Date?
+    /// The last space query answer, per 9.7. Empo never polls it.
+    public var quota: QuotaReading?
+    public var quotaAt: Date?
+
+    public init(
+        targetId: String,
+        failure: TargetFailure? = nil,
+        failedAt: Date? = nil,
+        quota: QuotaReading? = nil,
+        quotaAt: Date? = nil
+    ) {
+        self.targetId = targetId
+        self.failure = failure
+        self.failedAt = failedAt
+        self.quota = quota
+        self.quotaAt = quotaAt
+    }
+}
+
+/// What one game holds on one target, per SPEC 13.8.
+public struct TargetGameUsage: Equatable, Sendable {
+    public var gameKey: String
+    public var bytes: Int64
+
+    public init(gameKey: String, bytes: Int64) {
+        self.gameKey = gameKey
+        self.bytes = bytes
+    }
+}

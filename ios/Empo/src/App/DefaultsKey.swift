@@ -31,10 +31,20 @@ enum DefaultsKey {
     /// override, and Low Data Mode has no toggle at all.
     static let backupOverCellular = "backupOverCellular"
 
+    /// The retention preset of SPEC 5.10, as a
+    /// `RetentionPreset` raw value. One app-wide value, with no
+    /// per-game control. Absent means standard.
+    static let backupRetention = "backupRetention"
+
     /// Empo already asked for notification permission. It asks after
     /// the user configures their first backup target, never at first
     /// launch, per SPEC 7.11. Bool.
     static let backupNotificationsAsked = "backupNotificationsAsked"
+
+    /// Empo spent its one chance at the system notification prompt.
+    /// Only "Turn on" on the sheet of SPEC 13.19 sets it. "Not now"
+    /// marks nothing, so the one chance stays unspent. Bool.
+    static let backupNotificationPromptSpent = "backupNotificationPromptSpent"
 
     // MARK: - Disclaimer
 

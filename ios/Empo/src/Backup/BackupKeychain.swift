@@ -37,6 +37,14 @@ enum BackupKeychain {
         return fresh
     }
 
+    /// Takes over the namespace the adopt question of 11.5 named.
+    ///
+    /// The namespace id is what makes this device the writer of that
+    /// space, per 5.2, so adopting is this one write.
+    static func adoptNamespaceId(_ namespaceId: String) throws {
+        try setString(namespaceId, account: namespaceAccount)
+    }
+
     /// An OAuth token, a key, or a password for one target. Section 8
     /// states the shape of each.
     static func secret(targetId: String) throws -> String? {

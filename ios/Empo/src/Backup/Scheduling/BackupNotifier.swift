@@ -39,8 +39,21 @@ enum BackupNotifier {
         UNUserNotificationCenter.current().delegate = presenter
     }
 
-    /// Empo asks after the user configures their first target, never
-    /// at first launch.
+    /// Opens the system prompt and records that Empo spent its one
+    /// chance at it.
+    ///
+    /// iOS gives an app one chance, so the sheet of 13.19 decides.
+    /// Only "Turn on" reaches this. "Not now" marks nothing and
+    /// calls nothing.
+    static func spendTheSystemPrompt() async {
+        UserDefaults.standard.set(true, forKey: DefaultsKey.backupNotificationPromptSpent)
+        _ = try? await UNUserNotificationCenter.current()
+            .requestAuthorization(options: [.alert, .sound])
+    }
+
+    /// The device check of tickets 007 to 012 has no screen to tap,
+    /// so it goes straight to the system prompt. The Backups screen
+    /// shows the sheet of 13.19 instead.
     static func askForPermissionIfNeeded(configuredTargetCount: Int) async {
         let asked = UserDefaults.standard.bool(forKey: DefaultsKey.backupNotificationsAsked)
         guard
@@ -48,8 +61,7 @@ enum BackupNotifier {
                 configuredTargetCount: configuredTargetCount, hasAsked: asked)
         else { return }
         UserDefaults.standard.set(true, forKey: DefaultsKey.backupNotificationsAsked)
-        _ = try? await UNUserNotificationCenter.current()
-            .requestAuthorization(options: [.alert, .sound])
+        await spendTheSystemPrompt()
     }
 
     /// Posts what one run found on one target, and keeps the ledger

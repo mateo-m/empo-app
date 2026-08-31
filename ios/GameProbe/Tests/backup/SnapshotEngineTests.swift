@@ -560,7 +560,7 @@ final class SnapshotEngineTests: XCTestCase {
         let result = await engine.run(request(games: [game(gameName)]))
 
         XCTAssertEqual(result.outcome, .failed)
-        XCTAssertEqual(result.stop, .blocked(reason: QuotaCheck.prunedAndStillFullLine))
+        XCTAssertEqual(result.stop, .full(reason: QuotaCheck.prunedAndStillFullLine))
         XCTAssertEqual(result.detail, QuotaCheck.prunedAndStillFullLine)
         XCTAssertTrue(manifestPaths(target).isEmpty)
     }

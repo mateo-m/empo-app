@@ -35,7 +35,7 @@ public enum BackupNotificationRule {
         switch stop {
         case .needsSignIn:
             return .signInDead
-        case .blocked, .quotaShortfall:
+        case .blocked, .full, .quotaShortfall:
             return .targetBlocked
         case .writerConflict, .readOnlyFormat, .offline, .rejected:
             // The writer split is not a failure, per 7.11. Backups

@@ -562,4 +562,65 @@ final class BackupStateStoreTests: XCTestCase {
         try store.removeTarget(targetId: "t1")
         XCTAssertEqual(try store.partialTally(targetId: "t1", gameKey: "g"), [:])
     }
+
+    // MARK: - What the target row shows, per 13.5 and 13.6
+
+    func testATargetFailureOutlivesTheRunThatLeftIt() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        try store.recordTargetFailure(
+            targetId: "t1", failure: .blockedByPermissions(reason: "no write right"), at: now)
+        let status = try store.targetStatus(targetId: "t1")
+        XCTAssertEqual(status?.failure, .blockedByPermissions(reason: "no write right"))
+        XCTAssertEqual(status?.failedAt, now)
+    }
+
+    func testARunThatReachesTheTargetClearsTheFailure() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        try store.recordTargetFailure(targetId: "t1", failure: .unreachable, at: now)
+        try store.recordTargetFailure(targetId: "t1", failure: nil, at: now)
+        let status = try store.targetStatus(targetId: "t1")
+        XCTAssertNil(status?.failure)
+        XCTAssertNil(status?.failedAt)
+    }
+
+    func testTheSpaceQueryAnswerAndTheFailureKeepTheirOwnColumns() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        try store.recordTargetQuota(
+            targetId: "t1", reading: QuotaReading(usedBytes: 400, limitBytes: 1_000), at: now)
+        try store.recordTargetFailure(targetId: "t1", failure: .needsSignIn, at: now)
+        let status = try store.targetStatus(targetId: "t1")
+        XCTAssertEqual(status?.quota, QuotaReading(usedBytes: 400, limitBytes: 1_000))
+        XCTAssertEqual(status?.quotaAt, now)
+        XCTAssertEqual(status?.failure, .needsSignIn)
+    }
+
+    func testUsageSumsTheNewestManifestOfEachGameBiggestFirst() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        try store.recordUploadedManifest(
+            manifest(containerFolderName: "Yume Nikki", hashes: [hash("a")]),
+            snapshotId: "s1", targetId: "t1", namespaceId: namespaceId, uploadedAt: now)
+        try store.recordUploadedManifest(
+            manifest(containerFolderName: "Ib", hashes: [hash("b"), hash("c")]),
+            snapshotId: "s2", targetId: "t1", namespaceId: namespaceId, uploadedAt: now)
+        XCTAssertEqual(
+            try store.usage(targetId: "t1"),
+            [
+                TargetGameUsage(
+                    gameKey: BackupKeys.gameKey(containerFolderName: "Ib"), bytes: 4096),
+                TargetGameUsage(
+                    gameKey: BackupKeys.gameKey(containerFolderName: "Yume Nikki"), bytes: 2048),
+            ])
+    }
+
+    func testRemovingATargetDropsItsStatus() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        try store.recordTargetFailure(targetId: "t1", failure: .needsSignIn, at: now)
+        try store.removeTarget(targetId: "t1")
+        XCTAssertNil(try store.targetStatus(targetId: "t1"))
+    }
 }

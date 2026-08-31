@@ -93,6 +93,16 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    SettingsNavigationRow(
+                        title: "Backups",
+                        description:
+                            "Copy your save files to iCloud Drive, Dropbox, Google Drive, or a server you own."
+                    ) {
+                        BackupsScreen()
+                    }
+                }
+
+                Section {
                     SettingsToggle(
                         title: "Diagnostics overlay",
                         isOn: $settings.diagnosticsOverlay,

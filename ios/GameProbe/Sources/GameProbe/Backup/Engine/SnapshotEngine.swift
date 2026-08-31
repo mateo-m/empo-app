@@ -135,6 +135,12 @@ public actor SnapshotEngine {
             context.request, startedAt: startedAt, finishedAt: now, outcome: outcome,
             uploadedBytes: result.uploadedBytes,
             gameCount: context.streams.count, detail: result.detail)
+        // The target row of 13.5 outlives this run, and a run that
+        // reached the target clears what an earlier one left.
+        try? store.recordTargetFailure(
+            targetId: context.request.descriptor.id,
+            failure: stop.flatMap(TargetFailure.of),
+            at: now)
         return result
     }
 
@@ -167,7 +173,7 @@ public actor SnapshotEngine {
             return "this backup space needs a newer Empo"
         case .needsSignIn:
             return "sign in to this target again"
-        case .blocked(let reason):
+        case .blocked(let reason), .full(let reason):
             return reason
         case .quotaShortfall(let shortfall):
             return QuotaCheck.blockedLine(shortfall)
@@ -707,7 +713,7 @@ public actor SnapshotEngine {
         // 3. Stop, and mark the target blocked with a stated reason.
         //    Empo never sacrifices an older snapshot beyond the
         //    retention policy to fit a new one.
-        throw BackupRunStop.blocked(reason: QuotaCheck.prunedAndStillFullLine)
+        throw BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
     }
 
     /// Where the provider answers a space query, refuse a run that
@@ -744,7 +750,7 @@ public actor SnapshotEngine {
             return BackupRunStop.blocked(
                 reason: "this target asked Empo to wait \(Int(retryAfter)) seconds")
         case .outOfSpace:
-            return BackupRunStop.blocked(reason: QuotaCheck.prunedAndStillFullLine)
+            return BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
         case .notFound:
             return BackupRunStop.rejected(message: "the target lost an object Empo wrote")
         }
