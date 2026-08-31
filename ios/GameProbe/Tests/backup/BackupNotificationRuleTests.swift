@@ -13,9 +13,6 @@ final class BackupNotificationRuleTests: XCTestCase {
     func testEachFailFastStopMapsToItsCause() {
         XCTAssertEqual(BackupNotificationRule.failFastCause(of: .needsSignIn), .signInDead)
         XCTAssertEqual(
-            BackupNotificationRule.failFastCause(of: .blocked(reason: "cap reached")),
-            .targetBlocked)
-        XCTAssertEqual(
             BackupNotificationRule.failFastCause(
                 of: .quotaShortfall(
                     QuotaCheck.Shortfall(neededBytes: 10, freeBytes: 1))),
@@ -24,8 +21,22 @@ final class BackupNotificationRuleTests: XCTestCase {
             BackupNotificationRule.failFastCause(of: .notEnoughLocalSpace), .deviceStorageLow)
     }
 
+    /// A rights problem is not a space problem. The device posted
+    /// "empo-dev is full" for a stop that asked for a re-sign-in.
+    func testARightsBlockAsksForASignInAndNeverSaysFull() {
+        XCTAssertEqual(
+            BackupNotificationRule.failFastCause(
+                of: .blocked(reason: "this target refused the request.")),
+            .signInDead)
+        let line = BackupNotificationRule.text(
+            for: .signInDead, targetLabel: "empo-dev", deviceName: "iPhone")
+        XCTAssertFalse(line.contains("full"))
+        XCTAssertTrue(line.contains("Sign in"))
+    }
+
     func testEveryTransientCauseProducesNoNotification() {
         XCTAssertNil(BackupNotificationRule.failFastCause(of: .offline))
+        XCTAssertNil(BackupNotificationRule.failFastCause(of: .throttled(retryAfter: 30)))
         XCTAssertNil(BackupNotificationRule.failFastCause(of: .rejected(message: "slow down")))
         XCTAssertNil(
             BackupNotificationRule.failFastCause(

@@ -179,6 +179,8 @@ public actor SnapshotEngine {
             return QuotaCheck.blockedLine(shortfall)
         case .offline:
             return "no route to this target"
+        case .throttled(let retryAfter):
+            return "this target asked Empo to wait \(Int(retryAfter)) seconds"
         case .rejected(let message):
             return message
         }
@@ -747,8 +749,7 @@ public actor SnapshotEngine {
         case .offline:
             return BackupRunStop.offline
         case .throttled(let retryAfter):
-            return BackupRunStop.blocked(
-                reason: "this target asked Empo to wait \(Int(retryAfter)) seconds")
+            return BackupRunStop.throttled(retryAfter: retryAfter)
         case .outOfSpace:
             return BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
         case .notFound:

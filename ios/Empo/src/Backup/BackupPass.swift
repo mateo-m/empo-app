@@ -160,16 +160,13 @@ final class BackupPass: BackupRunning {
     /// transient and feeds only the stale line.
     private static func causes(of result: BackupRunResult) -> Set<BackupFailFastCause> {
         var causes: Set<BackupFailFastCause> = []
-        switch result.stop {
-        case .needsSignIn:
-            causes.insert(.signInDead)
-        case .blocked, .full, .quotaShortfall:
-            causes.insert(.targetBlocked)
-        case .none, .writerConflict, .readOnlyFormat, .offline, .rejected:
-            break
+        if let cause = result.stop.flatMap(BackupNotificationRule.failFastCause) {
+            causes.insert(cause)
         }
-        if result.streams.contains(where: { $0.outcome == .notEnoughLocalSpace }) {
-            causes.insert(.deviceStorageLow)
+        for stream in result.streams {
+            if let cause = BackupNotificationRule.failFastCause(of: stream.outcome) {
+                causes.insert(cause)
+            }
         }
         return causes
     }

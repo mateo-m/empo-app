@@ -565,6 +565,21 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertTrue(manifestPaths(target).isEmpty)
     }
 
+    /// Throttling is transient, per 7.11. The device saw a throttled
+    /// target post "is full".
+    func testAThrottledTargetStopsTransientAndNotifiesNothing() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        await target.addFault(
+            FakeTargetFault(operation: .put, error: .throttled(retryAfter: 30), pathContains: "/blobs/"))
+        let engine = try makeEngine(target)
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.stop, .throttled(retryAfter: 30))
+        XCTAssertNil(result.stop.flatMap(BackupNotificationRule.failFastCause))
+    }
+
     func testTheLadderRetryTakesTheUploadThatFailedOnce() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()

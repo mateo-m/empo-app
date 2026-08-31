@@ -35,12 +35,17 @@ public enum BackupNotificationRule {
         switch stop {
         case .needsSignIn:
             return .signInDead
-        case .blocked, .full, .quotaShortfall:
+        case .blocked:
+            // Rights, not space. A re-sign-in with full access is
+            // what fixes it, per 8.4, so the sign-in copy is the
+            // one that names the fix.
+            return .signInDead
+        case .full, .quotaShortfall:
             return .targetBlocked
-        case .writerConflict, .readOnlyFormat, .offline, .rejected:
+        case .writerConflict, .readOnlyFormat, .offline, .throttled, .rejected:
             // The writer split is not a failure, per 7.11. Backups
             // keep flowing into the new namespace, so it never
-            // notifies. The other three wait for the next run.
+            // notifies. The others wait for the next run.
             return nil
         }
     }

@@ -60,7 +60,7 @@ public enum TargetFailure: Equatable, Sendable {
             return .full(reason: reason)
         case .quotaShortfall(let shortfall):
             return .full(reason: QuotaCheck.blockedLine(shortfall))
-        case .offline:
+        case .offline, .throttled:
             return .unreachable
         case .rejected(let message):
             return .rejected(message: message)
