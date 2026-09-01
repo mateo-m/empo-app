@@ -35,6 +35,13 @@ public enum AdoptQuestion {
     /// Continue is the default.
     public static let defaultAnswer: Answer = .adopt
 
+    public static func label(of answer: Answer) -> String {
+        switch answer {
+        case .adopt: return "Continue"
+        case .startFresh: return "Start fresh"
+        }
+    }
+
     /// Whether the question fires for one namespace.
     ///
     /// The recorded device is what `device.json` carries, per 5.1. A

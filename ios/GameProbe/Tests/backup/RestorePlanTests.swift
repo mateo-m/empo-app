@@ -253,6 +253,25 @@ final class RestorePlanTests: XCTestCase {
             ["UserData/save.rxdata", "EmpoState/backup.json", "bucket/save.rxdata"])
     }
 
+    /// The two rows of 11.4 split one preferences snapshot, so each
+    /// scope leaves the other row's files alone.
+    func testTheTwoFreshInstallScopesSplitThePreferencesSnapshot() {
+        let snapshot = manifest([
+            entry("empo-defaults.json", root: .preferences, source: nil),
+            entry("profiles/one.json", root: .preferences, source: nil),
+            entry("bucket/save.rxdata", root: .rescuedSaves, source: nil),
+        ])
+
+        XCTAssertEqual(
+            RestorePlanner.plan(manifest: snapshot, scope: .preferences)
+                .steps.map(\.entry.path),
+            ["empo-defaults.json", "profiles/one.json"])
+        XCTAssertEqual(
+            RestorePlanner.plan(manifest: snapshot, scope: .rescuedSaves)
+                .steps.map(\.entry.path),
+            ["bucket/save.rxdata"])
+    }
+
     func testTheWholeGameScopeRestoresEveryEntry() {
         let plan = RestorePlanner.plan(
             manifest: manifest([entry("UserData/save.rxdata"), entry("Game/Data.rvdata")]),

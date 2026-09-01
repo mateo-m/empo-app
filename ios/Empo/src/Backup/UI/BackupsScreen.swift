@@ -11,6 +11,11 @@ struct BackupsScreen: View {
     @State private var model = BackupsScreenModel()
     @State private var showsAddSheet = false
     @State private var addedTarget: PermissionCheckOutcomeSheet?
+    /// The fresh-install flow of 11.4. It waits for the permission
+    /// sheet of the added target to close, because one view shows one
+    /// sheet at a time.
+    @State private var pendingFreshInstall: FreshInstallItem?
+    @State private var freshInstall: FreshInstallItem?
     /// The games the ask of 3.5 still waits on, per the press below.
     @State private var waiting: [BackupModeAsk] = []
     @AppStorage(DefaultsKey.backupOverCellular) private var overCellular = false
@@ -77,11 +82,27 @@ struct BackupsScreen: View {
                 Task {
                     await model.refresh()
                     model.askAboutNotificationsIfNeeded()
+                    if let scan = await model.freshInstall(after: descriptor) {
+                        pendingFreshInstall = FreshInstallItem(descriptor: descriptor, scan: scan)
+                    } else {
+                        await model.readTheAdoptBanners(of: descriptor.id)
+                    }
                 }
             }
         }
-        .sheet(item: $addedTarget) { outcome in
-            PermissionCheckSheet(targetLabel: outcome.targetLabel, result: outcome.result)
+        .sheet(
+            item: $addedTarget,
+            onDismiss: {
+                freshInstall = pendingFreshInstall
+                pendingFreshInstall = nil
+            },
+            content: { outcome in
+                PermissionCheckSheet(targetLabel: outcome.targetLabel, result: outcome.result)
+            }
+        )
+        .sheet(item: $freshInstall) { item in
+            FreshInstallSheet(
+                model: FreshInstallModel(descriptor: item.descriptor, scan: item.scan))
         }
         .sheet(item: firstAsk) { ask in
             FirstBackupAskSheet(
@@ -158,11 +179,11 @@ struct BackupsScreen: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     HStack(spacing: Spacing.lg) {
-                        Button("Continue") {
+                        Button(AdoptQuestion.label(of: .adopt)) {
                             model.answerTheAdoptBanner(banner, adopts: true)
                         }
                         .buttonStyle(PrimaryButtonStyle(size: .sm))
-                        Button("Start fresh") {
+                        Button(AdoptQuestion.label(of: .startFresh)) {
                             model.answerTheAdoptBanner(banner, adopts: false)
                         }
                         .buttonStyle(SecondaryButtonStyle(size: .sm))

@@ -10,6 +10,13 @@ import UIKit
 /// per 7.6, and the cancel leaves the intent record of 6.5 plus the
 /// staged blobs, so the next launch asks once.
 ///
+/// What the fresh-install flow of SPEC 11.4 reads off one target.
+struct FreshInstallScan {
+    var plan: FreshInstallPlan
+    /// The namespaces the adopt question of 11.5 covers.
+    var adoptableNamespaceIds: [String]
+}
+
 @MainActor
 final class RestoreCoordinator {
 
@@ -31,23 +38,22 @@ final class RestoreCoordinator {
             gameIsPlaying: BackupDeviceConditions.isSessionLive)
     }
 
-    /// Whether the fresh-install flow opens after a target was
-    /// added, per 11.3.
-    func freshInstallOpens(foundNamespaces: Bool, targetCount: Int) -> Bool {
-        FreshInstallMerge.opens(
-            libraryIsEmpty: GameContainer.discover().isEmpty,
-            isFirstTarget: targetCount == 1,
-            foundNamespaces: foundNamespaces)
-    }
-
-    /// Scans one target for the fresh-install screen of 11.4.
-    func freshInstallPlan(
-        descriptor: TargetDescriptor, provider: some BackupProvider
-    ) async -> FreshInstallPlan? {
+    /// The fresh-install flow of 11.4, or `nil` where the door of
+    /// 11.3 stays closed.
+    ///
+    /// The door opens once: the user added a first target, the
+    /// library is empty, and the target holds device namespaces.
+    func freshInstall(
+        descriptor: TargetDescriptor, provider: some BackupProvider, targetCount: Int
+    ) async -> FreshInstallScan? {
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
-        guard let namespaces = try? await scan.namespaces() else { return nil }
+        guard let namespaces = try? await scan.namespaces(),
+            FreshInstallMerge.opens(
+                libraryIsEmpty: GameContainer.discover().isEmpty,
+                isFirstTarget: targetCount == 1,
+                foundNamespaces: !namespaces.isEmpty)
+        else { return nil }
 
-        let gameRows = namespaces.flatMap(\.gameRows)
         let preferencesRows = namespaces.flatMap(\.preferencesRows)
         let newestPreferences = RestorePicker.newestFirst(preferencesRows).first
         let buckets =
@@ -56,14 +62,34 @@ final class RestoreCoordinator {
             .rescuedSavesBuckets ?? []
 
         let streamed = BackupTargets.load().filter { $0.id != descriptor.id }
-        return FreshInstallMerge.plan(
-            gameRows: gameRows,
+        let plan = FreshInstallMerge.plan(
+            gameRows: namespaces.flatMap(\.gameRows),
             preferencesRow: newestPreferences,
             orphanedBuckets: buckets,
             hints: FreshInstallHints.lines(
                 streamed: streamed,
                 canOpenICloud: await ICloudDriveGate.shared.availability().isReady),
             joinedSyncGroup: SyncStore.state().hasJoined)
+
+        let mine = try? BackupKeychain.namespaceId()
+        let thisDevice = UIDevice.current.identifierForVendor?.uuidString ?? ""
+        let adoptable = namespaces.filter {
+            AdoptQuestion.fires(
+                recordedDeviceId: $0.deviceId, thisDeviceId: thisDevice,
+                alreadyOwned: $0.id == mine)
+        }
+        return FreshInstallScan(plan: plan, adoptableNamespaceIds: adoptable.map(\.id))
+    }
+
+    /// The container a fresh-install restore writes into.
+    ///
+    /// This device holds no game yet, so the restore makes the
+    /// container the snapshot names and writes into it.
+    static func makeTheContainer(folderName: String) -> GameContainer? {
+        let container = GameContainer(
+            url: GameContainer.rootURL.appendingPathComponent(folderName, isDirectory: true))
+        guard (try? container.ensureSubdirs()) != nil else { return nil }
+        return container
     }
 
     // MARK: - Running one restore

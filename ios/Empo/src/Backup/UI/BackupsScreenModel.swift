@@ -316,6 +316,14 @@ final class BackupsScreenModel {
             descriptor: descriptor, scope: scope, replacesTheTree: replacesTheTree)
     }
 
+    /// The fresh-install flow of 11.4, where adding this target
+    /// opened the door of 11.3.
+    func freshInstall(after descriptor: TargetDescriptor) async -> FreshInstallScan? {
+        guard let provider = await BackupTargets.provider(for: descriptor) else { return nil }
+        return await RestoreCoordinator.shared.freshInstall(
+            descriptor: descriptor, provider: provider, targetCount: items.count)
+    }
+
     /// The banner of 13.13, from the namespaces one target holds.
     func readTheAdoptBanners(of targetId: String) async {
         guard let rows = try? await namespaces(of: targetId),
