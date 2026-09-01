@@ -252,15 +252,17 @@ final class PackageTests: XCTestCase {
         var library = SnapshotManifest(mode: .slim, containerFolderName: "")
         library.entries = [
             entry(
-                root: .preferences, path: BackupSetResolver.userDefaultsExportPathName,
+                root: .preferences, path: PreferencesMemberPath.userDefaultsExport.path,
                 bytes: Data("{}".utf8)),
             entry(
                 root: .preferences,
-                path: BackupSetResolver.profilesPathPrefix + "/pad.json",
+                path: PreferencesMemberPath.profile(path: "pad.json").path,
                 bytes: Data("{}".utf8)),
             entry(
                 root: .preferences,
-                path: BackupSetResolver.rescuedSavesPathPrefix + "/Quest/Save01.rvdata2",
+                path: PreferencesMemberPath.rescuedSavesBucket(
+                    name: "Quest", path: "Save01.rvdata2"
+                ).path,
                 bytes: Data("s".utf8)),
         ]
         let shared = library.entries.compactMap { PackageLayout.zipPath(of: $0, in: library) }

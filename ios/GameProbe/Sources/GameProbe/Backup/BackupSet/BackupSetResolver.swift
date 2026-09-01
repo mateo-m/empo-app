@@ -81,15 +81,6 @@ public struct LibraryBackupSetRequest: Sendable {
 /// delete, per invariant 3, and ticket 014 owns the restore rules.
 public enum BackupSetResolver {
 
-    /// The path a member of the library stream carries under the
-    /// layout profiles.
-    public static let profilesPathPrefix = "profiles"
-    /// The path a member of the library stream carries under a
-    /// Rescued Saves bucket.
-    public static let rescuedSavesPathPrefix = "rescued-saves"
-    /// The name the UserDefaults export takes in the stream.
-    public static let userDefaultsExportPathName = "userdefaults.json"
-
     // MARK: - One game
 
     public static func resolve(
@@ -139,7 +130,7 @@ public enum BackupSetResolver {
                 .map {
                     BackupSetMember(
                         root: .preferences,
-                        path: "\(profilesPathPrefix)/\($0.path)",
+                        path: PreferencesMemberPath.profile(path: $0.path).path,
                         size: $0.size,
                         modifiedAt: $0.modifiedAt)
                 }
@@ -149,7 +140,7 @@ public enum BackupSetResolver {
             members.append(
                 BackupSetMember(
                     root: .preferences,
-                    path: userDefaultsExportPathName,
+                    path: PreferencesMemberPath.userDefaultsExport.path,
                     size: stamp.size,
                     modifiedAt: stamp.modifiedAt))
         }
@@ -161,7 +152,7 @@ public enum BackupSetResolver {
             members += files(under: bucket, fm: fm).map {
                 BackupSetMember(
                     root: .preferences,
-                    path: "\(rescuedSavesPathPrefix)/\(name)/\($0.path)",
+                    path: PreferencesMemberPath.rescuedSavesBucket(name: name, path: $0.path).path,
                     size: $0.size,
                     modifiedAt: $0.modifiedAt)
             }
@@ -209,8 +200,9 @@ public enum BackupSetResolver {
 
             // Slim mode, per 3.4: the sources, the marks, and the
             // always-in list of 3.1.
-            guard source != nil
-                || BackupSetRules.isAlwaysIn(containerRelativePath: file.path)
+            guard
+                source != nil
+                    || BackupSetRules.isAlwaysIn(containerRelativePath: file.path)
             else { return nil }
             return BackupSetMember(
                 root: .container,

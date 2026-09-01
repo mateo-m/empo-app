@@ -13,7 +13,8 @@ enum PreferenceRestore {
     /// Where a restore of the preferences stream puts the export
     /// before Empo applies it.
     static var restoredFile: URL {
-        BackupRoot.layout.restore.appendingPathComponent(BackupSetResolver.userDefaultsExportPathName)
+        BackupRoot.layout.restore.appendingPathComponent(
+            PreferencesMemberPath.userDefaultsExportName)
     }
 
     /// What the confirmation says. On a joined device the change

@@ -145,13 +145,12 @@ public struct RestoreScan: Sendable {
     /// On a fresh install nothing is installed, so every bucket the
     /// stream holds is orphaned, per 11.4.
     public static func rescuedSavesBuckets(in manifest: SnapshotManifest) -> [String] {
-        let prefix = BackupSetResolver.rescuedSavesPathPrefix + "/"
         var names: Set<String> = []
         for entry in manifest.entries where entry.root == .preferences {
-            guard entry.path.hasPrefix(prefix) else { continue }
-            let rest = entry.path.dropFirst(prefix.count)
-            guard let name = rest.split(separator: "/").first else { continue }
-            names.insert(String(name))
+            guard case .rescuedSavesBucket(let name, _) = PreferencesMemberPath(entry.path) else {
+                continue
+            }
+            names.insert(name)
         }
         return names.sorted()
     }

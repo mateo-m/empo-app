@@ -79,20 +79,16 @@ public struct MemberSource: Sendable {
         return bucket.appendingPathComponent(String(parts[1]))
     }
 
-    /// The three shapes the stream that belongs to no game carries,
-    /// per 5.3.
     private func preferencesFile(_ path: String) -> URL? {
-        if path == BackupSetResolver.userDefaultsExportPathName {
+        switch PreferencesMemberPath(path) {
+        case .userDefaultsExport:
             return userDefaultsExport
+        case .profile(let inside):
+            return profiles?.appendingPathComponent(inside)
+        case .rescuedSavesBucket(let name, let inside):
+            return rescuedBuckets[name]?.appendingPathComponent(inside)
+        case nil:
+            return nil
         }
-        let profilePrefix = BackupSetResolver.profilesPathPrefix + "/"
-        if path.hasPrefix(profilePrefix) {
-            return profiles?.appendingPathComponent(String(path.dropFirst(profilePrefix.count)))
-        }
-        let rescuedPrefix = BackupSetResolver.rescuedSavesPathPrefix + "/"
-        if path.hasPrefix(rescuedPrefix) {
-            return bucketFile(String(path.dropFirst(rescuedPrefix.count)))
-        }
-        return nil
     }
 }

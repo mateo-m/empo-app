@@ -53,16 +53,16 @@ public enum PackageLayout {
     }
 
     private static func preferencesZipPath(_ path: String) -> String? {
-        if path == BackupSetResolver.userDefaultsExportPathName { return preferencesPath }
-        let profiles = BackupSetResolver.profilesPathPrefix + "/"
-        if path.hasPrefix(profiles) {
-            return profilesPrefix + String(path.dropFirst(profiles.count))
+        switch PreferencesMemberPath(path) {
+        case .userDefaultsExport:
+            return preferencesPath
+        case .profile(let inside):
+            return profilesPrefix + inside
+        case .rescuedSavesBucket(let name, let inside):
+            return rescuedSavesPrefix + name + "/" + inside
+        case nil:
+            return nil
         }
-        let rescued = BackupSetResolver.rescuedSavesPathPrefix + "/"
-        if path.hasPrefix(rescued) {
-            return rescuedSavesPrefix + String(path.dropFirst(rescued.count))
-        }
-        return nil
     }
 
     private static func trimmed(_ path: String) -> String {
