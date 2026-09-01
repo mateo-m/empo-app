@@ -101,7 +101,7 @@ final class BackupSheetModel {
     }
 
     private func resolve(_ mode: BackupMode) async -> GameBackupSet {
-        let request = GameBackupSets.request(for: container, mode: mode)
+        let request = await GameBackupSets.request(for: container, mode: mode)
         return await Task.detached { BackupSetResolver.resolve(request) }.value
     }
 

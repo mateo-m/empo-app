@@ -15,7 +15,9 @@ enum GameBackupSets {
     /// The request for one game, with the shared data directory of
     /// 4.5, the matching Rescued Saves buckets, the marks of 3.6,
     /// and the joins this app run saw.
-    static func request(for container: GameContainer, mode: BackupMode) -> GameBackupSetRequest {
+    static func request(
+        for container: GameContainer, mode: BackupMode
+    ) async -> GameBackupSetRequest {
         let intent = GameBackupIntent.load(from: container.empoStateURL)
         var buckets: [String: URL] = [:]
         for bucket in RescuedSaves.matchingBuckets(
@@ -31,7 +33,7 @@ enum GameBackupSets {
             documentsRoot: DataDirectory.documentsRootURL,
             rescuedSavesBuckets: buckets,
             manualMarks: intent.manualMarks,
-            runtimeWatchPaths: GameSaveWatch.shared.joinedPaths(forGame: container.id))
+            runtimeWatchPaths: await GameSaveWatch.shared.joinedPaths(forGame: container.id))
     }
 
     /// The stream that belongs to no game, per 5.3: the layout

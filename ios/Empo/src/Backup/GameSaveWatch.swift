@@ -38,6 +38,10 @@ final class GameSaveWatch {
 
     private var session: Session?
 
+    /// The reading in flight. `joinedPaths` waits for it, so a pass
+    /// that starts right after the session end sees the last joins.
+    private var reading: Task<Void, Never>?
+
     private struct Session {
         let container: GameContainer
         /// The time the baseline pass started. `RuntimeWatch` counts
@@ -102,7 +106,9 @@ final class GameSaveWatch {
         session?.baseline = Task.detached(priority: .utility) { await pass.value.after }
         session?.readingStartedAt = passStartedAt
 
-        Task { [weak self] in
+        let earlier = reading
+        reading = Task { [weak self] in
+            await earlier?.value
             guard let result = await pass.value.result else { return }
             self?.apply(result, forGame: container.id)
         }
@@ -111,6 +117,9 @@ final class GameSaveWatch {
     /// Takes a last reading and closes the session. The call is safe
     /// with no session open, because the engine-termination path
     /// reaches it after a reading may have already run.
+    ///
+    /// The last reading runs on after this returns. `joinedPaths`
+    /// waits for it, so the next backup pass holds its joins.
     func endSession() {
         guard session != nil else { return }
         takeReading()
@@ -177,8 +186,9 @@ final class GameSaveWatch {
 
     /// The paths this app run joined for one game, for the
     /// `runtimeWatchPaths` of `GameBackupSetRequest`.
-    func joinedPaths(forGame containerId: String) -> [String] {
-        (joinedPathsByGame[containerId] ?? []).sorted()
+    func joinedPaths(forGame containerId: String) async -> [String] {
+        await reading?.value
+        return (joinedPathsByGame[containerId] ?? []).sorted()
     }
 
     /// The paths over the 50 MB limit that wait for an answer.

@@ -30,7 +30,7 @@ enum PackageExport {
         of container: GameContainer, gameName: String
     ) async -> PackagePlan.Stream {
         let mode = await self.mode(of: container)
-        let request = GameBackupSets.request(for: container, mode: mode)
+        let request = await GameBackupSets.request(for: container, mode: mode)
         let set = BackupSetResolver.resolve(request)
         let identity = GameIdentities.identity(for: container)
         return PackagePlan.Stream(

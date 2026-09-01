@@ -154,7 +154,7 @@ final class BackupPass: BackupRunning {
             games.append(
                 BackupRunGame(
                     identity: GameIdentities.identity(for: container),
-                    set: GameBackupSets.request(for: container, mode: mode),
+                    set: await GameBackupSets.request(for: container, mode: mode),
                     versionMarker: GameIdentities.versionMarker(for: container),
                     lastPlayedAt: metadata.lastPlayed))
         }
