@@ -102,15 +102,7 @@ enum PackageExport {
     /// UserDefaults export of 10.1 written into staging first.
     @MainActor
     private static func preferencesStream() -> PlannedStream? {
-        let file = BackupRoot.staging.appendingPathComponent("defaults.json")
-        guard
-            let data = try? PreferenceExport.document(
-                of: PackagePreferences.currentDefaults(), at: Date())
-        else { return nil }
-        try? FileManager.default.createDirectory(
-            at: BackupRoot.staging, withIntermediateDirectories: true)
-        try? data.write(to: file, options: .atomic)
-
+        guard let file = DevicePreferences.writeTheExportFile() else { return nil }
         let request = GameBackupSets.libraryRequest(userDefaultsExportFile: file)
         let set = BackupSetResolver.resolveLibraryStream(request)
         guard !set.members.isEmpty else { return nil }
@@ -237,46 +229,5 @@ enum PackageExport {
             createdAt: date, isSaved: false)
         record.save(in: directory)
         return record
-    }
-}
-
-/// The defaults this device holds now, as the export reads them.
-///
-/// The allow-list of 10.1 decides what leaves. A game-scoped key of
-/// 10.2 is not on the list, so it never reaches `defaults.json`.
-@MainActor
-enum PackagePreferences {
-
-    static func currentDefaults() -> [String: JSONValue] {
-        var out: [String: JSONValue] = [:]
-        for (key, value) in UserDefaults.standard.dictionaryRepresentation() {
-            guard PreferenceKeys.classOf(key) == .portable else { continue }
-            guard let json = jsonValue(of: value) else { continue }
-            out[key] = json
-        }
-        return out
-    }
-
-    private static func jsonValue(of value: Any) -> JSONValue? {
-        switch value {
-        case let number as NSNumber:
-            // `Bool` and the integer types share one class here, so
-            // the encoding tells them apart.
-            if CFGetTypeID(number) == CFBooleanGetTypeID() { return .bool(number.boolValue) }
-            if String(cString: number.objCType) == "d" { return .double(number.doubleValue) }
-            return .int(number.intValue)
-        case let text as String:
-            return .string(text)
-        case let data as Data:
-            // A JSON document has no bytes type, so the value keeps
-            // its own shape and says what it is.
-            return .object(["base64Data": .string(data.base64EncodedString())])
-        case let list as [Any]:
-            return .array(list.compactMap(jsonValue(of:)))
-        case let map as [String: Any]:
-            return .object(map.compactMapValues(jsonValue(of:)))
-        default:
-            return nil
-        }
     }
 }

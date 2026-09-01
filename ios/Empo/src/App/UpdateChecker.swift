@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 
 /// Update checker for sideloaded / IPA installs.
 ///
@@ -76,12 +77,11 @@ enum UpdateChecker {
     /// flash the spinner for a single frame, which feels broken.
     private static let minimumCheckingDuration: Duration = .milliseconds(500)
 
-    /// UserDefaults keys for the persisted check result. They stay
-    /// raw strings (no enum), so older builds can still decode the
-    /// payload schema even when a future build adds new fields.
+    /// UserDefaults keys for the persisted check result. Both carry
+    /// the never-stored class of SPEC 10.1, so neither travels.
     private enum DefaultsKey {
-        static let lastCheckedAt = "UpdateChecker.lastCheckedAt"
-        static let lastKnownLatestVersion = "UpdateChecker.lastKnownLatestVersion"
+        static let lastCheckedAt = PreferenceKeys.updateCheckerLastCheckedAt.name
+        static let lastKnownLatestVersion = PreferenceKeys.updateCheckerLastKnownLatestVersion.name
     }
 
     /// Returns the freshest status without a recheck when a

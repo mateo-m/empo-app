@@ -6,6 +6,9 @@ import Foundation
 /// Library/Application Support/
 ///   targets.json                  <- beside the root, per 6.1
 ///   preference-rollback.json      <- beside the root, per 6.1 and 10.9
+///   sync.json                     <- beside the root, per 10.3
+///   sync-profile-ids.json         <- beside the root, per 10.6
+///   preferences.automerge         <- beside the root, per 10.3
 ///   Backup/
 ///     state.sqlite
 ///     staging/
@@ -32,6 +35,10 @@ public enum BackupRootLayout {
     /// The preference rollback undo of 10.9. Section 10 owns the
     /// contents.
     public static let preferenceRollbackFileName = "preference-rollback.json"
+    /// This device's copy of the sync document of 10.3. It sits
+    /// beside the root, because the root is a cache Empo may delete
+    /// whole and the causal history must survive that.
+    public static let syncDocumentFileName = "preferences.automerge"
 
     public static func root(inApplicationSupport applicationSupport: URL) -> URL {
         applicationSupport.appendingPathComponent(rootDirectoryName, isDirectory: true)
@@ -75,6 +82,10 @@ public enum BackupRootLayout {
 
     public static func preferenceRollbackFile(applicationSupport: URL) -> URL {
         applicationSupport.appendingPathComponent(preferenceRollbackFileName)
+    }
+
+    public static func syncDocumentFile(applicationSupport: URL) -> URL {
+        applicationSupport.appendingPathComponent(syncDocumentFileName)
     }
 
     /// The three working directories, which a fresh install and a

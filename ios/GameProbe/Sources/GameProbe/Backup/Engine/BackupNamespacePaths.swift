@@ -42,6 +42,9 @@ public struct BackupNamespacePaths: Equatable, Sendable {
     public static let formatFileName = "format.json"
     public static let writerFileName = "writer.json"
     public static let deviceFileName = "device.json"
+    /// This device's copy of the sync document of section 10, per
+    /// 5.1. Only the owning device writes it.
+    public static let syncDocumentFileName = "preferences.automerge"
     public static let gamesDirectoryName = "games"
     public static let preferencesDirectoryName = "prefs"
     public static let manifestFileExtension = "json"
@@ -88,6 +91,10 @@ public struct BackupNamespacePaths: Equatable, Sendable {
 
     public var deviceFile: String {
         Self.join(namespacePrefix, Self.deviceFileName)
+    }
+
+    public var syncDocumentFile: String {
+        Self.join(namespacePrefix, Self.syncDocumentFileName)
     }
 
     public var blobsPrefix: String {

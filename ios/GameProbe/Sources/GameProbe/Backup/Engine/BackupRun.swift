@@ -66,6 +66,10 @@ public struct BackupRunRequest: Sendable {
     /// `BackupKeys.makeNamespaceId()` and stores it in the Keychain,
     /// per 5.2.
     public var splitNamespaceId: String?
+    /// The sync group this device joined, per 10.4. The run carries
+    /// it into `device.json`, which is where a second device of the
+    /// same person finds the group, per 10.5 step 1.
+    public var syncGroupId: String?
 
     public init(
         runId: String,
@@ -79,7 +83,8 @@ public struct BackupRunRequest: Sendable {
         preferences: LibraryBackupSetRequest? = nil,
         games: [BackupRunGame] = [],
         writerResolution: WriterClaimResolution? = nil,
-        splitNamespaceId: String? = nil
+        splitNamespaceId: String? = nil,
+        syncGroupId: String? = nil
     ) {
         self.runId = runId
         self.descriptor = descriptor
@@ -93,6 +98,7 @@ public struct BackupRunRequest: Sendable {
         self.games = games
         self.writerResolution = writerResolution
         self.splitNamespaceId = splitNamespaceId
+        self.syncGroupId = syncGroupId
     }
 }
 

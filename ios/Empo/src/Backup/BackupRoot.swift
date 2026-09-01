@@ -46,6 +46,11 @@ enum BackupRoot {
         BackupRootLayout.preferenceRollbackFile(applicationSupport: applicationSupport)
     }
 
+    /// This device's copy of the sync document of 10.3.
+    static var syncDocumentFile: URL {
+        BackupRootLayout.syncDocumentFile(applicationSupport: applicationSupport)
+    }
+
     /// Makes the root and its three directories, then excludes the
     /// root from the device backup. Safe to call on every launch.
     @discardableResult

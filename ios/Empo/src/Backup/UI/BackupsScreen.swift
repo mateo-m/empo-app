@@ -21,6 +21,9 @@ struct BackupsScreen: View {
     /// The package a launch found waiting for its save, per 12.5.
     @State private var unsavedPackage: PackageRecord?
     @State private var savesAgain: PackageRecord?
+    /// The join ask of 10.4, once the user presses the row.
+    @State private var joinAsk: SyncJoinPrompt?
+    @State private var looksForAGroup = false
 
     var body: some View {
         List {
@@ -84,6 +87,9 @@ struct BackupsScreen: View {
             FirstBackupAskSheet(
                 model: BackupSheetModel(container: ask.container, gameName: ask.gameName),
                 ask: ask.ask)
+        }
+        .sheet(item: $joinAsk) { prompt in
+            SyncJoinSheet(ask: prompt.ask) { group in SyncJoin.join(group) }
         }
         .sheet(isPresented: $model.showsTheNotificationSheet) {
             NotificationAskSheet { answer in
@@ -327,9 +333,31 @@ struct BackupsScreen: View {
             }
             .onChange(of: retention) { _, preset in BackupSettings.retention = preset }
 
-            Text("Settings sync when Empo opens.")
+            Button {
+                lookForAGroup()
+            } label: {
+                HStack {
+                    Text("Sync settings with another device")
+                    Spacer()
+                    if looksForAGroup { ProgressView() }
+                }
+            }
+            .disabled(looksForAGroup)
+
+            Text(SyncGroupCopy.stableLine)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The screen makes no request until the user asks, so the join
+    /// step of 10.4 lists the targets from this press alone.
+    private func lookForAGroup() {
+        looksForAGroup = true
+        Task {
+            let ask = await SyncJoin.ask()
+            looksForAGroup = false
+            joinAsk = SyncJoinPrompt(ask: ask)
         }
     }
 
@@ -349,6 +377,12 @@ struct BackupsScreen: View {
             }
         }
     }
+}
+
+/// The join ask of 10.4, waiting for its sheet.
+struct SyncJoinPrompt: Identifiable {
+    let ask: SyncJoinAsk
+    let id = UUID()
 }
 
 /// The permission check of 8.7, waiting for its sheet.

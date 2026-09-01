@@ -10,69 +10,131 @@ public enum PreferenceClass: String, Codable, Sendable, CaseIterable, Equatable 
     case neverStored = "never-stored"
 }
 
+/// One UserDefaults key and the class SPEC 10.1 requires of it.
+///
+/// The initializer takes the class as its second value, so a new key
+/// that names no class does not compile. 10.1 asks for that: a key
+/// with no class must not ship.
+public struct PreferenceEntry: Equatable, Sendable {
+
+    public let name: String
+    public let backupClass: PreferenceClass
+
+    public init(_ name: String, _ backupClass: PreferenceClass) {
+        self.name = name
+        self.backupClass = backupClass
+    }
+}
+
 /// The allow-list of SPEC 10.1.
 ///
 /// An allow-list is the point. A deny-list would ship the next key
 /// that holds a path or a token with no review, so a key this file
-/// does not name never leaves the device.
+/// does not name never leaves the device. A key that is missing from
+/// `all` is on the same safe side: it travels nowhere.
 ///
 /// A game-scoped key is never here, per 10.2. Per-game layouts and
 /// per-game controller maps live in each game's
 /// `EmpoState/controls.json`, which the backup set already carries.
 public enum PreferenceKeys {
 
-    public static let portable: Set<String> = [
-        "theme",
-        "interfaceHaptics",
-        "controllerHaptics",
-        "controlsEditSnapToGrid",
-        "libraryDisplayMode",
-        "librarySortOption",
-        "showContinuePlaying",
-        "titlePosition",
-        "cleanupInvalidGames",
-        "controllerMap.global",
-        "layoutProfiles.gameNoticeShown",
-        "layoutProfiles.default",
+    // MARK: - App-wide
+
+    public static let theme = PreferenceEntry("theme", .portable)
+    public static let interfaceHaptics = PreferenceEntry("interfaceHaptics", .portable)
+    public static let controllerHaptics = PreferenceEntry("controllerHaptics", .portable)
+    public static let controlsEditSnapToGrid = PreferenceEntry("controlsEditSnapToGrid", .portable)
+    public static let debugMode = PreferenceEntry("debugMode", .deviceLocal)
+    public static let debugLogs = PreferenceEntry("debugLogs", .deviceLocal)
+    public static let maxLogFiles = PreferenceEntry("maxLogFiles", .deviceLocal)
+    public static let showViewportBounds = PreferenceEntry("showViewportBounds", .deviceLocal)
+    public static let showTouchZone = PreferenceEntry("showTouchZone", .deviceLocal)
+    public static let pointerInjection = PreferenceEntry("pointerInjection", .deviceLocal)
+    public static let caBundleLastRefresh = PreferenceEntry("caBundleLastRefresh", .neverStored)
+
+    // MARK: - Library
+
+    public static let libraryDisplayMode = PreferenceEntry("libraryDisplayMode", .portable)
+    public static let librarySortOption = PreferenceEntry("librarySortOption", .portable)
+    public static let showContinuePlaying = PreferenceEntry("showContinuePlaying", .portable)
+    public static let titlePosition = PreferenceEntry("titlePosition", .portable)
+    public static let cleanupInvalidGames = PreferenceEntry("cleanupInvalidGames", .portable)
+    public static let pendingDuplicateGameNames = PreferenceEntry(
+        "pendingDuplicateGameNames", .neverStored)
+    public static let pendingSaveRecoveries = PreferenceEntry("pendingSaveRecoveries", .neverStored)
+
+    // MARK: - Controls
+
+    /// Global controller overrides. This one is not game-scoped, and
+    /// it is the one key of its family that travels.
+    public static let controllerMapGlobal = PreferenceEntry("controllerMap.global", .portable)
+    public static let layoutProfilesGameNoticeShown = PreferenceEntry(
+        "layoutProfiles.gameNoticeShown", .portable)
+    /// It names a profile folder by string, so it applies only after
+    /// the named profile exists on this device.
+    public static let layoutProfilesDefault = PreferenceEntry("layoutProfiles.default", .portable)
+
+    // MARK: - The viewport bounds overlay
+
+    public static let viewportBoundsR = PreferenceEntry("vpBoundsR", .deviceLocal)
+    public static let viewportBoundsG = PreferenceEntry("vpBoundsG", .deviceLocal)
+    public static let viewportBoundsB = PreferenceEntry("vpBoundsB", .deviceLocal)
+    public static let viewportBoundsA = PreferenceEntry("vpBoundsA", .deviceLocal)
+
+    // MARK: - Backups
+
+    /// The one network switch of 7.4 and the retention preset of
+    /// 5.10 are device choices. 10.1 does not list them as portable,
+    /// so they stay where the user set them.
+    public static let backupOverCellular = PreferenceEntry("backupOverCellular", .deviceLocal)
+    public static let backupRetention = PreferenceEntry("backupRetention", .deviceLocal)
+    /// Both notification keys spend the one system prompt of 7.11,
+    /// the same way the disclaimer key spends the one disclaimer.
+    public static let backupNotificationsAsked = PreferenceEntry(
+        "backupNotificationsAsked", .neverStored)
+    public static let backupNotificationPromptSpent = PreferenceEntry(
+        "backupNotificationPromptSpent", .neverStored)
+
+    // MARK: - One per install
+
+    /// A new install must see the disclaimer once, per 10.1, so
+    /// restoring this key would let it skip that screen.
+    public static let disclaimerAcknowledgedVersion = PreferenceEntry(
+        "disclaimerAcknowledgedVersion", .neverStored)
+    public static let updateCheckerLastCheckedAt = PreferenceEntry(
+        "UpdateChecker.lastCheckedAt", .neverStored)
+    public static let updateCheckerLastKnownLatestVersion = PreferenceEntry(
+        "UpdateChecker.lastKnownLatestVersion", .neverStored)
+
+    // MARK: - The table
+
+    public static let all: [PreferenceEntry] = [
+        theme, interfaceHaptics, controllerHaptics, controlsEditSnapToGrid, debugMode, debugLogs,
+        maxLogFiles, showViewportBounds, showTouchZone, pointerInjection, caBundleLastRefresh,
+        libraryDisplayMode, librarySortOption, showContinuePlaying, titlePosition,
+        cleanupInvalidGames, pendingDuplicateGameNames, pendingSaveRecoveries, controllerMapGlobal,
+        layoutProfilesGameNoticeShown, layoutProfilesDefault, viewportBoundsR, viewportBoundsG,
+        viewportBoundsB, viewportBoundsA, backupOverCellular, backupRetention,
+        backupNotificationsAsked, backupNotificationPromptSpent, disclaimerAcknowledgedVersion,
+        updateCheckerLastCheckedAt, updateCheckerLastKnownLatestVersion,
     ]
 
     /// One family travels whole: every hint the user dismissed.
-    public static let portablePrefix = "hint.dismissed."
-
-    public static let deviceLocal: Set<String> = [
-        "debugMode",
-        "debugLogs",
-        "maxLogFiles",
-        "showViewportBounds",
-        "showTouchZone",
-        "pointerInjection",
-        "vpBoundsR",
-        "vpBoundsG",
-        "vpBoundsB",
-        "vpBoundsA",
-    ]
-
-    public static let neverStored: Set<String> = [
-        "caBundleLastRefresh",
-        "UpdateChecker.lastCheckedAt",
-        "UpdateChecker.lastKnownLatestVersion",
-        "pendingDuplicateGameNames",
-        "pendingSaveRecoveries",
-        // A new install must see the disclaimer once, per 10.1, so
-        // restoring this key would let it skip that screen.
-        "disclaimerAcknowledgedVersion",
-    ]
+    public static let hintDismissedPrefix = "hint.dismissed."
 
     /// The two legacy families of 10.2. A game that the player never
     /// opened since the migration shipped may still hold one.
-    public static let gameScopedPrefixes = ["controlsLayout.", "controllerMap."]
+    public static let controlsLayoutPrefix = "controlsLayout."
+    public static let controllerMapPrefix = "controllerMap."
+    public static let gameScopedPrefixes = [controlsLayoutPrefix, controllerMapPrefix]
+
+    public static func names(inClass wanted: PreferenceClass) -> Set<String> {
+        Set(all.filter { $0.backupClass == wanted }.map(\.name))
+    }
 
     public static func classOf(_ key: String) -> PreferenceClass? {
-        if portable.contains(key) { return .portable }
-        if key.hasPrefix(portablePrefix) { return .portable }
-        if deviceLocal.contains(key) { return .deviceLocal }
-        if neverStored.contains(key) { return .neverStored }
-        return nil
+        if key.hasPrefix(hintDismissedPrefix) { return .portable }
+        return all.first { $0.name == key }?.backupClass
     }
 
     /// Whether the key names one game, per 10.2.
@@ -80,7 +142,7 @@ public enum PreferenceKeys {
     /// `controllerMap.global` is not game-scoped, and it is the one
     /// key of that family that travels.
     public static func isGameScoped(_ key: String) -> Bool {
-        guard !portable.contains(key) else { return false }
+        guard classOf(key) == nil else { return false }
         return gameScopedPrefixes.contains { key.hasPrefix($0) }
     }
 }

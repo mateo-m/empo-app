@@ -63,19 +63,30 @@ public struct DeviceRecord: Codable, Equatable, Sendable {
     public var model: String
     public var name: String
     public var lastWriteAt: Date
+    /// The sync group this device joined, per 10.4. It is absent on
+    /// a device that never joined, and a second device reads it here
+    /// to discover the group.
+    public var syncGroupId: String?
+    /// When this device last saved its copy of the sync document.
+    /// The join picker of 10.4 names it beside the device.
+    public var syncUpdatedAt: Date?
 
     public init(
         version: Int = DeviceRecord.currentVersion,
         deviceId: String,
         model: String,
         name: String,
-        lastWriteAt: Date
+        lastWriteAt: Date,
+        syncGroupId: String? = nil,
+        syncUpdatedAt: Date? = nil
     ) {
         self.version = version
         self.deviceId = deviceId
         self.model = model
         self.name = name
         self.lastWriteAt = lastWriteAt
+        self.syncGroupId = syncGroupId
+        self.syncUpdatedAt = syncUpdatedAt
     }
 
     public func jsonData() throws -> Data {

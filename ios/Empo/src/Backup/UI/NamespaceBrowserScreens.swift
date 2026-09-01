@@ -11,11 +11,11 @@ struct NamespaceGamesScreen: View {
     let targetId: String
     let row: BackupNamespaceRow
 
-    @State private var sections: [SnapshotGameSection]?
+    @State private var contents: NamespaceContents?
 
     var body: some View {
         List {
-            if let sections {
+            if let sections = contents?.games {
                 if sections.isEmpty {
                     Text(RestoreNotices.emptyTargetLine)
                         .foregroundStyle(.secondary)
@@ -42,6 +42,7 @@ struct NamespaceGamesScreen: View {
                         }
                     }
                 }
+                preferences
             } else {
                 ProgressView()
             }
@@ -49,7 +50,32 @@ struct NamespaceGamesScreen: View {
         .navigationTitle(NamespaceListRules.title(of: row))
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            sections = await model.sections(of: targetId, namespaceId: row.namespaceId)
+            contents = await model.contents(of: targetId, namespaceId: row.namespaceId)
+        }
+    }
+}
+
+extension NamespaceGamesScreen {
+
+    /// The rollback points of 10.9. The stream is one export file,
+    /// so the list needs no scope question.
+    @ViewBuilder
+    fileprivate var preferences: some View {
+        if let rows = contents?.preferences, !rows.isEmpty {
+            Section {
+                NavigationLink {
+                    PreferenceSnapshotListScreen(rows: rows) { row in
+                        await model.restore(row, scope: .savesAndSettings)
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("Settings")
+                        Text("\(rows.count) snapshots")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
 }

@@ -86,13 +86,15 @@ final class BackupPass: BackupRunning {
             runId: UUID().uuidString,
             descriptor: descriptor,
             namespaceId: namespaceId,
-            deviceId: Self.deviceId,
-            deviceName: UIDevice.current.name,
-            deviceModel: UIDevice.current.model,
+            deviceId: BackupDevice.id,
+            deviceName: BackupDevice.name,
+            deviceModel: BackupDevice.model,
             retentionPreset: BackupSettings.retention,
             freeSpaceBytes: Self.freeSpaceBytes,
-            preferences: GameBackupSets.libraryRequest(),
-            games: games)
+            preferences: GameBackupSets.libraryRequest(
+                userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
+            games: games,
+            syncGroupId: SyncStore.state().groupId)
 
         // The engine takes the store over. `SQLiteDatabase` closes
         // its handle when the last reference goes, so nothing here
@@ -135,6 +137,10 @@ final class BackupPass: BackupRunning {
         var games: [BackupRunGame] = []
         for key in keys {
             guard let container = byKey[key] else { continue }
+            // The legacy per-game keys have to leave UserDefaults
+            // before the run stages `EmpoState/`, or the layout goes
+            // up in neither place.
+            ControlsLayout.migrateLegacyPersistence(container: container)
             let resolution = await GameBackupSets.resolveMode(
                 for: container, targets: thresholds)
             guard case .mode(let mode) = resolution else {
@@ -155,10 +161,6 @@ final class BackupPass: BackupRunning {
     }
 
     // MARK: - The device
-
-    private static var deviceId: String {
-        UIDevice.current.identifierForVendor?.uuidString ?? "unknown-device"
-    }
 
     /// What the budget of 6.4 may spend. The engine takes it as an
     /// input, so no rule inside it reads the host.

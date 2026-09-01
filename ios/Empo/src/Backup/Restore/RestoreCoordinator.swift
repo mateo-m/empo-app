@@ -42,7 +42,7 @@ final class RestoreCoordinator {
 
     /// Scans one target for the fresh-install screen of 11.4.
     func freshInstallPlan(
-        descriptor: TargetDescriptor, provider: some BackupProvider, joinedSyncGroup: Bool = false
+        descriptor: TargetDescriptor, provider: some BackupProvider
     ) async -> FreshInstallPlan? {
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
         guard let namespaces = try? await scan.namespaces() else { return nil }
@@ -63,7 +63,7 @@ final class RestoreCoordinator {
             hints: FreshInstallHints.lines(
                 streamed: streamed,
                 canOpenICloud: await ICloudDriveGate.shared.availability().isReady),
-            joinedSyncGroup: joinedSyncGroup)
+            joinedSyncGroup: SyncStore.state().hasJoined)
     }
 
     // MARK: - Running one restore
@@ -160,6 +160,12 @@ final class RestoreCoordinator {
         let outcome = await task.value
         running = nil
         runningGameKey = nil
+        // The rollback of 10.9. The stream carries one export file,
+        // and applying it is what makes the snapshot the live
+        // settings.
+        if case .finished = outcome, request.stream == .preferences {
+            PreferenceRestore.applyTheRestoredFile()
+        }
         log("restore of \(row.snapshotId): \(outcome)")
         return outcome
     }
@@ -307,7 +313,7 @@ final class RestoreCoordinator {
             },
             rescuedBuckets: buckets,
             profiles: LayoutProfilesManager.profilesRootURL,
-            userDefaultsExport: nil)
+            userDefaultsExport: PreferenceRestore.restoredFile)
     }
 
     /// Every local file the plan has to know about.

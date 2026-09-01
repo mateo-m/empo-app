@@ -256,7 +256,9 @@ public actor SnapshotEngine {
                 deviceId: context.request.deviceId,
                 model: context.request.deviceModel,
                 name: context.request.deviceName,
-                lastWriteAt: now
+                lastWriteAt: now,
+                syncGroupId: context.request.syncGroupId,
+                syncUpdatedAt: context.request.syncGroupId == nil ? nil : now
             ).jsonData(),
             to: context.paths.deviceFile)
     }

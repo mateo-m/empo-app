@@ -16,6 +16,9 @@ final class EmpoSceneDelegate: UIResponder, UIWindowSceneDelegate {
         // The backup schedule of SPEC 7. It watches the app lifetime,
         // so it starts once the scene connects.
         BackupScheduler.shared.start()
+        // The preference sync of SPEC 10. It runs when Empo opens,
+        // per 10.11.
+        SyncPass.shared.start()
     }
 
     /// Takes the OAuth callback of SPEC 8.10 and the backup package

@@ -27,6 +27,7 @@ enum BackupTargets {
         var targets = load().filter { $0.id != target.id }
         targets.append(target)
         try save(targets)
+        SyncJoin.startAGroup()
     }
 
     /// The provider a descriptor opens, or `nil` where this build

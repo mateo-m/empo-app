@@ -9,6 +9,15 @@ packages:
   AppAuth:
     url: https://github.com/openid/AppAuth-iOS.git
     from: 1.7.6
+  # The causal history and the merge of SPEC 10. Ticket 22 proved
+  # 0.7.2 on an iPhone 13 Pro: a 100,000-mutation document saved to
+  # 52,225 bytes, a median load took 64.87 ms, a two-branch merge
+  # took 23.89 ms, and the signed app-thinned payload grew by 1.35
+  # MiB compressed. Empo supplies the replication over its own
+  # targets, so `automerge-repo-swift` stays out.
+  Automerge:
+    url: https://github.com/automerge/automerge-swift.git
+    exactVersion: 0.7.2
 options:
   bundleIdPrefix: sh.mateo
   deploymentTarget:
@@ -461,6 +470,8 @@ targets:
       - package: GameProbe
       - package: AppAuth
         product: AppAuth
+      - package: Automerge
+        product: Automerge
 schemes:
   Empo:
     build:

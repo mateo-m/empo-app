@@ -17,6 +17,12 @@ struct BackupTargetItem: Identifiable {
     var id: String { descriptor.id }
 }
 
+/// What one namespace holds, as the browser of 13.9 lists it.
+struct NamespaceContents {
+    var games: [SnapshotGameSection]
+    var preferences: [SnapshotRow]
+}
+
 /// The adopt banner of SPEC 13.13.
 struct AdoptBannerItem: Identifiable {
     var targetId: String
@@ -186,6 +192,9 @@ final class BackupsScreenModel {
         }
         try? BackupTargets.save(BackupTargets.load().filter { $0.id != targetId })
         try? BackupKeychain.removeSecret(targetId: targetId)
+        var sync = SyncStore.state()
+        sync.forget(targetId: targetId)
+        SyncStore.save(sync)
         if let store = try? BackupStateStore(url: BackupRoot.stateDatabase) {
             try? store.removeTarget(targetId: targetId)
             store.close()
@@ -242,17 +251,20 @@ final class BackupsScreenModel {
         }
     }
 
-    /// The rows one namespace holds, grouped per 11.3. The trailing
-    /// section carries the snapshots that match no installed game.
-    func sections(of targetId: String, namespaceId: String) async -> [SnapshotGameSection] {
+    /// What one namespace holds, per 11.3. The trailing game
+    /// section carries the snapshots that match no installed game,
+    /// and the preference snapshots are the rollback points of 10.9.
+    func contents(of targetId: String, namespaceId: String) async -> NamespaceContents {
         guard let descriptor = items.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor),
             let scanned = try? await RestoreScan(provider: provider, descriptor: descriptor)
                 .namespaces(localMarkers: Self.localMarkers())
                 .first(where: { $0.id == namespaceId })
-        else { return [] }
-        return RestorePicker.sections(
-            scanned.gameRows, among: GameIdentities.installedIdentities())
+        else { return NamespaceContents(games: [], preferences: []) }
+        return NamespaceContents(
+            games: RestorePicker.sections(
+                scanned.gameRows, among: GameIdentities.installedIdentities()),
+            preferences: RestorePicker.newestFirst(scanned.preferencesRows))
     }
 
     /// The marker of every installed tree, so a row can carry the

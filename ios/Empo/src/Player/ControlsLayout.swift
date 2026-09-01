@@ -805,7 +805,7 @@ class ControlsLayout {
         resolutionInvolvesDerivation = false
         loadManifest(from: container?.gameURL)
         if let container, newGameID != nil {
-            migrateLegacyPersistenceIfNeeded(container: container)
+            Self.migrateLegacyPersistence(container: container)
             BindingStore.migrateRenamedActions(container: container)
             runProfileMigration(container: container)
             resolveChain(container: container)
@@ -1813,7 +1813,7 @@ class ControlsLayout {
         importOfferPending = false
     }
 
-    private static let gameLayoutNoticeKey = "layoutProfiles.gameNoticeShown"
+    private static let gameLayoutNoticeKey = DefaultsKey.layoutProfilesGameNoticeShown
 
     private static func shownGameLayoutNotices() -> Set<String> {
         Set(UserDefaults.standard.stringArray(forKey: gameLayoutNoticeKey) ?? [])
@@ -1972,8 +1972,12 @@ class ControlsLayout {
         )
     }
 
-    /// One-time migration from UserDefaults layout/controller keys.
-    private func migrateLegacyPersistenceIfNeeded(container: GameContainer) {
+    /// One-time migration from UserDefaults layout/controller keys,
+    /// per SPEC 10.2. It runs at game selection, and a backup run
+    /// calls it before it stages `EmpoState/`, so a game the player
+    /// never opened since it shipped still moves its layout into the
+    /// container. A second call finds the file and does nothing.
+    static func migrateLegacyPersistence(container: GameContainer) {
         guard !UserControlsFile.exists(in: container) else { return }
 
         let layoutKey = DefaultsKey.controlsLayout(gameID: container.id)
@@ -2021,7 +2025,7 @@ class ControlsLayout {
         UserDefaults.standard.removeObject(forKey: mapKey)
     }
 
-    private func decodeLegacyLayout(data: Data) -> PersistedLayout? {
+    private static func decodeLegacyLayout(data: Data) -> PersistedLayout? {
         if let v2 = try? JSONDecoder().decode(PersistedLayout.self, from: data) {
             return v2
         }
