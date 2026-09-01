@@ -15,7 +15,7 @@ struct NamespaceGamesScreen: View {
 
     var body: some View {
         List {
-            if let sections = contents?.games {
+            ReadFirst(value: contents?.games) { sections in
                 if sections.isEmpty {
                     Text(RestoreNotices.emptyTargetLine)
                         .foregroundStyle(.secondary)
@@ -27,8 +27,7 @@ struct NamespaceGamesScreen: View {
                             gameName: section.game?.folderName
                                 ?? RestorePicker.otherSnapshotsHeading,
                             rows: section.rows,
-                            availability: RestoreCoordinator.shared.availability(
-                                gameKey: section.game?.gameKey ?? ""),
+                            gameKey: section.game?.gameKey ?? "",
                             restore: { row, scope, replacesTheTree in
                                 await model.restore(
                                     row, scope: scope, replacesTheTree: replacesTheTree)
@@ -43,8 +42,6 @@ struct NamespaceGamesScreen: View {
                     }
                 }
                 preferences
-            } else {
-                ProgressView()
             }
         }
         .navigationTitle(NamespaceListRules.title(of: row))
@@ -86,7 +83,7 @@ struct SnapshotListScreen: View {
     let title: String
     let gameName: String
     let rows: [SnapshotRow]
-    let availability: RestoreAvailability
+    let gameKey: String
     let restore: (SnapshotRow, RestoreScope, Bool) async -> RestoreOutcome
 
     @State private var chosen: SnapshotRow?
@@ -125,7 +122,7 @@ struct SnapshotListScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $chosen) { row in
             RestoreSnapshotSheet(
-                row: row, gameName: gameName, availability: availability, restore: restore)
+                row: row, gameName: gameName, gameKey: gameKey, restore: restore)
         }
     }
 }

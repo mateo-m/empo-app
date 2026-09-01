@@ -89,31 +89,31 @@ struct PackageImportSheet: View {
                         Text(rejection)
                             .font(.subheadline)
                     }
-                } else if let exportedAt = model.exportedAt {
-                    Section {
-                        Text("\(BackupText.date(exportedAt)) from \(model.sourceDevice)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    Section {
-                        ForEach(model.rows, id: \.snapshotId) { row in
-                            Button {
-                                chosen = row
-                            } label: {
-                                VStack(alignment: .leading, spacing: Spacing.xs) {
-                                    Text(model.name(of: row))
-                                    Text(BackupText.bytes(row.bytesToDownload))
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    } header: {
-                        Text("What this package holds")
-                    }
                 } else {
-                    ProgressView()
+                    ReadFirst(value: model.exportedAt) { exportedAt in
+                        Section {
+                            Text("\(BackupText.date(exportedAt)) from \(model.sourceDevice)")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Section {
+                            ForEach(model.rows, id: \.snapshotId) { row in
+                                Button {
+                                    chosen = row
+                                } label: {
+                                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                                        Text(model.name(of: row))
+                                        Text(BackupText.bytes(row.bytesToDownload))
+                                            .font(.footnote)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        } header: {
+                            Text("What this package holds")
+                        }
+                    }
                 }
             }
             .navigationTitle("Import backup")
@@ -131,8 +131,7 @@ struct PackageImportSheet: View {
             RestoreSnapshotSheet(
                 row: row,
                 gameName: model.name(of: row),
-                availability: RestoreCoordinator.shared.availability(
-                    gameKey: row.identity.gameKey),
+                gameKey: row.identity.gameKey,
                 restore: { row, scope, replacesTheTree in
                     await model.restore(row, scope: scope, replacesTheTree: replacesTheTree)
                 })

@@ -16,7 +16,7 @@ struct NamespaceListScreen: View {
 
     var body: some View {
         List {
-            if let rows {
+            ReadFirst(value: rows) { rows in
                 ForEach(rows, id: \.namespaceId) { row in
                     Section {
                         NavigationLink {
@@ -42,8 +42,6 @@ struct NamespaceListScreen: View {
                         }
                     }
                 }
-            } else {
-                ProgressView()
             }
         }
         .navigationTitle("Devices")

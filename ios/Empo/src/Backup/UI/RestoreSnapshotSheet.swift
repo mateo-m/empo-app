@@ -11,8 +11,14 @@ struct RestoreSnapshotSheet: View {
 
     let row: SnapshotRow
     let gameName: String
-    let availability: RestoreAvailability
+    let gameKey: String
     let restore: (SnapshotRow, RestoreScope, Bool) async -> RestoreOutcome
+
+    /// The door of 11.3 answers while the sheet is open. A run that
+    /// starts under it closes the button.
+    private var availability: RestoreAvailability {
+        RestoreCoordinator.shared.availability(gameKey: gameKey)
+    }
 
     @Environment(\.dismiss) private var dismiss
     @State private var scope: RestoreScope = .savesAndSettings
@@ -129,20 +135,15 @@ struct GameRestoreScreen: View {
     @State private var rows: [SnapshotRow]?
 
     var body: some View {
-        Group {
-            if let rows {
-                SnapshotListScreen(
-                    title: model.gameName,
-                    gameName: model.gameName,
-                    rows: rows,
-                    availability: model.restoreAvailability,
-                    restore: { row, scope, replacesTheTree in
-                        await model.restore(
-                            row, scope: scope, replacesTheTree: replacesTheTree)
-                    })
-            } else {
-                ProgressView()
-            }
+        ReadFirst(value: rows) { rows in
+            SnapshotListScreen(
+                title: model.gameName,
+                gameName: model.gameName,
+                rows: rows,
+                gameKey: model.gameKey,
+                restore: { row, scope, replacesTheTree in
+                    await model.restore(row, scope: scope, replacesTheTree: replacesTheTree)
+                })
         }
         .task { rows = await model.snapshots() }
     }

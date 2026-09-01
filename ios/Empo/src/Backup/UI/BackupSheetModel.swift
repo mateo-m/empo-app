@@ -155,10 +155,6 @@ final class BackupSheetModel {
 
     // MARK: - The restore door of 11.3
 
-    var restoreAvailability: RestoreAvailability {
-        RestoreCoordinator.shared.availability(gameKey: gameKey)
-    }
-
     /// This game's snapshots on every target and every namespace,
     /// newest first.
     func snapshots() async -> [SnapshotRow] {
