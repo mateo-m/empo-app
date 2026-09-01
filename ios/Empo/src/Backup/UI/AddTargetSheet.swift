@@ -91,7 +91,9 @@ struct AddTargetSheet: View {
         case .webdav:
             return await BackupTargetAdd.webdav(form: values)
         case .sftp:
-            return .failed("SFTP is not in this build yet.")
+            // `offeredServices` draws no SFTP row, so nothing
+            // reaches this. The kind stays for the format of 5.
+            return .failed("Empo has no SFTP target.")
         }
     }
 
