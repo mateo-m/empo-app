@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.6 - 2026-09-01
+
+### Chores
+
+- Point the submodule at the legacy-method fix ([`6a361f9`](https://github.com/mateo-m/empo-app/commit/6a361f9ddce75147c9900d6b761c087f2d03ad60))
+- Revert the submodule bump until the deps rebuild ([`a8afca4`](https://github.com/mateo-m/empo-app/commit/a8afca4db23752c46bcffdd2fce1eb8cfe1c3eee))
+- Pin native-2026-09-01 native prebuilts (#142) ([`8af4d14`](https://github.com/mateo-m/empo-app/commit/8af4d144696bf603615c1f0b21074fdb91f64dd6))
+
 ## 0.6.5 - 2026-08-31
 
 ### Bug Fixes
