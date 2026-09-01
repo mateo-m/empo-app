@@ -1,24 +1,6 @@
 import Foundation
 import GameProbe
 
-/// What a restore left behind in one game's container, per SPEC
-/// 11.12.
-struct GameLeftovers {
-
-    /// The replaced game trees, `Game.empo-displaced` and its
-    /// numbered repeats.
-    var trees: [URL] = []
-    var treeBytes: Int64 = 0
-    /// The single files a restore moved aside.
-    var files: [URL] = []
-    var fileBytes: Int64 = 0
-    /// The one warning of 11.12, where a single file passed three
-    /// copies.
-    var warning: String?
-
-    var isEmpty: Bool { trees.isEmpty && files.isEmpty }
-}
-
 /// What the Backup sheet of SPEC 13.15 reads and writes for one
 /// game.
 ///
@@ -63,23 +45,40 @@ final class BackupSheetModel {
 
     // MARK: - Reading
 
-    func refresh() async {
+    /// Everything the sheet shows. The sheet reads this once, on
+    /// the way in.
+    func load() async {
+        refresh()
+        await readTheFiles()
+    }
+
+    /// What a run, a lock, or a target changes. It opens the state
+    /// database once and walks no directory.
+    func refresh() {
         let descriptors = BackupTargets.load()
         hasATarget = !descriptors.isEmpty
-        let intent = GameBackupIntent.load(from: container.empoStateURL)
-        mode = intent.mode
+        mode = GameBackupIntent.load(from: container.empoStateURL).mode
 
-        readTheStatus(descriptors)
-        readTheLocks()
-        await readTheSizes(intent: intent)
-        readTheStore(descriptors)
-        leftovers = Self.leftovers(in: container)
+        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
+        defer { store?.close() }
+        readTheStatus(descriptors, store: store)
+        readTheStore(descriptors, store: store)
+        locks = BackupSheetLockRules.locks(
+            runInFlight: BackupScheduler.shared.runningGameKeys.contains(gameKey),
+            openGameName: EngineSessionCoordinator.shared.openGameName)
         pendingAsks = GameSaveWatch.shared.pendingAsks(forGame: container.id)
     }
 
-    private func readTheStatus(_ descriptors: [TargetDescriptor]) {
-        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
-        defer { store?.close() }
+    /// What a change to the game's own files changes. It resolves
+    /// the backup set twice and walks the container, so only a
+    /// write that moves a file asks for it.
+    func readTheFiles() async {
+        let intent = GameBackupIntent.load(from: container.empoStateURL)
+        await readTheSizes(intent: intent)
+        leftovers = RestoreLeftovers.inside(container.url)
+    }
+
+    private func readTheStatus(_ descriptors: [TargetDescriptor], store: BackupStateStore?) {
         let read = GameBackupStatusReader.read(
             gameKey: gameKey,
             lastPlayedAt: GameMetadata.load(from: container).lastPlayed,
@@ -88,12 +87,6 @@ final class BackupSheetModel {
             now: Date())
         status = read.status
         lastSuccessAt = read.lastSuccessAt
-    }
-
-    private func readTheLocks() {
-        locks = BackupSheetLockRules.locks(
-            runInFlight: BackupScheduler.shared.runningGameKeys.contains(gameKey),
-            openGameName: EngineSessionCoordinator.shared.openGameName)
     }
 
     /// The two figures the mode picker needs, and the editor rows
@@ -112,9 +105,8 @@ final class BackupSheetModel {
         return await Task.detached { BackupSetResolver.resolve(request) }.value
     }
 
-    private func readTheStore(_ descriptors: [TargetDescriptor]) {
-        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
-        defer { store.close() }
+    private func readTheStore(_ descriptors: [TargetDescriptor], store: BackupStateStore?) {
+        guard let store else { return }
         storedBytes = descriptors.reduce(0) { total, descriptor in
             let rows = (try? store.usage(targetId: descriptor.id)) ?? []
             return total + (rows.first { $0.gameKey == gameKey }?.bytes ?? 0)
@@ -127,18 +119,18 @@ final class BackupSheetModel {
     /// fires it.
     func setMode(_ mode: BackupMode) async {
         guard (try? GameBackupSets.setMode(mode, for: container)) == true else {
-            await refresh()
+            await load()
             return
         }
         BackupScheduler.shared.markDirty(
             container: container, reason: BackupModeChange.dirtyReason)
-        await refresh()
+        await load()
     }
 
     func setMarks(_ editor: SaveFileEditorModel) async {
         let intent = GameBackupIntent.load(from: container.empoStateURL)
         try? editor.applied(to: intent).save(to: container.empoStateURL)
-        await refresh()
+        await load()
     }
 
     /// "Back up now" for one game, per 13.11.
@@ -158,7 +150,7 @@ final class BackupSheetModel {
         } else {
             GameSaveWatch.shared.declineAsk(path: path, container: container)
         }
-        await refresh()
+        await load()
     }
 
     // MARK: - The restore door of 11.3
@@ -192,69 +184,23 @@ final class BackupSheetModel {
         let outcome = await RestoreCoordinator.shared.restore(
             row, into: container, provider: provider, descriptor: descriptor,
             scope: scope, replacesTheTree: replacesTheTree)
-        await refresh()
+        await load()
         return outcome
     }
 
     // MARK: - The leftovers of 11.12
 
-    func deleteTheTrees() async {
+    func deleteTheTrees() {
         for url in leftovers.trees {
             try? FileManager.default.removeItem(at: url)
         }
-        await refresh()
+        leftovers = RestoreLeftovers.inside(container.url)
     }
 
-    func deleteTheFiles() async {
+    func deleteTheFiles() {
         for url in leftovers.files {
             try? FileManager.default.removeItem(at: url)
         }
-        await refresh()
-    }
-
-    /// Every name inside the container that carries the displaced
-    /// marker of 3.2. A marked directory counts once, so the files
-    /// under a replaced tree never count twice.
-    static func leftovers(in container: GameContainer) -> GameLeftovers {
-        let fm = FileManager.default
-        var found = GameLeftovers()
-        var copiesByOriginal: [String: Int] = [:]
-        var queue = [container.url]
-
-        while let directory = queue.popLast() {
-            let entries =
-                (try? fm.contentsOfDirectory(
-                    at: directory, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
-            for url in entries {
-                let name = url.lastPathComponent
-                let isDirectory =
-                    (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-                guard BackupSetRules.carriesDisplacedMarker(name) else {
-                    if isDirectory { queue.append(url) }
-                    continue
-                }
-                if let original = DisplacedCopy.originalName(ofDisplaced: name) {
-                    copiesByOriginal[original, default: 0] += 1
-                }
-                if isDirectory {
-                    found.trees.append(url)
-                    found.treeBytes += Self.size(of: url)
-                } else {
-                    found.files.append(url)
-                    found.fileBytes += Self.size(of: url)
-                }
-            }
-        }
-
-        if let (name, count) = copiesByOriginal.max(by: { $0.value < $1.value }) {
-            found.warning = RestoreLeftovers.copyWarning(fileName: name, count: count)
-        }
-        return found
-    }
-
-    private static func size(of url: URL) -> Int64 {
-        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
-        guard values?.isDirectory == true else { return Int64(values?.fileSize ?? 0) }
-        return BackupSetResolver.files(under: url).reduce(0) { $0 + $1.size }
+        leftovers = RestoreLeftovers.inside(container.url)
     }
 }

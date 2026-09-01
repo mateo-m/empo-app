@@ -1,5 +1,25 @@
 import Foundation
 
+/// What a restore left behind in one game's container, per SPEC
+/// 11.12.
+public struct GameLeftovers: Equatable, Sendable {
+
+    /// The replaced game trees, `Game.empo-displaced` and its
+    /// numbered repeats.
+    public var trees: [URL] = []
+    public var treeBytes: Int64 = 0
+    /// The single files a restore moved aside.
+    public var files: [URL] = []
+    public var fileBytes: Int64 = 0
+    /// The one warning of 11.12, where a single file passed three
+    /// copies.
+    public var warning: String?
+
+    public init() {}
+
+    public var isEmpty: Bool { trees.isEmpty && files.isEmpty }
+}
+
 /// One destructive confirmation of SPEC 13.15.
 public struct LeftoverConfirmation: Equatable, Sendable {
 
@@ -56,6 +76,52 @@ public enum RestoreLeftovers {
                 "A restore moved \(copies) aside and wrote the backup's files in their place. "
                 + "The moved files hold \(sizeText).",
             buttonLabel: count == 1 ? "Delete 1 file" : "Delete \(count) files")
+    }
+
+    /// Every name inside one container that carries the displaced
+    /// marker of 3.2. A marked directory counts once, so the files
+    /// under a replaced tree never count twice.
+    public static func inside(_ container: URL) -> GameLeftovers {
+        let fm = FileManager.default
+        var found = GameLeftovers()
+        var copiesByOriginal: [String: Int] = [:]
+        var queue = [container]
+
+        while let directory = queue.popLast() {
+            let entries =
+                (try? fm.contentsOfDirectory(
+                    at: directory, includingPropertiesForKeys: [.isDirectoryKey])) ?? []
+            for url in entries {
+                let name = url.lastPathComponent
+                let isDirectory =
+                    (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+                guard BackupSetRules.carriesDisplacedMarker(name) else {
+                    if isDirectory { queue.append(url) }
+                    continue
+                }
+                if let original = DisplacedCopy.originalName(ofDisplaced: name) {
+                    copiesByOriginal[original, default: 0] += 1
+                }
+                if isDirectory {
+                    found.trees.append(url)
+                    found.treeBytes += size(of: url)
+                } else {
+                    found.files.append(url)
+                    found.fileBytes += size(of: url)
+                }
+            }
+        }
+
+        if let (name, count) = copiesByOriginal.max(by: { $0.value < $1.value }) {
+            found.warning = copyWarning(fileName: name, count: count)
+        }
+        return found
+    }
+
+    private static func size(of url: URL) -> Int64 {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
+        guard values?.isDirectory == true else { return Int64(values?.fileSize ?? 0) }
+        return BackupSetResolver.files(under: url).reduce(0) { $0 + $1.size }
     }
 
     /// The one warning of 11.12. Empo warns once when a single file

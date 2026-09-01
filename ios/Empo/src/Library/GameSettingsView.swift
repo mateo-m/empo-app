@@ -326,8 +326,10 @@ struct GameSettingsView: View {
             .onDisappear { save() }
             .task {
                 refreshAutoDetection(forceRefresh: false)
+                // The row shows the status line alone, so it
+                // reads no size and walks no directory.
                 let model = BackupSheetModel(container: game.container!, gameName: game.title)
-                await model.refresh()
+                model.refresh()
                 backupModel = model
             }
         }

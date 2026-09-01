@@ -264,6 +264,58 @@ final class BackupSheetTests: XCTestCase {
         XCTAssertNotNil(RestoreLeftovers.copyWarning(fileName: "Save1.rvdata2", count: 4))
     }
 
+    func testTheWalkCountsAReplacedTreeOnceAndEveryDisplacedFile() throws {
+        let fm = FileManager.default
+        let container = fm.temporaryDirectory
+            .appendingPathComponent("leftovers-" + UUID().uuidString)
+        defer { try? fm.removeItem(at: container) }
+
+        func write(_ path: String, bytes: Int) throws {
+            let url = container.appendingPathComponent(path)
+            try fm.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(repeating: 1, count: bytes).write(to: url)
+        }
+
+        try write("Game/Save01.rvdata2", bytes: 100)
+        // The replaced tree counts once, and the files under it never
+        // count a second time.
+        try write("Game.empo-displaced/Save01.rvdata2", bytes: 400)
+        try write("Game.empo-displaced/Data/Map.rxdata", bytes: 600)
+        try write("Game/Save02.rvdata2.empo-displaced.bak", bytes: 30)
+        try write("Game/Save02.rvdata2.empo-displaced-2.bak", bytes: 30)
+
+        let found = RestoreLeftovers.inside(container)
+        XCTAssertEqual(found.trees.map(\.lastPathComponent), ["Game.empo-displaced"])
+        XCTAssertEqual(found.treeBytes, 1_000)
+        XCTAssertEqual(found.files.count, 2)
+        XCTAssertEqual(found.fileBytes, 60)
+        XCTAssertFalse(found.isEmpty)
+        // Two copies of one file stay under the warning of 11.12.
+        XCTAssertNil(found.warning)
+
+        try write("Game/Save02.rvdata2.empo-displaced-3.bak", bytes: 30)
+        try write("Game/Save02.rvdata2.empo-displaced-4.bak", bytes: 30)
+        let warned = RestoreLeftovers.inside(container)
+        XCTAssertEqual(warned.files.count, 4)
+        XCTAssertEqual(
+            warned.warning,
+            RestoreLeftovers.copyWarning(fileName: "Save02.rvdata2", count: 4))
+    }
+
+    func testAContainerWithNothingDisplacedIsEmpty() throws {
+        let fm = FileManager.default
+        let container = fm.temporaryDirectory
+            .appendingPathComponent("leftovers-" + UUID().uuidString)
+        try fm.createDirectory(
+            at: container.appendingPathComponent("Game"), withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: container) }
+
+        let found = RestoreLeftovers.inside(container)
+        XCTAssertTrue(found.isEmpty)
+        XCTAssertNil(found.warning)
+    }
+
     // MARK: - The cause a target failure leaves on a game
 
     func testARightsBlockAsksForASignInAndATransientFailureSaysNothing() {

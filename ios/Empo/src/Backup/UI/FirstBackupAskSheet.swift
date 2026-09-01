@@ -57,7 +57,7 @@ struct FirstBackupAskSheet: View {
             }
             .navigationTitle(BackupModePicker.askTitle(gameName: model.gameName))
             .navigationBarTitleDisplayMode(.inline)
-            .task { await model.refresh() }
+            .task { await model.load() }
             .sheet(isPresented: $showsTheEditor) {
                 NavigationStack {
                     SaveFileEditorView(

@@ -49,15 +49,13 @@ struct BackupSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .task { await model.refresh() }
+            .task { await model.load() }
             .sheet(item: $confirmation) { sheet in
                 LeftoverDeleteSheet(confirmation: sheet) {
-                    Task {
-                        if deletes == .trees {
-                            await model.deleteTheTrees()
-                        } else {
-                            await model.deleteTheFiles()
-                        }
+                    if deletes == .trees {
+                        model.deleteTheTrees()
+                    } else {
+                        model.deleteTheFiles()
                     }
                 }
             }
