@@ -13,7 +13,15 @@ import Foundation
 /// A device that reads an alias renames nothing.
 public enum AttachAction {
 
-    public static let actionLabel = "Restore into a different game…"
+    /// The title of the game picker.
+    public static let pickTitle = "Restore into a different game"
+
+    /// The row that opens the picker.
+    public static let actionLabel = pickTitle + "…"
+
+    public static func pickBody(snapshotName: String) -> String {
+        "Pick the game this backup of \(snapshotName) restores into."
+    }
 
     public static func confirmTitle(targetGameName: String) -> String {
         "Restore into \(targetGameName)?"

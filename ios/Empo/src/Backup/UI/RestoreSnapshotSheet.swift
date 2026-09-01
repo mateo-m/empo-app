@@ -20,10 +20,21 @@ struct RestoreSnapshotSheet: View {
         RestoreCoordinator.shared.availability(gameKey: gameKey)
     }
 
+    /// A snapshot that matches no installed game restores through
+    /// the attach of 11.11, and not through a plain Restore.
+    private var attaches: Bool {
+        guard !row.identity.containerFolderName.isEmpty else { return false }
+        return GameIdentities.match(row.identity) == nil
+    }
+
     @Environment(\.dismiss) private var dismiss
     @State private var scope: RestoreScope = .savesAndSettings
     @State private var outcome: RestoreOutcome?
     @State private var showsTheMarkerSheet = false
+    @State private var showsTheAttachSheet = false
+    /// The game the attach of 11.11 named, so the question of 11.10
+    /// compares against that game's tree and not against none.
+    @State private var attachedGame: GameContainer?
 
     var body: some View {
         StandardSheet(
@@ -44,8 +55,20 @@ struct RestoreSnapshotSheet: View {
             if let outcome {
                 SheetFootnote(Self.line(of: outcome))
             }
-            SheetPrimaryButton("Restore") { press() }
-                .disabled(!availability.isAvailable)
+            SheetPrimaryButton(attaches ? AttachAction.actionLabel : "Restore") {
+                if attaches {
+                    showsTheAttachSheet = true
+                } else {
+                    press()
+                }
+            }
+            .disabled(!availability.isAvailable)
+        }
+        .sheet(isPresented: $showsTheAttachSheet) {
+            AttachGameSheet(snapshot: row.identity) { game in
+                attachedGame = game
+                press()
+            }
         }
         .sheet(isPresented: $showsTheMarkerSheet) {
             VersionMarkerSheetView(gameName: gameName) { action in
@@ -54,9 +77,14 @@ struct RestoreSnapshotSheet: View {
         }
     }
 
+    private var markerDiffers: Bool {
+        guard let attachedGame else { return row.versionMarkerDiffers }
+        return GameIdentities.versionMarker(for: attachedGame) != row.versionMarker
+    }
+
     private func press() {
         if VersionMarkerSheet.shows(
-            mode: row.mode, scope: scope, markerDiffers: row.versionMarkerDiffers)
+            mode: row.mode, scope: scope, markerDiffers: markerDiffers)
         {
             showsTheMarkerSheet = true
             return

@@ -51,13 +51,12 @@ enum GameIdentities {
     static func attach(
         _ snapshot: SnapshotIdentity, to container: GameContainer
     ) throws -> Bool {
-        let identity = identity(for: container)
-        guard let alias = GameIdentityMatch.alias(attaching: snapshot, to: identity) else {
-            return false
-        }
-        var store = IdentityAliases.load(from: container.empoStateURL)
-        guard store.add(alias, forFolderName: container.folderName) else { return false }
-        try store.save(to: container.empoStateURL)
+        guard
+            let updated = AttachAction.record(
+                snapshot: snapshot, into: identity(for: container),
+                aliases: IdentityAliases.load(from: container.empoStateURL))
+        else { return false }
+        try updated.save(to: container.empoStateURL)
         return true
     }
 

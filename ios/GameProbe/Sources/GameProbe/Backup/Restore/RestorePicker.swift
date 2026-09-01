@@ -25,6 +25,10 @@ public struct SnapshotRow: Equatable, Sendable {
     /// tree's marker differs, and false where this device holds no
     /// tree.
     public var versionMarkerDiffers: Bool
+    /// The marker the snapshot carries, per 4.4. The attach of 11.11
+    /// names a game after the row was built, and the question of
+    /// 11.10 compares against this.
+    public var versionMarker: SnapshotManifest.VersionMarker
     public var identity: SnapshotIdentity
     /// The format version the manifest carried, per 5.16.
     public var formatVersion: Int
@@ -41,7 +45,8 @@ public struct SnapshotRow: Equatable, Sendable {
         hasPartialPaths: Bool,
         versionMarkerDiffers: Bool,
         identity: SnapshotIdentity,
-        formatVersion: Int = FormatDescriptor.currentVersion
+        formatVersion: Int = FormatDescriptor.currentVersion,
+        versionMarker: SnapshotManifest.VersionMarker = SnapshotManifest.VersionMarker()
     ) {
         self.targetId = targetId
         self.targetLabel = targetLabel
@@ -55,6 +60,7 @@ public struct SnapshotRow: Equatable, Sendable {
         self.versionMarkerDiffers = versionMarkerDiffers
         self.identity = identity
         self.formatVersion = formatVersion
+        self.versionMarker = versionMarker
     }
 
     /// Builds the row from a manifest the picker read.
@@ -82,7 +88,8 @@ public struct SnapshotRow: Equatable, Sendable {
             hasPartialPaths: manifest.entries.contains(where: \.partial),
             versionMarkerDiffers: localVersionMarker.map { $0 != manifest.versionMarker } ?? false,
             identity: SnapshotIdentity(manifest: manifest),
-            formatVersion: manifest.formatVersion)
+            formatVersion: manifest.formatVersion,
+            versionMarker: manifest.versionMarker)
     }
 
     /// What a reader may do with the namespace this row is in, per

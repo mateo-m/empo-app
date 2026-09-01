@@ -289,6 +289,27 @@ final class RestorePickerTests: XCTestCase {
         XCTAssertEqual(AttachAction.actionLabel, "Restore into a different game…")
         XCTAssertEqual(AttachAction.confirmTitle(targetGameName: "Quest"), "Restore into Quest?")
         XCTAssertTrue(AttachAction.confirmBody(targetGameName: "Quest").contains("Quest"))
+        XCTAssertEqual(AttachAction.pickTitle, "Restore into a different game")
+        XCTAssertTrue(AttachAction.actionLabel.hasPrefix(AttachAction.pickTitle))
+        XCTAssertTrue(AttachAction.pickBody(snapshotName: "Quest Demo").contains("Quest Demo"))
+    }
+
+    /// The attach names a game after the row was built, so the
+    /// question of 11.10 needs the snapshot's own marker.
+    func testARowCarriesTheMarkerOfItsSnapshot() {
+        let marker = SnapshotManifest.VersionMarker(fileCount: 3, totalSize: 900)
+        let manifest = SnapshotManifest(
+            mode: .full, containerFolderName: "Quest Demo", versionMarker: marker)
+        let built = SnapshotRow(
+            manifest: manifest, targetId: "target-1", targetLabel: "Homelab",
+            namespaceId: "ns-1", deviceName: "iPhone", snapshotId: snapshotId(0))
+
+        XCTAssertEqual(built.versionMarker, marker)
+        XCTAssertFalse(built.versionMarkerDiffers, "this device holds no tree for the game")
+        XCTAssertTrue(
+            VersionMarkerSheet.shows(
+                mode: built.mode, scope: .wholeGame,
+                snapshot: built.versionMarker, local: SnapshotManifest.VersionMarker()))
     }
 
     // MARK: - The edges, per 11.14
