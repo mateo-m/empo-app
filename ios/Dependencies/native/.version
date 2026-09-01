@@ -1,3 +1,3 @@
 # tools/package-native-deps.sh updates this file. Commit it with the release.
-NATIVE_DEPS_VERSION=native-2026-08-31
-NATIVE_DEPS_SHA256=28e84e5e44395a66c78f145a0f8dadaf51dcef5a55c8b1eb27aa4df60eaadc34
+NATIVE_DEPS_VERSION=native-2026-09-01
+NATIVE_DEPS_SHA256=1b3efd3b31d0c258f9eb0cd93edd5d89be79ec1e446147b382a5267f152dd437
