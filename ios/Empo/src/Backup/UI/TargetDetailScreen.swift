@@ -19,7 +19,7 @@ struct TargetDetailScreen: View {
     @State private var gameNames: [String: String] = [:]
 
     private var item: BackupTargetItem? {
-        model.items.first { $0.id == targetId }
+        model.items?.first { $0.id == targetId }
     }
 
     var body: some View {

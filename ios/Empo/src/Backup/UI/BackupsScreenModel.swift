@@ -52,7 +52,13 @@ struct AdoptBannerItem: Identifiable {
 @Observable
 final class BackupsScreenModel {
 
-    private(set) var items: [BackupTargetItem] = []
+    /// `nil` until the first `refresh` returns. The screen shows the
+    /// wait then, and not the empty state of 13.4.
+    private(set) var items: [BackupTargetItem]?
+
+    /// What the model's own readers use. Nothing inside waits for a
+    /// screen, so an empty read before the first refresh is right.
+    private var targets: [BackupTargetItem] { items ?? [] }
     private(set) var status: BackupsScreenStatus?
     private(set) var history: [BackupRunRecord] = []
     private(set) var adoptBanners: [AdoptBannerItem] = []
@@ -62,8 +68,6 @@ final class BackupsScreenModel {
     var showsTheNotificationSheet = false
 
     var iCloudReach: TargetReach = .open
-
-    var isEmpty: Bool { items.isEmpty }
 
     // MARK: - Reading
 
@@ -130,13 +134,13 @@ final class BackupsScreenModel {
     /// The row states its own condition instead of greying out
     /// mutely, per 13.11.
     var backUpNowLine: String {
-        let enabled = items.filter { !$0.descriptor.isPaused }
+        let enabled = targets.filter { !$0.descriptor.isPaused }
         if enabled.isEmpty { return "Every backup target is paused" }
         return "Covers every game with new data, on every target."
     }
 
     var canBackUpNow: Bool {
-        items.contains { !$0.descriptor.isPaused }
+        targets.contains { !$0.descriptor.isPaused }
     }
 
     func backUpNow() {
@@ -219,7 +223,7 @@ final class BackupsScreenModel {
 
     /// A checked box deletes this device's namespace only, per 5.13.
     private func deleteThisDeviceNamespace(targetId: String) async throws {
-        guard let descriptor = items.first(where: { $0.id == targetId })?.descriptor,
+        guard let descriptor = targets.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor),
             let namespaceId = try? BackupKeychain.namespaceId()
         else { return }
@@ -228,7 +232,7 @@ final class BackupsScreenModel {
     }
 
     func deleteNamespace(_ namespaceId: String, targetId: String) async {
-        guard let descriptor = items.first(where: { $0.id == targetId })?.descriptor,
+        guard let descriptor = targets.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor)
         else { return }
         let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
@@ -246,7 +250,7 @@ final class BackupsScreenModel {
     // MARK: - The namespace list, per 13.9
 
     func namespaces(of targetId: String) async throws -> [BackupNamespaceRow] {
-        guard let descriptor = items.first(where: { $0.id == targetId })?.descriptor,
+        guard let descriptor = targets.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor)
         else { return [] }
         let mine = try? BackupKeychain.namespaceId()
@@ -270,7 +274,7 @@ final class BackupsScreenModel {
     /// section carries the snapshots that match no installed game,
     /// and the preference snapshots are the rollback points of 10.9.
     func contents(of targetId: String, namespaceId: String) async -> NamespaceContents {
-        guard let descriptor = items.first(where: { $0.id == targetId })?.descriptor,
+        guard let descriptor = targets.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor),
             let scanned = try? await RestoreScan(provider: provider, descriptor: descriptor)
                 .namespace(namespaceId, localMarkers: Self.localMarkers())
@@ -308,7 +312,7 @@ final class BackupsScreenModel {
     func restore(
         _ row: SnapshotRow, scope: RestoreScope, replacesTheTree: Bool = false
     ) async -> RestoreOutcome {
-        guard let descriptor = items.first(where: { $0.id == row.targetId })?.descriptor,
+        guard let descriptor = targets.first(where: { $0.id == row.targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor)
         else { return .failed("this target is not configured on this device") }
         return await RestoreCoordinator.shared.restore(
@@ -321,13 +325,13 @@ final class BackupsScreenModel {
     func freshInstall(after descriptor: TargetDescriptor) async -> FreshInstallScan? {
         guard let provider = await BackupTargets.provider(for: descriptor) else { return nil }
         return await RestoreCoordinator.shared.freshInstall(
-            descriptor: descriptor, provider: provider, targetCount: items.count)
+            descriptor: descriptor, provider: provider, targetCount: targets.count)
     }
 
     /// The banner of 13.13, from the namespaces one target holds.
     func readTheAdoptBanners(of targetId: String) async {
         guard let rows = try? await namespaces(of: targetId),
-            let label = items.first(where: { $0.id == targetId })?.descriptor.displayName
+            let label = targets.first(where: { $0.id == targetId })?.descriptor.displayName
         else { return }
         let banners = rows.filter { $0.isEarlierSpace }.map {
             AdoptBannerItem(targetId: targetId, targetLabel: label, namespaceId: $0.namespaceId)
@@ -346,7 +350,7 @@ final class BackupsScreenModel {
 
     private func readTheNotificationPermission() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
-        asksForNotifications = !items.isEmpty && settings.authorizationStatus != .authorized
+        asksForNotifications = !targets.isEmpty && settings.authorizationStatus != .authorized
         systemMayStillPrompt = settings.authorizationStatus == .notDetermined
     }
 
@@ -357,7 +361,7 @@ final class BackupsScreenModel {
     func askAboutNotificationsIfNeeded() {
         let asked = UserDefaults.standard.bool(forKey: DefaultsKey.backupNotificationsAsked)
         showsTheNotificationSheet = BackupNotificationRule.asksForPermission(
-            configuredTargetCount: items.count, hasAsked: asked)
+            configuredTargetCount: targets.count, hasAsked: asked)
     }
 
     func answerTheNotificationSheet(_ answer: BackupNotificationAnswer) async {

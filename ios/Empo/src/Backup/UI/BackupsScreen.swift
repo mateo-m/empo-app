@@ -32,23 +32,25 @@ struct BackupsScreen: View {
 
     var body: some View {
         List {
-            if model.isEmpty {
-                emptyState
-            } else {
-                statusSection
-                adoptBanners
-                runBlock
-                backUpNowSection
-                targetList
-                manualTransfer
-                settingsSection
+            ReadFirst(value: model.items) { items in
+                if items.isEmpty {
+                    emptyState
+                } else {
+                    statusSection
+                    adoptBanners
+                    runBlock
+                    backUpNowSection
+                    targetList(items)
+                    manualTransfer
+                    settingsSection
+                }
             }
             historySection
         }
         .navigationTitle("Backups")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !model.isEmpty {
+            if model.items?.isEmpty == false {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Add") { showsAddSheet = true }
                 }
@@ -267,9 +269,9 @@ struct BackupsScreen: View {
 
     // MARK: - The target list, per 13.5
 
-    private var targetList: some View {
+    private func targetList(_ items: [BackupTargetItem]) -> some View {
         Section {
-            ForEach(model.items) { item in
+            ForEach(items) { item in
                 HStack(spacing: Spacing.lg) {
                     NavigationLink {
                         TargetDetailScreen(model: model, targetId: item.id)

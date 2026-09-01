@@ -56,6 +56,7 @@ struct BackupHistoryScreen: View {
     }
 
     private func label(of run: BackupRunRecord) -> String {
-        model.items.first { $0.id == run.targetId }?.descriptor.displayName ?? "a removed target"
+        model.items?.first { $0.id == run.targetId }?.descriptor.displayName
+            ?? "a removed target"
     }
 }
