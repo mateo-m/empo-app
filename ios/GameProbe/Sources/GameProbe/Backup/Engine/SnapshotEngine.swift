@@ -46,6 +46,10 @@ public actor SnapshotEngine {
     /// run with no observer does the same work.
     let observer: (any BackupRunObserver)?
     private let readClock: @Sendable () -> Date
+    /// Where the engine writes what it could not save. The state
+    /// database is a cache and a failed write never stops a run,
+    /// but it must not pass in silence either.
+    private let note: @Sendable (String) -> Void
     let fm = FileManager.default
 
     public init(
@@ -54,7 +58,8 @@ public actor SnapshotEngine {
         localRoot: URL,
         clock: BackupClock = SystemBackupClock(),
         observer: (any BackupRunObserver)? = nil,
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = { Date() },
+        note: @escaping @Sendable (String) -> Void = { _ in }
     ) {
         self.provider = provider
         self.store = store
@@ -62,15 +67,27 @@ public actor SnapshotEngine {
         self.clock = clock
         self.observer = observer
         self.readClock = now
+        self.note = note
+    }
+
+    /// Runs a state write the run itself does not depend on.
+    func save(_ write: @autoclosure () throws -> Void, _ what: String) {
+        do {
+            try write()
+        } catch {
+            note("\(what) was not saved: \(error)")
+        }
     }
 
     var now: Date { readClock() }
 
     // MARK: - One run
 
-    /// What one run carries from stream to stream.
-    struct RunContext {
-        var request: BackupRunRequest
+    /// What one run carries from stream to stream. One object per
+    /// run, so no step takes it in and gives it back.
+    final class RunContext {
+        let request: BackupRunRequest
+        /// A split moves the run to a new namespace, per 5.12.
         var paths: BackupNamespacePaths
         var fanOutWidth = FormatDescriptor.version1FanOutWidth
         var didSplit = false
@@ -78,6 +95,11 @@ public actor SnapshotEngine {
         var streams: [StreamResult] = []
         /// The quota the run read before staging, per 5.14.
         var quota: QuotaReading?
+
+        init(request: BackupRunRequest, paths: BackupNamespacePaths) {
+            self.request = request
+            self.paths = paths
+        }
     }
 
     /// Runs every stream of the request against the target.
@@ -95,15 +117,15 @@ public actor SnapshotEngine {
             request, startedAt: startedAt, finishedAt: nil, outcome: .failed,
             uploadedBytes: 0, gameCount: 0, detail: "the run did not finish")
 
-        var context = RunContext(
+        let context = RunContext(
             request: request,
             paths: BackupNamespacePaths(
                 root: request.descriptor.root, namespaceId: request.namespaceId))
 
         do {
-            try await openNamespace(&context)
-            try await applyPendingDeletions(&context)
-            try await runStreams(&context)
+            try await openNamespace(context)
+            try await applyPendingDeletions(context)
+            try await runStreams(context)
         } catch let stop as BackupRunStop {
             return finish(context, startedAt: startedAt, stop: stop)
         } catch {
@@ -142,13 +164,15 @@ public actor SnapshotEngine {
             gameCount: context.streams.count, detail: result.detail)
         // The run reached its end with the process alive, so it left
         // no interruption to ask about at the next launch, per 6.5.
-        try? store.clearIntent(kind: .interruptedRun)
+        save(try store.clearIntent(kind: .interruptedRun), "the end of the interrupted run")
         // The target row of 13.5 outlives this run, and a run that
         // reached the target clears what an earlier one left.
-        try? store.recordTargetFailure(
-            targetId: context.request.descriptor.id,
-            failure: stop.flatMap(TargetFailure.of),
-            at: now)
+        save(
+            try store.recordTargetFailure(
+                targetId: context.request.descriptor.id,
+                failure: stop.flatMap(TargetFailure.of),
+                at: now),
+            "the target failure of \(context.request.descriptor.id)")
         return result
     }
 
@@ -161,16 +185,18 @@ public actor SnapshotEngine {
         gameCount: Int,
         detail: String?
     ) {
-        try? store.recordRun(
-            BackupRunRecord(
-                id: request.runId,
-                targetId: request.descriptor.id,
-                startedAt: startedAt,
-                finishedAt: finishedAt,
-                outcome: outcome,
-                uploadedBytes: uploadedBytes,
-                gameCount: gameCount,
-                detail: detail))
+        save(
+            try store.recordRun(
+                BackupRunRecord(
+                    id: request.runId,
+                    targetId: request.descriptor.id,
+                    startedAt: startedAt,
+                    finishedAt: finishedAt,
+                    outcome: outcome,
+                    uploadedBytes: uploadedBytes,
+                    gameCount: gameCount,
+                    detail: detail)),
+            "the run history row of \(request.runId)")
     }
 
     static func detail(of stop: BackupRunStop) -> String {
@@ -198,7 +224,7 @@ public actor SnapshotEngine {
 
     /// Reads `format.json` and `writer.json`, once per run and
     /// before the first blob upload, per 5.12 and 5.16.
-    private func openNamespace(_ context: inout RunContext) async throws {
+    private func openNamespace(_ context: RunContext) async throws {
         let formatData = try await fetch(context.paths.formatFile)
         if let formatData {
             let access = FormatDescriptor.targetAccess(formatJSON: formatData)
@@ -214,7 +240,7 @@ public actor SnapshotEngine {
         // The claim comes before any write, per 5.12, so a run that
         // meets another writer leaves the target exactly as it found
         // it.
-        try await holdTheWriterClaim(&context)
+        try await holdTheWriterClaim(context)
 
         if formatData == nil {
             // The target and the namespace are both created lazily
@@ -223,7 +249,7 @@ public actor SnapshotEngine {
         }
     }
 
-    private func holdTheWriterClaim(_ context: inout RunContext) async throws {
+    private func holdTheWriterClaim(_ context: RunContext) async throws {
         let found = try await fetch(context.paths.writerFile)
             .flatMap { try? WriterClaim.decode(json: $0) }
         let decision = WriterClaimCheck.decide(
@@ -235,7 +261,7 @@ public actor SnapshotEngine {
         case .proceed:
             break
         case .claim:
-            try await writeClaim(&context)
+            try await writeClaim(context)
         case .conflict(let claim):
             guard let resolution = context.request.writerResolution else {
                 throw BackupRunStop.writerConflict(claim)
@@ -246,9 +272,11 @@ public actor SnapshotEngine {
                 context.didSplit = true
                 // No namespace may reference another's blobs, per
                 // 5.12, so the split starts from a full upload.
-                try? store.clearNamespaceState(targetId: context.request.descriptor.id)
+                save(
+                    try store.clearNamespaceState(targetId: context.request.descriptor.id),
+                    "the namespace state the split drops")
             }
-            try await writeClaim(&context)
+            try await writeClaim(context)
         }
 
         try await put(
@@ -263,7 +291,7 @@ public actor SnapshotEngine {
             to: context.paths.deviceFile)
     }
 
-    private func writeClaim(_ context: inout RunContext) async throws {
+    private func writeClaim(_ context: RunContext) async throws {
         let claim = WriterClaim(
             namespaceId: context.paths.namespaceId,
             deviceId: context.request.deviceId,
@@ -274,14 +302,14 @@ public actor SnapshotEngine {
 
     // MARK: - The streams
 
-    private func runStreams(_ context: inout RunContext) async throws {
+    private func runStreams(_ context: RunContext) async throws {
         // The prefs stream goes first on every run, per 7.8. It is
         // tiny, and it holds the controller maps and layout pins a
         // user would miss at once.
         if let preferences = context.request.preferences {
             let set = BackupSetResolver.resolveLibraryStream(preferences, fm: fm)
             try await runStream(
-                &context,
+                context,
                 stream: .preferences,
                 set: set,
                 source: MemberSource(library: preferences),
@@ -302,7 +330,7 @@ public actor SnapshotEngine {
                 sharedDataDirectory: set.sharedDataDirectory,
                 rescuedSavesBuckets: set.rescuedSavesBuckets)
             try await runStream(
-                &context,
+                context,
                 stream: game.stream,
                 set: set,
                 source: MemberSource(game: setRequest),
@@ -341,192 +369,9 @@ public actor SnapshotEngine {
         return plan.changed.reduce(0) { $0 + $1.size }
     }
 
-    // MARK: - One stream
-
-    private func runStream(
-        _ context: inout RunContext,
-        stream: BackupStream,
-        set: GameBackupSet,
-        source: MemberSource,
-        manifest header: SnapshotManifest,
-        kind: StreamKind,
-        isOneOff: Bool
-    ) async throws {
-        let targetId = context.request.descriptor.id
-        let previous = try? store.lastUploadedManifest(targetId: targetId, gameKey: stream.key)
-
-        if let previous, !previous.manifest.access.allowsWrite {
-            guard case .readOnly(let restriction) = previous.manifest.access else { return }
-            throw BackupRunStop.readOnlyFormat(restriction)
-        }
-
-        let plan = SnapshotDiff.plan(members: set.members, previous: previous?.manifest)
-        if plan.changed.isEmpty,
-            !isOneOff,
-            !SnapshotDiff.earnsSnapshot(entries: plan.reused, previous: previous?.manifest)
-        {
-            context.streams.append(StreamResult(streamKey: stream.key, outcome: .noChange))
-            return
-        }
-
-        let route = stagingRoute(for: plan.changed, freeSpaceBytes: context.request.freeSpaceBytes)
-        guard route != .notEnoughSpace else {
-            context.streams.append(
-                StreamResult(streamKey: stream.key, outcome: .notEnoughLocalSpace))
-            try? markAttempt(targetId: targetId, gameKey: stream.key)
-            return
-        }
-
-        try await refuseARunThatCannotFit(&context, pending: plan.changed)
-
-        // Staging ends by producing the plan, per 13.2. The sum
-        // freezes here and no later work changes it.
-        let plannedBytes = plan.changed.reduce(0) { $0 + $1.size }
-        await observer?.runPlanned(streamKey: stream.key, bytes: plannedBytes)
-
-        var result = StreamResult(streamKey: stream.key, outcome: .blobsOnly)
-        let staging = BackupRootLayout(root: localRoot).staging
-            .appendingPathComponent(stream.key, isDirectory: true)
-        try? fm.createDirectory(at: staging, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: staging) }
-
-        var entries = plan.reused
-        var confirmed: [String: BlobCompression] = [:]
-        for blob in (try? store.checkpoint(targetId: targetId, gameKey: stream.key))?
-            .confirmedBlobs ?? []
-        {
-            confirmed[blob.hash] = blob.compression
-        }
-        var pendingPaths: [String] = []
-        var confirmedBytes: Int64 = 0
-        let snapshotId = BackupKeys.makeSnapshotId(date: now)
-
-        for (index, member) in plan.changed.enumerated() {
-            guard let file = source.url(of: member) else { continue }
-            let staged = try stage(member, from: file, route: route, into: staging, index: index)
-            var entry = SnapshotManifest.Entry(
-                root: member.root,
-                path: member.path,
-                size: staged.stamp.size,
-                modifiedAt: staged.stamp.modifiedAt,
-                hash: staged.hash,
-                compression: .stored,
-                partial: staged.partial,
-                detectionSource: member.detectionSource)
-
-            var known = confirmed[staged.hash]
-            if known == nil {
-                known =
-                    (try? store.knownBlobCompression(
-                        hash: staged.hash, targetId: targetId,
-                        namespaceId: context.paths.namespaceId)) ?? nil
-            }
-
-            if let algorithm = known {
-                // The blob is already on the target, so the entry
-                // costs nothing. It still has to name the algorithm
-                // the blob went up with, per 5.6.
-                entry.compression = algorithm
-            } else {
-                let upload = try await uploadBlob(&context, file: staged.file, hash: staged.hash)
-                entry.compression = upload.compression
-                result.uploadedBytes += upload.bytes
-                result.uploadedBlobCount += 1
-                confirmed[staged.hash] = upload.compression
-                if upload.isPending { pendingPaths.append(upload.path) }
-            }
-            // The plan counts the member, so the progress counts the
-            // member as well, whichever of the two paths above put
-            // the blob on the target.
-            confirmedBytes += member.size
-            await observer?.runConfirmed(streamKey: stream.key, bytes: member.size)
-
-            if case .inPlace = route, SaveMemberRule.isSaveMember(member) {
-                // Rule 3 of 6.4: hash, upload, re-hash, and mark the
-                // path partial on a mismatch.
-                let after = try? ContentHash.hexOfFile(at: staged.file)
-                if after != staged.hash { entry.partial = true }
-            }
-
-            if entry.partial { result.partialPaths.append(member.path) }
-            entries.append(entry)
-            try? store.saveCheckpoint(
-                RunCheckpoint(
-                    targetId: targetId,
-                    gameKey: stream.key,
-                    snapshotId: snapshotId,
-                    uploadedBytes: result.uploadedBytes,
-                    pendingPaths: plan.changed.dropFirst(index + 1).map(\.path),
-                    confirmedBlobs: confirmed
-                        .map { ConfirmedBlob(hash: $0.key, compression: $0.value) }
-                        .sorted { $0.hash < $1.hash },
-                    updatedAt: now))
-            // The record a process death leaves behind, per 6.5. The
-            // run clears it at its end, so only a death keeps it.
-            try? store.saveIntent(
-                BackupIntentRecord(
-                    kind: .interruptedRun,
-                    targetId: targetId,
-                    gameKey: stream.key,
-                    snapshotId: snapshotId,
-                    uploadedBytes: result.uploadedBytes,
-                    remainingBytes: max(0, plannedBytes - confirmedBytes),
-                    createdAt: now))
-        }
-
-        context.uploadedBytes += result.uploadedBytes
-
-        // Content decides, per 7.7. The filter of the diff reads
-        // size and mtime, so a file whose bytes never moved can
-        // still reach the hash. The entry set is the test, and a run
-        // that matches the last one writes no snapshot.
-        guard isOneOff || SnapshotDiff.earnsSnapshot(entries: entries, previous: previous?.manifest)
-        else {
-            context.streams.append(StreamResult(streamKey: stream.key, outcome: .noChange))
-            try? store.clearCheckpoint(targetId: targetId, gameKey: stream.key)
-            return
-        }
-
-        // Step 3 of 5.8: the manifest goes last, after every blob it
-        // names is confirmed. A blob still pending leaves the
-        // manifest for the next run, which reuses every blob for
-        // free.
-        guard try await waitForConfirmations(pendingPaths) else {
-            context.streams.append(result)
-            try? markAttempt(targetId: targetId, gameKey: stream.key)
-            return
-        }
-
-        var manifest = header
-        manifest.entries = entries.sorted {
-            $0.root == $1.root ? $0.path < $1.path : $0.root.rawValue < $1.root.rawValue
-        }
-        try await put(
-            try manifest.compressedData(),
-            to: context.paths.manifestPath(stream: stream, snapshotId: snapshotId))
-
-        try? store.recordUploadedManifest(
-            manifest, snapshotId: snapshotId, targetId: targetId,
-            namespaceId: context.paths.namespaceId, uploadedAt: now)
-        try? store.recordSnapshot(
-            SnapshotLedgerEntry(
-                targetId: targetId, gameKey: stream.key, snapshotId: snapshotId,
-                createdAt: now, isOneOff: isOneOff))
-        try? store.clearCheckpoint(targetId: targetId, gameKey: stream.key)
-        try? store.clearDirty(gameKey: stream.key)
-        markSuccess(targetId: targetId, gameKey: stream.key, manifest: manifest)
-
-        result.outcome = .wroteSnapshot(snapshotId: snapshotId)
-        // Step 4 of 5.8, inline at the end of the stream that just
-        // closed, per 5.10.
-        result.prunedSnapshotIds = await prune(
-            context, stream: stream, kind: kind, preset: context.request.retentionPreset)
-        context.streams.append(result)
-    }
-
     // MARK: - Staging and hashing
 
-    private func stagingRoute(
+    func stagingRoute(
         for members: [BackupSetMember], freeSpaceBytes: Int64
     ) -> StagingRoute {
         let saves = members.filter(SaveMemberRule.isSaveMember)
@@ -537,7 +382,7 @@ public actor SnapshotEngine {
     }
 
     /// One member, ready to hash and upload.
-    private struct StagedMember {
+    struct StagedMember {
         var file: URL
         var stamp: FileStamp
         var hash: String
@@ -550,7 +395,7 @@ public actor SnapshotEngine {
     /// once means re-stage. Changed twice means keep the copy and
     /// mark the path partial, per 5.9: its bytes are from one moment
     /// and its neighbours are from another.
-    private func stage(
+    func stage(
         _ member: BackupSetMember,
         from source: URL,
         route: StagingRoute,
@@ -588,7 +433,7 @@ public actor SnapshotEngine {
 
     // MARK: - Uploads
 
-    private struct UploadedBlob {
+    struct UploadedBlob {
         var compression: BlobCompression
         var bytes: Int64
         var path: String
@@ -597,8 +442,8 @@ public actor SnapshotEngine {
 
     /// Compresses one blob at a time into the outbox and puts it,
     /// per rule 5 of 6.4 and step 2 of 5.8.
-    private func uploadBlob(
-        _ context: inout RunContext, file: URL, hash: String
+    func uploadBlob(
+        _ context: RunContext, file: URL, hash: String
     ) async throws -> UploadedBlob {
         let path = context.paths.blobPath(hash: hash, fanOutWidth: context.fanOutWidth)
         let size = BackupSetResolver.stamp(of: file, fm: fm)?.size ?? 0
@@ -621,7 +466,7 @@ public actor SnapshotEngine {
         }
         defer { if let outbox { try? fm.removeItem(at: outbox) } }
 
-        try await put(fileAt: source, to: path, context: &context)
+        try await put(fileAt: source, to: path, context: context)
         let uploaded = BackupSetResolver.stamp(of: source, fm: fm)?.size ?? size
         let confirmation = (try? await provider.confirm(path: path)) ?? .pending
         return UploadedBlob(
@@ -636,7 +481,7 @@ public actor SnapshotEngine {
     /// per 5.8, so a blob that stays pending ends the stream without
     /// a manifest. The next run finds the blob confirmed and reuses
     /// it for free.
-    private func waitForConfirmations(_ paths: [String]) async throws -> Bool {
+    func waitForConfirmations(_ paths: [String]) async throws -> Bool {
         var pending = paths
         var attempt = 0
         while !pending.isEmpty, attempt < Self.confirmationAttempts {
@@ -654,7 +499,7 @@ public actor SnapshotEngine {
 
     // MARK: - The staleness clock, per 7.2
 
-    private func markAttempt(targetId: String, gameKey: String) throws {
+    func markAttempt(targetId: String, gameKey: String) throws {
         var clock =
             (try? store.staleness(targetId: targetId, gameKey: gameKey))
             ?? StalenessClock(targetId: targetId, gameKey: gameKey)
@@ -664,7 +509,7 @@ public actor SnapshotEngine {
 
     /// A snapshot that carries a partial path resets the clock only
     /// when no partial path is a save member, per 7.2.
-    private func markSuccess(targetId: String, gameKey: String, manifest: SnapshotManifest) {
+    func markSuccess(targetId: String, gameKey: String, manifest: SnapshotManifest) {
         var clock =
             (try? store.staleness(targetId: targetId, gameKey: gameKey))
             ?? StalenessClock(targetId: targetId, gameKey: gameKey)
@@ -677,12 +522,14 @@ public actor SnapshotEngine {
         } else if clock.partialSince == nil {
             clock.partialSince = now
         }
-        try? store.saveStaleness(clock)
+        save(try store.saveStaleness(clock), "the staleness clock of \(gameKey)")
 
         let previous = (try? store.partialTally(targetId: targetId, gameKey: gameKey)) ?? [:]
-        try? store.savePartialTally(
-            PartialPathClock.tally(previous, savePartials: savePartials),
-            targetId: targetId, gameKey: gameKey)
+        save(
+            try store.savePartialTally(
+                PartialPathClock.tally(previous, savePartials: savePartials),
+                targetId: targetId, gameKey: gameKey),
+            "the partial tally of \(gameKey)")
     }
 
     // MARK: - Provider calls
@@ -720,7 +567,7 @@ public actor SnapshotEngine {
     /// Puts a blob, and runs the prune ladder of 5.14 when the
     /// target answers `outOfSpace`.
     private func put(
-        fileAt file: URL, to path: String, context: inout RunContext
+        fileAt file: URL, to path: String, context: RunContext
     ) async throws {
         do {
             try await provider.put(localFile: file, path: path)
@@ -755,8 +602,8 @@ public actor SnapshotEngine {
 
     /// Where the provider answers a space query, refuse a run that
     /// cannot fit and name the shortfall, per 5.14.
-    private func refuseARunThatCannotFit(
-        _ context: inout RunContext, pending: [BackupSetMember]
+    func refuseARunThatCannotFit(
+        _ context: RunContext, pending: [BackupSetMember]
     ) async throws {
         guard provider.capabilities.canQueryQuota else { return }
         if context.quota == nil {

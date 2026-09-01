@@ -101,7 +101,8 @@ final class BackupPass: BackupRunning {
         // may hold it after this line.
         let engine = SnapshotEngine(
             provider: provider, store: store, localRoot: BackupRoot.layout.root,
-            observer: BackupRunMonitor.shared)
+            observer: BackupRunMonitor.shared,
+            note: { BackupLog.line("SnapshotEngine", $0) })
         let result = await engine.run(request)
         log(
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "

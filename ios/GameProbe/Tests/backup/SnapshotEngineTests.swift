@@ -226,6 +226,32 @@ final class SnapshotEngineTests: XCTestCase {
 
     // MARK: - 1. The write order of 5.8
 
+    func testAStateWriteThatFailsReachesTheNote() async throws {
+        try makeGameTree(gameName)
+        let store = try BackupStateStore(url: nil)
+        // The state database is a cache. A run whose writes all fail
+        // still reaches the target, and every failure reaches the
+        // note.
+        store.close()
+        let notes = NoteRecorder()
+        let clock = self.clock!
+        let engine = SnapshotEngine(
+            provider: makeTarget(),
+            store: store,
+            localRoot: localRoot,
+            clock: FakeBackupClock(),
+            now: { clock.now },
+            note: { notes.add($0) })
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .success)
+        XCTAssertFalse(notes.lines.isEmpty)
+        XCTAssertTrue(notes.lines.contains { $0.contains("the checkpoint of") })
+        XCTAssertTrue(notes.lines.contains { $0.contains("the interrupted-run record of") })
+        XCTAssertTrue(notes.lines.contains { $0.contains("the run history row of") })
+    }
+
     func testAFirstSnapshotUploadsEveryBlobAndThenTheManifest() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
@@ -914,6 +940,25 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(plan.fraction, 1)
     }
 
+}
+
+/// What the engine could not save.
+final class NoteRecorder: @unchecked Sendable {
+
+    private let lock = NSLock()
+    private var recorded: [String] = []
+
+    var lines: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recorded
+    }
+
+    func add(_ line: String) {
+        lock.lock()
+        recorded.append(line)
+        lock.unlock()
+    }
 }
 
 /// Builds the run plan of SPEC 13.2 from what the engine reports,

@@ -100,8 +100,10 @@ extension SnapshotEngine {
             context.paths.manifestPath(stream: stream, snapshotId: $0)
         }
         guard (try? await provider.delete(paths: paths)) != nil else { return [] }
-        try? store.removeSnapshots(
-            targetId: targetId, gameKey: stream.key, snapshotIds: plan.drop)
+        save(
+            try store.removeSnapshots(
+                targetId: targetId, gameKey: stream.key, snapshotIds: plan.drop),
+            "the pruned snapshots of \(stream.key)")
         return plan.drop
     }
 
@@ -197,7 +199,7 @@ extension SnapshotEngine {
                 throw mapped(error)
             }
         }
-        try? store.recordSweep(targetId: targetId, at: now)
+        save(try store.recordSweep(targetId: targetId, at: now), "the sweep time of \(targetId)")
         return full
     }
 
@@ -254,30 +256,46 @@ extension SnapshotEngine {
                 try await provider.delete(
                     paths: ids.map { paths.manifestPath(stream: stream, snapshotId: $0) })
             }
-            try? store.removeSnapshots(
-                targetId: targetId, gameKey: request.gameKey, snapshotIds: ids)
-            try? store.clearUploadedManifest(targetId: targetId, gameKey: request.gameKey)
-            try? store.clearCheckpoint(targetId: targetId, gameKey: request.gameKey)
+            forget(request.gameKey, targetId: targetId, snapshotIds: ids)
             let swept = try await sweepNamespace(
                 paths: paths, deviceId: request.deviceId, targetId: targetId)
-            try? store.clearPendingDeletion(targetId: targetId, gameKey: request.gameKey)
+            save(
+                try store.clearPendingDeletion(targetId: targetId, gameKey: request.gameKey),
+                "the end of the pending deletion of \(request.gameKey)")
             return .deleted(snapshotIds: ids, sweptPaths: swept)
         } catch {
             // The local delete always proceeds. The choice becomes a
             // pending deletion, applied at the start of the next
             // successful run.
-            try? store.addPendingDeletion(
-                PendingDeletion(
-                    targetId: targetId,
-                    gameKey: request.gameKey,
-                    requestedAt: now,
-                    rescuedBuckets: request.rescuedBuckets.map(\.lastPathComponent)))
+            save(
+                try store.addPendingDeletion(
+                    PendingDeletion(
+                        targetId: targetId,
+                        gameKey: request.gameKey,
+                        requestedAt: now,
+                        rescuedBuckets: request.rescuedBuckets.map(\.lastPathComponent))),
+                "the pending deletion of \(request.gameKey)")
             return .pending
         }
     }
 
+    /// Drops everything this device remembers about one game on one
+    /// target, after the manifests left it.
+    private func forget(_ gameKey: String, targetId: String, snapshotIds: [String]) {
+        save(
+            try store.removeSnapshots(
+                targetId: targetId, gameKey: gameKey, snapshotIds: snapshotIds),
+            "the deleted snapshots of \(gameKey)")
+        save(
+            try store.clearUploadedManifest(targetId: targetId, gameKey: gameKey),
+            "the end of the manifest record of \(gameKey)")
+        save(
+            try store.clearCheckpoint(targetId: targetId, gameKey: gameKey),
+            "the end of the checkpoint of \(gameKey)")
+    }
+
     /// Applies the pending deletions of 5.13 at the start of a run.
-    func applyPendingDeletions(_ context: inout RunContext) async throws {
+    func applyPendingDeletions(_ context: RunContext) async throws {
         let targetId = context.request.descriptor.id
         let pending = (try? store.pendingDeletions(targetId: targetId)) ?? []
         for deletion in pending {
