@@ -150,7 +150,7 @@ final class BackupPass: BackupRunning {
                 continue
             }
             let metadata = GameMetadata.load(from: container)
-            names[key] = metadata.customTitle ?? metadata.baseTitle ?? container.folderName
+            names[key] = BackupGameNames.name(of: container, in: metadata)
             games.append(
                 BackupRunGame(
                     identity: GameIdentities.identity(for: container),

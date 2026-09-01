@@ -14,6 +14,7 @@ final class PackageImportModel {
     private(set) var rejection: String?
     private(set) var record: PackageRecord?
     private(set) var source: PackageSource?
+    private let names = BackupGameNames()
     /// True once a restore finished or stopped. A stopped one keeps
     /// the staged package for the resume question of 11.9.
     private var keepsThePackage = false
@@ -59,14 +60,8 @@ final class PackageImportModel {
         self.record = nil
     }
 
-    /// The name one row carries on screen.
     func name(of row: SnapshotRow) -> String {
-        if row.identity.containerFolderName.isEmpty { return "your settings" }
-        guard let container = GameIdentities.match(row.identity) else {
-            return row.identity.containerFolderName
-        }
-        let metadata = GameMetadata.load(from: container)
-        return metadata.customTitle ?? metadata.baseTitle ?? container.folderName
+        names.name(of: row.identity)
     }
 }
 

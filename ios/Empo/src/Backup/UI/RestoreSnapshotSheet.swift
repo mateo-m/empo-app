@@ -137,7 +137,6 @@ struct GameRestoreScreen: View {
     var body: some View {
         ReadFirst(value: rows) { rows in
             SnapshotListScreen(
-                title: model.gameName,
                 gameName: model.gameName,
                 rows: rows,
                 gameKey: model.gameKey,

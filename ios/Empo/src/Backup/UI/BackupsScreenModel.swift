@@ -19,8 +19,18 @@ struct BackupTargetItem: Identifiable {
 
 /// What one namespace holds, as the browser of 13.9 lists it.
 struct NamespaceContents {
-    var games: [SnapshotGameSection]
+    var games: [NamespaceGameRow]
     var preferences: [SnapshotRow]
+}
+
+/// One game's snapshots in a namespace, with the name the browser
+/// shows and the key the restore door reads.
+struct NamespaceGameRow: Identifiable {
+    /// The game key, or the empty key for the trailing "Other
+    /// snapshots" section of 11.11.
+    var id: String
+    var name: String
+    var rows: [SnapshotRow]
 }
 
 /// The adopt banner of SPEC 13.13.
@@ -150,15 +160,10 @@ final class BackupsScreenModel {
             waiting.append(
                 BackupModeAsk(
                     container: container,
-                    gameName: Self.name(of: container),
+                    gameName: BackupGameNames.name(of: container),
                     ask: ask))
         }
         return waiting
-    }
-
-    private static func name(of container: GameContainer) -> String {
-        let metadata = GameMetadata.load(from: container)
-        return metadata.customTitle ?? metadata.baseTitle ?? container.folderName
     }
 
     // MARK: - Writing
@@ -268,12 +273,20 @@ final class BackupsScreenModel {
         guard let descriptor = items.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor),
             let scanned = try? await RestoreScan(provider: provider, descriptor: descriptor)
-                .namespaces(localMarkers: Self.localMarkers())
-                .first(where: { $0.id == namespaceId })
+                .namespace(namespaceId, localMarkers: Self.localMarkers())
         else { return NamespaceContents(games: [], preferences: []) }
+        let names = BackupGameNames()
+        let sections = RestorePicker.sections(
+            scanned.gameRows, among: GameIdentities.installedIdentities())
         return NamespaceContents(
-            games: RestorePicker.sections(
-                scanned.gameRows, among: GameIdentities.installedIdentities()),
+            games: sections.map { section in
+                guard let game = section.game else {
+                    return NamespaceGameRow(
+                        id: "", name: RestorePicker.otherSnapshotsHeading, rows: section.rows)
+                }
+                return NamespaceGameRow(
+                    id: game.gameKey, name: names.name(of: game), rows: section.rows)
+            },
             preferences: RestorePicker.newestFirst(scanned.preferencesRows))
     }
 

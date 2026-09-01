@@ -8,7 +8,7 @@ enum PackageExport {
     /// The plan for one game. It uses that game's current mode.
     @MainActor
     static func plan(game container: GameContainer) async -> PackagePlan {
-        let name = Self.name(of: container)
+        let name = BackupGameNames.name(of: container)
         return PackagePlan(gameName: name, streams: [await stream(of: container, gameName: name)])
     }
 
@@ -19,7 +19,7 @@ enum PackageExport {
     static func libraryPlan() async -> PackagePlan {
         var streams: [PackagePlan.Stream] = []
         for container in GameContainer.discover() {
-            streams.append(await stream(of: container, gameName: Self.name(of: container)))
+            streams.append(await stream(of: container, gameName: BackupGameNames.name(of: container)))
         }
         if let preferences = preferencesStream() { streams.append(preferences) }
         return PackagePlan(gameName: nil, streams: streams)
@@ -73,11 +73,5 @@ enum PackageExport {
         // members, which is what the ask's own default is.
         guard case .mode(let mode) = resolution else { return .slim }
         return mode
-    }
-
-    @MainActor
-    private static func name(of container: GameContainer) -> String {
-        let metadata = GameMetadata.load(from: container)
-        return metadata.customTitle ?? metadata.baseTitle ?? container.folderName
     }
 }

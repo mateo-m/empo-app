@@ -31,6 +31,21 @@ public struct RestoreScan: Sendable {
         self.descriptor = descriptor
     }
 
+    /// The id of every namespace on the target, in order.
+    public func namespaceIds() async throws -> [String] {
+        let empo = BackupNamespacePaths(root: descriptor.root, namespaceId: "")
+        let prefix = empo.devicesPrefix + "/"
+
+        var ids: Set<String> = []
+        for object in try await provider.list(prefix: prefix) {
+            guard object.path.hasPrefix(prefix) else { continue }
+            let rest = object.path.dropFirst(prefix.count)
+            guard let id = rest.split(separator: "/").first else { continue }
+            ids.insert(String(id))
+        }
+        return ids.sorted()
+    }
+
     /// Every namespace of the target, newest device first.
     ///
     /// `localMarkers` maps a game key to the marker of the local
@@ -39,32 +54,39 @@ public struct RestoreScan: Sendable {
     public func namespaces(
         localMarkers: [String: SnapshotManifest.VersionMarker] = [:]
     ) async throws -> [ScannedNamespace] {
-        let empo = BackupNamespacePaths(root: descriptor.root, namespaceId: "")
-        let prefix = empo.devicesPrefix + "/"
-        let listed = try await provider.list(prefix: prefix)
-
-        var ids: Set<String> = []
-        for object in listed {
-            guard object.path.hasPrefix(prefix) else { continue }
-            let rest = object.path.dropFirst(prefix.count)
-            guard let id = rest.split(separator: "/").first else { continue }
-            ids.insert(String(id))
-        }
-
         var scanned: [ScannedNamespace] = []
-        for id in ids.sorted() {
+        for id in try await namespaceIds() {
             scanned.append(try await namespace(id, localMarkers: localMarkers))
         }
         return scanned
     }
 
-    private func namespace(
-        _ id: String, localMarkers: [String: SnapshotManifest.VersionMarker]
+    /// One game's rows in every namespace of the target, per 11.3.
+    ///
+    /// The door of one game lists one prefix for each namespace, so
+    /// it reads no manifest of another game.
+    public func rows(
+        of stream: BackupStream,
+        localMarker: SnapshotManifest.VersionMarker? = nil
+    ) async throws -> [SnapshotRow] {
+        let markers = localMarker.map { [stream.key: $0] } ?? [:]
+        var found: [SnapshotRow] = []
+        for id in try await namespaceIds() {
+            let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: id)
+            found += try await rows(
+                under: paths.prefix(of: stream), paths: paths,
+                deviceName: try await deviceRecord(paths)?.name ?? id,
+                localMarkers: markers)
+        }
+        return RestorePicker.newestFirst(found)
+    }
+
+    /// One namespace, with every game it holds.
+    public func namespace(
+        _ id: String, localMarkers: [String: SnapshotManifest.VersionMarker] = [:]
     ) async throws -> ScannedNamespace {
         let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: id)
-        let record = try await read(paths.deviceFile).flatMap {
-            try? DeviceRecord.decode(json: $0)
-        }
+        let record = try await deviceRecord(paths)
 
         var namespace = ScannedNamespace(
             id: id,
@@ -88,6 +110,10 @@ public struct RestoreScan: Sendable {
             namespace.rescuedSavesBuckets = Self.rescuedSavesBuckets(in: manifest)
         }
         return namespace
+    }
+
+    private func deviceRecord(_ paths: BackupNamespacePaths) async throws -> DeviceRecord? {
+        try await read(paths.deviceFile).flatMap { try? DeviceRecord.decode(json: $0) }
     }
 
     private func rows(

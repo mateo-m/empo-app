@@ -20,21 +20,19 @@ struct NamespaceGamesScreen: View {
                     Text(RestoreNotices.emptyTargetLine)
                         .foregroundStyle(.secondary)
                 }
-                ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+                ForEach(sections) { section in
                     NavigationLink {
                         SnapshotListScreen(
-                            title: section.game?.folderName ?? RestorePicker.otherSnapshotsHeading,
-                            gameName: section.game?.folderName
-                                ?? RestorePicker.otherSnapshotsHeading,
+                            gameName: section.name,
                             rows: section.rows,
-                            gameKey: section.game?.gameKey ?? "",
+                            gameKey: section.id,
                             restore: { row, scope, replacesTheTree in
                                 await model.restore(
                                     row, scope: scope, replacesTheTree: replacesTheTree)
                             })
                     } label: {
                         VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text(section.game?.folderName ?? RestorePicker.otherSnapshotsHeading)
+                            Text(section.name)
                             Text("\(section.rows.count) snapshots")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -80,7 +78,6 @@ extension NamespaceGamesScreen {
 /// One game's snapshots under day headers, per 11.6.
 struct SnapshotListScreen: View {
 
-    let title: String
     let gameName: String
     let rows: [SnapshotRow]
     let gameKey: String
@@ -118,7 +115,7 @@ struct SnapshotListScreen: View {
                 }
             }
         }
-        .navigationTitle(title)
+        .navigationTitle(gameName)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $chosen) { row in
             RestoreSnapshotSheet(

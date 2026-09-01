@@ -158,15 +158,13 @@ final class BackupSheetModel {
     /// This game's snapshots on every target and every namespace,
     /// newest first.
     func snapshots() async -> [SnapshotRow] {
-        let markers = [gameKey: GameIdentities.versionMarker(for: container)]
+        let marker = GameIdentities.versionMarker(for: container)
         var rows: [SnapshotRow] = []
         for descriptor in BackupTargets.load() {
             guard let provider = await BackupTargets.provider(for: descriptor) else { continue }
             let scan = RestoreScan(provider: provider, descriptor: descriptor)
-            guard let namespaces = try? await scan.namespaces(localMarkers: markers) else {
-                continue
-            }
-            rows += namespaces.flatMap(\.gameRows).filter { $0.identity.gameKey == gameKey }
+            rows +=
+                (try? await scan.rows(of: .game(key: gameKey), localMarker: marker)) ?? []
         }
         return RestorePicker.newestFirst(rows)
     }

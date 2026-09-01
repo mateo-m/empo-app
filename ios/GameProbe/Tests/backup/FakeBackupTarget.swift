@@ -179,6 +179,7 @@ actor FakeBackupTarget: BackupProvider {
             await latch?.wait()
             try FakeBackupTarget.copyFile(from: source, to: localFile)
         }
+        readPaths.append(path)
     }
 
     func delete(paths: [String]) async throws(BackupProviderError) {
@@ -257,6 +258,9 @@ actor FakeBackupTarget: BackupProvider {
     func forgetCommittedPaths() {
         committedPaths = []
     }
+
+    /// Every path a get read, in the order the gets finished.
+    private(set) var readPaths: [String] = []
 
     /// Every object the target holds, by path.
     nonisolated func objectPaths() -> [String] {

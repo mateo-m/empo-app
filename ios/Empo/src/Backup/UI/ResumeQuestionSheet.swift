@@ -42,15 +42,16 @@ struct ResumeQuestionAsk: Identifiable {
     /// the state that leaves files in two versions.
     @MainActor
     static func pending() -> ResumeQuestionAsk? {
+        let names = BackupGameNames()
         if let record = RestoreCoordinator.shared.pendingResume() {
             return ResumeQuestionAsk(
                 side: .restore, record: record,
-                gameName: BackupGameNames.name(ofGameKey: record.gameKey))
+                gameName: names.name(ofGameKey: record.gameKey))
         }
         if let record = BackupScheduler.shared.pendingResume() {
             return ResumeQuestionAsk(
                 side: .backupRun, record: record,
-                gameName: BackupGameNames.name(ofGameKey: record.gameKey))
+                gameName: names.name(ofGameKey: record.gameKey))
         }
         return nil
     }
@@ -106,20 +107,5 @@ struct ResumeQuestionSheet: View {
     private func answer(_ index: Int) {
         ask.answer(index)
         dismiss()
-    }
-}
-
-/// The name one game key carries on screen.
-enum BackupGameNames {
-
-    @MainActor
-    static func name(ofGameKey key: String?) -> String {
-        guard let key else { return "your settings" }
-        for container in GameContainer.discover()
-        where BackupKeys.gameKey(containerFolderName: container.folderName) == key {
-            let metadata = GameMetadata.load(from: container)
-            return metadata.customTitle ?? metadata.baseTitle ?? container.folderName
-        }
-        return "this game"
     }
 }

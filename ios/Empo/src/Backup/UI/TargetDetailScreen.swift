@@ -36,7 +36,7 @@ struct TargetDetailScreen: View {
         }
         .navigationTitle(item?.descriptor.displayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
-        .task { gameNames = Self.namesByGameKey() }
+        .task { gameNames = BackupGameNames().namesByGameKey() }
         .sheet(isPresented: $showsRemoveSheet) {
             if let item {
                 RemoveTargetSheet(item: item) { deletesBackups in
@@ -192,17 +192,6 @@ struct TargetDetailScreen: View {
         Section {
             Button("Remove", role: .destructive) { showsRemoveSheet = true }
         }
-    }
-
-    /// The library's own names, so a breakdown row reads as a game
-    /// and not as a key.
-    private static func namesByGameKey() -> [String: String] {
-        var names: [String: String] = [:]
-        for container in GameContainer.discover() {
-            names[BackupKeys.gameKey(containerFolderName: container.folderName)] =
-                container.folderName
-        }
-        return names
     }
 }
 
