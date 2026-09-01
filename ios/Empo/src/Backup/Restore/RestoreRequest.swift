@@ -8,7 +8,11 @@ import GameProbe
 struct RestoreRequest: Sendable {
 
     var restoreId: String
-    var descriptor: TargetDescriptor
+    /// The target the snapshot is on. A backup package carries its
+    /// own id here, because a package is not a target, per 12.7.
+    var targetId: String
+    /// The fixed root of 8.7, or an empty string for a package.
+    var root: String
     var namespaceId: String
     /// The stream the snapshot belongs to, per 5.3.
     var stream: BackupStream
@@ -32,7 +36,8 @@ struct RestoreRequest: Sendable {
 
     init(
         restoreId: String = UUID().uuidString,
-        descriptor: TargetDescriptor,
+        targetId: String,
+        root: String,
         namespaceId: String,
         stream: BackupStream,
         snapshotId: String,
@@ -46,7 +51,8 @@ struct RestoreRequest: Sendable {
         gameTreeURL: URL? = nil
     ) {
         self.restoreId = restoreId
-        self.descriptor = descriptor
+        self.targetId = targetId
+        self.root = root
         self.namespaceId = namespaceId
         self.stream = stream
         self.snapshotId = snapshotId

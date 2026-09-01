@@ -12,6 +12,7 @@ struct BackupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmation: LeftoverConfirmation?
     @State private var deletes: LeftoverKind?
+    @State private var exports = false
 
     /// Which leftover row the confirmation belongs to.
     private enum LeftoverKind { case trees, files }
@@ -59,6 +60,9 @@ struct BackupSheet: View {
                         }
                     }
                 }
+            }
+            .sheet(isPresented: $exports) {
+                PackageExportSheet(source: .game(model.container))
             }
             .sheet(item: firstPendingAsk) { ask in
                 OversizedWriteAskSheet(path: ask.path, sizeBytes: ask.sizeBytes) { joins in
@@ -164,10 +168,8 @@ struct BackupSheet: View {
             }
             .disabled(!model.locks.canRestore)
 
-            // Ticket 019 builds the package writer of 12.5. The row
-            // holds its place in the order.
-            Button("Export backup") {}
-                .disabled(true)
+            Button("Export backup") { exports = true }
+                .disabled(!model.locks.canExport)
         } footer: {
             if let footer = model.locks.footer {
                 Text(footer)

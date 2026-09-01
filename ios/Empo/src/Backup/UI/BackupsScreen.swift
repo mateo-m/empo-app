@@ -15,6 +15,12 @@ struct BackupsScreen: View {
     @State private var waiting: [BackupModeAsk] = []
     @AppStorage(DefaultsKey.backupOverCellular) private var overCellular = false
     @State private var retention = BackupSettings.retention
+    @State private var exports = false
+    @State private var showsTheZipPicker = false
+    @State private var picked: PickedPackage?
+    /// The package a launch found waiting for its save, per 12.5.
+    @State private var unsavedPackage: PackageRecord?
+    @State private var savesAgain: PackageRecord?
 
     var body: some View {
         List {
@@ -41,7 +47,26 @@ struct BackupsScreen: View {
             }
         }
         .task { await model.refresh() }
+        .task { readTheUnsavedPackage() }
         .refreshable { await model.refresh() }
+        .sheet(isPresented: $exports) {
+            PackageExportSheet(source: .library)
+        }
+        .sheet(isPresented: $showsTheZipPicker) {
+            PackageZipPicker { url in
+                showsTheZipPicker = false
+                picked = PickedPackage(url: url)
+            }
+        }
+        .sheet(item: $picked) { file in
+            PackageImportSheet(picked: file.url)
+        }
+        .sheet(
+            item: $savesAgain, onDismiss: readTheUnsavedPackage,
+            content: { record in
+                PackageExportSheet(source: .library, model: PackageExportModel(waiting: record))
+            }
+        )
         .sheet(isPresented: $showsAddSheet) {
             AddTargetSheet(iCloudReach: model.iCloudReach) { descriptor, result in
                 addedTarget = PermissionCheckOutcomeSheet(
@@ -65,6 +90,11 @@ struct BackupsScreen: View {
                 Task { await model.answerTheNotificationSheet(answer) }
             }
         }
+    }
+
+    /// The package a failed or cancelled save left behind, per 12.5.
+    private func readTheUnsavedPackage() {
+        unsavedPackage = PackageRecord.waitingForASave(localRoot: BackupRoot.url)
     }
 
     /// The queue of asks. Each answer, and each dismissal, moves to
@@ -251,13 +281,29 @@ struct BackupsScreen: View {
 
     // MARK: - Manual transfer, per 12.5
 
+    /// Both doors close while a game runs, per 7.6.
+    private var manualTransferOpens: Bool {
+        PackageDoors.opens(gameIsPlaying: BackupDeviceConditions.isSessionLive)
+    }
+
     private var manualTransfer: some View {
         Section {
-            Text("Ticket 019 brings the backup package.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Button("Export library") { exports = true }
+                .disabled(!manualTransferOpens)
+            Button("Import backup") { showsTheZipPicker = true }
+                .disabled(!manualTransferOpens)
+            if let unsavedPackage {
+                Button(PackageSaveChoice.question(fileName: unsavedPackage.fileName)) {
+                    savesAgain = unsavedPackage
+                }
+            }
         } header: {
             Text("Manual transfer")
+        } footer: {
+            Text(
+                PackageDoors.line(gameName: EngineSessionCoordinator.shared.openGameName)
+                    ?? "A backup package is a ZIP file you keep in Files. "
+                    + "It needs no backup target.")
         }
     }
 

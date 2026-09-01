@@ -18,14 +18,16 @@ final class EmpoSceneDelegate: UIResponder, UIWindowSceneDelegate {
         BackupScheduler.shared.start()
     }
 
-    /// Takes the OAuth callback of SPEC 8.10.
+    /// Takes the OAuth callback of SPEC 8.10 and the backup package
+    /// of 12.6.
     ///
     /// The callback is a custom URL scheme, because an https link
     /// needs the Associated Domains entitlement and a sideloaded
     /// build does not hold it.
     func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
-        for context in contexts where OAuthSignIn.shared.resume(with: context.url) {
-            return
+        for context in contexts {
+            if OAuthSignIn.shared.resume(with: context.url) { return }
+            if PackageInbox.shared.accept(context.url) { return }
         }
     }
 }

@@ -64,7 +64,7 @@ struct ResumeQuestionAsk: Identifiable {
             BackupScheduler.shared.answerResume(action, gameName: gameName)
         case .restore:
             let action = RestoreResumeQuestion.Action.allCases[index]
-            RestoreCoordinator.shared.answerResume(action)
+            RestoreCoordinator.shared.answerResume(action, record: record)
             guard RestoreResumeQuestion.effect(of: action).startsRestoreNow else { return }
             Task { await RestoreCoordinator.shared.resume(record) }
         }

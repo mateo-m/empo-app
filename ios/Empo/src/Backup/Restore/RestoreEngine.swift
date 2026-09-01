@@ -51,7 +51,7 @@ actor RestoreEngine {
 
     func run(_ request: RestoreRequest) async -> RestoreOutcome {
         let paths = BackupNamespacePaths(
-            root: request.descriptor.root, namespaceId: request.namespaceId)
+            root: request.root, namespaceId: request.namespaceId)
 
         var fanOutWidth = FormatDescriptor.version1FanOutWidth
         if let data = try? await fetch(paths.formatFile),
@@ -105,7 +105,7 @@ actor RestoreEngine {
         // process that dies mid-restore leaves one, per 6.5.
         try? store.saveIntent(
             RestoreResumeQuestion.record(
-                targetId: request.descriptor.id,
+                targetId: request.targetId,
                 gameKey: request.stream == .preferences ? nil : request.stream.key,
                 snapshotId: request.snapshotId,
                 scope: request.scope,

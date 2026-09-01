@@ -9,6 +9,7 @@ import Foundation
 ///   Backup/
 ///     state.sqlite
 ///     staging/
+///       packages/<package id>/     <- the backup packages of 12.5
 ///     outbox/
 ///     restore/<blob hash>
 /// ```
@@ -22,6 +23,9 @@ public enum BackupRootLayout {
     public static let stagingDirectoryName = "staging"
     public static let outboxDirectoryName = "outbox"
     public static let restoreDirectoryName = "restore"
+    /// The backup packages of 12.5, while they build and while they
+    /// wait for Files to confirm a save.
+    public static let packagesDirectoryName = "packages"
 
     /// The target descriptors of 8.8. Section 8 owns the contents.
     public static let targetsFileName = "targets.json"
@@ -47,6 +51,16 @@ public enum BackupRootLayout {
 
     public static func restore(root: URL) -> URL {
         root.appendingPathComponent(restoreDirectoryName, isDirectory: true)
+    }
+
+    public static func packages(root: URL) -> URL {
+        staging(root: root).appendingPathComponent(packagesDirectoryName, isDirectory: true)
+    }
+
+    /// One package, in its own directory, so a cancel deletes the
+    /// partial ZIP and nothing else.
+    public static func package(root: URL, id: String) -> URL {
+        packages(root: root).appendingPathComponent(id, isDirectory: true)
     }
 
     /// A downloaded blob, keyed by its hash, per 6.4. A restarted

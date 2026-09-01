@@ -12,6 +12,22 @@
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
+			<!-- The backup package of SPEC 12.6. Empo takes a ZIP file
+			     from Files so that "Open in Empo" starts the import.
+			     The rank is Alternate, because a ZIP file belongs to
+			     no one app. -->
+			<key>CFBundleTypeName</key>
+			<string>Backup package</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.zip-archive</string>
+			</array>
+		</dict>
+		<dict>
 			<key>CFBundleTypeName</key>
 			<string>JoiPlay Archive</string>
 			<key>CFBundleTypeRole</key>

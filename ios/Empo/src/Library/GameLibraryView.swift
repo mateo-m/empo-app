@@ -268,6 +268,7 @@ struct GameLibraryView: View {
             .modifier(
                 DuplicateGamesNotice(names: $duplicateNoticeNames, active: splashDismissed)
             )
+            .modifier(PackageImportPresentation())
             .modifier(
                 SaveRecoveryPresentation(games: library.games, active: splashDismissed)
             )

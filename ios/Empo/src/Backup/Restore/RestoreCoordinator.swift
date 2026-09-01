@@ -81,24 +81,57 @@ final class RestoreCoordinator {
         scope: RestoreScope,
         replacesTheTree: Bool = false
     ) async -> RestoreOutcome {
-        guard running == nil else { return .failed("a restore is already running") }
-
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
         let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: row.namespaceId)
-        let stream: BackupStream =
-            container == nil ? .preferences : .game(key: row.identity.gameKey)
         guard
             let manifest = try? await scan.manifest(
-                at: paths.manifestPath(stream: stream, snapshotId: row.snapshotId))
+                at: paths.manifestPath(stream: Self.stream(of: row), snapshotId: row.snapshotId))
         else {
-            return .failed("this backup could not be read")
+            return .failed(Self.unreadableLine)
         }
+        return await run(
+            row, into: container, provider: provider, targetId: descriptor.id,
+            root: descriptor.root, manifest: manifest, scope: scope,
+            replacesTheTree: replacesTheTree)
+    }
+
+    /// The import of 12.6. The package answers the provider protocol
+    /// itself and carries its own manifest, so nothing scans it and
+    /// the engine below runs unchanged.
+    func restore(
+        _ row: SnapshotRow,
+        into container: GameContainer?,
+        package: PackageSource,
+        scope: RestoreScope,
+        replacesTheTree: Bool = false
+    ) async -> RestoreOutcome {
+        guard let manifest = package.manifest.stream(Self.stream(of: row).key)?.manifest else {
+            return .failed(Self.unreadableLine)
+        }
+        return await run(
+            row, into: container, provider: package,
+            targetId: PackageSource.targetId(packageId: package.packageId), root: "",
+            manifest: manifest, scope: scope, replacesTheTree: replacesTheTree)
+    }
+
+    private func run(
+        _ row: SnapshotRow,
+        into container: GameContainer?,
+        provider: some BackupProvider,
+        targetId: String,
+        root: String,
+        manifest: SnapshotManifest,
+        scope: RestoreScope,
+        replacesTheTree: Bool
+    ) async -> RestoreOutcome {
+        guard running == nil else { return .failed("a restore is already running") }
 
         let destination = Self.destination(for: container, manifest: manifest)
         let request = RestoreRequest(
-            descriptor: descriptor,
+            targetId: targetId,
+            root: root,
             namespaceId: row.namespaceId,
-            stream: stream,
+            stream: Self.stream(of: row),
             snapshotId: row.snapshotId,
             scope: scope,
             destination: destination,
@@ -131,6 +164,15 @@ final class RestoreCoordinator {
         return outcome
     }
 
+    /// The stream a row belongs to. The preferences stream of 5.3
+    /// carries the game key of the empty container name, so one
+    /// reading covers both kinds of row.
+    private static func stream(of row: SnapshotRow) -> BackupStream {
+        BackupStream(key: row.identity.gameKey)
+    }
+
+    private static let unreadableLine = "this backup could not be read"
+
     /// The hard stop of 7.6. A game launched, so the restore stops at
     /// once and leaves its record and its staged blobs.
     func stopForGameLaunch() {
@@ -159,6 +201,9 @@ final class RestoreCoordinator {
     /// for the bytes it already downloaded once.
     @discardableResult
     func resume(_ record: BackupIntentRecord) async -> RestoreOutcome {
+        if let packageId = PackageSource.packageId(ofTargetId: record.targetId) {
+            return await resumeTheImport(packageId: packageId, record: record)
+        }
         guard let descriptor = BackupTargets.load().first(where: { $0.id == record.targetId }),
             let provider = await BackupTargets.provider(for: descriptor),
             let snapshotId = record.snapshotId
@@ -181,9 +226,33 @@ final class RestoreCoordinator {
             replacesTheTree: record.replacesTheTree)
     }
 
+    /// An import that stopped, per 12.6. The staged package is still
+    /// in the staging area, so the resume opens it again and repeats
+    /// the row the record names.
+    private func resumeTheImport(
+        packageId: String, record: BackupIntentRecord
+    ) async -> RestoreOutcome {
+        let localRoot = BackupRoot.url
+        guard
+            let staged = PackageRecord.all(localRoot: localRoot).first(where: {
+                $0.id == packageId
+            }),
+            let source = try? PackageSource(
+                zip: staged.zipURL(localRoot: localRoot), packageId: packageId),
+            let snapshotId = record.snapshotId,
+            let row = PackageSource.rows(of: source.manifest, packageId: packageId)
+                .first(where: { $0.snapshotId == snapshotId })
+        else { return .failed("this backup package is no longer on this device") }
+
+        return await restore(
+            row, into: GameIdentities.match(row.identity), package: source,
+            scope: record.restoreScope ?? .savesAndSettings,
+            replacesTheTree: record.replacesTheTree)
+    }
+
     /// Applies one answer. The caller resumes the restore itself when
     /// the effect says to start it now.
-    func answerResume(_ action: RestoreResumeQuestion.Action) {
+    func answerResume(_ action: RestoreResumeQuestion.Action, record: BackupIntentRecord) {
         guard let store = try? BackupStateStore(url: BackupRoot.stateDatabase) else { return }
         defer { store.close() }
 
@@ -195,7 +264,15 @@ final class RestoreCoordinator {
         let effect = RestoreResumeQuestion.effect(of: action)
         guard !effect.keepsRecord else { return }
         try? store.clearIntent(kind: .interruptedRestore)
-        if effect.deletesStagedBlobs { Self.deleteStagedBlobs() }
+        guard effect.deletesStagedBlobs else { return }
+        Self.deleteStagedBlobs()
+        // Stopping an import deletes the staged package as well as
+        // the staged files, per 12.6.
+        if let packageId = PackageSource.packageId(ofTargetId: record.targetId) {
+            PackageRecord.all(localRoot: BackupRoot.url)
+                .first { $0.id == packageId }?
+                .delete(localRoot: BackupRoot.url)
+        }
     }
 
     private static func deleteStagedBlobs() {
