@@ -58,3 +58,20 @@ enum SyncStore {
         }
     }
 }
+
+/// The two sync files as the pass reads and changes them.
+@MainActor
+final class SyncFileStore: SyncStateStore {
+
+    func state() -> SyncState {
+        SyncStore.state()
+    }
+
+    func update(_ change: (inout SyncState) -> Void) throws {
+        try SyncStore.update(change)
+    }
+
+    func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) throws {
+        try SyncStore.updateIdentities(change)
+    }
+}

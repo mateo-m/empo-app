@@ -65,10 +65,41 @@ enum SyncRemote {
     }
 }
 
-/// One namespace on one target, as section 10 reads it.
-struct SyncNamespace {
-    let id: String
-    let record: DeviceRecord?
-    /// The copy of the sync document, where the namespace holds one.
-    let document: RemoteObject?
+/// The targets one pass reads and writes, per SPEC 10.5.
+@MainActor
+final class ProviderSyncTargets: SyncTargets {
+
+    func enabled() -> [TargetDescriptor] {
+        BackupTargets.load().filter { !$0.isPaused }
+    }
+
+    func namespaces(of target: TargetDescriptor) async -> [SyncNamespace] {
+        guard let provider = await BackupTargets.provider(for: target) else { return [] }
+        return await SyncRemote.namespaces(root: target.root, provider: provider)
+    }
+
+    func read(_ path: String, from target: TargetDescriptor) async -> Data? {
+        guard let provider = await BackupTargets.provider(for: target) else { return nil }
+        return await SyncRemote.read(path, from: provider)
+    }
+
+    func write(_ data: Data, to path: String, on target: TargetDescriptor) async -> Bool {
+        guard let provider = await BackupTargets.provider(for: target) else { return false }
+        return (try? await SyncRemote.write(data, to: path, with: provider)) != nil
+    }
+
+    func putTheDocument(to path: String, on target: TargetDescriptor) async -> String? {
+        guard let provider = await BackupTargets.provider(for: target) else {
+            return "this device could not open the target"
+        }
+        do {
+            try await provider.put(localFile: AutomergeDocumentStore.url, path: path)
+            guard try await provider.confirm(path: path) == .confirmed else {
+                return "the target did not confirm the copy"
+            }
+        } catch {
+            return String(describing: error)
+        }
+        return nil
+    }
 }

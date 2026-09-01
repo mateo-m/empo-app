@@ -143,3 +143,16 @@ enum SyncLocalValues {
         }
     }
 }
+
+/// What this device holds now, as the pass reads and applies it.
+@MainActor
+final class DeviceSyncValues: SyncLocalValuesStore {
+
+    func read(identities: inout SyncProfileIdentities) -> SyncDocumentModel {
+        SyncLocalValues.current(identities: &identities)
+    }
+
+    func apply(_ model: SyncDocumentModel, identities: inout SyncProfileIdentities) {
+        SyncLocalValues.apply(model, identities: &identities)
+    }
+}

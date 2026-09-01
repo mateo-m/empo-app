@@ -68,13 +68,16 @@ final class PackageTests: XCTestCase {
                     members: members,
                     source: MemberSource(container: container))
             ])
+        // The staging area sits under the backup root, and the
+        // root's own parent is Application Support.
+        let localRoot = BackupRootLayout(applicationSupport: root).root
         let record = try plan.build(
             id: "export",
-            localRoot: root,
+            localRoot: localRoot,
             sourceDevice: "iPad",
             freeSpaceBytes: 1 << 40,
             at: stamp)
-        let url = record.zipURL(localRoot: root)
+        let url = record.zipURL(localRoot: localRoot)
         return (url, try PackageSource(zip: url, packageId: "p1").manifest)
     }
 

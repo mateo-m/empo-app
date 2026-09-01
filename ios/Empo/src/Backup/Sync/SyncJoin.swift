@@ -39,7 +39,7 @@ enum SyncJoin {
     /// with it: step 4 of 10.5 reads them from the device and writes
     /// them over the merged document.
     static func join(_ group: DiscoveredSyncGroup) {
-        SyncDocumentFile.delete()
+        AutomergeDocumentStore.delete()
         try? SyncStore.update { $0.join(group.groupId, at: Date()) }
         SyncPass.shared.schedule(.now)
     }
