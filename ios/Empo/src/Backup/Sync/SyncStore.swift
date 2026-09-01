@@ -23,6 +23,18 @@ enum SyncStore {
         try? state.write(applicationSupport: BackupRoot.applicationSupport)
     }
 
+    /// Changes the state on the file and not on a copy.
+    ///
+    /// A pass runs for seconds and a join lands in the middle of one.
+    /// A caller that read the state before the join and wrote it back
+    /// after would put the old group back, so every change reads the
+    /// file again first.
+    static func update(_ change: (inout SyncState) -> Void) {
+        var state = state()
+        change(&state)
+        save(state)
+    }
+
     static func identities() -> SyncProfileIdentities {
         SyncProfileIdentities.read(applicationSupport: BackupRoot.applicationSupport)
     }

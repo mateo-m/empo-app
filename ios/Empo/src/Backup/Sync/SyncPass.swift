@@ -10,10 +10,6 @@ import UIKit
 /// applies the merged values to this device, then writes its own
 /// copy back to each target that does not hold the current heads.
 ///
-/// `SyncState` needs its module here: Automerge exports a type of
-/// the same name for its own network protocol, which Empo does not
-/// use.
-///
 /// A target is a mailbox and nothing more. No device answers, no
 /// device locks, and a target that fails takes nothing from the
 /// others.
@@ -23,6 +19,8 @@ final class SyncPass {
     static let shared = SyncPass()
 
     private var isRunning = false
+    /// Whether a pass arrived while one ran, per the rerun below.
+    private var asksAgain = false
     private var didStart = false
     private var wait: Task<Void, Never>?
 
@@ -48,7 +46,50 @@ final class SyncPass {
         ) { _ in
             MainActor.assumeIsolated { SyncPass.shared.schedule(after: SyncPass.localChangeWait) }
         }
+        runTheDeviceCheck()
         schedule(after: 0)
+    }
+
+    /// The launch arguments the device checks of ticket 020 use.
+    ///
+    /// `-syncJoin YES` joins the first group a target holds, which
+    /// is check 1 with no sheet. `-syncDump YES` writes what the
+    /// merged document carries to the backup log, which is how
+    /// checks 2 to 5 read what crossed between two devices.
+    private func runTheDeviceCheck() {
+        dumps = UserDefaults.standard.bool(forKey: "syncDump")
+        guard UserDefaults.standard.bool(forKey: "syncJoin") else { return }
+        Task {
+            guard case .confirm(let group) = await SyncJoin.ask() else {
+                self.log("no target holds a group to join")
+                return
+            }
+            SyncJoin.join(group)
+            self.log("joined \(group.groupId) with \(group.deviceNames.joined(separator: ", "))")
+        }
+    }
+
+    /// Whether each pass writes what the document carries to the
+    /// log, for the device checks of ticket 020.
+    private var dumps = false
+
+    private func dump(_ model: SyncDocumentModel, heads: [String]) {
+        guard dumps else { return }
+        log("heads \(heads.joined(separator: " "))")
+        log("schema \(model.schemaVersion), writer \(model.minimumWriterVersion)")
+        for (key, value) in model.preferences.sorted(by: { $0.key < $1.key }) {
+            log("preference \(key) = \(value)")
+        }
+        for (id, binding) in model.controllerBindings.sorted(by: { $0.key < $1.key }) {
+            log("binding \(id) = \(binding)")
+        }
+        for (id, profile) in model.layoutProfiles.sorted(by: { $0.key < $1.key }) {
+            let state = profile.isDeleted ? "deleted" : "\(profile.controls.count) controls"
+            log("profile \(id) \"\(profile.name)\" \(state)")
+        }
+        for id in model.targetDescriptors.keys.sorted() {
+            log("descriptor \(id)")
+        }
     }
 
     /// A local change waits, because a settings screen writes a key
@@ -60,7 +101,11 @@ final class SyncPass {
     func schedule(after seconds: Double) {
         // The pass writes preferences itself, and a play session
         // writes them too. Neither one asks for a pass of its own.
-        if seconds > 0, isRunning || BackupDeviceConditions.isSessionLive { return }
+        if seconds > 0, BackupDeviceConditions.isSessionLive { return }
+        if seconds > 0, isRunning {
+            asksAgain = true
+            return
+        }
         wait?.cancel()
         wait = Task { [weak self] in
             if seconds > 0 { try? await Task.sleep(for: .seconds(seconds)) }
@@ -73,48 +118,78 @@ final class SyncPass {
     /// One pass. It answers nothing, because the user never waits
     /// for it, per 10.11.
     func run() async {
-        guard !isRunning else { return }
+        guard !isRunning else {
+            // The news that asked for this pass arrived after the
+            // running one read the targets, so it runs again after.
+            asksAgain = true
+            return
+        }
         isRunning = true
-        defer { isRunning = false }
+        defer {
+            isRunning = false
+            if asksAgain {
+                asksAgain = false
+                schedule(after: 0)
+            }
+        }
 
-        var state = SyncStore.state()
+        let state = SyncStore.state()
         guard let groupId = state.groupId else { return }
         let targets = BackupTargets.load().filter { !$0.isPaused }
         guard !targets.isEmpty else { return }
 
         let document = localDocument(actorId: state.actorId)
+        guard let held = try? SyncDocument.model(of: document) else {
+            log("the local document could not be read")
+            return
+        }
+        var identities = SyncStore.identities()
+
+        // Step 3 writes the document onto this device, so a local
+        // value that differs from the document is a change the user
+        // made since the last pass. It goes in before the merge. A
+        // copy that arrived first would write over it, and the user
+        // would watch their change come undone.
+        //
+        // A document a newer Empo wrote still applies here. This
+        // build only stops writing to it, per 10.10.
+        let publishes = !SyncCopyValidation.readsButDoesNotPublish(held)
+        if publishes {
+            let mine = SyncLocalValues.current(identities: &identities)
+            try? SyncDocument.write(held.overlaid(with: mine), to: document)
+        }
+
         for descriptor in targets {
-            await merge(from: descriptor, groupId: groupId, into: document, state: &state)
+            await merge(from: descriptor, groupId: groupId, into: document)
         }
 
         guard let merged = try? SyncDocument.model(of: document) else {
             log("the local document could not be read")
             return
         }
-        var identities = SyncStore.identities()
         SyncLocalValues.apply(merged, identities: &identities)
+        SyncStore.save(identities)
 
-        // A document a newer Empo wrote still applies here. This
-        // build only stops writing to it, per 10.10.
-        if SyncCopyValidation.readsButDoesNotPublish(merged) {
+        guard publishes, !SyncCopyValidation.readsButDoesNotPublish(merged) else {
             log("this build reads the document but does not write it")
-            SyncStore.save(identities)
-            SyncStore.save(state)
             return
         }
-
-        let mine = SyncLocalValues.current(identities: &identities)
-        SyncStore.save(identities)
         do {
-            try SyncDocument.write(merged.overlaid(with: mine), to: document)
             try document.save().write(to: BackupRoot.syncDocumentFile, options: .atomic)
         } catch {
             log("the local document could not be saved: \(error)")
             return
         }
 
-        await publish(document, groupId: groupId, targets: targets, state: &state)
-        SyncStore.save(state)
+        // A join that landed during this pass left the group this
+        // pass read. Nothing of it goes to the new group, and the
+        // pass that follows reads the new one whole.
+        guard SyncStore.state().groupId == groupId else {
+            asksAgain = true
+            return
+        }
+        await publish(document, groupId: groupId, targets: targets)
+        dump(merged, heads: SyncDocument.heads(of: document))
     }
 
     // MARK: - Steps 1 and 2: read and merge
@@ -127,8 +202,7 @@ final class SyncPass {
     }
 
     private func merge(
-        from descriptor: TargetDescriptor, groupId: String, into document: Document,
-        state: inout GameProbe.SyncState
+        from descriptor: TargetDescriptor, groupId: String, into document: Document
     ) async {
         guard let provider = await BackupTargets.provider(for: descriptor),
             let mine = try? BackupKeychain.namespaceId()
@@ -136,7 +210,8 @@ final class SyncPass {
 
         let namespaces = await SyncRemote.namespaces(root: descriptor.root, provider: provider)
         let progress =
-            state.progress(ofTarget: descriptor.id) ?? SyncTargetProgress(targetId: descriptor.id)
+            SyncStore.state().progress(ofTarget: descriptor.id)
+            ?? SyncTargetProgress(targetId: descriptor.id)
 
         for namespace in namespaces where namespace.id != mine {
             // A copy of another group belongs to another person, per
@@ -151,7 +226,9 @@ final class SyncPass {
                 in: document, before: before,
                 deviceName: namespace.record?.name ?? "another device")
             if let modifiedAt = object.modifiedAt {
-                state.saw(namespaceId: namespace.id, at: modifiedAt, targetId: descriptor.id)
+                SyncStore.update {
+                    $0.saw(namespaceId: namespace.id, at: modifiedAt, targetId: descriptor.id)
+                }
             }
         }
     }
@@ -208,12 +285,12 @@ final class SyncPass {
     // MARK: - Steps 5 and 6: write the copy back
 
     private func publish(
-        _ document: Document, groupId: String, targets: [TargetDescriptor], state: inout GameProbe.SyncState
+        _ document: Document, groupId: String, targets: [TargetDescriptor]
     ) async {
         let heads = SyncDocument.heads(of: document)
         let needed = Set(
             SyncReplication.targetsNeedingACopy(
-                enabled: targets.map(\.id), progress: state.targets, heads: heads))
+                enabled: targets.map(\.id), progress: SyncStore.state().targets, heads: heads))
         guard !needed.isEmpty, let namespaceId = try? BackupKeychain.namespaceId() else { return }
 
         for descriptor in targets where needed.contains(descriptor.id) {
@@ -230,7 +307,7 @@ final class SyncPass {
                 continue
             }
             await writeTheDeviceRecord(groupId: groupId, paths: paths, provider: provider)
-            state.confirm(targetId: descriptor.id, heads: heads)
+            SyncStore.update { $0.confirm(targetId: descriptor.id, heads: heads) }
         }
     }
 

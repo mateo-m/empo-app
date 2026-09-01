@@ -31,7 +31,15 @@ enum SyncJoin {
 
     /// The user said yes. The next pass reads the group's copies and
     /// publishes this device's own.
+    ///
+    /// The local document goes first. Two documents that never shared
+    /// a history give the root a second `preferences` map, and
+    /// Automerge answers one of the two, so the group's keys would
+    /// read as absent here. This device's own values are not lost
+    /// with it: step 4 of 10.5 reads them from the device and writes
+    /// them over the merged document.
     static func join(_ group: DiscoveredSyncGroup) {
+        try? FileManager.default.removeItem(at: BackupRoot.syncDocumentFile)
         var state = SyncStore.state()
         state.join(group.groupId, at: Date())
         SyncStore.save(state)
