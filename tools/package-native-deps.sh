@@ -41,6 +41,33 @@ PLATFORM_NAME=iphoneos "$VERIFY"
 echo "==> verifying simulator tree"
 PLATFORM_NAME=iphonesimulator "$VERIFY"
 
+DEVICE_TREE="$DEPS_DIR/build-iphoneos-arm64"
+SIM_TREE="$DEPS_DIR/build-iphonesimulator-arm64"
+for tree in "$DEVICE_TREE" "$SIM_TREE"; do
+    [ -f "$tree/lib/.deps-fingerprint" ] || {
+        echo "error: $tree/lib/.deps-fingerprint missing; rebuild the tree" >&2
+        exit 1
+    }
+    [ -f "$tree/MANIFEST" ] || {
+        echo "error: $tree/MANIFEST missing; rebuild the tree" >&2
+        exit 1
+    }
+done
+DEPS_FINGERPRINT="$(cat "$DEVICE_TREE/lib/.deps-fingerprint")"
+[ "$DEPS_FINGERPRINT" = "$(cat "$SIM_TREE/lib/.deps-fingerprint")" ] || {
+    echo "error: the two trees carry different dependency fingerprints; rebuild both from one commit" >&2
+    exit 1
+}
+for field in mode sdk_version; do
+    device_value="$(sed -n "s/^$field=//p" "$DEVICE_TREE/MANIFEST")"
+    sim_value="$(sed -n "s/^$field=//p" "$SIM_TREE/MANIFEST")"
+    [ "$device_value" = "$sim_value" ] || {
+        echo "error: $field differs between the trees: iphoneos=$device_value iphonesimulator=$sim_value" >&2
+        exit 1
+    }
+done
+SDK_VERSION="$(sed -n 's/^sdk_version=//p' "$DEVICE_TREE/MANIFEST")"
+
 OUT="${TMPDIR:-/tmp}/native-ios-prebuilt.tar.gz"
 rm -f "$OUT"
 
@@ -65,7 +92,19 @@ cat >"$VERSION_FILE" <<EOF
 # tools/package-native-deps.sh updates this file. Commit it with the release.
 NATIVE_DEPS_VERSION=$TAG
 NATIVE_DEPS_SHA256=$SHA256
+NATIVE_DEPS_FINGERPRINT=$DEPS_FINGERPRINT
+NATIVE_DEPS_SDK_VERSION=$SDK_VERSION
 EOF
+
+NOTES="${TMPDIR:-/tmp}/native-ios-prebuilt-notes.md"
+{
+    for tree in "$DEVICE_TREE" "$SIM_TREE"; do
+        echo "## $(basename "$tree")"
+        echo '```'
+        cat "$tree/MANIFEST"
+        echo '```'
+    done
+} >"$NOTES"
 
 echo ""
 echo "Packaged: $OUT"
@@ -93,9 +132,9 @@ if [ "$PUBLISH" = "1" ]; then
     else
         echo "==> publishing to empo-deps as $TAG"
         gh release create "$TAG" "$OUT" \
-            --repo mateo-m/empo-deps --title "native deps $TAG"
+            --repo mateo-m/empo-deps --title "native deps $TAG" --notes-file "$NOTES"
     fi
 else
     echo "Upload:"
-    echo "  gh release create $TAG \"$OUT\" --repo mateo-m/empo-deps --title \"native deps $TAG\""
+    echo "  gh release create $TAG \"$OUT\" --repo mateo-m/empo-deps --title \"native deps $TAG\" --notes-file \"$NOTES\""
 fi
