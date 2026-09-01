@@ -66,6 +66,6 @@ enum PreferenceRestore {
     private static func apply(_ plan: PreferenceRollbackPlan) {
         DevicePreferences.apply(plan.sets)
         DevicePreferences.remove(plan.deletes)
-        SyncPass.shared.schedule(after: 0)
+        SyncPass.shared.schedule(.now)
     }
 }

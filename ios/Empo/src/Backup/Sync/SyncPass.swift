@@ -18,85 +18,121 @@ final class SyncPass {
 
     static let shared = SyncPass()
 
-    private var isRunning = false
-    /// Whether a pass arrived while one ran, per the rerun below.
-    private var asksAgain = false
-    private var didStart = false
-    private var wait: Task<Void, Never>?
+    /// Why a pass runs, per 10.11.
+    enum Trigger {
+        /// Empo opened, or a join or a restore asked for a pass. It
+        /// always reads every target.
+        case now
+        /// The user changed a setting, a binding, or a layout. It
+        /// waits, because a settings screen writes a key on every
+        /// keystroke and every drag.
+        case afterALocalChange
+    }
+
+    /// What the pass is doing.
+    private enum State {
+        /// `start()` has not run, so no news reaches the pass yet.
+        case new
+        case idle
+        /// A pass is due, and the task waits for it.
+        case waiting(Task<Void, Never>)
+        /// A pass is in flight. News that arrives now asks for the
+        /// pass that follows it.
+        case running(newsArrived: Bool)
+    }
+
+    private var state = State.new
+    /// What this device held at the last pass. Step 4 writes the
+    /// merged values here, and those writes post the news a local
+    /// change posts, so the pass compares before it runs again.
+    private var lastLocalValues: SyncDocumentModel?
 
     // MARK: - The two triggers of 10.11
 
     /// The scene delegate calls this once.
     func start() {
-        guard !didStart else { return }
-        didStart = true
+        guard case .new = state else { return }
+        state = .idle
         let center = NotificationCenter.default
         center.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { _ in
-            MainActor.assumeIsolated { SyncPass.shared.schedule(after: 0) }
+            MainActor.assumeIsolated { SyncPass.shared.schedule(.now) }
         }
         center.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { _ in
-            MainActor.assumeIsolated { SyncPass.shared.schedule(after: SyncPass.localChangeWait) }
+            MainActor.assumeIsolated { SyncPass.shared.schedule(.afterALocalChange) }
         }
         center.addObserver(
             forName: .layoutProfileDidChange, object: nil, queue: .main
         ) { _ in
-            MainActor.assumeIsolated { SyncPass.shared.schedule(after: SyncPass.localChangeWait) }
+            MainActor.assumeIsolated { SyncPass.shared.schedule(.afterALocalChange) }
         }
         SyncDeviceCheck.run()
-        schedule(after: 0)
+        schedule(.now)
     }
 
-    /// A local change waits, because a settings screen writes a key
-    /// on every keystroke and every drag.
+    /// How long a local change waits.
     static let localChangeWait: Double = 15
 
     /// The pass this device asks for next. A second ask inside the
     /// wait replaces the first.
-    func schedule(after seconds: Double) {
-        // The pass writes preferences itself, and a play session
-        // writes them too. Neither one asks for a pass of its own.
-        if seconds > 0, BackupDeviceConditions.isSessionLive { return }
-        if seconds > 0, isRunning {
-            asksAgain = true
+    func schedule(_ trigger: Trigger) {
+        // A play session writes preferences of its own, and it does
+        // not ask for a pass.
+        if trigger == .afterALocalChange, BackupDeviceConditions.isSessionLive { return }
+        switch state {
+        case .new:
             return
+        case .running:
+            state = .running(newsArrived: true)
+        case .waiting(let task):
+            task.cancel()
+            state = .waiting(waitThenRun(trigger))
+        case .idle:
+            state = .waiting(waitThenRun(trigger))
         }
-        wait?.cancel()
-        wait = Task { [weak self] in
-            if seconds > 0 { try? await Task.sleep(for: .seconds(seconds)) }
+    }
+
+    private func waitThenRun(_ trigger: Trigger) -> Task<Void, Never> {
+        Task { [weak self] in
+            if trigger == .afterALocalChange {
+                try? await Task.sleep(for: .seconds(Self.localChangeWait))
+            }
             guard !Task.isCancelled else { return }
-            self?.wait = nil
-            await self?.run()
+            await self?.run(trigger)
         }
     }
 
     /// One pass. It answers nothing, because the user never waits
     /// for it, per 10.11.
-    func run() async {
-        guard !isRunning else {
+    func run(_ trigger: Trigger = .now) async {
+        if case .running = state {
             // The news that asked for this pass arrived after the
             // running one read the targets, so it runs again after.
-            asksAgain = true
+            state = .running(newsArrived: true)
             return
         }
-        isRunning = true
-        defer {
-            isRunning = false
-            if asksAgain {
-                asksAgain = false
-                schedule(after: 0)
-            }
-        }
+        state = .running(newsArrived: false)
+        defer { runTheNextPass() }
+        await pass(trigger)
+    }
 
-        let state = SyncStore.state()
-        guard let groupId = state.groupId else { return }
+    /// The pass that follows, where news arrived while this one ran.
+    private func runTheNextPass() {
+        guard case .running(let newsArrived) = state else { return }
+        state = .idle
+        if newsArrived { schedule(.now) }
+    }
+
+    private func pass(_ trigger: Trigger) async {
+        let sync = SyncStore.state()
+        guard let groupId = sync.groupId else { return }
         let targets = BackupTargets.load().filter { !$0.isPaused }
         guard !targets.isEmpty else { return }
 
-        let document = SyncDocumentFile.read(actorId: state.actorId)
+        let document = SyncDocumentFile.read(actorId: sync.actorId)
         guard let held = try? SyncDocument.model(of: document) else {
             log("the local document could not be read")
             return
@@ -110,9 +146,15 @@ final class SyncPass {
         // A document a newer Empo wrote still applies here. This
         // build only stops writing to it, per 10.10.
         let publishes = !SyncCopyValidation.readsButDoesNotPublish(held)
+        var mine = SyncDocumentModel()
+        updateIdentities { mine = SyncLocalValues.current(identities: &$0) }
+        // Step 4 writes the merged values to this device, and those
+        // writes post the news a local change posts. A pass that
+        // finds nothing new of its own stops here, so no pass asks
+        // for the next one.
+        if trigger == .afterALocalChange, mine == lastLocalValues { return }
+        lastLocalValues = mine
         if publishes {
-            var mine = SyncDocumentModel()
-            updateIdentities { mine = SyncLocalValues.current(identities: &$0) }
             try? SyncDocument.write(held.overlaid(with: mine), to: document)
         }
 
@@ -141,7 +183,7 @@ final class SyncPass {
         // pass read. Nothing of it goes to the new group, and the
         // pass that follows reads the new one whole.
         guard SyncStore.state().groupId == groupId else {
-            asksAgain = true
+            state = .running(newsArrived: true)
             return
         }
         await publish(document, groupId: groupId, targets: targets)
@@ -242,24 +284,46 @@ final class SyncPass {
                 enabled: targets.map(\.id), progress: SyncStore.state().targets, heads: heads))
         guard !needed.isEmpty, let namespaceId = try? BackupKeychain.namespaceId() else { return }
 
-        for descriptor in targets where needed.contains(descriptor.id) {
-            guard let provider = await BackupTargets.provider(for: descriptor) else { continue }
-            let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
-            do {
-                try await provider.put(
-                    localFile: SyncDocumentFile.url, path: paths.syncDocumentFile)
-                guard try await provider.confirm(path: paths.syncDocumentFile) == .confirmed else {
-                    continue
+        // A target is a mailbox, so the copies go out together.
+        let took = await withTaskGroup(of: TargetDescriptor?.self) { group in
+            for descriptor in targets where needed.contains(descriptor.id) {
+                group.addTask { @MainActor in
+                    await self.publish(
+                        to: descriptor, groupId: groupId, namespaceId: namespaceId)
                 }
-            } catch {
-                log("\(descriptor.label) took no copy: \(error)")
-                continue
             }
-            await writeTheDeviceRecord(groupId: groupId, paths: paths, provider: provider)
+            var out: [TargetDescriptor] = []
+            for await descriptor in group {
+                if let descriptor { out.append(descriptor) }
+            }
+            return out
+        }
+
+        for descriptor in took {
             updateState("the confirmed heads of \(descriptor.label)") {
                 $0.confirm(targetId: descriptor.id, heads: heads)
             }
         }
+    }
+
+    /// One target takes the copy, or it does not. A target that
+    /// fails takes nothing from the others, per 10.5.
+    private func publish(
+        to descriptor: TargetDescriptor, groupId: String, namespaceId: String
+    ) async -> TargetDescriptor? {
+        guard let provider = await BackupTargets.provider(for: descriptor) else { return nil }
+        let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
+        do {
+            try await provider.put(localFile: SyncDocumentFile.url, path: paths.syncDocumentFile)
+            guard try await provider.confirm(path: paths.syncDocumentFile) == .confirmed else {
+                return nil
+            }
+        } catch {
+            log("\(descriptor.label) took no copy: \(error)")
+            return nil
+        }
+        await writeTheDeviceRecord(groupId: groupId, paths: paths, provider: provider)
+        return descriptor
     }
 
     /// The group id rides `device.json`, per 10.5 step 1. A pass

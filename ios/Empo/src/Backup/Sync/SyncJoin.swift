@@ -41,7 +41,7 @@ enum SyncJoin {
     static func join(_ group: DiscoveredSyncGroup) {
         SyncDocumentFile.delete()
         try? SyncStore.update { $0.join(group.groupId, at: Date()) }
-        SyncPass.shared.schedule(after: 0)
+        SyncPass.shared.schedule(.now)
     }
 
     /// The first target makes a group, per 10.4. A device with a

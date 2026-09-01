@@ -28,7 +28,7 @@ final class BackupPass: BackupRunning {
             return BackupPassResult(didFinish: true)
         }
 
-        let games = await gamesInScope(scope)
+        let (games, names) = await gamesInScope(scope)
         BackupScheduler.shared.passCovers(gameKeys: Set(games.map(\.identity.gameKey)))
         BackupRunMonitor.shared.runStarts(names: names)
         progress?.totalUnitCount = Int64(max(1, targets.count))
@@ -113,13 +113,12 @@ final class BackupPass: BackupRunning {
 
     // MARK: - The games
 
-    /// The name of each game the pass covers, keyed by its game key.
-    /// The pill and the run block of 13.2 name the game they upload.
-    private var names: [String: String] = [:]
-
-    /// The games this trigger covers, in the order 7.8 asks for.
-    private func gamesInScope(_ scope: BackupScanScope) async -> [BackupRunGame] {
-        names = [:]
+    /// The games this trigger covers, in the order 7.8 asks for,
+    /// with the name each one shows. The pill and the run block of
+    /// 13.2 name the game they upload.
+    private func gamesInScope(
+        _ scope: BackupScanScope
+    ) async -> (games: [BackupRunGame], names: [String: String]) {
         let containers = GameContainer.discover()
         let byKey = Dictionary(
             uniqueKeysWithValues: containers.map {
@@ -136,6 +135,7 @@ final class BackupPass: BackupRunning {
 
         let thresholds = BackupTargets.thresholds()
         var games: [BackupRunGame] = []
+        var names: [String: String] = [:]
         for key in keys {
             guard let container = byKey[key] else { continue }
             // The legacy per-game keys have to leave UserDefaults
@@ -158,7 +158,7 @@ final class BackupPass: BackupRunning {
                     versionMarker: GameIdentities.versionMarker(for: container),
                     lastPlayedAt: metadata.lastPlayed))
         }
-        return games
+        return (games, names)
     }
 
     // MARK: - The device
