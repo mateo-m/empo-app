@@ -89,6 +89,7 @@ final class BackupScheduler {
     /// sheet of 13.15 can lock the games it writes.
     func passCovers(gameKeys: Set<String>) {
         runningGameKeys = gameKeys
+        BackupBadges.shared.invalidate()
     }
 
     // MARK: - Launch
@@ -302,6 +303,7 @@ final class BackupScheduler {
             isRunning = false
             runningGameKeys = []
             BackupNetwork.allowsThisRunOverCellular = false
+            BackupBadges.shared.invalidate()
         }
         progress?.totalUnitCount = 1
 

@@ -90,6 +90,9 @@ public struct TargetRowFacts: Equatable, Sendable {
     public var failure: TargetFailure?
     /// When the failure happened. The unreachable line names it.
     public var failedAt: Date?
+    /// The failure time in the words the caller formatted, such as
+    /// "14:03".
+    public var failedAtText: String
     /// False for a foreground-only target, per 8.9.
     public var supportsBackgroundTransfer: Bool
     /// How long ago the last run closed a snapshot here, in words
@@ -101,6 +104,7 @@ public struct TargetRowFacts: Equatable, Sendable {
         reach: TargetReach = .open,
         failure: TargetFailure? = nil,
         failedAt: Date? = nil,
+        failedAtText: String = "",
         supportsBackgroundTransfer: Bool = true,
         lastSuccessText: String? = nil
     ) {
@@ -108,6 +112,7 @@ public struct TargetRowFacts: Equatable, Sendable {
         self.reach = reach
         self.failure = failure
         self.failedAt = failedAt
+        self.failedAtText = failedAtText
         self.supportsBackgroundTransfer = supportsBackgroundTransfer
         self.lastSuccessText = lastSuccessText
     }
@@ -242,7 +247,7 @@ public enum TargetRowRules {
     }
 
     /// The whole row.
-    public static func row(_ facts: TargetRowFacts, time: String = "") -> TargetRow {
+    public static func row(_ facts: TargetRowFacts) -> TargetRow {
         let state = state(of: facts)
         return TargetRow(
             targetId: facts.descriptor.id,
@@ -250,7 +255,7 @@ public enum TargetRowRules {
             accountHint: facts.descriptor.accountHint,
             state: state,
             stateLine: stateLine(
-                state, target: facts.descriptor, time: time,
+                state, target: facts.descriptor, time: facts.failedAtText,
                 lastSuccessText: facts.lastSuccessText),
             action: action(for: state),
             foregroundOnlyLine: facts.supportsBackgroundTransfer ? nil : foregroundOnlyLine,

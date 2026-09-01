@@ -33,9 +33,10 @@ public enum BackupsScreenStatusRules {
     /// `lastSuccessText` carries the newest run across the targets
     /// in the words the caller formatted, such as "today".
     public static func status(
-        rows: [TargetRow], lastSuccessText: String? = nil
+        of targets: [TargetRowFacts], lastSuccessText: String? = nil
     ) -> BackupsScreenStatus? {
-        guard !rows.isEmpty else { return nil }
+        guard !targets.isEmpty else { return nil }
+        let rows = targets.map(TargetRowRules.row)
         let enabled = rows.filter { $0.state != .paused }
         guard !enabled.isEmpty else {
             return BackupsScreenStatus(

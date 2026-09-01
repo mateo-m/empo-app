@@ -221,25 +221,15 @@ struct GameLibraryView: View {
                 duplicateNoticeNames = GameContainerMigration.pendingDuplicateNoticeNames()
             }
             .task(id: library.initialScanCompleted) {
-                readTheBackupBadges()
+                BackupBadges.shared.reads {
+                    library.games.map { BackupBadgeGame(id: $0.id, lastPlayed: $0.lastPlayed) }
+                }
             }
             .task {
                 // The question of 13.18 comes once, at the launch
                 // after the interruption.
                 resumeAsk = ResumeQuestionAsk.pending()
             }
-            .onChange(of: BackupRunMonitor.shared.finishedAt) { _, _ in
-                readTheBackupBadges()
-            }
-    }
-
-    /// The card badges of 13.3 and the one banner of 7.1, in one
-    /// open of the state store.
-    private func readTheBackupBadges() {
-        BackupBadges.shared.refresh(
-            games: library.games.map {
-                BackupBadgeGame(id: $0.id, lastPlayed: $0.lastPlayed)
-            })
     }
 
     private var libraryPresentedContent: some View {

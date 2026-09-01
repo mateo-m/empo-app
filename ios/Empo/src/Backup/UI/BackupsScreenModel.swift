@@ -61,26 +61,29 @@ final class BackupsScreenModel {
         iCloudReach = await Self.reach()
         let descriptors = BackupTargets.load()
         var items: [BackupTargetItem] = []
+        var facts: [TargetRowFacts] = []
         let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
         defer { store?.close() }
+        let runs = (try? store?.runHistory()) ?? []
 
         for descriptor in descriptors {
             let capabilities = await BackupTargets.provider(for: descriptor)?.capabilities
             let status = try? store?.targetStatus(targetId: descriptor.id)
             let games = (try? store?.usage(targetId: descriptor.id)) ?? []
             let written = games.reduce(0) { $0 + $1.bytes }
-            let facts = TargetRowFacts(
+            let row = TargetRowFacts(
                 descriptor: descriptor,
                 reach: descriptor.provider == .iCloudDrive ? iCloudReach : .open,
                 failure: status?.failure,
                 failedAt: status?.failedAt,
+                failedAtText: (status?.failedAt).map(BackupText.time) ?? "",
                 supportsBackgroundTransfer: capabilities?.supportsBackgroundTransfer ?? true,
-                lastSuccessText: Self.lastSuccess(of: descriptor.id, store: store))
+                lastSuccessText: Self.lastSuccess(of: descriptor.id, in: runs))
+            facts.append(row)
             items.append(
                 BackupTargetItem(
                     descriptor: descriptor,
-                    row: TargetRowRules.row(
-                        facts, time: (status?.failedAt).map(BackupText.time) ?? ""),
+                    row: TargetRowRules.row(row),
                     usage: TargetUsageRules.usage(
                         reading: status?.quota, capBytes: descriptor.capBytes,
                         bytesWrittenHere: written),
@@ -91,10 +94,10 @@ final class BackupsScreenModel {
                     lastSweep: try? store?.lastSweep(targetId: descriptor.id)))
         }
         self.items = items
-        self.history = (try? store?.runHistory()) ?? []
+        self.history = runs
         self.status = BackupsScreenStatusRules.status(
-            rows: items.map(\.row),
-            lastSuccessText: history.first { $0.outcome == .success }?.finishedAt
+            of: facts,
+            lastSuccessText: runs.first { $0.outcome == .success }?.finishedAt
                 .map(BackupText.day))
         await readTheNotificationPermission()
     }
@@ -107,8 +110,7 @@ final class BackupsScreenModel {
         }
     }
 
-    private static func lastSuccess(of targetId: String, store: BackupStateStore?) -> String? {
-        guard let runs = try? store?.runHistory() else { return nil }
+    private static func lastSuccess(of targetId: String, in runs: [BackupRunRecord]) -> String? {
         let last = runs.first { $0.targetId == targetId && $0.outcome == .success }
         return last?.finishedAt.map(BackupText.ago)
     }

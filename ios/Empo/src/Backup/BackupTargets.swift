@@ -31,6 +31,7 @@ enum BackupTargets {
         guard targets != stored else { return }
         try TargetDescriptorFile(targets: targets)
             .write(applicationSupport: BackupRoot.layout.applicationSupport)
+        BackupBadges.shared.invalidate()
     }
 
     /// Adds one target, or replaces the one that carries its id.

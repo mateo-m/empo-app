@@ -12,19 +12,36 @@ public struct GameTargetState: Equatable, Sendable {
     /// nothing does.
     public var cause: StaleCause?
     public var lastSuccessAt: Date?
+    /// When the user last played the game. The clock of 7.1 counts
+    /// from here where no snapshot covers the play.
+    public var lastPlayedAt: Date?
 
     public init(
         targetId: String,
         displayName: String,
         isPaused: Bool = false,
         cause: StaleCause? = nil,
-        lastSuccessAt: Date? = nil
+        lastSuccessAt: Date? = nil,
+        lastPlayedAt: Date? = nil
     ) {
         self.targetId = targetId
         self.displayName = displayName
         self.isPaused = isPaused
         self.cause = cause
         self.lastSuccessAt = lastSuccessAt
+        self.lastPlayedAt = lastPlayedAt
+    }
+
+    /// The clock inputs of 7.1. The status line of 13.16, the card
+    /// badge, and the library banner all read one ladder through
+    /// this.
+    public var freshness: TargetFreshness {
+        TargetFreshness(
+            targetId: targetId,
+            isPaused: isPaused,
+            lastSuccessAt: lastSuccessAt,
+            lastPlayedAt: lastPlayedAt,
+            cause: cause)
     }
 }
 
@@ -149,8 +166,11 @@ public enum GameBackupStatusRules {
             return GameBackupStatus(state: .waitingForWiFi, targetLabel: label(waiting))
         }
 
-        let late = enabled.filter { days(since: $0.lastSuccessAt, now: now) ?? 0 >= staleDays }
-        if let worst = late.min(by: order) {
+        // The ladder of 7.1 decides who is late, so the line, the
+        // card badge, and the library banner never disagree.
+        let late = enabled.filter { Staleness.level(of: $0.freshness, now: now) != .fresh }
+        let worstId = Staleness.worst(of: late.map(\.freshness), now: now).targetId
+        if let worst = late.first(where: { $0.targetId == worstId }) {
             return GameBackupStatus(
                 state: .stale(days: days(since: worst.lastSuccessAt, now: now) ?? staleDays),
                 targetLabel: label(late))
@@ -162,7 +182,7 @@ public enum GameBackupStatusRules {
         return GameBackupStatus(state: .healthy, targetLabel: label(enabled))
     }
 
-    private static let staleDays = 7
+    private static let staleDays = Int(Staleness.staleAfter / 86_400)
 
     /// A cause that is not the clock and not the policy is a
     /// failure, per 13.16.
@@ -180,8 +200,10 @@ public enum GameBackupStatusRules {
         targets.count == 1 ? targets[0].displayName : nil
     }
 
-    /// The oldest success first, then the target id, so one set of
-    /// targets always answers the same way.
+    /// The failure the line names: the oldest success first, then
+    /// the target id, so one set of targets always answers the same
+    /// way. A failure is not a staleness level, so the ladder of 7.1
+    /// cannot pick it.
     private static func order(_ left: GameTargetState, _ right: GameTargetState) -> Bool {
         let leftAt = left.lastSuccessAt ?? .distantPast
         let rightAt = right.lastSuccessAt ?? .distantPast

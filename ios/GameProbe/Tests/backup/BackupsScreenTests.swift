@@ -80,8 +80,7 @@ final class BackupsScreenTests: XCTestCase {
         let row = TargetRowRules.row(
             TargetRowFacts(
                 descriptor: target(label: "Homelab", accountHint: "homelab.lan"),
-                failure: .unreachable, failedAt: failedAt),
-            time: "14:03")
+                failure: .unreachable, failedAt: failedAt, failedAtText: "14:03"))
         XCTAssertEqual(row.stateLine, "Could not reach homelab.lan at 14:03")
         XCTAssertNil(row.action)
     }
@@ -94,50 +93,43 @@ final class BackupsScreenTests: XCTestCase {
 
     // MARK: - 2. The status line
 
-    private func row(_ facts: TargetRowFacts) -> TargetRow {
-        TargetRowRules.row(facts, time: "14:03")
-    }
-
     func testTheStatusLineNamesTheWorstEnabledTargetOfThree() {
-        let rows = [
-            row(TargetRowFacts(descriptor: target(id: "a", label: "Homelab"))),
-            row(
-                TargetRowFacts(
-                    descriptor: target(id: "b", label: "Dropbox"), failure: .needsSignIn)),
-            row(
-                TargetRowFacts(
-                    descriptor: target(id: "c", label: "S3"), failure: .full(reason: "no room"))),
+        let targets = [
+            TargetRowFacts(descriptor: target(id: "a", label: "Homelab")),
+            TargetRowFacts(
+                descriptor: target(id: "b", label: "Dropbox"), failure: .needsSignIn),
+            TargetRowFacts(
+                descriptor: target(id: "c", label: "S3"), failure: .full(reason: "no room")),
         ]
-        let status = BackupsScreenStatusRules.status(rows: rows)
+        let status = BackupsScreenStatusRules.status(of: targets)
         XCTAssertEqual(status?.line, "Dropbox needs you to sign in again")
         XCTAssertEqual(status?.targetId, "b")
         XCTAssertEqual(status?.isHealthy, false)
     }
 
     func testAPausedTargetLeavesTheStatusComputation() {
-        let rows = [
-            row(
-                TargetRowFacts(
-                    descriptor: target(id: "a", label: "Dropbox", isPaused: true),
-                    failure: .needsSignIn)),
-            row(TargetRowFacts(descriptor: target(id: "b", label: "Homelab"))),
+        let targets = [
+            TargetRowFacts(
+                descriptor: target(id: "a", label: "Dropbox", isPaused: true),
+                failure: .needsSignIn),
+            TargetRowFacts(descriptor: target(id: "b", label: "Homelab")),
         ]
-        let status = BackupsScreenStatusRules.status(rows: rows, lastSuccessText: "today")
+        let status = BackupsScreenStatusRules.status(of: targets, lastSuccessText: "today")
         XCTAssertEqual(status?.line, "All games backed up today")
         XCTAssertTrue(status?.isHealthy == true)
     }
 
     func testAScreenWithNoTargetCarriesNoStatusLine() {
-        XCTAssertNil(BackupsScreenStatusRules.status(rows: []))
+        XCTAssertNil(BackupsScreenStatusRules.status(of: []))
     }
 
     func testEveryTargetPausedSaysSo() {
-        let rows = [
-            row(TargetRowFacts(descriptor: target(id: "a", isPaused: true))),
-            row(TargetRowFacts(descriptor: target(id: "b", isPaused: true))),
+        let targets = [
+            TargetRowFacts(descriptor: target(id: "a", isPaused: true)),
+            TargetRowFacts(descriptor: target(id: "b", isPaused: true)),
         ]
         XCTAssertEqual(
-            BackupsScreenStatusRules.status(rows: rows)?.line,
+            BackupsScreenStatusRules.status(of: targets)?.line,
             BackupsScreenStatusRules.everythingPausedLine)
     }
 

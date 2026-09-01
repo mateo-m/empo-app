@@ -14,6 +14,10 @@ final class BackupBadges {
 
     private init() {}
 
+    /// Where the badge pass reads the library. `GameLibraryView`
+    /// gives it once, so a write that changes a badge refreshes
+    /// without the view.
+    private var readTheLibrary: (@MainActor () -> [BackupBadgeGame])?
     private var badgesByGameId: [String: GameBackupBadge] = [:]
     /// The one banner the library shows at 21 days, or `nil` while
     /// no game reached the mark.
@@ -26,8 +30,22 @@ final class BackupBadges {
         badgesByGameId[gameId] ?? .none
     }
 
+    /// The library the badges count. The view gives it once.
+    func reads(_ library: @escaping @MainActor () -> [BackupBadgeGame]) {
+        readTheLibrary = library
+        refresh()
+    }
+
+    /// Every write that changes a badge calls this: a run that
+    /// starts, a run that ends, and a target added, paused, or
+    /// removed.
+    func invalidate() {
+        refresh()
+    }
+
     /// Reads every game in one open of the state store.
-    func refresh(games: [BackupBadgeGame]) {
+    private func refresh() {
+        guard let games = readTheLibrary?() else { return }
         let descriptors = BackupTargets.load()
         guard !descriptors.isEmpty else {
             badgesByGameId = [:]
@@ -37,21 +55,20 @@ final class BackupBadges {
 
         let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
         defer { store?.close() }
-        let running = BackupScheduler.shared.runningGameKeys
         let now = Date()
 
         var badges: [String: GameBackupBadge] = [:]
         var clocks: [GameFreshness] = []
         for game in games {
             let gameKey = BackupKeys.gameKey(containerFolderName: game.id)
-            let targets = GameBackupStatusReader.targets(
-                gameKey: gameKey, descriptors: descriptors, store: store)
-            let status = GameBackupStatusRules.status(
-                targets: targets, isRunning: running.contains(gameKey), now: now)
-            badges[game.id] = status.badge
-            clocks.append(
-                GameBackupStatusReader.freshness(
-                    gameKey: gameKey, lastPlayedAt: game.lastPlayed, targets: targets, now: now))
+            let read = GameBackupStatusReader.read(
+                gameKey: gameKey,
+                lastPlayedAt: game.lastPlayed,
+                descriptors: descriptors,
+                store: store,
+                now: now)
+            badges[game.id] = read.status.badge
+            clocks.append(read.freshness)
         }
 
         badgesByGameId = badges

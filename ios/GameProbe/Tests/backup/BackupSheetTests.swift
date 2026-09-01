@@ -13,14 +13,16 @@ final class BackupSheetTests: XCTestCase {
         name: String? = nil,
         paused: Bool = false,
         cause: StaleCause? = nil,
-        daysAgo: Double? = 0
+        daysAgo: Double? = 0,
+        playedDaysAgo: Double? = 0
     ) -> GameTargetState {
         GameTargetState(
             targetId: id,
             displayName: name ?? id,
             isPaused: paused,
             cause: cause,
-            lastSuccessAt: daysAgo.map { now.addingTimeInterval(-$0 * 86_400) })
+            lastSuccessAt: daysAgo.map { now.addingTimeInterval(-$0 * 86_400) },
+            lastPlayedAt: playedDaysAgo.map { now.addingTimeInterval(-$0 * 86_400) })
     }
 
     // MARK: - 1. The eight states, in precedence order
@@ -66,6 +68,23 @@ final class BackupSheetTests: XCTestCase {
 
         XCTAssertEqual(
             GameBackupStatusRules.status(targets: [], isRunning: false, now: now).state, .notSetUp)
+    }
+
+    func testTheLineAndTheBadgeReadOneLadder() {
+        // A play after the last success starts the clock of 7.1.
+        // The line, the badge, and the banner count from the same
+        // date, so no screen calls a game late while another calls
+        // it current.
+        for days in [0.0, 3, 6, 6.9, 7, 12, 21, 40] {
+            let late = target("a", daysAgo: days, playedDaysAgo: 0)
+            let status = GameBackupStatusRules.status(
+                targets: [late], isRunning: false, now: now)
+            let level = Staleness.level(of: late.freshness, now: now)
+            XCTAssertEqual(
+                status.state == .stale(days: Int(days)), level != .fresh,
+                "the two ladders disagree at \(days) days")
+            XCTAssertEqual(status.badge == .stale, level != .fresh)
+        }
     }
 
     func testTheLineNamesATargetOnlyWhenExactlyOneIsAtFault() {
@@ -262,7 +281,8 @@ final class BackupSheetTests: XCTestCase {
             targetId: "a",
             displayName: "homelab",
             cause: StaleCause.of(.unreachable),
-            lastSuccessAt: now.addingTimeInterval(-9 * 86_400))
+            lastSuccessAt: now.addingTimeInterval(-9 * 86_400),
+            lastPlayedAt: now)
         let status = GameBackupStatusRules.status(
             targets: [unreachable], isRunning: false, now: now)
         XCTAssertEqual(status.state, .stale(days: 9))

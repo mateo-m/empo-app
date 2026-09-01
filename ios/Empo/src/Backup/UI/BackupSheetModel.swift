@@ -80,14 +80,14 @@ final class BackupSheetModel {
     private func readTheStatus(_ descriptors: [TargetDescriptor]) {
         let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
         defer { store?.close() }
-        let targets = GameBackupStatusReader.targets(
-            gameKey: gameKey, descriptors: descriptors, store: store)
-
-        status = GameBackupStatusRules.status(
-            targets: targets,
-            isRunning: BackupScheduler.shared.runningGameKeys.contains(gameKey),
+        let read = GameBackupStatusReader.read(
+            gameKey: gameKey,
+            lastPlayedAt: GameMetadata.load(from: container).lastPlayed,
+            descriptors: descriptors,
+            store: store,
             now: Date())
-        lastSuccessAt = targets.compactMap(\.lastSuccessAt).max()
+        status = read.status
+        lastSuccessAt = read.lastSuccessAt
     }
 
     private func readTheLocks() {
