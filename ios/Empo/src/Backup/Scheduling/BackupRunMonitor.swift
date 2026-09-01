@@ -20,6 +20,12 @@ final class BackupRunMonitor: BackupRunObserver {
     /// The games the pass covers, in the order the run takes them,
     /// with the name each card shows.
     private(set) var queue: [BackupRunGameRow] = []
+    /// The games the pass in flight covers, per 13.17. A game in
+    /// this set locks what writes its container.
+    private(set) var runningGameKeys: Set<String> = []
+    /// Why staging is not running, per 7.5 and 7.6, or `nil` while
+    /// nothing holds it. The scheduler writes it at each gate.
+    var pause: StagingPause?
     /// The clock the pill's own 2-second and 5-second rules read.
     /// A timer moves it, because neither rule reacts to an event.
     private(set) var now = Date()
@@ -32,6 +38,7 @@ final class BackupRunMonitor: BackupRunObserver {
     /// The pass starts and names what it covers.
     func runStarts(names: [String: String]) {
         namesByKey = names
+        runningGameKeys = Set(names.keys)
         plan = BackupRunPlan()
         startedAt = Date()
         finishedAt = nil
@@ -46,6 +53,7 @@ final class BackupRunMonitor: BackupRunObserver {
     func runEnds() {
         finishedAt = Date()
         now = Date()
+        runningGameKeys = []
     }
 
     nonisolated func runPlanned(streamKey: String, bytes: Int64) async {
@@ -75,7 +83,7 @@ final class BackupRunMonitor: BackupRunObserver {
 
     var phase: ProgressPill.Phase {
         if finishedAt != nil { return .complete }
-        if let pause = BackupScheduler.shared.pause { return .paused(reason: pause.line) }
+        if let pause { return .paused(reason: pause.line) }
         guard let name = runningGameName else { return .preparing }
         return .uploading(gameName: name)
     }

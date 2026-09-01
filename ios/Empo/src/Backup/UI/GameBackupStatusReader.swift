@@ -36,7 +36,7 @@ enum GameBackupStatusReader {
         return GameBackupRead(
             status: GameBackupStatusRules.status(
                 targets: targets,
-                isRunning: BackupScheduler.shared.runningGameKeys.contains(gameKey),
+                isRunning: BackupRunMonitor.shared.runningGameKeys.contains(gameKey),
                 now: now),
             freshness: Staleness.worst(gameKey: gameKey, of: targets.map(\.freshness), now: now),
             lastSuccessAt: targets.compactMap(\.lastSuccessAt).max())

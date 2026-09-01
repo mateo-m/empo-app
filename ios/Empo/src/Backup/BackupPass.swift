@@ -29,7 +29,6 @@ final class BackupPass: BackupRunning {
         }
 
         let (games, names) = await gamesInScope(scope)
-        BackupScheduler.shared.passCovers(gameKeys: Set(games.map(\.identity.gameKey)))
         BackupRunMonitor.shared.runStarts(names: names)
         progress?.totalUnitCount = Int64(max(1, targets.count))
         var rows: [BackupPassTarget] = []

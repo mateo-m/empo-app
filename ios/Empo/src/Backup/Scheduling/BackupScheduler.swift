@@ -62,10 +62,6 @@ final class BackupScheduler {
     /// What one pass does. Ticket 008 set it to `BackupPass`.
     var runner: (any BackupRunning)?
 
-    /// Why staging is not running, per 7.5 and 7.6, or `nil` while
-    /// nothing holds it. The screens of section 13 read it.
-    private(set) var pause: StagingPause?
-
     /// The network cause the stale line carries, per 7.4. It is
     /// `waitingForWiFi` while the switch is off and the device is on
     /// cellular.
@@ -78,19 +74,9 @@ final class BackupScheduler {
     /// Whether a pass is in flight. The manual restore door of
     /// 11.3 closes while one is, per the third row of that section.
     private(set) var isRunning = false
-    /// The games the pass in flight covers, per 13.17. A game in
-    /// this set locks what writes its container.
-    private(set) var runningGameKeys: Set<String> = []
     private var foregroundWait: Task<Void, Never>?
     private var runTask: Task<Void, Never>?
     private lazy var store: BackupStateStore? = try? BackupRoot.openStateStore()
-
-    /// The pass tells the scheduler what it covers, so the Backup
-    /// sheet of 13.15 can lock the games it writes.
-    func passCovers(gameKeys: Set<String>) {
-        runningGameKeys = gameKeys
-        BackupBadges.shared.invalidate()
-    }
 
     // MARK: - Launch
 
@@ -271,12 +257,12 @@ final class BackupScheduler {
         let conditions = BackupDeviceConditions.now(isManual: trigger == .manual)
         switch ResourcePolicy.stagingGate(conditions) {
         case .pause(let reason):
-            pause = reason
+            BackupRunMonitor.shared.pause = reason
             log("%@ paused: %@", trigger.rawValue, reason.line)
             close(progress)
             return false
         case .run:
-            pause = nil
+            BackupRunMonitor.shared.pause = nil
         }
 
         // The uploads wait inside the transfer daemon, and the stale
@@ -299,9 +285,9 @@ final class BackupScheduler {
         }
 
         isRunning = true
+        BackupBadges.shared.invalidate()
         defer {
             isRunning = false
-            runningGameKeys = []
             BackupNetwork.allowsThisRunOverCellular = false
             BackupBadges.shared.invalidate()
         }

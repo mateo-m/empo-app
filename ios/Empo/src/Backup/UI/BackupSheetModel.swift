@@ -64,7 +64,7 @@ final class BackupSheetModel {
         readTheStatus(descriptors, store: store)
         readTheStore(descriptors, store: store)
         locks = BackupSheetLockRules.locks(
-            runInFlight: BackupScheduler.shared.runningGameKeys.contains(gameKey),
+            runInFlight: BackupRunMonitor.shared.runningGameKeys.contains(gameKey),
             openGameName: EngineSessionCoordinator.shared.openGameName)
         pendingAsks = GameSaveWatch.shared.pendingAsks(forGame: container.id)
     }
