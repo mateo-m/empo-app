@@ -13,20 +13,32 @@ import GameProbe
 enum BackupTargets {
 
     static func load() -> [TargetDescriptor] {
-        let file = try? TargetDescriptorFile.read(applicationSupport: BackupRoot.layout.applicationSupport)
+        let file = try? TargetDescriptorFile.read(
+            applicationSupport: BackupRoot.layout.applicationSupport)
         return file?.targets ?? []
     }
 
-    static func save(_ targets: [TargetDescriptor]) throws {
+    /// Changes the targets on the file and not on a copy.
+    ///
+    /// A sync pass runs for seconds, and the user adds or pauses a
+    /// target in the middle of one. A caller that read the list
+    /// before the pass and wrote it back after would put the old
+    /// list back, so every change reads the file again first.
+    static func update(_ change: (inout [TargetDescriptor]) -> Void) throws {
+        let stored = load()
+        var targets = stored
+        change(&targets)
+        guard targets != stored else { return }
         try TargetDescriptorFile(targets: targets)
             .write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
     /// Adds one target, or replaces the one that carries its id.
     static func add(_ target: TargetDescriptor) throws {
-        var targets = load().filter { $0.id != target.id }
-        targets.append(target)
-        try save(targets)
+        try update { targets in
+            targets.removeAll { $0.id == target.id }
+            targets.append(target)
+        }
         SyncJoin.startAGroup()
     }
 

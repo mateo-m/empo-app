@@ -72,6 +72,15 @@ public struct TargetDescriptor: Codable, Equatable, Sendable, Identifiable {
         return copy
     }
 
+    /// This device's copy after a document of 10.8 arrives: every
+    /// field the document carries, and this device's own account
+    /// hint. It is the other half of `forSyncDocument()`.
+    public func withSyncedFields(from incoming: TargetDescriptor) -> TargetDescriptor {
+        var copy = incoming
+        copy.accountHint = accountHint
+        return copy
+    }
+
     /// Whether this descriptor arrived without its account hint,
     /// which is what a target placeholder looks like on a device
     /// that has not signed in yet, per 8.8.

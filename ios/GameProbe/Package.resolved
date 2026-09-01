@@ -1,24 +1,6 @@
 {
-  "originHash" : "189af609e6585f8ac30b8e437d90ab026a431aac8db281662d03e0510dc1eb19",
+  "originHash" : "94e6ecc71714b93b27bd6261e4e522e7079bfb3158d2af917878d5a086815577",
   "pins" : [
-    {
-      "identity" : "appauth-ios",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/openid/AppAuth-iOS.git",
-      "state" : {
-        "revision" : "2781038865a80e2c425a1da12cc1327bcd56501f",
-        "version" : "1.7.6"
-      }
-    },
-    {
-      "identity" : "automerge-swift",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/automerge/automerge-swift.git",
-      "state" : {
-        "revision" : "aa45d17ac92cef2b8ded63b47e65a28dc85e3418",
-        "version" : "0.7.2"
-      }
-    },
     {
       "identity" : "bitbytedata",
       "kind" : "remoteSourceControl",

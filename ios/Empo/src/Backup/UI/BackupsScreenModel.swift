@@ -162,54 +162,62 @@ final class BackupsScreenModel {
     // MARK: - Writing
 
     func setPaused(_ isPaused: Bool, targetId: String) async {
-        var targets = BackupTargets.load()
-        guard let index = targets.firstIndex(where: { $0.id == targetId }) else { return }
-        targets[index].isPaused = isPaused
-        try? BackupTargets.save(targets)
-        await refresh()
+        await change(targetId: targetId) { $0.isPaused = isPaused }
     }
 
     func setCap(_ capBytes: Int64?, targetId: String) async {
-        var targets = BackupTargets.load()
-        guard let index = targets.firstIndex(where: { $0.id == targetId }) else { return }
-        targets[index].capBytes = capBytes
-        try? BackupTargets.save(targets)
-        await refresh()
+        await change(targetId: targetId) { $0.capBytes = capBytes }
     }
 
     func setThreshold(_ bytes: Int64?, targetId: String) async {
-        var targets = BackupTargets.load()
-        guard let index = targets.firstIndex(where: { $0.id == targetId }) else { return }
-        targets[index].sizeThresholdBytes = bytes
-        try? BackupTargets.save(targets)
+        await change(targetId: targetId) { $0.sizeThresholdBytes = bytes }
+    }
+
+    private func change(
+        targetId: String, _ edit: (inout TargetDescriptor) -> Void
+    ) async {
+        try? BackupTargets.update { targets in
+            guard let index = targets.firstIndex(where: { $0.id == targetId }) else { return }
+            edit(&targets[index])
+        }
         await refresh()
     }
 
-    /// Removing is local-only, per 8.8 and 13.10.
-    func remove(targetId: String, deleteBackups: Bool) async {
-        if deleteBackups {
-            await deleteThisDeviceNamespace(targetId: targetId)
-        }
-        try? BackupTargets.save(BackupTargets.load().filter { $0.id != targetId })
-        try? BackupKeychain.removeSecret(targetId: targetId)
-        var sync = SyncStore.state()
-        sync.forget(targetId: targetId)
-        SyncStore.save(sync)
-        if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
-            try? store.removeTarget(targetId: targetId)
-            store.close()
+    /// Removing is local-only, per 8.8 and 13.10. It answers the
+    /// line the sheet shows, or `nil` where the target went.
+    ///
+    /// The descriptor goes last, and nothing else runs after a
+    /// failure. A target that still has its descriptor is one the
+    /// user can remove again, while a descriptor that went first
+    /// would leave the secret and the rows with no row to remove
+    /// them from.
+    func remove(targetId: String, deleteBackups: Bool) async -> String? {
+        do {
+            if deleteBackups {
+                try await deleteThisDeviceNamespace(targetId: targetId)
+            }
+            let store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
+            defer { store.close() }
+            try store.removeTarget(targetId: targetId)
+            try SyncStore.update { $0.forget(targetId: targetId) }
+            try BackupKeychain.removeSecret(targetId: targetId)
+            try BackupTargets.update { $0.removeAll { $0.id == targetId } }
+        } catch {
+            await refresh()
+            return "Empo could not remove this target: \(error.localizedDescription)"
         }
         await refresh()
+        return nil
     }
 
     /// A checked box deletes this device's namespace only, per 5.13.
-    private func deleteThisDeviceNamespace(targetId: String) async {
+    private func deleteThisDeviceNamespace(targetId: String) async throws {
         guard let descriptor = items.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor),
             let namespaceId = try? BackupKeychain.namespaceId()
         else { return }
         let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
-        try? await deleteEverything(under: paths.namespacePrefix, on: provider)
+        try await deleteEverything(under: paths.namespacePrefix, on: provider)
     }
 
     func deleteNamespace(_ namespaceId: String, targetId: String) async {

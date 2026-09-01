@@ -15,6 +15,7 @@ struct TargetDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showsEveryGame = false
     @State private var showsRemoveSheet = false
+    @State private var removalFailure: String?
     @State private var gameNames: [String: String] = [:]
 
     private var item: BackupTargetItem? {
@@ -40,11 +41,20 @@ struct TargetDetailScreen: View {
             if let item {
                 RemoveTargetSheet(item: item) { deletesBackups in
                     Task {
-                        await model.remove(targetId: targetId, deleteBackups: deletesBackups)
-                        dismiss()
+                        removalFailure = await model.remove(
+                            targetId: targetId, deleteBackups: deletesBackups)
+                        if removalFailure == nil { dismiss() }
                     }
                 }
             }
+        }
+        .alert(
+            "Remove failed", isPresented: .constant(removalFailure != nil),
+            presenting: removalFailure
+        ) { _ in
+            Button("OK") { removalFailure = nil }
+        } message: { line in
+            Text(line)
         }
     }
 

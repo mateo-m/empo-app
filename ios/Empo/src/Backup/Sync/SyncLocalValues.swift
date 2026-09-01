@@ -132,25 +132,14 @@ enum SyncLocalValues {
     /// arrives without its secret, which is the target placeholder.
     /// Removing a target stays local-only, so nothing here deletes.
     private static func applyDescriptors(_ descriptors: [String: TargetDescriptor]) {
-        var local = BackupTargets.load()
-        var changed = false
-        for (id, incoming) in descriptors {
-            guard let index = local.firstIndex(where: { $0.id == id }) else {
-                local.append(incoming)
-                changed = true
-                continue
+        try? BackupTargets.update { local in
+            for (id, incoming) in descriptors {
+                guard let index = local.firstIndex(where: { $0.id == id }) else {
+                    local.append(incoming)
+                    continue
+                }
+                local[index] = local[index].withSyncedFields(from: incoming)
             }
-            var merged = local[index]
-            merged.label = incoming.label
-            merged.root = incoming.root
-            merged.sizeThresholdBytes = incoming.sizeThresholdBytes
-            merged.capBytes = incoming.capBytes
-            merged.isPaused = incoming.isPaused
-            guard merged != local[index] else { continue }
-            local[index] = merged
-            changed = true
         }
-        guard changed else { return }
-        try? BackupTargets.save(local)
     }
 }

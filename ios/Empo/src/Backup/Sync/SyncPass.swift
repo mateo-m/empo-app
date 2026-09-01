@@ -96,13 +96,11 @@ final class SyncPass {
         let targets = BackupTargets.load().filter { !$0.isPaused }
         guard !targets.isEmpty else { return }
 
-        let document = localDocument(actorId: state.actorId)
+        let document = SyncDocumentFile.read(actorId: state.actorId)
         guard let held = try? SyncDocument.model(of: document) else {
             log("the local document could not be read")
             return
         }
-        var identities = SyncStore.identities()
-
         // Step 3 writes the document onto this device, so a local
         // value that differs from the document is a change the user
         // made since the last pass. It goes in before the merge. A
@@ -113,7 +111,8 @@ final class SyncPass {
         // build only stops writing to it, per 10.10.
         let publishes = !SyncCopyValidation.readsButDoesNotPublish(held)
         if publishes {
-            let mine = SyncLocalValues.current(identities: &identities)
+            var mine = SyncDocumentModel()
+            updateIdentities { mine = SyncLocalValues.current(identities: &$0) }
             try? SyncDocument.write(held.overlaid(with: mine), to: document)
         }
 
@@ -125,15 +124,14 @@ final class SyncPass {
             log("the local document could not be read")
             return
         }
-        SyncLocalValues.apply(merged, identities: &identities)
-        SyncStore.save(identities)
+        updateIdentities { SyncLocalValues.apply(merged, identities: &$0) }
 
         guard publishes, !SyncCopyValidation.readsButDoesNotPublish(merged) else {
             log("this build reads the document but does not write it")
             return
         }
         do {
-            try document.save().write(to: BackupRoot.layout.syncDocumentFile, options: .atomic)
+            try SyncDocumentFile.write(document)
         } catch {
             log("the local document could not be saved: \(error)")
             return
@@ -151,13 +149,6 @@ final class SyncPass {
     }
 
     // MARK: - Steps 1 and 2: read and merge
-
-    private func localDocument(actorId: String) -> Document {
-        guard let bytes = try? Data(contentsOf: BackupRoot.layout.syncDocumentFile),
-            let document = try? SyncDocument.open(bytes, actorId: actorId)
-        else { return SyncDocument.make(actorId: actorId) }
-        return document
-    }
 
     private func merge(
         from descriptor: TargetDescriptor, groupId: String, into document: Document
@@ -184,7 +175,7 @@ final class SyncPass {
                 in: document, before: before,
                 deviceName: namespace.record?.name ?? "another device")
             if let modifiedAt = object.modifiedAt {
-                SyncStore.update {
+                updateState("what this pass read of \(descriptor.label)") {
                     $0.saw(namespaceId: namespace.id, at: modifiedAt, targetId: descriptor.id)
                 }
             }
@@ -256,7 +247,7 @@ final class SyncPass {
             let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
             do {
                 try await provider.put(
-                    localFile: BackupRoot.layout.syncDocumentFile, path: paths.syncDocumentFile)
+                    localFile: SyncDocumentFile.url, path: paths.syncDocumentFile)
                 guard try await provider.confirm(path: paths.syncDocumentFile) == .confirmed else {
                     continue
                 }
@@ -265,7 +256,9 @@ final class SyncPass {
                 continue
             }
             await writeTheDeviceRecord(groupId: groupId, paths: paths, provider: provider)
-            SyncStore.update { $0.confirm(targetId: descriptor.id, heads: heads) }
+            updateState("the confirmed heads of \(descriptor.label)") {
+                $0.confirm(targetId: descriptor.id, heads: heads)
+            }
         }
     }
 
@@ -290,6 +283,25 @@ final class SyncPass {
     }
 
     // MARK: - The log
+
+    /// Every write of `sync.json` and of `sync-profile-ids.json`
+    /// reads the file again first. A pass runs for seconds, and a
+    /// join or a profile rename lands in the middle of one.
+    private func updateState(_ what: String, _ change: (inout GameProbe.SyncState) -> Void) {
+        do {
+            try SyncStore.update(change)
+        } catch {
+            log("\(what) was not saved: \(error)")
+        }
+    }
+
+    private func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) {
+        do {
+            try SyncStore.updateIdentities(change)
+        } catch {
+            log("the profile identities were not saved: \(error)")
+        }
+    }
 
     private func log(_ message: String) {
         guard AppSettings.shared.debugLogs else { return }

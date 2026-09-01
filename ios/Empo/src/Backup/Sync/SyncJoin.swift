@@ -39,19 +39,17 @@ enum SyncJoin {
     /// with it: step 4 of 10.5 reads them from the device and writes
     /// them over the merged document.
     static func join(_ group: DiscoveredSyncGroup) {
-        try? FileManager.default.removeItem(at: BackupRoot.layout.syncDocumentFile)
-        var state = SyncStore.state()
-        state.join(group.groupId, at: Date())
-        SyncStore.save(state)
+        SyncDocumentFile.delete()
+        try? SyncStore.update { $0.join(group.groupId, at: Date()) }
         SyncPass.shared.schedule(after: 0)
     }
 
     /// The first target makes a group, per 10.4. A device with a
     /// group keeps it.
     static func startAGroup() {
-        var state = SyncStore.state()
-        guard !state.hasJoined else { return }
-        state.startAGroup(at: Date())
-        SyncStore.save(state)
+        try? SyncStore.update { state in
+            guard !state.hasJoined else { return }
+            state.startAGroup(at: Date())
+        }
     }
 }

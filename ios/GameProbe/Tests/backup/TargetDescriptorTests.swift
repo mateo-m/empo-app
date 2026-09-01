@@ -81,6 +81,18 @@ final class TargetDescriptorTests: XCTestCase {
         XCTAssertEqual(shared.sizeThresholdBytes, descriptor.sizeThresholdBytes)
     }
 
+    func testTheArrivingCopyKeepsThisDevicesAccountHint() {
+        var incoming = descriptor.forSyncDocument()
+        incoming.label = "the other name"
+        incoming.isPaused = true
+
+        let kept = descriptor.withSyncedFields(from: incoming)
+
+        XCTAssertEqual(kept.accountHint, descriptor.accountHint)
+        XCTAssertEqual(kept.label, "the other name")
+        XCTAssertTrue(kept.isPaused)
+    }
+
     func testADescriptorWithoutAnAccountHintIsAPlaceholder() {
         XCTAssertFalse(descriptor.isPlaceholder)
         XCTAssertTrue(descriptor.forSyncDocument().isPlaceholder)

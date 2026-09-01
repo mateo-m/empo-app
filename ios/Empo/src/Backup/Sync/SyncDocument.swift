@@ -225,6 +225,20 @@ enum SyncDocument {
         }
     }
 
+    /// The fields one descriptor rides the document with, per 10.8.
+    /// `descriptor(_:_:id:)` reads them back.
+    private static func fields(of descriptor: TargetDescriptor) -> [String: ScalarValue] {
+        [
+            "provider": .String(descriptor.provider.rawValue),
+            "label": .String(descriptor.label),
+            "root": .String(descriptor.root),
+            "sizeThresholdBytes": descriptor.sizeThresholdBytes.map { ScalarValue.Int($0) }
+                ?? .Null,
+            "capBytes": descriptor.capBytes.map { ScalarValue.Int($0) } ?? .Null,
+            "isPaused": .Boolean(descriptor.isPaused),
+        ]
+    }
+
     private static func writeDescriptors(
         _ descriptors: [String: TargetDescriptor], was: [String: TargetDescriptor],
         _ document: Document
@@ -232,30 +246,10 @@ enum SyncDocument {
         let map = try makeMap(document, .ROOT, Key.targetDescriptors)
         for (id, descriptor) in descriptors where was[id] != descriptor {
             let entry = try makeMap(document, map, id)
-            let old = was[id]
-            if old?.provider != descriptor.provider {
-                try document.put(
-                    obj: entry, key: "provider", value: .String(descriptor.provider.rawValue))
-            }
-            if old?.label != descriptor.label {
-                try document.put(obj: entry, key: "label", value: .String(descriptor.label))
-            }
-            if old?.root != descriptor.root {
-                try document.put(obj: entry, key: "root", value: .String(descriptor.root))
-            }
-            if old?.sizeThresholdBytes != descriptor.sizeThresholdBytes {
-                try document.put(
-                    obj: entry, key: "sizeThresholdBytes",
-                    value: descriptor.sizeThresholdBytes.map { ScalarValue.Int($0) } ?? .Null)
-            }
-            if old?.capBytes != descriptor.capBytes {
-                try document.put(
-                    obj: entry, key: "capBytes",
-                    value: descriptor.capBytes.map { ScalarValue.Int($0) } ?? .Null)
-            }
-            if old?.isPaused != descriptor.isPaused {
-                try document.put(
-                    obj: entry, key: "isPaused", value: .Boolean(descriptor.isPaused))
+            let old = was[id].map(fields(of:))
+            for (key, value) in fields(of: descriptor).sorted(by: { $0.key < $1.key })
+            where old?[key] != value {
+                try document.put(obj: entry, key: key, value: value)
             }
         }
         for id in was.keys where descriptors[id] == nil {
