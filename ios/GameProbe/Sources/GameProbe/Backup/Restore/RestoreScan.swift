@@ -1,18 +1,18 @@
 import Foundation
-import GameProbe
 
 /// One device namespace as the scan read it.
-struct ScannedNamespace: Sendable {
-    var id: String
-    var deviceId: String?
+public struct ScannedNamespace: Sendable {
+
+    public var id: String
+    public var deviceId: String?
     /// The name `device.json` carries, or the namespace id where the
     /// namespace holds no record yet.
-    var deviceName: String
-    var gameRows: [SnapshotRow]
-    var preferencesRows: [SnapshotRow]
+    public var deviceName: String
+    public var gameRows: [SnapshotRow]
+    public var preferencesRows: [SnapshotRow]
     /// The Rescued Saves buckets the newest preferences snapshot
     /// carries, per 5.3.
-    var rescuedSavesBuckets: [String]
+    public var rescuedSavesBuckets: [String]
 }
 
 /// What one target holds, for the two manual doors of SPEC 11.3 and
@@ -21,17 +21,22 @@ struct ScannedNamespace: Sendable {
 /// The scan is read-only. It lists and reads, it writes nothing, and
 /// it claims no namespace, so it never touches a namespace another
 /// device owns.
-struct RestoreScan: Sendable {
+public struct RestoreScan: Sendable {
 
-    let provider: any BackupProvider
-    let descriptor: TargetDescriptor
+    public let provider: any BackupProvider
+    public let descriptor: TargetDescriptor
+
+    public init(provider: any BackupProvider, descriptor: TargetDescriptor) {
+        self.provider = provider
+        self.descriptor = descriptor
+    }
 
     /// Every namespace of the target, newest device first.
     ///
     /// `localMarkers` maps a game key to the marker of the local
     /// tree, so a row can carry the version-marker flag of 11.10. A
     /// fresh install passes none.
-    func namespaces(
+    public func namespaces(
         localMarkers: [String: SnapshotManifest.VersionMarker] = [:]
     ) async throws -> [ScannedNamespace] {
         let empo = BackupNamespacePaths(root: descriptor.root, namespaceId: "")
@@ -113,7 +118,7 @@ struct RestoreScan: Sendable {
     ///
     /// On a fresh install nothing is installed, so every bucket the
     /// stream holds is orphaned, per 11.4.
-    static func rescuedSavesBuckets(in manifest: SnapshotManifest) -> [String] {
+    public static func rescuedSavesBuckets(in manifest: SnapshotManifest) -> [String] {
         let prefix = BackupSetResolver.rescuedSavesPathPrefix + "/"
         var names: Set<String> = []
         for entry in manifest.entries where entry.root == .preferences {
@@ -127,7 +132,7 @@ struct RestoreScan: Sendable {
 
     // MARK: - Reading
 
-    func manifest(at path: String) async throws -> SnapshotManifest? {
+    public func manifest(at path: String) async throws -> SnapshotManifest? {
         guard let data = try await read(path) else { return nil }
         return try? SnapshotManifest.decode(compressed: data)
     }

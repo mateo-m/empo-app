@@ -1,5 +1,4 @@
 import Foundation
-import GameProbe
 
 /// The engine that puts a snapshot back on this device, per SPEC 11.
 ///
@@ -25,7 +24,7 @@ import GameProbe
 ///
 /// Nothing here deletes local data to make room. That is invariant
 /// 1's restore twin.
-actor RestoreEngine {
+public actor RestoreEngine {
 
     private let provider: any BackupProvider
     private let store: BackupStateStore
@@ -33,7 +32,7 @@ actor RestoreEngine {
     private let fm = FileManager.default
     private let readClock: @Sendable () -> Date
 
-    init(
+    public init(
         provider: any BackupProvider,
         store: sending BackupStateStore,
         localRoot: URL,
@@ -49,7 +48,7 @@ actor RestoreEngine {
 
     // MARK: - One restore
 
-    func run(_ request: RestoreRequest) async -> RestoreOutcome {
+    public func run(_ request: RestoreRequest) async -> RestoreOutcome {
         let paths = BackupNamespacePaths(
             root: request.root, namespaceId: request.namespaceId)
 

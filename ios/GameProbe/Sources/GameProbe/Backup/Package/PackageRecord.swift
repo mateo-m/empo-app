@@ -1,8 +1,7 @@
 import Foundation
-import GameProbe
 
 /// Which way a staged package got there.
-enum PackageKind: String, Codable, Sendable {
+public enum PackageKind: String, Codable, Sendable {
     /// Empo built it for an export, per 12.5.
     case built
     /// The user picked it for an import, per 12.6.
@@ -15,27 +14,43 @@ enum PackageKind: String, Codable, Sendable {
 /// is what survives a launch, so the Save again and Delete choice
 /// returns when Empo received no result, and a deferred import finds
 /// its package again.
-struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
+public struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
 
-    static let fileName = "package.json"
+    public static let fileName = "package.json"
 
-    var id: String
-    var kind: PackageKind
-    var fileName: String
+    public var id: String
+    public var kind: PackageKind
+    public var fileName: String
     /// The game the package covers, or `nil` for a library package.
-    var gameName: String?
-    var createdAt: Date
-    var isSaved: Bool
+    public var gameName: String?
+    public var createdAt: Date
+    public var isSaved: Bool
 
-    func directory(localRoot: URL) -> URL {
+    public init(
+        id: String,
+        kind: PackageKind,
+        fileName: String,
+        gameName: String? = nil,
+        createdAt: Date,
+        isSaved: Bool
+    ) {
+        self.id = id
+        self.kind = kind
+        self.fileName = fileName
+        self.gameName = gameName
+        self.createdAt = createdAt
+        self.isSaved = isSaved
+    }
+
+    public func directory(localRoot: URL) -> URL {
         BackupRootLayout(root: localRoot).package(id: id)
     }
 
-    func zipURL(localRoot: URL) -> URL {
+    public func zipURL(localRoot: URL) -> URL {
         directory(localRoot: localRoot).appendingPathComponent(fileName)
     }
 
-    func save(in directory: URL) {
+    public func save(in directory: URL) {
         guard let data = try? JSONEncoder().encode(self) else { return }
         try? FileManager.default.createDirectory(
             at: directory, withIntermediateDirectories: true)
@@ -43,7 +58,7 @@ struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
     }
 
     /// Every package still in staging, newest first.
-    static func all(localRoot: URL) -> [PackageRecord] {
+    public static func all(localRoot: URL) -> [PackageRecord] {
         let fm = FileManager.default
         let root = BackupRootLayout(root: localRoot).packages
         let names = (try? fm.contentsOfDirectory(atPath: root.path)) ?? []
@@ -58,7 +73,7 @@ struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
     }
 
     /// The package that still waits for a save, per 12.5.
-    static func waitingForASave(localRoot: URL) -> PackageRecord? {
+    public static func waitingForASave(localRoot: URL) -> PackageRecord? {
         all(localRoot: localRoot).first { record in
             record.kind == .built
                 && PackageSaveChoice.asks(
@@ -68,7 +83,7 @@ struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
         }
     }
 
-    func markSaved(localRoot: URL) {
+    public func markSaved(localRoot: URL) {
         var copy = self
         copy.isSaved = true
         copy.save(in: directory(localRoot: localRoot))
@@ -77,7 +92,7 @@ struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
         try? FileManager.default.removeItem(at: directory(localRoot: localRoot))
     }
 
-    func delete(localRoot: URL) {
+    public func delete(localRoot: URL) {
         try? FileManager.default.removeItem(at: directory(localRoot: localRoot))
     }
 }

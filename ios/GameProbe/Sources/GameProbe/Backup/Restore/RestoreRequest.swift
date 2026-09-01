@@ -1,40 +1,39 @@
 import Foundation
-import GameProbe
 
 /// One restore, as the engine needs it.
 ///
 /// The planner of ticket 014's pure half decides what happens. This
 /// carries the paths and the numbers only the app can answer.
-struct RestoreRequest: Sendable {
+public struct RestoreRequest: Sendable {
 
-    var restoreId: String
+    public var restoreId: String
     /// The target the snapshot is on. A backup package carries its
     /// own id here, because a package is not a target, per 12.7.
-    var targetId: String
+    public var targetId: String
     /// The fixed root of 8.7, or an empty string for a package.
-    var root: String
-    var namespaceId: String
+    public var root: String
+    public var namespaceId: String
     /// The stream the snapshot belongs to, per 5.3.
-    var stream: BackupStream
-    var snapshotId: String
-    var scope: RestoreScope
+    public var stream: BackupStream
+    public var snapshotId: String
+    public var scope: RestoreScope
     /// Where each named root of the manifest writes on this device.
-    var destination: MemberSource
+    public var destination: MemberSource
     /// Every file the local tree already holds under those roots,
     /// displaced copies included.
-    var localFiles: [RestoreLocalFile]
-    var localVersionMarker: SnapshotManifest.VersionMarker?
-    var freeSpaceBytes: Int64
+    public var localFiles: [RestoreLocalFile]
+    public var localVersionMarker: SnapshotManifest.VersionMarker?
+    public var freeSpaceBytes: Int64
     /// The replace choice of 11.12. Only "Use only this backup"
     /// sets it.
-    var replacesTheTree: Bool
+    public var replacesTheTree: Bool
     /// The game's mode, which gates proven coverage.
-    var mode: BackupMode
+    public var mode: BackupMode
     /// `Documents/Games/<folderName>/Game/`, the tree a replace
     /// moves aside.
-    var gameTreeURL: URL?
+    public var gameTreeURL: URL?
 
-    init(
+    public init(
         restoreId: String = UUID().uuidString,
         targetId: String,
         root: String,
@@ -68,22 +67,22 @@ struct RestoreRequest: Sendable {
 }
 
 /// What a finished restore did.
-struct RestoreResult: Equatable, Sendable {
-    var writtenFileCount = 0
-    var displacedFileCount = 0
-    var unchangedFileCount = 0
-    var partialPathCount = 0
-    var bytesWritten: Int64 = 0
+public struct RestoreResult: Equatable, Sendable {
+    public var writtenFileCount = 0
+    public var displacedFileCount = 0
+    public var unchangedFileCount = 0
+    public var partialPathCount = 0
+    public var bytesWritten: Int64 = 0
     /// The name the replaced tree took, per 11.12.
-    var replacedTreeName: String?
+    public var replacedTreeName: String?
     /// How many files proven coverage let the replaced tree drop.
-    var droppedFromReplacedTree = 0
+    public var droppedFromReplacedTree = 0
     /// What the replaced tree still holds.
-    var replacedTreeKeptBytes: Int64 = 0
+    public var replacedTreeKeptBytes: Int64 = 0
 }
 
 /// How a restore ended.
-enum RestoreOutcome: Sendable {
+public enum RestoreOutcome: Sendable {
     case finished(RestoreResult)
     /// The space check of 11.8 refused before any write.
     case notEnoughSpace(RestoreSpaceCheck.Shortfall)

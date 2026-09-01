@@ -8,7 +8,7 @@ enum PackageExportSource {
     case library
 
     @MainActor
-    func plan() async -> PackageExport.Plan {
+    func plan() async -> PackagePlan {
         switch self {
         case .game(let container): return await PackageExport.plan(game: container)
         case .library: return await PackageExport.libraryPlan()
@@ -63,14 +63,13 @@ final class PackageExportModel {
         }
     }
 
-    private func build(_ plan: PackageExport.Plan) async {
+    private func build(_ plan: PackagePlan) async {
         let localRoot = localRoot
         let device = UIDevice.current.name
         let freeSpaceBytes = Self.freeSpaceBytes
         do {
             let built = try await Task.detached(priority: .userInitiated) { [weak self] in
-                try PackageExport.build(
-                    plan,
+                try plan.build(
                     localRoot: localRoot,
                     sourceDevice: device,
                     freeSpaceBytes: freeSpaceBytes

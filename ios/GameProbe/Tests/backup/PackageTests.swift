@@ -42,33 +42,40 @@ final class PackageTests: XCTestCase {
             compression: .stored)
     }
 
-    /// One package with one game stream, written for real.
+    /// One package with one game stream, built by the real export.
     private func writeAPackage(
-        named name: String = "one.zip",
         files: [(String, Data)] = [("Game/Save01.rvdata2", Data(repeating: 7, count: 4_096))]
     ) throws -> (url: URL, manifest: PackageManifest) {
-        var manifest = SnapshotManifest(
-            mode: .slim, containerFolderName: "Quest", versionMarker: .init())
-        manifest.entries = files.map { entry(path: $0.0, bytes: $0.1) }
-
-        let url = root.appendingPathComponent(name)
-        let writer = try ZipWriter(creating: url)
-        for (index, member) in files.enumerated() {
-            let source = try file("source-\(index).bin", bytes: member.1)
-            let zipPath = try XCTUnwrap(
-                PackageLayout.zipPath(of: manifest.entries[index], in: manifest))
-            try writer.add(file: source, at: zipPath, modifiedAt: stamp)
+        let container = root.appendingPathComponent("Games/Quest", isDirectory: true)
+        var members: [BackupSetMember] = []
+        for (path, bytes) in files {
+            _ = try file("Games/Quest/" + path, bytes: bytes)
+            members.append(
+                BackupSetMember(
+                    root: .container, path: path, size: Int64(bytes.count), modifiedAt: stamp))
         }
-        let package = PackageManifest(
-            exportedAt: stamp,
-            sourceDevice: "iPad",
+
+        let plan = PackagePlan(
+            gameName: "Quest",
             streams: [
-                PackageStream(key: manifest.gameKey, gameName: "Quest", manifest: manifest)
+                PackagePlan.Stream(
+                    key: BackupKeys.gameKey(containerFolderName: "Quest"),
+                    gameName: "Quest",
+                    mode: .slim,
+                    containerFolderName: "Quest",
+                    versionMarker: .init(),
+                    rescuedSavesBuckets: [],
+                    members: members,
+                    source: MemberSource(container: container))
             ])
-        try writer.add(data: Data(PackageLayout.readmeText.utf8), at: PackageLayout.readmePath)
-        try writer.add(data: package.jsonData(), at: PackageLayout.manifestPath)
-        try writer.finish()
-        return (url, package)
+        let record = try plan.build(
+            id: "export",
+            localRoot: root,
+            sourceDevice: "iPad",
+            freeSpaceBytes: 1 << 40,
+            at: stamp)
+        let url = record.zipURL(localRoot: root)
+        return (url, try PackageSource(zip: url, packageId: "p1").manifest)
     }
 
     // MARK: - 1. A stranger's ZIP tool reads it
