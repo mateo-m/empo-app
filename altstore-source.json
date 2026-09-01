@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.6.6",
+          "buildVersion": "668",
+          "date": "2026-09-01",
+          "localizedDescription": "### Chores\n\n- Point the submodule at the legacy-method fix ([`6a361f9`](https://github.com/mateo-m/empo-app/commit/6a361f9ddce75147c9900d6b761c087f2d03ad60))\n- Revert the submodule bump until the deps rebuild ([`a8afca4`](https://github.com/mateo-m/empo-app/commit/a8afca4db23752c46bcffdd2fce1eb8cfe1c3eee))\n- Pin native-2026-09-01 native prebuilts (#142) ([`8af4d14`](https://github.com/mateo-m/empo-app/commit/8af4d144696bf603615c1f0b21074fdb91f64dd6))",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.6.6/Empo-0.6.6-unsigned.ipa",
+          "size": 19363130,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.6.5",
           "buildVersion": "663",
           "date": "2026-08-31",
