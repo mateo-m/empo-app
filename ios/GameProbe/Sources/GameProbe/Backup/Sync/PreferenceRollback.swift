@@ -85,7 +85,7 @@ public struct PreferenceRollbackUndo: Codable, Equatable, Sendable {
     public static func read(
         applicationSupport: URL, at date: Date, fm: FileManager = .default
     ) -> PreferenceRollbackUndo? {
-        let url = BackupRootLayout.preferenceRollbackFile(applicationSupport: applicationSupport)
+        let url = BackupRootLayout(applicationSupport: applicationSupport).preferenceRollbackFile
         guard let data = try? Data(contentsOf: url) else { return nil }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .millisecondsSince1970
@@ -104,12 +104,12 @@ public struct PreferenceRollbackUndo: Codable, Equatable, Sendable {
         try FileManager.default.createDirectory(
             at: applicationSupport, withIntermediateDirectories: true)
         try jsonData().write(
-            to: BackupRootLayout.preferenceRollbackFile(applicationSupport: applicationSupport),
+            to: BackupRootLayout(applicationSupport: applicationSupport).preferenceRollbackFile,
             options: .atomic)
     }
 
     public static func clear(applicationSupport: URL, fm: FileManager = .default) {
         try? fm.removeItem(
-            at: BackupRootLayout.preferenceRollbackFile(applicationSupport: applicationSupport))
+            at: BackupRootLayout(applicationSupport: applicationSupport).preferenceRollbackFile)
     }
 }

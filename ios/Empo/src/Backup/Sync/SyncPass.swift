@@ -46,50 +46,8 @@ final class SyncPass {
         ) { _ in
             MainActor.assumeIsolated { SyncPass.shared.schedule(after: SyncPass.localChangeWait) }
         }
-        runTheDeviceCheck()
+        SyncDeviceCheck.run()
         schedule(after: 0)
-    }
-
-    /// The launch arguments the device checks of ticket 020 use.
-    ///
-    /// `-syncJoin YES` joins the first group a target holds, which
-    /// is check 1 with no sheet. `-syncDump YES` writes what the
-    /// merged document carries to the backup log, which is how
-    /// checks 2 to 5 read what crossed between two devices.
-    private func runTheDeviceCheck() {
-        dumps = UserDefaults.standard.bool(forKey: "syncDump")
-        guard UserDefaults.standard.bool(forKey: "syncJoin") else { return }
-        Task {
-            guard case .confirm(let group) = await SyncJoin.ask() else {
-                self.log("no target holds a group to join")
-                return
-            }
-            SyncJoin.join(group)
-            self.log("joined \(group.groupId) with \(group.deviceNames.joined(separator: ", "))")
-        }
-    }
-
-    /// Whether each pass writes what the document carries to the
-    /// log, for the device checks of ticket 020.
-    private var dumps = false
-
-    private func dump(_ model: SyncDocumentModel, heads: [String]) {
-        guard dumps else { return }
-        log("heads \(heads.joined(separator: " "))")
-        log("schema \(model.schemaVersion), writer \(model.minimumWriterVersion)")
-        for (key, value) in model.preferences.sorted(by: { $0.key < $1.key }) {
-            log("preference \(key) = \(value)")
-        }
-        for (id, binding) in model.controllerBindings.sorted(by: { $0.key < $1.key }) {
-            log("binding \(id) = \(binding)")
-        }
-        for (id, profile) in model.layoutProfiles.sorted(by: { $0.key < $1.key }) {
-            let state = profile.isDeleted ? "deleted" : "\(profile.controls.count) controls"
-            log("profile \(id) \"\(profile.name)\" \(state)")
-        }
-        for id in model.targetDescriptors.keys.sorted() {
-            log("descriptor \(id)")
-        }
     }
 
     /// A local change waits, because a settings screen writes a key
@@ -175,7 +133,7 @@ final class SyncPass {
             return
         }
         do {
-            try document.save().write(to: BackupRoot.syncDocumentFile, options: .atomic)
+            try document.save().write(to: BackupRoot.layout.syncDocumentFile, options: .atomic)
         } catch {
             log("the local document could not be saved: \(error)")
             return
@@ -189,13 +147,13 @@ final class SyncPass {
             return
         }
         await publish(document, groupId: groupId, targets: targets)
-        dump(merged, heads: SyncDocument.heads(of: document))
+        SyncDeviceCheck.dump(merged, heads: SyncDocument.heads(of: document))
     }
 
     // MARK: - Steps 1 and 2: read and merge
 
     private func localDocument(actorId: String) -> Document {
-        guard let bytes = try? Data(contentsOf: BackupRoot.syncDocumentFile),
+        guard let bytes = try? Data(contentsOf: BackupRoot.layout.syncDocumentFile),
             let document = try? SyncDocument.open(bytes, actorId: actorId)
         else { return SyncDocument.make(actorId: actorId) }
         return document
@@ -298,7 +256,7 @@ final class SyncPass {
             let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
             do {
                 try await provider.put(
-                    localFile: BackupRoot.syncDocumentFile, path: paths.syncDocumentFile)
+                    localFile: BackupRoot.layout.syncDocumentFile, path: paths.syncDocumentFile)
                 guard try await provider.confirm(path: paths.syncDocumentFile) == .confirmed else {
                     continue
                 }

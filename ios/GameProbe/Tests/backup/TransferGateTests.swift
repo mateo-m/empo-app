@@ -3,6 +3,21 @@ import XCTest
 
 @testable import GameProbe
 
+/// A clock that runs a probe instead of sleeping, so a test can
+/// look at the gate while a transfer waits.
+actor ProbingClock: BackupClock {
+
+    private var probe: (@Sendable () async -> Void)?
+
+    func setProbe(_ probe: @escaping @Sendable () async -> Void) {
+        self.probe = probe
+    }
+
+    func wait(seconds: TimeInterval) async {
+        await probe?()
+    }
+}
+
 /// A clock that records a wait and never sleeps.
 actor FakeBackupClock: BackupClock {
 
@@ -10,6 +25,22 @@ actor FakeBackupClock: BackupClock {
 
     func wait(seconds: TimeInterval) async {
         waits.append(seconds)
+    }
+}
+
+/// Counts how many bodies the gate holds open at one time.
+actor InFlightCounter {
+
+    private var inFlight = 0
+    private(set) var peak = 0
+
+    func enter() {
+        inFlight += 1
+        peak = max(peak, inFlight)
+    }
+
+    func leave() {
+        inFlight -= 1
     }
 }
 
@@ -34,11 +65,16 @@ final class TransferGateTests: XCTestCase {
     func testTheGateNeverHoldsMoreThanFourTransfersAtOnce() async {
         let gate = TransferGate()
         let latch = TransferLatch()
+        let counter = InFlightCounter()
 
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<12 {
                 group.addTask {
-                    try? await gate.transfer { await latch.wait() }
+                    try? await gate.transfer {
+                        await counter.enter()
+                        await latch.wait()
+                        await counter.leave()
+                    }
                 }
             }
 
@@ -54,7 +90,7 @@ final class TransferGateTests: XCTestCase {
             await latch.open()
         }
 
-        let peak = await gate.peakInFlight
+        let peak = await counter.peak
         XCTAssertEqual(peak, 4)
     }
 
@@ -91,8 +127,6 @@ final class TransferGateTests: XCTestCase {
 
         let waits = await clock.waits
         XCTAssertEqual(waits, [7, 7])
-        let recorded = await gate.waitedSeconds
-        XCTAssertEqual(recorded, [7, 7])
         XCTAssertLessThan(
             Date().timeIntervalSince(startedAt), 2,
             "14 seconds of stated wait cost no real time")
@@ -155,10 +189,6 @@ final class TransferGateTests: XCTestCase {
 
         let waits = await clock.waits
         XCTAssertEqual(waits, [4, 4])
-        // `list`, `delete`, and `quota` move no file, so the limit
-        // of four never counts them.
-        let peak = await gate.peakInFlight
-        XCTAssertEqual(peak, 0)
     }
 
     func testAnyNumberOfRequestsRunAtOnce() async {
@@ -172,27 +202,36 @@ final class TransferGateTests: XCTestCase {
                 }
             }
 
+            // Twelve is three times the limit of four. They all
+            // reach the latch, so `list`, `delete`, and `quota`
+            // take no slot.
             let arrived = await latch.waitForArrivals(12)
             XCTAssertTrue(arrived, "no request waits on a transfer slot")
 
             await latch.open()
         }
-
-        let peak = await gate.peakInFlight
-        XCTAssertEqual(peak, 0)
     }
 
     func testATransferThatThrottlesGivesItsSlotUpWhileItWaits() async {
-        let clock = FakeBackupClock()
-        let gate = TransferGate(attempts: 2, clock: clock)
+        let clock = ProbingClock()
+        let gate = TransferGate(limit: 1, attempts: 2, clock: clock)
+        let probe = AttemptCounter()
 
-        // One throttled transfer must not hold a slot through its
-        // wait, or a target that throttles once would run at three.
+        // The probe runs while the throttled transfer waits. This
+        // gate holds one slot, so the probe reaches its body only
+        // where the throttled transfer gave the slot up first. A
+        // target that throttles once would otherwise run at three.
+        await clock.setProbe {
+            let task = Task { try? await gate.transfer { _ = await probe.next() } }
+            for _ in 0..<10_000 where await probe.count == 0 { await Task.yield() }
+            task.cancel()
+        }
+
         try? await gate.transfer { () async throws(BackupProviderError) in
             throw BackupProviderError.throttled(retryAfter: 1)
         }
 
-        let peak = await gate.peakInFlight
-        XCTAssertEqual(peak, 1)
+        let ran = await probe.count
+        XCTAssertEqual(ran, 1)
     }
 }

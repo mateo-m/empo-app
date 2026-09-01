@@ -20,50 +20,46 @@ final class BackupRootLayoutTests: XCTestCase {
         super.tearDown()
     }
 
-    func testTheRootHoldsTheDatabaseAndTheThreeDirectories() {
-        let root = BackupRootLayout.root(inApplicationSupport: tempRoot)
+    private var layout: BackupRootLayout { BackupRootLayout(applicationSupport: tempRoot) }
 
-        XCTAssertEqual(root.lastPathComponent, "Backup")
-        XCTAssertEqual(
-            BackupRootLayout.stateDatabase(root: root).lastPathComponent, "state.sqlite")
-        XCTAssertEqual(BackupRootLayout.staging(root: root).lastPathComponent, "staging")
-        XCTAssertEqual(BackupRootLayout.outbox(root: root).lastPathComponent, "outbox")
-        XCTAssertEqual(BackupRootLayout.restore(root: root).lastPathComponent, "restore")
+    func testTheRootHoldsTheDatabaseAndTheThreeDirectories() {
+        XCTAssertEqual(layout.root.lastPathComponent, "Backup")
+        XCTAssertEqual(layout.stateDatabase.lastPathComponent, "state.sqlite")
+        XCTAssertEqual(layout.staging.lastPathComponent, "staging")
+        XCTAssertEqual(layout.outbox.lastPathComponent, "outbox")
+        XCTAssertEqual(layout.restore.lastPathComponent, "restore")
+    }
+
+    func testTheLayoutOfARootMatchesTheLayoutOfItsApplicationSupport() {
+        XCTAssertEqual(BackupRootLayout(root: layout.root), layout)
     }
 
     func testADownloadedBlobIsKeyedByItsHash() {
-        let root = BackupRootLayout.root(inApplicationSupport: tempRoot)
         let hash = ContentHash.hex(ofUTF8: "save bytes")
 
-        let url = BackupRootLayout.restoreBlob(root: root, hash: hash)
+        let url = layout.restoreBlob(hash: hash)
 
         XCTAssertEqual(url.lastPathComponent, hash)
-        XCTAssertEqual(url.deletingLastPathComponent(), BackupRootLayout.restore(root: root))
+        XCTAssertEqual(url.deletingLastPathComponent(), layout.restore)
     }
 
     func testTheTwoFilesSitBesideTheRootAndNotUnderIt() {
         // Empo may delete the root whole, per 6.1.
-        let root = BackupRootLayout.root(inApplicationSupport: tempRoot)
-        let targets = BackupRootLayout.targetsFile(applicationSupport: tempRoot)
-        let undo = BackupRootLayout.preferenceRollbackFile(applicationSupport: tempRoot)
+        let targets = layout.targetsFile
+        let undo = layout.preferenceRollbackFile
 
         XCTAssertEqual(targets.deletingLastPathComponent().path, tempRoot.path)
         XCTAssertEqual(undo.deletingLastPathComponent().path, tempRoot.path)
-        XCTAssertNotEqual(targets.deletingLastPathComponent().path, root.path)
-        XCTAssertNotEqual(undo.deletingLastPathComponent().path, root.path)
+        XCTAssertNotEqual(targets.deletingLastPathComponent().path, layout.root.path)
+        XCTAssertNotEqual(undo.deletingLastPathComponent().path, layout.root.path)
     }
 
     func testCreateDirectoriesMakesAllFourAndRunsTwice() throws {
-        let root = BackupRootLayout.root(inApplicationSupport: tempRoot)
-
-        try BackupRootLayout.createDirectories(root: root)
-        try BackupRootLayout.createDirectories(root: root)
+        try layout.createDirectories()
+        try layout.createDirectories()
 
         let manager = FileManager.default
-        for url in [
-            root, BackupRootLayout.staging(root: root),
-            BackupRootLayout.outbox(root: root), BackupRootLayout.restore(root: root),
-        ] {
+        for url in [layout.root, layout.staging, layout.outbox, layout.restore] {
             var isDirectory: ObjCBool = false
             XCTAssertTrue(
                 manager.fileExists(atPath: url.path, isDirectory: &isDirectory),

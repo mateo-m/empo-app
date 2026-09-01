@@ -92,12 +92,6 @@ final class BackupRunMonitor: BackupRunObserver {
         return namesByKey[key]
     }
 
-    /// How far the badge of one card is, per 13.3. `nil` draws the
-    /// spinner the badge shows before the plan freezes.
-    func fraction(ofGame gameKey: String) -> Double? {
-        plan.fraction(ofStream: gameKey)
-    }
-
     func isDone(_ gameKey: String) -> Bool {
         plan.isDone(gameKey)
     }

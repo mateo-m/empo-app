@@ -155,7 +155,7 @@ enum PackageExport {
         }
 
         let fileName = PackageLayout.fileName(gameName: plan.gameName, date: date)
-        let directory = BackupRootLayout.package(root: localRoot, id: id)
+        let directory = BackupRootLayout(root: localRoot).package(id: id)
         let zipURL = directory.appendingPathComponent(fileName)
         let writer = try ZipWriter(creating: zipURL)
 

@@ -190,7 +190,7 @@ enum BackupTargetAdd {
         else {
             return .failed("The permission check could not run.")
         }
-        if let store = try? BackupStateStore(url: BackupRoot.stateDatabase) {
+        if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
             try? store.recordTargetQuota(
                 targetId: descriptor.id, reading: result.quota, at: Date())
             if result.allowsAdd {

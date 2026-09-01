@@ -623,4 +623,55 @@ final class BackupStateStoreTests: XCTestCase {
         try store.removeTarget(targetId: "t1")
         XCTAssertNil(try store.targetStatus(targetId: "t1"))
     }
+
+    /// `removeTarget` derives its table list from the schema, so a
+    /// table added later is covered. This writes one row into every
+    /// table that files rows under a target, then reads them all
+    /// back empty.
+    func testRemovingATargetEmptiesEveryTableThatFilesRowsUnderIt() throws {
+        let store = try makeStore()
+        defer { store.close() }
+        let snapshot = manifest(hashes: [hash("one")])
+        let gameKey = snapshot.gameKey
+
+        try store.recordUploadedManifest(
+            snapshot, snapshotId: "s1", targetId: targetId, namespaceId: namespaceId,
+            uploadedAt: now)
+        try store.saveCheckpoint(
+            RunCheckpoint(
+                targetId: targetId, gameKey: gameKey, snapshotId: "s1", uploadedBytes: 1,
+                pendingPaths: ["Game/Save0.rvdata2"], confirmedBlobs: [], updatedAt: now))
+        try store.recordSnapshot(
+            SnapshotLedgerEntry(
+                targetId: targetId, gameKey: gameKey, snapshotId: "s1", createdAt: now))
+        try store.recordSweep(targetId: targetId, at: now)
+        try store.recordTargetFailure(targetId: targetId, failure: .needsSignIn, at: now)
+        try store.addPendingDeletion(
+            PendingDeletion(targetId: targetId, gameKey: gameKey, requestedAt: now))
+        try store.saveStaleness(
+            StalenessClock(targetId: targetId, gameKey: gameKey, lastSuccessAt: now))
+        try store.recordRun(
+            BackupRunRecord(
+                id: "r1", targetId: targetId, startedAt: now, finishedAt: now,
+                outcome: .success))
+        try store.saveIntent(
+            BackupIntentRecord(
+                kind: .interruptedRun, targetId: targetId, gameKey: gameKey, createdAt: now))
+        try store.savePartialTally(
+            ["Game/Save0.rvdata2": 2], targetId: targetId, gameKey: gameKey)
+
+        try store.removeTarget(targetId: targetId)
+
+        XCTAssertNil(try store.lastUploadedManifest(targetId: targetId, gameKey: gameKey))
+        XCTAssertEqual(try store.knownBlobHashes(targetId: targetId, namespaceId: namespaceId), [])
+        XCTAssertNil(try store.checkpoint(targetId: targetId, gameKey: gameKey))
+        XCTAssertEqual(try store.snapshots(targetId: targetId, gameKey: gameKey), [])
+        XCTAssertNil(try store.lastSweep(targetId: targetId))
+        XCTAssertNil(try store.targetStatus(targetId: targetId))
+        XCTAssertEqual(try store.pendingDeletions(targetId: targetId), [])
+        XCTAssertNil(try store.staleness(targetId: targetId, gameKey: gameKey))
+        XCTAssertEqual(try store.runHistory(), [])
+        XCTAssertNil(try store.intent(kind: .interruptedRun))
+        XCTAssertEqual(try store.partialTally(targetId: targetId, gameKey: gameKey), [:])
+    }
 }

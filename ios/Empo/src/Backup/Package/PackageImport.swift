@@ -13,7 +13,7 @@ enum PackageImport {
 
     /// Moves the picked ZIP into staging and records it, per 12.6.
     static func stage(
-        picked: URL, localRoot: URL = BackupRoot.url, at date: Date = Date()
+        picked: URL, localRoot: URL = BackupRoot.layout.root, at date: Date = Date()
     ) throws -> PackageRecord {
         let record = PackageRecord(
             id: UUID().uuidString,
@@ -43,7 +43,7 @@ enum PackageImport {
     /// Opens a staged package. It throws a `PackageRejection` where
     /// the package fails a check of 12.6.
     static func open(
-        _ record: PackageRecord, localRoot: URL = BackupRoot.url
+        _ record: PackageRecord, localRoot: URL = BackupRoot.layout.root
     ) throws -> PackageSource {
         try PackageSource(zip: record.zipURL(localRoot: localRoot), packageId: record.id)
     }
@@ -63,7 +63,7 @@ enum PackageImport {
 
     /// A finished import deletes the staged package. The original in
     /// Files stays untouched, per 12.6.
-    static func finish(_ record: PackageRecord, localRoot: URL = BackupRoot.url) {
+    static func finish(_ record: PackageRecord, localRoot: URL = BackupRoot.layout.root) {
         record.delete(localRoot: localRoot)
     }
 }

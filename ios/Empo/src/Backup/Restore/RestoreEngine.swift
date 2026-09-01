@@ -212,14 +212,14 @@ actor RestoreEngine {
     private func stageBlob(
         _ entry: SnapshotManifest.Entry, paths: BackupNamespacePaths, fanOutWidth: Int
     ) async throws -> URL {
-        let staged = BackupRootLayout.restoreBlob(root: localRoot, hash: entry.hash)
+        let staged = BackupRootLayout(root: localRoot).restoreBlob(hash: entry.hash)
         if fm.fileExists(atPath: staged.path) {
             if verify(staged, entry: entry) { return staged }
             try? fm.removeItem(at: staged)
         }
 
         try fm.createDirectory(
-            at: BackupRootLayout.restore(root: localRoot), withIntermediateDirectories: true)
+            at: BackupRootLayout(root: localRoot).restore, withIntermediateDirectories: true)
         let path = paths.blobPath(hash: entry.hash, fanOutWidth: fanOutWidth)
         do {
             try await provider.get(path: path, localFile: staged)
@@ -292,7 +292,7 @@ actor RestoreEngine {
     /// The blobs already under `restore/`. A cancel keeps them, so
     /// this is what a resume skips.
     private func stagedBlobHashes() -> Set<String> {
-        let directory = BackupRootLayout.restore(root: localRoot)
+        let directory = BackupRootLayout(root: localRoot).restore
         let names = (try? fm.contentsOfDirectory(atPath: directory.path)) ?? []
         return Set(names.filter { !$0.hasPrefix(Self.scratchPrefix) })
     }
@@ -301,7 +301,7 @@ actor RestoreEngine {
     /// stopped restore keeps them.
     private func clearStagedBlobs(_ blobs: [RestoreBlob]) {
         for blob in blobs {
-            try? fm.removeItem(at: BackupRootLayout.restoreBlob(root: localRoot, hash: blob.hash))
+            try? fm.removeItem(at: BackupRootLayout(root: localRoot).restoreBlob(hash: blob.hash))
         }
     }
 
@@ -312,7 +312,7 @@ actor RestoreEngine {
     private static let scratchPrefix = "read-"
 
     private func fetch(_ path: String) async throws -> Data? {
-        let scratch = BackupRootLayout.restore(root: localRoot)
+        let scratch = BackupRootLayout(root: localRoot).restore
             .appendingPathComponent(Self.scratchPrefix + UUID().uuidString)
         try? fm.createDirectory(
             at: scratch.deletingLastPathComponent(), withIntermediateDirectories: true)

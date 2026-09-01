@@ -30,11 +30,11 @@ final class PackageImportModel {
             rows = PackageImport.rows(of: source)
         } catch let rejection as PackageRejection {
             self.rejection = rejection.line
-            self.record?.delete(localRoot: BackupRoot.url)
+            self.record?.delete(localRoot: BackupRoot.layout.root)
             self.record = nil
         } catch {
             rejection = PackageRejection.noManifest.line
-            self.record?.delete(localRoot: BackupRoot.url)
+            self.record?.delete(localRoot: BackupRoot.layout.root)
             self.record = nil
         }
     }

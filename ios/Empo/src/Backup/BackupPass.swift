@@ -76,7 +76,7 @@ final class BackupPass: BackupRunning {
             namespaceId = try BackupKeychain.namespaceId()
             // One store belongs to the task that opened it, so the
             // engine gets its own.
-            store = try BackupStateStore(url: BackupRoot.stateDatabase)
+            store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
         } catch {
             log("\(descriptor.label) could not open its local state")
             return nil
@@ -100,7 +100,7 @@ final class BackupPass: BackupRunning {
         // its handle when the last reference goes, so nothing here
         // may hold it after this line.
         let engine = SnapshotEngine(
-            provider: provider, store: store, localRoot: BackupRoot.url,
+            provider: provider, store: store, localRoot: BackupRoot.layout.root,
             observer: BackupRunMonitor.shared)
         let result = await engine.run(request)
         log(
@@ -126,7 +126,7 @@ final class BackupPass: BackupRunning {
             })
 
         var dirty: [DirtyMark] = []
-        if let store = try? BackupStateStore(url: BackupRoot.stateDatabase) {
+        if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
             dirty = (try? store.dirtyGames()) ?? []
             store.close()
         }
@@ -165,7 +165,7 @@ final class BackupPass: BackupRunning {
     /// What the budget of 6.4 may spend. The engine takes it as an
     /// input, so no rule inside it reads the host.
     private static var freeSpaceBytes: Int64 {
-        let values = try? BackupRoot.url.resourceValues(
+        let values = try? BackupRoot.layout.root.resourceValues(
             forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         return values?.volumeAvailableCapacityForImportantUsage ?? 0
     }

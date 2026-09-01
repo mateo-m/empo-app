@@ -385,7 +385,7 @@ public actor SnapshotEngine {
         await observer?.runPlanned(streamKey: stream.key, bytes: plannedBytes)
 
         var result = StreamResult(streamKey: stream.key, outcome: .blobsOnly)
-        let staging = BackupRootLayout.staging(root: localRoot)
+        let staging = BackupRootLayout(root: localRoot).staging
             .appendingPathComponent(stream.key, isDirectory: true)
         try? fm.createDirectory(at: staging, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: staging) }
@@ -609,7 +609,7 @@ public actor SnapshotEngine {
         if size <= Self.compressionSizeLimit, let data = try? Data(contentsOf: file) {
             let encoded = BlobCodec.encode(data)
             if encoded.algorithm == .zlib {
-                let url = BackupRootLayout.outbox(root: localRoot)
+                let url = BackupRootLayout(root: localRoot).outbox
                     .appendingPathComponent(hash)
                 try? fm.createDirectory(
                     at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -670,16 +670,19 @@ public actor SnapshotEngine {
             ?? StalenessClock(targetId: targetId, gameKey: gameKey)
         clock.lastAttemptAt = now
 
-        let partialSaves = manifest.entries.filter {
-            $0.partial && SaveMemberRule.isSaveMember($0)
-        }
-        if partialSaves.isEmpty {
+        let savePartials = PartialPathClock.savePartials(in: manifest.entries)
+        if savePartials.isEmpty {
             clock.lastSuccessAt = now
             clock.partialSince = nil
         } else if clock.partialSince == nil {
             clock.partialSince = now
         }
         try? store.saveStaleness(clock)
+
+        let previous = (try? store.partialTally(targetId: targetId, gameKey: gameKey)) ?? [:]
+        try? store.savePartialTally(
+            PartialPathClock.tally(previous, savePartials: savePartials),
+            targetId: targetId, gameKey: gameKey)
     }
 
     // MARK: - Provider calls
@@ -790,7 +793,7 @@ public actor SnapshotEngine {
     }
 
     func scratchFile() -> URL {
-        let url = BackupRootLayout.outbox(root: localRoot)
+        let url = BackupRootLayout(root: localRoot).outbox
             .appendingPathComponent(UUID().uuidString)
         try? fm.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

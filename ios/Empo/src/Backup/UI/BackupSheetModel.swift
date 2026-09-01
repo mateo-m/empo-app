@@ -78,7 +78,7 @@ final class BackupSheetModel {
     }
 
     private func readTheStatus(_ descriptors: [TargetDescriptor]) {
-        let store = try? BackupStateStore(url: BackupRoot.stateDatabase)
+        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
         defer { store?.close() }
         let targets = GameBackupStatusReader.targets(
             gameKey: gameKey, descriptors: descriptors, store: store)
@@ -113,7 +113,7 @@ final class BackupSheetModel {
     }
 
     private func readTheStore(_ descriptors: [TargetDescriptor]) {
-        guard let store = try? BackupStateStore(url: BackupRoot.stateDatabase) else { return }
+        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
         defer { store.close() }
         storedBytes = descriptors.reduce(0) { total, descriptor in
             let rows = (try? store.usage(targetId: descriptor.id)) ?? []

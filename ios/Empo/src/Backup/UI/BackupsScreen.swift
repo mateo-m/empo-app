@@ -100,7 +100,7 @@ struct BackupsScreen: View {
 
     /// The package a failed or cancelled save left behind, per 12.5.
     private func readTheUnsavedPackage() {
-        unsavedPackage = PackageRecord.waitingForASave(localRoot: BackupRoot.url)
+        unsavedPackage = PackageRecord.waitingForASave(localRoot: BackupRoot.layout.root)
     }
 
     /// The queue of asks. Each answer, and each dismissal, moves to

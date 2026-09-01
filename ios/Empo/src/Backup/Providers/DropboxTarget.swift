@@ -41,7 +41,7 @@ actor DropboxTarget: BackupProvider {
     func put(localFile: URL, path: String) async throws(BackupProviderError) {
         // Before any byte moves, per 8.3. A file over the limit is a
         // permanent refusal and no amount of space makes it fit.
-        let size = Self.fileSize(at: localFile)
+        let size = UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         try await gate.transfer { () async throws(BackupProviderError) in
@@ -167,7 +167,7 @@ actor DropboxTarget: BackupProvider {
     private func uploadSession(
         _ localFile: URL, to path: String, size: Int64, chunks: [Dropbox.Chunk]
     ) async throws(BackupProviderError) {
-        let scratch = Self.scratchDirectory()
+        let scratch = UploadStaging.scratchDirectory("dropbox")
         defer { try? FileManager.default.removeItem(at: scratch) }
 
         let store = DropboxUploadSessionStore.shared
@@ -190,7 +190,9 @@ actor DropboxTarget: BackupProvider {
         }
 
         while let chunk = left.first {
-            let piece = try Self.piece(of: localFile, chunk: chunk, in: scratch)
+            let piece = try UploadStaging.piece(
+                of: localFile, offset: chunk.offset, length: chunk.length,
+                named: "chunk-\(chunk.offset)", in: scratch)
             defer { try? FileManager.default.removeItem(at: piece) }
 
             let answer: HTTPAnswer
@@ -382,40 +384,5 @@ actor DropboxTarget: BackupProvider {
             return nil
         }
         return root[name]
-    }
-
-    // MARK: - The file work
-
-    private static func fileSize(at url: URL) -> Int64 {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
-        return Int64(values?.fileSize ?? 0)
-    }
-
-    private static func scratchDirectory() -> URL {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("empo-dropbox-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return url
-    }
-
-    /// One chunk of the file, as a file of its own.
-    ///
-    /// A background URLSession uploads from a file and from nothing
-    /// else, so an append needs its bytes on disk first.
-    private static func piece(
-        of localFile: URL, chunk: Dropbox.Chunk, in scratch: URL
-    ) throws(BackupProviderError) -> URL {
-        let url = scratch.appendingPathComponent("chunk-\(chunk.offset)")
-        do {
-            let handle = try FileHandle(forReadingFrom: localFile)
-            defer { try? handle.close() }
-            try handle.seek(toOffset: UInt64(chunk.offset))
-            let bytes = try handle.read(upToCount: Int(chunk.length)) ?? Data()
-            try bytes.write(to: url, options: .atomic)
-        } catch {
-            throw BackupProviderError.rejected(
-                message: "this device could not stage the upload: \(error.localizedDescription)")
-        }
-        return url
     }
 }

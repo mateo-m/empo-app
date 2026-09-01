@@ -26,7 +26,7 @@ actor GoogleDriveUploadSessionStore {
     private init() {}
 
     private var file: URL {
-        BackupRoot.outbox.appendingPathComponent(Self.fileName)
+        BackupRoot.layout.outbox.appendingPathComponent(Self.fileName)
     }
 
     /// The session to carry on from, or `nil` to start a new one.

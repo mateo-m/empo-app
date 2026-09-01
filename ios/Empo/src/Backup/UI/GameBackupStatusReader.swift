@@ -20,11 +20,13 @@ enum GameBackupStatusReader {
         return descriptors.map { descriptor in
             let clock = try? store?.staleness(targetId: descriptor.id, gameKey: gameKey)
             let failure = (try? store?.targetStatus(targetId: descriptor.id))?.failure
+            let tally =
+                (try? store?.partialTally(targetId: descriptor.id, gameKey: gameKey)) ?? [:]
             return GameTargetState(
                 targetId: descriptor.id,
                 displayName: descriptor.displayName,
                 isPaused: descriptor.isPaused,
-                cause: StaleCause.of(failure) ?? network,
+                cause: StaleCause.of(failure) ?? PartialPathClock.cause(tally) ?? network,
                 lastSuccessAt: clock?.lastSuccessAt)
         }
     }

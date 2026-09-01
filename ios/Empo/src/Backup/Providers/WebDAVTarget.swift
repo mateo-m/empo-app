@@ -67,7 +67,7 @@ actor WebDAVTarget: BackupProvider {
         // Before any byte moves, per 8.3. A WebDAV server states no
         // number, so this refuses nothing today. It stays because the
         // engine calls every provider the same way.
-        let size = Self.fileSize(at: localFile)
+        let size = UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         try await gate.transfer { () async throws(BackupProviderError) in
@@ -346,8 +346,4 @@ actor WebDAVTarget: BackupProvider {
         return error
     }
 
-    private static func fileSize(at url: URL) -> Int64 {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
-        return Int64(values?.fileSize ?? 0)
-    }
 }

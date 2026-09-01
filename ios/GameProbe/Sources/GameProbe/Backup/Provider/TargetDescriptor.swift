@@ -110,13 +110,13 @@ public struct TargetDescriptorFile: Codable, Equatable, Sendable {
     /// Reads `targets.json`, or returns an empty file where none is
     /// there yet.
     public static func read(applicationSupport: URL) throws -> TargetDescriptorFile {
-        let url = BackupRootLayout.targetsFile(applicationSupport: applicationSupport)
+        let url = BackupRootLayout(applicationSupport: applicationSupport).targetsFile
         guard let data = try? Data(contentsOf: url) else { return TargetDescriptorFile() }
         return try decode(json: data)
     }
 
     public func write(applicationSupport: URL) throws {
-        let url = BackupRootLayout.targetsFile(applicationSupport: applicationSupport)
+        let url = BackupRootLayout(applicationSupport: applicationSupport).targetsFile
         try FileManager.default.createDirectory(
             at: applicationSupport, withIntermediateDirectories: true)
         try jsonData().write(to: url, options: .atomic)

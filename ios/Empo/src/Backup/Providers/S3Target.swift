@@ -66,7 +66,7 @@ actor S3Target: BackupProvider {
     func put(localFile: URL, path: String) async throws(BackupProviderError) {
         // Before any byte moves, per 8.3. A file over the limit is a
         // permanent refusal and no amount of space makes it fit.
-        let size = Self.fileSize(at: localFile)
+        let size = UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         try await gate.transfer { () async throws(BackupProviderError) in
@@ -186,7 +186,7 @@ actor S3Target: BackupProvider {
     private func putInParts(
         _ localFile: URL, key: String, size: Int64, parts: [S3.Part]
     ) async throws(BackupProviderError) {
-        let scratch = Self.scratchDirectory()
+        let scratch = UploadStaging.scratchDirectory("s3")
         defer { try? FileManager.default.removeItem(at: scratch) }
 
         var record = try await openUpload(key: key, size: size, parts: parts)
@@ -201,7 +201,9 @@ actor S3Target: BackupProvider {
                 continue
             }
 
-            let piece = try Self.piece(of: localFile, part: part, in: scratch)
+            let piece = try UploadStaging.piece(
+                of: localFile, offset: part.offset, length: part.length,
+                named: "part-\(part.number)", in: scratch)
             defer { try? FileManager.default.removeItem(at: piece) }
 
             let answer: HTTPAnswer
@@ -463,52 +465,5 @@ actor S3Target: BackupProvider {
             throttleAttempt = 1
         }
         return error
-    }
-
-    // MARK: - The file work
-
-    private static func fileSize(at url: URL) -> Int64 {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
-        return Int64(values?.fileSize ?? 0)
-    }
-
-    private static func scratchDirectory() -> URL {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("empo-s3-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return url
-    }
-
-    /// One part of the file, as a file of its own. A background
-    /// URLSession uploads from a file and from nothing else.
-    private static func piece(
-        of localFile: URL, part: S3.Part, in scratch: URL
-    ) throws(BackupProviderError) -> URL {
-        let url = scratch.appendingPathComponent("part-\(part.number)")
-        do {
-            let handle = try FileHandle(forReadingFrom: localFile)
-            defer { try? handle.close() }
-            try handle.seek(toOffset: UInt64(part.offset))
-
-            guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
-                throw CocoaError(.fileWriteUnknown)
-            }
-            let out = try FileHandle(forWritingTo: url)
-            defer { try? out.close() }
-
-            // A part is tens of megabytes, so it goes over in reads
-            // of one megabyte and never sits in memory whole.
-            var left = part.length
-            while left > 0 {
-                let want = Int(min(left, 1024 * 1024))
-                guard let bytes = try handle.read(upToCount: want), !bytes.isEmpty else { break }
-                try out.write(contentsOf: bytes)
-                left -= Int64(bytes.count)
-            }
-        } catch {
-            throw BackupProviderError.rejected(
-                message: "this device could not stage the upload: \(error.localizedDescription)")
-        }
-        return url
     }
 }

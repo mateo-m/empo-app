@@ -61,7 +61,7 @@ final class BackupsScreenModel {
         iCloudReach = await Self.reach()
         let descriptors = BackupTargets.load()
         var items: [BackupTargetItem] = []
-        let store = try? BackupStateStore(url: BackupRoot.stateDatabase)
+        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
         defer { store?.close() }
 
         for descriptor in descriptors {
@@ -195,7 +195,7 @@ final class BackupsScreenModel {
         var sync = SyncStore.state()
         sync.forget(targetId: targetId)
         SyncStore.save(sync)
-        if let store = try? BackupStateStore(url: BackupRoot.stateDatabase) {
+        if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
             try? store.removeTarget(targetId: targetId)
             store.close()
         }

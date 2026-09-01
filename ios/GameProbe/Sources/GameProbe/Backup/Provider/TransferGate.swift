@@ -54,11 +54,6 @@ public actor TransferGate {
     private var inFlight = 0
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
-    /// The most transfers this gate ever held at one time.
-    public private(set) var peakInFlight = 0
-    /// Every wait this gate made, in seconds and in order.
-    public private(set) var waitedSeconds: [TimeInterval] = []
-
     public init(
         limit: Int = TransferGate.maxInFlight,
         attempts: Int = 3,
@@ -106,7 +101,6 @@ public actor TransferGate {
                     throw error
                 }
                 attempt += 1
-                waitedSeconds.append(retryAfter)
                 await clock.wait(seconds: retryAfter)
             }
         }
@@ -117,7 +111,6 @@ public actor TransferGate {
     private func acquire() async {
         if inFlight < limit {
             inFlight += 1
-            peakInFlight = max(peakInFlight, inFlight)
             return
         }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -134,56 +127,5 @@ public actor TransferGate {
         } else {
             waiters.removeFirst().resume()
         }
-    }
-}
-
-/// Holds transfers open so a test can see several of them in flight
-/// at one time.
-///
-/// It is here and not in the tests because `FakeBackupTarget` awaits
-/// it inside the transfer body, and both the gate check and the fake
-/// target check need it.
-public actor TransferLatch {
-
-    private var isOpen: Bool
-    /// How many transfers pass before the latch starts to hold. The
-    /// default holds the first one. A test that has to stop a run at
-    /// a later call raises it.
-    private let holdFrom: Int
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    /// How many transfers reached the latch.
-    public private(set) var arrivedCount = 0
-
-    public init(open: Bool = false, holdFrom: Int = 1) {
-        self.isOpen = open
-        self.holdFrom = max(1, holdFrom)
-    }
-
-    public func wait() async {
-        arrivedCount += 1
-        guard !isOpen, arrivedCount >= holdFrom else { return }
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            waiters.append(continuation)
-        }
-    }
-
-    /// Lets every waiting transfer through, and every later one.
-    public func open() {
-        isOpen = true
-        let waiting = waiters
-        waiters = []
-        for continuation in waiting { continuation.resume() }
-    }
-
-    /// Waits until `count` transfers reach the latch, or until the
-    /// yield budget runs out. Returns whether the count arrived.
-    public func waitForArrivals(_ count: Int, yields: Int = 10_000) async -> Bool {
-        var left = yields
-        while arrivedCount < count, left > 0 {
-            left -= 1
-            await Task.yield()
-        }
-        return arrivedCount >= count
     }
 }

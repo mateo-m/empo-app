@@ -88,8 +88,10 @@ struct BackupSheet: View {
                 if model.locks.backUpNowIsPause {
                     // The bar counts the run plan the engine froze at
                     // staging end, per 13.2.
-                    ProgressView(value: BackupRunMonitor.shared.fraction(ofGame: model.gameKey) ?? 0)
-                        .progressViewStyle(.linear)
+                    ProgressView(
+                        value: BackupRunMonitor.shared.plan.fraction(ofStream: model.gameKey) ?? 0
+                    )
+                    .progressViewStyle(.linear)
                 }
             }
             .padding(.vertical, Spacing.xs)

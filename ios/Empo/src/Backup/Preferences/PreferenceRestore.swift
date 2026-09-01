@@ -13,7 +13,7 @@ enum PreferenceRestore {
     /// Where a restore of the preferences stream puts the export
     /// before Empo applies it.
     static var restoredFile: URL {
-        BackupRoot.restore.appendingPathComponent(BackupSetResolver.userDefaultsExportPathName)
+        BackupRoot.layout.restore.appendingPathComponent(BackupSetResolver.userDefaultsExportPathName)
     }
 
     /// What the confirmation says. On a joined device the change
@@ -38,7 +38,7 @@ enum PreferenceRestore {
         // before the first key moves.
         try? PreferenceRollbackUndo(
             savedAt: date, values: PreferenceExport.portableValues(of: current)
-        ).write(applicationSupport: BackupRoot.applicationSupport)
+        ).write(applicationSupport: BackupRoot.layout.applicationSupport)
 
         apply(plan)
         return true
@@ -49,18 +49,18 @@ enum PreferenceRestore {
     static func undo(at date: Date = Date()) -> Bool {
         guard
             let undo = PreferenceRollbackUndo.read(
-                applicationSupport: BackupRoot.applicationSupport, at: date)
+                applicationSupport: BackupRoot.layout.applicationSupport, at: date)
         else { return false }
         apply(
             PreferenceRollback.plan(
                 current: DevicePreferences.currentDefaults(), snapshot: undo.values))
-        PreferenceRollbackUndo.clear(applicationSupport: BackupRoot.applicationSupport)
+        PreferenceRollbackUndo.clear(applicationSupport: BackupRoot.layout.applicationSupport)
         return true
     }
 
     static func hasUndo(at date: Date = Date()) -> Bool {
         PreferenceRollbackUndo.read(
-            applicationSupport: BackupRoot.applicationSupport, at: date) != nil
+            applicationSupport: BackupRoot.layout.applicationSupport, at: date) != nil
     }
 
     private static func apply(_ plan: PreferenceRollbackPlan) {

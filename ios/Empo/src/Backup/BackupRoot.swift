@@ -9,46 +9,11 @@ import GameProbe
 /// device backup.
 enum BackupRoot {
 
-    /// `Library/Application Support/`. The root sits inside it, and
-    /// `targets.json` and the preference rollback undo sit beside it.
-    static var applicationSupport: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-    }
-
-    static var url: URL {
-        BackupRootLayout.root(inApplicationSupport: applicationSupport)
-    }
-
-    static var stateDatabase: URL {
-        BackupRootLayout.stateDatabase(root: url)
-    }
-
-    static var staging: URL {
-        BackupRootLayout.staging(root: url)
-    }
-
-    static var outbox: URL {
-        BackupRootLayout.outbox(root: url)
-    }
-
-    static var restore: URL {
-        BackupRootLayout.restore(root: url)
-    }
-
-    /// The target descriptors of 8.8. Section 8 owns the contents.
-    static var targetsFile: URL {
-        BackupRootLayout.targetsFile(applicationSupport: applicationSupport)
-    }
-
-    /// The preference rollback undo of 10.9. Section 10 owns the
-    /// contents.
-    static var preferenceRollbackFile: URL {
-        BackupRootLayout.preferenceRollbackFile(applicationSupport: applicationSupport)
-    }
-
-    /// This device's copy of the sync document of 10.3.
-    static var syncDocumentFile: URL {
-        BackupRootLayout.syncDocumentFile(applicationSupport: applicationSupport)
+    /// Every path of 6.1, from this device's Application Support.
+    static var layout: BackupRootLayout {
+        BackupRootLayout(
+            applicationSupport: FileManager.default.urls(
+                for: .applicationSupportDirectory, in: .userDomainMask)[0])
     }
 
     /// Makes the root and its three directories, then excludes the
@@ -56,7 +21,7 @@ enum BackupRoot {
     @discardableResult
     static func prepare() -> Bool {
         do {
-            try BackupRootLayout.createDirectories(root: url)
+            try layout.createDirectories()
         } catch {
             return false
         }
@@ -75,7 +40,7 @@ enum BackupRoot {
     static func excludeFromDeviceBackup() {
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
-        var mutableURL = url
+        var mutableURL = layout.root
         try? mutableURL.setResourceValues(values)
     }
 
@@ -83,13 +48,13 @@ enum BackupRoot {
     /// `needsRebuildFromTarget` downloads the newest manifest and
     /// rebuilds from it, per 6.3.
     static func openStateStore() throws -> BackupStateStore {
-        try BackupStateStore(url: stateDatabase)
+        try BackupStateStore(url: layout.stateDatabase)
     }
 
     /// Deletes the whole root. The cache is never truth, per 6.3, so
     /// this costs CPU and not bytes. `targets.json` and the
     /// preference undo sit beside the root and stay.
     static func deleteAll() throws {
-        try FileManager.default.removeItem(at: url)
+        try FileManager.default.removeItem(at: layout.root)
     }
 }

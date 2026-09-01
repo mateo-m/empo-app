@@ -12,11 +12,11 @@ enum DevicePreferences {
     /// The export file the prefs stream of 5.3 and the package of
     /// 12.2 both carry, written into staging.
     static func writeTheExportFile() -> URL? {
-        let file = BackupRoot.staging.appendingPathComponent("defaults.json")
+        let file = BackupRoot.layout.staging.appendingPathComponent("defaults.json")
         guard let data = try? PreferenceExport.document(of: currentDefaults(), at: Date())
         else { return nil }
         try? FileManager.default.createDirectory(
-            at: BackupRoot.staging, withIntermediateDirectories: true)
+            at: BackupRoot.layout.staging, withIntermediateDirectories: true)
         guard (try? data.write(to: file, options: .atomic)) != nil else { return nil }
         return file
     }

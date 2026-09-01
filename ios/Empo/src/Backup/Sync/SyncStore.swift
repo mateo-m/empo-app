@@ -10,17 +10,17 @@ import GameProbe
 enum SyncStore {
 
     static func state() -> SyncState {
-        let url = BackupRoot.applicationSupport.appendingPathComponent(SyncState.fileName)
+        let url = BackupRoot.layout.applicationSupport.appendingPathComponent(SyncState.fileName)
         let state = SyncState.read(
-            applicationSupport: BackupRoot.applicationSupport, actorId: UUID().uuidString)
+            applicationSupport: BackupRoot.layout.applicationSupport, actorId: UUID().uuidString)
         if !FileManager.default.fileExists(atPath: url.path) {
-            try? state.write(applicationSupport: BackupRoot.applicationSupport)
+            try? state.write(applicationSupport: BackupRoot.layout.applicationSupport)
         }
         return state
     }
 
     static func save(_ state: SyncState) {
-        try? state.write(applicationSupport: BackupRoot.applicationSupport)
+        try? state.write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
     /// Changes the state on the file and not on a copy.
@@ -36,11 +36,11 @@ enum SyncStore {
     }
 
     static func identities() -> SyncProfileIdentities {
-        SyncProfileIdentities.read(applicationSupport: BackupRoot.applicationSupport)
+        SyncProfileIdentities.read(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
     static func save(_ identities: SyncProfileIdentities) {
-        try? identities.write(applicationSupport: BackupRoot.applicationSupport)
+        try? identities.write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
     // MARK: - What the profile store reports

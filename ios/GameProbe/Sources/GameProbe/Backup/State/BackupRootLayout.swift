@@ -19,7 +19,7 @@ import Foundation
 ///
 /// The two files beside the root are there on purpose. The root holds
 /// cache and working files, and Empo may delete it whole.
-public enum BackupRootLayout {
+public struct BackupRootLayout: Equatable, Sendable {
 
     public static let rootDirectoryName = "Backup"
     public static let stateDatabaseName = "state.sqlite"
@@ -40,59 +40,73 @@ public enum BackupRootLayout {
     /// whole and the causal history must survive that.
     public static let syncDocumentFileName = "preferences.automerge"
 
-    public static func root(inApplicationSupport applicationSupport: URL) -> URL {
-        applicationSupport.appendingPathComponent(rootDirectoryName, isDirectory: true)
+    public let applicationSupport: URL
+
+    public init(applicationSupport: URL) {
+        self.applicationSupport = applicationSupport
     }
 
-    public static func stateDatabase(root: URL) -> URL {
-        root.appendingPathComponent(stateDatabaseName)
+    /// The layout a caller that holds the root alone reads. The root
+    /// is always one directory inside Application Support, so the
+    /// files beside it come from the parent.
+    public init(root: URL) {
+        self.applicationSupport = root.deletingLastPathComponent()
     }
 
-    public static func staging(root: URL) -> URL {
-        root.appendingPathComponent(stagingDirectoryName, isDirectory: true)
+    public var root: URL {
+        applicationSupport.appendingPathComponent(
+            Self.rootDirectoryName, isDirectory: true)
     }
 
-    public static func outbox(root: URL) -> URL {
-        root.appendingPathComponent(outboxDirectoryName, isDirectory: true)
+    public var stateDatabase: URL {
+        root.appendingPathComponent(Self.stateDatabaseName)
     }
 
-    public static func restore(root: URL) -> URL {
-        root.appendingPathComponent(restoreDirectoryName, isDirectory: true)
+    public var staging: URL {
+        root.appendingPathComponent(Self.stagingDirectoryName, isDirectory: true)
     }
 
-    public static func packages(root: URL) -> URL {
-        staging(root: root).appendingPathComponent(packagesDirectoryName, isDirectory: true)
+    public var outbox: URL {
+        root.appendingPathComponent(Self.outboxDirectoryName, isDirectory: true)
+    }
+
+    public var restore: URL {
+        root.appendingPathComponent(Self.restoreDirectoryName, isDirectory: true)
+    }
+
+    public var packages: URL {
+        staging.appendingPathComponent(Self.packagesDirectoryName, isDirectory: true)
     }
 
     /// One package, in its own directory, so a cancel deletes the
     /// partial ZIP and nothing else.
-    public static func package(root: URL, id: String) -> URL {
-        packages(root: root).appendingPathComponent(id, isDirectory: true)
+    public func package(id: String) -> URL {
+        packages.appendingPathComponent(id, isDirectory: true)
     }
 
     /// A downloaded blob, keyed by its hash, per 6.4. A restarted
     /// restore re-verifies what is there and skips it for free.
-    public static func restoreBlob(root: URL, hash: String) -> URL {
-        restore(root: root).appendingPathComponent(hash)
+    public func restoreBlob(hash: String) -> URL {
+        restore.appendingPathComponent(hash)
     }
 
-    public static func targetsFile(applicationSupport: URL) -> URL {
-        applicationSupport.appendingPathComponent(targetsFileName)
+    public var targetsFile: URL {
+        applicationSupport.appendingPathComponent(Self.targetsFileName)
     }
 
-    public static func preferenceRollbackFile(applicationSupport: URL) -> URL {
-        applicationSupport.appendingPathComponent(preferenceRollbackFileName)
+    public var preferenceRollbackFile: URL {
+        applicationSupport.appendingPathComponent(Self.preferenceRollbackFileName)
     }
 
-    public static func syncDocumentFile(applicationSupport: URL) -> URL {
-        applicationSupport.appendingPathComponent(syncDocumentFileName)
+    public var syncDocumentFile: URL {
+        applicationSupport.appendingPathComponent(Self.syncDocumentFileName)
     }
 
     /// The three working directories, which a fresh install and a
     /// deleted root both need.
-    public static func createDirectories(root: URL) throws {
+    public func createDirectories() throws {
         let manager = FileManager.default
-        for url in [root, staging(root: root), outbox(root: root), restore(root: root)] {
+        for url in [root, staging, outbox, restore] {
             try manager.createDirectory(at: url, withIntermediateDirectories: true)
         }
     }

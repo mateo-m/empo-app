@@ -45,13 +45,13 @@ public struct PreferenceUndoFile: Codable, Equatable, Sendable {
     }
 
     public static func read(applicationSupport: URL) -> PreferenceUndoFile? {
-        let url = BackupRootLayout.preferenceRollbackFile(applicationSupport: applicationSupport)
+        let url = BackupRootLayout(applicationSupport: applicationSupport).preferenceRollbackFile
         guard let data = try? Data(contentsOf: url) else { return nil }
         return try? decode(json: data)
     }
 
     public func write(applicationSupport: URL) throws {
-        let url = BackupRootLayout.preferenceRollbackFile(applicationSupport: applicationSupport)
+        let url = BackupRootLayout(applicationSupport: applicationSupport).preferenceRollbackFile
         try jsonData().write(to: url, options: .atomic)
     }
 }

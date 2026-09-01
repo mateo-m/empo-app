@@ -346,7 +346,7 @@ final class PreferenceSyncTests: XCTestCase {
         XCTAssertNil(PreferenceRollbackUndo.read(applicationSupport: support, at: late))
         XCTAssertFalse(
             FileManager.default.fileExists(
-                atPath: BackupRootLayout.preferenceRollbackFile(applicationSupport: support).path),
+                atPath: BackupRootLayout(applicationSupport: support).preferenceRollbackFile.path),
             "reading an expired undo drops it")
     }
 

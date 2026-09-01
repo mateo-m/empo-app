@@ -28,7 +28,7 @@ struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
     var isSaved: Bool
 
     func directory(localRoot: URL) -> URL {
-        BackupRootLayout.package(root: localRoot, id: id)
+        BackupRootLayout(root: localRoot).package(id: id)
     }
 
     func zipURL(localRoot: URL) -> URL {
@@ -45,7 +45,7 @@ struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
     /// Every package still in staging, newest first.
     static func all(localRoot: URL) -> [PackageRecord] {
         let fm = FileManager.default
-        let root = BackupRootLayout.packages(root: localRoot)
+        let root = BackupRootLayout(root: localRoot).packages
         let names = (try? fm.contentsOfDirectory(atPath: root.path)) ?? []
         return
             names

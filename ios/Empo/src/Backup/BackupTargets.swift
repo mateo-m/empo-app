@@ -13,13 +13,13 @@ import GameProbe
 enum BackupTargets {
 
     static func load() -> [TargetDescriptor] {
-        let file = try? TargetDescriptorFile.read(applicationSupport: BackupRoot.applicationSupport)
+        let file = try? TargetDescriptorFile.read(applicationSupport: BackupRoot.layout.applicationSupport)
         return file?.targets ?? []
     }
 
     static func save(_ targets: [TargetDescriptor]) throws {
         try TargetDescriptorFile(targets: targets)
-            .write(applicationSupport: BackupRoot.applicationSupport)
+            .write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
     /// Adds one target, or replaces the one that carries its id.
@@ -77,7 +77,7 @@ enum BackupTargets {
         let result = await PermissionCheck.run(
             on: provider,
             probePath: PermissionCheck.makeProbePath(root: target.root),
-            scratchDirectory: BackupRoot.staging)
+            scratchDirectory: BackupRoot.layout.staging)
         guard result.allowsAdd else { return result }
         // WebDAV and SFTP answer the space query on some servers and
         // not on others, so the check that just ran is what sets

@@ -145,13 +145,13 @@ final class RestoreCoordinator {
 
         let store: BackupStateStore
         do {
-            store = try BackupStateStore(url: BackupRoot.stateDatabase)
+            store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
         } catch {
             return .failed("this device could not open its local state")
         }
 
         runningGameKey = container.map { BackupKeys.gameKey(containerFolderName: $0.folderName) }
-        let localRoot = BackupRoot.url
+        let localRoot = BackupRoot.layout.root
         let task = Task<RestoreOutcome, Never> {
             let engine = RestoreEngine(provider: provider, store: store, localRoot: localRoot)
             return await engine.run(request)
@@ -192,7 +192,7 @@ final class RestoreCoordinator {
     /// The record the next launch asks about, or `nil` when there is
     /// nothing to ask.
     func pendingResume() -> BackupIntentRecord? {
-        guard let store = try? BackupStateStore(url: BackupRoot.stateDatabase) else { return nil }
+        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return nil }
         defer { store.close() }
         // `try?` flattens the optional the store returns, so this is
         // one level, not two.
@@ -238,7 +238,7 @@ final class RestoreCoordinator {
     private func resumeTheImport(
         packageId: String, record: BackupIntentRecord
     ) async -> RestoreOutcome {
-        let localRoot = BackupRoot.url
+        let localRoot = BackupRoot.layout.root
         guard
             let staged = PackageRecord.all(localRoot: localRoot).first(where: {
                 $0.id == packageId
@@ -259,7 +259,7 @@ final class RestoreCoordinator {
     /// Applies one answer. The caller resumes the restore itself when
     /// the effect says to start it now.
     func answerResume(_ action: RestoreResumeQuestion.Action, record: BackupIntentRecord) {
-        guard let store = try? BackupStateStore(url: BackupRoot.stateDatabase) else { return }
+        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
         defer { store.close() }
 
         // Every answer marks the record asked, because the question
@@ -275,15 +275,15 @@ final class RestoreCoordinator {
         // Stopping an import deletes the staged package as well as
         // the staged files, per 12.6.
         if let packageId = PackageSource.packageId(ofTargetId: record.targetId) {
-            PackageRecord.all(localRoot: BackupRoot.url)
+            PackageRecord.all(localRoot: BackupRoot.layout.root)
                 .first { $0.id == packageId }?
-                .delete(localRoot: BackupRoot.url)
+                .delete(localRoot: BackupRoot.layout.root)
         }
     }
 
     private static func deleteStagedBlobs() {
         let fm = FileManager.default
-        let directory = BackupRoot.restore
+        let directory = BackupRoot.layout.restore
         for name in (try? fm.contentsOfDirectory(atPath: directory.path)) ?? [] {
             try? fm.removeItem(at: directory.appendingPathComponent(name))
         }
@@ -379,7 +379,7 @@ final class RestoreCoordinator {
 
     /// What the space check of 11.8 measures against.
     private static var freeSpaceBytes: Int64 {
-        let values = try? BackupRoot.url.resourceValues(
+        let values = try? BackupRoot.layout.root.resourceValues(
             forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         return values?.volumeAvailableCapacityForImportantUsage ?? 0
     }

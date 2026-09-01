@@ -140,7 +140,8 @@ struct GameCard: View {
             kind: .resolve(
                 status: game.status, progress: game.importProgress, paused: isPaused,
                 backup: BackupBadges.shared.badge(of: game.id),
-                backupProgress: BackupBadges.shared.progress(of: game.id)),
+                backupProgress: BackupRunMonitor.shared.plan.fraction(
+                    ofStream: BackupKeys.gameKey(containerFolderName: game.id))),
             onStopImport: onStopImport,
             size: 36
         )
@@ -214,7 +215,8 @@ struct GameListRow: View {
                 kind: .resolve(
                     status: game.status, progress: game.importProgress, paused: isPaused,
                     backup: BackupBadges.shared.badge(of: game.id),
-                    backupProgress: BackupBadges.shared.progress(of: game.id)),
+                    backupProgress: BackupRunMonitor.shared.plan.fraction(
+                        ofStream: BackupKeys.gameKey(containerFolderName: game.id))),
                 onStopImport: onStopImport
             )
         }

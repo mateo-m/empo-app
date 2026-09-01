@@ -38,7 +38,7 @@ final class PackageExportModel {
     private(set) var record: PackageRecord?
 
     private var task: Task<Void, Never>?
-    private let localRoot = BackupRoot.url
+    private let localRoot = BackupRoot.layout.root
 
     /// Picks up a package a launch found waiting for its save.
     init(waiting record: PackageRecord? = nil) {
@@ -121,7 +121,7 @@ final class PackageExportModel {
     }
 
     private static var freeSpaceBytes: Int64 {
-        let values = try? BackupRoot.url.resourceValues(
+        let values = try? BackupRoot.layout.root.resourceValues(
             forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         return values?.volumeAvailableCapacityForImportantUsage ?? 0
     }
@@ -164,7 +164,7 @@ struct PackageExportSheet: View {
         }
         .sheet(isPresented: .constant(model.phase == .saving)) {
             if let record = model.record {
-                PackageExportPicker(file: record.zipURL(localRoot: BackupRoot.url)) { saved in
+                PackageExportPicker(file: record.zipURL(localRoot: BackupRoot.layout.root)) { saved in
                     if saved {
                         model.saved()
                     } else {

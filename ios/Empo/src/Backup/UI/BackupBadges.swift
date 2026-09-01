@@ -26,13 +26,6 @@ final class BackupBadges {
         badgesByGameId[gameId] ?? .none
     }
 
-    /// How far the run is on this game, or `nil` before the plan
-    /// freezes.
-    func progress(of gameId: String) -> Double? {
-        BackupRunMonitor.shared.fraction(
-            ofGame: BackupKeys.gameKey(containerFolderName: gameId))
-    }
-
     /// Reads every game in one open of the state store.
     func refresh(games: [BackupBadgeGame]) {
         let descriptors = BackupTargets.load()
@@ -42,7 +35,7 @@ final class BackupBadges {
             return
         }
 
-        let store = try? BackupStateStore(url: BackupRoot.stateDatabase)
+        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
         defer { store?.close() }
         let running = BackupScheduler.shared.runningGameKeys
         let now = Date()

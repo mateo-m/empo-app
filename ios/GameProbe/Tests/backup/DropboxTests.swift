@@ -189,10 +189,8 @@ final class DropboxTests: XCTestCase {
         }
 
         let waits = await clock.waits
-        let gateWaits = await gate.waitedSeconds
         XCTAssertEqual(answer, "ok")
         XCTAssertEqual(waits, [30, 30])
-        XCTAssertEqual(gateWaits, [30, 30])
     }
 
     func testAServiceThatKeepsThrottlingReachesTheEngine() async {
