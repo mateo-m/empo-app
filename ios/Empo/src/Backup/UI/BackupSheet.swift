@@ -82,9 +82,9 @@ struct BackupSheet: View {
                         .foregroundStyle(.secondary)
                 }
                 if model.locks.backUpNowIsPause {
-                    // Ticket 018 fills the byte-weighted bar of 13.2
-                    // over the run plan the engine freezes.
-                    ProgressView()
+                    // The bar counts the run plan the engine froze at
+                    // staging end, per 13.2.
+                    ProgressView(value: BackupRunMonitor.shared.fraction(ofGame: model.gameKey) ?? 0)
                         .progressViewStyle(.linear)
                 }
             }

@@ -1,3 +1,4 @@
+import GameProbe
 import SwiftUI
 
 struct GameCard: View {
@@ -137,7 +138,9 @@ struct GameCard: View {
         // one card.
         GameStatusIndicator(
             kind: .resolve(
-                status: game.status, progress: game.importProgress, paused: isPaused),
+                status: game.status, progress: game.importProgress, paused: isPaused,
+                backup: BackupBadges.shared.badge(of: game.id),
+                backupProgress: BackupBadges.shared.progress(of: game.id)),
             onStopImport: onStopImport,
             size: 36
         )
@@ -209,7 +212,9 @@ struct GameListRow: View {
 
             GameStatusIndicator(
                 kind: .resolve(
-                    status: game.status, progress: game.importProgress, paused: isPaused),
+                    status: game.status, progress: game.importProgress, paused: isPaused,
+                    backup: BackupBadges.shared.badge(of: game.id),
+                    backupProgress: BackupBadges.shared.progress(of: game.id)),
                 onStopImport: onStopImport
             )
         }
@@ -241,6 +246,13 @@ struct GameStatusIndicator: View {
         case paused
         case deleting
         case invalid
+        /// A backup run uploads this game now, per 13.3. `progress`
+        /// is `nil` until the run plan freezes, and the ring spins
+        /// until then.
+        case backingUp(progress: Double?)
+        /// The game is ready and its backup carries one of the three
+        /// marks of 13.3.
+        case backupMark(BackupCardMark)
     }
 
     let kind: Kind
@@ -260,8 +272,11 @@ struct GameStatusIndicator: View {
     }
 
     private var progress: Double {
-        if case .importing(let p) = kind { return p }
-        return 0
+        switch kind {
+        case .importing(let value): return value
+        case .backingUp(let value): return value ?? 0
+        default: return 0
+        }
     }
 
     /// Paused state gets an inverted scheme for emphasis: a light badge
@@ -287,7 +302,14 @@ struct GameStatusIndicator: View {
         // (progress stays 0) around a glyph, inverted over the
         // artwork, but without a stop control, because a running
         // delete cannot be cancelled.
-        let showsRing = kind == .deleting || { if case .importing = kind { true } else { false } }()
+        let showsRing =
+            kind == .deleting
+            || {
+                switch kind {
+                case .importing, .backingUp: return true
+                default: return false
+                }
+            }()
         let core = ZStack {
             // Ring + stop render white and blend with `.difference`
             // so the indicator auto-inverts against whatever's behind
@@ -308,8 +330,11 @@ struct GameStatusIndicator: View {
         }
 
         switch kind {
-        case .importing, .deleting:
+        case .importing, .deleting, .backingUp:
             core.blendMode(.difference)
+        case .backupMark(let mark):
+            core.glassEffect(.regular, in: .circle)
+                .overlay(alignment: .topTrailing) { markDot(mark) }
         case .paused:
             // Inverted scheme tint so the paused badge reads stronger
             // than the ambient ready state.
@@ -353,6 +378,61 @@ struct GameStatusIndicator: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(iconFont)
                 .foregroundStyle(.warning)
+        case .backingUp:
+            // White paired with the `.difference` wrap above, like
+            // the import stop square.
+            Image(systemName: "play.fill")
+                .font(iconFont)
+                .foregroundStyle(Color.white)
+        case .backupMark:
+            Image(systemName: "play.fill")
+                .font(iconFont)
+                .foregroundStyle(.primary)
+        }
+    }
+
+    /// The mark of 13.3 rides on the badge that is already there, so
+    /// backup state claims no new space on the card.
+    @ViewBuilder
+    private func markDot(_ mark: BackupCardMark) -> some View {
+        let dot = size * 0.3
+        Group {
+            switch mark {
+            case .paused:
+                Image(systemName: "pause.fill")
+                    .font(.system(size: dot * 0.7, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: dot, height: dot)
+                    .background(Color.secondary, in: .circle)
+            case .failed:
+                Image(systemName: "exclamationmark")
+                    .font(.system(size: dot * 0.7, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: dot, height: dot)
+                    .background(Color.red, in: .circle)
+            case .stale:
+                Circle()
+                    .fill(Color.orange)
+                    .frame(width: dot * 0.6, height: dot * 0.6)
+                    .frame(width: dot, height: dot)
+            }
+        }
+        .accessibilityLabel(mark.label)
+    }
+}
+
+/// The three marks a ready card can carry, per SPEC 13.3. A game
+/// that is backed up and current carries none, which is invariant 9.
+enum BackupCardMark: Hashable {
+    case paused
+    case failed
+    case stale
+
+    var label: String {
+        switch self {
+        case .paused: return "Backup paused"
+        case .failed: return "Backup failed"
+        case .stale: return "Backup is out of date"
         }
     }
 }
@@ -365,12 +445,28 @@ extension GameStatusIndicator.Kind {
     /// `.importing`. Callers pass `game.importProgress` and the read
     /// registers an Observation dependency precisely where the value
     /// is displayed.
-    static func resolve(status: GameStatus, progress: Double, paused: Bool) -> Self {
+    static func resolve(
+        status: GameStatus,
+        progress: Double,
+        paused: Bool,
+        backup: GameBackupBadge = .none,
+        backupProgress: Double? = nil
+    ) -> Self {
         switch status {
-        case .importing: .importing(progress: progress)
-        case .deleting: .deleting
-        case .invalid: .invalid
-        case .ready: paused ? .paused : .ready
+        case .importing: return .importing(progress: progress)
+        case .deleting: return .deleting
+        case .invalid: return .invalid
+        case .ready: break
+        }
+        // A paused session outranks every backup state, because the
+        // player is one tap from the game.
+        if paused { return .paused }
+        switch backup {
+        case .uploading: return .backingUp(progress: backupProgress)
+        case .paused: return .backupMark(.paused)
+        case .failed: return .backupMark(.failed)
+        case .stale: return .backupMark(.stale)
+        case .none: return .ready
         }
     }
 }

@@ -76,7 +76,9 @@ final class SnapshotEngineTests: XCTestCase {
             clock: FakeBackupClock())
     }
 
-    private func makeEngine(_ target: FakeBackupTarget) throws -> SnapshotEngine {
+    private func makeEngine(
+        _ target: FakeBackupTarget, observer: (any BackupRunObserver)? = nil
+    ) throws -> SnapshotEngine {
         let store = try BackupStateStore(url: nil)
         let clock = self.clock!
         return SnapshotEngine(
@@ -84,6 +86,7 @@ final class SnapshotEngineTests: XCTestCase {
             store: store,
             localRoot: localRoot,
             clock: FakeBackupClock(),
+            observer: observer,
             now: { clock.now })
     }
 
@@ -841,5 +844,93 @@ final class SnapshotEngineTests: XCTestCase {
         guard case .wroteSnapshot = stream.outcome else {
             return XCTFail("the retry wrote no snapshot: \(stream.outcome)")
         }
+    }
+
+    // MARK: - 22. The run plan the pill and the badge read, per 13.2
+
+    func testTheRunReportsOnePlanForTheStreamAndConfirmsEveryBlobOfIt() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let recorder = RunPlanRecorder()
+        let engine = try makeEngine(target, observer: recorder)
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        let plans = await recorder.plans
+        let plan = await recorder.plan
+        XCTAssertEqual(plans.count, 1)
+        XCTAssertEqual(plans.first?.0, key(gameName))
+        XCTAssertEqual(plan.plannedBytes, plans.first?.1)
+        let confirmCount = await recorder.confirmCount
+        XCTAssertEqual(confirmCount, 4)
+        XCTAssertEqual(plan.confirmedBytes, plan.plannedBytes)
+        XCTAssertEqual(plan.fraction, 1)
+        XCTAssertTrue(plan.isDone(key(gameName)))
+        XCTAssertEqual(result.outcome, .success)
+    }
+
+    func testProgressAdvancesOnAConfirmedBlobAndNotOnAStartedUpload() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        // The fourth transfer is the first member's blob, per the
+        // partial-path test above. It starts and then waits here.
+        let latch = TransferLatch(holdFrom: 4)
+        await target.setLatch(latch)
+        let recorder = RunPlanRecorder()
+        let engine = try makeEngine(target, observer: recorder)
+
+        let payload = request(games: [game(gameName)])
+        let running = Task { [engine] in await engine.run(payload) }
+        _ = await waitForArrivals(4, at: latch)
+
+        let held = await recorder.plan
+        XCTAssertGreaterThan(held.plannedBytes, 0)
+        XCTAssertEqual(held.confirmedBytes, 0)
+        XCTAssertEqual(held.fraction, 0)
+
+        await latch.open()
+        _ = await running.value
+
+        let done = await recorder.plan
+        XCTAssertEqual(done.confirmedBytes, done.plannedBytes)
+    }
+
+    func testAResumedRunConfirmsTheBlobsTheLastRunLeftOnTheTarget() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        await target.addFault(.crashBeforeTheManifest())
+        _ = await (try makeEngine(target)).run(request(games: [game(gameName)]))
+
+        let recorder = RunPlanRecorder()
+        let engine = try makeEngine(target, observer: recorder)
+        clock.advance(3_600)
+        _ = await engine.run(request(games: [game(gameName)]))
+
+        // The blobs are already up, so the second run uploads
+        // nothing. The plan still counts them and still reaches the
+        // end, per 13.2.
+        let plan = await recorder.plan
+        XCTAssertEqual(plan.confirmedBytes, plan.plannedBytes)
+        XCTAssertEqual(plan.fraction, 1)
+    }
+
+}
+
+/// Builds the run plan of SPEC 13.2 from what the engine reports,
+/// the way `BackupRunMonitor` does on the app side.
+actor RunPlanRecorder: BackupRunObserver {
+
+    private(set) var plan = BackupRunPlan()
+    private(set) var plans: [(String, Int64)] = []
+    private(set) var confirmCount = 0
+
+    func runPlanned(streamKey: String, bytes: Int64) {
+        plans.append((streamKey, bytes))
+        plan.plan(streamKey: streamKey, bytes: bytes)
+    }
+
+    func runConfirmed(streamKey: String, bytes: Int64) {
+        confirmCount += 1
+        plan.confirm(streamKey: streamKey, bytes: bytes)
     }
 }

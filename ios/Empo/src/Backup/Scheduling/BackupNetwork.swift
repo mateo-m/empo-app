@@ -8,8 +8,7 @@ import Network
 /// The rules live in `NetworkPolicy` and `ResourcePolicy`, inside
 /// GameProbe. This file stores the switch and reads the path.
 ///
-/// Ticket 016 puts the switch on the Backups screen. Until then it
-/// stays off, which is the default 7.4 asks for.
+/// The Backups screen of 13.14 holds the switch.
 enum BackupNetwork {
 
     /// "Back up over cellular". Off by default, and there is no
@@ -19,8 +18,17 @@ enum BackupNetwork {
         set { UserDefaults.standard.set(newValue, forKey: DefaultsKey.backupOverCellular) }
     }
 
+    /// One run over cellular, per 7.4. The manual ask and the 21-day
+    /// banner set it, it covers the whole run, and it never changes
+    /// the stored switch. The run clears it at its end.
+    ///
+    /// The background session fixes its configuration at creation,
+    /// so the per-request flags of `BackupTransferSession.request`
+    /// are what carry this to the uploads in flight.
+    static var allowsThisRunOverCellular = false
+
     static var policy: NetworkPolicy {
-        NetworkPolicy(backsUpOverCellular: backsUpOverCellular)
+        NetworkPolicy(backsUpOverCellular: backsUpOverCellular || allowsThisRunOverCellular)
     }
 
     /// Whether the device's route costs money right now.

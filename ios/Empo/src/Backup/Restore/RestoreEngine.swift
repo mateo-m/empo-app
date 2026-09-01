@@ -108,6 +108,8 @@ actor RestoreEngine {
                 targetId: request.descriptor.id,
                 gameKey: request.stream == .preferences ? nil : request.stream.key,
                 snapshotId: request.snapshotId,
+                scope: request.scope,
+                replacesTheTree: request.replacesTheTree,
                 at: now))
 
         var result = RestoreResult(partialPathCount: plan.partialPaths.count)

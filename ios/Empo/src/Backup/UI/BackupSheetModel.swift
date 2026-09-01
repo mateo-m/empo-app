@@ -80,20 +80,8 @@ final class BackupSheetModel {
     private func readTheStatus(_ descriptors: [TargetDescriptor]) {
         let store = try? BackupStateStore(url: BackupRoot.stateDatabase)
         defer { store?.close() }
-        let network = BackupScheduler.shared.networkCause
-
-        var targets: [GameTargetState] = []
-        for descriptor in descriptors {
-            let clock = try? store?.staleness(targetId: descriptor.id, gameKey: gameKey)
-            let failure = (try? store?.targetStatus(targetId: descriptor.id))?.failure
-            targets.append(
-                GameTargetState(
-                    targetId: descriptor.id,
-                    displayName: descriptor.displayName,
-                    isPaused: descriptor.isPaused,
-                    cause: StaleCause.of(failure) ?? network,
-                    lastSuccessAt: clock?.lastSuccessAt))
-        }
+        let targets = GameBackupStatusReader.targets(
+            gameKey: gameKey, descriptors: descriptors, store: store)
 
         status = GameBackupStatusRules.status(
             targets: targets,

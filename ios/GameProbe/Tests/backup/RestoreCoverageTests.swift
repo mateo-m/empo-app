@@ -104,7 +104,8 @@ final class RestoreCoverageTests: XCTestCase {
 
     func testAnInterruptedRestoreAsksWhateverItsSize() {
         let record = RestoreResumeQuestion.record(
-            targetId: "target-1", gameKey: "key", snapshotId: "snap", at: stamp)
+            targetId: "target-1", gameKey: "key", snapshotId: "snap",
+            scope: .wholeGame, replacesTheTree: false, at: stamp)
 
         XCTAssertEqual(record.kind, .interruptedRestore)
         XCTAssertEqual(record.uploadedBytes, 0)
@@ -113,7 +114,8 @@ final class RestoreCoverageTests: XCTestCase {
 
     func testTheSameInterruptionAsksOnceAndNeverTwice() {
         var record = RestoreResumeQuestion.record(
-            targetId: "target-1", gameKey: "key", snapshotId: "snap", at: stamp)
+            targetId: "target-1", gameKey: "key", snapshotId: "snap",
+            scope: .wholeGame, replacesTheTree: false, at: stamp)
         XCTAssertTrue(RestoreResumeQuestion.asks(record))
 
         record.asked = true
@@ -154,10 +156,12 @@ final class RestoreCoverageTests: XCTestCase {
 
         try store.saveIntent(
             RestoreResumeQuestion.record(
-                targetId: "target-1", gameKey: "key", snapshotId: "snap-1", at: stamp))
+                targetId: "target-1", gameKey: "key", snapshotId: "snap-1",
+                scope: .wholeGame, replacesTheTree: false, at: stamp))
         try store.saveIntent(
             RestoreResumeQuestion.record(
                 targetId: "target-1", gameKey: "key", snapshotId: "snap-2",
+                scope: .wholeGame, replacesTheTree: false,
                 at: stamp.addingTimeInterval(60)))
 
         let record = try store.intent(kind: .interruptedRestore)

@@ -11,7 +11,6 @@ struct BackupsScreen: View {
     @State private var model = BackupsScreenModel()
     @State private var showsAddSheet = false
     @State private var addedTarget: PermissionCheckOutcomeSheet?
-    @State private var isRunning = BackupScheduler.shared.isRunning
     /// The games the ask of 3.5 still waits on, per the press below.
     @State private var waiting: [BackupModeAsk] = []
     @AppStorage(DefaultsKey.backupOverCellular) private var overCellular = false
@@ -140,15 +139,39 @@ struct BackupsScreen: View {
 
     // MARK: - The run block, per 13.4
 
+    /// The run block shows while a pass is in flight, per 13.4.
+    private var isRunning: Bool { BackupRunMonitor.shared.isRunning }
+
     @ViewBuilder private var runBlock: some View {
         if isRunning {
+            let monitor = BackupRunMonitor.shared
             Section {
-                // Ticket 018 fills this with the per-game queue, the
-                // byte-weighted total of 13.2, and Pause.
-                HStack(spacing: Spacing.md) {
-                    ProgressView()
-                    Text("Backing up")
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Text(monitor.line)
+                        .font(.subheadline.weight(.medium))
+                    // The bar counts the run plan the engine froze at
+                    // staging end, per 13.2.
+                    ProgressView(value: monitor.plan.fraction ?? 0)
+                        .progressViewStyle(.linear)
+                    Button("Pause") { BackupScheduler.shared.pauseTheRun() }
+                        .buttonStyle(SecondaryButtonStyle(size: .sm))
                 }
+                .padding(.vertical, Spacing.xs)
+
+                ForEach(monitor.queue) { row in
+                    HStack {
+                        Text(row.name)
+                            .font(.footnote)
+                        Spacer()
+                        if monitor.isDone(row.gameKey) {
+                            Image(systemName: "checkmark")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } header: {
+                Text("Backing up")
             }
         }
     }
@@ -183,7 +206,6 @@ struct BackupsScreen: View {
 
     private func startTheRun() {
         model.backUpNow()
-        isRunning = true
     }
 
     // MARK: - The target list, per 13.5

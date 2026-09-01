@@ -10,7 +10,6 @@ import UIKit
 /// per 7.6, and the cancel leaves the intent record of 6.5 plus the
 /// staged blobs, so the next launch asks once.
 ///
-/// Tickets 017 and 018 build the views over this.
 @MainActor
 final class RestoreCoordinator {
 
@@ -151,6 +150,35 @@ final class RestoreCoordinator {
         // one level, not two.
         let record = try? store.intent(kind: .interruptedRestore)
         return RestoreResumeQuestion.asks(record) ? record : nil
+    }
+
+    /// Continues the restore the record names, with the same scope
+    /// and the same replace choice the user chose, per 11.7.
+    ///
+    /// The staged blobs are still there, so a resumed restore pays
+    /// for the bytes it already downloaded once.
+    @discardableResult
+    func resume(_ record: BackupIntentRecord) async -> RestoreOutcome {
+        guard let descriptor = BackupTargets.load().first(where: { $0.id == record.targetId }),
+            let provider = await BackupTargets.provider(for: descriptor),
+            let snapshotId = record.snapshotId
+        else { return .failed("this target is not configured on this device") }
+
+        let scan = RestoreScan(provider: provider, descriptor: descriptor)
+        guard let namespaces = try? await scan.namespaces(),
+            let row = namespaces.flatMap({ $0.gameRows + $0.preferencesRows })
+                .first(where: { $0.snapshotId == snapshotId })
+        else { return .failed("this backup could not be read") }
+
+        let container = record.gameKey.flatMap { key in
+            GameContainer.discover().first {
+                BackupKeys.gameKey(containerFolderName: $0.folderName) == key
+            }
+        }
+        return await restore(
+            row, into: container, provider: provider, descriptor: descriptor,
+            scope: record.restoreScope ?? .savesAndSettings,
+            replacesTheTree: record.replacesTheTree)
     }
 
     /// Applies one answer. The caller resumes the restore itself when

@@ -10,9 +10,8 @@ import UIKit
 /// library into a `BackupRunRequest` and hands it to `SnapshotEngine`,
 /// which does the rest.
 ///
-/// A game whose mode is still unanswered is skipped, per 3.5. Ticket
-/// 017 brings the ask, and ticket 016 brings the screen that starts
-/// it.
+/// A game whose mode is still unanswered is skipped, per 3.5. The
+/// Backups screen asks about every such game before it starts a run.
 @MainActor
 final class BackupPass: BackupRunning {
 
@@ -31,12 +30,16 @@ final class BackupPass: BackupRunning {
 
         let games = await gamesInScope(scope)
         BackupScheduler.shared.passCovers(gameKeys: Set(games.map(\.identity.gameKey)))
+        BackupRunMonitor.shared.runStarts(names: names)
         progress?.totalUnitCount = Int64(max(1, targets.count))
         var rows: [BackupPassTarget] = []
         var didFinish = true
 
         for (index, descriptor) in targets.enumerated() {
-            guard !Task.isCancelled else { return BackupPassResult(targets: rows) }
+            guard !Task.isCancelled else {
+                BackupRunMonitor.shared.runEnds()
+                return BackupPassResult(targets: rows)
+            }
             guard let provider = await BackupTargets.provider(for: descriptor) else {
                 // The gate of 9.1 is closed, or the provider is not
                 // built yet. Neither is a failure the user can clear,
@@ -58,6 +61,7 @@ final class BackupPass: BackupRunning {
                     causes: Self.causes(of: result)))
         }
 
+        BackupRunMonitor.shared.runEnds()
         return BackupPassResult(didFinish: didFinish, targets: rows)
     }
 
@@ -94,7 +98,8 @@ final class BackupPass: BackupRunning {
         // its handle when the last reference goes, so nothing here
         // may hold it after this line.
         let engine = SnapshotEngine(
-            provider: provider, store: store, localRoot: BackupRoot.url)
+            provider: provider, store: store, localRoot: BackupRoot.url,
+            observer: BackupRunMonitor.shared)
         let result = await engine.run(request)
         log(
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
@@ -105,8 +110,13 @@ final class BackupPass: BackupRunning {
 
     // MARK: - The games
 
+    /// The name of each game the pass covers, keyed by its game key.
+    /// The pill and the run block of 13.2 name the game they upload.
+    private var names: [String: String] = [:]
+
     /// The games this trigger covers, in the order 7.8 asks for.
     private func gamesInScope(_ scope: BackupScanScope) async -> [BackupRunGame] {
+        names = [:]
         let containers = GameContainer.discover()
         let byKey = Dictionary(
             uniqueKeysWithValues: containers.map {
@@ -129,10 +139,11 @@ final class BackupPass: BackupRunning {
                 for: container, targets: thresholds)
             guard case .mode(let mode) = resolution else {
                 // The ask of 3.5 has no answer yet, so this game
-                // waits for it. Ticket 017 asks.
+                // waits for it.
                 continue
             }
             let metadata = GameMetadata.load(from: container)
+            names[key] = metadata.customTitle ?? metadata.baseTitle ?? container.folderName
             games.append(
                 BackupRunGame(
                     identity: GameIdentities.identity(for: container),

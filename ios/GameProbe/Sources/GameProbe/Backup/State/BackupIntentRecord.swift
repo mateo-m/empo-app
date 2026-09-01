@@ -31,6 +31,14 @@ public struct BackupIntentRecord: Equatable, Sendable {
     public var snapshotId: String?
     /// What reached the target before the interruption.
     public var uploadedBytes: Int64
+    /// What the frozen run plan of 13.2 still had to upload. The
+    /// resume question of 13.18 names it.
+    public var remainingBytes: Int64
+    /// What the interrupted restore covered, per 11.7. A resume
+    /// takes the same scope, so it never widens what the user chose.
+    public var restoreScope: RestoreScope?
+    /// The replace choice of 11.12 the interrupted restore carried.
+    public var replacesTheTree: Bool
     public var createdAt: Date
     /// The user already saw the question for this record. The same
     /// interruption never asks twice, per 6.5.
@@ -42,6 +50,9 @@ public struct BackupIntentRecord: Equatable, Sendable {
         gameKey: String? = nil,
         snapshotId: String? = nil,
         uploadedBytes: Int64 = 0,
+        remainingBytes: Int64 = 0,
+        restoreScope: RestoreScope? = nil,
+        replacesTheTree: Bool = false,
         createdAt: Date,
         asked: Bool = false
     ) {
@@ -50,12 +61,14 @@ public struct BackupIntentRecord: Equatable, Sendable {
         self.gameKey = gameKey
         self.snapshotId = snapshotId
         self.uploadedBytes = uploadedBytes
+        self.remainingBytes = remainingBytes
+        self.restoreScope = restoreScope
+        self.replacesTheTree = replacesTheTree
         self.createdAt = createdAt
         self.asked = asked
     }
 
     /// Whether the next launch shows the question for this record.
-    /// Ticket 018 builds the sheet.
     public var asksAtNextLaunch: Bool {
         if asked { return false }
         switch kind {

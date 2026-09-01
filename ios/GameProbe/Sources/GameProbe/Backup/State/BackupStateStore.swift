@@ -44,7 +44,7 @@ public enum BackupStateRebuild: Equatable, Sendable {
 public final class BackupStateStore {
 
     /// The schema this build writes. Raise it when a table changes.
-    public static let schemaVersion: Int32 = 4
+    public static let schemaVersion: Int32 = 5
 
     /// What the open did. `needsRebuildFromTarget` reads it.
     public let openOutcome: BackupStateOpen
@@ -212,6 +212,9 @@ public final class BackupStateStore {
             gameKey TEXT,
             snapshotId TEXT,
             uploadedBytes INTEGER NOT NULL,
+            remainingBytes INTEGER NOT NULL,
+            restoreScope TEXT,
+            replacesTree INTEGER NOT NULL,
             createdAt REAL NOT NULL,
             asked INTEGER NOT NULL
         );
@@ -685,13 +688,17 @@ public final class BackupStateStore {
         try database.run(
             """
             INSERT INTO intent_record
-                (kind, targetId, gameKey, snapshotId, uploadedBytes, createdAt, asked)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (kind, targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
+                 restoreScope, replacesTree, createdAt, asked)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (kind) DO UPDATE SET
                 targetId = excluded.targetId,
                 gameKey = excluded.gameKey,
                 snapshotId = excluded.snapshotId,
                 uploadedBytes = excluded.uploadedBytes,
+                remainingBytes = excluded.remainingBytes,
+                restoreScope = excluded.restoreScope,
+                replacesTree = excluded.replacesTree,
                 createdAt = excluded.createdAt,
                 asked = excluded.asked
             """,
@@ -700,6 +707,9 @@ public final class BackupStateStore {
                 intent.gameKey.map { .text($0) } ?? .null,
                 intent.snapshotId.map { .text($0) } ?? .null,
                 .integer(intent.uploadedBytes),
+                .integer(intent.remainingBytes),
+                intent.restoreScope.map { .text($0.rawValue) } ?? .null,
+                .integer(intent.replacesTheTree ? 1 : 0),
                 .real(intent.createdAt.timeIntervalSince1970),
                 .integer(intent.asked ? 1 : 0),
             ])
@@ -708,15 +718,18 @@ public final class BackupStateStore {
     public func intent(kind: BackupIntentKind) throws -> BackupIntentRecord? {
         let rows = try database.query(
             """
-            SELECT targetId, gameKey, snapshotId, uploadedBytes, createdAt, asked
+            SELECT targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
+                   restoreScope, replacesTree, createdAt, asked
             FROM intent_record WHERE kind = ?
             """,
             [.text(kind.rawValue)])
         guard let row = rows.first,
             let targetId = row[0].string,
             let uploadedBytes = row[3].int64,
-            let createdAt = row[4].double,
-            let asked = row[5].int64
+            let remainingBytes = row[4].int64,
+            let replacesTree = row[6].int64,
+            let createdAt = row[7].double,
+            let asked = row[8].int64
         else { return nil }
         return BackupIntentRecord(
             kind: kind,
@@ -724,6 +737,9 @@ public final class BackupStateStore {
             gameKey: row[1].string,
             snapshotId: row[2].string,
             uploadedBytes: uploadedBytes,
+            remainingBytes: remainingBytes,
+            restoreScope: row[5].string.flatMap(RestoreScope.init(rawValue:)),
+            replacesTheTree: replacesTree != 0,
             createdAt: Date(timeIntervalSince1970: createdAt),
             asked: asked != 0)
     }

@@ -22,6 +22,10 @@ struct GameLibraryView: View {
     @Environment(\.pauseManager) private var pauseManager
     @State private var showImporter = false
     @State private var showSettings = false
+    /// The Backups screen, which the pill of 13.2 and the 21-day
+    /// banner of 7.1 both open.
+    @State private var showsBackups = false
+    @State private var resumeAsk: ResumeQuestionAsk?
     @State private var errorMessage: String?
     // TODO(localization): once the app has a strings catalog these
     // copy fallbacks should move into it alongside the other
@@ -216,10 +220,37 @@ struct GameLibraryView: View {
             .task {
                 duplicateNoticeNames = GameContainerMigration.pendingDuplicateNoticeNames()
             }
+            .task(id: library.initialScanCompleted) {
+                readTheBackupBadges()
+            }
+            .task {
+                // The question of 13.18 comes once, at the launch
+                // after the interruption.
+                resumeAsk = ResumeQuestionAsk.pending()
+            }
+            .onChange(of: BackupRunMonitor.shared.finishedAt) { _, _ in
+                readTheBackupBadges()
+            }
+    }
+
+    /// The card badges of 13.3 and the one banner of 7.1, in one
+    /// open of the state store.
+    private func readTheBackupBadges() {
+        BackupBadges.shared.refresh(
+            games: library.games.map {
+                BackupBadgeGame(id: $0.id, lastPlayed: $0.lastPlayed)
+            })
     }
 
     private var libraryPresentedContent: some View {
         libraryScene
+            .sheet(isPresented: $showsBackups) {
+                NavigationStack { BackupsScreen() }
+                    .tint(.brand)
+            }
+            .sheet(item: $resumeAsk) { ask in
+                ResumeQuestionSheet(ask: ask)
+            }
             .modifier(
                 BulkDeleteAlert(
                     isPresented: $showBulkDeleteConfirm,
@@ -330,6 +361,11 @@ struct GameLibraryView: View {
     private var headerInset: some View {
         VStack(spacing: Spacing.md) {
             libraryHeader
+            if BackupRunMonitor.shared.showsPill {
+                BackupProgressPill { showsBackups = true }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            backupStaleBanner
             // Keyed on games directly (not showEmpty) so the search
             // bar doesn't flash in during the pre-scan window when
             // emptiness is still unknown.
@@ -337,6 +373,7 @@ struct GameLibraryView: View {
                 searchBar
             }
         }
+        .animation(Motion.bouncy, value: BackupRunMonitor.shared.showsPill)
         .background {
             if appState.phase != .playing {
                 Rectangle()
@@ -355,6 +392,23 @@ struct GameLibraryView: View {
                     }
                     .ignoresSafeArea(edges: .top)
             }
+        }
+    }
+
+    /// The one banner of 7.1, at 21 days. It names the cause and
+    /// carries the single action that clears it.
+    @ViewBuilder private var backupStaleBanner: some View {
+        if let banner = BackupBadges.shared.banner, !selectionMode {
+            BackupStaleBannerView(
+                banner: banner, targetLabel: BackupBadges.shared.bannerTargetLabel
+            ) {
+                if BackupBadges.shared.bannerOpensTheBackupsScreen {
+                    showsBackups = true
+                } else {
+                    BackupBadges.shared.pressTheBanner()
+                }
+            }
+            .padding(.horizontal, Spacing.xl)
         }
     }
 

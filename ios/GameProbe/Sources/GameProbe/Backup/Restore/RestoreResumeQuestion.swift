@@ -22,8 +22,6 @@ public enum RestoreStopReason: String, Error, Codable, Sendable, CaseIterable, E
 /// because a half-restored game is not a state to leave quietly.
 ///
 /// The same interruption never asks twice.
-///
-/// Ticket 018 builds the sheet. The rules are here.
 public enum RestoreResumeQuestion {
 
     /// The three actions, per 11.9. Every one of them marks the
@@ -74,15 +72,24 @@ public enum RestoreResumeQuestion {
         return record.asksAtNextLaunch
     }
 
-    /// The record an interrupted restore leaves.
+    /// The record an interrupted restore leaves. It carries the
+    /// scope and the replace choice, so a resume repeats the restore
+    /// the user asked for and never a wider one.
     public static func record(
-        targetId: String, gameKey: String?, snapshotId: String, at date: Date
+        targetId: String,
+        gameKey: String?,
+        snapshotId: String,
+        scope: RestoreScope,
+        replacesTheTree: Bool,
+        at date: Date
     ) -> BackupIntentRecord {
         BackupIntentRecord(
             kind: .interruptedRestore,
             targetId: targetId,
             gameKey: gameKey,
             snapshotId: snapshotId,
+            restoreScope: scope,
+            replacesTheTree: replacesTheTree,
             createdAt: date)
     }
 

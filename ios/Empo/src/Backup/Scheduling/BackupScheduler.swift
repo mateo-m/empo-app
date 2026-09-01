@@ -589,6 +589,58 @@ final class BackupScheduler {
     func pauseTheRun() {
         runTask?.cancel()
         runTask = nil
+        recordThePause()
+    }
+
+    // MARK: - The resume question of 6.5 and 13.18
+
+    /// A pause is its own record. It keeps the staging and the outbox
+    /// files, and it never asks at the next launch, because resume is
+    /// one tap while the process lives.
+    private func recordThePause() {
+        guard let store, var record = try? store.intent(kind: .interruptedRun) else {
+            return
+        }
+        record.kind = .pausedRun
+        try? store.saveIntent(record)
+    }
+
+    /// The run the process did not survive, or `nil` when the last
+    /// launch left nothing to ask about.
+    func pendingResume() -> BackupIntentRecord? {
+        guard let store else { return nil }
+        let record = try? store.intent(kind: .interruptedRun)
+        return BackupResumeQuestion.asks(record) ? record : nil
+    }
+
+    /// Applies one answer to the resume question.
+    ///
+    /// Every answer marks the record asked, because the question was
+    /// asked. That is what keeps one interruption from asking twice.
+    func answerResume(_ action: BackupResumeQuestion.Action, gameName: String) {
+        guard let store else { return }
+        let record = try? store.intent(kind: .interruptedRun)
+        try? store.markIntentAsked(kind: .interruptedRun)
+
+        let effect = BackupResumeQuestion.effect(of: action)
+        if effect.startsRunNow, let gameKey = record?.gameKey {
+            pressBackUpNow(.game(gameKey: gameKey, gameName: gameName))
+        }
+        guard !effect.keepsRecord else { return }
+        try? store.clearIntent(kind: .interruptedRun)
+        if effect.cleansStagingAndOutbox { Self.cleanStagingAndOutbox() }
+    }
+
+    /// Stop backup throws the staged copies and the outbox away. The
+    /// blobs the target already confirmed stay where they are,
+    /// because the store is content addressed.
+    private static func cleanStagingAndOutbox() {
+        let fm = FileManager.default
+        for directory in [BackupRoot.staging, BackupRoot.outbox] {
+            for name in (try? fm.contentsOfDirectory(atPath: directory.path)) ?? [] {
+                try? fm.removeItem(at: directory.appendingPathComponent(name))
+            }
+        }
     }
 
     // MARK: - One pass
@@ -629,7 +681,6 @@ final class BackupScheduler {
             // Ticket 008 brings the first provider. Until then the
             // gates run and the pass stops here.
             log("%@ has no runner yet", trigger.rawValue)
-            await holdTheLiveActivityForADeviceCheck(progress)
             close(progress)
             return false
         }
@@ -638,6 +689,7 @@ final class BackupScheduler {
         defer {
             isRunning = false
             runningGameKeys = []
+            BackupNetwork.allowsThisRunOverCellular = false
         }
         progress?.totalUnitCount = 1
 
@@ -650,26 +702,6 @@ final class BackupScheduler {
         record(result.didFinish ? .succeeded : .otherFailure)
         report(result.targets)
         return result.didFinish
-    }
-
-    /// Walks the progress of a continued-processing task for a
-    /// minute, when the process starts with `-backupHoldManual YES`.
-    ///
-    /// The device check of ticket 007 has to see the Live Activity
-    /// the system draws for the task. A pass with no runner ends in
-    /// milliseconds, which is too fast to see. Delete this when
-    /// ticket 016 lands.
-    private func holdTheLiveActivityForADeviceCheck(_ progress: Progress?) async {
-        guard let progress else { return }
-        guard UserDefaults.standard.bool(forKey: "backupHoldManual") else { return }
-        let steps: Int64 = 60
-        progress.totalUnitCount = steps
-        for step in 1...steps {
-            guard !Task.isCancelled else { return }
-            progress.completedUnitCount = step
-            log("the Live Activity shows %ld of %ld", step, steps)
-            try? await Task.sleep(for: .seconds(1))
-        }
     }
 
     /// The one line a device check reads. The Backups screen of

@@ -173,6 +173,14 @@ public struct LibraryStaleBanner: Equatable, Sendable {
         self.targetId = targetId
         self.gameCount = gameCount
     }
+
+    /// The words the one banner shows. It names the cause, because
+    /// the cause is what the single action clears.
+    public func line(targetLabel: String? = nil, deviceName: String = "this device") -> String {
+        let games = gameCount == 1 ? "1 game has" : "\(gameCount) games have"
+        let reason = cause.line(targetLabel: targetLabel, deviceName: deviceName)
+        return "\(games) had no backup for 3 weeks, \(reason)."
+    }
 }
 
 /// The staleness clock of SPEC 7.1.

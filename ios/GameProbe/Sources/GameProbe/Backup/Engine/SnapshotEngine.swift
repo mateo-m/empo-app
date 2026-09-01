@@ -42,6 +42,9 @@ public actor SnapshotEngine {
     let store: BackupStateStore
     let localRoot: URL
     let clock: BackupClock
+    /// Who reads the run plan of 13.2. The engine never draws, so a
+    /// run with no observer does the same work.
+    let observer: (any BackupRunObserver)?
     private let readClock: @Sendable () -> Date
     let fm = FileManager.default
 
@@ -50,12 +53,14 @@ public actor SnapshotEngine {
         store: sending BackupStateStore,
         localRoot: URL,
         clock: BackupClock = SystemBackupClock(),
+        observer: (any BackupRunObserver)? = nil,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.provider = provider
         self.store = store
         self.localRoot = localRoot
         self.clock = clock
+        self.observer = observer
         self.readClock = now
     }
 
@@ -135,6 +140,9 @@ public actor SnapshotEngine {
             context.request, startedAt: startedAt, finishedAt: now, outcome: outcome,
             uploadedBytes: result.uploadedBytes,
             gameCount: context.streams.count, detail: result.detail)
+        // The run reached its end with the process alive, so it left
+        // no interruption to ask about at the next launch, per 6.5.
+        try? store.clearIntent(kind: .interruptedRun)
         // The target row of 13.5 outlives this run, and a run that
         // reached the target clears what an earlier one left.
         try? store.recordTargetFailure(
@@ -369,6 +377,11 @@ public actor SnapshotEngine {
 
         try await refuseARunThatCannotFit(&context, pending: plan.changed)
 
+        // Staging ends by producing the plan, per 13.2. The sum
+        // freezes here and no later work changes it.
+        let plannedBytes = plan.changed.reduce(0) { $0 + $1.size }
+        await observer?.runPlanned(streamKey: stream.key, bytes: plannedBytes)
+
         var result = StreamResult(streamKey: stream.key, outcome: .blobsOnly)
         let staging = BackupRootLayout.staging(root: localRoot)
             .appendingPathComponent(stream.key, isDirectory: true)
@@ -383,6 +396,7 @@ public actor SnapshotEngine {
             confirmed[blob.hash] = blob.compression
         }
         var pendingPaths: [String] = []
+        var confirmedBytes: Int64 = 0
         let snapshotId = BackupKeys.makeSnapshotId(date: now)
 
         for (index, member) in plan.changed.enumerated() {
@@ -419,6 +433,11 @@ public actor SnapshotEngine {
                 confirmed[staged.hash] = upload.compression
                 if upload.isPending { pendingPaths.append(upload.path) }
             }
+            // The plan counts the member, so the progress counts the
+            // member as well, whichever of the two paths above put
+            // the blob on the target.
+            confirmedBytes += member.size
+            await observer?.runConfirmed(streamKey: stream.key, bytes: member.size)
 
             if case .inPlace = route, SaveMemberRule.isSaveMember(member) {
                 // Rule 3 of 6.4: hash, upload, re-hash, and mark the
@@ -440,6 +459,17 @@ public actor SnapshotEngine {
                         .map { ConfirmedBlob(hash: $0.key, compression: $0.value) }
                         .sorted { $0.hash < $1.hash },
                     updatedAt: now))
+            // The record a process death leaves behind, per 6.5. The
+            // run clears it at its end, so only a death keeps it.
+            try? store.saveIntent(
+                BackupIntentRecord(
+                    kind: .interruptedRun,
+                    targetId: targetId,
+                    gameKey: stream.key,
+                    snapshotId: snapshotId,
+                    uploadedBytes: result.uploadedBytes,
+                    remainingBytes: max(0, plannedBytes - confirmedBytes),
+                    createdAt: now))
         }
 
         context.uploadedBytes += result.uploadedBytes
