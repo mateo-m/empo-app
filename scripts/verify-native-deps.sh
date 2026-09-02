@@ -140,6 +140,34 @@ sources. Rebuild with: cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-merg
 then build). Set EMPO_ALLOW_UNSTAMPED=1 to bypass."
 fi
 
+# Dependency half: the source submodules, the patches, and the
+# makefiles compile into every other archive in the tree. The full
+# rebuild stamps a hash of those inputs. A submodule bump without a
+# republish must fail here, not link the old archives.
+DEPS_FP_FILE="$LIB/.deps-fingerprint"
+DEPS_FP_SCRIPT="$REPO_ROOT/tools/deps-fingerprint.sh"
+if [[ "$PLATFORM" == iphoneos ]]; then
+    FULL_REBUILD="scripts/rebuild-device-deps.sh"
+else
+    FULL_REBUILD="scripts/rebuild-simulator-deps.sh"
+fi
+if [[ -f "$DEPS_FP_FILE" ]]; then
+    recorded="$(cat "$DEPS_FP_FILE")"
+    current="$("$DEPS_FP_SCRIPT")"
+    if [[ "$current" != "$recorded" ]]; then
+        fail "dependency archives are STALE for $PLATFORM: a dependency submodule, patch, or \
+makefile changed since the tree was built. Rebuild with: $FULL_REBUILD, or pin a release \
+built from this commit (tools/deps-fingerprint.sh --list shows the inputs)"
+    fi
+elif [[ "${EMPO_ALLOW_UNSTAMPED:-0}" == "1" ]]; then
+    echo "warning: $DEPS_FP_FILE missing, dependency staleness check skipped (EMPO_ALLOW_UNSTAMPED=1)" >&2
+else
+    fail "$DEPS_FP_FILE missing: cannot prove the dependency archives match the checkout. \
+Trees before native-2026-09-02 have no stamp: re-hydrate (rm -rf ios/Dependencies/build-* \
+ios/Dependencies/native/.fetched-version, then build) or run $FULL_REBUILD. \
+Set EMPO_ALLOW_UNSTAMPED=1 to bypass."
+fi
+
 # Engine core: everything under mkxp-z-apple-mobile/src compiles into
 # the prebuilt libmkxpz-core.a. The engine repo's
 # tools/build-core-ios.sh builds it, via `make mkxp-core` or as a

@@ -28,6 +28,10 @@ rm -f "$OPENSSL_DIR"/.configured-*
 rm -rf "$DEPS/build-iphoneos-arm64"
 find "$DEPS/sources" "$DEPS/downloads" -maxdepth 3 -type d -name 'cmakebuild-*' -prune -exec rm -rf {} + 2>/dev/null || true
 
+# Hash the inputs before the build patches the sources. Written to the
+# tree after the last dependency target succeeds.
+DEPS_FINGERPRINT="$("$REPO_ROOT/tools/deps-fingerprint.sh" --require-clean)"
+
 cd "$DEPS"
 
 echo "==> building core deps (sequential)"
@@ -48,6 +52,9 @@ make -f iphoneos.make "$LIB/libruby.3.1-ext.a"
 echo "==> installing pure-Ruby stdlib subsets"
 make -f iphoneos.make ruby-stdlib
 
+echo "$DEPS_FINGERPRINT" >"$LIB/.deps-fingerprint"
+DEPS_BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
 echo "==> building mkxp{18,19,31}-merged.o"
 make -f iphoneos.make mkxp-merged
 
@@ -56,3 +63,4 @@ make -f iphoneos.make mkxp-core
 
 echo "==> device deps rebuild complete"
 PLATFORM_NAME=iphoneos "$REPO_ROOT/scripts/verify-native-deps.sh"
+"$REPO_ROOT/scripts/write-deps-manifest.sh" iphoneos full "$DEPS_BUILT_AT" none

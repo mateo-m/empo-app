@@ -57,18 +57,24 @@ PLATFORM_NAME=iphonesimulator scripts/verify-native-deps.sh
 
 Xcode does **not** compile `mkxp-z-apple-mobile/binding/*.cpp` (and `hmode7/`).
 They are baked into the prebuilt `mkxp{18,19,31}-merged.o` objects.
-After you edit them (or any engine header they include), rebuild the merged
-objects for your target SDK:
+After you edit them (or any engine header they include), rebuild the engine
+halves for your target SDK on the tree Xcode hydrated:
 
 ```sh
-cd ios/Dependencies
-make -f iphonesimulator.make mkxp-merged   # or iphoneos.make
+scripts/rebuild-engine-halves.sh iphonesimulator   # or iphoneos
 ```
 
-The merged targets track those sources as prerequisites, so this is a no-op
-when nothing changed. The Xcode build verifies a content fingerprint of the
-same source set on every build (`scripts/verify-native-deps.sh`) and fails
-with a rebuild hint if the merged objects are stale.
+Do not run `make mkxp-merged` on a hydrated tree. The merged objects depend
+on the Ruby archives, and their rules reach into `sources/ruby` for a
+configure stamp a fresh clone does not have, so make rebuilds Ruby and
+OpenSSL first. The script tells make the archives are final.
+
+The script refuses when a dependency submodule, a patch, or a makefile
+changed since the tree was built. In that case run the full rebuild. The
+Xcode build verifies content fingerprints of the binding sources, the
+engine sources, and the dependency inputs on every build
+(`scripts/verify-native-deps.sh`) and fails with a rebuild hint when any
+of them is stale.
 
 ### Simulator install
 
