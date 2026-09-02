@@ -50,6 +50,9 @@ enum DefaultsKey {
     /// marks nothing, so the one chance stays unspent. Bool.
     static let backupNotificationPromptSpent = PreferenceKeys.backupNotificationPromptSpent.name
 
+    /// Controls edit mode: drags land on a fixed grid. Bool.
+    static let controlsEditSnapToGrid = "controlsEditSnapToGrid"
+
     // MARK: - Disclaimer
 
     static let disclaimerAcknowledgedVersion = PreferenceKeys.disclaimerAcknowledgedVersion.name

@@ -25,8 +25,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: 0.6.4
-    CURRENT_PROJECT_VERSION: 650
+    MARKETING_VERSION: 0.6.6
+    CURRENT_PROJECT_VERSION: 668
     # The Dropbox app key of SPEC 9.2. A PKCE client holds no secret,
     # so the key is public and lives here. It builds the callback
     # scheme `db-<key>` in Info.plist. An empty key hides Dropbox from

@@ -3,10 +3,17 @@
 # (build-iphoneos-arm64 + build-iphonesimulator-arm64 trees) to
 # empo-deps, replacing the hand-built-tarball-from-a-laptop flow.
 #
-# Deliberately workflow_dispatch only: the multi-Ruby cross-builds
-# take hours of macOS runner time, and dep bumps are rare. Kick it
-# off after changing ios/Dependencies makefiles or dependency
+# Deliberately workflow_dispatch only. Kick it off after changing the
+# engine submodule, ios/Dependencies makefiles, or dependency
 # submodule pins.
+#
+# Each tree job picks one of two paths. The full path rebuilds every
+# dependency from source (about ten minutes per tree). The engine path
+# downloads the tree pinned in ios/Dependencies/native/.version and
+# rebuilds only the engine halves on it (about two minutes). It takes
+# the engine path only when tools/deps-fingerprint.sh matches the pin
+# and the SDK version matches. docs/deps-publish-engine-only.md has
+# the rules.
 #
 # Shape: the two SDK trees build on PARALLEL runners (halving
 # wall-clock), then a stitch job verifies, packages, publishes, and
@@ -35,6 +42,16 @@ on:
         type: choice
         options: [self, hosted]
         default: self
+      mode:
+        description: "auto = engine halves only when the dependency inputs match the pin, else full; full = always rebuild every dependency; engine = require the short path, fail otherwise"
+        type: choice
+        options: [auto, full, engine]
+        default: auto
+
+# One Mac, one pin commit per run. A second dispatch waits.
+concurrency:
+  group: deps-publish
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -102,8 +119,50 @@ jobs:
           GH_TOKEN: ${{ secrets.EMPO_DEPS_READ_TOKEN }}
         run: tools/fetch-angle.sh
 
+      - name: Pick the build path
+        id: path
+        env:
+          GH_TOKEN: ${{ secrets.EMPO_DEPS_READ_TOKEN }}
+          MODE: ${{ github.event.inputs.mode || 'auto' }}
+          SDK: ${{ matrix.sdk }}
+        run: |
+          set -e
+          CURRENT="$(tools/deps-fingerprint.sh --require-clean)"
+          SDK_VERSION="$(xcrun --sdk "$SDK" --show-sdk-version)"
+          . ios/Dependencies/native/.version
+          if [ "$MODE" = full ]; then
+            CHOSEN=full; WHY="mode=full"
+          elif [ "$NATIVE_DEPS_VERSION" = unpublished ]; then
+            CHOSEN=full; WHY="the pin is unpublished"
+          elif [ -z "${NATIVE_DEPS_FINGERPRINT:-}" ]; then
+            CHOSEN=full; WHY="$NATIVE_DEPS_VERSION carries no dependency fingerprint"
+          elif [ "$CURRENT" != "$NATIVE_DEPS_FINGERPRINT" ]; then
+            CHOSEN=full; WHY="the dependency inputs changed since $NATIVE_DEPS_VERSION"
+          elif [ "$SDK_VERSION" != "${NATIVE_DEPS_SDK_VERSION:-}" ]; then
+            CHOSEN=full; WHY="this Mac has SDK $SDK_VERSION and $NATIVE_DEPS_VERSION was built with ${NATIVE_DEPS_SDK_VERSION:-an unknown SDK}"
+          elif ! gh release view "$NATIVE_DEPS_VERSION" --repo mateo-m/empo-deps >/dev/null 2>&1; then
+            CHOSEN=full; WHY="release $NATIVE_DEPS_VERSION is not on empo-deps"
+          else
+            CHOSEN=engine; WHY="the dependency inputs and the SDK match $NATIVE_DEPS_VERSION"
+          fi
+          echo "$CHOSEN build: $WHY"
+          echo "dependency fingerprint: $CURRENT"
+          tools/deps-fingerprint.sh --list
+          if [ "$MODE" = engine ] && [ "$CHOSEN" != engine ]; then
+            echo "::error::mode=engine, but $WHY"
+            exit 1
+          fi
+          echo "mode=$CHOSEN" >> "$GITHUB_OUTPUT"
+
       - name: Rebuild ${{ matrix.sdk }} tree
+        if: steps.path.outputs.mode == 'full'
         run: scripts/rebuild-${{ matrix.sdk == 'iphoneos' && 'device' || 'simulator' }}-deps.sh
+
+      - name: Rebuild ${{ matrix.sdk }} engine halves on the pinned tree
+        if: steps.path.outputs.mode == 'engine'
+        env:
+          GH_TOKEN: ${{ secrets.EMPO_DEPS_READ_TOKEN }}
+        run: scripts/rebuild-engine-halves.sh ${{ matrix.sdk }} --hydrate
 
       - name: Pack tree
         run: tar -czf "tree-${{ matrix.sdk }}.tar.gz" -C ios/Dependencies "build-${{ matrix.sdk }}-arm64"

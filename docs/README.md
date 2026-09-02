@@ -40,6 +40,7 @@ Explanations of the trickier architecture, in rough reading order:
 | [`pause-resume.md`](pause-resume.md)                 | Frozen-frame snapshots that bridge the SDL window into SwiftUI transitions.        |
 | [`import-pipeline.md`](import-pipeline.md)           | The game import pipeline: supported inputs, stage flow, invariants.                |
 | [`sheet-design.md`](sheet-design.md)                 | The rules that keep every bottom sheet consistent.                                 |
+| [`deps-publish-engine-only.md`](deps-publish-engine-only.md) | How deps-publish reuses a published dependency half and rebuilds only the engine. |
 
 `media/` holds the README screenshots and demo assets. The site configuration lives in
 [`blume.config.ts`](../blume.config.ts), and site-wide static files live in [`public/`](../public).
