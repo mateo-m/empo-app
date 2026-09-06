@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Empo. Run RPG Maker games on iPhone and iPad.</title>
+    <meta
+      name="description"
+      content="Empo runs RPG Maker XP, VX, and VX Ace games, and Pokemon Essentials games, on iPhone and iPad. Import a folder or an archive and play."
+    />
+    <meta name="theme-color" content="#fa8f29" />
+    <meta property="og:title" content="Empo" />
+    <meta property="og:description" content="Run RPG Maker games on iPhone and iPad." />
+    <meta property="og:image" content="media/icon.png" />
+    <link rel="icon" href="media/icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;900&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="font-body">
+    <a class="absolute top-3 -left-[999px] z-20 rounded-full bg-brand px-4 py-2 text-white focus:left-3" href="#what">Skip to content</a>
+
+    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+      <div class="absolute -top-[10%] -left-[10%] size-[60vmax] rounded-full bg-orb-1 opacity-70 blur-[120px] animate-drift-1 motion-reduce:animate-none"></div>
+      <div class="absolute top-[30%] -right-[15%] size-[55vmax] rounded-full bg-orb-2 opacity-55 blur-[130px] animate-drift-2 motion-reduce:animate-none"></div>
+      <div class="absolute -bottom-[20%] left-[20%] size-[50vmax] rounded-full bg-orb-3 opacity-60 blur-[130px] animate-drift-3 motion-reduce:animate-none"></div>
+    </div>
+
+    <header class="fixed inset-x-0 top-4 z-10 flex justify-center px-4">
+      <div class="glass flex w-full max-w-3xl items-center justify-between gap-4 rounded-full py-2 pr-2 pl-4">
+        <a class="inline-flex items-center gap-2 font-round text-lg font-extrabold text-ink hover:no-underline" href="#top" aria-label="Empo home">
+          <svg class="size-7 fill-brand" viewBox="0 0 1024.5 1024.5" aria-hidden="true"><use href="#empo-mark" /></svg>
+          <span>Empo</span>
+        </a>
+        <nav class="flex items-center gap-5" aria-label="Site">
+          <a class="hidden text-[15px] font-semibold text-ink-muted hover:text-ink hover:no-underline md:inline" href="https://mateo-m.github.io/empo-app/">Docs</a>
+          <a class="hidden text-[15px] font-semibold text-ink-muted hover:text-ink hover:no-underline md:inline" href="https://github.com/mateo-m/empo-app">GitHub</a>
+          <a class="hidden text-[15px] font-semibold text-ink-muted hover:text-ink hover:no-underline md:inline" href="https://discord.gg/m3YnpXMxrB">Discord</a>
+          <a class="btn btn-brand min-h-10 px-5 py-2 text-[15px]" href="https://github.com/mateo-m/empo-app/releases">Download</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="flex min-h-svh flex-col items-center justify-center px-6 py-28 text-center">
+        <div class="flex max-w-3xl flex-col items-center gap-8">
+          <div class="glass-strong flex size-32 items-center justify-center rounded-full">
+            <svg class="size-16 animate-float fill-brand drop-shadow-[0_4px_12px_rgba(242,106,26,0.45)] motion-reduce:animate-none" viewBox="0 0 1024.5 1024.5" aria-hidden="true"><use href="#empo-mark" /></svg>
+          </div>
+          <h1 class="[text-wrap:pretty]">Your RPG Maker games.<br /><span class="bg-linear-to-r from-brand to-rose bg-clip-text text-transparent">On your iPhone.</span></h1>
+          <p class="max-w-[40ch] text-[clamp(18px,2vw,22px)] text-pretty text-ink-muted">
+            Import a folder or an archive. Tap play. Empo runs RPG Maker XP, VX, and VX Ace games,
+            and Pokemon Essentials fangames.
+          </p>
+          <div class="flex flex-wrap justify-center gap-4">
+            <a class="btn btn-brand" href="https://github.com/mateo-m/empo-app/releases">Download the IPA</a>
+            <a class="btn glass-strong text-ink" href="https://mateo-m.github.io/empo-app/install">How to install</a>
+          </div>
+          <ul class="flex flex-wrap justify-center gap-3" aria-label="Supported engines">
+            <li class="glass rounded-full px-4 py-2 text-[13px] font-semibold text-ink">RPG Maker XP</li>
+            <li class="glass rounded-full px-4 py-2 text-[13px] font-semibold text-ink">VX</li>
+            <li class="glass rounded-full px-4 py-2 text-[13px] font-semibold text-ink">VX Ace</li>
+            <li class="glass rounded-full px-4 py-2 text-[13px] font-semibold text-ink">Pokemon Essentials</li>
+            <li class="glass rounded-full px-4 py-2 text-[13px] font-semibold text-ink">mkxp-z forks</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="screens" class="flex min-h-svh flex-col items-center justify-center gap-12 px-6 py-24 text-center">
+        <h2 class="reveal max-w-2xl">It looks like the game. Because it is the game.</h2>
+        <div class="flex items-center justify-center gap-8 md:items-end">
+          <figure class="reveal hidden w-[220px] md:block">
+            <div class="glass rounded-[44px] p-2.5 transition-transform duration-500 ease-snappy hover:-translate-y-2 motion-reduce:transition-none">
+              <img class="block aspect-[1206/2622] w-full rounded-[34px] object-cover" src="media/demo-cinematic.png" alt="A cinematic scene from an RPG Maker game running in Empo." width="1206" height="2622" loading="lazy" />
+            </div>
+          </figure>
+          <figure class="reveal w-full max-w-[300px]">
+            <div class="glass rounded-[44px] p-2.5 transition-transform duration-500 ease-snappy hover:-translate-y-2 motion-reduce:transition-none">
+              <img class="block aspect-[1206/2622] w-full rounded-[34px] object-cover" src="media/demo-overworld.png" alt="A snowy overworld scene running in Empo, with the on-screen D-pad and action buttons." width="1206" height="2622" />
+            </div>
+          </figure>
+          <figure class="reveal hidden w-[220px] md:block">
+            <div class="glass rounded-[44px] p-2.5 transition-transform duration-500 ease-snappy hover:-translate-y-2 motion-reduce:transition-none">
+              <img class="block aspect-[1206/2622] w-full rounded-[34px] object-cover" src="media/demo-battle.png" alt="A battle scene from an RPG Maker game running in Empo." width="1206" height="2622" loading="lazy" />
+            </div>
+          </figure>
+        </div>
+      </section>
+
+      <section id="what" class="flex min-h-svh flex-col items-center justify-center gap-12 px-6 py-24 text-center">
+        <div class="reveal flex max-w-2xl flex-col gap-3">
+          <h2>Three taps from a zip file to a title screen.</h2>
+          <p class="text-[19px] text-ink-muted">Empo ships no games. You bring the ones you already have.</p>
+        </div>
+        <ol class="grid w-full max-w-4xl gap-6 md:grid-cols-3">
+          <li class="reveal flex flex-col items-center gap-5 p-8 glass rounded-[28px]">
+            <div class="flex size-16 items-center justify-center rounded-full glass-strong"><svg class="size-7 fill-brand [shape-rendering:crispEdges]" viewBox="0 0 16 16" aria-hidden="true"><use href="#px-cube" /></svg></div>
+            <h3>Import</h3>
+            <p class="text-ink-muted">Share a folder, a zip, a 7z, a rar, or a JoiPlay package to Empo.</p>
+          </li>
+          <li class="reveal flex flex-col items-center gap-5 p-8 glass rounded-[28px]">
+            <div class="flex size-16 items-center justify-center rounded-full glass-strong"><svg class="size-7 fill-brand [shape-rendering:crispEdges]" viewBox="0 0 16 16" aria-hidden="true"><use href="#px-star" /></svg></div>
+            <h3>Play</h3>
+            <p class="text-ink-muted">Empo picks the Ruby the game needs. Move the D-pad and the buttons where you want them.</p>
+          </li>
+          <li class="reveal flex flex-col items-center gap-5 p-8 glass rounded-[28px]">
+            <div class="flex size-16 items-center justify-center rounded-full glass-strong"><svg class="size-7 fill-brand [shape-rendering:crispEdges]" viewBox="0 0 16 16" aria-hidden="true"><use href="#px-heart" /></svg></div>
+            <h3>Pause</h3>
+            <p class="text-ink-muted">Freeze the game, go back to the library, and tap the card to return where you left off.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section id="dragons" class="flex min-h-svh flex-col items-center justify-center px-6 py-24">
+        <div class="reveal flex w-full max-w-2xl flex-col items-center gap-8 p-8 text-center md:p-12 glass rounded-[28px]">
+          <div class="flex size-16 items-center justify-center rounded-full glass-strong"><svg class="size-7 fill-brand [shape-rendering:crispEdges]" viewBox="0 0 16 16" aria-hidden="true"><use href="#px-diamond" /></svg></div>
+          <h2>Here be dragons, or bugs!</h2>
+          <p class="max-w-[46ch] text-ink-muted">
+            Empo is pre-release and not on the App Store. I am a lone dev who builds this in my spare
+            time. Save often.
+          </p>
+          <ul class="flex w-full flex-col gap-3 text-left">
+            <li class="glass-strong rounded-2xl px-5 py-4">
+              <strong>You sideload it.</strong> AltStore, SideStore, or Sideloadly. iOS 26 or newer.
+            </li>
+            <li class="glass-strong rounded-2xl px-5 py-4">
+              <strong>One game per session.</strong> Close Empo from the app switcher before you start another one.
+            </li>
+            <li class="glass-strong rounded-2xl px-5 py-4">
+              <strong>Ogg and Theora movies only.</strong> An MP4 opening stays blank. The game still runs.
+            </li>
+          </ul>
+          <div class="flex w-full flex-col gap-2 text-left">
+            <p class="text-[15px] text-ink-muted">AltStore and SideStore source, for update notifications:</p>
+            <pre class="glass-strong rounded-2xl px-5 py-4 min-w-0 max-w-full select-all overflow-x-auto font-mono text-[13px]"><code>https://raw.githubusercontent.com/mateo-m/empo-app/main/altstore-source.json</code></pre>
+          </div>
+          <div class="flex flex-wrap justify-center gap-4">
+            <a class="btn btn-brand" href="https://github.com/mateo-m/empo-app/releases">Download the IPA</a>
+            <a class="btn glass-strong text-ink" href="https://mateo-m.github.io/empo-app/troubleshooting">Troubleshooting</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="flex flex-col items-center gap-5 px-6 pt-8 pb-16 text-center text-[15px] text-ink-muted">
+      <nav class="flex flex-wrap justify-center gap-5 font-semibold" aria-label="Footer">
+        <a class="text-ink-muted hover:text-ink" href="https://mateo-m.github.io/empo-app/">Docs</a>
+        <a class="text-ink-muted hover:text-ink" href="https://mateo-m.github.io/empo-app/controls-format">For game makers</a>
+        <a class="text-ink-muted hover:text-ink" href="https://github.com/mateo-m/empo-app">GitHub</a>
+        <a class="text-ink-muted hover:text-ink" href="https://discord.gg/m3YnpXMxrB">Discord</a>
+        <a class="text-ink-muted hover:text-ink" href="https://mateo-m.github.io/empo-app/privacy">Privacy</a>
+        <a class="text-ink-muted hover:text-ink" href="https://mateo-m.github.io/empo-app/terms">Terms</a>
+      </nav>
+      <p class="max-w-[60ch]">
+        Free software under GPLv2+. Built on <a href="https://github.com/Ancurio/mkxp">mkxp</a>,
+        <a href="https://github.com/mkxp-z/mkxp-z">mkxp-z</a>, and the Ruby work of
+        <a href="https://github.com/joiplay">JoiPlay</a>.
+      </p>
+      <p class="text-[13px]">Made with ☕ by <a href="https://twitter.com/gridplay_">Grid</a>.</p>
+    </footer>
+
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g id="empo-mark">
+          <polygon points="882.02 284.69 882.02 227.81 825.14 227.81 825.14 170.92 768.25 170.92 768.25 114.03 711.36 114.03 711.36 57.15 654.47 57.15 597.58 57.15 597.58 .25 540.69 .25 540.69 57.15 540.69 114.03 540.69 170.92 540.69 227.81 540.69 284.69 540.69 341.59 540.69 398.48 540.69 455.36 540.69 512.25 540.69 569.14 540.69 626.02 540.69 682.92 597.58 682.92 597.58 626.02 654.47 626.02 711.36 626.02 768.25 626.02 825.14 626.02 825.14 682.92 882.02 682.92 882.02 626.02 882.02 569.14 938.91 569.14 938.91 512.25 938.91 455.36 938.91 398.48 938.91 341.59 938.91 284.69 882.02 284.69" />
+          <polygon points="825.14 739.81 768.25 739.81 768.25 796.69 711.36 796.69 654.47 796.69 597.58 796.69 540.69 796.69 483.81 796.69 426.92 796.69 426.92 739.81 370.03 739.81 313.14 739.81 256.25 739.81 199.36 739.81 142.48 739.81 142.48 796.69 199.36 796.69 199.36 853.58 199.36 910.47 256.25 910.47 256.25 967.36 313.14 967.36 370.03 967.36 370.03 1024.25 426.92 1024.25 483.81 1024.25 540.69 1024.25 597.58 1024.25 654.47 1024.25 654.47 967.36 711.36 967.36 768.25 967.36 768.25 910.47 825.14 910.47 825.14 853.58 882.02 853.58 882.02 796.69 938.91 796.69 938.91 739.81 882.02 739.81 825.14 739.81" />
+          <polygon points="199.36 682.92 256.25 682.92 313.14 682.92 370.03 682.92 426.92 682.92 483.81 682.92 483.81 626.02 483.81 569.14 483.81 512.25 483.81 455.36 483.81 398.48 483.81 341.59 483.81 284.69 483.81 227.81 483.81 170.92 483.81 114.03 426.92 114.03 426.92 170.92 426.92 227.81 370.03 227.81 370.03 284.69 370.03 341.59 313.14 341.59 313.14 398.48 313.14 455.36 256.25 455.36 256.25 512.25 199.36 512.25 199.36 569.14 142.48 569.14 142.48 626.02 85.59 626.02 85.59 682.92 142.48 682.92 199.36 682.92" />
+        </g>
+        <path id="px-circle" d="M12 16H4V14H12V16ZM4 14H2V12H4V14ZM14 14H12V12H14V14ZM2 12H0V4H2V12ZM16 12H14V4H16V12ZM4 4H2V2H4V4ZM14 4H12V2H14V4ZM12 2H4V0H12V2Z" />
+        <path id="px-square" d="M14 2H2V14H14V2ZM16 16H0V0H16V16Z" />
+        <path id="px-square-rounded" d="M14 16H2V14H14V16ZM2 14H0V2H2V14ZM16 14H14V2H16V14ZM14 2H2V0H14V2Z" />
+        <path id="px-diamond" d="M10 2H12V4H14V6H16V10H14V12H12V14H10V16H6V14H4V12H2V10H0V6H2V4H4V2H6V0H10V2Z" />
+        <path id="px-heart" d="M4 2H6V4H10V2H12V0H14V2H16V10H14V12H12V14H10V16H6V14H4V12H2V10H0V2H2V0H4V2Z" />
+        <path id="px-star" d="M4 16H2V14H4V16ZM14 16H12V14H14V16ZM10 4H12V6H16V8H14V10H12V14H10V12H6V14H4V10H2V8H0V6H4V4H6V0H10V4Z" />
+        <path id="px-plus" d="M10 6H16V10H10V16H6V10H0V6H6V0H10V6Z" />
+        <path id="px-cube" d="M2 6H10V14H12V16H0V4H2V6ZM16 12H14V14H12V4H14V2H12V4H2V2H4V0H16V12Z" />
+        <path id="px-sphere" d="M14 6H12V10H14V6ZM10 6H12V4H10V6ZM6 4H10V2H6V4ZM16 12H14V14H12V16H4V14H2V12H0V4H2V2H4V0H12V2H14V4H16V12Z" />
+      </defs>
+    </svg>
+
+    <script src="main.js" defer></script>
+  </body>
+</html>

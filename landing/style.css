@@ -1,0 +1,244 @@
+@import "tailwindcss" source(none);
+@source "./index.html";
+@source "./main.js";
+
+:root {
+  color-scheme: light dark;
+  --bg: #fff5ea;
+  --ink: #2a1d12;
+  --ink-muted: rgba(42, 29, 18, 0.66);
+  --glass-fill: rgba(255, 255, 255, 0.42);
+  --glass-fill-strong: rgba(255, 255, 255, 0.62);
+  --glass-rim: rgba(255, 255, 255, 0.7);
+  --glass-edge: rgba(255, 255, 255, 0.9);
+  --glass-shade: rgba(60, 30, 10, 0.1);
+  --orb-1: #ffb15c;
+  --orb-2: #ff7a9e;
+  --orb-3: #8fd3ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #130d0a;
+    --ink: #fff4ea;
+    --ink-muted: rgba(255, 244, 234, 0.66);
+    --glass-fill: rgba(255, 255, 255, 0.07);
+    --glass-fill-strong: rgba(255, 255, 255, 0.12);
+    --glass-rim: rgba(255, 255, 255, 0.16);
+    --glass-edge: rgba(255, 255, 255, 0.35);
+    --glass-shade: rgba(0, 0, 0, 0.35);
+    --orb-1: #fa8f29;
+    --orb-2: #c2416b;
+    --orb-3: #2f6fb5;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-orb-1: var(--orb-1);
+  --color-orb-2: var(--orb-2);
+  --color-orb-3: var(--orb-3);
+}
+
+@theme {
+  --color-brand: #fa8f29;
+  --color-brand-deep: #f26a1a;
+  --color-rose: #ff5e7a;
+
+  --font-round: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+  --font-body: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --animate-float: float 2.4s ease-in-out infinite alternate;
+  --animate-drift-1: drift-1 26s ease-in-out infinite alternate;
+  --animate-drift-2: drift-2 32s ease-in-out infinite alternate;
+  --animate-drift-3: drift-3 38s ease-in-out infinite alternate;
+
+  @keyframes float {
+    from {
+      transform: translateY(-3px);
+    }
+    to {
+      transform: translateY(3px);
+    }
+  }
+
+  @keyframes drift-1 {
+    from {
+      transform: translate(-10%, -8%) scale(1);
+    }
+    to {
+      transform: translate(12%, 10%) scale(1.15);
+    }
+  }
+
+  @keyframes drift-2 {
+    from {
+      transform: translate(8%, 6%) scale(1.1);
+    }
+    to {
+      transform: translate(-14%, -10%) scale(0.95);
+    }
+  }
+
+  @keyframes drift-3 {
+    from {
+      transform: translate(-6%, 12%) scale(0.9);
+    }
+    to {
+      transform: translate(10%, -12%) scale(1.1);
+    }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.5;
+    color: var(--color-ink);
+    background: var(--color-bg);
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-round);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+
+  h1 {
+    font-size: clamp(40px, 6vw, 64px);
+  }
+
+  h2 {
+    font-size: clamp(28px, 4.5vw, 44px);
+  }
+
+  h3 {
+    font-size: 20px;
+  }
+
+  a {
+    color: var(--color-brand-deep);
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+/* Frosted panel. A translucent fill over a blurred, saturated backdrop, a light
+   rim, and a thin bright edge along the top, like glass that catches the light. */
+@utility glass {
+  background: var(--glass-fill);
+  backdrop-filter: blur(24px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  border: 1px solid var(--glass-rim);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04),
+    0 12px 40px var(--glass-shade);
+}
+
+@utility glass-strong {
+  background: var(--glass-fill-strong);
+  backdrop-filter: blur(28px) saturate(2);
+  -webkit-backdrop-filter: blur(28px) saturate(2);
+  border: 1px solid var(--glass-rim);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04),
+    0 12px 40px var(--glass-shade);
+}
+
+/* Capsule button. Press scales to 0.95 like the app. */
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 14px 28px;
+  border-radius: 999px;
+  font-family: var(--font-round);
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    transform 180ms var(--ease-snappy),
+    box-shadow 180ms var(--ease-snappy),
+    background-color 180ms var(--ease-snappy);
+
+  &:hover {
+    text-decoration: none;
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+/* Brand glass: orange tint with the same edge light, and an orange glow. */
+@utility btn-brand {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 55%), linear-gradient(135deg, #ffa244, #f26a1a);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 8px 28px rgba(242, 106, 26, 0.45);
+
+  &:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      0 12px 36px rgba(242, 106, 26, 0.55);
+  }
+}
+
+/* Enter from opacity 0, 12px below, blurred. main.js sets data-in. */
+@utility reveal {
+  opacity: 0;
+  translate: 0 12px;
+  filter: blur(6px);
+  transition:
+    opacity 500ms var(--ease-snappy),
+    translate 500ms var(--ease-snappy),
+    filter 500ms var(--ease-snappy);
+
+  &[data-in] {
+    opacity: 1;
+    translate: none;
+    filter: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    opacity: 1;
+    translate: none;
+    filter: none;
+    transition: none;
+  }
+}

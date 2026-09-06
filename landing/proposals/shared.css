@@ -1,0 +1,41 @@
+@theme {
+  --color-brand: #fa8f29;
+  --font-round: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+  --ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-round);
+    line-height: 1.45;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-round);
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  a:hover {
+    text-decoration: none;
+  }
+}
+
+@utility press {
+  transition: transform 160ms var(--ease-snappy);
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+@utility px {
+  shape-rendering: crispEdges;
+}

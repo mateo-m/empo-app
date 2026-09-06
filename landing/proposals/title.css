@@ -1,0 +1,103 @@
+@import "tailwindcss" source(none);
+@source "./title.html";
+@source "./title.js";
+@import "./shared.css";
+
+@theme {
+  --animate-blink: blink 1s steps(2, start) infinite;
+  --animate-float: float 12s ease-in-out infinite alternate;
+  --animate-rise: rise 700ms var(--ease-snappy) both;
+
+  @keyframes blink {
+    to {
+      visibility: hidden;
+    }
+  }
+
+  @keyframes float {
+    from {
+      translate: var(--px, 0px) calc(var(--py, 0px) - 12px);
+    }
+    to {
+      translate: var(--px, 0px) calc(var(--py, 0px) + 12px);
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 14px;
+      filter: blur(6px);
+    }
+  }
+}
+
+@layer base {
+  body {
+    background: linear-gradient(180deg, #111730, #0a0d1a);
+    color: #fff;
+    font-weight: 700;
+    overflow-x: hidden;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+}
+
+
+/* One cursor per item. The first item shows its cursor until the pointer or
+   focus lands on another item, then that item's cursor shows instead. */
+@utility menu {
+  & a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    transition:
+      color 160ms var(--ease-snappy),
+      translate 220ms var(--ease-snappy);
+  }
+
+  & .cursor {
+    position: absolute;
+    top: 50%;
+    left: -28px;
+    translate: 0 -50%;
+    opacity: 0;
+    transition: opacity 120ms var(--ease-snappy);
+  }
+
+  & li:first-child .cursor {
+    opacity: 1;
+    animation: var(--animate-blink);
+  }
+
+  &:has(a:hover, a:focus-visible) li:first-child a:not(:hover, :focus-visible) .cursor {
+    opacity: 0;
+    animation: none;
+  }
+
+  & a:hover,
+  & a:focus-visible {
+    color: var(--color-brand);
+    translate: 6px 0;
+  }
+
+  & a:hover .cursor,
+  & a:focus-visible .cursor {
+    opacity: 1;
+    animation: var(--animate-blink);
+  }
+
+  & a:active {
+    translate: 8px 0;
+    scale: 0.98;
+  }
+}
+
+@utility tilt {
+  transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 300ms var(--ease-snappy);
+}

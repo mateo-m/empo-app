@@ -1,0 +1,11 @@
+@import "tailwindcss" source(none);
+@source "./fan.html";
+@import "./shared.css";
+
+@layer base {
+  body {
+    background: #ffe9d2;
+    color: #2a1a0a;
+    font-weight: 700;
+  }
+}

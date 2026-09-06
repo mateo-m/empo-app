@@ -6,6 +6,8 @@
     "prepare": "lefthook install --reset-hooks-path",
     "docs:dev": "blume dev",
     "docs:build": "blume build",
+    "landing:dev": "bun tools/landing-dev.ts",
+    "landing:build": "bun tools/landing-build.ts",
     "fmt:check": "oxfmt --check altstore-source.json ios/Empo/project.yml ios/Empo/curated-patches/gameRegistry.json",
     "controls:schema:check": "bun tools/controls-schema-check.ts",
     "controls:schema": "bun tools/generate-controls-schema.ts"
@@ -15,8 +17,10 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "blume": "^1.5.1",
+    "bun-plugin-tailwind": "^0.1.2",
     "lefthook": "2.1.9",
     "markdownlint-cli": "0.48.0",
-    "oxfmt": "0.55.0"
+    "oxfmt": "0.55.0",
+    "tailwindcss": "^4.3.3"
   }
 }
