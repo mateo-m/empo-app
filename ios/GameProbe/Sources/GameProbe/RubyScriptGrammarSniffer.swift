@@ -29,8 +29,8 @@ public enum RubyScriptGrammarSniffer {
 
         /// The sniffer read the script source but found no modern
         /// tokens. The caller should use the data file extension
-        /// to choose between 1.8 (`.rxdata`) and 1.9
-        /// (`.rvdata`/`.rvdata2`).
+        /// to choose between 1.8 (`.rxdata`, `.rvdata`) and 1.9
+        /// (`.rvdata2`).
         case legacy
 
         /// The sniffer could not read the live source. Causes: an
@@ -247,8 +247,12 @@ public enum RubyScriptGrammarSniffer {
         // Endless method def (3.0+): `def foo = expr`. The
         // pattern excludes setter methods (`def x=(v)`). Setters
         // are common in RGSS1 and were mistaken for endless defs
-        // before.
-        #"\bdef\s+(?!\w+=)\w+(?:\([^)]*\))?\s*=\s*(?!\()\S"#,
+        // before. RGSS2/3 also name the defense stat `def`
+        // (`actor.def`, `Vocab::def`, `def def`). The lookbehind
+        // skips the call form, and the name must follow on the
+        // same line, or `Vocab::def` plus an assignment on the
+        // next line reads as an endless def.
+        #"(?<![.:\w])def[ \t]+(?!\w+=)\w+(?:\([^)]*\))?[ \t]*=[ \t]*(?!\()\S"#,
         // Numbered block params (2.7+): _1, _2 inside { ... }
         #"\{\s*[^}]*\b_[1-9]\b"#,
         // Keyword-arg shorthand (3.1+): foo(x:, y:)
