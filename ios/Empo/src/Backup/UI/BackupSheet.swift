@@ -309,7 +309,7 @@ private struct LeftoverDeleteSheet: View {
             trailingButton: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(confirmation.body)
-            SheetPrimaryButton(confirmation.buttonLabel) {
+            SheetDestructiveButton(confirmation.buttonLabel) {
                 delete()
                 dismiss()
             }

@@ -180,9 +180,8 @@ struct PackageExportSheet: View {
         SheetPrimaryButton(PackageSaveChoice.saveAgain.label) {
             model.answer(.saveAgain)
         }
-        Button(PackageSaveChoice.delete.label, role: .destructive) {
+        SheetDestructiveButton(PackageSaveChoice.delete.label) {
             model.answer(.delete)
         }
-        .buttonStyle(SecondaryButtonStyle(tint: .red))
     }
 }

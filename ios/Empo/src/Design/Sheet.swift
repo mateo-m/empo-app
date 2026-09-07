@@ -11,7 +11,7 @@ import SwiftUI
 /// shows, the vocabulary decides HOW it looks.
 ///
 /// ```swift
-/// StandardSheet(title: "Saves Recovered", emblem: "checkmark.seal") {
+/// StandardSheet(title: "Saves recovered", emblem: "checkmark.seal") {
 ///     SheetBodyText("What happened and why.")
 ///     SheetCard { /* rows */ }
 ///     SheetFootnote("The fine print.")
@@ -19,13 +19,18 @@ import SwiftUI
 /// }
 /// ```
 
-/// A navigation-bar action on a sheet ("Cancel", "Close").
+/// The icon in the sheet's top-trailing corner. Close is the safe
+/// exit of the first step. Back returns to the step before.
 struct SheetBarAction {
+    enum Symbol { case close, back }
+
     let label: String
+    let symbol: Symbol
     let action: () -> Void
 
-    init(_ label: String, action: @escaping () -> Void) {
+    init(_ label: String, symbol: Symbol = .close, action: @escaping () -> Void) {
         self.label = label
+        self.symbol = symbol
         self.action = action
     }
 }
@@ -44,35 +49,24 @@ enum SheetSurface {
 
 /// The standard content-sized Empo sheet.
 ///
-/// Two title styles, matching the two system sheet shapes:
+/// Two title styles:
 ///
-///   - No emblem: the title sits inline in the navigation bar
-///     (activity-summary style - image sources, build info).
+///   - No emblem: the title sits at the top of the content,
+///     leading, with the bar action as an icon at its trailing end.
 ///   - With `emblem:`: the title joins the symbol as ONE centered
-///     identity block at the top of the content (welcome-sheet
-///     style). Splitting them - a bar title plus a floating
-///     symbol - reads as two competing anchors. Never do that.
+///     identity block (welcome-sheet style). The icon, when there
+///     is one, sits in the top-trailing corner over that block.
 struct StandardSheet<Content: View>: View {
     let title: String
     /// SF Symbol name for the identity block. A nil value keeps the
-    /// title in the navigation bar.
+    /// title leading at the top of the content.
     var emblem: String?
     var surface: SheetSurface = .grouped
-    /// Extra height for navigation chrome. A nil value derives it from
-    /// the bar: the full bar allowance with a bar, only the
-    /// grabber zone without one.
-    var chromeAllowance: CGFloat?
-    /// Optional top-trailing toolbar action.
+    /// Optional top-trailing icon action.
     var trailingButton: SheetBarAction?
     @ViewBuilder var content: Content
 
     @State private var measuredHeight: CGFloat = 0
-
-    /// An identity-block sheet with no toolbar action has an empty
-    /// bar. Hiding it lets the sheet hug its content.
-    private var barHidden: Bool {
-        emblem != nil && trailingButton == nil
-    }
 
     var body: some View {
         switch surface {
@@ -84,39 +78,55 @@ struct StandardSheet<Content: View>: View {
     }
 
     private var core: some View {
-        NavigationStack {
-            // The scroll container does two jobs: content taller
-            // than the screen scrolls instead of clipping, and a
-            // sheet pulled past its detent keeps the content
-            // pinned to the top (a bare VStack centers in the
-            // stretched space).
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.xl) {
-                    if let emblem {
-                        SheetIdentityBlock(systemName: emblem, title: title)
-                    }
-                    content
-                }
-                .padding(Spacing.xl)
-                .intrinsicSheetContent(measuredHeight: $measuredHeight)
+        // The scroll container does two jobs: content taller than
+        // the screen scrolls instead of clipping, and a sheet
+        // pulled past its detent keeps the content pinned to the
+        // top (a bare VStack centers in the stretched space).
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                header
+                content
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .navigationTitle(emblem == nil ? title : "")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(barHidden ? .hidden : .automatic, for: .navigationBar)
-            .toolbar {
-                if let trailingButton {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(trailingButton.label, action: trailingButton.action)
-                    }
+            .padding([.horizontal, .top], Spacing.xl)
+            .padding(.top, Spacing.md)
+            // The home indicator's safe area already pads the
+            // bottom. A full gutter under it reads as a hole.
+            .padding(.bottom, Spacing.sm)
+            .intrinsicSheetContent(measuredHeight: $measuredHeight)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .intrinsicSheetDetent(measuredHeight: measuredHeight, chromeAllowance: 0)
+        .tint(.brand)
+    }
+
+    @ViewBuilder private var header: some View {
+        if let emblem {
+            SheetIdentityBlock(systemName: emblem, title: title)
+                .overlay(alignment: .topTrailing) {
+                    if let trailingButton { icon(trailingButton) }
                 }
+        } else {
+            HStack(alignment: .top, spacing: Spacing.lg) {
+                Text(title)
+                    .font(.title2.bold())
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let trailingButton { icon(trailingButton) }
             }
         }
-        .intrinsicSheetDetent(
-            measuredHeight: measuredHeight,
-            chromeAllowance: chromeAllowance ?? (barHidden ? 28 : 64)
-        )
-        .tint(.brand)
+    }
+
+    private func icon(_ action: SheetBarAction) -> some View {
+        Button(action: action.action) {
+            Image(systemName: action.symbol == .close ? "xmark.circle.fill" : "chevron.left.circle.fill")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 44, height: 44, alignment: .topTrailing)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(action.label)
     }
 }
 
@@ -144,11 +154,24 @@ private struct SheetIdentityBlock: View {
     }
 }
 
-/// Leading-aligned explanation text under the emblem.
+/// Leading-aligned explanation text under the title.
 struct SheetBodyText: View {
-    let text: String
+    let text: AttributedString
 
-    init(_ text: String) { self.text = text }
+    init(_ text: String) { self.text = AttributedString(text) }
+
+    /// `name` is the game or target the line talks about. It reads in
+    /// the primary color and a heavier weight, so it stands out of
+    /// the secondary text around it.
+    init(_ text: String, naming name: String) {
+        var attributed = AttributedString(text)
+        for range in text.ranges(of: name) {
+            guard let marked = Range(range, in: attributed) else { continue }
+            attributed[marked].foregroundColor = .primary
+            attributed[marked].font = .subheadline.weight(.semibold)
+        }
+        self.text = attributed
+    }
 
     var body: some View {
         Text(text)
@@ -216,5 +239,47 @@ struct SheetPrimaryButton: View {
             Text(title).frame(maxWidth: .infinity)
         }
         .buttonStyle(PrimaryButtonStyle())
+    }
+}
+
+/// The step toward a destructive answer, or any second choice that
+/// needs no weight of its own. Plain text, full width, 44pt tall.
+struct SheetQuietButton: View {
+    let title: String
+    let action: () -> Void
+
+    init(_ title: String, action: @escaping () -> Void) {
+        self.title = title
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// The one destructive answer of a confirmation step. Red, full
+/// width, and never the brand primary.
+struct SheetDestructiveButton: View {
+    let title: String
+    let action: () -> Void
+
+    init(_ title: String, action: @escaping () -> Void) {
+        self.title = title
+        self.action = action
+    }
+
+    var body: some View {
+        Button(role: .destructive, action: action) {
+            Text(title).frame(maxWidth: .infinity)
+        }
+        .buttonStyle(PrimaryButtonStyle(tint: .destructive))
     }
 }

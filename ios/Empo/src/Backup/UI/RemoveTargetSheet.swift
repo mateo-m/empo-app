@@ -26,14 +26,14 @@ struct RemoveTargetSheet: View {
             title: sheet.title,
             trailingButton: SheetBarAction("Cancel") { dismiss() }
         ) {
-            SheetBodyText(sheet.body)
+            SheetBodyText(sheet.body, naming: item.descriptor.displayName)
             Toggle(sheet.deleteLabel, isOn: $deletesBackups)
                 .font(.subheadline)
             if let refusal {
                 SheetBodyText(refusal.line)
                     .foregroundStyle(.red)
                 VStack(spacing: Spacing.md) {
-                    ForEach(refusal.actions, id: \.self) { action in
+                    ForEach(refusal.actions.filter { $0 != .cancel }, id: \.self) { action in
                         Button(action.label) { press(action) }
                             .buttonStyle(SecondaryButtonStyle(size: .md))
                     }

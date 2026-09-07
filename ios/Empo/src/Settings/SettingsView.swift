@@ -871,8 +871,7 @@ private struct BuildInfoSheet: View {
 
     var body: some View {
         StandardSheet(
-            title: "Build Info",
-            chromeAllowance: AppSize.libraryHeader,
+            title: "Build info",
             trailingButton: SheetBarAction("Close") { dismiss() }
         ) {
             SheetCard {

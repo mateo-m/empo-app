@@ -126,7 +126,7 @@ struct VersionMarkerSheetView: View {
             title: VersionMarkerSheet.title,
             trailingButton: SheetBarAction("Cancel") { dismiss() }
         ) {
-            SheetBodyText(VersionMarkerSheet.body(gameName: gameName))
+            SheetBodyText(VersionMarkerSheet.body(gameName: gameName), naming: gameName)
             SheetCard {
                 ForEach(Array(VersionMarkerSheet.actions.enumerated()), id: \.element) {
                     index, action in

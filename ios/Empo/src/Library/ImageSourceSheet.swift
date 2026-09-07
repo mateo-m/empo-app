@@ -30,7 +30,7 @@ struct ImageSourceSheet: View {
             SheetCard {
                 ImageSourceRow(
                     icon: "photo.on.rectangle",
-                    label: "Camera Roll"
+                    label: "Camera roll"
                 ) {
                     isPresented = false
                     onPickPhoto()
@@ -40,7 +40,7 @@ struct ImageSourceSheet: View {
                     SheetRowSeparator(leadingColumn: 24)
                     ImageSourceRow(
                         icon: "camera",
-                        label: "Take Photo"
+                        label: "Take photo"
                     ) {
                         isPresented = false
                         onTakePhoto()
@@ -50,7 +50,7 @@ struct ImageSourceSheet: View {
                 SheetRowSeparator(leadingColumn: 24)
                 ImageSourceRow(
                     icon: "folder",
-                    label: "Choose File"
+                    label: "Choose file"
                 ) {
                     isPresented = false
                     onPickFile()

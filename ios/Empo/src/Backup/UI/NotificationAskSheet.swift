@@ -10,22 +10,24 @@ struct NotificationAskSheet: View {
     let answer: (BackupNotificationAnswer) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var answered = false
 
     var body: some View {
-        StandardSheet(title: BackupNotificationAsk.title, emblem: "bell.badge") {
+        StandardSheet(
+            title: BackupNotificationAsk.title,
+            emblem: "bell.badge",
+            trailingButton: SheetBarAction(BackupNotificationAsk.notNowLabel) { dismiss() }
+        ) {
             SheetBodyText(BackupNotificationAsk.body)
-            VStack(spacing: Spacing.md) {
-                SheetPrimaryButton(BackupNotificationAsk.turnOnLabel) {
-                    answer(.turnOn)
-                    dismiss()
-                }
-                Button(BackupNotificationAsk.notNowLabel) {
-                    answer(.notNow)
-                    dismiss()
-                }
-                .buttonStyle(SecondaryButtonStyle(size: .md))
+            SheetPrimaryButton(BackupNotificationAsk.turnOnLabel) {
+                answered = true
+                answer(.turnOn)
+                dismiss()
             }
         }
-        .interactiveDismissDisabled()
+        .onDisappear {
+            guard !answered else { return }
+            answer(.notNow)
+        }
     }
 }

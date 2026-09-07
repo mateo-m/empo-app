@@ -102,11 +102,10 @@ private struct NamespaceDeleteSheet: View {
                 }
             }
             SheetFootnote(confirmation.spaceLine)
-            Button(confirmation.buttonLabel, role: .destructive) {
+            SheetDestructiveButton(confirmation.buttonLabel) {
                 delete()
                 dismiss()
             }
-            .buttonStyle(SecondaryButtonStyle(tint: .red))
         }
     }
 }

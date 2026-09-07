@@ -80,14 +80,13 @@ private struct SaveRecoverySheet: View {
 
     var body: some View {
         StandardSheet(
-            title: "Saves Recovered",
+            title: "Saves recovered",
             emblem: "checkmark.arrow.trianglehead.counterclockwise"
         ) {
             SheetBodyText(
-                "A defect in earlier Empo versions renamed save files on this "
-                    + "device, so games showed only \u{201C}New Game\u{201D}. "
-                    + "Empo restored the most recent save file for each game "
-                    + "below."
+                "An older Empo renamed save files on this device, so games "
+                    + "showed only \u{201C}New Game\u{201D}. Empo put back the "
+                    + "latest save of each game below."
             )
 
             SheetCard {
@@ -106,10 +105,10 @@ private struct SaveRecoverySheet: View {
             }
 
             SheetFootnote(
-                "The renamed copies stay in the game's data folder as backups "
-                    + "(\u{201C}.pre-literal.bak\u{201D} files). If a restored "
-                    + "save is not the one you expect, tap Files on that game "
-                    + "and rename a backup to the save file's name."
+                "The renamed copies stay in each game's data folder as "
+                    + "\u{201C}.pre-literal.bak\u{201D} files. If a save is not "
+                    + "the one you expect, tap Files and rename a copy to the "
+                    + "save file's name."
             )
 
             SheetPrimaryButton("Done") { isPresented = false }

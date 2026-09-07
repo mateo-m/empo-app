@@ -18,20 +18,18 @@ struct SyncJoinSheet: View {
         case .none:
             StandardSheet(title: "No settings to sync", emblem: "arrow.triangle.2.circlepath") {
                 SheetBodyText(SyncGroupCopy.noCommonTarget)
-                SheetPrimaryButton("OK") { dismiss() }
+                SheetPrimaryButton("Done") { dismiss() }
             }
         case .confirm(let group):
             StandardSheet(
-                title: SyncGroupCopy.confirmation(of: group), emblem: "arrow.triangle.2.circlepath"
+                title: SyncGroupCopy.confirmation(of: group),
+                emblem: "arrow.triangle.2.circlepath",
+                trailingButton: SheetBarAction("Not now") { dismiss() }
             ) {
                 SheetBodyText(SyncGroupCopy.joinBody)
-                VStack(spacing: Spacing.md) {
-                    SheetPrimaryButton("Sync settings") {
-                        join(group)
-                        dismiss()
-                    }
-                    Button("Not now") { dismiss() }
-                        .buttonStyle(SecondaryButtonStyle(size: .md))
+                SheetPrimaryButton("Sync settings") {
+                    join(group)
+                    dismiss()
                 }
             }
         case .pick(let groups):
