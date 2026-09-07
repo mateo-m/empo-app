@@ -49,7 +49,9 @@ jobs:
           fetch-depth: 0
 
       - name: Fetch the engine history
-        run: git submodule update --init mkxp-z-apple-mobile
+        run: |
+          git -c url."https://github.com/".insteadOf="git@github.com:" \
+              submodule update --init mkxp-z-apple-mobile
 
       - uses: oven-sh/setup-bun@v2
 
