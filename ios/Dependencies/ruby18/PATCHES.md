@@ -13,7 +13,7 @@
 
 Authors wrote most RPG Maker XP games (RGSS1) against Ruby 1.8. Empo's
 multi-Ruby dispatcher routes detected RGSS1 games to this build (see
-`docs/multi-ruby.md`). Vintage Pokemon Essentials forks then run on the
+`ios/Empo/docs/multi-ruby.md`). Vintage Pokemon Essentials forks then run on the
 parser their authors used, not through Ruby 3.1's syntax-transform
 patches.
 

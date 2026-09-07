@@ -8,6 +8,8 @@ ios/Empo/Empo.xcodeproj/
 *.ipa
 
 # Docs site (Blume generates .blume/ and builds into dist/)
+# tools/changelog-page.ts derives this page from CHANGELOG.md.
+docs/changelog.mdx
 .blume/
 dist/
 

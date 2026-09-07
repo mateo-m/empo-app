@@ -9,11 +9,16 @@ Start with the [project README](../README.md) for what Empo is and how to build 
 ## For players
 
 | Doc                                          | What it covers                                                     |
-| -------------------------------------------- | -------------------------------------------------------------------- |
-| [`install.mdx`](install.mdx)                 | Requirements, and how to sideload the app.                         |
+| -------------------------------------------- | ------------------------------------------------------------------ |
+| [`requirements.mdx`](requirements.mdx)       | Devices, iOS version, sideloading tools, and the supported engines. |
+| [`install.mdx`](install.mdx)                 | How to sideload the app and get update notifications.              |
 | [`importing-games.mdx`](importing-games.mdx) | The accepted file types, and what happens to an installed game.    |
 | [`playing.mdx`](playing.mdx)                 | The library, the touch controls, controllers, and game settings.   |
-| [`troubleshooting.mdx`](troubleshooting.mdx) | Frequent problems, and how to collect logs for a report.           |
+| [`saves.mdx`](saves.mdx)                     | Where saves live, what updates and deletes do, moving saves.       |
+| [`troubleshooting.mdx`](troubleshooting.mdx) | Frequent problems and their fixes.                                 |
+| [`faq.mdx`](faq.mdx)                         | Short answers before you install.                                  |
+| [`community.mdx`](community.mdx)             | Discord, GitHub issues, and how to collect logs for a report.      |
+| `changelog.mdx`                              | Generated from [`CHANGELOG.md`](../CHANGELOG.md) by `tools/changelog-page.ts` at build time. Not checked in. |
 
 ## For game developers
 
@@ -27,20 +32,18 @@ Reference docs for shipping or adapting an RPG Maker game for Empo:
 | [`schemas/`](schemas/)                     | JSON Schemas (e.g. `empo-controls.v1.schema.json`).                                          |
 | [`examples/`](examples/)                   | Worked examples (e.g. a complete `controls.json`).                                           |
 
-## How Empo works (contributors)
+## For contributors
 
 Explanations of the trickier architecture, in rough reading order:
 
 | Doc                                                  | What it covers                                                                     |
 | ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | [`how-it-works.mdx`](how-it-works.mdx)               | The architecture in one page, with links to each detailed note.                     |
-| [`multi-ruby.md`](multi-ruby.md)                     | Three Ruby interpreters in one binary, with per-game version detection and dispatch. |
 | [`sdl-ruby-workarounds.md`](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/sdl-ruby-workarounds.md) (engine repo) | Why SDL, the GL context, OpenAL, and the Ruby VM persist for the process lifetime. |
-| [`multi-session.md`](multi-session.md)               | Why cross-session play is disabled, and the neutralized quit paths.                |
-| [`pause-resume.md`](pause-resume.md)                 | Frozen-frame snapshots that bridge the SDL window into SwiftUI transitions.        |
-| [`import-pipeline.md`](import-pipeline.md)           | The game import pipeline: supported inputs, stage flow, invariants.                |
-| [`sheet-design.md`](sheet-design.md)                 | The rules that keep every bottom sheet consistent.                                 |
-| [`deps-publish-engine-only.md`](deps-publish-engine-only.md) | How deps-publish reuses a published dependency half and rebuilds only the engine. |
+
+The detailed notes (the three Ruby interpreters, one game per session, pause and resume, the
+import pipeline, and the visual rules) live next to the Swift, in
+[`ios/Empo/docs/`](../ios/Empo/docs/).
 
 `media/` holds the README screenshots and demo assets. The site configuration lives in
 [`blume.config.ts`](../blume.config.ts), and site-wide static files live in [`public/`](../public).

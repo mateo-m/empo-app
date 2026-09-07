@@ -151,7 +151,7 @@ class AppState {
     /// (Ruby `SystemExit` / `Reset`) mid-session. Sources: the
     /// game's built-in "Exit to desktop" menu, or postload scripts
     /// that raise Reset after they compile data files.
-    /// Cross-session play is disabled (`docs/multi-session.md`), so
+    /// Cross-session play is disabled (`ios/Empo/docs/multi-session.md`), so
     /// we cannot safely return to the library and launch another
     /// game in the same process. The user has to force-close and
     /// reopen. RootView appends "Close Empo from the app switcher
@@ -299,7 +299,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
     func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool) {
         // Both clean and crash exits surface an alert that routes
         // through RootView's dismiss-only branch (phase != nil).
-        // Cross-session play is disabled (`docs/multi-session.md`),
+        // Cross-session play is disabled (`ios/Empo/docs/multi-session.md`),
         // so we cannot safely return to the library and launch
         // another game in the same process. To play again, the user
         // must force-close from the app switcher.

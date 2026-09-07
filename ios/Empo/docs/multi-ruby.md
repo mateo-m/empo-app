@@ -184,7 +184,7 @@ Currently disabled. After a clean engine exit, the iOS host shows an alert ("The
 
 A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method scrubbing, intrusive-list detachment for disposables, etc.). It worked for narrow game pairs but did not survive contact with a broader corpus, especially across different Ruby versions. Until that cleanup is reliable, the app asks the user to force-close and relaunch.
 
-Same-game re-entry is safe in principle (no class leak). But the iOS layer currently cannot tell it apart from a different-game pick. See `docs/multi-session.md` for the engine-side teardown sequence.
+Same-game re-entry is safe in principle (no class leak). But the iOS layer currently cannot tell it apart from a different-game pick. See `ios/Empo/docs/multi-session.md` for the engine-side teardown sequence.
 
 ## Files
 

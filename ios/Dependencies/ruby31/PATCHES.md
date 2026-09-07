@@ -12,7 +12,7 @@
 
 Modern Pokemon Essentials forks on the mkxp-z runtime target Ruby 3.x.
 Ruby 3.1 is also the only Empo build with the syntax-transform patches
-enabled (see `docs/multi-ruby.md`, "Syntax transform stays").
+enabled (see `ios/Empo/docs/multi-ruby.md`, "Syntax transform stays").
 Mixed-grammar Pokemon Essentials forks, which combine 1.8-era syntax
 with 1.9+ runtime methods, route here in LEGACY transform mode.
 
