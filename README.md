@@ -45,7 +45,7 @@ In-game battle:
 ## Highlights
 
 - Plays games made for RGSS1 (XP), RGSS2 (VX), RGSS3 (VX Ace), and modern mkxp-z forks.
-- **Three Ruby versions in one app.** Empo includes Ruby 1.8, 1.9, and 3.1. Each game runs on the version it was written for. Newer Pokemon Essentials games that ship a `ruby300.dll` run on Ruby 3.1, and Empo rewrites their older syntax as needed. See [`docs/multi-ruby.md`](docs/multi-ruby.md).
+- **Three Ruby versions in one app.** Empo includes Ruby 1.8, 1.9, and 3.1. Each game runs on the version it was written for. Newer Pokemon Essentials games that ship a `ruby300.dll` run on Ruby 3.1, and Empo rewrites their older syntax as needed. See [`ios/Empo/docs/multi-ruby.md`](ios/Empo/docs/multi-ruby.md).
 - Imports games from folders or archives (`.zip`, `.7z`, `.rar`, JoiPlay's `.jgp`, self-extractable `.exe`).
 - On-screen D-pad and action buttons you can move and resize. Layouts can differ per game and per screen orientation.
 - Pause and resume from the library.
@@ -67,7 +67,7 @@ https://raw.githubusercontent.com/mateo-m/empo-app/main/altstore-source.json
 
 ### Limitations
 
-- **One game per session.** After you exit a game, close Empo from the app switcher and reopen it to start a different one. This limit stays until Ruby can clear its state reliably. See [`docs/multi-session.md`](docs/multi-session.md).
+- **One game per session.** After you exit a game, close Empo from the app switcher and reopen it to start a different one. This limit stays until Ruby can clear its state reliably. See [`ios/Empo/docs/multi-session.md`](ios/Empo/docs/multi-session.md).
 - **Ogg and Theora movies only.** The engine skips MP4 and other formats without a message.
 - **Windows-only code.** Some games call Windows functions that the engine's `win32_wrap.rb` does not copy. Those games can fail to load some files.
 
@@ -80,22 +80,9 @@ ios/Dependencies/      Cross-compiled static libs (SDL, three Ruby versions, Ope
 docs/                  Notes on the harder parts
 ```
 
-For more detail on the architecture:
-
-| Doc                                                            | What it covers                                                                                     |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| [`docs/multi-ruby.md`](docs/multi-ruby.md)                     | How three Ruby interpreters live in one binary, and how the engine picks the correct one per game. |
-| [`sdl-ruby-workarounds.md`](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/sdl-ruby-workarounds.md) (engine repo) | Why SDL, the GL context, OpenAL, and the running Ruby VM stay alive for the whole process.   |
-| [`docs/pause-resume.md`](docs/pause-resume.md)                 | Frozen-frame snapshots that bridge the SDL window into SwiftUI transitions.                        |
-| [`docs/multi-session.md`](docs/multi-session.md)               | Why cross-session play is currently disabled.                                                      |
-
-Game developers who ship for Empo can start with [`docs/config-format.md`](docs/config-format.md)
-and [`docs/controls-format.md`](docs/controls-format.md). The full documentation index is at
-[`docs/README.md`](docs/README.md).
-
-The `docs/` folder is also a documentation site, published at
-[mateo-m.github.io/empo-app](https://mateo-m.github.io/empo-app/). To read it in a browser
-locally, run:
+The [documentation site](https://mateo-m.github.io/empo-app/) covers the rest: how to
+install and play, what game developers can ship with a game, and how the harder parts of the
+app work. The source is in [`docs/`](docs/README.md). To read it in a browser locally, run:
 
 ```sh
 bun install

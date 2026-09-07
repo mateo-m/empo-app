@@ -113,7 +113,7 @@ enum AppTheme: String, CaseIterable {
 // `cheats` graduated to always-on. No experimental toggles remain.
 // We also planned `gameQuit` as an experimental feature. It never
 // landed, and we removed the quit paths in August 2026. See
-// docs/multi-session.md.
+// ios/Empo/docs/multi-session.md.
 //
 // To bring back an opt-in experimental toggle later, restore:
 //   - this enum (cases + `label` + `description` + `id`)

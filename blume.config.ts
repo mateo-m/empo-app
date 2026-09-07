@@ -12,47 +12,47 @@ export default defineConfig({
   },
   content: {
     root: "docs",
-    // README.md is the GitHub view of this folder. The site uses index.mdx.
+    // README.md is the GitHub view of this folder.
     exclude: ["**/_*", "**/.*", "README.md"],
   },
   theme: {
-    accent: "#fa8f29",
+    accent: "oklch(0.75 0.166 57.9)",
+    background: "oklch(0.199 0.059 268.9)",
     radius: "md",
-    mode: "system",
+    mode: "dark",
+    fonts: {
+      display: { name: "Nunito", weights: [700, 900] },
+      body: { name: "Nunito", weights: [500, 700, 900] },
+    },
   },
   navigation: {
     sidebar: [
-      "/",
+      "/introduction",
       {
         label: "Play",
-        items: ["/install", "/importing-games", "/playing", "/troubleshooting"],
+        items: [
+          "/requirements",
+          "/install",
+          "/importing-games",
+          "/playing",
+          "/saves",
+          "/troubleshooting",
+          "/faq",
+          "/changelog",
+          "/community",
+        ],
       },
       {
         label: "Ship a game",
         items: ["/controls-format", "/config-format"],
       },
       {
-        label: "Internals",
-        items: [
-          "/how-it-works",
-          "/multi-ruby",
-          "/multi-session",
-          "/pause-resume",
-          "/import-pipeline",
-          "/sheet-design",
-        ],
+        label: "Contribute",
+        items: ["/how-it-works"],
       },
       {
         label: "Legal",
         items: ["/privacy", "/terms"],
-      },
-      {
-        label: "Contributing",
-        href: "https://github.com/mateo-m/empo-app/blob/main/CONTRIBUTING.md",
-      },
-      {
-        label: "Discord",
-        href: "https://discord.gg/m3YnpXMxrB",
       },
     ],
   },

@@ -4,16 +4,26 @@ on:
   pull_request:
     paths:
       - "docs/**"
+      - "landing/**"
+      - "pages/**"
       - "public/**"
+      - "theme.css"
       - "blume.config.ts"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/docs.yml"
   push:
     branches: [main]
+    # A release tag rebuilds the What's new page with the new release. Path
+    # filters do not apply to tag pushes, so every tag builds the whole site.
+    tags: ["v*.*.*"]
     paths:
+      - "CHANGELOG.md"
       - "docs/**"
+      - "landing/**"
+      - "pages/**"
       - "public/**"
+      - "theme.css"
       - "blume.config.ts"
       - "package.json"
       - "bun.lock"
@@ -32,7 +42,16 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      # The changelog page reads the engine commits between the submodule
+      # pins of two release tags, so it needs the tags and the engine history.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the engine history
+        run: |
+          git -c url."https://github.com/".insteadOf="git@github.com:" \
+              submodule update --init mkxp-z-apple-mobile
 
       - uses: oven-sh/setup-bun@v2
 

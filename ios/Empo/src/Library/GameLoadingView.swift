@@ -229,7 +229,7 @@ struct GameLoadingView: View {
             // and an app may not close itself: App Store guideline
             // 2.5.1 forbids it. So the label tells the user to close
             // Empo from the app switcher, which is the way iOS
-            // allows. See `docs/multi-session.md`.
+            // allows. See `ios/Empo/docs/multi-session.md`.
             Text("If loading is stuck, close Empo from the app switcher and reopen.")
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.8))

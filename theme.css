@@ -1,0 +1,31 @@
+/* The docs share the palette of the landing page: navy water, white text,
+   and the brand orange for headings and links. Both color modes get the
+   same tokens, so the theme toggle does not change the look. */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --blume-background: oklch(0.199 0.059 268.9);
+  --blume-foreground: oklch(1 0 0);
+  --blume-muted: oklch(0.261 0.097 264.9);
+  --blume-muted-foreground: oklch(1 0 0 / 0.72);
+  --blume-border: oklch(1 0 0 / 0.14);
+  --blume-accent: oklch(0.75 0.166 57.9);
+  --blume-accent-foreground: oklch(0.199 0.059 268.9);
+  --blume-code-background: oklch(0.16 0.05 268);
+  --blume-font-body: ui-rounded, "SF Pro Rounded", var(--blume-ff-nunito), system-ui, sans-serif;
+  --blume-font-display: var(--blume-font-body);
+}
+
+.prose {
+  --tw-prose-headings: var(--blume-accent);
+  --tw-prose-links: var(--blume-accent);
+}
+
+.prose :where(h1, h2, h3) {
+  color: var(--blume-accent);
+  font-weight: 900;
+}
+
+.prose :where(a) {
+  color: var(--blume-accent);
+}

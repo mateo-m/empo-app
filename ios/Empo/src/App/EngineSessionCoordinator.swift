@@ -95,7 +95,7 @@ final class EngineSessionCoordinator {
     /// Hands the RGSS thread its game path.
     ///
     /// There is no wait for an earlier session to tear down. Empo
-    /// plays one game for each process, per `docs/multi-session.md`,
+    /// plays one game for each process, per `ios/Empo/docs/multi-session.md`,
     /// and `selectGame` refuses a second launch while a game is
     /// paused or an exit alert is up. So the thread is always parked
     /// in `waitForGamePath` when this runs.
@@ -307,7 +307,7 @@ final class EngineSessionCoordinator {
         GameLibrary.shared.reload()
 
         // The app never asks the engine to terminate: Empo plays one
-        // game for each process, per `docs/multi-session.md`. So
+        // game for each process, per `ios/Empo/docs/multi-session.md`. So
         // every termination comes from the game itself or from a
         // crash, and both surface the alert.
         if delegate?.coordinatorPhase != nil {

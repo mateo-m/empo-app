@@ -1386,7 +1386,7 @@ private struct LibraryAlertPresentation: ViewModifier {
             .alert("A game is paused", isPresented: $showPausedGameAlert) {
                 // The alert is informational. To play another game the
                 // user resumes the paused one from its card, or
-                // force-closes the app. See `docs/multi-session.md`.
+                // force-closes the app. See `ios/Empo/docs/multi-session.md`.
                 Button("OK", role: .cancel, action: onDismissPausedGameAlert)
             } message: {
                 if let pausedGame {

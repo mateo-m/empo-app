@@ -1,0 +1,80 @@
+---
+title: Saves
+description: Where Empo keeps your save files, what happens to them when you update or delete a game, and how to move saves in and out.
+sidebar:
+  icon: save
+---
+
+Empo keeps saves in the Files app, under **On My iPhone → Empo**. Nothing is hidden inside the
+app binary, so an app update never touches a save.
+
+## Where a save lives
+
+A game writes its saves in one of two places. The game decides, not Empo.
+
+| Location                  | Path in Files                   | Which games                                                    |
+| ------------------------- | ------------------------------- | -------------------------------------------------------------- |
+| The shared data folder    | `Empo/Data/<game>/`             | Most games. The engine sends saves there, as desktop mkxp-z does. |
+| Inside the game folder    | `Empo/Games/<title>/Game/`      | Games that save next to their own files (`Game.rxdata`, a `Save Data/` folder). Empo calls these portable saves. |
+
+Two versions of a game that declare the same data path share one folder under `Data/`. That is
+how a fangame keeps its saves from one release to the next.
+
+To see where one game saves, play it, save once, and look for the newest file under both paths.
+
+## When you update a game
+
+An import over an installed game merges the new files into the game folder. Your saves stay.
+If the new version ships a file at the path of one of your saves, the newer file keeps the path,
+and Empo keeps the other one beside it with a `.empo-displaced.bak` suffix.
+
+The shared data folder is never part of an update.
+
+## When you delete a game
+
+- Saves in the shared data folder stay where they are.
+- Portable saves move to `Empo/Rescued Saves/<title>/`, with their folder structure intact.
+- A file that Empo does not recognize as a save goes with the game.
+
+When you import the same game again, Empo moves the rescued saves back into the game folder
+before the first launch.
+
+:::warning
+If you delete Empo itself, iOS deletes the whole `Empo` folder, saves included. Update the app
+over the old one. Do not delete it first.
+:::
+
+## Move saves in from another device
+
+Copy the save files into the folder the game uses on this device.
+
+<Steps>
+  <Step title="Find the folder">
+    Play the game once and save, so the folder exists. Find the new file under `Empo/Data/` or
+    under the game folder.
+  </Step>
+  <Step title="Copy the files">
+    In the Files app, copy your save files from the other device, from iCloud Drive, or from a
+    zip, into that folder. Keep the file names. Replace the files with the same names.
+  </Step>
+  <Step title="Restart the game">
+    Quit the game if it is open, close Empo from the app switcher, and start the game again.
+  </Step>
+</Steps>
+
+Saves from Windows, from desktop mkxp-z, and from JoiPlay work without a change. The file format
+is the same.
+
+## Move saves out
+
+Copy the files out of the same folder with the Files app, or share the folder to another app.
+Keep a copy of your saves before you try a game update that you do not trust.
+
+## Saves that went missing
+
+A defect in versions before v0.6.1 renamed the save files of some games. Empo v0.6.1 and newer
+restore the newest save for each affected game at launch, and show a **Saves Recovered** sheet.
+The renamed copies stay in the game folder as backups.
+
+If a save is still missing, check the other location in the table above, then check
+`Rescued Saves/`. If it is in none of them, ask on [Discord](/community).

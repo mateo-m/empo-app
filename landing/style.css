@@ -1,0 +1,291 @@
+@import "tailwindcss" source(none);
+@source "../pages/index.astro";
+@source "./main.js";
+
+@theme {
+  --color-white: oklch(1 0 0);
+  --color-brand: oklch(0.75 0.166 57.9);
+  --font-round: ui-rounded, "SF Pro Rounded", var(--blume-ff-nunito), system-ui, sans-serif;
+  --text-shadow-wii:
+    0 1px 0 oklch(0.188 0.067 266.4 / 0.2),
+    0 2px 6px oklch(0.188 0.067 266.4 / 0.45);
+  --ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Critically damped spring, sampled. It settles without overshoot. */
+  --ease-spring: linear(0.0, 0.0398, 0.1304, 0.2416, 0.3558, 0.4634, 0.5596, 0.6429, 0.7132, 0.7715, 0.8192, 0.8577, 0.8886, 0.9132, 0.9326, 0.9478, 0.9597, 0.969, 0.9762, 0.9818, 0.9861, 0.9894, 0.9919, 0.9938, 0.9953, 0.9965, 0.9973, 0.998, 0.9985, 0.9988, 0.9991, 0.9993, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-round);
+    line-height: 1.45;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-round);
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  a:hover {
+    text-decoration: none;
+  }
+}
+
+@utility press {
+  transition: transform 160ms var(--ease-snappy);
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+@utility px {
+  shape-rendering: crispEdges;
+}
+
+
+@theme {
+  --animate-blink: blink 1s steps(2, start) infinite;
+  --animate-rise: rise 900ms var(--ease-spring) both;
+  --animate-bob: bob 6.4s ease-in-out infinite;
+  --animate-scroll-far: scroll 60s linear infinite;
+  --animate-scroll-near: scroll 44s linear infinite;
+  --animate-scroll-mid: scroll 32s linear infinite;
+  --animate-scroll-front: scroll 22s linear infinite;
+  --animate-scroll-clouds-back: scroll 240s linear infinite;
+  --animate-scroll-clouds-front: scroll 150s linear infinite;
+  --animate-scroll-fish: scroll 80s linear infinite;
+  --animate-bubble: bubble 30s linear infinite;
+
+  @keyframes blink {
+    to {
+      visibility: hidden;
+    }
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 14px;
+      filter: blur(6px);
+    }
+  }
+
+  @keyframes bob {
+    25% {
+      translate: 0 -3px;
+      rotate: -3deg;
+    }
+    75% {
+      translate: 0 3px;
+      rotate: 3deg;
+    }
+  }
+
+  @keyframes bubble {
+    to {
+      background-position-y: calc(-1 * var(--tile) * var(--unit));
+    }
+  }
+
+  @keyframes scroll {
+    to {
+      background-position-x: calc(-1 * var(--tile) * var(--unit));
+    }
+  }
+}
+
+@layer base {
+  :root {
+    /* One logo pixel: the boat is 18 pixels wide and 0.72em tall. Whole
+       pixels keep the layer edges free of anti-aliased hairlines. */
+    --unit: round(calc(clamp(56px, 20vw, 168px) * 0.04), 1px);
+  }
+
+  body {
+    background: linear-gradient(180deg, oklch(0.199 0.059 268.9), oklch(0.294 0.101 265.9));
+    color: oklch(1 0 0);
+    font-weight: 700;
+    overflow-x: hidden;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
+}
+
+/* Intro. The boat starts alone on the sky and slides into the lockup.
+   Everything else enters while it slides: the sky fades in, the sea rises,
+   the text rises. */
+@utility intro {
+  & [data-reveal] {
+    opacity: 0;
+    animation: none;
+    transition: none;
+  }
+}
+
+@utility boat {
+  translate: var(--dx, 0px) var(--dy, 0px);
+  scale: var(--s, 1);
+  transform-origin: center;
+  transition: scale 400ms var(--ease-spring);
+  &:hover {
+    --s: 1.08;
+  }
+  &.sailing {
+    transition:
+      translate 900ms var(--ease-spring),
+      scale 900ms var(--ease-spring);
+  }
+}
+
+@utility parallax {
+  translate: var(--px, 0px) var(--py, 0px);
+}
+
+@utility pixel {
+  image-rendering: pixelated;
+  background-repeat: repeat-x;
+}
+
+@utility horizon {
+  background: linear-gradient(transparent, oklch(0.367 0.118 263.7) calc(16 * var(--unit)));
+}
+
+@utility stars {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(1%200%200)' d='M32 45h1v1h-1zM3 59h1v1h-1zM31 6h1v1h-1zM20 14h1v1h-1zM47 60h1v1h-1zM31 48h1v1h-1zM13 31h1v1h-1zM1 27h1v1h-1zM52 35h1v1h-1zM23 49h1v1h-1z'/%3E%3C/svg%3E");
+  background-size: calc(64 * var(--unit)) calc(64 * var(--unit));
+  background-repeat: repeat;
+}
+
+@utility moon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(0.942%200.027%2095.3)' d='M4 1h8v1h-8zM3 2h10v1h-10zM2 3h12v1h-12zM1 4h14v1h-14zM1 5h14v1h-14zM1 6h14v1h-14zM1 7h14v1h-14zM1 8h14v1h-14zM1 9h14v1h-14zM1 10h14v1h-14zM1 11h14v1h-14zM2 12h12v1h-12zM3 13h10v1h-10zM4 14h8v1h-8z'/%3E%3Cpath fill='oklch(0.862%200.036%2094.6)' d='M5 4h2v2H5zM9 8h2v2H9zM6 10h1v1H6z'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+}
+
+@utility clouds-back {
+  --tile: 128;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='24' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(1%200%200)' d='M26 9h2v1h-2zM24 10h6v1h-6zM34 10h4v1h-4zM23 11h8v1h-8zM33 11h7v1h-7zM22 12h18v1h-18zM51 12h3v1h-3zM56 12h4v1h-4zM22 13h19v1h-19zM49 13h13v1h-13zM64 13h4v1h-4zM22 14h19v1h-19zM48 14h21v1h-21zM22 15h19v1h-19zM47 15h23v1h-23zM22 16h18v1h-18zM47 16h23v1h-23zM23 17h17v1h-17zM46 17h24v1h-24z'/%3E%3C/svg%3E");
+  background-size: calc(128 * var(--unit)) calc(24 * var(--unit));
+  animation: var(--animate-scroll-clouds-back);
+}
+
+@utility clouds-front {
+  --tile: 128;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='24' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(1%200%200)' d='M109 9h5v1h-5zM97 10h6v1h-6zM104 10h11v1h-11zM97 11h19v1h-19zM96 12h20v1h-20zM96 13h21v1h-21zM96 14h21v1h-21zM96 15h21v1h-21zM97 16h19v1h-19z'/%3E%3C/svg%3E");
+  background-size: calc(128 * var(--unit)) calc(24 * var(--unit));
+  animation: var(--animate-scroll-clouds-front);
+}
+
+@utility band-far {
+  --tile: 128;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='480' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(0.573%200.162%20260.9)' d='M0 2h1V480h-1zM1 2h1V480h-1zM2 2h1V480h-1zM3 2h1V480h-1zM4 2h1V480h-1zM5 2h1V480h-1zM6 1h1V480h-1zM7 1h1V480h-1zM8 1h1V480h-1zM9 1h1V480h-1zM10 2h1V480h-1zM11 2h1V480h-1zM12 2h1V480h-1zM13 2h1V480h-1zM14 1h1V480h-1zM15 1h1V480h-1zM16 1h1V480h-1zM17 2h1V480h-1zM18 2h1V480h-1zM19 2h1V480h-1zM20 2h1V480h-1zM21 2h1V480h-1zM22 2h1V480h-1zM23 1h1V480h-1zM24 1h1V480h-1zM25 1h1V480h-1zM26 1h1V480h-1zM27 1h1V480h-1zM28 1h1V480h-1zM29 2h1V480h-1zM30 2h1V480h-1zM31 2h1V480h-1zM32 2h1V480h-1zM33 2h1V480h-1zM34 2h1V480h-1zM35 2h1V480h-1zM36 2h1V480h-1zM37 1h1V480h-1zM38 1h1V480h-1zM39 1h1V480h-1zM40 1h1V480h-1zM41 2h1V480h-1zM42 2h1V480h-1zM43 2h1V480h-1zM44 2h1V480h-1zM45 2h1V480h-1zM46 2h1V480h-1zM47 2h1V480h-1zM48 1h1V480h-1zM49 1h1V480h-1zM50 1h1V480h-1zM51 1h1V480h-1zM52 2h1V480h-1zM53 2h1V480h-1zM54 2h1V480h-1zM55 2h1V480h-1zM56 2h1V480h-1zM57 2h1V480h-1zM58 1h1V480h-1zM59 1h1V480h-1zM60 1h1V480h-1zM61 1h1V480h-1zM62 1h1V480h-1zM63 1h1V480h-1zM64 2h1V480h-1zM65 2h1V480h-1zM66 2h1V480h-1zM67 1h1V480h-1zM68 1h1V480h-1zM69 1h1V480h-1zM70 2h1V480h-1zM71 2h1V480h-1zM72 2h1V480h-1zM73 2h1V480h-1zM74 2h1V480h-1zM75 2h1V480h-1zM76 2h1V480h-1zM77 2h1V480h-1zM78 1h1V480h-1zM79 1h1V480h-1zM80 2h1V480h-1zM81 2h1V480h-1zM82 2h1V480h-1zM83 2h1V480h-1zM84 2h1V480h-1zM85 2h1V480h-1zM86 1h1V480h-1zM87 1h1V480h-1zM88 1h1V480h-1zM89 2h1V480h-1zM90 2h1V480h-1zM91 2h1V480h-1zM92 2h1V480h-1zM93 1h1V480h-1zM94 1h1V480h-1zM95 1h1V480h-1zM96 1h1V480h-1zM97 2h1V480h-1zM98 2h1V480h-1zM99 2h1V480h-1zM100 2h1V480h-1zM101 1h1V480h-1zM102 1h1V480h-1zM103 1h1V480h-1zM104 1h1V480h-1zM105 2h1V480h-1zM106 2h1V480h-1zM107 2h1V480h-1zM108 2h1V480h-1zM109 2h1V480h-1zM110 2h1V480h-1zM111 2h1V480h-1zM112 2h1V480h-1zM113 1h1V480h-1zM114 1h1V480h-1zM115 1h1V480h-1zM116 1h1V480h-1zM117 1h1V480h-1zM118 1h1V480h-1zM119 2h1V480h-1zM120 2h1V480h-1zM121 2h1V480h-1zM122 2h1V480h-1zM123 2h1V480h-1zM124 2h1V480h-1zM125 2h1V480h-1zM126 1h1V480h-1zM127 1h1V480h-1z'/%3E%3Cpath fill='oklch(0.479%200.134%20261.2)' d='M6 2h4v1h-4zM14 2h3v1h-3zM23 2h6v1h-6zM37 2h4v1h-4zM48 2h4v1h-4zM58 2h6v1h-6zM67 2h3v1h-3zM78 2h2v1h-2zM86 2h3v1h-3zM93 2h4v1h-4zM101 2h4v1h-4zM113 2h6v1h-6zM126 2h2v1h-2zM0 3h6v1h-6zM10 3h4v1h-4zM17 3h6v1h-6zM29 3h8v1h-8zM41 3h7v1h-7zM52 3h6v1h-6zM64 3h3v1h-3zM70 3h8v1h-8zM80 3h6v1h-6zM89 3h4v1h-4zM97 3h4v1h-4zM105 3h8v1h-8zM119 3h7v1h-7z'/%3E%3Cpath fill='oklch(0.763%200.094%20260.1)' d='M55 8h9v1h-9zM4 9h4v1h-4zM13 14h6v1h-6zM8 19h6v1h-6zM32 23h9v1h-9zM36 28h5v1h-5zM92 29h7v1h-7zM30 31h8v1h-8z'/%3E%3C/svg%3E");
+  background-size: calc(128 * var(--unit)) calc(480 * var(--unit));
+  animation: var(--animate-scroll-far);
+}
+
+@utility band-near {
+  --tile: 128;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='480' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(0.496%200.159%20262.1)' d='M0 4h1V480h-1zM1 4h1V480h-1zM2 4h1V480h-1zM3 3h1V480h-1zM4 3h1V480h-1zM5 3h1V480h-1zM6 2h1V480h-1zM7 2h1V480h-1zM8 2h1V480h-1zM9 2h1V480h-1zM10 2h1V480h-1zM11 2h1V480h-1zM12 2h1V480h-1zM13 2h1V480h-1zM14 2h1V480h-1zM15 2h1V480h-1zM16 3h1V480h-1zM17 3h1V480h-1zM18 3h1V480h-1zM19 4h1V480h-1zM20 4h1V480h-1zM21 4h1V480h-1zM22 4h1V480h-1zM23 4h1V480h-1zM24 3h1V480h-1zM25 3h1V480h-1zM26 2h1V480h-1zM27 2h1V480h-1zM28 1h1V480h-1zM29 1h1V480h-1zM30 1h1V480h-1zM31 1h1V480h-1zM32 1h1V480h-1zM33 1h1V480h-1zM34 1h1V480h-1zM35 2h1V480h-1zM36 2h1V480h-1zM37 3h1V480h-1zM38 3h1V480h-1zM39 4h1V480h-1zM40 4h1V480h-1zM41 4h1V480h-1zM42 4h1V480h-1zM43 3h1V480h-1zM44 3h1V480h-1zM45 2h1V480h-1zM46 2h1V480h-1zM47 2h1V480h-1zM48 2h1V480h-1zM49 2h1V480h-1zM50 2h1V480h-1zM51 2h1V480h-1zM52 2h1V480h-1zM53 3h1V480h-1zM54 3h1V480h-1zM55 4h1V480h-1zM56 4h1V480h-1zM57 4h1V480h-1zM58 4h1V480h-1zM59 4h1V480h-1zM60 3h1V480h-1zM61 3h1V480h-1zM62 3h1V480h-1zM63 2h1V480h-1zM64 2h1V480h-1zM65 2h1V480h-1zM66 2h1V480h-1zM67 2h1V480h-1zM68 2h1V480h-1zM69 2h1V480h-1zM70 2h1V480h-1zM71 2h1V480h-1zM72 2h1V480h-1zM73 3h1V480h-1zM74 3h1V480h-1zM75 3h1V480h-1zM76 4h1V480h-1zM77 4h1V480h-1zM78 4h1V480h-1zM79 4h1V480h-1zM80 4h1V480h-1zM81 4h1V480h-1zM82 3h1V480h-1zM83 3h1V480h-1zM84 3h1V480h-1zM85 2h1V480h-1zM86 2h1V480h-1zM87 2h1V480h-1zM88 2h1V480h-1zM89 2h1V480h-1zM90 2h1V480h-1zM91 2h1V480h-1zM92 2h1V480h-1zM93 2h1V480h-1zM94 2h1V480h-1zM95 3h1V480h-1zM96 3h1V480h-1zM97 3h1V480h-1zM98 4h1V480h-1zM99 4h1V480h-1zM100 4h1V480h-1zM101 4h1V480h-1zM102 4h1V480h-1zM103 4h1V480h-1zM104 3h1V480h-1zM105 3h1V480h-1zM106 3h1V480h-1zM107 2h1V480h-1zM108 2h1V480h-1zM109 2h1V480h-1zM110 1h1V480h-1zM111 1h1V480h-1zM112 1h1V480h-1zM113 1h1V480h-1zM114 1h1V480h-1zM115 1h1V480h-1zM116 1h1V480h-1zM117 1h1V480h-1zM118 1h1V480h-1zM119 2h1V480h-1zM120 2h1V480h-1zM121 2h1V480h-1zM122 3h1V480h-1zM123 3h1V480h-1zM124 3h1V480h-1zM125 4h1V480h-1zM126 4h1V480h-1zM127 4h1V480h-1z'/%3E%3Cpath fill='oklch(0.419%200.133%20262.3)' d='M28 2h7v1h-7zM110 2h9v1h-9zM6 3h10v1h-10zM26 3h2v1h-2zM35 3h2v1h-2zM45 3h8v1h-8zM63 3h10v1h-10zM85 3h10v1h-10zM107 3h3v1h-3zM119 3h3v1h-3zM3 4h3v1h-3zM16 4h3v1h-3zM24 4h2v1h-2zM37 4h2v1h-2zM43 4h2v1h-2zM53 4h2v1h-2zM60 4h3v1h-3zM73 4h3v1h-3zM82 4h3v1h-3zM95 4h3v1h-3zM104 4h3v1h-3zM122 4h3v1h-3zM0 5h3v1h-3zM19 5h5v1h-5zM39 5h4v1h-4zM55 5h5v1h-5zM76 5h6v1h-6zM98 5h6v1h-6zM125 5h3v1h-3z'/%3E%3Cpath fill='oklch(0.68%200.116%20261.2)' d='M30 1h3v1h-3zM113 1h3v1h-3zM7 10h7v1h-7zM86 11h5v1h-5zM16 12h7v1h-7zM41 12h4v1h-4zM56 14h8v1h-8zM69 16h9v1h-9zM74 18h9v1h-9zM39 23h5v1h-5z'/%3E%3C/svg%3E");
+  background-size: calc(128 * var(--unit)) calc(480 * var(--unit));
+  animation: var(--animate-scroll-near);
+}
+
+@utility band-mid {
+  --tile: 128;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='480' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(0.437%200.148%20263.1)' d='M0 3h1V480h-1zM1 3h1V480h-1zM2 2h1V480h-1zM3 2h1V480h-1zM4 2h1V480h-1zM5 2h1V480h-1zM6 2h1V480h-1zM7 2h1V480h-1zM8 3h1V480h-1zM9 3h1V480h-1zM10 3h1V480h-1zM11 2h1V480h-1zM12 1h1V480h-1zM13 1h1V480h-1zM14 1h1V480h-1zM15 1h1V480h-1zM16 1h1V480h-1zM17 1h1V480h-1zM18 1h1V480h-1zM19 2h1V480h-1zM20 3h1V480h-1zM21 3h1V480h-1zM22 2h1V480h-1zM23 1h1V480h-1zM24 1h1V480h-1zM25 1h1V480h-1zM26 1h1V480h-1zM27 1h1V480h-1zM28 1h1V480h-1zM29 1h1V480h-1zM30 2h1V480h-1zM31 3h1V480h-1zM32 3h1V480h-1zM33 2h1V480h-1zM34 2h1V480h-1zM35 1h1V480h-1zM36 1h1V480h-1zM37 1h1V480h-1zM38 1h1V480h-1zM39 1h1V480h-1zM40 1h1V480h-1zM41 1h1V480h-1zM42 1h1V480h-1zM43 1h1V480h-1zM44 2h1V480h-1zM45 2h1V480h-1zM46 3h1V480h-1zM47 3h1V480h-1zM48 2h1V480h-1zM49 2h1V480h-1zM50 1h1V480h-1zM51 1h1V480h-1zM52 1h1V480h-1zM53 1h1V480h-1zM54 1h1V480h-1zM55 1h1V480h-1zM56 2h1V480h-1zM57 2h1V480h-1zM58 3h1V480h-1zM59 3h1V480h-1zM60 2h1V480h-1zM61 2h1V480h-1zM62 2h1V480h-1zM63 1h1V480h-1zM64 1h1V480h-1zM65 1h1V480h-1zM66 1h1V480h-1zM67 1h1V480h-1zM68 1h1V480h-1zM69 1h1V480h-1zM70 1h1V480h-1zM71 2h1V480h-1zM72 2h1V480h-1zM73 2h1V480h-1zM74 3h1V480h-1zM75 3h1V480h-1zM76 2h1V480h-1zM77 1h1V480h-1zM78 1h1V480h-1zM79 1h1V480h-1zM80 1h1V480h-1zM81 1h1V480h-1zM82 1h1V480h-1zM83 2h1V480h-1zM84 3h1V480h-1zM85 3h1V480h-1zM86 2h1V480h-1zM87 2h1V480h-1zM88 1h1V480h-1zM89 1h1V480h-1zM90 1h1V480h-1zM91 1h1V480h-1zM92 1h1V480h-1zM93 1h1V480h-1zM94 1h1V480h-1zM95 1h1V480h-1zM96 1h1V480h-1zM97 2h1V480h-1zM98 2h1V480h-1zM99 3h1V480h-1zM100 3h1V480h-1zM101 3h1V480h-1zM102 2h1V480h-1zM103 2h1V480h-1zM104 2h1V480h-1zM105 2h1V480h-1zM106 2h1V480h-1zM107 2h1V480h-1zM108 2h1V480h-1zM109 3h1V480h-1zM110 3h1V480h-1zM111 3h1V480h-1zM112 2h1V480h-1zM113 2h1V480h-1zM114 2h1V480h-1zM115 1h1V480h-1zM116 1h1V480h-1zM117 1h1V480h-1zM118 1h1V480h-1zM119 1h1V480h-1zM120 1h1V480h-1zM121 1h1V480h-1zM122 1h1V480h-1zM123 1h1V480h-1zM124 2h1V480h-1zM125 2h1V480h-1zM126 2h1V480h-1zM127 3h1V480h-1z'/%3E%3Cpath fill='oklch(0.374%200.126%20263.7)' d='M12 2h7v1h-7zM23 2h7v1h-7zM35 2h9v1h-9zM50 2h6v1h-6zM63 2h8v1h-8zM77 2h6v1h-6zM88 2h9v1h-9zM115 2h9v1h-9zM2 3h6v1h-6zM11 3h1v1h-1zM19 3h1v1h-1zM22 3h1v1h-1zM30 3h1v1h-1zM33 3h2v1h-2zM44 3h2v1h-2zM48 3h2v1h-2zM56 3h2v1h-2zM60 3h3v1h-3zM71 3h3v1h-3zM76 3h1v1h-1zM83 3h1v1h-1zM86 3h2v1h-2zM97 3h2v1h-2zM102 3h7v1h-7zM112 3h3v1h-3zM124 3h3v1h-3zM0 4h2v1h-2zM8 4h3v1h-3zM20 4h2v1h-2zM31 4h2v1h-2zM46 4h2v1h-2zM58 4h2v1h-2zM74 4h2v1h-2zM84 4h2v1h-2zM99 4h3v1h-3zM109 4h3v1h-3zM127 4h1v1h-1z'/%3E%3Cpath fill='oklch(0.611%200.122%20261.9)' d='M57 8h7v1h-7zM59 9h8v1h-8zM109 13h5v1h-5zM10 14h8v1h-8zM78 17h4v1h-4zM27 20h6v1h-6zM52 20h5v1h-5zM3 25h7v1h-7z'/%3E%3C/svg%3E");
+  background-size: calc(128 * var(--unit)) calc(480 * var(--unit));
+  animation: var(--animate-scroll-mid);
+}
+
+@utility band-front {
+  --tile: 128;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='480' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(0.374%200.133%20263.9)' d='M0 5h1V480h-1zM1 3h1V480h-1zM2 3h1V480h-1zM3 3h1V480h-1zM4 1h1V480h-1zM5 1h1V480h-1zM6 1h1V480h-1zM7 1h1V480h-1zM8 1h1V480h-1zM9 1h1V480h-1zM10 1h1V480h-1zM11 1h1V480h-1zM12 1h1V480h-1zM13 1h1V480h-1zM14 1h1V480h-1zM15 1h1V480h-1zM16 1h1V480h-1zM17 1h1V480h-1zM18 1h1V480h-1zM19 1h1V480h-1zM20 1h1V480h-1zM21 1h1V480h-1zM22 1h1V480h-1zM23 1h1V480h-1zM24 1h1V480h-1zM25 1h1V480h-1zM26 1h1V480h-1zM27 3h1V480h-1zM28 3h1V480h-1zM29 3h1V480h-1zM30 5h1V480h-1zM31 5h1V480h-1zM32 4h1V480h-1zM33 4h1V480h-1zM34 2h1V480h-1zM35 2h1V480h-1zM36 2h1V480h-1zM37 2h1V480h-1zM38 2h1V480h-1zM39 2h1V480h-1zM40 2h1V480h-1zM41 2h1V480h-1zM42 2h1V480h-1zM43 2h1V480h-1zM44 2h1V480h-1zM45 2h1V480h-1zM46 2h1V480h-1zM47 2h1V480h-1zM48 2h1V480h-1zM49 2h1V480h-1zM50 2h1V480h-1zM51 2h1V480h-1zM52 4h1V480h-1zM53 4h1V480h-1zM54 5h1V480h-1zM55 5h1V480h-1zM56 4h1V480h-1zM57 4h1V480h-1zM58 2h1V480h-1zM59 2h1V480h-1zM60 2h1V480h-1zM61 2h1V480h-1zM62 2h1V480h-1zM63 2h1V480h-1zM64 2h1V480h-1zM65 2h1V480h-1zM66 2h1V480h-1zM67 2h1V480h-1zM68 2h1V480h-1zM69 2h1V480h-1zM70 2h1V480h-1zM71 2h1V480h-1zM72 2h1V480h-1zM73 2h1V480h-1zM74 2h1V480h-1zM75 4h1V480h-1zM76 4h1V480h-1zM77 5h1V480h-1zM78 5h1V480h-1zM79 3h1V480h-1zM80 3h1V480h-1zM81 1h1V480h-1zM82 1h1V480h-1zM83 1h1V480h-1zM84 1h1V480h-1zM85 1h1V480h-1zM86 1h1V480h-1zM87 1h1V480h-1zM88 1h1V480h-1zM89 1h1V480h-1zM90 1h1V480h-1zM91 1h1V480h-1zM92 1h1V480h-1zM93 1h1V480h-1zM94 1h1V480h-1zM95 1h1V480h-1zM96 1h1V480h-1zM97 1h1V480h-1zM98 1h1V480h-1zM99 1h1V480h-1zM100 3h1V480h-1zM101 3h1V480h-1zM102 5h1V480h-1zM103 5h1V480h-1zM104 4h1V480h-1zM105 4h1V480h-1zM106 2h1V480h-1zM107 2h1V480h-1zM108 2h1V480h-1zM109 2h1V480h-1zM110 2h1V480h-1zM111 2h1V480h-1zM112 2h1V480h-1zM113 2h1V480h-1zM114 2h1V480h-1zM115 2h1V480h-1zM116 2h1V480h-1zM117 2h1V480h-1zM118 2h1V480h-1zM119 2h1V480h-1zM120 2h1V480h-1zM121 2h1V480h-1zM122 2h1V480h-1zM123 2h1V480h-1zM124 2h1V480h-1zM125 4h1V480h-1zM126 4h1V480h-1zM127 5h1V480h-1z'/%3E%3Cpath fill='oklch(0.323%200.113%20264.4)' d='M4 2h23v1h-23zM81 2h19v1h-19zM34 3h18v1h-18zM58 3h17v1h-17zM106 3h19v1h-19zM1 4h3v1h-3zM27 4h3v1h-3zM79 4h2v1h-2zM100 4h2v1h-2zM32 5h2v1h-2zM52 5h2v1h-2zM56 5h2v1h-2zM75 5h2v1h-2zM104 5h2v1h-2zM125 5h2v1h-2zM0 6h1v1h-1zM30 6h2v1h-2zM54 6h2v1h-2zM77 6h2v1h-2zM102 6h2v1h-2zM127 6h1v1h-1z'/%3E%3Cpath fill='oklch(0.55%200.125%20263.1)' d='M4 1h23v1h-23zM81 1h19v1h-19zM34 2h18v1h-18zM58 2h17v1h-17zM106 2h19v1h-19zM78 18h8v1h-8zM101 18h6v1h-6zM20 19h8v1h-8zM92 23h4v1h-4zM120 24h8v1h-8zM114 27h4v1h-4zM41 31h5v1h-5zM4 33h6v1h-6z'/%3E%3C/svg%3E");
+  background-size: calc(128 * var(--unit)) calc(480 * var(--unit));
+  animation: var(--animate-scroll-front);
+}
+
+@utility fish {
+  --tile: 256;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='24' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(0.188%200.067%20266.4)' d='M136 2h1v1h-1zM130 3h6v1h-6zM130 4h6v1h-6zM135 5h1v1h-1zM136 6h1v1h-1zM119 8h4v1h-4zM125 8h1v1h-1zM117 9h8v1h-8zM195 9h3v1h-3zM201 9h1v1h-1zM117 10h8v1h-8zM193 10h8v1h-8zM119 11h4v1h-4zM124 11h1v1h-1zM193 11h8v1h-8zM125 12h1v1h-1zM195 12h3v1h-3zM200 12h1v1h-1zM201 13h1v1h-1zM45 15h1v1h-1zM50 15h1v1h-1zM170 15h5v1h-5zM177 15h1v1h-1zM233 15h1v1h-1zM42 16h8v1h-8zM169 16h8v1h-8zM228 16h5v1h-5zM42 17h8v1h-8zM169 17h8v1h-8zM228 17h5v1h-5zM45 18h1v1h-1zM49 18h1v1h-1zM123 18h1v1h-1zM170 18h5v1h-5zM176 18h1v1h-1zM232 18h1v1h-1zM50 19h1v1h-1zM117 19h6v1h-6zM177 19h1v1h-1zM233 19h1v1h-1zM117 20h6v1h-6zM122 21h1v1h-1zM123 22h1v1h-1z'/%3E%3C/svg%3E");
+  background-size: calc(256 * var(--unit)) calc(24 * var(--unit));
+  animation: var(--animate-scroll-fish);
+}
+
+@utility bubbles {
+  --tile: 64;
+  image-rendering: pixelated;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(0.763%200.094%20260.1)' d='M63 6h2v1h-2zM63 7h2v1h-2zM36 9h1v1h-1zM31 15h1v1h-1zM61 23h2v1h-2zM61 24h2v1h-2zM21 29h1v1h-1zM54 35h1v1h-1zM40 36h1v1h-1zM52 39h2v1h-2zM52 40h2v1h-2zM41 61h1v1h-1z'/%3E%3C/svg%3E");
+  background-size: calc(64 * var(--unit)) calc(64 * var(--unit));
+  background-repeat: repeat;
+  animation: var(--animate-bubble);
+}
+
+@utility seabed {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='48' shape-rendering='crispEdges'%3E%3Cpath fill='oklch(0.188%200.067%20266.4)' d='M126 20h1v1h-1zM127 21h1v1h-1zM127 22h1v1h-1zM10 23h1v1h-1zM127 23h1v1h-1zM10 24h1v1h-1zM127 24h2v1h-2zM11 25h1v1h-1zM127 25h2v1h-2zM11 26h1v1h-1zM17 26h1v1h-1zM126 26h2v1h-2zM11 27h2v1h-2zM18 27h1v1h-1zM126 27h2v1h-2zM6 28h1v1h-1zM11 28h2v1h-2zM19 28h1v1h-1zM124 28h4v1h-4zM152 28h1v1h-1zM6 29h1v1h-1zM10 29h2v1h-2zM19 29h1v1h-1zM125 29h2v1h-2zM152 29h1v1h-1zM7 30h1v1h-1zM10 30h2v1h-2zM16 30h1v1h-1zM19 30h2v1h-2zM33 30h1v1h-1zM111 30h3v1h-3zM126 30h2v1h-2zM153 30h1v1h-1zM7 31h1v1h-1zM9 31h2v1h-2zM16 31h1v1h-1zM19 31h2v1h-2zM34 31h1v1h-1zM111 31h3v1h-3zM126 31h2v1h-2zM153 31h1v1h-1zM7 32h5v1h-5zM17 32h5v1h-5zM34 32h1v1h-1zM112 32h1v1h-1zM126 32h4v1h-4zM153 32h2v1h-2zM7 33h3v1h-3zM17 33h3v1h-3zM34 33h1v1h-1zM112 33h1v1h-1zM127 33h2v1h-2zM152 33h2v1h-2zM7 34h3v1h-3zM17 34h2v1h-2zM34 34h2v1h-2zM109 34h7v1h-7zM127 34h2v1h-2zM152 34h2v1h-2zM6 35h4v1h-4zM16 35h3v1h-3zM33 35h2v1h-2zM112 35h1v1h-1zM127 35h2v1h-2zM151 35h2v1h-2zM5 36h7v1h-7zM15 36h4v1h-4zM31 36h4v1h-4zM112 36h1v1h-1zM126 36h4v1h-4zM150 36h4v1h-4zM6 37h2v1h-2zM9 37h2v1h-2zM15 37h3v1h-3zM32 37h2v1h-2zM112 37h1v1h-1zM127 37h2v1h-2zM151 37h2v1h-2zM5 38h2v1h-2zM10 38h2v1h-2zM15 38h2v1h-2zM32 38h2v1h-2zM106 38h2v1h-2zM112 38h1v1h-1zM117 38h2v1h-2zM126 38h2v1h-2zM151 38h2v1h-2zM5 39h2v1h-2zM10 39h2v1h-2zM15 39h3v1h-3zM32 39h2v1h-2zM106 39h2v1h-2zM112 39h1v1h-1zM117 39h2v1h-2zM126 39h2v1h-2zM151 39h2v1h-2zM4 40h4v1h-4zM10 40h16v1h-16zM32 40h4v1h-4zM40 40h1v1h-1zM107 40h1v1h-1zM112 40h1v1h-1zM117 40h1v1h-1zM124 40h4v1h-4zM151 40h4v1h-4zM0 41h7v1h-7zM11 41h2v1h-2zM16 41h12v1h-12zM34 41h2v1h-2zM40 41h1v1h-1zM71 41h6v1h-6zM84 41h9v1h-9zM107 41h2v1h-2zM112 41h1v1h-1zM116 41h2v1h-2zM125 41h2v1h-2zM153 41h2v1h-2zM0 42h7v1h-7zM11 42h2v1h-2zM14 42h29v1h-29zM51 42h4v1h-4zM64 42h4v1h-4zM69 42h10v1h-10zM82 42h13v1h-13zM108 42h2v1h-2zM112 42h1v1h-1zM115 42h2v1h-2zM126 42h2v1h-2zM134 42h4v1h-4zM140 42h7v1h-7zM153 42h2v1h-2zM0 43h8v1h-8zM11 43h29v1h-29zM41 43h1v1h-1zM50 43h5v1h-5zM63 43h33v1h-33zM109 43h7v1h-7zM126 43h2v1h-2zM133 43h16v1h-16zM153 43h2v1h-2zM0 44h40v1h-40zM42 44h1v1h-1zM50 44h6v1h-6zM63 44h34v1h-34zM111 44h4v1h-4zM126 44h4v1h-4zM133 44h17v1h-17zM151 44h4v1h-4zM0 45h160v1h-160zM0 46h160v1h-160zM0 47h160v1h-160z'/%3E%3C/svg%3E"), linear-gradient(180deg, transparent, oklch(0.282 0.098 263.9) 45%, oklch(0.261 0.097 264.9));
+  background-size: calc(160 * var(--unit)) calc(48 * var(--unit)), 100% 100%;
+  background-position: 0 100%, 0 0;
+  background-repeat: repeat-x, no-repeat;
+}
+
+@utility menu {
+  & a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    transition:
+      color 160ms var(--ease-snappy),
+      translate 400ms var(--ease-spring);
+  }
+
+  & .cursor {
+    position: absolute;
+    top: 50%;
+    left: -28px;
+    translate: 0 -50%;
+    opacity: 0;
+    transition: opacity 120ms var(--ease-snappy);
+  }
+
+  & li:first-child .cursor {
+    opacity: 1;
+    animation: var(--animate-blink);
+  }
+
+  &:has(a:hover, a:focus-visible) li:first-child a:not(:hover, :focus-visible) .cursor {
+    opacity: 0;
+    animation: none;
+  }
+
+  & a:hover,
+  & a:focus-visible {
+    color: var(--color-brand);
+    translate: 6px 0;
+  }
+
+  & a:hover .cursor,
+  & a:focus-visible .cursor {
+    opacity: 1;
+    animation: var(--animate-blink);
+  }
+
+  & a:active {
+    translate: 8px 0;
+    scale: 0.98;
+  }
+}
+
+@utility tilt {
+  transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 500ms var(--ease-spring);
+}

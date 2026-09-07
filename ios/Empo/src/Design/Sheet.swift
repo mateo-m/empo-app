@@ -5,7 +5,7 @@ import SwiftUI
 /// one-surface background, intrinsic sizing, brand tint - and the
 /// `Sheet*` pieces below are the building blocks its content
 /// composes. A sheet built from these cannot spell the chrome
-/// wrong. The rules they encode live in `docs/sheet-design.md`.
+/// wrong. The rules they encode live in `ios/Empo/docs/sheet-design.md`.
 ///
 /// Composition works like slots: the sheet declares WHAT it
 /// shows, the vocabulary decides HOW it looks.
