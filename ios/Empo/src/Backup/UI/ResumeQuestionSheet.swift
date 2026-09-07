@@ -110,12 +110,10 @@ struct ResumeQuestionAsk: Identifiable {
 
 /// The sheet the question shows, in two steps.
 ///
-/// The first step says what happened and offers Resume. Stop sits
-/// one step deeper, where its own screen states what it deletes, so
-/// the first screen stays short and the destructive answer is never
-/// one tap away from a reflex. The close button is Not now, and so
-/// is a swipe down, so the record is marked asked whichever way the
-/// sheet goes.
+/// The first step asks Resume. Stop sits one step deeper, where the
+/// title asks again and the body says what stays. Not now closes
+/// the sheet, and so does a swipe down, so the record is marked
+/// asked whichever way the sheet goes.
 struct ResumeQuestionSheet: View {
 
     private enum Step { case ask, stop }
@@ -125,78 +123,35 @@ struct ResumeQuestionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var step: Step = .ask
     @State private var answered = false
-    @State private var measuredHeight: CGFloat = 0
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xl) {
-                header
-                Text(step == .ask ? ask.detail : ask.stopDetail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                actions
+        StandardSheet(
+            title: step == .ask ? ask.title : ask.stopTitle,
+            trailingButton: step == .ask
+                ? SheetBarAction(ask.labels[1]) { answer(1) }
+                : SheetBarAction("Back") { show(.ask) }
+        ) {
+            SheetBodyText(step == .ask ? ask.detail : ask.stopDetail)
+            switch step {
+            case .ask:
+                VStack(spacing: Spacing.md) {
+                    SheetPrimaryButton(ask.labels[0]) { answer(0) }
+                    Button(ask.labels[2]) { show(.stop) }
+                        .buttonStyle(SecondaryButtonStyle(size: .md))
+                }
+            case .stop:
+                Button(ask.labels[2], role: .destructive) { answer(2) }
+                    .buttonStyle(SecondaryButtonStyle(tint: .red))
             }
-            .padding(Spacing.xl)
-            .padding(.top, Spacing.md)
-            .intrinsicSheetContent(measuredHeight: $measuredHeight)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .intrinsicSheetDetent(measuredHeight: measuredHeight, chromeAllowance: 28)
-        .presentationBackground(Color(.systemGroupedBackground))
-        .tint(.brand)
         .onDisappear {
             guard !answered else { return }
             ask.answer(1)
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: Spacing.lg) {
-            Text(step == .ask ? ask.title : ask.stopTitle)
-                .font(.title2.bold())
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button {
-                if step == .stop {
-                    withAnimation(Motion.gentle) { step = .ask }
-                } else {
-                    answer(1)
-                }
-            } label: {
-                Image(systemName: step == .ask ? "xmark.circle.fill" : "chevron.left.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                    .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 44, height: 44, alignment: .topTrailing)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(step == .ask ? ask.labels[1] : "Back")
-        }
-    }
-
-    @ViewBuilder
-    private var actions: some View {
-        switch step {
-        case .ask:
-            VStack(spacing: Spacing.md) {
-                SheetPrimaryButton(ask.labels[0]) { answer(0) }
-                Button(ask.labels[2]) {
-                    withAnimation(Motion.gentle) { step = .stop }
-                }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 44)
-            }
-        case .stop:
-            Button {
-                answer(2)
-            } label: {
-                Text(ask.labels[2]).frame(maxWidth: .infinity)
-            }
-            .buttonStyle(PrimaryButtonStyle(tint: .destructive))
-        }
+    private func show(_ next: Step) {
+        withAnimation(Motion.gentle) { step = next }
     }
 
     private func answer(_ index: Int) {

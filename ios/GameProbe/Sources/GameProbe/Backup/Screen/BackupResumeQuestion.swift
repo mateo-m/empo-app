@@ -30,20 +30,18 @@ public enum BackupResumeQuestion {
         }
     }
 
-    public static let title = "Backup Interrupted"
+    public static let title = "Resume the backup?"
 
     /// `leftText` carries the remaining bytes in the words the caller
     /// formatted, such as "2.8 GB".
     public static func detail(gameName: String, targetLabel: String, leftText: String) -> String {
-        "Empo closed before \(gameName) finished backing up to \(targetLabel). "
-            + "About \(leftText) is left to upload."
+        "\(gameName) did not finish backing up to \(targetLabel). About \(leftText) left."
     }
 
-    public static let stopTitle = "Stop the Backup?"
+    public static let stopTitle = "Stop the backup?"
 
     public static func stopDetail(gameName: String, targetLabel: String) -> String {
-        "The staged files on this device are deleted, and \(gameName) goes back to "
-            + "the normal schedule. The files that already reached \(targetLabel) stay there."
+        "\(gameName) goes back to its normal schedule. The files already on \(targetLabel) stay."
     }
 
     public static func label(of action: Action) -> String {

@@ -175,16 +175,14 @@ final class RestoreCoverageTests: XCTestCase {
     }
 
     func testTheResumeQuestionNamesTheGame() {
-        XCTAssertEqual(RestoreResumeQuestion.title, "Restore Interrupted")
+        XCTAssertEqual(RestoreResumeQuestion.title, "Resume the restore?")
         XCTAssertEqual(
             RestoreResumeQuestion.detail(gameName: "Quest", backupText: "the backup of 4 March"),
-            "The restore of Quest from the backup of 4 March stopped before it finished. "
-                + "The game has a mix of restored files and older files until it completes.")
-        XCTAssertEqual(RestoreResumeQuestion.stopTitle, "Stop the Restore?")
+            "Quest is only partly restored from the backup of 4 March.")
+        XCTAssertEqual(RestoreResumeQuestion.stopTitle, "Stop the restore?")
         XCTAssertEqual(
             RestoreResumeQuestion.stopDetail(gameName: "Quest"),
-            "The downloaded files on this device are deleted. "
-                + "Quest keeps the mix of files it has now.")
+            "Quest keeps the mix of files it has now.")
         XCTAssertEqual(
             RestoreResumeQuestion.Action.allCases.map(RestoreResumeQuestion.label),
             ["Resume", "Not now", "Stop restore"])
