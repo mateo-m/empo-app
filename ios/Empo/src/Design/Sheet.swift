@@ -87,20 +87,37 @@ struct StandardSheet<Content: View>: View {
         // pulled past its detent keeps the content pinned to the
         // top (a bare VStack centers in the stretched space).
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xl) {
-                header
-                content
-            }
-            .padding([.horizontal, .top], Spacing.xl)
-            .padding(.top, Spacing.md)
-            // The home indicator's safe area already pads the
-            // bottom. A full gutter under it reads as a hole.
-            .padding(.bottom, Spacing.sm)
-            .intrinsicSheetContent(measuredHeight: $measuredHeight)
+            stack
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .top)
+                // A view on its way out still takes its space until
+                // its transition ends, so the visible stack is the
+                // wrong thing to measure during a step change. The
+                // copy below has no animation, so it is already the
+                // size of the next step when the change begins.
+                .background {
+                    stack
+                        .hidden()
+                        .accessibilityHidden(true)
+                        .transaction { $0.animation = nil }
+                        .intrinsicSheetContent(measuredHeight: $measuredHeight)
+                }
         }
         .scrollBounceBehavior(.basedOnSize)
         .intrinsicSheetDetent(measuredHeight: measuredHeight, chromeAllowance: 0)
         .tint(.brand)
+    }
+
+    private var stack: some View {
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            header
+            content
+        }
+        .padding([.horizontal, .top], Spacing.xl)
+        .padding(.top, Spacing.md)
+        // The home indicator's safe area already pads the bottom. A
+        // full gutter under it reads as a hole.
+        .padding(.bottom, Spacing.sm)
     }
 
     /// The title is centered. Back leads, close trails, level with
@@ -119,7 +136,8 @@ struct StandardSheet<Content: View>: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 44 + Spacing.lg)
-                    .contentTransition(.opacity)
+                    .id(title)
+                    .transition(.sheetStep)
                 if let barAction {
                     icon(barAction)
                         .frame(
@@ -295,4 +313,21 @@ struct SheetDestructiveButton: View {
         }
         .buttonStyle(PrimaryButtonStyle(tint: .destructive))
     }
+}
+
+/// The way one step of a sheet gives way to the next: the old
+/// content blurs and fades out while the new one blurs and fades in.
+private struct SheetStepFade: ViewModifier {
+    let radius: CGFloat
+    let opacity: Double
+
+    func body(content: Content) -> some View {
+        content.blur(radius: radius).opacity(opacity)
+    }
+}
+
+extension AnyTransition {
+    static let sheetStep = AnyTransition.modifier(
+        active: SheetStepFade(radius: 12, opacity: 0),
+        identity: SheetStepFade(radius: 0, opacity: 1))
 }

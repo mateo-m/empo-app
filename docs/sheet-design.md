@@ -58,9 +58,11 @@ pattern of the Family app.
   one button is `SheetDestructiveButton`. The way there is a
   `SheetQuietButton` under the primary. The icon on that step is
   `symbol: .back`, at the leading corner.
-- One question per step. Change the step inside `withAnimation`.
-  The title, the icon and the content swap in place, and the
-  sheet grows or shrinks to the new content with the same motion.
+- One question per step. Change the step inside `withAnimation`
+  and give the content `.transition(.sheetStep)`. The old step
+  blurs and fades out, the new one blurs and fades in, the title
+  does the same, and the sheet grows or shrinks to the new content
+  with the same motion.
 - Never ask with an alert at launch. A record that needs an
   answer gets a sheet, on the library, after the splash.
 

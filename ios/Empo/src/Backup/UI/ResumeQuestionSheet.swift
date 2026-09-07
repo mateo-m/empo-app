@@ -144,7 +144,7 @@ struct ResumeQuestionSheet: View {
                     SheetDestructiveButton(ask.labels[2]) { answer(2) }
                 }
             }
-            .transition(.blurReplace)
+            .transition(.sheetStep)
         }
         .onDisappear {
             guard !answered else { return }
