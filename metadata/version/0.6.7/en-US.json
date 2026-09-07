@@ -1,0 +1,8 @@
+{
+  "description": "Empo plays RPG Maker XP, VX, and VX Ace games on iPhone and iPad. Import a game folder or archive from Files, and play it with touch controls or a game controller.\n\nTHREE RUBY VERSIONS IN ONE APP\nEmpo includes Ruby 1.8, 1.9, and 3.1. Each game runs on the version it was written for, so classic titles and modern engine forks both work.\n\nIMPORT\n• Game folders with the standard Data layout\n• .zip, .7z, and .rar archives\n• Self-extracting installers\n• Empo detects the engine version and picks the interpreter\n• Artwork comes from the game's own icon when there is one\n\nPLAY\n• On-screen D-pad and action buttons you can move and resize\n• Separate layouts per game and per orientation\n• Bluetooth and MFi game controllers\n• Pause and resume from the library\n• Local multiplayer for games that support it\n\nLIBRARY\n• Sort, search, grid and list views\n• Per-game settings\n• Save files survive re-imports and game updates\n\nFREE AND OPEN SOURCE\nEmpo is free. There is no subscription, no unlock, and no ads. It collects no data. The source code is on GitHub under GPLv2+.\n\nIMPORTANT\nEmpo is a game player. It does not include, sell, host, or download games. Import only games you have the right to play.\n\nSupport: https://github.com/mateo-m/empo-app/issues",
+  "keywords": "emulator,rgss,retro,fangame,jrpg,pixel,launcher,mkxp,ruby,indie,port,fan,essentials,rtp,classic,pc",
+  "marketingUrl": "https://empo.mateo.sh",
+  "promotionalText": "Empo runs RPG Maker XP, VX, and VX Ace games on iPhone and iPad. Import a game folder or archive, and play it with touch controls or a game controller.",
+  "supportUrl": "https://github.com/mateo-m/empo-app/issues",
+  "whatsNew": "First release on the App Store."
+}
