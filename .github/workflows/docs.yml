@@ -14,7 +14,11 @@ on:
       - ".github/workflows/docs.yml"
   push:
     branches: [main]
+    # A release tag rebuilds the What's new page with the new release. Path
+    # filters do not apply to tag pushes, so every tag builds the whole site.
+    tags: ["v*.*.*"]
     paths:
+      - "CHANGELOG.md"
       - "docs/**"
       - "landing/**"
       - "pages/**"
