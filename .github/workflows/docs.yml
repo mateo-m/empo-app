@@ -4,7 +4,10 @@ on:
   pull_request:
     paths:
       - "docs/**"
+      - "landing/**"
+      - "pages/**"
       - "public/**"
+      - "theme.css"
       - "blume.config.ts"
       - "package.json"
       - "bun.lock"
@@ -13,7 +16,10 @@ on:
     branches: [main]
     paths:
       - "docs/**"
+      - "landing/**"
+      - "pages/**"
       - "public/**"
+      - "theme.css"
       - "blume.config.ts"
       - "package.json"
       - "bun.lock"
@@ -32,7 +38,14 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      # The changelog page reads the engine commits between the submodule
+      # pins of two release tags, so it needs the tags and the engine history.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the engine history
+        run: git submodule update --init mkxp-z-apple-mobile
 
       - uses: oven-sh/setup-bun@v2
 

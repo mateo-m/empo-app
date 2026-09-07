@@ -4,10 +4,10 @@
   "description": "Pinned versions of Node-based CI lint/format tools and the documentation site generator. Not shipped with the app.",
   "scripts": {
     "prepare": "lefthook install --reset-hooks-path",
-    "docs:dev": "blume dev",
-    "docs:build": "blume build",
+    "docs:changelog": "bun tools/changelog-page.ts",
+    "docs:dev": "bun run docs:changelog && blume dev",
+    "docs:build": "bun run docs:changelog && blume build",
     "landing:dev": "bun tools/landing-dev.ts",
-    "landing:build": "bun tools/landing-build.ts",
     "fmt:check": "oxfmt --check altstore-source.json ios/Empo/project.yml ios/Empo/curated-patches/gameRegistry.json",
     "controls:schema:check": "bun tools/controls-schema-check.ts",
     "controls:schema": "bun tools/generate-controls-schema.ts"
