@@ -5,8 +5,9 @@
   "scripts": {
     "prepare": "lefthook install --reset-hooks-path",
     "docs:changelog": "bun tools/changelog-page.ts",
-    "docs:dev": "bun run docs:changelog && blume dev",
-    "docs:build": "bun run docs:changelog && blume build",
+    "docs:pages": "bun tools/root-pages.ts",
+    "docs:dev": "bun run docs:changelog && bun run docs:pages && blume dev",
+    "docs:build": "bun run docs:changelog && bun run docs:pages && blume build",
     "landing:dev": "bun tools/landing-dev.ts",
     "fmt:check": "oxfmt --check altstore-source.json ios/Empo/project.yml ios/Empo/curated-patches/gameRegistry.json",
     "controls:schema:check": "bun tools/controls-schema-check.ts",

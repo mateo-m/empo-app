@@ -17,7 +17,9 @@ Start with the [project README](../README.md) for what Empo is and how to build 
 | [`saves.mdx`](saves.mdx)                     | Where saves live, what updates and deletes do, moving saves.       |
 | [`troubleshooting.mdx`](troubleshooting.mdx) | Frequent problems and their fixes.                                 |
 | [`faq.mdx`](faq.mdx)                         | Short answers before you install.                                  |
-| [`community.mdx`](community.mdx)             | Discord, GitHub issues, and how to collect logs for a report.      |
+| `community.mdx`                              | Generated from [`SUPPORT.md`](../SUPPORT.md) by `tools/root-pages.ts` at build time. Not checked in. |
+| `privacy.mdx`                                | Generated from [`PRIVACY.md`](../PRIVACY.md) by `tools/root-pages.ts` at build time. Not checked in. |
+| `terms.mdx`                                  | Generated from [`TERMS.md`](../TERMS.md) by `tools/root-pages.ts` at build time. Not checked in. |
 | `changelog.mdx`                              | Generated from [`CHANGELOG.md`](../CHANGELOG.md) by `tools/changelog-page.ts` at build time. Not checked in. |
 
 ## For game developers

@@ -10,6 +10,10 @@ ios/Empo/Empo.xcodeproj/
 # Docs site (Blume generates .blume/ and builds into dist/)
 # tools/changelog-page.ts derives this page from CHANGELOG.md.
 docs/changelog.mdx
+# tools/root-pages.ts derives these pages from the root markdown files.
+docs/privacy.mdx
+docs/terms.mdx
+docs/community.mdx
 .blume/
 dist/
 
@@ -67,6 +71,9 @@ ios/Empo/src/App/GitInfo.generated.swift
 !/CHANGELOG.md
 !/README.md
 !/CONTRIBUTING.md
+!/PRIVACY.md
+!/TERMS.md
+!/SUPPORT.md
 
 # Python cache (agent skill scripts)
 __pycache__/

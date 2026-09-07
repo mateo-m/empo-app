@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "docs/**"
+      - "PRIVACY.md"
+      - "TERMS.md"
+      - "SUPPORT.md"
+      - "tools/**"
       - "landing/**"
       - "pages/**"
       - "public/**"
@@ -20,6 +24,10 @@ on:
     paths:
       - "CHANGELOG.md"
       - "docs/**"
+      - "PRIVACY.md"
+      - "TERMS.md"
+      - "SUPPORT.md"
+      - "tools/**"
       - "landing/**"
       - "pages/**"
       - "public/**"
