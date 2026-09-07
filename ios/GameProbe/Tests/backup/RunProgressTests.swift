@@ -160,8 +160,11 @@ final class RunProgressTests: XCTestCase {
 
     func testTheQuestionNamesTheGameAndWhatRemains() {
         XCTAssertEqual(
-            BackupResumeQuestion.question(gameName: "Rejuvenation", leftText: "2.8 GB"),
-            "Resume backing up Rejuvenation? About 2.8 GB left.")
+            BackupResumeQuestion.title(gameName: "Rejuvenation"),
+            "Resume backing up Rejuvenation?")
+        XCTAssertEqual(
+            BackupResumeQuestion.detail(leftText: "2.8 GB"),
+            "About 2.8 GB left. What already reached the target stays there.")
         XCTAssertEqual(
             BackupResumeQuestion.Action.allCases.map(BackupResumeQuestion.label),
             ["Resume", "Later", "Stop backup"])

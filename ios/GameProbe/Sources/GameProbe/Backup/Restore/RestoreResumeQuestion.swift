@@ -49,9 +49,12 @@ public enum RestoreResumeQuestion {
         }
     }
 
-    public static func question(gameName: String) -> String {
-        "A restore was interrupted. Resume \(gameName)?"
+    public static func title(gameName: String) -> String {
+        "Resume restoring \(gameName)?"
     }
+
+    public static let detail =
+        "This restore stopped before it finished. The files already on this device stay."
 
     public static func label(of action: Action) -> String {
         switch action {

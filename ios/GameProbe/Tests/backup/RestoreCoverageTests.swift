@@ -176,8 +176,8 @@ final class RestoreCoverageTests: XCTestCase {
 
     func testTheResumeQuestionNamesTheGame() {
         XCTAssertEqual(
-            RestoreResumeQuestion.question(gameName: "Quest"),
-            "A restore was interrupted. Resume Quest?")
+            RestoreResumeQuestion.title(gameName: "Quest"),
+            "Resume restoring Quest?")
     }
 
     // MARK: - The preferences restore, per 11.13

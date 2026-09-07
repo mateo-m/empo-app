@@ -15,17 +15,31 @@ struct ResumeQuestionAsk: Identifiable {
 
     var id: String { "\(side)" }
 
-    var question: String {
+    var emblem: String {
         switch side {
-        case .backupRun:
-            return BackupResumeQuestion.question(
-                gameName: gameName, leftText: BackupText.bytes(record.remainingBytes))
-        case .restore:
-            return RestoreResumeQuestion.question(gameName: gameName)
+        case .backupRun: return "arrow.up.circle"
+        case .restore: return "arrow.down.circle"
         }
     }
 
-    /// The three labels, in the order 13.18 puts them.
+    var title: String {
+        switch side {
+        case .backupRun: return BackupResumeQuestion.title(gameName: gameName)
+        case .restore: return RestoreResumeQuestion.title(gameName: gameName)
+        }
+    }
+
+    var detail: String {
+        switch side {
+        case .backupRun:
+            return BackupResumeQuestion.detail(leftText: BackupText.bytes(record.remainingBytes))
+        case .restore:
+            return RestoreResumeQuestion.detail
+        }
+    }
+
+    /// The three labels, in the order 13.18 puts them: resume, later,
+    /// stop.
     var labels: [String] {
         switch side {
         case .backupRun:
@@ -73,6 +87,10 @@ struct ResumeQuestionAsk: Identifiable {
 }
 
 /// The sheet the question shows.
+///
+/// A swipe cannot dismiss it. Every way out is one of the three
+/// answers, so the record is marked asked and the question never
+/// comes back for the same interruption.
 struct ResumeQuestionSheet: View {
 
     let ask: ResumeQuestionAsk
@@ -80,28 +98,19 @@ struct ResumeQuestionSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xl) {
-            Text(ask.question)
-                .font(.headline)
-
+        StandardSheet(title: ask.title, emblem: ask.emblem) {
+            SheetBodyText(ask.detail)
             VStack(spacing: Spacing.md) {
-                ForEach(Array(ask.labels.enumerated()), id: \.offset) { index, label in
-                    // Resume is the default, per 13.18, so it takes
-                    // the one filled button.
-                    if index == 0 {
-                        Button(label) { answer(index) }
-                            .buttonStyle(PrimaryButtonStyle(size: .md))
-                            .frame(maxWidth: .infinity)
-                    } else {
-                        Button(label) { answer(index) }
-                            .buttonStyle(SecondaryButtonStyle(size: .md))
-                            .frame(maxWidth: .infinity)
-                    }
-                }
+                SheetPrimaryButton(ask.labels[0]) { answer(0) }
+                Button(ask.labels[1]) { answer(1) }
+                    .buttonStyle(SecondaryButtonStyle(size: .md))
+                    .frame(maxWidth: .infinity)
             }
+            Button(ask.labels[2], role: .destructive) { answer(2) }
+                .font(.subheadline.weight(.medium))
+                .frame(maxWidth: .infinity)
         }
-        .padding(Spacing.xl)
-        .presentationDetents([.height(280)])
+        .interactiveDismissDisabled()
     }
 
     private func answer(_ index: Int) {

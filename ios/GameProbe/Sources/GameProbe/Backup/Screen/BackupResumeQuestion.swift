@@ -30,10 +30,14 @@ public enum BackupResumeQuestion {
         }
     }
 
+    public static func title(gameName: String) -> String {
+        "Resume backing up \(gameName)?"
+    }
+
     /// `leftText` carries the remaining bytes in the words the caller
     /// formatted, such as "2.8 GB".
-    public static func question(gameName: String, leftText: String) -> String {
-        "Resume backing up \(gameName)? About \(leftText) left."
+    public static func detail(leftText: String) -> String {
+        "About \(leftText) left. What already reached the target stays there."
     }
 
     public static func label(of action: Action) -> String {
