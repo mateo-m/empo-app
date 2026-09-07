@@ -90,7 +90,7 @@ private struct NamespaceDeleteSheet: View {
     var body: some View {
         StandardSheet(
             title: confirmation.title,
-            trailingButton: SheetBarAction("Cancel") { dismiss() }
+            barAction: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetCard {
                 ForEach(Array(confirmation.lines.enumerated()), id: \.offset) { index, line in

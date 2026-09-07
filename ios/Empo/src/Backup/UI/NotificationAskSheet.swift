@@ -16,7 +16,7 @@ struct NotificationAskSheet: View {
         StandardSheet(
             title: BackupNotificationAsk.title,
             emblem: "bell.badge",
-            trailingButton: SheetBarAction(BackupNotificationAsk.notNowLabel) { dismiss() }
+            barAction: SheetBarAction(BackupNotificationAsk.notNowLabel) { dismiss() }
         ) {
             SheetBodyText(BackupNotificationAsk.body)
             SheetPrimaryButton(BackupNotificationAsk.turnOnLabel) {

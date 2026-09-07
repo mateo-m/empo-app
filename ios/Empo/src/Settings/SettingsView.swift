@@ -872,7 +872,7 @@ private struct BuildInfoSheet: View {
     var body: some View {
         StandardSheet(
             title: "Build info",
-            trailingButton: SheetBarAction("Close") { dismiss() }
+            barAction: SheetBarAction("Close") { dismiss() }
         ) {
             SheetCard {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in

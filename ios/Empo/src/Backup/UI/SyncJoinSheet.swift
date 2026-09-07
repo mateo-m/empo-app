@@ -24,7 +24,7 @@ struct SyncJoinSheet: View {
             StandardSheet(
                 title: SyncGroupCopy.confirmation(of: group),
                 emblem: "arrow.triangle.2.circlepath",
-                trailingButton: SheetBarAction("Not now") { dismiss() }
+                barAction: SheetBarAction("Not now") { dismiss() }
             ) {
                 SheetBodyText(SyncGroupCopy.joinBody)
                 SheetPrimaryButton("Sync settings") {

@@ -30,7 +30,7 @@ struct AttachGameSheet: View {
     var body: some View {
         StandardSheet(
             title: AttachAction.pickTitle,
-            trailingButton: SheetBarAction(AttachAction.cancelLabel) { dismiss() }
+            barAction: SheetBarAction(AttachAction.cancelLabel) { dismiss() }
         ) {
             SheetBodyText(
                 AttachAction.pickBody(snapshotName: snapshot.containerFolderName))

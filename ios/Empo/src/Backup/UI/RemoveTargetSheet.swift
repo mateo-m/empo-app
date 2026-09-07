@@ -24,7 +24,7 @@ struct RemoveTargetSheet: View {
     var body: some View {
         StandardSheet(
             title: sheet.title,
-            trailingButton: SheetBarAction("Cancel") { dismiss() }
+            barAction: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(sheet.body, naming: item.descriptor.displayName)
             Toggle(sheet.deleteLabel, isOn: $deletesBackups)

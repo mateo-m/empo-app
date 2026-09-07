@@ -306,7 +306,7 @@ private struct LeftoverDeleteSheet: View {
     var body: some View {
         StandardSheet(
             title: confirmation.title,
-            trailingButton: SheetBarAction("Cancel") { dismiss() }
+            barAction: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(confirmation.body)
             SheetDestructiveButton(confirmation.buttonLabel) {
@@ -329,7 +329,7 @@ private struct OversizedWriteAskSheet: View {
     var body: some View {
         StandardSheet(
             title: "Back up this file too?",
-            trailingButton: SheetBarAction("Not now") {
+            barAction: SheetBarAction("Not now") {
                 answer(false)
                 dismiss()
             }

@@ -127,20 +127,24 @@ struct ResumeQuestionSheet: View {
     var body: some View {
         StandardSheet(
             title: step == .ask ? ask.title : ask.stopTitle,
-            trailingButton: step == .ask
+            barAction: step == .ask
                 ? SheetBarAction(ask.labels[1]) { answer(1) }
                 : SheetBarAction("Back", symbol: .back) { show(.ask) }
         ) {
-            SheetBodyText(step == .ask ? ask.detail : ask.stopDetail, naming: ask.gameName)
-            switch step {
-            case .ask:
-                VStack(spacing: Spacing.md) {
-                    SheetPrimaryButton(ask.labels[0]) { answer(0) }
-                    SheetQuietButton(ask.labels[2]) { show(.stop) }
+            Group {
+                switch step {
+                case .ask:
+                    SheetBodyText(ask.detail, naming: ask.gameName)
+                    VStack(spacing: Spacing.md) {
+                        SheetPrimaryButton(ask.labels[0]) { answer(0) }
+                        SheetQuietButton(ask.labels[2]) { show(.stop) }
+                    }
+                case .stop:
+                    SheetBodyText(ask.stopDetail, naming: ask.gameName)
+                    SheetDestructiveButton(ask.labels[2]) { answer(2) }
                 }
-            case .stop:
-                SheetDestructiveButton(ask.labels[2]) { answer(2) }
             }
+            .transition(.blurReplace)
         }
         .onDisappear {
             guard !answered else { return }

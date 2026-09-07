@@ -39,7 +39,7 @@ struct RestoreSnapshotSheet: View {
     var body: some View {
         StandardSheet(
             title: "Restore this backup?",
-            trailingButton: SheetBarAction("Cancel") { dismiss() }
+            barAction: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(
                 "\(BackupText.date(row.createdAt)) at \(BackupText.time(row.createdAt)), "
@@ -124,7 +124,7 @@ struct VersionMarkerSheetView: View {
     var body: some View {
         StandardSheet(
             title: VersionMarkerSheet.title,
-            trailingButton: SheetBarAction("Cancel") { dismiss() }
+            barAction: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(VersionMarkerSheet.body(gameName: gameName), naming: gameName)
             SheetCard {

@@ -17,7 +17,7 @@ struct PermissionCheckSheet: View {
     var body: some View {
         StandardSheet(
             title: result.allowsAdd ? "\(targetLabel) is ready" : "\(targetLabel) refused a step",
-            trailingButton: SheetBarAction("Close") { dismiss() }
+            barAction: SheetBarAction("Close") { dismiss() }
         ) {
             SheetCard {
                 ForEach(Array(result.steps.enumerated()), id: \.offset) { index, step in

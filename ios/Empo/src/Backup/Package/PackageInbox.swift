@@ -56,7 +56,7 @@ struct PackageDoorClosedSheet: View {
     var body: some View {
         StandardSheet(
             title: "Import backup",
-            trailingButton: SheetBarAction("Done") { dismiss() }
+            barAction: SheetBarAction("Done") { dismiss() }
         ) {
             SheetBodyText(
                 PackageDoors.line(gameName: EngineSessionCoordinator.shared.openGameName)

@@ -137,7 +137,7 @@ struct PackageExportSheet: View {
     var body: some View {
         StandardSheet(
             title: "Export backup",
-            trailingButton: SheetBarAction("Cancel") { model.cancelTheBuild() }
+            barAction: SheetBarAction("Cancel") { model.cancelTheBuild() }
         ) {
             switch model.phase {
             case .planning, .building:

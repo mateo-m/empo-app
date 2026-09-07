@@ -18,7 +18,7 @@ of hand-writing chrome:
 ```swift
 StandardSheet(
     title: "Resume the backup?",
-    trailingButton: SheetBarAction("Not now") { answer(.later) }
+    barAction: SheetBarAction("Not now") { answer(.later) }
 ) {
     SheetBodyText("Rejuvenation did not finish backing up. About 2.8 GB left.", naming: "Rejuvenation")
     SheetPrimaryButton("Resume") { answer(.resume) }
@@ -56,10 +56,11 @@ pattern of the Family app.
 - A destructive answer sits one step deeper. Its step titles the
   question again, the body says what goes and what stays, and the
   one button is `SheetDestructiveButton`. The way there is a
-  `SheetQuietButton` under the primary. The corner icon on that
-  step is `symbol: .back`.
-- One question per step. A later step differs in height from the
-  one before, and the icon and the title change in place.
+  `SheetQuietButton` under the primary. The icon on that step is
+  `symbol: .back`, at the leading corner.
+- One question per step. Change the step inside `withAnimation`.
+  The title, the icon and the content swap in place, and the
+  sheet grows or shrinks to the new content with the same motion.
 - Never ask with an alert at launch. A record that needs an
   answer gets a sheet, on the library, after the splash.
 
@@ -107,8 +108,9 @@ pattern of the Family app.
 Top to bottom, each zone optional except the action:
 
 1. **Identity** - the title takes one of two shapes, never a mix:
-   - No emblem: a `title2` bold title at the top of the content,
-     leading, with the corner icon at its trailing end.
+   - No emblem: a centered `title2` bold title at the top of the
+     content. Close sits at the trailing corner, back at the
+     leading corner.
    - With an emblem: the title joins the 48pt brand-tinted
      symbol as ONE centered block at the top of the content
      (welcome-sheet style - pass `emblem:` to `StandardSheet`).

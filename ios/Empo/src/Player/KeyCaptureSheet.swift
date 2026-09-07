@@ -12,7 +12,7 @@ struct KeyCaptureSheet: View {
         StandardSheet(
             title: "Press a button",
             emblem: "keyboard",
-            trailingButton: SheetBarAction("Cancel") { dismiss() }
+            barAction: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(
                 "Press the button on your controller, or the key on your "

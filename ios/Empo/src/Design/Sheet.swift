@@ -52,18 +52,22 @@ enum SheetSurface {
 /// Two title styles:
 ///
 ///   - No emblem: the title sits at the top of the content,
-///     leading, with the bar action as an icon at its trailing end.
+///     leading, with the corner icon beside it.
 ///   - With `emblem:`: the title joins the symbol as ONE centered
 ///     identity block (welcome-sheet style). The icon, when there
-///     is one, sits in the top-trailing corner over that block.
+///     is one, floats in a top corner over that block.
+///
+/// A multi-step sheet swaps the title, the icon and the content in
+/// one `withAnimation`. The detent follows the measured height with
+/// the same motion, so the sheet grows and shrinks with each step.
 struct StandardSheet<Content: View>: View {
     let title: String
     /// SF Symbol name for the identity block. A nil value keeps the
     /// title leading at the top of the content.
     var emblem: String?
     var surface: SheetSurface = .grouped
-    /// Optional top-trailing icon action.
-    var trailingButton: SheetBarAction?
+    /// Optional corner icon action.
+    var barAction: SheetBarAction?
     @ViewBuilder var content: Content
 
     @State private var measuredHeight: CGFloat = 0
@@ -99,19 +103,29 @@ struct StandardSheet<Content: View>: View {
         .tint(.brand)
     }
 
+    /// The title is centered. Back leads, close trails, level with
+    /// the title's first line.
     @ViewBuilder private var header: some View {
         if let emblem {
             SheetIdentityBlock(systemName: emblem, title: title)
-                .overlay(alignment: .topTrailing) {
-                    if let trailingButton { icon(trailingButton) }
+                .overlay(alignment: barAction?.symbol == .back ? .topLeading : .topTrailing) {
+                    if let barAction { icon(barAction) }
                 }
         } else {
-            HStack(alignment: .top, spacing: Spacing.lg) {
+            ZStack(alignment: .top) {
                 Text(title)
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if let trailingButton { icon(trailingButton) }
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 44 + Spacing.lg)
+                    .contentTransition(.opacity)
+                if let barAction {
+                    icon(barAction)
+                        .frame(
+                            maxWidth: .infinity,
+                            alignment: barAction.symbol == .back ? .leading : .trailing)
+                }
             }
         }
     }
@@ -121,8 +135,7 @@ struct StandardSheet<Content: View>: View {
             Image(systemName: action.symbol == .close ? "xmark.circle.fill" : "chevron.left.circle.fill")
                 .font(.title2)
                 .foregroundStyle(.secondary)
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 44, height: 44, alignment: .topTrailing)
+                .frame(width: 44, height: 44, alignment: .top)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
