@@ -10,7 +10,7 @@
 
 Most RPG Maker VX (RGSS2) and VX Ace (RGSS3) games target Ruby 1.9.2.
 Empo's multi-Ruby dispatcher routes any game whose detection signals
-RGSS2/RGSS3 to this build (see `ios/Empo/docs/multi-ruby.md`). Developers also
+RGSS2/RGSS3 to this build (see `docs/multi-ruby.md`). Developers also
 tested most VX Ace games against the 1.9 series. Syntax that is valid
 only in 1.9 (block-local variables, `__method__`) then parses correctly,
 with no fallback to Ruby 3.1's syntax-transform patches.
