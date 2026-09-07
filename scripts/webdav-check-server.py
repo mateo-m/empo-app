@@ -131,9 +131,18 @@ class Handler(BaseHTTPRequestHandler):
         if not os.path.isdir(os.path.dirname(local)):
             return self.answer(409)
         existed = os.path.isfile(local)
+        if CONFIG["quota"] and self.used_bytes() + len(body) > CONFIG["limit"]:
+            return self.answer(507)
         with open(local, "wb") as handle:
             handle.write(body)
         self.answer(204 if existed else 201)
+
+    def used_bytes(self):
+        used = 0
+        for folder, _, names in os.walk(CONFIG["root"]):
+            for name in names:
+                used += os.path.getsize(os.path.join(folder, name))
+        return used
 
     def do_DELETE(self):
         if not self.authorized() or self.refuses():
@@ -223,7 +232,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def quota_answer(self, local):
         href = self.href(local, os.path.isdir(local))
-        if not CONFIG["quota"]:
+        if not CONFIG["quota"] or CONFIG["hide_space"]:
             # The server holds no such property, per RFC 4918.
             return self.multistatus(
                 "<D:response><D:href>%s</D:href><D:propstat><D:prop>"
@@ -231,10 +240,7 @@ class Handler(BaseHTTPRequestHandler):
                 "</D:prop><D:status>HTTP/1.1 404 Not Found</D:status>"
                 "</D:propstat></D:response>" % href
             )
-        used = 0
-        for folder, _, names in os.walk(CONFIG["root"]):
-            for name in names:
-                used += os.path.getsize(os.path.join(folder, name))
+        used = self.used_bytes()
         available = max(0, CONFIG["limit"] - used)
         return self.multistatus(
             "<D:response><D:href>%s</D:href><D:propstat><D:prop>"
@@ -263,6 +269,9 @@ def main():
     parser.add_argument(
         "--limit", type=int, default=2 * 1024 * 1024 * 1024,
         help="the byte limit the space query reports")
+    parser.add_argument(
+        "--hide-space", action="store_true",
+        help="keep the limit but answer no space query, like a server without quota properties")
     given = parser.parse_args()
 
     CONFIG.update(
@@ -272,6 +281,7 @@ def main():
         quota=given.quota,
         switch=given.switch,
         limit=given.limit,
+        hide_space=given.hide_space,
     )
     os.makedirs(CONFIG["root"], exist_ok=True)
 
