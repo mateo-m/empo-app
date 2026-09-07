@@ -228,7 +228,7 @@ struct GameLibraryView: View {
             .task {
                 // The question of 13.18 comes once, at the launch
                 // after the interruption.
-                resumeAsk = ResumeQuestionAsk.pending()
+                resumeAsk = ResumeQuestionAsk.pending(games: library.games)
             }
     }
 

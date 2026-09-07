@@ -12,29 +12,51 @@ struct ResumeQuestionAsk: Identifiable {
     var side: Side
     var record: BackupIntentRecord
     var gameName: String
+    var artworkPath: String?
+    var targetLabel: String
 
     var id: String { "\(side)" }
 
     var emblem: String {
         switch side {
-        case .backupRun: return "arrow.up.circle"
-        case .restore: return "arrow.down.circle"
+        case .backupRun: return "arrow.up.circle.dotted"
+        case .restore: return "arrow.down.circle.dotted"
         }
     }
 
     var title: String {
         switch side {
-        case .backupRun: return BackupResumeQuestion.title(gameName: gameName)
-        case .restore: return RestoreResumeQuestion.title(gameName: gameName)
+        case .backupRun: return BackupResumeQuestion.title
+        case .restore: return RestoreResumeQuestion.title
         }
     }
 
     var detail: String {
         switch side {
         case .backupRun:
-            return BackupResumeQuestion.detail(leftText: BackupText.bytes(record.remainingBytes))
+            return BackupResumeQuestion.detail(gameName: gameName, targetLabel: targetLabel)
         case .restore:
-            return RestoreResumeQuestion.detail
+            return RestoreResumeQuestion.detail(gameName: gameName)
+        }
+    }
+
+    /// The second line of the game row: what is left, or which
+    /// backup the restore came from.
+    var gameLine: String {
+        switch side {
+        case .backupRun:
+            return BackupResumeQuestion.leftLine(leftText: BackupText.bytes(record.remainingBytes))
+        case .restore:
+            guard let id = record.snapshotId, let date = BackupKeys.timestamp(ofSnapshotId: id)
+            else { return "Backup on \(targetLabel)" }
+            return "Backup from " + date.formatted(date: .abbreviated, time: .shortened)
+        }
+    }
+
+    var stopDetail: String {
+        switch side {
+        case .backupRun: return BackupResumeQuestion.stopDetail(gameName: gameName)
+        case .restore: return RestoreResumeQuestion.stopDetail
         }
     }
 
@@ -55,19 +77,27 @@ struct ResumeQuestionAsk: Identifiable {
     /// A half-restored game outranks an unfinished run, because it is
     /// the state that leaves files in two versions.
     @MainActor
-    static func pending() -> ResumeQuestionAsk? {
-        let names = BackupGameNames()
+    static func pending(games: [GameEntry]) -> ResumeQuestionAsk? {
         if let record = RestoreCoordinator.shared.pendingResume() {
-            return ResumeQuestionAsk(
-                side: .restore, record: record,
-                gameName: names.name(ofGameKey: record.gameKey))
+            return ResumeQuestionAsk(side: .restore, record: record, games: games)
         }
         if let record = BackupScheduler.shared.pendingResume() {
-            return ResumeQuestionAsk(
-                side: .backupRun, record: record,
-                gameName: names.name(ofGameKey: record.gameKey))
+            return ResumeQuestionAsk(side: .backupRun, record: record, games: games)
         }
         return nil
+    }
+
+    @MainActor
+    private init(side: Side, record: BackupIntentRecord, games: [GameEntry]) {
+        self.side = side
+        self.record = record
+        gameName = BackupGameNames().name(ofGameKey: record.gameKey)
+        artworkPath = games.first {
+            guard let folder = $0.container?.folderName else { return false }
+            return BackupKeys.gameKey(containerFolderName: folder) == record.gameKey
+        }?.artworkPath
+        targetLabel =
+            BackupTargets.load().first { $0.id == record.targetId }?.label ?? "the target"
     }
 
     /// Applies one answer by its place in `labels`.
@@ -88,32 +118,81 @@ struct ResumeQuestionAsk: Identifiable {
 
 /// The sheet the question shows.
 ///
-/// A swipe cannot dismiss it. Every way out is one of the three
-/// answers, so the record is marked asked and the question never
-/// comes back for the same interruption.
+/// Later is the bar action, and a swipe down means Later too, so the
+/// record is marked asked whichever way the sheet goes.
 struct ResumeQuestionSheet: View {
 
     let ask: ResumeQuestionAsk
 
     @Environment(\.dismiss) private var dismiss
+    @State private var answered = false
 
     var body: some View {
-        StandardSheet(title: ask.title, emblem: ask.emblem) {
+        StandardSheet(
+            title: ask.title,
+            emblem: ask.emblem,
+            trailingButton: SheetBarAction(ask.labels[1]) { answer(1) }
+        ) {
             SheetBodyText(ask.detail)
-            VStack(spacing: Spacing.md) {
-                SheetPrimaryButton(ask.labels[0]) { answer(0) }
-                Button(ask.labels[1]) { answer(1) }
-                    .buttonStyle(SecondaryButtonStyle(size: .md))
-                    .frame(maxWidth: .infinity)
+
+            SheetCard {
+                HStack(spacing: Spacing.lg) {
+                    GameArtworkView(
+                        artworkPath: ask.artworkPath,
+                        placeholderIconSize: 20,
+                        size: 44,
+                        cornerRadius: Radius.sm
+                    )
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(ask.gameName)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text(ask.gameLine)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Spacing.lg)
+                .padding(.vertical, Spacing.md)
             }
-            Button(ask.labels[2], role: .destructive) { answer(2) }
-                .font(.subheadline.weight(.medium))
-                .frame(maxWidth: .infinity)
+
+            SheetCard {
+                Button(role: .destructive) {
+                    Haptics.tap()
+                    answer(2)
+                } label: {
+                    HStack(spacing: Spacing.lg) {
+                        Image(systemName: "xmark.circle")
+                            .foregroundStyle(.red)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(ask.labels[2])
+                                .foregroundStyle(.red)
+                            Text(ask.stopDetail)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.vertical, Spacing.md)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+
+            SheetPrimaryButton(ask.labels[0]) { answer(0) }
         }
-        .interactiveDismissDisabled()
+        .onDisappear {
+            guard !answered else { return }
+            ask.answer(1)
+        }
     }
 
     private func answer(_ index: Int) {
+        answered = true
         ask.answer(index)
         dismiss()
     }
