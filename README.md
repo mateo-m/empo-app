@@ -80,7 +80,7 @@ ios/Dependencies/      Cross-compiled static libs (SDL, three Ruby versions, Ope
 docs/                  Notes on the harder parts
 ```
 
-The [documentation site](https://mateo-m.github.io/empo-app/) covers the rest: how to
+The [documentation site](https://empo.mateo.sh/) covers the rest: how to
 install and play, what game developers can ship with a game, and how the harder parts of the
 app work. The source is in [`docs/`](docs/README.md). To read it in a browser locally, run:
 

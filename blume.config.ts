@@ -58,8 +58,7 @@ export default defineConfig({
   },
   deployment: {
     output: "static",
-    // GitHub Pages serves a project site under the repository name.
-    site: "https://mateo-m.github.io",
-    base: "/empo-app",
+    site: "https://empo.mateo.sh",
+    base: "/",
   },
 });
