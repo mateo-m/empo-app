@@ -153,6 +153,8 @@ final class DeviceSyncValues: SyncLocalValuesStore {
     }
 
     func apply(_ model: SyncDocumentModel, identities: inout SyncProfileIdentities) {
+        SyncPass.shared.isApplying = true
+        defer { SyncPass.shared.isApplying = false }
         SyncLocalValues.apply(model, identities: &identities)
     }
 }

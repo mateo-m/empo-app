@@ -27,6 +27,11 @@ final class SyncPass {
     private var state = State.new
     private var engine: SyncEngine?
 
+    /// True while a pass writes the merged document to the device.
+    /// The writes post the same notifications a user change does,
+    /// and a pass that asked for itself again would never end.
+    var isApplying = false
+
     // MARK: - The two triggers of 10.11
 
     /// The scene delegate calls this once.
@@ -63,6 +68,7 @@ final class SyncPass {
         // A play session writes preferences of its own, and it does
         // not ask for a pass.
         if case .afterALocalChange = trigger, BackupDeviceConditions.isSessionLive { return }
+        if case .afterALocalChange = trigger, isApplying { return }
         switch state {
         case .new:
             return

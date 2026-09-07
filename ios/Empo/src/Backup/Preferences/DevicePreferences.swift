@@ -37,6 +37,13 @@ enum DevicePreferences {
     static func apply(_ values: [String: JSONValue]) {
         for (key, value) in values where PreferenceKeys.classOf(key) == .portable {
             guard let object = objectValue(of: value) else { continue }
+            // An equal value still posts `didChangeNotification`, and
+            // that notification asks for the next pass.
+            if let current = UserDefaults.standard.object(forKey: key),
+                jsonValue(of: current) == value
+            {
+                continue
+            }
             UserDefaults.standard.set(object, forKey: key)
         }
     }
