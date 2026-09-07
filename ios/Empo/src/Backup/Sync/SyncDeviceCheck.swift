@@ -19,6 +19,7 @@ enum SyncDeviceCheck {
 
     static func run() {
         dumps = UserDefaults.standard.bool(forKey: "syncDump")
+        setOnePreference()
         guard UserDefaults.standard.bool(forKey: "syncJoin") else { return }
         Task {
             guard case .confirm(let group) = await SyncJoin.ask() else {
@@ -27,6 +28,24 @@ enum SyncDeviceCheck {
             }
             SyncJoin.join(group)
             log("joined \(group.groupId) with \(group.deviceNames.joined(separator: ", "))")
+        }
+    }
+
+    /// `-syncSetPreference key=value` writes one string preference
+    /// five seconds after launch, as a user change would, which is
+    /// what checks 2 to 5 need from the second device. A write from
+    /// outside the process posts no change notification, so it
+    /// never reaches the document.
+    private static func setOnePreference() {
+        guard let change = UserDefaults.standard.string(forKey: "syncSetPreference"),
+            let separator = change.firstIndex(of: "=")
+        else { return }
+        let key = String(change[..<separator])
+        let value = String(change[change.index(after: separator)...])
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            UserDefaults.standard.set(value, forKey: key)
+            log("set \(key) = \(value)")
         }
     }
 

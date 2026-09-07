@@ -27,9 +27,11 @@ enum BackupDeviceCheck {
         let presses = defaults.bool(forKey: "backupPressNow")
         let uploadsBig = defaults.bool(forKey: "backupBigUpload")
         let rearms = defaults.bool(forKey: "backupRearmNotifications")
+        let restores = defaults.string(forKey: "restoreGame")
+        let launches = defaults.string(forKey: "launchGame")
         guard
             addsICloud || addsDropbox || addsGoogleDrive || addsS3 || addsWebDAV || presses
-                || uploadsBig || rearms
+                || uploadsBig || rearms || restores != nil || launches != nil
         else {
             return
         }
@@ -78,6 +80,52 @@ enum BackupDeviceCheck {
             if addsWebDAV { await addTheWebDAVTargets() }
             if uploadsBig { await uploadOneBigFile() }
             if presses { BackupScheduler.shared.pressBackUpNow(.library) }
+            if let restores { await restoreTheNewestSnapshot(folderName: restores) }
+        }
+        if let launches { launchTheGame(title: launches) }
+    }
+
+    // MARK: - The restore
+
+    /// `-restoreGame <folder name>` restores the newest snapshot of
+    /// that game, whole, from `-restoreTarget <id>` or from any target.
+    /// `-restoreSnapshot <prefix>` picks an older snapshot by its id.
+    private static func restoreTheNewestSnapshot(folderName: String) async {
+        let wanted = UserDefaults.standard.string(forKey: "restoreTarget")
+        let snapshot = UserDefaults.standard.string(forKey: "restoreSnapshot") ?? ""
+        let key = BackupKeys.gameKey(containerFolderName: folderName)
+        for descriptor in BackupTargets.load() where wanted == nil || descriptor.id == wanted {
+            guard let provider = await BackupTargets.provider(for: descriptor) else { continue }
+            let scan = RestoreScan(provider: provider, descriptor: descriptor)
+            let rows = RestorePicker.newestFirst((try? await scan.rows(of: .game(key: key))) ?? [])
+            guard let row = rows.first(where: { $0.snapshotId.hasPrefix(snapshot) }) else {
+                log("\(descriptor.id) holds no snapshot of \(folderName)")
+                continue
+            }
+            log("restore of \(folderName) from \(descriptor.id), snapshot \(row.snapshotId), \(row.bytesToDownload) bytes")
+            let outcome = await RestoreCoordinator.shared.restore(
+                row, into: GameIdentities.match(row.identity), provider: provider,
+                descriptor: descriptor, scope: .wholeGame)
+            log("restore of \(folderName): \(outcome)")
+            return
+        }
+    }
+
+    /// `-launchGame <title>` starts that game after
+    /// `-launchGameAfter <seconds>`, so a check can launch a game
+    /// while a restore or a run is in flight.
+    private static func launchTheGame(title: String) {
+        let delay = UserDefaults.standard.double(forKey: "launchGameAfter")
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(delay))
+            GameLibrary.shared.reload()
+            let games = GameLibrary.shared.games
+            guard let game = games.first(where: { $0.title == title || $0.id == title }) else {
+                log("no game titled \(title), the library holds \(games.map(\.title))")
+                return
+            }
+            log("launching \(title)")
+            AppState.shared.selectGame(game)
         }
     }
 
