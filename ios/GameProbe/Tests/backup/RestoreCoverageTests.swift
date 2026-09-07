@@ -177,12 +177,17 @@ final class RestoreCoverageTests: XCTestCase {
     func testTheResumeQuestionNamesTheGame() {
         XCTAssertEqual(RestoreResumeQuestion.title, "Restore Interrupted")
         XCTAssertEqual(
-            RestoreResumeQuestion.detail(gameName: "Quest"),
-            "The restore of Quest stopped before it finished. "
-                + "The game now has a mix of restored files and the files it had before.")
+            RestoreResumeQuestion.detail(gameName: "Quest", backupText: "the backup of 4 March"),
+            "The restore of Quest from the backup of 4 March stopped before it finished. "
+                + "The game has a mix of restored files and older files until it completes.")
+        XCTAssertEqual(RestoreResumeQuestion.stopTitle, "Stop the Restore?")
+        XCTAssertEqual(
+            RestoreResumeQuestion.stopDetail(gameName: "Quest"),
+            "The downloaded files on this device are deleted. "
+                + "Quest keeps the mix of files it has now.")
         XCTAssertEqual(
             RestoreResumeQuestion.Action.allCases.map(RestoreResumeQuestion.label),
-            ["Resume", "Later", "Stop Restore"])
+            ["Resume", "Not now", "Stop restore"])
     }
 
     // MARK: - The preferences restore, per 11.13

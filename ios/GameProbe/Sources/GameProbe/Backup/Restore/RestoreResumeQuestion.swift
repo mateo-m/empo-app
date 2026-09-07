@@ -51,19 +51,25 @@ public enum RestoreResumeQuestion {
 
     public static let title = "Restore Interrupted"
 
-    public static func detail(gameName: String) -> String {
-        "The restore of \(gameName) stopped before it finished. "
-            + "The game now has a mix of restored files and the files it had before."
+    /// `backupText` names the backup the restore came from, such as
+    /// "the backup of 7 Sep 2026, 21:03".
+    public static func detail(gameName: String, backupText: String) -> String {
+        "The restore of \(gameName) from \(backupText) stopped before it finished. "
+            + "The game has a mix of restored files and older files until it completes."
     }
 
-    public static let stopDetail =
-        "Deletes the downloaded files on this device. The game stays as it is now."
+    public static let stopTitle = "Stop the Restore?"
+
+    public static func stopDetail(gameName: String) -> String {
+        "The downloaded files on this device are deleted. "
+            + "\(gameName) keeps the mix of files it has now."
+    }
 
     public static func label(of action: Action) -> String {
         switch action {
         case .resume: return "Resume"
-        case .later: return "Later"
-        case .stop: return "Stop Restore"
+        case .later: return "Not now"
+        case .stop: return "Stop restore"
         }
     }
 

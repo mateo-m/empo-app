@@ -161,14 +161,18 @@ final class RunProgressTests: XCTestCase {
     func testTheQuestionNamesTheGameAndWhatRemains() {
         XCTAssertEqual(BackupResumeQuestion.title, "Backup Interrupted")
         XCTAssertEqual(
-            BackupResumeQuestion.detail(gameName: "Rejuvenation", targetLabel: "Dropbox"),
-            "Empo closed before the backup of Rejuvenation finished. "
-                + "The files that already reached Dropbox stay there.")
+            BackupResumeQuestion.detail(
+                gameName: "Rejuvenation", targetLabel: "Dropbox", leftText: "2.8 GB"),
+            "Empo closed before Rejuvenation finished backing up to Dropbox. "
+                + "About 2.8 GB is left to upload.")
+        XCTAssertEqual(BackupResumeQuestion.stopTitle, "Stop the Backup?")
         XCTAssertEqual(
-            BackupResumeQuestion.leftLine(leftText: "2.8 GB"), "About 2.8 GB left to upload")
+            BackupResumeQuestion.stopDetail(gameName: "Rejuvenation", targetLabel: "Dropbox"),
+            "The staged files on this device are deleted, and Rejuvenation goes back to "
+                + "the normal schedule. The files that already reached Dropbox stay there.")
         XCTAssertEqual(
             BackupResumeQuestion.Action.allCases.map(BackupResumeQuestion.label),
-            ["Resume", "Later", "Stop Backup"])
+            ["Resume", "Not now", "Stop backup"])
     }
 
     // MARK: - 8. What each answer leaves behind
