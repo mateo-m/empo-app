@@ -12,11 +12,17 @@ struct BackupModePickerView: View {
     let fullBytes: Int64
     let slimBytes: Int64
     let chosen: BackupMode?
+    /// A `List` pads its rows and draws its separators. A
+    /// `SheetCard` does neither, so the rows do it themselves.
+    var inCard = false
     let choose: (BackupMode) -> Void
 
     var body: some View {
-        ForEach(BackupModePicker.options(fullBytes: fullBytes, slimBytes: slimBytes), id: \.mode) {
-            option in
+        let options = BackupModePicker.options(fullBytes: fullBytes, slimBytes: slimBytes)
+        ForEach(Array(options.enumerated()), id: \.element.mode) { index, option in
+            if inCard, index > 0 {
+                Divider().padding(.leading, Spacing.lg)
+            }
             Button {
                 choose(option.mode)
             } label: {
@@ -37,6 +43,8 @@ struct BackupModePickerView: View {
                             .foregroundStyle(Color.brand)
                     }
                 }
+                .padding(inCard ? Spacing.lg : 0)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }

@@ -55,9 +55,8 @@ public enum BackupModePicker {
         return mode == .full ? "The whole game" : "Saves and settings only"
     }
 
-    public static func askTitle(gameName: String) -> String {
-        "How much of \(gameName) do you want to back up?"
-    }
+    /// The question the two rows answer.
+    public static let askTitle = "What should the backup include?"
 
     /// The ask fires against the lowest threshold among the enabled
     /// targets, and it names that target, per 3.5.
