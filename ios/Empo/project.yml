@@ -472,7 +472,34 @@ targets:
         product: AppAuth
       - package: Automerge
         product: Automerge
+  EmpoChecks:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: checks
+    dependencies:
+      - target: Empo
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev2.checks
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: ""
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
 schemes:
+  EmpoChecks:
+    build:
+      targets:
+        Empo: all
+        EmpoChecks: test
+    test:
+      config: Debug
+      targets:
+        - EmpoChecks
   Empo:
     build:
       targets:
