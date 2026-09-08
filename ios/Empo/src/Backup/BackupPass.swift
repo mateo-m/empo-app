@@ -29,12 +29,12 @@ final class BackupPass: BackupRunning {
         }
 
         let (games, names) = await gamesInScope(scope)
-        BackupRunMonitor.shared.runStarts(names: names)
-        progress?.totalUnitCount = Int64(max(1, targets.count))
+        BackupRunMonitor.shared.runStarts(
+            names: names, progress: progress, targetCount: targets.count)
         var rows: [BackupPassTarget] = []
         var didFinish = true
 
-        for (index, descriptor) in targets.enumerated() {
+        for descriptor in targets {
             guard !Task.isCancelled else {
                 BackupRunMonitor.shared.runEnds()
                 return BackupPassResult(targets: rows)
@@ -48,7 +48,7 @@ final class BackupPass: BackupRunning {
             }
 
             let result = await run(descriptor, provider: provider, games: games)
-            progress?.completedUnitCount = Int64(index + 1)
+            BackupRunMonitor.shared.targetEnds()
             guard let result else {
                 didFinish = false
                 continue

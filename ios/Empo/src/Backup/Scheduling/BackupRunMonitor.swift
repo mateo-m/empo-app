@@ -32,12 +32,21 @@ final class BackupRunMonitor: BackupRunObserver {
 
     private var namesByKey: [String: String] = [:]
     private var ticker: Task<Void, Never>?
+    /// The progress of the continued-processing task of 7.3. The
+    /// system expires a task whose progress stands still, so every
+    /// confirmed blob moves it, not only a finished target.
+    private var progress: Progress?
+    private var targetCount = 0
+    private var targetsDone = 0
 
     // MARK: - What the pass reports
 
     /// The pass starts and names what it covers.
-    func runStarts(names: [String: String]) {
+    func runStarts(names: [String: String], progress: Progress? = nil, targetCount: Int = 0) {
         namesByKey = names
+        self.progress = progress
+        self.targetCount = targetCount
+        targetsDone = 0
         runningGameKeys = Set(names.keys)
         plan = BackupRunPlan()
         startedAt = Date()
@@ -50,18 +59,40 @@ final class BackupRunMonitor: BackupRunObserver {
         startTheTicker()
     }
 
+    func targetEnds() {
+        targetsDone += 1
+        report()
+    }
+
     func runEnds() {
         finishedAt = Date()
         now = Date()
         runningGameKeys = []
+        progress = nil
     }
 
     nonisolated func runPlanned(streamKey: String, bytes: Int64) async {
-        await MainActor.run { plan.plan(streamKey: streamKey, bytes: bytes) }
+        await MainActor.run {
+            plan.plan(streamKey: streamKey, bytes: bytes)
+            report()
+        }
     }
 
     nonisolated func runConfirmed(streamKey: String, bytes: Int64) async {
-        await MainActor.run { plan.confirm(streamKey: streamKey, bytes: bytes) }
+        await MainActor.run {
+            plan.confirm(streamKey: streamKey, bytes: bytes)
+            report()
+        }
+    }
+
+    /// One stream plans once, so the second target confirms the
+    /// same bytes again. The total counts the plan once per target.
+    private func report() {
+        guard let progress else { return }
+        let total = max(1, plan.plannedBytes * Int64(targetCount))
+        let doneTargets = plan.plannedBytes * Int64(targetsDone)
+        progress.totalUnitCount = total
+        progress.completedUnitCount = min(total, max(plan.confirmedBytes, doneTargets))
     }
 
     // MARK: - What the screens read
