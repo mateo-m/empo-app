@@ -104,6 +104,11 @@ struct StandardSheet<Content: View>: View {
                 }
         }
         .scrollBounceBehavior(.basedOnSize)
+        // During a detent change UIKit sizes this view to the new
+        // height at once and animates only the sheet's frame. With
+        // clipping on, the scroll view cuts the old step off in one
+        // frame. With it off, the sheet's moving edge does the cut.
+        .scrollClipDisabled()
         .intrinsicSheetDetent(measuredHeight: measuredHeight, chromeAllowance: 0)
         .tint(.brand)
     }
@@ -125,8 +130,8 @@ struct StandardSheet<Content: View>: View {
     @ViewBuilder private var header: some View {
         if let emblem {
             SheetIdentityBlock(systemName: emblem, title: title)
-                .overlay(alignment: barAction?.symbol == .back ? .topLeading : .topTrailing) {
-                    if let barAction { icon(barAction) }
+                .overlay(alignment: .top) {
+                    if let barAction { placed(icon: barAction) }
                 }
         } else {
             ZStack(alignment: .top) {
@@ -138,14 +143,18 @@ struct StandardSheet<Content: View>: View {
                     .padding(.horizontal, 44 + Spacing.lg)
                     .id(title)
                     .transition(.sheetStep)
-                if let barAction {
-                    icon(barAction)
-                        .frame(
-                            maxWidth: .infinity,
-                            alignment: barAction.symbol == .back ? .leading : .trailing)
-                }
+                if let barAction { placed(icon: barAction) }
             }
         }
+    }
+
+    /// Back leads, close trails. A step change swaps one for the
+    /// other with the same blur as the rest of the sheet.
+    private func placed(icon action: SheetBarAction) -> some View {
+        icon(action)
+            .frame(maxWidth: .infinity, alignment: action.symbol == .back ? .leading : .trailing)
+            .id(action.symbol)
+            .transition(.sheetStep)
     }
 
     private func icon(_ action: SheetBarAction) -> some View {
