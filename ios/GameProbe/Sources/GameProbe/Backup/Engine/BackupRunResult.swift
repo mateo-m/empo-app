@@ -69,6 +69,9 @@ public enum BackupRunStop: Error, Equatable, Sendable {
     case throttled(retryAfter: TimeInterval)
     /// The service refused and gave a reason, per 8.4.
     case rejected(message: String)
+    /// A play session started mid-run, per 7.6. The games the run
+    /// did not reach stay dirty and wait for the session end.
+    case gameStarted
 }
 
 public struct BackupRunResult: Equatable, Sendable {

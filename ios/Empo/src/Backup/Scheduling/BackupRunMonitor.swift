@@ -93,6 +93,10 @@ final class BackupRunMonitor: BackupRunObserver {
         }
     }
 
+    nonisolated func runMayGoOn() async -> Bool {
+        await MainActor.run { !BackupDeviceConditions.isSessionLive }
+    }
+
     nonisolated func runConfirmed(streamKey: String, bytes: Int64) async {
         await MainActor.run {
             plan.confirm(streamKey: streamKey, bytes: bytes)

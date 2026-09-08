@@ -20,4 +20,12 @@ public protocol BackupRunObserver: Sendable {
     /// upload or because the local cache proves the blob is already
     /// there.
     func runConfirmed(streamKey: String, bytes: Int64) async
+
+    /// Asked before each game stream. `false` stops the run with
+    /// `BackupRunStop.gameStarted`, per 7.6.
+    func runMayGoOn() async -> Bool
+}
+
+extension BackupRunObserver {
+    public func runMayGoOn() async -> Bool { true }
 }

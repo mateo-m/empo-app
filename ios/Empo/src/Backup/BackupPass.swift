@@ -39,6 +39,14 @@ final class BackupPass: BackupRunning {
                 BackupRunMonitor.shared.runEnds()
                 return BackupPassResult(targets: rows)
             }
+            // A game wins everything, per 7.6. The session end runs
+            // the backbone pass, which takes the rest.
+            guard !BackupDeviceConditions.isSessionLive else {
+                log("a game is running, the pass stops before \(descriptor.label)")
+                BackupRunMonitor.shared.pause = .gameRunning
+                didFinish = false
+                break
+            }
             guard let provider = await BackupTargets.provider(for: descriptor) else {
                 // The gate of 9.1 is closed, or the provider is not
                 // built yet. Neither is a failure the user can clear,
@@ -54,6 +62,7 @@ final class BackupPass: BackupRunning {
                 continue
             }
             if result.outcome != .success { didFinish = false }
+            if result.stop == .gameStarted { BackupRunMonitor.shared.pause = .gameRunning }
             rows.append(
                 BackupPassTarget(
                     id: descriptor.id, label: descriptor.label,

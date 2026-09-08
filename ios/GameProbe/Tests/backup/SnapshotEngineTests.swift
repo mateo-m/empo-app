@@ -895,6 +895,22 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(result.outcome, .success)
     }
 
+    func testAGameThatStartsMidRunStopsTheRunBeforeTheNextGame() async throws {
+        try makeGameTree("Alpha")
+        try makeGameTree("Bravo")
+        let target = makeTarget()
+        let gate = RunGate(allowedStreams: 1)
+        let engine = try makeEngine(target, observer: gate)
+
+        let result = await engine.run(request(games: [game("Alpha"), game("Bravo")]))
+
+        XCTAssertEqual(result.stop, .gameStarted)
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.streams.filter { $0.streamKey != BackupStream.preferences.key }.count, 1)
+        XCTAssertNil(TargetFailure.of(.gameStarted))
+        XCTAssertNil(BackupNotificationRule.failFastCause(of: .gameStarted))
+    }
+
     func testProgressAdvancesOnAConfirmedBlobAndNotOnAStartedUpload() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
@@ -958,6 +974,25 @@ final class NoteRecorder: @unchecked Sendable {
         lock.lock()
         recorded.append(line)
         lock.unlock()
+    }
+}
+
+/// Lets a set number of game streams through, then answers as if a
+/// game had started.
+actor RunGate: BackupRunObserver {
+
+    private var allowedStreams: Int
+
+    init(allowedStreams: Int) {
+        self.allowedStreams = allowedStreams
+    }
+
+    func runPlanned(streamKey: String, bytes: Int64) {}
+    func runConfirmed(streamKey: String, bytes: Int64) {}
+
+    func runMayGoOn() -> Bool {
+        defer { allowedStreams -= 1 }
+        return allowedStreams > 0
     }
 }
 

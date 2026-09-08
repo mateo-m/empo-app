@@ -217,6 +217,8 @@ public actor SnapshotEngine {
             return "this target asked Empo to wait \(Int(retryAfter)) seconds"
         case .rejected(let message):
             return message
+        case .gameStarted:
+            return "a game started, the rest waits for the session end"
         }
     }
 
@@ -319,6 +321,7 @@ public actor SnapshotEngine {
         }
 
         for game in try order(context.request.games, targetId: context.request.descriptor.id) {
+            guard await observer?.runMayGoOn() ?? true else { throw BackupRunStop.gameStarted }
             var setRequest = game.set
             if game.isOneOffFullSnapshot { setRequest.mode = .full }
             let set = BackupSetResolver.resolve(setRequest, fm: fm)

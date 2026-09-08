@@ -226,9 +226,19 @@ actor WebDAVTarget: BackupProvider {
 
     /// `PUT` the whole file under the temp name, on the background
     /// session of 7.3.
+    /// Above this size the collections go in before the `PUT`. A
+    /// server answers 409 for a missing collection only after it has
+    /// read the whole body.
+    static let collectionsFirstAbove = 8_000_000
+
     private func stage(
         _ localFile: URL, at temporary: String
     ) async throws(BackupProviderError) {
+        let size = (try? localFile.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        let known = WebDAV.ancestorCollections(ofPath: temporary).allSatisfy(knownCollections.contains)
+        if size > Self.collectionsFirstAbove, !known {
+            try await makeCollections(forPath: temporary)
+        }
         var answer = try await upload(localFile, to: temporary)
         if WebDAV.needsACollection(status: answer.status) {
             try await makeCollections(forPath: temporary)
