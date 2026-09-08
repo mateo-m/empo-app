@@ -47,7 +47,7 @@ enum BackupNetwork {
     }
 
     /// The line the UI shows while the system holds the tasks.
-    static let waitingLine = ResourcePolicy.waitingForWiFiLine
+    static let waitingLine = StaleCause.waitingForWiFi.line(targetLabel: nil)
 
     static let lowDataModeLine = "Low Data Mode is on"
 
@@ -61,7 +61,11 @@ enum BackupNetwork {
 
     private static let monitor: NWPathMonitor = {
         let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { _ in
+        monitor.pathUpdateHandler = { path in
+            BackupLog.line(
+                "BackupNetwork",
+                "the path is \(path.status), expensive \(path.isExpensive), "
+                    + "constrained \(path.isConstrained)")
             Task { @MainActor in BackupRunMonitor.shared.networkHold = holdLine }
         }
         monitor.start(queue: DispatchQueue(label: "sh.mateo.empo.backup.path"))

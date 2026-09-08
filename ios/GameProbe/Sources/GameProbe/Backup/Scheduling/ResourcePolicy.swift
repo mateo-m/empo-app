@@ -96,11 +96,6 @@ public struct NetworkPolicy: Equatable, Sendable {
 /// The resource rules of SPEC 7.4, 7.5, and 7.6.
 public enum ResourcePolicy {
 
-    /// The line the UI shows while the system holds the tasks, per
-    /// 7.4. It reads the wait from task state, and nothing re-asks
-    /// and nothing fails.
-    public static let waitingForWiFiLine = "Waiting for Wi-Fi"
-
     /// Whether staging may run now.
     ///
     /// A running game wins everything and the manual button does not

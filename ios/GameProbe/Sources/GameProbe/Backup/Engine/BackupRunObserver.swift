@@ -11,6 +11,10 @@ import Foundation
 /// back with `BackupStream(key:)`.
 public protocol BackupRunObserver: Sendable {
 
+    /// One stream starts to stage: the engine reads and hashes its
+    /// files before it knows what to upload.
+    func runStages(streamKey: String) async
+
     /// One stream froze its part of the plan: every blob this
     /// snapshot needs. Staging ends by producing this number, and it
     /// never changes again for this run.
@@ -27,5 +31,6 @@ public protocol BackupRunObserver: Sendable {
 }
 
 extension BackupRunObserver {
+    public func runStages(streamKey: String) async {}
     public func runMayGoOn() async -> Bool { true }
 }

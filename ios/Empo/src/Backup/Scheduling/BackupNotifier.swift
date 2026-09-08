@@ -15,19 +15,14 @@ import UserNotifications
 @MainActor
 enum BackupNotifier {
 
-    /// Shows a banner for a notification that posts while Empo is
-    /// open.
-    ///
-    /// 7.11 says a cause posts "from the nightly task or the
-    /// foreground pass". A foreground pass runs while the app is
-    /// open, and iOS shows no banner then unless a delegate asks for
-    /// one. Without this the foreground half of that sentence posts
-    /// nothing the user can see.
+    /// iOS asks this only while Empo is on screen. The pill of 13.2
+    /// already says what stopped, so the notice stays silent there
+    /// and reaches the user only when Empo is away.
     private final class Presenter: NSObject, UNUserNotificationCenterDelegate {
         func userNotificationCenter(
             _ center: UNUserNotificationCenter, willPresent notification: UNNotification
         ) async -> UNNotificationPresentationOptions {
-            [.banner, .sound]
+            []
         }
     }
 

@@ -29,6 +29,11 @@ final class BackupRunMonitor: BackupRunObserver {
     /// Why the system holds the uploads, per 7.4, or `nil` while they
     /// move. The path monitor writes it on every change.
     var networkHold: String?
+    /// The cause the pass stopped on, in the words of the notice, or
+    /// `nil` while every target finished.
+    var stopLine: String?
+    /// The stream the engine stages now, or `nil` between streams.
+    private var stagingKey: String?
     /// The clock the pill's own 2-second and 5-second rules read.
     /// A timer moves it, because neither rule reacts to an event.
     private(set) var now = Date()
@@ -57,6 +62,8 @@ final class BackupRunMonitor: BackupRunObserver {
         plan = BackupRunPlan()
         startedAt = Date()
         finishedAt = nil
+        stopLine = nil
+        stagingKey = nil
         networkHold = BackupNetwork.holdLine
         now = Date()
         queue =
@@ -72,8 +79,12 @@ final class BackupRunMonitor: BackupRunObserver {
         report()
     }
 
+    /// Bytes that move prove the system holds nothing, whatever the
+    /// path monitor last said. The phone reported an expensive path
+    /// after a launch from the lock screen and never took it back.
     func transferSent(bytes: Int64) {
         inFlightBytes = bytes
+        networkHold = nil
         report()
     }
 
@@ -86,8 +97,13 @@ final class BackupRunMonitor: BackupRunObserver {
         progress = nil
     }
 
+    nonisolated func runStages(streamKey: String) async {
+        await MainActor.run { stagingKey = streamKey }
+    }
+
     nonisolated func runPlanned(streamKey: String, bytes: Int64) async {
         await MainActor.run {
+            stagingKey = nil
             plan.plan(streamKey: streamKey, bytes: bytes)
             report()
         }
@@ -101,6 +117,7 @@ final class BackupRunMonitor: BackupRunObserver {
         await MainActor.run {
             plan.confirm(streamKey: streamKey, bytes: bytes)
             inFlightBytes = 0
+            networkHold = nil
             report()
         }
     }
@@ -143,14 +160,16 @@ final class BackupRunMonitor: BackupRunObserver {
             finishedAt: finishedAt,
             hasUploads: plan.hasUploads,
             gameIsPlaying: BackupDeviceConditions.isSessionLive,
+            stopped: stopLine != nil,
             now: now)
     }
 
     var phase: ProgressPill.Phase {
-        if finishedAt != nil { return .complete }
+        if finishedAt != nil { return stopLine.map { .stopped(reason: $0) } ?? .complete }
         if let pause { return .paused(reason: pause.line) }
         if let networkHold { return .paused(reason: networkHold) }
-        guard let name = runningGameName else { return .preparing }
+        if let stagingKey { return .checking(gameName: gameName(of: stagingKey)) }
+        guard let name = runningGameName else { return .checking(gameName: nil) }
         return .uploading(gameName: name)
     }
 
@@ -162,8 +181,11 @@ final class BackupRunMonitor: BackupRunObserver {
     /// run stages, or while it carries the preferences stream of
     /// 5.3, which belongs to no game.
     var runningGameName: String? {
-        guard let key = plan.streamKey, key != BackupStream.preferencesKey else { return nil }
-        return namesByKey[key]
+        plan.streamKey.flatMap(gameName)
+    }
+
+    private func gameName(of streamKey: String) -> String? {
+        streamKey == BackupStream.preferencesKey ? nil : namesByKey[streamKey]
     }
 
     func isDone(_ gameKey: String) -> Bool {
@@ -183,7 +205,7 @@ final class BackupRunMonitor: BackupRunObserver {
                 guard let self else { return }
                 self.now = Date()
                 guard let end = self.finishedAt else { continue }
-                if self.now.timeIntervalSince(end) > ProgressPill.hideAfter {
+                if self.now.timeIntervalSince(end) > ProgressPill.hideAfterStop {
                     self.ticker = nil
                     return
                 }

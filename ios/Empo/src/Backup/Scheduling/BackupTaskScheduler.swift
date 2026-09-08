@@ -174,8 +174,9 @@ enum BackupTaskScheduler {
         }
     }
 
-    /// What the Live Activity shows before the first file moves.
-    static let startingLine = "Starting"
+    /// What the Live Activity shows before the first file moves. It
+    /// then follows the pill of 13.2, line for line.
+    static let startingLine = ProgressPill.line(.checking(gameName: nil))
 
     /// Gives one press identifier its handler, once.
     ///
@@ -204,10 +205,21 @@ enum BackupTaskScheduler {
 
         let expired = OSAllocatedUnfairLock(initialState: false)
         Task { @MainActor in
+            let subtitle = Task { @MainActor in
+                var last = startingLine
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1))
+                    let line = BackupRunMonitor.shared.line
+                    guard line != last, !expired.withLock({ $0 }) else { continue }
+                    last = line
+                    task.updateTitle(task.title, subtitle: line)
+                }
+            }
             await BackupScheduler.shared.run(
                 trigger: .manual,
                 press: press,
                 progress: task.progress)
+            subtitle.cancel()
             guard !expired.withLock({ $0 }) else { return }
             // A run that ends by itself did its work. A target that
             // stopped gets Empo's own notice, and `success: false`

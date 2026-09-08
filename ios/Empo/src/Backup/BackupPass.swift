@@ -61,12 +61,20 @@ final class BackupPass: BackupRunning {
                 didFinish = false
                 continue
             }
-            if result.outcome != .success { didFinish = false }
             if result.stop == .gameStarted { BackupRunMonitor.shared.pause = .gameRunning }
+            let causes = Self.causes(of: result)
+            if result.outcome != .success {
+                didFinish = false
+                if BackupRunMonitor.shared.stopLine == nil, result.stop != .gameStarted {
+                    BackupRunMonitor.shared.stopLine = Self.stopLine(
+                        causes: causes, label: descriptor.label)
+                }
+            }
+            // A run the system cut short proves nothing about the
+            // target, so it must not re-arm a notification, per 7.11.
+            guard result.outcome == .success || !causes.isEmpty else { continue }
             rows.append(
-                BackupPassTarget(
-                    id: descriptor.id, label: descriptor.label,
-                    causes: Self.causes(of: result)))
+                BackupPassTarget(id: descriptor.id, label: descriptor.label, causes: causes))
         }
 
         BackupRunMonitor.shared.runEnds()
@@ -181,6 +189,16 @@ final class BackupPass: BackupRunning {
 
     /// The three causes of 7.11 this run carries. Everything else is
     /// transient and feeds only the stale line.
+    /// What the pill says after the run, per 13.2. The notice of 7.11
+    /// names the cause, so the pill uses the same words.
+    private static func stopLine(causes: Set<BackupFailFastCause>, label: String) -> String {
+        guard let cause = BackupFailFastCause.allCases.first(where: causes.contains) else {
+            return "\(label) did not finish"
+        }
+        return cause.staleCause.line(
+            targetLabel: label, deviceName: BackupDeviceConditions.deviceName)
+    }
+
     private static func causes(of result: BackupRunResult) -> Set<BackupFailFastCause> {
         var causes: Set<BackupFailFastCause> = []
         if let cause = result.stop.flatMap(BackupNotificationRule.failFastCause) {

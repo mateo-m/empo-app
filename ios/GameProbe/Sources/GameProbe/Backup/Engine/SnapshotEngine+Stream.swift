@@ -74,6 +74,7 @@ extension SnapshotEngine {
         kind: StreamKind,
         isOneOff: Bool
     ) async throws {
+        await observer?.runStages(streamKey: stream.key)
         guard
             let run = try await decide(
                 context, stream: stream, set: set, source: source, manifest: header,

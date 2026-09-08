@@ -3,8 +3,7 @@ import SwiftUI
 
 /// The progress pill of SPEC 13.2.
 ///
-/// It pins under the navigation bar in the library. The update
-/// banner owns the bottom safe-area inset, so the two never compete.
+/// It floats at the bottom of the library, above the update banner.
 /// A tap opens the Backups screen at the run block.
 struct BackupProgressPill: View {
 
@@ -15,15 +14,24 @@ struct BackupProgressPill: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: Spacing.md) {
-                mark
-                Text(monitor.line)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                // The ZStacks hold the old and the new view on one spot
+                // while they cross-fade, so the capsule grows or shrinks
+                // to the new text instead of holding both side by side.
+                ZStack { mark.transition(.fadeBlur) }
+                ZStack {
+                    Text(monitor.line)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .id(monitor.line)
+                        .transition(.fadeBlur)
+                }
             }
             .padding(.horizontal, Spacing.xl)
             .padding(.vertical, Spacing.md)
+            .geometryGroup()
             .glassEffect(.regular, in: .capsule)
+            .animation(Motion.standard, value: monitor.line)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(monitor.line)
@@ -40,7 +48,11 @@ struct BackupProgressPill: View {
             Image(systemName: "pause.circle.fill")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
-        case .preparing, .uploading:
+        case .stopped:
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.footnote)
+                .foregroundStyle(.warning)
+        case .checking, .uploading:
             // The plan freezes only as the hashes land, so the ring
             // spins until the first stream reports its total.
             SpinnerRing(

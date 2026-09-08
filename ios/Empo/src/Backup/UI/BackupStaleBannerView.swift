@@ -19,15 +19,14 @@ struct BackupStaleBannerView: View {
 
             Text(banner.line(targetLabel: targetLabel))
                 .font(.footnote.weight(.medium))
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .lineLimit(2)
 
             Button(banner.action.label, action: onAct)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.brand)
         }
         .padding(.horizontal, Spacing.xl)
-        .padding(.vertical, Spacing.lg)
-        .background(Color.warning.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        .padding(.vertical, Spacing.md)
+        .glassEffect(.regular, in: .capsule)
     }
 }

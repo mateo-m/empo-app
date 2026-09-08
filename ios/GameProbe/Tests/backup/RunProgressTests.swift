@@ -250,13 +250,19 @@ final class RunProgressTests: XCTestCase {
     // MARK: - The pill's four wordings, per 13.2
 
     func testThePillSaysTheFourLinesOfThirteenTwo() {
-        XCTAssertEqual(ProgressPill.line(.preparing), "Preparing…")
+        XCTAssertEqual(ProgressPill.line(.checking(gameName: nil)), "Checking for changes…")
+        XCTAssertEqual(
+            ProgressPill.line(.checking(gameName: "Rejuvenation")),
+            "Checking Rejuvenation for changes")
         XCTAssertEqual(
             ProgressPill.line(.uploading(gameName: "Rejuvenation"), leftText: "2.4 GB"),
             "Backing up Rejuvenation, about 2.4 GB left")
         XCTAssertEqual(
             ProgressPill.line(.paused(reason: "a game is running")),
             "Paused, a game is running")
+        XCTAssertEqual(
+            ProgressPill.line(.stopped(reason: "Dropbox is full")),
+            "Backup stopped, Dropbox is full")
         XCTAssertEqual(ProgressPill.line(.complete), "Backup complete")
     }
 

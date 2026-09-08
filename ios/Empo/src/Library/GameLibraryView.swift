@@ -322,8 +322,10 @@ struct GameLibraryView: View {
             }
             .overlay(alignment: .topTrailing) { importButtonOverlay }
             .overlay(alignment: .bottom) { bulkDeleteOverlay }
-            .safeAreaInset(edge: .bottom, spacing: 0) { updateBannerInset }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomPills }
             .animation(Motion.bouncy, value: showsUpdateBanner)
+            .animation(Motion.bouncy, value: showsBackupPill)
+            .animation(Motion.bouncy, value: BackupBadges.shared.banner)
     }
 
     private var libraryContentLayer: some View {
@@ -352,11 +354,6 @@ struct GameLibraryView: View {
     private var headerInset: some View {
         VStack(spacing: Spacing.md) {
             libraryHeader
-            if BackupRunMonitor.shared.showsPill {
-                BackupProgressPill { showsBackups = true }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-            backupStaleBanner
             // Keyed on games directly (not showEmpty) so the search
             // bar doesn't flash in during the pre-scan window when
             // emptiness is still unknown.
@@ -364,7 +361,6 @@ struct GameLibraryView: View {
                 searchBar
             }
         }
-        .animation(Motion.bouncy, value: BackupRunMonitor.shared.showsPill)
         .background {
             if appState.phase != .playing {
                 Rectangle()
@@ -399,7 +395,6 @@ struct GameLibraryView: View {
                     BackupBadges.shared.pressTheBanner()
                 }
             }
-            .padding(.horizontal, Spacing.xl)
         }
     }
 
@@ -424,14 +419,29 @@ struct GameLibraryView: View {
         return true
     }
 
+    private var showsBackupPill: Bool {
+        BackupRunMonitor.shared.showsPill && !selectionMode
+    }
+
+    /// The floating pills of the library, one above the other: the
+    /// progress pill of 13.2, the stale banner of 7.1, and the update
+    /// banner. Selection mode hides them for the delete button.
     @ViewBuilder
-    private var updateBannerInset: some View {
-        if showsUpdateBanner {
-            libraryUpdateBanner
-                .padding(.horizontal, Spacing.xl)
-                .padding(.bottom, Spacing._2xl)
+    private var bottomPills: some View {
+        VStack(spacing: Spacing.md) {
+            if showsBackupPill {
+                BackupProgressPill { showsBackups = true }
+                    .transition(.move(edge: .bottom).combined(with: .fadeBlur))
+            }
+            backupStaleBanner
                 .transition(.move(edge: .bottom).combined(with: .fadeBlur))
+            if showsUpdateBanner {
+                libraryUpdateBanner
+                    .transition(.move(edge: .bottom).combined(with: .fadeBlur))
+            }
         }
+        .padding(.horizontal, Spacing.xl)
+        .padding(.bottom, Spacing._2xl)
     }
 
     @ViewBuilder
