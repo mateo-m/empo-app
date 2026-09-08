@@ -199,11 +199,15 @@ enum BackupTaskScheduler {
         }
 
         let work = Task { @MainActor in
-            let done = await BackupScheduler.shared.run(
+            await BackupScheduler.shared.run(
                 trigger: .manual,
                 press: press,
                 progress: task.progress)
-            task.setTaskCompleted(success: done)
+            // A run that ends by itself did its work. A target that
+            // stopped gets Empo's own notice, and `success: false`
+            // here would put the system's "Task failed" next to it.
+            // Only a run the system cut short failed.
+            task.setTaskCompleted(success: !Task.isCancelled)
         }
         task.expirationHandler = { work.cancel() }
     }
