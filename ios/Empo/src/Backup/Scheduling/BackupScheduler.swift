@@ -115,6 +115,29 @@ final class BackupScheduler {
         ) { _ in
             MainActor.assumeIsolated { BackupScheduler.shared.appDidBecomeActive() }
         }
+        for name in [ProcessInfo.thermalStateDidChangeNotification, .NSProcessInfoPowerStateDidChange] {
+            center.addObserver(forName: name, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { BackupScheduler.shared.conditionsDidChange() }
+            }
+        }
+    }
+
+    /// A pause of 7.5 ends when its condition ends, not at the next
+    /// trigger.
+    private func conditionsDidChange() {
+        guard let pause = BackupRunMonitor.shared.pause, !isRunning else { return }
+        switch pause {
+        case .gameRunning:
+            return
+        case .heat:
+            guard ResourcePolicy.resumesStagingAfterHeat(BackupDeviceConditions.thermalState) else {
+                return
+            }
+        case .lowPowerMode:
+            guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        }
+        log("the pause ended, %@ no more", pause.line)
+        Task { await run(trigger: .foreground) }
     }
 
     // MARK: - The backbone
@@ -173,6 +196,14 @@ final class BackupScheduler {
     /// "Back up now", from the Backup sheet of one game or from the
     /// Backups screen. There is no third entry point, per 13.11.
     func pressBackUpNow(_ press: ManualBackupPress) {
+        // Low Data Mode holds every upload and has no bypass, per
+        // 7.4. A continued-processing task would show "Starting" for
+        // as long as the hold lasts, so the pass runs without one.
+        if BackupNetwork.isConstrained {
+            log("manual press in Low Data Mode, the pass runs without a task")
+            runTask = Task { await run(trigger: .manual, press: press) }
+            return
+        }
         guard !BackupTaskScheduler.submitManual(press) else { return }
         // The system refused the task, so the pass runs in the
         // foreground and hands its uploads to the background session.

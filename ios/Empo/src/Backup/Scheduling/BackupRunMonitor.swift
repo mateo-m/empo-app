@@ -26,6 +26,9 @@ final class BackupRunMonitor: BackupRunObserver {
     /// Why staging is not running, per 7.5 and 7.6, or `nil` while
     /// nothing holds it. The scheduler writes it at each gate.
     var pause: StagingPause?
+    /// Why the system holds the uploads, per 7.4, or `nil` while they
+    /// move. The path monitor writes it on every change.
+    var networkHold: String?
     /// The clock the pill's own 2-second and 5-second rules read.
     /// A timer moves it, because neither rule reacts to an event.
     private(set) var now = Date()
@@ -38,6 +41,9 @@ final class BackupRunMonitor: BackupRunObserver {
     private var progress: Progress?
     private var targetCount = 0
     private var targetsDone = 0
+    /// The bytes sent of the one upload in flight. A 300 MB blob
+    /// confirms nothing for a minute, and the pill must still move.
+    private var inFlightBytes: Int64 = 0
 
     // MARK: - What the pass reports
 
@@ -51,6 +57,7 @@ final class BackupRunMonitor: BackupRunObserver {
         plan = BackupRunPlan()
         startedAt = Date()
         finishedAt = nil
+        networkHold = BackupNetwork.holdLine
         now = Date()
         queue =
             names
@@ -61,11 +68,19 @@ final class BackupRunMonitor: BackupRunObserver {
 
     func targetEnds() {
         targetsDone += 1
+        inFlightBytes = 0
+        report()
+    }
+
+    func transferSent(bytes: Int64) {
+        inFlightBytes = bytes
         report()
     }
 
     func runEnds() {
-        finishedAt = Date()
+        // A cancelled run did not complete, so the pill hides instead
+        // of saying "Backup complete".
+        if Task.isCancelled { startedAt = nil } else { finishedAt = Date() }
         now = Date()
         runningGameKeys = []
         progress = nil
@@ -81,6 +96,7 @@ final class BackupRunMonitor: BackupRunObserver {
     nonisolated func runConfirmed(streamKey: String, bytes: Int64) async {
         await MainActor.run {
             plan.confirm(streamKey: streamKey, bytes: bytes)
+            inFlightBytes = 0
             report()
         }
     }
@@ -89,10 +105,24 @@ final class BackupRunMonitor: BackupRunObserver {
     /// same bytes again. The total counts the plan once per target.
     private func report() {
         guard let progress else { return }
-        let total = max(1, plan.plannedBytes * Int64(targetCount))
+        progress.totalUnitCount = max(1, totalBytes)
+        progress.completedUnitCount = completedBytes
+    }
+
+    private var totalBytes: Int64 { plan.plannedBytes * Int64(max(1, targetCount)) }
+
+    /// A blob a target already holds confirms nothing, so a finished
+    /// target is the floor.
+    private var completedBytes: Int64 {
         let doneTargets = plan.plannedBytes * Int64(targetsDone)
-        progress.totalUnitCount = total
-        progress.completedUnitCount = min(total, max(plan.confirmedBytes, doneTargets))
+        return min(totalBytes, max(plan.confirmedBytes, doneTargets) + inFlightBytes)
+    }
+
+    /// The share of every target's bytes that landed, or `nil`
+    /// before the first stream reports its total.
+    var fraction: Double? {
+        guard totalBytes > 0 else { return nil }
+        return Double(completedBytes) / Double(totalBytes)
     }
 
     // MARK: - What the screens read
@@ -115,12 +145,13 @@ final class BackupRunMonitor: BackupRunObserver {
     var phase: ProgressPill.Phase {
         if finishedAt != nil { return .complete }
         if let pause { return .paused(reason: pause.line) }
+        if let networkHold { return .paused(reason: networkHold) }
         guard let name = runningGameName else { return .preparing }
         return .uploading(gameName: name)
     }
 
     var line: String {
-        ProgressPill.line(phase, leftText: BackupText.bytes(plan.bytesLeft))
+        ProgressPill.line(phase, leftText: BackupText.bytes(totalBytes - completedBytes))
     }
 
     /// The name of the game the run uploads now, or `nil` while the

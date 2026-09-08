@@ -49,8 +49,21 @@ enum BackupNetwork {
     /// The line the UI shows while the system holds the tasks.
     static let waitingLine = ResourcePolicy.waitingForWiFiLine
 
+    static let lowDataModeLine = "Low Data Mode is on"
+
+    /// Why the system holds the uploads right now, per 7.4, or `nil`
+    /// while they move.
+    static var holdLine: String? {
+        if isConstrained { return lowDataModeLine }
+        let cause = ResourcePolicy.blockedCause(policy: policy, isOnCellular: isOnCellular)
+        return cause == nil ? nil : waitingLine
+    }
+
     private static let monitor: NWPathMonitor = {
         let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { _ in
+            Task { @MainActor in BackupRunMonitor.shared.networkHold = holdLine }
+        }
         monitor.start(queue: DispatchQueue(label: "sh.mateo.empo.backup.path"))
         return monitor
     }()

@@ -44,7 +44,7 @@ struct BackupProgressPill: View {
             // The plan freezes only as the hashes land, so the ring
             // spins until the first stream reports its total.
             SpinnerRing(
-                progress: monitor.plan.fraction ?? 0,
+                progress: monitor.fraction ?? 0,
                 size: 14,
                 lineWidth: 2,
                 tint: AnyShapeStyle(Color.brand),

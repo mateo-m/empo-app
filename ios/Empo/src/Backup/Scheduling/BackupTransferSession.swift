@@ -42,6 +42,8 @@ final class BackupTransferSession: NSObject {
     }
 
     private var pending: [Int: PendingTransfer] = [:]
+    /// The bytes sent that the monitor last heard about, per task.
+    private var reportedBytes: [Int: Int64] = [:]
     private let lock = NSLock()
 
     /// The completion handler iOS hands the app when it wakes it for
@@ -138,6 +140,7 @@ final class BackupTransferSession: NSObject {
     ) {
         lock.lock()
         let transfer = pending.removeValue(forKey: taskIdentifier)
+        reportedBytes.removeValue(forKey: taskIdentifier)
         lock.unlock()
         transfer?.resume(result)
     }
@@ -202,9 +205,37 @@ extension BackupTransferSession: URLSessionDataDelegate {
     }
 
     func urlSession(
+        _ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
+        totalBytesSent: Int64, totalBytesExpectedToSend: Int64
+    ) {
+        if totalBytesSent == bytesSent {
+            BackupLog.line(
+                "BackupTransferSession",
+                "\(task.taskDescription ?? "?") sends \(totalBytesExpectedToSend) bytes")
+        }
+        // The session calls this for every chunk of the body. One
+        // hop to the main actor per megabyte is enough for a pill.
+        lock.lock()
+        let last = reportedBytes[task.taskIdentifier] ?? 0
+        let moved = totalBytesSent - last >= 1_000_000 || totalBytesSent == totalBytesExpectedToSend
+        if moved { reportedBytes[task.taskIdentifier] = totalBytesSent }
+        lock.unlock()
+        guard moved else { return }
+        Task { await BackupRunMonitor.shared.transferSent(bytes: totalBytesSent) }
+    }
+
+    func urlSession(
         _ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?
     ) {
         let http = task.response as? HTTPURLResponse
+        if let error {
+            BackupLog.line(
+                "BackupTransferSession",
+                "\(task.taskDescription ?? "?") ended with \(error.localizedDescription)")
+        } else if let http, !(200..<300).contains(http.statusCode) {
+            BackupLog.line(
+                "BackupTransferSession", "\(task.taskDescription ?? "?") answered \(http.statusCode)")
+        }
         if let error, http == nil {
             // No answer at all. The device could not reach the
             // service, so 8.4 decides from the transport error.

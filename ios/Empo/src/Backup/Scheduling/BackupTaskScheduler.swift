@@ -1,6 +1,7 @@
 import BackgroundTasks
 import Foundation
 import GameProbe
+import os
 
 /// The two iOS background tasks of SPEC 7.3.
 ///
@@ -132,7 +133,10 @@ enum BackupTaskScheduler {
             let done = await BackupScheduler.shared.run(trigger: .nightly)
             task.setTaskCompleted(success: done)
         }
-        task.expirationHandler = { work.cancel() }
+        task.expirationHandler = {
+            BackupLog.line("BackupTaskScheduler", "the system expired the overnight task")
+            work.cancel()
+        }
     }
 
     // MARK: - The manual button
@@ -198,17 +202,26 @@ enum BackupTaskScheduler {
             return
         }
 
-        let work = Task { @MainActor in
+        let expired = OSAllocatedUnfairLock(initialState: false)
+        Task { @MainActor in
             await BackupScheduler.shared.run(
                 trigger: .manual,
                 press: press,
                 progress: task.progress)
+            guard !expired.withLock({ $0 }) else { return }
             // A run that ends by itself did its work. A target that
             // stopped gets Empo's own notice, and `success: false`
             // here would put the system's "Task failed" next to it.
-            // Only a run the system cut short failed.
             task.setTaskCompleted(success: !Task.isCancelled)
         }
-        task.expirationHandler = { work.cancel() }
+        // The system expires the task on the second trip to the
+        // background, progress or not. The run goes on without it,
+        // per 7.4 "nothing fails". The uploads live in the background
+        // session anyway.
+        task.expirationHandler = {
+            expired.withLock { $0 = true }
+            BackupLog.line("BackupTaskScheduler", "the system expired the manual task, the run goes on")
+            task.setTaskCompleted(success: true)
+        }
     }
 }

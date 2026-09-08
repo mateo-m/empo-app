@@ -210,7 +210,7 @@ struct BackupsScreen: View {
                         .font(.subheadline.weight(.medium))
                     // The bar counts the run plan the engine froze at
                     // staging end, per 13.2.
-                    ProgressView(value: monitor.plan.fraction ?? 0)
+                    ProgressView(value: monitor.fraction ?? 0)
                         .progressViewStyle(.linear)
                     Button("Pause") { BackupScheduler.shared.pauseTheRun() }
                         .buttonStyle(SecondaryButtonStyle(size: .sm))
