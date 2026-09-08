@@ -1,0 +1,11 @@
+@import "tailwindcss" source(none);
+@source "./split.html";
+@import "./shared.css";
+
+@layer base {
+  body {
+    background: var(--color-brand);
+    color: #121212;
+    font-weight: 700;
+  }
+}

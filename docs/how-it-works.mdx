@@ -32,7 +32,7 @@ config, and the engine dispatches to the correct one.
 Ruby 3.1 also carries syntax-transform patches, so Pokemon Essentials forks that mix old grammar
 with a modern runtime still parse. The app turns the mode on for each game that needs it.
 
-Read [Multi-Ruby](/multi-ruby) for the detection rules and the dispatch mechanism.
+Read [`multi-ruby.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-ruby.md) for the detection rules and the dispatch mechanism.
 
 ## One session for each process
 
@@ -40,7 +40,7 @@ The app creates SDL, the GL context, OpenAL, and the Ruby interpreter one time, 
 them for the lifetime of the process. iOS does not let an app relaunch itself between games, and
 `ruby_init()` runs one time for each process.
 
-This is why Empo plays one game for each session. Read [Multi-session](/multi-session) for the
+This is why Empo plays one game for each session. Read [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) for the
 quit paths and the state that stays behind.
 
 ## Touch controls are keyboard events
@@ -63,18 +63,20 @@ Each game is a folder under `Documents/Games/<title>/`. There is no database. Th
 pipeline extracts the source one time, validates each game root that it finds, and commits one
 container for each game that you select.
 
-Read [Game import pipeline](/import-pipeline) for the stages and the invariants.
+Read [`import-pipeline.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/import-pipeline.md) for the stages and the invariants.
 
 ## Pause is a frozen frame
 
 The SDL window and the SwiftUI view hierarchy cannot animate together. Empo takes a snapshot of
 the last frame, shows the snapshot, and animates that instead.
 
-Read [Pause and resume](/pause-resume) for the two pause modes.
+Read [`pause-resume.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/pause-resume.md) for the two pause modes.
 
 ## Read next
 
-- [Sheet design rules](/sheet-design): how the app builds its bottom sheets.
+- [`sheet-design.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/sheet-design.md) and
+  [`design-system.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/design-system.md) in
+  the repository: the visual rules the app follows.
 - [`sdl-ruby-workarounds.md`](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/sdl-ruby-workarounds.md)
   in the engine repository: why SDL, the GL context, OpenAL, and the Ruby VM are persistent.
 - [`patches-format.md`](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/patches-format.md)

@@ -1,0 +1,34 @@
+@import "tailwindcss" source(none);
+@source "./window.html";
+@import "./shared.css";
+
+@theme {
+  --color-sky: #dbe7f4;
+  --color-ink: #16233a;
+
+  --animate-nudge: nudge 0.8s steps(2, start) infinite;
+
+  @keyframes nudge {
+    to {
+      translate: 0 3px;
+    }
+  }
+}
+
+@layer base {
+  body {
+    background: var(--color-sky);
+    color: var(--color-ink);
+    font-weight: 700;
+  }
+}
+
+/* RPG Maker VX message window: navy fill, white 2px frame, a second thin frame inset. */
+@utility rm-window {
+  background: linear-gradient(180deg, #2d4b86, #1a2d56);
+  border: 2px solid #fff;
+  border-radius: 10px;
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: -6px;
+  color: #fff;
+}

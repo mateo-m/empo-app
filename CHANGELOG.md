@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.7 - 2026-09-07
+
+### Bug Fixes
+
+- Pick up the System.mouse_in_window stand-in ([`b86ce86`](https://github.com/mateo-m/empo-app/commit/b86ce86fc2ae2cd937f31cd344c3ba922824409f))
+- Run the pre-push guard from a linked worktree ([`9bda6ed`](https://github.com/mateo-m/empo-app/commit/9bda6ed910090a736c855b7a1399db001d88d439))
+
+### Features
+
+- Rebuild only the engine halves when the dependency inputs match the pin ([`c0126de`](https://github.com/mateo-m/empo-app/commit/c0126de7dadb8607a0ff4755dd1d8a29a6f7fb1e))
+- Add the landing page and trim the docs ([`af0181b`](https://github.com/mateo-m/empo-app/commit/af0181b915ab8ebd871df27e943c13a5338274e1))
+- Serve the site from empo.mateo.sh ([`59f48ee`](https://github.com/mateo-m/empo-app/commit/59f48ee3008375e85fbf8de6c86a3cfdd5b65d28))
+- Add the share card and the open graph tags to the landing page ([`e1c3c40`](https://github.com/mateo-m/empo-app/commit/e1c3c40b5cd10941a8d62c9307363a038c5417f0))
+
 ## 0.6.6 - 2026-09-01
 
 ### Chores

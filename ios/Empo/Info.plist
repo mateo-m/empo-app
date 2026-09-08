@@ -96,7 +96,7 @@
 	<key>EmpoGoogleDriveClientId</key>
 	<string>$(GOOGLE_DRIVE_CLIENT_ID)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<true/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>LSSupportsGameMode</key>

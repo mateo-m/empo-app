@@ -21,9 +21,12 @@ public enum GameScriptProfile {
         /// Read script grammar outranks bundled-runtime packaging
         /// when the sniffer reached the source.
         case sourceOverPackaging = "source-over-packaging"
+        /// RGSS2 games run on Ruby 1.8, and the endless-def token
+        /// skips the RGSS2/3 `def` stat method.
+        case rgss2Ruby18 = "rgss2-ruby18"
     }
 
-    public static let currentSchema: Schema = .sourceOverPackaging
+    public static let currentSchema: Schema = .rgss2Ruby18
 
     public struct Result {
         public let rubyVersion: Int
@@ -83,8 +86,7 @@ public enum GameScriptProfile {
 
         if let archiveExt = topLevelRgssArchiveExtension(at: gameDirectory, fm: fm) {
             switch archiveExt {
-            case "rgssad": return 18
-            case "rgss2a": return 19
+            case "rgssad", "rgss2a": return 18
             case "rgss3a": return 19
             default: break
             }
@@ -92,8 +94,8 @@ public enum GameScriptProfile {
 
         if let libraryRGSS = rgssLibraryMajor(at: gameDirectory, fm: fm) {
             switch libraryRGSS {
-            case 1: return 18
-            case 2, 3: return 19
+            case 1, 2: return 18
+            case 3: return 19
             default: break
             }
         }
@@ -215,11 +217,12 @@ public enum GameScriptProfile {
             gameDirectory.appendingPathComponent("Data"),
         ]
         for dir in candidates {
-            if fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rxdata").path) {
+            // RPG Maker XP and VX both shipped Ruby 1.8. VX Ace
+            // moved to 1.9.
+            if fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rxdata").path)
+                || fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rvdata").path)
+            {
                 return 18
-            }
-            if fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rvdata").path) {
-                return 19
             }
             if fm.fileExists(atPath: dir.appendingPathComponent("Scripts.rvdata2").path) {
                 return 19

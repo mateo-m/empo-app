@@ -51,6 +51,27 @@ final class GameScriptProfileTests: XCTestCase {
         }
     }
 
+    func testDefStatCallsDoNotReadAsEndlessDefs() {
+        let profile = GameScriptProfile.analyze(
+            gameDirectory: fixtureURL("legacy-loose-def-stat"))
+        XCTAssertFalse(profile.modernRubyScripts)
+        XCTAssertEqual(profile.grammar, .legacy)
+    }
+
+    func testRGSS2LibraryRoutesToRuby18() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "[Game]\nLibrary=RGSS202E.dll\n".write(
+            to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+        try Data().write(to: dir.appendingPathComponent("Game.rgss2a"))
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.rubyVersion, 18)
+    }
+
     func testBundledRuby300DLLFoldsTo31() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

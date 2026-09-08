@@ -16,7 +16,7 @@ Different RPG Maker generations target different Ruby versions:
 | Generation               | Engine DLL                       | Ruby version | Typical games                                                                                                           |
 | ------------------------ | -------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | RGSS1 (RPG Maker XP)     | `RGSS104E.dll`                   | 1.8          | Vintage Pokemon Essentials forks                                                                                        |
-| RGSS2 (RPG Maker VX)     | `RGSS200J.dll`                   | 1.9          | A handful of community projects                                                                                         |
+| RGSS2 (RPG Maker VX)     | `RGSS200J.dll`                   | 1.8          | A handful of community projects                                                                                         |
 | RGSS3 (RPG Maker VX Ace) | `RGSS300.dll`                    | 1.9          | Traditional VX Ace games                                                                                                |
 | mkxp-z modern            | bundled `x64-msvcrt-rubyXYZ.dll` | 3.1          | Modern Pokemon Essentials forks that ship the mkxp-z runtime. Bundles for 3.0 fold onto 3.1 + Legacy compatibility |
 
@@ -75,9 +75,9 @@ Individual setters (`mkxp_setActiveRubyVersion`, `mkxp_setSyntaxTransformMode`, 
 
 2. **Script grammar sniff** via `RubyScriptGrammarSniffer.swift`. The sniffer decodes `Scripts.{rxdata,rvdata,rvdata2}` (Marshal + zlib) and reads loose `.rb` files. Modern Ruby 3.x tokens (`&.`, pattern-match `case ... in`, endless `def`, numbered block params, kwarg shorthand, `Hash#except`, `Array#filter_map`) give **31**. Pure-legacy source uses the data file extension as a prior. An inconclusive result (encrypted archive, or scripts packed in `Data/*.fpk`) falls through.
 
-3. **RGSS archive at project root**: `.rgssad` → 18, `.rgss2a` → 19, `.rgss3a` → 19. This signal applies when scripts live inside the encrypted archive and the sniffer cannot reach them.
+3. **RGSS archive at project root**: `.rgssad` → 18, `.rgss2a` → 18, `.rgss3a` → 19. This signal applies when scripts live inside the encrypted archive and the sniffer cannot reach them.
 
-4. **`Game.ini` `Library=`** field: `RGSS1*` → 18, `RGSS2*` / `RGSS3*` → 19.
+4. **`Game.ini` `Library=`** field: `RGSS1*` / `RGSS2*` → 18, `RGSS3*` → 19.
 
 5. **Default**: 31. The build's historical fallback for projects that do not match any signal.
 
@@ -95,10 +95,11 @@ enum Schema: String {
     case dropRuby30 = "drop-ruby-30"
     case tightenGrammarSniff = "tighten-grammar-sniff"
     case unified = "unified"
-    case sourceOverPackaging = "source-over-packaging"  // current: read grammar outranks bundled runtime
+    case sourceOverPackaging = "source-over-packaging"
+    case rgss2Ruby18 = "rgss2-ruby18"  // current: RGSS2 on 1.8, `def` stat method is not an endless def
 }
 
-static let currentSchema: Schema = .sourceOverPackaging
+static let currentSchema: Schema = .rgss2Ruby18
 ```
 
 `GameMetadata` persists the detected version and `modernRubyScriptsDetected` alongside the `*DetectedSchema` raw strings. Library load compares the stored schema with the current one. On a mismatch, it re-runs detection. `GameScriptProfile` is the only entry point.
@@ -184,7 +185,7 @@ Currently disabled. After a clean engine exit, the iOS host shows an alert ("The
 
 A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method scrubbing, intrusive-list detachment for disposables, etc.). It worked for narrow game pairs but did not survive contact with a broader corpus, especially across different Ruby versions. Until that cleanup is reliable, the app asks the user to force-close and relaunch.
 
-Same-game re-entry is safe in principle (no class leak). But the iOS layer currently cannot tell it apart from a different-game pick. See `docs/multi-session.md` for the engine-side teardown sequence.
+Same-game re-entry is safe in principle (no class leak). But the iOS layer currently cannot tell it apart from a different-game pick. See `ios/Empo/docs/multi-session.md` for the engine-side teardown sequence.
 
 ## Files
 

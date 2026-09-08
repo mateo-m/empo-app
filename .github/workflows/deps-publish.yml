@@ -12,7 +12,7 @@
 # downloads the tree pinned in ios/Dependencies/native/.version and
 # rebuilds only the engine halves on it (about two minutes). It takes
 # the engine path only when tools/deps-fingerprint.sh matches the pin
-# and the SDK version matches. docs/deps-publish-engine-only.md has
+# and the SDK version matches. scripts/deps-publish-engine-only.md has
 # the rules.
 #
 # Shape: the two SDK trees build on PARALLEL runners (halving

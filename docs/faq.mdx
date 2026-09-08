@@ -1,0 +1,76 @@
+---
+title: FAQ
+description: Short answers to the questions people ask before they install Empo.
+sidebar:
+  icon: circle-help
+---
+
+## Is Empo on the App Store?
+
+No. Empo is pre-release. You sideload an `.ipa` file with AltStore, SideStore, or Sideloadly.
+See [Install Empo](/install).
+
+## Why does the app stop after seven days?
+
+Apple limits apps signed with a free developer account to seven days. Your sideloading tool
+refreshes the app before it expires, as long as the tool can reach your device. A paid Apple
+Developer account extends the period to one year. Your games and saves survive a refresh.
+
+## Which games does Empo run?
+
+Games made with RPG Maker XP, VX, and VX Ace, and games built on modern mkxp-z forks, such as
+Pokemon Essentials fangames. See [Requirements](/requirements) for the full list.
+
+## Does it run RPG Maker MV or MZ games?
+
+No. Those engines run on JavaScript, not on Ruby. Empo has no support for them.
+
+## Does it run RPG Maker 2000 or 2003 games?
+
+No. Use [EasyRPG Player](https://easyrpg.org/player/) for those.
+
+## Do I need the RTP?
+
+Empo cannot install a Run-Time Package. If a game asks for one, Empo warns you before the game
+starts. Import a version of the game that ships its own assets.
+
+## Can I play a game I packaged for JoiPlay?
+
+Yes. Empo imports `.jgp` packages and reads their manifest. If a game expects JoiPlay behavior,
+turn on **JoiPlay compatibility** in the settings for that game.
+
+## Where do I get games?
+
+Empo ships no games and hosts no games. Import the games you own or the free fangames you
+download from their authors. Empo does not link to game downloads.
+
+## Why iOS 26?
+
+Empo builds on the iOS 26 SDK and uses its controls throughout the interface. Older versions of
+iOS cannot run it.
+
+## Does it work on iPad?
+
+Yes. Empo runs on iPhone and iPad with iOS 26 or newer. Each orientation keeps its own touch
+layout, and each game can keep its own.
+
+## Why can I play only one game per session?
+
+The engine keeps one Ruby interpreter for the lifetime of the process, and the interpreter
+cannot restart cleanly. After you quit a game, close Empo from the app switcher and open it
+again. [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) explains the constraint.
+
+## Do my saves survive an app update?
+
+Yes. Saves live in the Files app under **On My iPhone → Empo**, not in the app binary. Do not
+delete the app before you update it. See [Saves](/saves).
+
+## Does Empo collect any data?
+
+No. There is no account, no server, no analytics, and no crash reporting. See the
+[privacy policy](/privacy).
+
+## A game does not work. What now?
+
+Work through [Troubleshooting](/troubleshooting). If that does not fix it, collect the logs and
+report the game on [GitHub or Discord](/community).

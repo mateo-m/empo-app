@@ -1,13 +1,6 @@
----
-title: Terms of use
-description: The terms you accept when you use Empo, and the limits on what Empo promises.
-sidebar:
-  icon: scale
----
-
 These terms cover the Empo app and this documentation site.
 
-Last update: 27 August 2026.
+Last update: 7 September 2026.
 
 ## The licence
 
@@ -33,14 +26,6 @@ Keep your own copy of anything you care about.
 Empo comes as it is, with no warranty of any kind. To the limit the law permits,
 the author is not liable for lost data, lost time, or any other damage that
 follows from the use of Empo.
-
-## Cloud backups
-
-A cloud backup writes to an account that you own. Your agreement with that
-provider governs the account and the storage. Empo is not a party to it.
-
-Empo cannot recover a backup that the provider deleted, and it cannot restore a
-grant that you cancelled.
 
 ## Changes
 

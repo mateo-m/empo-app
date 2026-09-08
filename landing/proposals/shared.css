@@ -1,0 +1,47 @@
+@theme {
+  --color-white: oklch(1 0 0);
+  --color-brand: oklch(0.75 0.166 57.9);
+  --font-round: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+  --text-shadow-wii:
+    0 1px 0 oklch(0.188 0.067 266.4 / 0.2),
+    0 2px 6px oklch(0.188 0.067 266.4 / 0.45);
+  --ease-snappy: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* Critically damped spring, sampled. It settles without overshoot. */
+  --ease-spring: linear(0.0, 0.0398, 0.1304, 0.2416, 0.3558, 0.4634, 0.5596, 0.6429, 0.7132, 0.7715, 0.8192, 0.8577, 0.8886, 0.9132, 0.9326, 0.9478, 0.9597, 0.969, 0.9762, 0.9818, 0.9861, 0.9894, 0.9919, 0.9938, 0.9953, 0.9965, 0.9973, 0.998, 0.9985, 0.9988, 0.9991, 0.9993, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-round);
+    line-height: 1.45;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-round);
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+
+  a:hover {
+    text-decoration: none;
+  }
+}
+
+@utility press {
+  transition: transform 160ms var(--ease-snappy);
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+@utility px {
+  shape-rendering: crispEdges;
+}

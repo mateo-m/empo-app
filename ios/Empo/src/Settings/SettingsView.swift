@@ -176,7 +176,7 @@ struct SettingsView: View {
                     }
 
                     Link(
-                        destination: URL(string: "https://github.com/mateo-m/empo-app/wiki/privacy-policy")
+                        destination: URL(string: "https://empo.mateo.sh/privacy/")
                             ?? URL.empoHomepage
                     ) {
                         Label {
@@ -189,6 +189,24 @@ struct SettingsView: View {
                             }
                         } icon: {
                             Image(systemName: "hand.raised")
+                        }
+                    }
+                    .tint(.primary)
+
+                    Link(
+                        destination: URL(string: "https://empo.mateo.sh/terms/")
+                            ?? URL.empoHomepage
+                    ) {
+                        Label {
+                            HStack {
+                                Text("Terms of Use")
+                                Spacer()
+                                Image(systemName: "arrow.up.forward")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "scale.3d")
                         }
                     }
                     .tint(.primary)

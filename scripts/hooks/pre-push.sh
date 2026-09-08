@@ -4,6 +4,10 @@ set -e
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
+# In a linked worktree git exports GIT_DIR to hooks, and every
+# `git -C $SUBMODULE_PATH` below would then act on the parent repo.
+unset GIT_DIR GIT_WORK_TREE
+
 SUBMODULE_PATH="mkxp-z-apple-mobile"
 SUBMODULE_NAME="mkxp-z-apple-mobile"
 SUBMODULE_BRANCH=$(git config -f .gitmodules --get "submodule.${SUBMODULE_NAME}.branch" || printf 'dev')

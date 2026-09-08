@@ -1,0 +1,11 @@
+@import "tailwindcss" source(none);
+@source "./wordmark.html";
+@import "./shared.css";
+
+@layer base {
+  body {
+    background: #fff;
+    color: #121212;
+    font-weight: 600;
+  }
+}
