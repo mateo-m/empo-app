@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.8 - 2026-09-08
+
+### Bug Fixes
+
+- Declare the OpenSSL encryption in Info.plist ([`a34a694`](https://github.com/mateo-m/empo-app/commit/a34a694a574ff05787aebf14955350a745828599))
+- Link the settings to the site privacy policy and terms ([`561bcd6`](https://github.com/mateo-m/empo-app/commit/561bcd66b2819954b6f875eead698a634844d647))
+- Run RGSS2 games on Ruby 1.8 and skip the def stat in the endless-def sniff ([`d846d5d`](https://github.com/mateo-m/empo-app/commit/d846d5d5bbdcd025859a877195887879d29506c6))
+
+### Chores
+
+- Add the GPLv2 license file ([`e1d9fc0`](https://github.com/mateo-m/empo-app/commit/e1d9fc0c6f618da4705a5e20bd627ab513918c80))
+- Pin engine-2026-09-08 with the font substitution fix ([`58a316f`](https://github.com/mateo-m/empo-app/commit/58a316f1177de55b9a3edd5db75c92288ddf8757))
+
+### Documentation
+
+- Build the privacy, terms, and support pages from root markdown files ([`9eb43ce`](https://github.com/mateo-m/empo-app/commit/9eb43ceda381cf8f194696a3d3d94acac58d68ef))
+
+### Features
+
+- Add the App Store listing and the review notes ([`2b45040`](https://github.com/mateo-m/empo-app/commit/2b45040a336e93992d8f93adca44e714887913f1))
+
 ## 0.6.7 - 2026-09-07
 
 ### Bug Fixes
