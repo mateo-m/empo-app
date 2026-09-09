@@ -1201,6 +1201,62 @@ final class DeviceChecks: XCTestCase {
         note("sheet marks: \(marks.suffix(6))")
     }
 
+    /// 020 check 5.12. A `writer.json` that names another device was
+    /// planted in this device's namespace before the run.
+    func testWriterSplit() {
+        let cap = TimeInterval(env["EMPO_WAIT"] ?? "") ?? 1200
+        launchEmpo(arguments: ["-debugLogs", "YES", "-backupPressNow", "YES"], answeringNotNow: true)
+        note("pill at the stop: \"\(watchThePill(within: 300))\"")
+        shot("writer-stop")
+        openBackupsScreen()
+        let question = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Another device,'")).firstMatch
+        note("question shows: \(question.waitForExistence(timeout: 10)), reads \"\(question.label)\"")
+        note("answers: \(["Use a new space", "Take over"].map { "\($0)=\(empo.buttons[$0].firstMatch.exists)" })")
+        note("target rows: \(targetRows())")
+        shot("writer-question")
+        guard question.exists else { return }
+        empo.buttons["Use a new space"].firstMatch.tap()
+        sleep(2)
+        note("question gone after the answer: \(!question.exists)")
+        empo.navigationBars.buttons.firstMatch.tap()
+        empo.navigationBars.buttons.firstMatch.tap()
+        note("pill at the end: \"\(watchThePill(within: cap))\"")
+        openBackupsScreen()
+        let line = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Another device was using'")).firstMatch
+        note("split line shows: \(line.waitForExistence(timeout: 10))")
+        note("target rows: \(targetRows())")
+        shot("writer-split")
+        guard line.exists else { return }
+        empo.buttons["OK"].firstMatch.tap()
+        sleep(1)
+        note("split line after OK: \(line.exists)")
+    }
+
+    private func targetRows() -> [String] {
+        empo.buttons.matching(NSPredicate(format: "label CONTAINS ' at '")).allElementsBoundByIndex.map(\.label)
+    }
+
+    /// Follows the pill until it settles, and returns its last line.
+    private func watchThePill(within cap: TimeInterval) -> String {
+        let began = Date()
+        var last = ""
+        var seen = false
+        while Date().timeIntervalSince(began) < cap {
+            let line = pillLine()
+            if line != last {
+                note("pill reads \"\(line)\" after \(Int(Date().timeIntervalSince(began))) s")
+                last = line
+            }
+            if line != "(no pill)" { seen = true }
+            if seen, line == "(no pill)" || line.hasPrefix("Backup complete") || line.hasPrefix("Backup stopped") {
+                sleep(3)
+                if pillLine() == "(no pill)" || pillLine() == line { return line }
+            }
+            sleep(5)
+        }
+        return last
+    }
+
     /// 016 check 6. The namespace named in `EMPO_DEVICE` was planted
     /// on the server before the run.
     func testDeleteForeignNamespace() {
