@@ -34,6 +34,8 @@ final class BackupTransferSession: NSObject {
         let path: String
         let resume: (Result<HTTPAnswer, BackupProviderError>) -> Void
         var body = Data()
+        var bodyStarts = 0
+        var gaveUp = false
 
         init(path: String, resume: @escaping (Result<HTTPAnswer, BackupProviderError>) -> Void) {
             self.path = path
@@ -42,6 +44,12 @@ final class BackupTransferSession: NSObject {
     }
 
     private var pending: [Int: PendingTransfer] = [:]
+
+    /// iOS 27: a background session retries a timed-out upload on its
+    /// own every 60 to 75 s until `timeoutIntervalForResource` (7 days)
+    /// and tells the app nothing. Each retry sends the body from zero,
+    /// so the count of body starts is the only signal.
+    static let bodyStartsBeforeGivingUp = 3
     /// The bytes sent that the monitor last heard about, per task.
     private var reportedBytes: [Int: Int64] = [:]
     private let lock = NSLock()
@@ -145,6 +153,21 @@ final class BackupTransferSession: NSObject {
         transfer?.resume(result)
     }
 
+    private func giveUpOnTheFourthStart(of task: URLSessionTask) {
+        lock.lock()
+        let transfer = pending[task.taskIdentifier]
+        transfer?.bodyStarts += 1
+        let starts = transfer?.bodyStarts ?? 0
+        let giveUp = starts > Self.bodyStartsBeforeGivingUp && transfer?.gaveUp == false
+        if giveUp { transfer?.gaveUp = true }
+        lock.unlock()
+        guard giveUp else { return }
+        BackupLog.line(
+            "BackupTransferSession",
+            "\(task.taskDescription ?? "?") got no answer in \(starts - 1) tries, gives up")
+        task.cancel()
+    }
+
     private func collect(_ data: Data, taskIdentifier: Int) {
         lock.lock()
         pending[taskIdentifier]?.body.append(data)
@@ -212,6 +235,7 @@ extension BackupTransferSession: URLSessionDataDelegate {
             BackupLog.line(
                 "BackupTransferSession",
                 "\(task.taskDescription ?? "?") sends \(totalBytesExpectedToSend) bytes")
+            giveUpOnTheFourthStart(of: task)
         }
         // The session calls this for every chunk of the body. One
         // hop to the main actor per megabyte is enough for a pill.
@@ -239,9 +263,12 @@ extension BackupTransferSession: URLSessionDataDelegate {
         if let error, http == nil {
             // No answer at all. The device could not reach the
             // service, so 8.4 decides from the transport error.
+            lock.lock()
+            let gaveUp = pending[task.taskIdentifier]?.gaveUp ?? false
+            lock.unlock()
             finish(
                 taskIdentifier: task.taskIdentifier,
-                with: .failure(Self.providerError(error)))
+                with: .failure(gaveUp ? .offline : Self.providerError(error)))
             return
         }
         guard let http else {

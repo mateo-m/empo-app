@@ -22,7 +22,12 @@ final class BackupAPISession: Sendable {
 
     private init() {
         let configuration = URLSessionConfiguration.default
-        configuration.waitsForConnectivity = true
+        // Measured on macOS 27 and iOS 27: with `waitsForConnectivity`
+        // on, a server that accepts the connection and never answers
+        // holds the task past 200 s. Neither this timeout nor a
+        // request-level one fires. Off, the task fails with -1001 at
+        // 61 s, which 8.4 maps to `offline` and the next pass retries.
+        configuration.waitsForConnectivity = false
         configuration.timeoutIntervalForRequest = 60
         session = URLSession(configuration: configuration)
     }
