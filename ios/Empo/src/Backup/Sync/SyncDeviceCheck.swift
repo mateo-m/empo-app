@@ -64,6 +64,7 @@ enum SyncDeviceCheck {
         for (id, profile) in model.layoutProfiles.sorted(by: { $0.key < $1.key }) {
             let state = profile.isDeleted ? "deleted" : "\(profile.controls.count) controls"
             log("profile \(id) \"\(profile.name)\" \(state)")
+            if let origin = profile.origin { log("profile \(id) origin \"\(origin)\"") }
         }
         for id in model.targetDescriptors.keys.sorted() {
             log("descriptor \(id)")
