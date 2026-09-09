@@ -4,9 +4,10 @@ import Network
 
 /// iOS 27 shows the local network alert on the first connection to a
 /// private address, and the URLSession request that caused it fails
-/// while the alert is up. A connection opened here first sits in
-/// `preparing` until the user answers, so the check that follows
-/// meets an answered alert.
+/// while the alert is up. A connection opened here sits in
+/// `waiting(ENETDOWN)` until the user answers, so the check that
+/// follows meets an answered alert. A refusal keeps the same state,
+/// so the wait has a limit.
 enum LocalNetworkAccess {
 
     static func waitForTheAnswer(to address: URL) async {
@@ -23,13 +24,14 @@ enum LocalNetworkAccess {
                 BackupLog.line("LocalNetworkAccess", "\(host): \(state)")
                 switch state {
                 case .setup, .preparing: continue
+                case .waiting(.posix(.ENETDOWN)): continue
                 case .ready, .waiting, .failed, .cancelled: return
                 @unknown default: return
                 }
             }
         }
         let limit = Task {
-            try? await Task.sleep(for: .seconds(90))
+            try? await Task.sleep(for: .seconds(60))
             waiting.cancel()
         }
         await waiting.value
