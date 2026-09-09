@@ -640,6 +640,33 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertTrue(blobPaths(target).isEmpty)
     }
 
+    func testTheRunWritesTheSpaceReadingItTookAfterTheUploads() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget(
+            capabilities: TargetCapabilities(canQueryQuota: true), quotaLimitBytes: 50_000_000)
+        let stateURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: stateURL) }
+        let clock = self.clock!
+        let engine = SnapshotEngine(
+            provider: target,
+            store: try BackupStateStore(url: stateURL),
+            localRoot: localRoot,
+            clock: FakeBackupClock(),
+            now: { clock.now })
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .success)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        let status = try XCTUnwrap(store.targetStatus(targetId: targetId))
+        XCTAssertEqual(status.quota?.limitBytes, 50_000_000)
+        let live = try await target.quota()
+        XCTAssertEqual(status.quota?.usedBytes, live?.usedBytes)
+        XCTAssertNotNil(status.quotaAt)
+    }
+
     // MARK: - 9. The order of 7.8
 
     func testTheRunCoversFiveGamesInTheOrderOfSevenPointEight() async throws {

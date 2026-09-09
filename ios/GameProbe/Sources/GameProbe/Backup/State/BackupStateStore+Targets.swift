@@ -141,9 +141,9 @@ extension BackupStateStore {
             [.text(targetId), kind, detail, when])
     }
 
-    /// Writes the space query answer of 9.7. The add check and the
-    /// re-sign-in check are the only callers, because Empo never
-    /// polls a quota.
+    /// Writes the space query answer of 9.7. The add check, the
+    /// re-sign-in check and the end of a run write it. Empo never
+    /// polls a quota on its own.
     public func recordTargetQuota(
         targetId: String, reading: QuotaReading?, at date: Date
     ) throws {

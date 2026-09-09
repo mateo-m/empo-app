@@ -126,6 +126,7 @@ public actor SnapshotEngine {
             try await openNamespace(context)
             try await applyPendingDeletions(context)
             try await runStreams(context)
+            try await readTheSpaceLeft(context)
         } catch let stop as BackupRunStop {
             return finish(context, startedAt: startedAt, stop: Task.isCancelled ? .paused : stop)
         } catch {
@@ -177,6 +178,13 @@ public actor SnapshotEngine {
                 failure: stop.flatMap(TargetFailure.of),
                 at: now),
             "the target failure of \(context.request.descriptor.id)")
+        // The usage line of the detail screen reads this row.
+        if let quota = context.quota {
+            save(
+                try store.recordTargetQuota(
+                    targetId: context.request.descriptor.id, reading: quota, at: now),
+                "the space reading of \(context.request.descriptor.id)")
+        }
         return result
     }
 
@@ -608,6 +616,16 @@ public actor SnapshotEngine {
         //    Empo never sacrifices an older snapshot beyond the
         //    retention policy to fit a new one.
         throw BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
+    }
+
+    /// Reads the space again once the uploads are in, so the row the
+    /// detail screen shows counts them. A run that moved nothing
+    /// keeps the reading it took before staging.
+    func readTheSpaceLeft(_ context: RunContext) async throws {
+        guard provider.capabilities.canQueryQuota, context.uploadedBytes > 0 else { return }
+        if let fresh = try? await provider.quota() {
+            context.quota = fresh
+        }
     }
 
     /// Where the provider answers a space query, refuse a run that
