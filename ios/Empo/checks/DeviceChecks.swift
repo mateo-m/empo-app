@@ -912,7 +912,20 @@ final class DeviceChecks: XCTestCase {
         let name = env["EMPO_NAME"] ?? "Server"
         launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
         openBackupsScreen()
-        tapAdd()
+        addTargetThroughTheForm(service: service, name: name)
+        waitForPermissionSheet(name: name)
+        notePermissionSheet()
+        shot("permission-\(name)")
+        dismissSavePasswordAsk()
+        empo.buttons["Close"].firstMatch.tap()
+        sleep(1)
+        noteTargetDetail(name)
+    }
+
+    /// Fills the Add form for `service` and taps Add. Ends with the
+    /// permission sheet on its way up.
+    private func addTargetThroughTheForm(service: String, name: String) {
+        if !empo.navigationBars["Add a target"].exists { tapAdd() }
         let row = empo.buttons[service].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10), "no \(service) row on the Add sheet")
         note("Add sheet rows: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })")
@@ -956,17 +969,143 @@ final class DeviceChecks: XCTestCase {
             sleep(3)
         }
         dismissSavePasswordAsk()
+    }
+
+    private func waitForPermissionSheet(name: String) {
         let ready = empo.staticTexts["\(name) is ready"].firstMatch
         let refused = empo.staticTexts["\(name) refused a step"].firstMatch
         let start = Date()
         while !ready.exists, !refused.exists, Date().timeIntervalSince(start) < 120 { sleep(1) }
         note("permission sheet after \(Int(Date().timeIntervalSince(start))) s: ready \(ready.exists), refused \(refused.exists)")
-        notePermissionSheet()
-        shot("permission-\(name)")
-        dismissSavePasswordAsk()
-        empo.buttons["Close"].firstMatch.tap()
-        sleep(1)
-        noteTargetDetail(name)
+    }
+
+    private func texts() -> [String] {
+        empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+    }
+
+    // MARK: - 014 check 5 and 016 check 7: a fresh install
+
+    /// Runs after `devicectl device uninstall app`. The first target
+    /// on an empty library opens the restore sheet of 11.4. The first
+    /// target also opens the notification ask of 13.19. The two
+    /// sheets come in an order the check does not fix.
+    func testFreshInstallRestore() {
+        let name = env["EMPO_NAME"] ?? "192.168.0.40"
+        let cap = TimeInterval(env["EMPO_WAIT"] ?? "") ?? 1800
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        launchEmpo(arguments: ["-debugLogs", "YES"])
+        sleep(3)
+        shot("fresh-launch")
+        note("first screen texts: \(texts().prefix(12))")
+        let understood = empo.buttons["I understand"].firstMatch
+        if understood.waitForExistence(timeout: 3) {
+            understood.tap()
+            note("closed the first-launch disclaimer")
+        }
+        openBackupsScreen()
+        shot("fresh-backups")
+        note("Backups screen texts: \(texts().prefix(12)), buttons: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })")
+        // The first request to a LAN address on a fresh install earns
+        // the local network ask of iOS. The check fails while the ask
+        // is open, so a second Add is part of the check.
+        for attempt in 1...2 {
+            addTargetThroughTheForm(service: "WebDAV server", name: name)
+            let localNetwork = springboard.alerts.firstMatch
+            if localNetwork.waitForExistence(timeout: 8) {
+                note("system alert: \(localNetwork.label)")
+                shot("fresh-local-network-ask")
+                localNetwork.buttons["Allow"].firstMatch.tap()
+            }
+            waitForPermissionSheet(name: name)
+            notePermissionSheet()
+            shot("fresh-permission-\(attempt)")
+            dismissSavePasswordAsk()
+            let refused = empo.staticTexts["\(name) refused a step"].exists
+            empo.buttons["Close"].firstMatch.tap()
+            sleep(2)
+            guard refused, attempt == 1 else { break }
+            let opens = openAddSheet()
+            note("the first check failed, the Add button opens the sheet again: \(opens)")
+            if !opens {
+                shot("fresh-add-dead")
+                empo.terminate()
+                launchEmpo(arguments: ["-debugLogs", "YES"])
+                openBackupsScreen()
+            }
+        }
+        var restoreSeen = false
+        var askSeen = false
+        var idleSince = Date()
+        while Date().timeIntervalSince(idleSince) < 90, !(restoreSeen && askSeen) {
+            if !askSeen, empo.staticTexts["Empo can tell you when a backup stops"].exists {
+                askSeen = true
+                shot("fresh-notification-ask")
+                note("notification ask texts: \(texts().suffix(8)), system alerts: \(springboard.alerts.count)")
+                empo.buttons["Not now"].firstMatch.tap()
+                sleep(2)
+                idleSince = Date()
+            }
+            if !restoreSeen, empo.navigationBars["Restore your backups"].exists {
+                restoreSeen = true
+                restoreEverything(within: cap)
+                idleSince = Date()
+            }
+            sleep(1)
+        }
+        note("restore sheet seen \(restoreSeen), notification ask seen \(askSeen)")
+        XCTAssertTrue(restoreSeen, "the restore sheet of 11.4 never came")
+        XCTAssertTrue(askSeen, "the notification ask of 13.19 never came")
+        let row = empo.buttons["Turn on backup notifications"].firstMatch
+        for _ in 0..<4 where !row.waitForExistence(timeout: 2) { empo.swipeUp() }
+        note("Turn on backup notifications row: \(row.exists)")
+        if row.exists {
+            row.tap()
+            let alert = springboard.alerts.firstMatch
+            let shows = alert.waitForExistence(timeout: 10)
+            note("system prompt after the row: \(shows), \(shows ? alert.label : "")")
+            shot("fresh-system-prompt")
+            if shows { alert.buttons["Allow"].firstMatch.tap() }
+            sleep(2)
+            note("row after the answer: \(row.exists ? row.label : "(gone)")")
+        }
+        empo.terminate()
+        launchEmpo(arguments: ["-debugLogs", "YES"])
+        sleep(3)
+        shot("fresh-library-after")
+        note("library texts: \(texts().prefix(12))")
+    }
+
+    private func restoreEverything(within cap: TimeInterval) {
+        shot("fresh-restore-sheet")
+        note("restore sheet texts: \(texts())")
+        note("restore sheet switches: \(empo.switches.allElementsBoundByIndex.map { "\($0.label)=\($0.value ?? "")" })")
+        let restore = empo.buttons["Restore"].firstMatch
+        note("Restore enabled: \(restore.isEnabled)")
+        restore.tap()
+        let adopt = empo.alerts.firstMatch
+        if adopt.waitForExistence(timeout: 10) {
+            note("adopt alert: \(adopt.label), buttons \(adopt.buttons.allElementsBoundByIndex.map(\.label))")
+            shot("fresh-adopt")
+            adopt.buttons["Continue"].firstMatch.tap()
+        } else {
+            note("no adopt alert after Restore")
+        }
+        let done = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Restored '")).firstMatch
+        let progress = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Restoring'")).firstMatch
+        let start = Date()
+        var last = ""
+        while !done.exists, Date().timeIntervalSince(start) < cap {
+            let line = progress.exists ? progress.label : "(no progress line)"
+            if line != last {
+                note("restore reads \"\(line)\" after \(Int(Date().timeIntervalSince(start))) s")
+                last = line
+            }
+            sleep(5)
+        }
+        note("restore ended after \(Int(Date().timeIntervalSince(start))) s: \(texts())")
+        shot("fresh-restored")
+        empo.buttons["Done"].firstMatch.tap()
+        sleep(2)
     }
 
     /// The detail screen of the target named in `EMPO_NAME`.
@@ -1003,13 +1142,17 @@ final class DeviceChecks: XCTestCase {
     }
 
     private func tapAdd() {
+        XCTAssertTrue(openAddSheet(), "no Add a target sheet")
+    }
+
+    private func openAddSheet() -> Bool {
         let names = ["Add", "Add a backup target", "Add a target"]
         for name in names where empo.buttons[name].firstMatch.waitForExistence(timeout: 3) {
             empo.buttons[name].firstMatch.tap()
-            XCTAssertTrue(empo.navigationBars["Add a target"].waitForExistence(timeout: 10), "no Add a target sheet")
-            return
+            return empo.navigationBars["Add a target"].waitForExistence(timeout: 10)
         }
         XCTFail("no Add button on the Backups screen")
+        return false
     }
 
     /// SwiftUI gives the form fields no label, only the hint as the
