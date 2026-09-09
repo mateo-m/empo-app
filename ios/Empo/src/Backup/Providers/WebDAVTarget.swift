@@ -291,7 +291,7 @@ actor WebDAVTarget: BackupProvider {
     private func makeCollections(forPath path: String) async throws(BackupProviderError) {
         for collection in WebDAV.ancestorCollections(ofPath: path) {
             guard !knownCollections.contains(collection) else { continue }
-            let answer = try await send(WebDAV.Method.makeCollection, path: collection)
+            let answer = try await send(WebDAV.Method.makeCollection, path: collection + "/")
             guard answer.isSuccess || WebDAV.collectionIsAlreadyThere(status: answer.status) else {
                 throw mapped(answer)
             }
