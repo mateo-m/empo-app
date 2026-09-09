@@ -86,6 +86,9 @@ struct BackupsScreen: View {
                 Task {
                     await model.refresh()
                     pendingNotificationAsk = model.asksAboutNotifications()
+                    if !result.allowsAdd {
+                        return
+                    }
                     if let scan = await model.freshInstall(after: descriptor) {
                         pendingFreshInstall = FreshInstallItem(descriptor: descriptor, scan: scan)
                     } else {
