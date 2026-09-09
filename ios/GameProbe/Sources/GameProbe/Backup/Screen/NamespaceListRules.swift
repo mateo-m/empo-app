@@ -61,8 +61,8 @@ public struct NamespaceDeleteConfirmation: Equatable, Sendable {
 /// The namespace list rules of SPEC 13.9.
 public enum NamespaceListRules {
 
-    /// Deleting manifests deletes no blob, per invariant 6.
-    public static let spaceLine = "The space returns on the next sweep."
+    public static let spaceLine =
+        "This removes these backups from the server right away. Your other backups are not affected."
 
     public static func title(of row: BackupNamespaceRow) -> String {
         row.isEarlierSpace ? "This device, earlier space" : row.deviceName

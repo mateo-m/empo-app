@@ -228,7 +228,9 @@ final class BackupsScreenTests: XCTestCase {
         XCTAssertEqual(confirmation?.buttonLabel, "Delete 34 snapshots")
         XCTAssertEqual(
             confirmation?.lines, ["Old iPhone", "5 games", "34 snapshots", "4 March to 2 August 2026"])
-        XCTAssertEqual(confirmation?.spaceLine, "The space returns on the next sweep.")
+        XCTAssertEqual(
+            confirmation?.spaceLine,
+            "This removes these backups from the server right away. Your other backups are not affected.")
     }
 
     func testTheDestructiveButtonCountsOneSnapshotInTheSingular() {
