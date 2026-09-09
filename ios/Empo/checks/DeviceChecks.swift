@@ -184,6 +184,490 @@ final class DeviceChecks: XCTestCase {
         note("killed Empo so the staging and the outbox can be read")
     }
 
+    // MARK: - 016 check 4
+
+    /// Server B answers 401 before this runs, so the first manual run
+    /// puts 192.168.0.40 in needs-sign-in. The pause then has to win
+    /// the row, and the next manual run has to skip the target.
+    func testPausedTargetOutranksNeedsSignIn() {
+        launchEmpo(arguments: ["-debugLogs", "YES", "-backupPressNow", "YES"], answeringNotNow: true)
+        sleep(45)
+        note("pill 45 s after the press: \(pillLine())")
+        openBackupsScreen()
+        note("row before the pause: \(targetRowLabel())")
+        note("Sign in button shows: \(empo.buttons["Sign in"].firstMatch.exists)")
+        shot("row-needs-sign-in")
+        targetRow.tap()
+        let pause = empo.switches["Pause"].firstMatch
+        XCTAssertTrue(pause.waitForExistence(timeout: 10), "no Pause switch on the target screen")
+        (pause.switches.firstMatch.exists ? pause.switches.firstMatch : pause).tap()
+        sleep(1)
+        note("Pause switch reads \(pause.value as? String ?? "?")")
+        shot("target-paused")
+        empo.navigationBars.buttons.firstMatch.tap()
+        sleep(1)
+        note("row after the pause: \(targetRowLabel())")
+        note("Resume button shows: \(empo.buttons["Resume"].firstMatch.exists)")
+        note("Sign in button shows: \(empo.buttons["Sign in"].firstMatch.exists)")
+        shot("row-paused")
+        let backUpNow = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Back up now'")).firstMatch
+        XCTAssertTrue(backUpNow.waitForExistence(timeout: 120), "no Back up now button")
+        note("Back up now reads: \(backUpNow.label), enabled \(backUpNow.isEnabled)")
+        backUpNow.tap()
+        note("pressed Back up now with the target paused")
+        sleep(45)
+        note("pill 45 s after the press: \(pillLine())")
+        note("row after the run: \(targetRowLabel())")
+        shot("after-run-with-pause")
+        empo.terminate()
+    }
+
+    /// 016 check 3 for WebDAV. Server B is back on its password, and
+    /// the row's Sign in reruns the permission check with what the
+    /// Keychain holds.
+    func testSignInAgainRecoversTarget() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        note("row before Sign in: \(targetRowLabel())")
+        let signIn = empo.buttons["Sign in"].firstMatch
+        XCTAssertTrue(signIn.waitForExistence(timeout: 10), "no Sign in button on the row")
+        signIn.tap()
+        let close = empo.buttons["Close"].firstMatch
+        note("permission check sheet shows: \(close.waitForExistence(timeout: 30))")
+        sleep(2)
+        note("sheet texts: \(empo.staticTexts.allElementsBoundByIndex.prefix(12).map(\.label))")
+        shot("permission-check-after-sign-in")
+        close.tap()
+        sleep(2)
+        note("row after Sign in: \(targetRowLabel())")
+        note("Sign in button shows: \(signIn.exists)")
+        shot("row-after-sign-in")
+    }
+
+    /// Puts 192.168.0.40 back to work through the row's Resume button.
+    func testResumePausedTarget() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        note("row before Resume: \(targetRowLabel())")
+        let resume = empo.buttons["Resume"].firstMatch
+        XCTAssertTrue(resume.waitForExistence(timeout: 10), "no Resume button on the row")
+        resume.tap()
+        sleep(2)
+        note("row after Resume: \(targetRowLabel())")
+        shot("row-resumed")
+    }
+
+    /// The export picker of iOS 27 has Save and a back chevron and no
+    /// Cancel. A drag down from its bar is the cancel.
+    /// The iOS 27 export picker opens inside a folder. Its back chevron
+    /// carries the parent's name and Cancel lives on the browse root.
+    /// The picker's bar is not an XCUI navigation bar, so the chevron
+    /// is found by label. A drag down from the top long-presses the
+    /// folder title instead.
+    private func dismissThePicker() {
+        let cancel = empo.buttons["Cancel"].firstMatch
+        for _ in 0..<4 where !cancel.exists {
+            let labels = empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+            note("picker buttons: \(labels.suffix(8))")
+            guard let parent = ["On My iPhone", "Browse", "Locations"].first(where: { labels.contains($0) }) else {
+                break
+            }
+            empo.buttons[parent].firstMatch.tap()
+            sleep(2)
+        }
+        note("picker Cancel shows: \(cancel.exists)")
+        if cancel.exists {
+            cancel.tap()
+        } else {
+            let top = empo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.06))
+            let bottom = empo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            top.press(forDuration: 0.05, thenDragTo: bottom)
+        }
+        sleep(2)
+    }
+
+    private var targetRow: XCUIElement {
+        empo.buttons.matching(NSPredicate(format: "label BEGINSWITH '192.168.0.40'")).firstMatch
+    }
+
+    private func targetRowLabel() -> String {
+        targetRow.waitForExistence(timeout: 10) ? targetRow.label : "(no row)"
+    }
+
+    /// Library gear, then the Backups row of Settings.
+    private func openBackupsScreen() {
+        let gear = empo.buttons["Settings"].firstMatch
+        XCTAssertTrue(gear.waitForExistence(timeout: 10), "no Settings gear")
+        gear.tap()
+        let row = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Backups'")).firstMatch
+        // The list builds its rows on the way down, so a row below
+        // the fold is not in the tree until a swipe brings it up.
+        for _ in 0..<6 where !row.waitForExistence(timeout: 2) {
+            empo.swipeUp()
+        }
+        XCTAssertTrue(row.exists, "no Backups row in Settings")
+        row.tap()
+        XCTAssertTrue(empo.navigationBars["Backups"].waitForExistence(timeout: 10), "no Backups screen")
+    }
+
+    // MARK: - 018 check 8
+
+    /// Puts the game back on "The whole game", so the next run has
+    /// bytes to move.
+    func testSetWholeGameMode() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        setMode("The whole game")
+    }
+
+    /// Puts the game on "Saves and settings only", so an export
+    /// builds in seconds.
+    func testSetSlimMode() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        setMode("Saves and settings only")
+    }
+
+    private func setMode(_ label: String) {
+        openGameBackupSheet()
+        let modeRow = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'What gets backed up'")).firstMatch
+        note("mode row before: \(modeRow.label)")
+        modeRow.tap()
+        sleep(1)
+        let option = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+        let optionText = empo.staticTexts[label].firstMatch
+        (option.exists ? option : optionText).tap()
+        sleep(2)
+        note("mode row after: \(modeRow.waitForExistence(timeout: 5) ? modeRow.label : "(no row)")")
+        shot("mode-set")
+        empo.buttons["Done"].firstMatch.tap()
+    }
+
+    // MARK: - 019 check 3
+
+    /// Exports the game, cancels the Files picker, and takes both
+    /// answers of the Save again / Delete choice, one before a
+    /// relaunch and one after it.
+    func testExportCancelThenChoice() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openGameBackupSheet()
+        empo.buttons["Export backup"].firstMatch.tap()
+        let save = empo.buttons["Save"].firstMatch
+        note("Files picker shows: \(save.waitForExistence(timeout: 120))")
+        shot("export-picker")
+        dismissThePicker()
+        let saveAgain = empo.buttons["Save again"].firstMatch
+        note("Save again shows: \(saveAgain.waitForExistence(timeout: 10)), Delete shows: \(empo.buttons["Delete"].firstMatch.exists)")
+        note("choice texts: \(empo.staticTexts.allElementsBoundByIndex.filter { $0.frame.minY > 400 }.map(\.label))")
+        shot("export-choice")
+        saveAgain.tap()
+        note("Files picker shows again: \(save.waitForExistence(timeout: 30))")
+        dismissThePicker()
+        note("Save again shows again: \(saveAgain.waitForExistence(timeout: 10))")
+        empo.terminate()
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        let question = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Empo built'")).firstMatch
+        for _ in 0..<4 where !question.waitForExistence(timeout: 2) {
+            empo.swipeUp()
+        }
+        note("question row after the relaunch: \(question.exists ? question.label : "(no row)")")
+        shot("question-row")
+        question.tap()
+        let delete = empo.buttons["Delete"].firstMatch
+        note("choice shows after the relaunch: \(delete.waitForExistence(timeout: 10))")
+        shot("choice-after-relaunch")
+        delete.tap()
+        sleep(2)
+        note("question row after Delete: \(question.exists ? question.label : "(no row)")")
+        shot("after-delete")
+    }
+
+    /// 019 check 1, the local half. The picker opens on Empo's own
+    /// folder, so Save lands the ZIP in Documents. iCloud Drive
+    /// needs the user's account.
+    func testExportSaveToEmpoFolder() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openGameBackupSheet()
+        let export = empo.buttons["Export backup"].firstMatch
+        let start = Date()
+        while !export.isEnabled, Date().timeIntervalSince(start) < 900 { sleep(5) }
+        note("Export backup enabled after \(Int(Date().timeIntervalSince(start))) s")
+        export.tap()
+        let save = empo.buttons["Save"].firstMatch
+        let began = Date()
+        var lastLine = ""
+        while !save.exists, Date().timeIntervalSince(began) < 900 {
+            let texts = empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+            let line = texts.drop(while: { $0 != "Export backup" }).dropFirst().prefix(3).joined(separator: " | ")
+            if line != lastLine {
+                note("export sheet: \(line)")
+                lastLine = line
+            }
+            if empo.buttons.matching(identifier: "Done").allElementsBoundByIndex.count > 1 || line.contains("free space") || line.contains("could not") {
+                shot("export-stopped")
+            }
+            sleep(5)
+        }
+        note("Files picker shows: \(save.exists) after \(Int(Date().timeIntervalSince(began))) s")
+        guard save.exists else {
+            shot("export-no-picker")
+            return
+        }
+        save.tap()
+        sleep(3)
+        let labels = empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        note("buttons after Save: \(labels.suffix(8))")
+        shot("after-save")
+        // A ZIP of the same name is already there, so the picker asks
+        // "Replace Existing Item". Its buttons are outside Empo's
+        // accessibility tree, so the tap goes by position.
+        let replace = empo.descendants(matching: .any)["Replace"].firstMatch
+        note("Replace reachable: \(replace.exists)")
+        if replace.exists {
+            replace.tap()
+        } else {
+            empo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.543)).tap()
+        }
+        sleep(4)
+        note("export sheet gone: \(!empo.staticTexts["Export backup"].firstMatch.exists), Backup sheet shows: \(empo.buttons["Export backup"].firstMatch.exists)")
+        shot("after-export")
+        empo.terminate()
+    }
+
+    /// Files opens the ZIP Empo saved into its own folder through
+    /// "Open With", and Empo shows the import sheet.
+    private func openPackageFromFiles() {
+        let files = XCUIApplication(bundleIdentifier: "com.apple.DocumentsApp")
+        files.launch()
+        sleep(3)
+        shot("files-launch")
+        note("files buttons: \(files.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.prefix(20))")
+        let browse = files.tabBars.buttons["Browse"].firstMatch
+        if browse.exists { browse.tap(); sleep(1); browse.tap(); sleep(1) }
+        let onMyIPhone = files.staticTexts["On My iPhone"].firstMatch
+        if !onMyIPhone.exists, files.buttons["Browse"].firstMatch.exists {
+            files.buttons["Browse"].firstMatch.tap()
+            sleep(1)
+        }
+        note("On My iPhone shows: \(onMyIPhone.waitForExistence(timeout: 10))")
+        onMyIPhone.tap()
+        sleep(2)
+        let empoFolder = files.staticTexts["Empo"].firstMatch
+        note("Empo folder shows: \(empoFolder.waitForExistence(timeout: 10))")
+        shot("files-on-my-iphone")
+        empoFolder.tap()
+        sleep(2)
+        let zip = files.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'In Search of Immortality-Empo-backup'")).firstMatch
+        note("ZIP shows: \(zip.waitForExistence(timeout: 10)), label \(zip.exists ? zip.label : "")")
+        shot("files-empo-folder")
+        zip.press(forDuration: 1.2)
+        sleep(2)
+        shot("files-zip-menu")
+        note("menu buttons: \(files.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(20))")
+        let openWith = files.buttons["Open With"].firstMatch
+        note("Open With shows: \(openWith.waitForExistence(timeout: 5))")
+        openWith.tap()
+        sleep(3)
+        shot("files-open-with")
+        let any = files.descendants(matching: .any)
+        let empoTarget = any.matching(NSPredicate(format: "label == 'Empo' OR label BEGINSWITH 'Empo,'")).firstMatch
+        note("Empo in Open With: \(empoTarget.waitForExistence(timeout: 5)), label \(empoTarget.exists ? empoTarget.label : "")")
+        note("open with labels: \(files.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(20)), cells \(files.cells.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.prefix(12))")
+        if empoTarget.exists { empoTarget.tap() }
+        note("Empo in front: \(empo.wait(for: .runningForeground, timeout: 20))")
+        sleep(3)
+        if empo.staticTexts["Something went wrong"].firstMatch.exists { empo.buttons["OK"].firstMatch.tap() }
+        let importBar = empo.navigationBars["Import backup"].firstMatch
+        note("import sheet shows: \(importBar.waitForExistence(timeout: 20))")
+        note("import texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(8))")
+        shot("import-sheet")
+    }
+
+    /// The row is a plain button whose label is the name plus the
+    /// size. The library card behind the sheet has the bare name.
+    private var importRow: XCUIElement {
+        empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'In Search of Immortality' AND label ENDSWITH 'B'")).firstMatch
+    }
+
+    /// 019 checks 4 and 5. The restore lands over the game this phone
+    /// holds.
+    func testOpenPackageFromFilesAndImport() {
+        openPackageFromFiles()
+        let row = importRow
+        note("game row in the import sheet: \(row.exists ? row.label : "(none)")")
+        row.tap()
+        let restore = empo.buttons["Restore"].firstMatch
+        note("restore sheet shows: \(restore.waitForExistence(timeout: 10))")
+        note("restore texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        shot("restore-sheet")
+        restore.tap()
+        sleep(15)
+        note("after restore texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        note("after restore buttons: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        shot("after-restore")
+        for name in ["Done", "Cancel"] where empo.buttons[name].firstMatch.exists {
+            empo.buttons[name].firstMatch.tap()
+            sleep(1)
+        }
+        shot("after-import-close")
+        openGameBackupSheet()
+        for _ in 0..<3 { empo.swipeUp() }
+        note("backup sheet texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(10))")
+        shot("backup-sheet-after-import")
+        empo.terminate()
+    }
+
+    /// 019 check 6. A whole-game import dies right after Restore. The
+    /// next launch asks the resume question, and Stop deletes the
+    /// staged package.
+    func testInterruptImportThenStop() {
+        openPackageFromFiles()
+        // A package Files opened in place is copied into staging
+        // first, 3 GB here.
+        note("row shows: \(importRow.waitForExistence(timeout: 600))")
+        importRow.tap()
+        let restore = empo.buttons["Restore"].firstMatch
+        note("restore sheet shows: \(restore.waitForExistence(timeout: 10))")
+        empo.buttons["The whole game"].firstMatch.tap()
+        sleep(1)
+        restore.tap()
+        // The plan compares 340 files by hash first, about 3 s on
+        // this phone, and the record lands before the first write.
+        sleep(5)
+        empo.terminate()
+        note("Empo killed 5 s after Restore")
+        sleep(3)
+        launchEmpo(arguments: ["-debugLogs", "YES"])
+        let title = empo.staticTexts["Resume the restore?"].firstMatch
+        note("resume question shows: \(title.waitForExistence(timeout: 15))")
+        note("question texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        note("question buttons: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        shot("resume-question")
+        let stop = empo.buttons["Stop restore"].firstMatch
+        stop.tap()
+        let stopTitle = empo.staticTexts["Stop the restore?"].firstMatch
+        note("stop step shows: \(stopTitle.waitForExistence(timeout: 10))")
+        note("stop texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(4))")
+        shot("stop-step")
+        stop.tap()
+        sleep(3)
+        note("question gone: \(!title.exists)")
+        shot("after-stop")
+        empo.terminate()
+        launchEmpo(arguments: ["-debugLogs", "YES"])
+        note("question comes back: \(title.waitForExistence(timeout: 8))")
+        empo.terminate()
+    }
+
+    /// One row stands for every unsaved package. Each Delete removes one.
+    func testRestoreWholeGameFromFiles() {
+        openPackageFromFiles()
+        note("row shows: \(importRow.waitForExistence(timeout: 600))")
+        importRow.tap()
+        let restore = empo.buttons["Restore"].firstMatch
+        note("restore sheet shows: \(restore.waitForExistence(timeout: 10))")
+        empo.buttons["The whole game"].firstMatch.tap()
+        sleep(1)
+        restore.tap()
+        // The restore sheet shows no progress. It closes itself when
+        // the restore finishes, and a footnote stays when it fails.
+        let scope = empo.buttons["The whole game"].firstMatch
+        let start = Date()
+        var footnote = ""
+        while scope.exists, footnote.isEmpty, Date().timeIntervalSince(start) < 900 {
+            sleep(5)
+            footnote = empo.staticTexts.allElementsBoundByIndex.map(\.label)
+                .first { $0.hasPrefix("This device needs") || $0 == "The restore stopped." } ?? ""
+        }
+        note("restore sheet gone after \(Int(Date().timeIntervalSince(start))) s: \(!scope.exists), footnote: \(footnote)")
+        shot("whole-game-restored")
+        let done = empo.buttons["Done"].firstMatch
+        if done.exists { done.tap() }
+        sleep(2)
+        empo.terminate()
+    }
+
+    func testResumeInterruptedImportFromFiles() {
+        // A record from a cut restore waits. Files opens the package
+        // at the same time, so both sheets ask for the one slot.
+        openPackageFromFiles()
+        let title = empo.staticTexts["Resume the restore?"].firstMatch
+        note("resume question shows: \(title.waitForExistence(timeout: 10))")
+        shot("question-over-files-open")
+        empo.buttons["Resume"].firstMatch.tap()
+        let importBar = empo.navigationBars["Import backup"].firstMatch
+        let start = Date()
+        while !importBar.exists, Date().timeIntervalSince(start) < 300 {
+            sleep(10)
+            note("after Resume texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(5))")
+        }
+        note("import sheet shows after the resume, \(Int(Date().timeIntervalSince(start))) s: \(importBar.exists)")
+        shot("after-resume")
+        let done = empo.buttons["Done"].firstMatch
+        if done.exists { done.tap() }
+        sleep(2)
+        empo.terminate()
+    }
+
+    func testAnswerResumeWithResume() {
+        launchEmpo(arguments: ["-debugLogs", "YES"])
+        let title = empo.staticTexts["Resume the restore?"].firstMatch
+        note("resume question shows: \(title.waitForExistence(timeout: 15))")
+        if title.exists { empo.buttons["Resume"].firstMatch.tap() }
+        sleep(30)
+        note("question gone: \(!title.exists)")
+        empo.terminate()
+        launchEmpo(arguments: ["-debugLogs", "YES"])
+        note("question comes back: \(title.waitForExistence(timeout: 8))")
+        empo.terminate()
+    }
+
+    func testDeleteUnsavedPackages() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        let question = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Empo built'")).firstMatch
+        for _ in 0..<4 where !question.waitForExistence(timeout: 2) {
+            empo.swipeUp()
+        }
+        var deleted = 0
+        while question.exists, deleted < 6 {
+            question.tap()
+            let delete = empo.buttons["Delete"].firstMatch
+            guard delete.waitForExistence(timeout: 10) else { break }
+            delete.tap()
+            deleted += 1
+            sleep(2)
+        }
+        note("deleted \(deleted) unsaved packages, row still shows: \(question.exists)")
+    }
+
+    /// The pill and the card's ring both go while a game is open.
+    /// The ring has no accessibility label, so the screenshots carry
+    /// that half.
+    func testPillAndBadgeHideWhileAGamePlays() {
+        launchEmpo(arguments: ["-debugLogs", "YES", "-backupPressNow", "YES"], answeringNotNow: true)
+        watchPill(until: "Backing up", timeout: 600)
+        sleep(2)
+        shot("library-during-run")
+        let card = empo.buttons["In Search of Immortality"].firstMatch
+        card.tap()
+        sleep(10)
+        note("pill in the game: \(pillLine())")
+        shot("in-game-during-run")
+        let menu = empo.buttons["Menu"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), "no Menu button in the game")
+        menu.tap()
+        let pauseRow = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Pause '")).firstMatch
+        XCTAssertTrue(pauseRow.waitForExistence(timeout: 5), "no Pause row in the menu")
+        pauseRow.tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "no card after the pause")
+        sleep(3)
+        note("pill with the game paused in the library: \(pillLine())")
+        shot("library-game-paused-during-run")
+        sleep(20)
+        note("pill 20 s later: \(pillLine())")
+        empo.terminate()
+    }
+
     // MARK: - 017 checks 1 to 3, and 018 check 5
 
     /// Opens the per-game Backup sheet during a run for that game,
@@ -373,6 +857,13 @@ final class DeviceChecks: XCTestCase {
         empo.launchArguments = arguments
         empo.launch()
         note("Empo launched with \(arguments.joined(separator: " "))")
+        // A kill with a game session open earns the player's crash
+        // notice at the next launch.
+        let crashNotice = empo.staticTexts["Something went wrong"].firstMatch
+        if crashNotice.waitForExistence(timeout: 2) {
+            empo.buttons["OK"].firstMatch.tap()
+            note("closed the player's crash notice")
+        }
         guard answeringNotNow, resumeTitle.waitForExistence(timeout: 3) else { return }
         empo.buttons["Not now"].firstMatch.tap()
         note("a resume question waited, answered Not now")
