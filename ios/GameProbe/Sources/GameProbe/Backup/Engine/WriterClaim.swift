@@ -115,7 +115,7 @@ public enum WriterClaimDecision: Equatable, Sendable {
 }
 
 /// What the user chose after a mismatch, per SPEC 5.12.
-public enum WriterClaimResolution: String, Equatable, Sendable, CaseIterable {
+public enum WriterClaimResolution: String, Codable, Equatable, Sendable, CaseIterable {
     /// Write to a new namespace from now on. This is the default.
     /// The abandoned namespace keeps its snapshots and stays
     /// restorable.

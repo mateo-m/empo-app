@@ -39,6 +39,8 @@ struct BackupsScreen: View {
                     emptyState
                 } else {
                     statusSection
+                    splitLine
+                    writerQuestions
                     adoptBanners
                     runBlock
                     backUpNowSection
@@ -181,6 +183,51 @@ struct BackupsScreen: View {
                     .font(.headline)
                     .foregroundStyle(status.isHealthy ? Color.primary : Color.orange)
                     .padding(.vertical, Spacing.xs)
+            }
+        }
+    }
+
+    // MARK: - The writer question, per 5.12
+
+    @ViewBuilder private var writerQuestions: some View {
+        ForEach(model.writerQuestions) { item in
+            Section {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Text(
+                        WriterConflictQuestion.line(
+                            deviceName: item.deviceName, targetLabel: item.targetLabel)
+                    )
+                    .font(.subheadline)
+                    Text(WriterConflictQuestion.note)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: Spacing.lg) {
+                        Button(WriterConflictQuestion.label(of: .split)) {
+                            model.answerTheWriterQuestion(item, resolution: .split)
+                        }
+                        .buttonStyle(PrimaryButtonStyle(size: .sm))
+                        Button(WriterConflictQuestion.label(of: .takeOver)) {
+                            model.answerTheWriterQuestion(item, resolution: .takeOver)
+                        }
+                        .buttonStyle(SecondaryButtonStyle(size: .sm))
+                    }
+                }
+                .padding(.vertical, Spacing.xs)
+            }
+        }
+    }
+
+    @ViewBuilder private var splitLine: some View {
+        if model.showsTheSplitLine {
+            Section {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    Text(BackupNotificationRule.writerSplitLine)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("OK") { model.closeTheSplitLine() }
+                        .buttonStyle(SecondaryButtonStyle(size: .sm))
+                }
+                .padding(.vertical, Spacing.xs)
             }
         }
     }

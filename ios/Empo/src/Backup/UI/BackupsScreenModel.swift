@@ -33,6 +33,15 @@ struct NamespaceGameRow: Identifiable {
     var rows: [SnapshotRow]
 }
 
+/// The writer question of SPEC 5.12, for one target.
+struct WriterQuestionItem: Identifiable {
+    var targetId: String
+    var targetLabel: String
+    var deviceName: String
+
+    var id: String { targetId }
+}
+
 /// The adopt banner of SPEC 13.13.
 struct AdoptBannerItem: Identifiable {
     var targetId: String
@@ -62,6 +71,9 @@ final class BackupsScreenModel {
     private(set) var status: BackupsScreenStatus?
     private(set) var history: [BackupRunRecord] = []
     private(set) var adoptBanners: [AdoptBannerItem] = []
+    private(set) var writerQuestions: [WriterQuestionItem] = []
+    /// The line of 7.11, after a split, until the user closes it.
+    private(set) var showsTheSplitLine = false
     /// Whether the row above Backup history shows, per 13.19.
     private(set) var asksForNotifications = false
     /// Whether the sheet of 13.19 comes up after this add.
@@ -109,6 +121,16 @@ final class BackupsScreenModel {
         }
         self.items = items
         self.history = runs
+        let conflicts = WriterConflicts.read(
+            applicationSupport: BackupRoot.layout.applicationSupport)
+        writerQuestions = descriptors.compactMap { descriptor in
+            conflicts.questions[descriptor.id].map {
+                WriterQuestionItem(
+                    targetId: descriptor.id, targetLabel: descriptor.displayName,
+                    deviceName: $0.deviceName)
+            }
+        }
+        showsTheSplitLine = conflicts.showsTheSplitLine
         self.status = BackupsScreenStatusRules.status(
             of: facts,
             lastSuccessText: runs.first { $0.outcome == .success }?.finishedAt
@@ -211,6 +233,7 @@ final class BackupsScreenModel {
             defer { store.close() }
             try store.removeTarget(targetId: targetId)
             try SyncStore.update { $0.forget(targetId: targetId) }
+            updateTheConflicts { $0.forget(targetId: targetId) }
             try BackupKeychain.removeSecret(targetId: targetId)
             try BackupTargets.update { $0.removeAll { $0.id == targetId } }
         } catch {
@@ -338,6 +361,28 @@ final class BackupsScreenModel {
             try? BackupKeychain.adoptNamespaceId(banner.namespaceId)
         }
         adoptBanners.removeAll { $0.id == banner.id }
+    }
+
+    // MARK: - The writer question, per 5.12
+
+    /// The answer starts a run at once, so the user sees the split or
+    /// the take-over happen.
+    func answerTheWriterQuestion(_ item: WriterQuestionItem, resolution: WriterClaimResolution) {
+        updateTheConflicts { $0.answer(targetId: item.targetId, resolution: resolution) }
+        writerQuestions.removeAll { $0.id == item.id }
+        backUpNow()
+    }
+
+    func closeTheSplitLine() {
+        updateTheConflicts { $0.showsTheSplitLine = false }
+        showsTheSplitLine = false
+    }
+
+    private func updateTheConflicts(_ change: (inout WriterConflicts) -> Void) {
+        let applicationSupport = BackupRoot.layout.applicationSupport
+        var conflicts = WriterConflicts.read(applicationSupport: applicationSupport)
+        change(&conflicts)
+        try? conflicts.write(applicationSupport: applicationSupport)
     }
 
     // MARK: - Notifications, per 13.19

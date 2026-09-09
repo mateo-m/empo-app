@@ -104,6 +104,9 @@ final class BackupPass: BackupRunning {
             return nil
         }
 
+        var conflicts = WriterConflicts.read(
+            applicationSupport: BackupRoot.layout.applicationSupport)
+        let answer = conflicts.answer(for: descriptor.id)
         let request = BackupRunRequest(
             runId: UUID().uuidString,
             descriptor: descriptor,
@@ -116,6 +119,8 @@ final class BackupPass: BackupRunning {
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
+            writerResolution: answer?.resolution,
+            splitNamespaceId: answer?.splitNamespaceId,
             syncGroupId: SyncStore.state().groupId)
 
         // The engine takes the store over. `SQLiteDatabase` closes
@@ -130,7 +135,30 @@ final class BackupPass: BackupRunning {
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"
                 + (result.stop.map { ", stop \($0)" } ?? ""))
+        conflicts.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
+        try? conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
+        if result.didSplit {
+            moveTheDevice(to: result.namespaceId, after: descriptor)
+        }
         return result
+    }
+
+    /// The namespace id is one per device, so a split on one target
+    /// moves every target to the new space. The others start from a
+    /// full upload on their next run, like the one that split.
+    private func moveTheDevice(to namespaceId: String, after descriptor: TargetDescriptor) {
+        do {
+            try BackupKeychain.adoptNamespaceId(namespaceId)
+        } catch {
+            log("\(descriptor.label) split to \(namespaceId) but the Keychain kept the old id")
+            return
+        }
+        log("\(descriptor.label) split, the device now writes to \(namespaceId)")
+        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
+        defer { store.close() }
+        for other in BackupTargets.load() where other.id != descriptor.id {
+            try? store.clearNamespaceState(targetId: other.id)
+        }
     }
 
     // MARK: - The games
@@ -199,6 +227,9 @@ final class BackupPass: BackupRunning {
         of result: BackupRunResult, causes: Set<BackupFailFastCause>, label: String
     ) -> String {
         let device = BackupDeviceConditions.deviceName
+        if case .writerConflict = result.stop {
+            return WriterConflictQuestion.stopLine(targetLabel: label)
+        }
         if let cause = StaleCause.of(result.stop.flatMap(TargetFailure.of)) {
             return cause.line(targetLabel: label, deviceName: device)
         }
