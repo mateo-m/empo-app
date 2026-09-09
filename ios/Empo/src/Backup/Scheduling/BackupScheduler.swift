@@ -94,12 +94,17 @@ final class BackupScheduler {
         BackupTransferSession.shared.start()
         ICloudDriveGate.shared.start()
         runner = BackupPass.shared
-        observeAppLifetime()
         BackupTaskScheduler.scheduleNightly()
-        countTheRunsThatVanished()
         PackageRecord.deleteThePackagesWithoutARecord(localRoot: BackupRoot.layout.root)
         log("the schedule started")
-        BackupDeviceCheck.run()
+        // The active notification of this launch fires before the
+        // gate opens, so the catch-up wait starts by hand here.
+        BackupLaunchGate.shared.whenOpen {
+            self.observeAppLifetime()
+            self.appDidBecomeActive()
+            self.countTheRunsThatVanished()
+            BackupDeviceCheck.run()
+        }
     }
 
     private func observeAppLifetime() {

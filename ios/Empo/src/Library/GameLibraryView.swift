@@ -237,7 +237,9 @@ struct GameLibraryView: View {
     /// only an active app takes the question. `scenePhase` stays
     /// `.inactive` under the UIHostingController, so this reads UIKit.
     private func takeTheResumeQuestion() {
-        guard UIApplication.shared.applicationState == .active, !Self.tookTheResumeQuestion else {
+        guard UIApplication.shared.applicationState == .active, splashDismissed,
+            !Self.tookTheResumeQuestion
+        else {
             return
         }
         // The library comes back from the player with a new `.task`,
@@ -275,7 +277,7 @@ struct GameLibraryView: View {
             .modifier(
                 DuplicateGamesNotice(names: $duplicateNoticeNames, active: splashDismissed)
             )
-            .modifier(PackageImportPresentation())
+            .modifier(PackageImportPresentation(active: splashDismissed))
             .modifier(
                 SaveRecoveryPresentation(games: library.games, active: splashDismissed)
             )
@@ -402,7 +404,7 @@ struct GameLibraryView: View {
     /// The one banner of 7.1, at 21 days. It names the cause and
     /// carries the single action that clears it.
     @ViewBuilder private var backupStaleBanner: some View {
-        if let banner = BackupBadges.shared.banner, !selectionMode {
+        if let banner = BackupBadges.shared.banner, !selectionMode, splashDismissed {
             BackupStaleBannerView(
                 banner: banner, targetLabel: BackupBadges.shared.bannerTargetLabel
             ) {
@@ -437,7 +439,7 @@ struct GameLibraryView: View {
     }
 
     private var showsBackupPill: Bool {
-        BackupRunMonitor.shared.showsPill && !selectionMode
+        BackupRunMonitor.shared.showsPill && !selectionMode && splashDismissed
     }
 
     /// The floating pills of the library, one above the other: the
@@ -1087,6 +1089,7 @@ struct GameLibraryView: View {
 
     private func handleSplashDismissedChange(_ dismissed: Bool) {
         if dismissed {
+            takeTheResumeQuestion()
             staggerTrigger = UUID()
             // Clear entrance delay after first mount so subsequent
             // animations (view mode switch, new imports) play instantly.

@@ -18,7 +18,7 @@ final class EmpoSceneDelegate: UIResponder, UIWindowSceneDelegate {
         BackupScheduler.shared.start()
         // The preference sync of SPEC 10. It runs when Empo opens,
         // per 10.11.
-        SyncPass.shared.start()
+        BackupLaunchGate.shared.whenOpen { SyncPass.shared.start() }
         // A cold launch from Files delivers the file here, not in
         // openURLContexts.
         self.scene(scene, openURLContexts: connectionOptions.urlContexts)

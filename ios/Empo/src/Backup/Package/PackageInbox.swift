@@ -34,10 +34,18 @@ final class PackageInbox {
 /// Shows the import sheet for a package Files opened.
 struct PackageImportPresentation: ViewModifier {
 
+    /// False while the splash is up. The sheet waits for it.
+    var active: Bool = true
     @State private var inbox = PackageInbox.shared
 
+    private var pending: Binding<PickedPackage?> {
+        Binding(
+            get: { active ? inbox.pending : nil },
+            set: { inbox.pending = $0 })
+    }
+
     func body(content: Content) -> some View {
-        content.sheet(item: $inbox.pending) { picked in
+        content.sheet(item: pending) { picked in
             // Import is closed while a game runs, per 7.6.
             if PackageDoors.opens(gameIsPlaying: BackupDeviceConditions.isSessionLive) {
                 PackageImportSheet(picked: picked.url)

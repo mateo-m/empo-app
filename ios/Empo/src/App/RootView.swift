@@ -90,6 +90,9 @@ struct RootView: View {
         }
         .fontDesign(.rounded)
         .tint(.brand)
+        .onChange(of: splashDismissed, initial: true) { _, dismissed in
+            if dismissed { BackupLaunchGate.shared.open() }
+        }
         .onChange(of: appState.phase) { _, phase in
             if phase == .playing {
                 // GameLoadingView flips the phase inside a spring of
