@@ -920,21 +920,36 @@ final class DeviceChecks: XCTestCase {
             fill(hint: "eu-west-1", with: env["EMPO_REGION"] ?? "")
             fill(hint: "", with: env["EMPO_USER"] ?? "")
             fill(hint: "", with: env["EMPO_PASSWORD"] ?? "", secret: true)
+            hideKeyboard()
             if env["EMPO_PATH_STYLE"] == "YES" {
                 let toggle = empo.switches["Put the bucket name in the path"].firstMatch
                 for _ in 0..<3 where !toggle.exists { empo.swipeUp() }
-                toggle.tap()
+                // The row label of a SwiftUI Toggle takes no tap. The knob does.
+                let knob = toggle.switches.firstMatch
+                (knob.exists ? knob : toggle).tap()
+                sleep(1)
+                if "\(toggle.value ?? "")" != "1" {
+                    toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+                    sleep(1)
+                }
                 note("path style toggle reads \(toggle.value ?? "nil")")
             }
         } else {
             fill(hint: "alice", with: env["EMPO_USER"] ?? "")
             fill(hint: "", with: env["EMPO_PASSWORD"] ?? "", secret: true)
         }
+        hideKeyboard()
         shot("form-\(name)")
         let add = empo.buttons.matching(identifier: "Add").allElementsBoundByIndex.last
         for _ in 0..<3 where !(add?.isHittable ?? false) { empo.swipeUp() }
-        note("form Add enabled: \(add?.isEnabled ?? false)")
+        note("form Add enabled: \(add?.isEnabled ?? false), fields: \(empo.textFields.allElementsBoundByIndex.map { "\($0.value ?? "")" })")
         add?.tap()
+        sleep(3)
+        if empo.navigationBars[service].exists, let add {
+            note("the form stayed after the Add tap, tapping the row by coordinate")
+            add.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).tap()
+            sleep(3)
+        }
         dismissSavePasswordAsk()
         let ready = empo.staticTexts["\(name) is ready"].firstMatch
         let refused = empo.staticTexts["\(name) refused a step"].firstMatch
@@ -1001,7 +1016,11 @@ final class DeviceChecks: XCTestCase {
         if secret {
             field = fields.firstMatch
         } else if hint.isEmpty {
-            field = fields.allElementsBoundByIndex.last ?? fields.firstMatch
+            // An index into the field list races the keyboard, which
+            // re-lays the form. The one field with no hint is stable.
+            field = fields.matching(
+                NSPredicate(format: "placeholderValue == nil OR placeholderValue == ''")
+            ).firstMatch
         } else {
             field = fields.matching(NSPredicate(format: "placeholderValue == %@", hint)).firstMatch
         }
@@ -1011,8 +1030,20 @@ final class DeviceChecks: XCTestCase {
             return
         }
         for _ in 0..<3 where !field.isHittable { empo.swipeUp() }
-        field.tap()
+        // A tap during the scroll that follows a keyboard change lands
+        // on the row that was there before. Tap until the field has focus.
+        for _ in 0..<3 where !field.hasKeyboardFocus {
+            field.tap()
+            usleep(500_000)
+        }
         field.typeText(text)
+    }
+
+    /// A tap under the keyboard hits the keyboard, not the form.
+    private func hideKeyboard() {
+        let done = empo.keyboards.buttons.matching(identifier: "Return").firstMatch
+        if done.exists { done.tap() }
+        sleep(1)
     }
 
     private func notePermissionSheet() {
@@ -1259,4 +1290,8 @@ final class DeviceChecks: XCTestCase {
         formatter.dateFormat = "HH:mm:ss.SSS"
         return formatter
     }()
+}
+
+extension XCUIElement {
+    var hasKeyboardFocus: Bool { (value(forKey: "hasKeyboardFocus") as? Bool) ?? false }
 }
