@@ -286,8 +286,10 @@ final class DeviceChecks: XCTestCase {
         sleep(2)
     }
 
+    /// `EMPO_TARGET` names the row. Server B is the default.
     private var targetRow: XCUIElement {
-        empo.buttons.matching(NSPredicate(format: "label BEGINSWITH '192.168.0.40'")).firstMatch
+        let name = env["EMPO_TARGET"] ?? "192.168.0.40"
+        return empo.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name + ",")).firstMatch
     }
 
     private func targetRowLabel() -> String {
@@ -854,7 +856,8 @@ final class DeviceChecks: XCTestCase {
     // MARK: - Empo
 
     private func launchEmpo(arguments: [String], answeringNotNow: Bool = false) {
-        empo.launchArguments = arguments
+        let extra = (env["EMPO_LAUNCH_ARGS"] ?? "").split(separator: " ").map(String.init)
+        empo.launchArguments = arguments + extra
         empo.launch()
         note("Empo launched with \(arguments.joined(separator: " "))")
         // A kill with a game session open earns the player's crash
@@ -1075,10 +1078,10 @@ final class DeviceChecks: XCTestCase {
         var lastLine = ""
         var stopped = false
         sleep(1)
-        note("sheet texts at start: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        note("sheet texts at start: \(visibleTexts().suffix(6))")
         shot("library-export-start")
         while !save.exists, !stopped, Date().timeIntervalSince(began) < 1800 {
-            let texts = empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+            let texts = visibleTexts()
             let line = texts.drop(while: { !$0.hasPrefix("Export") }).dropFirst().prefix(3).joined(separator: " | ")
             if line != lastLine {
                 note("export sheet: \(line)")
@@ -1112,6 +1115,19 @@ final class DeviceChecks: XCTestCase {
             delete.tap()
             sleep(3)
         }
+    }
+
+    /// One snapshot of every static text. A per-element read races the
+    /// progress sheet, which replaces its rows between two reads.
+    private func visibleTexts() -> [String] {
+        guard let root = try? empo.snapshot() else { return [] }
+        var texts: [String] = []
+        func walk(_ node: XCUIElementSnapshot) {
+            if node.elementType == .staticText, !node.label.isEmpty { texts.append(node.label) }
+            node.children.forEach(walk)
+        }
+        walk(root)
+        return texts
     }
 
     /// Taps the question row of an unsaved package on the Backups
