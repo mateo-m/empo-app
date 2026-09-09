@@ -38,7 +38,7 @@ struct PermissionCheckSheet: View {
         HStack(spacing: Spacing.lg) {
             Image(systemName: symbol(of: step.outcome))
                 .foregroundStyle(color(of: step.outcome))
-            Text(step.label.capitalized)
+            Text(step.label.prefix(1).uppercased() + step.label.dropFirst())
             Spacer(minLength: 0)
         }
         .padding(.vertical, Spacing.sm)
