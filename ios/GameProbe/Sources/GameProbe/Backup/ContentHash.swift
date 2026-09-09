@@ -49,14 +49,18 @@ public enum ContentHash {
 
         var hasher = SHA256()
         while true {
-            let chunk: Data?
-            do {
-                chunk = try handle.read(upToCount: chunkSize)
-            } catch {
-                throw Failure.cannotReadFile(path: url.path)
+            let more = try drainingAutoreleased { () throws -> Bool in
+                let chunk: Data?
+                do {
+                    chunk = try handle.read(upToCount: chunkSize)
+                } catch {
+                    throw Failure.cannotReadFile(path: url.path)
+                }
+                guard let chunk, !chunk.isEmpty else { return false }
+                hasher.update(data: chunk)
+                return true
             }
-            guard let chunk, !chunk.isEmpty else { break }
-            hasher.update(data: chunk)
+            if !more { break }
         }
         return hexString(hasher.finalize())
     }

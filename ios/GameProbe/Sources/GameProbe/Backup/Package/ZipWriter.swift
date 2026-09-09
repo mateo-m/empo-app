@@ -84,9 +84,13 @@ public final class ZipWriter {
         do {
             return try add(path: path, size: size, modifiedAt: stamp) { push in
                 while true {
-                    let bytes = reader.readData(ofLength: chunk)
-                    if bytes.isEmpty { return }
-                    try push(bytes)
+                    let more = try drainingAutoreleased { () throws -> Bool in
+                        let bytes = reader.readData(ofLength: chunk)
+                        if bytes.isEmpty { return false }
+                        try push(bytes)
+                        return true
+                    }
+                    if !more { return }
                 }
             }
         } catch let failure as ZipFailure {

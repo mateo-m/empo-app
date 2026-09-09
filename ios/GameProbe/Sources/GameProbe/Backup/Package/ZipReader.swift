@@ -183,13 +183,15 @@ public final class ZipReader {
         var crc: UInt32 = 0
         let chunk = Int64(1_024 * 1_024)
         while left > 0 {
-            let take = Int(min(chunk, left))
-            let bytes = read(at: start, count: take)
-            guard bytes.count == take else { throw Failure.truncated }
-            crc = RawDeflate.crc32(bytes, seed: crc)
-            out.write(bytes)
-            start += Int64(take)
-            left -= Int64(take)
+            try drainingAutoreleased {
+                let take = Int(min(chunk, left))
+                let bytes = read(at: start, count: take)
+                guard bytes.count == take else { throw Failure.truncated }
+                crc = RawDeflate.crc32(bytes, seed: crc)
+                out.write(bytes)
+                start += Int64(take)
+                left -= Int64(take)
+            }
         }
         guard crc == entry.crc else { throw Failure.checksumMismatch(entry.path) }
     }
@@ -204,16 +206,18 @@ public final class ZipReader {
         var crc: UInt32 = 0
         let chunk = Int64(1_024 * 1_024)
         while left > 0 {
-            let take = Int(min(chunk, left))
-            let bytes = read(at: start, count: take)
-            guard bytes.count == take else { throw Failure.truncated }
-            guard let produced = stream.push(bytes) else {
-                throw Failure.unreadableEntry(entry.path)
+            try drainingAutoreleased {
+                let take = Int(min(chunk, left))
+                let bytes = read(at: start, count: take)
+                guard bytes.count == take else { throw Failure.truncated }
+                guard let produced = stream.push(bytes) else {
+                    throw Failure.unreadableEntry(entry.path)
+                }
+                crc = RawDeflate.crc32(produced, seed: crc)
+                out.write(produced)
+                start += Int64(take)
+                left -= Int64(take)
             }
-            crc = RawDeflate.crc32(produced, seed: crc)
-            out.write(produced)
-            start += Int64(take)
-            left -= Int64(take)
         }
         guard let tail = stream.finish() else { throw Failure.unreadableEntry(entry.path) }
         crc = RawDeflate.crc32(tail, seed: crc)
