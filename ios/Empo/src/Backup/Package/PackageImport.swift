@@ -25,15 +25,17 @@ enum PackageImport {
         let fm = FileManager.default
         try fm.createDirectory(at: directory, withIntermediateDirectories: true)
 
-        // A file the picker copied is ours to move. A file Files
-        // opened in place is not, so that one gets copied under its
-        // security scope.
+        // The import picker copies the ZIP into tmp, and that copy is
+        // ours to move. A file Files opened in place is the user's.
+        // A move of it succeeds when it sits in Empo's own Documents
+        // folder, and the file leaves Files. So that one is copied.
         let scoped = picked.startAccessingSecurityScopedResource()
         defer { if scoped { picked.stopAccessingSecurityScopedResource() } }
         let destination = record.zipURL(localRoot: localRoot)
-        do {
+        let tmp = fm.temporaryDirectory.resolvingSymlinksInPath().path
+        if picked.resolvingSymlinksInPath().path.hasPrefix(tmp) {
             try fm.moveItem(at: picked, to: destination)
-        } catch {
+        } else {
             try fm.copyItem(at: picked, to: destination)
         }
         record.save(in: directory)
