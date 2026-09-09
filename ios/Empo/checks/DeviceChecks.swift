@@ -892,6 +892,245 @@ final class DeviceChecks: XCTestCase {
         XCTFail("the pill never read \"\(prefix)\" within \(Int(timeout)) s, last: \(pillLine())")
     }
 
+
+    // MARK: - 011, 012, 016: targets added through the form
+
+    private var env: [String: String] { ProcessInfo.processInfo.environment }
+
+    /// 012 check 1 and 011 check 1. The xcodebuild call names the
+    /// server through `TEST_RUNNER_EMPO_*` variables.
+    func testAddTargetThroughTheForm() {
+        let service = env["EMPO_SERVICE"] ?? "WebDAV server"
+        let name = env["EMPO_NAME"] ?? "Server"
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        tapAdd()
+        let row = empo.buttons[service].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "no \(service) row on the Add sheet")
+        note("Add sheet rows: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })")
+        row.tap()
+        XCTAssertTrue(empo.navigationBars[service].waitForExistence(timeout: 10), "no \(service) form")
+        fill(hint: service == "S3 storage" ? "My bucket" : "My server", with: name)
+        fill(hint: service == "S3 storage" ? "https://s3.eu-west-1.amazonaws.com" : "https://cloud.example.com/remote.php/dav/files/alice", with: env["EMPO_ADDRESS"] ?? "")
+        if service == "S3 storage" {
+            fill(hint: "my-saves", with: env["EMPO_BUCKET"] ?? "")
+            fill(hint: "eu-west-1", with: env["EMPO_REGION"] ?? "")
+            fill(hint: "", with: env["EMPO_USER"] ?? "")
+            fill(hint: "", with: env["EMPO_PASSWORD"] ?? "", secret: true)
+            if env["EMPO_PATH_STYLE"] == "YES" {
+                let toggle = empo.switches["Put the bucket name in the path"].firstMatch
+                for _ in 0..<3 where !toggle.exists { empo.swipeUp() }
+                toggle.tap()
+                note("path style toggle reads \(toggle.value ?? "nil")")
+            }
+        } else {
+            fill(hint: "alice", with: env["EMPO_USER"] ?? "")
+            fill(hint: "", with: env["EMPO_PASSWORD"] ?? "", secret: true)
+        }
+        shot("form-\(name)")
+        let add = empo.buttons.matching(identifier: "Add").allElementsBoundByIndex.last
+        for _ in 0..<3 where !(add?.isHittable ?? false) { empo.swipeUp() }
+        note("form Add enabled: \(add?.isEnabled ?? false)")
+        add?.tap()
+        dismissSavePasswordAsk()
+        let ready = empo.staticTexts["\(name) is ready"].firstMatch
+        let refused = empo.staticTexts["\(name) refused a step"].firstMatch
+        let start = Date()
+        while !ready.exists, !refused.exists, Date().timeIntervalSince(start) < 120 { sleep(1) }
+        note("permission sheet after \(Int(Date().timeIntervalSince(start))) s: ready \(ready.exists), refused \(refused.exists)")
+        notePermissionSheet()
+        shot("permission-\(name)")
+        dismissSavePasswordAsk()
+        empo.buttons["Close"].firstMatch.tap()
+        sleep(1)
+        noteTargetDetail(name)
+    }
+
+    /// The detail screen of the target named in `EMPO_NAME`.
+    func testNoteTargetDetail() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        noteTargetDetail(env["EMPO_NAME"] ?? "Nextcloud")
+    }
+
+    private func noteTargetDetail(_ name: String) {
+        let target = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        note("target row: \(target.waitForExistence(timeout: 10) ? target.label : "(no row)")")
+        target.tap()
+        XCTAssertTrue(empo.navigationBars[name].waitForExistence(timeout: 10), "no \(name) detail screen")
+        sleep(2)
+        let texts = empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        note("detail texts: \(texts.prefix(8))")
+        note("detail usage line: \(texts.first { $0.contains(" used") || $0.contains("backed up here") } ?? "(none)")")
+        note("usage bar shows: \(empo.progressIndicators.firstMatch.exists)")
+        shot("detail-\(name)")
+    }
+
+    /// The password manager asks to save the password of the form.
+    private func dismissSavePasswordAsk() {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for app in [springboard, empo] {
+            let notNow = app.buttons["Not Now"].firstMatch
+            if notNow.waitForExistence(timeout: 3) {
+                notNow.tap()
+                note("closed the Save Password ask")
+                return
+            }
+        }
+    }
+
+    private func tapAdd() {
+        let names = ["Add", "Add a backup target", "Add a target"]
+        for name in names where empo.buttons[name].firstMatch.waitForExistence(timeout: 3) {
+            empo.buttons[name].firstMatch.tap()
+            XCTAssertTrue(empo.navigationBars["Add a target"].waitForExistence(timeout: 10), "no Add a target sheet")
+            return
+        }
+        XCTFail("no Add button on the Backups screen")
+    }
+
+    /// SwiftUI gives the form fields no label, only the hint as the
+    /// placeholder. A field with no hint is the last text field of
+    /// its form.
+    private func fill(hint: String, with text: String, secret: Bool = false) {
+        let fields = secret ? empo.secureTextFields : empo.textFields
+        let field: XCUIElement
+        if secret {
+            field = fields.firstMatch
+        } else if hint.isEmpty {
+            field = fields.allElementsBoundByIndex.last ?? fields.firstMatch
+        } else {
+            field = fields.matching(NSPredicate(format: "placeholderValue == %@", hint)).firstMatch
+        }
+        guard field.waitForExistence(timeout: 3) else {
+            note("fields: \(fields.allElementsBoundByIndex.map { $0.placeholderValue ?? "" })")
+            XCTFail("no field with the hint \(hint)")
+            return
+        }
+        for _ in 0..<3 where !field.isHittable { empo.swipeUp() }
+        field.tap()
+        field.typeText(text)
+    }
+
+    private func notePermissionSheet() {
+        let texts = empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        note("sheet texts: \(texts.suffix(10))")
+        let marks = empo.images.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        note("sheet marks: \(marks.suffix(6))")
+    }
+
+    /// 016 check 6. The namespace named in `EMPO_DEVICE` was planted
+    /// on the server before the run.
+    func testDeleteForeignNamespace() {
+        let targetName = env["EMPO_NAME"] ?? "localhost"
+        let device = env["EMPO_DEVICE"] ?? "Planted iPhone"
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        let target = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", targetName)).firstMatch
+        XCTAssertTrue(target.waitForExistence(timeout: 10), "no \(targetName) row")
+        target.tap()
+        let devices = empo.buttons["Devices"].firstMatch
+        for _ in 0..<4 where !devices.waitForExistence(timeout: 2) { empo.swipeUp() }
+        devices.tap()
+        let planted = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", device)).firstMatch
+        let start = Date()
+        note("planted row shows: \(planted.waitForExistence(timeout: 180)) after \(Int(Date().timeIntervalSince(start))) s")
+        let rows = empo.buttons.matching(NSPredicate(format: "label CONTAINS 'snapshots'")).allElementsBoundByIndex.map(\.label)
+        note("device rows: \(rows)")
+        shot("devices-before")
+        guard planted.exists else { return }
+        let deletes = empo.buttons.matching(identifier: "Delete").allElementsBoundByIndex
+        guard let delete = deletes.first(where: { $0.frame.minY > planted.frame.minY }) else {
+            XCTFail("no Delete under the planted row")
+            return
+        }
+        delete.tap()
+        let confirm = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Delete '")).firstMatch
+        note("confirmation shows: \(confirm.waitForExistence(timeout: 10))")
+        let texts = empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        note("sheet texts: \(texts.suffix(8))")
+        note("destructive button: \(confirm.label)")
+        shot("delete-sheet")
+        confirm.tap()
+        let began = Date()
+        while planted.exists, Date().timeIntervalSince(began) < 180 { sleep(2) }
+        note("planted row gone: \(!planted.exists) after \(Int(Date().timeIntervalSince(began))) s")
+        let after = empo.buttons.matching(NSPredicate(format: "label CONTAINS 'snapshots'")).allElementsBoundByIndex.map(\.label)
+        note("device rows after: \(after)")
+        shot("devices-after")
+    }
+
+    /// 019 check 2. `EMPO_KEEP=YES` leaves the ZIP in place through
+    /// "Save again", so a second run meets the space check.
+    func testExportLibrary() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        let export = empo.buttons["Export library"].firstMatch
+        for _ in 0..<6 where !export.waitForExistence(timeout: 2) { empo.swipeUp() }
+        XCTAssertTrue(export.exists, "no Export library row")
+        note("Export library enabled: \(export.isEnabled)")
+        export.tap()
+        let save = empo.buttons["Save"].firstMatch
+        let began = Date()
+        var lastLine = ""
+        var stopped = false
+        sleep(1)
+        note("sheet texts at start: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        shot("library-export-start")
+        while !save.exists, !stopped, Date().timeIntervalSince(began) < 1800 {
+            let texts = empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+            let line = texts.drop(while: { !$0.hasPrefix("Export") }).dropFirst().prefix(3).joined(separator: " | ")
+            if line != lastLine {
+                note("export sheet: \(line)")
+                lastLine = line
+            }
+            if line.contains("free space") || line.contains("could not") || line.contains("stopped") {
+                shot("library-export-stopped")
+                stopped = true
+            }
+            sleep(5)
+        }
+        note("Files picker shows: \(save.exists) after \(Int(Date().timeIntervalSince(began))) s")
+        shot("library-export-end")
+        guard save.exists else {
+            if let done = empo.buttons.matching(identifier: "Done").allElementsBoundByIndex.last, done.exists {
+                done.tap()
+            }
+            return
+        }
+        dismissThePicker()
+        let saveAgain = empo.buttons["Save again"].firstMatch
+        let delete = empo.buttons["Delete"].firstMatch
+        note("choice shows: \(saveAgain.waitForExistence(timeout: 10)), texts: \(empo.staticTexts.allElementsBoundByIndex.filter { $0.frame.minY > 400 }.map(\.label))")
+        shot("library-export-choice")
+        if env["EMPO_KEEP"] == "YES" {
+            saveAgain.tap()
+            note("Files picker shows again: \(save.waitForExistence(timeout: 30))")
+            dismissThePicker()
+            note("Save again shows again: \(saveAgain.waitForExistence(timeout: 10))")
+        } else {
+            delete.tap()
+            sleep(3)
+        }
+    }
+
+    /// Taps the question row of an unsaved package on the Backups
+    /// screen and answers Delete.
+    func testDeleteTheUnsavedLibraryPackage() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        let question = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Empo built'")).firstMatch
+        for _ in 0..<4 where !question.waitForExistence(timeout: 2) { empo.swipeUp() }
+        note("question row: \(question.exists ? question.label : "(no row)")")
+        guard question.exists else { return }
+        question.tap()
+        let delete = empo.buttons["Delete"].firstMatch
+        note("choice shows: \(delete.waitForExistence(timeout: 10))")
+        delete.tap()
+        sleep(3)
+        note("question row after Delete: \(question.exists ? question.label : "(no row)")")
+    }
+
     // MARK: - Settings
 
     private func openWiFiNetworkDetails() {
