@@ -35,6 +35,23 @@ final class BackupTriggerPlanTests: XCTestCase {
             library)
     }
 
+    func testAGameWithAnUnfinishedRestoreSitsOutOfEveryScope() {
+        XCTAssertEqual(
+            BackupTriggerPlan.games(
+                in: .wholeLibrary, dirty: [], library: library, restoring: "game-b"),
+            ["game-a", "game-c"])
+        XCTAssertEqual(
+            BackupTriggerPlan.games(
+                in: .dirtyGames, dirty: dirty(["game-b"]), library: library,
+                restoring: "game-b"),
+            [])
+        XCTAssertEqual(
+            BackupTriggerPlan.games(
+                in: .oneGame(gameKey: "game-b"), dirty: [], library: library,
+                restoring: "game-b"),
+            [])
+    }
+
     func testTheForegroundPassReturnsTheFullLibraryToo() {
         XCTAssertEqual(BackupTriggerPlan.scope(of: .foreground), .wholeLibrary)
     }

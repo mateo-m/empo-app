@@ -22,6 +22,7 @@ enum BackupDeviceConditions {
     static func now(isManual: Bool = false) -> BackupConditions {
         BackupConditions(
             isSessionLive: isSessionLive,
+            isRestoreLive: RestoreCoordinator.shared.isRestoring,
             isLowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
             thermalState: thermalState,
             isManual: isManual)

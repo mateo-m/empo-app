@@ -153,7 +153,7 @@ actor S3Target: BackupProvider {
     private func getOne(_ path: String, to localFile: URL) async throws(BackupProviderError) {
         var request = URLRequest(url: try presigned(method: "GET", key: path))
         request.httpMethod = "GET"
-        let answer = try await BackupAPISession.shared.download(request, to: localFile)
+        let answer = try await BackupTransferSession.shared.download(request, to: localFile, path: path)
         try check(answer)
     }
 

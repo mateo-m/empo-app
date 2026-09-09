@@ -36,6 +36,9 @@ final class BackupTransferSession: NSObject {
         var body = Data()
         var bodyStarts = 0
         var gaveUp = false
+        /// Where a download lands. A successful download moves its
+        /// file here before it completes, and the body stays empty.
+        var localFile: URL?
 
         init(path: String, resume: @escaping (Result<HTTPAnswer, BackupProviderError>) -> Void) {
             self.path = path
@@ -119,20 +122,63 @@ final class BackupTransferSession: NSObject {
         return try result.get()
     }
 
+    /// Downloads one object to a file, per 11.9. The task outlives
+    /// the app the way an upload does, so a restore keeps going
+    /// while the user is elsewhere.
+    ///
+    /// On a 2xx the file is at `localFile` when this returns and the
+    /// answer's body is empty. On any other status the body carries
+    /// what the service said and no file is written.
+    func download(
+        _ request: URLRequest, to localFile: URL, path: String
+    ) async throws(BackupProviderError) -> HTTPAnswer {
+        // A game launch cancels the restore's task, and 7.6 wants the
+        // download to stop with it. Uploads keep going on a cancel,
+        // per 7.5, so only this path listens.
+        guard !Task.isCancelled else { throw .offline }
+        let task = session.downloadTask(with: self.request(request))
+        // The description names the file the download lands in,
+        // so a process that died mid-download still gets the
+        // file: the daemon finishes it, wakes the app, and the
+        // delegate below reads the destination from here.
+        task.taskDescription = Self.downloadMark + localFile.path
+        let result = await withTaskCancellationHandler {
+            await withCheckedContinuation {
+                (continuation: CheckedContinuation<Result<HTTPAnswer, BackupProviderError>, Never>) in
+                let transfer = PendingTransfer(path: path) { answer in
+                    continuation.resume(returning: answer)
+                }
+                transfer.localFile = localFile
+                lock.lock()
+                pending[task.taskIdentifier] = transfer
+                lock.unlock()
+                task.resume()
+            }
+        } onCancel: {
+            task.cancel()
+        }
+        return try result.get()
+    }
+
     /// The tasks the daemon still holds for this app.
     ///
     /// The launch recovery of 7.10 reads it. A run that never
     /// finished and has no task left here died with the process.
     /// iOS 27 keeps a task that finished while the app was dead in
     /// `allTasks` as `.completed` until the delegate hears about it,
-    /// so only a running or suspended task counts as live.
+    /// so only a running or suspended task counts as live. A
+    /// download is a restore's, and the resume question of 11.9
+    /// owns that one, so it does not count here.
     func liveTaskPaths() async -> Set<String> {
         let tasks = await session.allTasks
         return Set(
             tasks
                 .filter { $0.state == .running || $0.state == .suspended }
-                .compactMap(\.taskDescription))
+                .compactMap(\.taskDescription)
+                .filter { !$0.hasPrefix(Self.downloadMark) })
     }
+
+    private static let downloadMark = "get "
 
     /// Cancels every transfer in flight. A user pause is the one
     /// thing that may call this, per 7.5.
@@ -227,7 +273,43 @@ struct HTTPAnswer: Sendable {
     }
 }
 
-extension BackupTransferSession: URLSessionDataDelegate {
+extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDelegate {
+
+    /// The temporary file is gone once this returns, so the move
+    /// happens here and not where the continuation resumes.
+    func urlSession(
+        _ session: URLSession, downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        lock.lock()
+        let transfer = pending[downloadTask.taskIdentifier]
+        lock.unlock()
+        let http = downloadTask.response as? HTTPURLResponse
+        guard let http, (200..<300).contains(http.statusCode) else {
+            // The body carries the reason, not the file. Nobody reads
+            // it when the caller died with the process.
+            guard transfer != nil else { return }
+            collect(
+                (try? Data(contentsOf: location)) ?? Data(),
+                taskIdentifier: downloadTask.taskIdentifier)
+            return
+        }
+        let described = (downloadTask.taskDescription ?? "").dropFirst(Self.downloadMark.count)
+        let localFile = transfer?.localFile ?? URL(fileURLWithPath: String(described))
+        let manager = FileManager.default
+        do {
+            try manager.createDirectory(
+                at: localFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if manager.fileExists(atPath: localFile.path) {
+                try manager.removeItem(at: localFile)
+            }
+            try manager.moveItem(at: location, to: localFile)
+        } catch {
+            BackupLog.line(
+                "BackupTransferSession",
+                "\(downloadTask.taskDescription ?? "?") landed but could not move: \(error.localizedDescription)")
+        }
+    }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         collect(data, taskIdentifier: dataTask.taskIdentifier)
@@ -266,9 +348,11 @@ extension BackupTransferSession: URLSessionDataDelegate {
             BackupLog.line(
                 "BackupTransferSession", "\(task.taskDescription ?? "?") answered \(http.statusCode)")
         }
-        if let error, http == nil {
-            // No answer at all. The device could not reach the
-            // service, so 8.4 decides from the transport error.
+        if let error {
+            // A transport error after the headers arrived still means
+            // no body and no file. A download cut mid-way carries its
+            // 200 in `task.response`, and reading that as a success
+            // would send an empty file to the hash check.
             lock.lock()
             let gaveUp = pending[task.taskIdentifier]?.gaveUp ?? false
             lock.unlock()

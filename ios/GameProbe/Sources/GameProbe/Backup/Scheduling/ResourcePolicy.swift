@@ -24,6 +24,9 @@ public struct BackupConditions: Equatable, Sendable {
     /// live, per 7.6, because a background pause keeps the player
     /// view mounted.
     public var isSessionLive: Bool
+    /// A restore is downloading. A run that starts now would snapshot
+    /// the half-restored tree, so it waits like it waits for a game.
+    public var isRestoreLive: Bool
     public var isLowPowerMode: Bool
     public var thermalState: DeviceThermalState
     /// The user pressed "Back up now".
@@ -31,11 +34,13 @@ public struct BackupConditions: Equatable, Sendable {
 
     public init(
         isSessionLive: Bool = false,
+        isRestoreLive: Bool = false,
         isLowPowerMode: Bool = false,
         thermalState: DeviceThermalState = .nominal,
         isManual: Bool = false
     ) {
         self.isSessionLive = isSessionLive
+        self.isRestoreLive = isRestoreLive
         self.isLowPowerMode = isLowPowerMode
         self.thermalState = thermalState
         self.isManual = isManual
@@ -54,12 +59,14 @@ public enum StagingPause: String, Equatable, CaseIterable, Sendable {
     /// Invariant 5. The engine shares Empo's process, so this is a
     /// hard stop and not a QoS demotion.
     case gameRunning = "game-running"
+    case restoreRunning = "restore-running"
     case lowPowerMode = "low-power-mode"
     case heat
 
     public var line: String {
         switch self {
         case .gameRunning: return "a game is running"
+        case .restoreRunning: return "a restore is running"
         case .lowPowerMode: return "Low Power Mode is on"
         case .heat: return "the device is too warm"
         }
@@ -103,6 +110,7 @@ public enum ResourcePolicy {
     /// button does bypass that one. Heat has no bypass.
     public static func stagingGate(_ conditions: BackupConditions) -> StagingGate {
         if conditions.isSessionLive { return .pause(.gameRunning) }
+        if conditions.isRestoreLive { return .pause(.restoreRunning) }
         if conditions.isLowPowerMode, !conditions.isManual { return .pause(.lowPowerMode) }
         if conditions.thermalState >= .serious { return .pause(.heat) }
         return .run

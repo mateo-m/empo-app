@@ -86,9 +86,16 @@ public enum BackupTriggerPlan {
 
     /// The game keys the pass covers, in the order the caller gave
     /// them. `RunOrdering` puts them in run order afterwards.
+    ///
+    /// A game with an unfinished restore sits out until the user
+    /// answers the resume question of 11.9. Its tree is a mix of old
+    /// and new files, and a snapshot of that mix would be the newest
+    /// backup.
     public static func games(
-        in scope: BackupScanScope, dirty: [DirtyMark], library: [String]
+        in scope: BackupScanScope, dirty: [DirtyMark], library: [String],
+        restoring: String? = nil
     ) -> [String] {
+        let library = library.filter { $0 != restoring }
         switch scope {
         case .dirtyGames:
             let marked = Set(dirty.map(\.gameKey))

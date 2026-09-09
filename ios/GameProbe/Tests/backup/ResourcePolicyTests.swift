@@ -22,6 +22,16 @@ final class ResourcePolicyTests: XCTestCase {
             .pause(.gameRunning))
     }
 
+    func testARunningRestoreStopsStagingAndTheManualButtonDoesNotBypassIt() {
+        XCTAssertEqual(
+            ResourcePolicy.stagingGate(BackupConditions(isRestoreLive: true)),
+            .pause(.restoreRunning))
+        XCTAssertEqual(
+            ResourcePolicy.stagingGate(
+                BackupConditions(isRestoreLive: true, isManual: true)),
+            .pause(.restoreRunning))
+    }
+
     func testAQuietDeviceWithNoSessionStages() {
         XCTAssertEqual(ResourcePolicy.stagingGate(BackupConditions()), .run)
     }

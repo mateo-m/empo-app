@@ -27,6 +27,10 @@ final class RestoreCoordinator {
     /// 11.3 can close for that game alone.
     private(set) var runningGameKey: String?
 
+    /// The run gate of 7.6 reads it. A backup that starts now would
+    /// snapshot the half-restored tree.
+    var isRestoring: Bool { running != nil }
+
     private init() {}
 
     // MARK: - The doors, per 11.3
@@ -183,6 +187,10 @@ final class RestoreCoordinator {
             return await engine.run(request)
         }
         running = task
+        // The downloads ride the background session and survive on
+        // their own. The grant covers the hash check and the copy
+        // between two of them once the user has left the app.
+        await BackupBackgroundTask.run(named: "restore") { _ = await task.value }
         let outcome = await task.value
         running = nil
         runningGameKey = nil

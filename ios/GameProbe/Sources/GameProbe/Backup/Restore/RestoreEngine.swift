@@ -137,7 +137,7 @@ public actor RestoreEngine {
             } catch let stop as RestoreStopReason {
                 return .stopped(stop, result)
             } catch {
-                return .stopped(.targetFailed, result)
+                return .stopped(Task.isCancelled ? .gameLaunched : .targetFailed, result)
             }
             result.writtenFileCount += 1
             result.bytesWritten += step.entry.size
@@ -159,7 +159,7 @@ public actor RestoreEngine {
         }
 
         try? store.clearIntent(kind: .interruptedRestore)
-        clearStagedBlobs(plan.blobs)
+        clearStagedBlobs()
         return .finished(result)
     }
 
@@ -224,7 +224,10 @@ public actor RestoreEngine {
             try await provider.get(path: path, localFile: staged)
         } catch {
             try? fm.removeItem(at: staged)
-            throw Self.stop(of: error)
+            // The cancel of 7.6 usually lands while the download is
+            // in flight, and the session reports it as a transport
+            // error. The cancel flag says what really happened.
+            throw Task.isCancelled ? RestoreStopReason.gameLaunched : Self.stop(of: error)
         }
         guard verify(staged, entry: entry) else {
             try? fm.removeItem(at: staged)
@@ -298,9 +301,14 @@ public actor RestoreEngine {
 
     /// Clears the blobs a finished restore no longer needs. A
     /// stopped restore keeps them.
-    private func clearStagedBlobs(_ blobs: [RestoreBlob]) {
-        for blob in blobs {
-            try? fm.removeItem(at: BackupRootLayout(root: localRoot).restoreBlob(hash: blob.hash))
+    /// Empties `restore/` once a restore finishes. One restore runs
+    /// at a time, so every staged blob there is this one's, or one
+    /// an earlier stopped run left behind and this run did not need.
+    private func clearStagedBlobs() {
+        let directory = BackupRootLayout(root: localRoot).restore
+        for name in (try? fm.contentsOfDirectory(atPath: directory.path)) ?? []
+        where !name.hasPrefix(Self.scratchPrefix) {
+            try? fm.removeItem(at: directory.appendingPathComponent(name))
         }
     }
 

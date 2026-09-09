@@ -128,7 +128,7 @@ final class BackupScheduler {
     private func conditionsDidChange() {
         guard let pause = BackupRunMonitor.shared.pause, !isRunning else { return }
         switch pause {
-        case .gameRunning:
+        case .gameRunning, .restoreRunning:
             return
         case .heat:
             guard ResourcePolicy.resumesStagingAfterHeat(BackupDeviceConditions.thermalState) else {

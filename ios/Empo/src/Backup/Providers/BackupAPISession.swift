@@ -58,43 +58,6 @@ final class BackupAPISession: Sendable {
         }
     }
 
-    /// Downloads one object to a file.
-    ///
-    /// The restore of section 11 runs in the foreground with the user
-    /// watching, so a download needs no background task.
-    func download(
-        _ request: URLRequest, to localFile: URL
-    ) async throws(BackupProviderError) -> HTTPAnswer {
-        do {
-            var request = request
-            let policy = BackupNetwork.policy
-            request.allowsExpensiveNetworkAccess = policy.allowsExpensiveNetworkAccess
-            request.allowsConstrainedNetworkAccess = policy.allowsConstrainedNetworkAccess
-
-            let (temporary, response) = try await session.download(for: request)
-            guard let http = response as? HTTPURLResponse else { throw BackupProviderError.offline }
-            guard (200..<300).contains(http.statusCode) else {
-                // The body carries the reason, not the file.
-                let body = (try? Data(contentsOf: temporary)) ?? Data()
-                try? FileManager.default.removeItem(at: temporary)
-                return HTTPAnswer(status: http.statusCode, body: body, response: http)
-            }
-
-            let manager = FileManager.default
-            try manager.createDirectory(
-                at: localFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if manager.fileExists(atPath: localFile.path) {
-                try manager.removeItem(at: localFile)
-            }
-            try manager.moveItem(at: temporary, to: localFile)
-            return HTTPAnswer(status: http.statusCode, body: Data(), response: http)
-        } catch let error as BackupProviderError {
-            throw error
-        } catch {
-            throw Self.transportError(error)
-        }
-    }
-
     private static func transportError(_ error: Error) -> BackupProviderError {
         let error = error as NSError
         switch error.code {

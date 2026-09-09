@@ -128,7 +128,7 @@ actor WebDAVTarget: BackupProvider {
         _ path: String, to localFile: URL
     ) async throws(BackupProviderError) {
         let request = try makeRequest(WebDAV.Method.get, path: path)
-        let answer = try await BackupAPISession.shared.download(request, to: localFile)
+        let answer = try await BackupTransferSession.shared.download(request, to: localFile, path: path)
         try check(answer)
     }
 

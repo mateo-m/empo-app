@@ -92,8 +92,8 @@ actor GoogleDriveTarget: BackupProvider {
             guard let url = GoogleDrive.filesURL(id: id, alt: "media") else {
                 throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
             }
-            let answer = try await BackupAPISession.shared.download(
-                try await self.authorized(url), to: localFile)
+            let answer = try await BackupTransferSession.shared.download(
+                try await self.authorized(url), to: localFile, path: path)
             try await self.check(answer)
         }
     }

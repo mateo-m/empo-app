@@ -78,7 +78,7 @@ actor DropboxTarget: BackupProvider {
             // type it did not ask for.
             request.setValue(nil, forHTTPHeaderField: "Content-Type")
 
-            let answer = try await BackupAPISession.shared.download(request, to: localFile)
+            let answer = try await BackupTransferSession.shared.download(request, to: localFile, path: path)
             guard answer.isSuccess else { throw Self.error(answer) }
         }
     }
