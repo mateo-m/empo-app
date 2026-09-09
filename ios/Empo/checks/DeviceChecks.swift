@@ -119,6 +119,81 @@ final class DeviceChecks: XCTestCase {
         note("pill exists after 60 s in the game: \(pill.exists)")
     }
 
+    // MARK: - 014 checks 1 to 3
+
+    /// The arguments that start a restore of the newest snapshot of
+    /// `EMPO_GAME` from `EMPO_TARGET` with no tap.
+    private var restoreArguments: [String] {
+        [
+            "-debugLogs", "YES",
+            "-restoreGame", env["EMPO_GAME"] ?? "In Search of Immortality",
+            "-restoreTarget", env["EMPO_TARGET"] ?? "",
+        ]
+    }
+
+    private var restoreTitle: XCUIElement {
+        empo.staticTexts["Resume the restore?"].firstMatch
+    }
+
+    /// Starts the restore, then leaves Empo for Settings while the
+    /// first blob downloads. The Mac reads the server log and the
+    /// phone log for what happened while Empo was suspended.
+    ///
+    /// The runner kills Empo when the test ends, and a kill cancels
+    /// every task of the background session. So the test holds on
+    /// until the restore has had time to finish.
+    func testRestoreWithEmpoSuspended() {
+        launchEmpo(arguments: restoreArguments)
+        if restoreTitle.waitForExistence(timeout: 5) {
+            empo.buttons["Not now"].firstMatch.tap()
+            note("a restore question waited from the last check, answered Not now")
+        }
+        let wait = UInt32(env["EMPO_WAIT"] ?? "") ?? 15
+        sleep(wait)
+        settings.launch()
+        note("left Empo for Settings \(wait) s after the launch")
+        let hold = UInt32(env["EMPO_HOLD"] ?? "") ?? 420
+        sleep(hold)
+        settings.terminate()
+        empo.activate()
+        note("Empo is back after \(hold) s away")
+        sleep(5)
+        shot("restore-back")
+        sleep(150)
+        shot("restore-later")
+    }
+
+    /// Starts the restore and a game `EMPO_LAUNCH_AFTER` s later, 40
+    /// by default so the launch lands inside a blob download. The
+    /// restore stops at once, per 7.6, and the log names the game
+    /// launch as the reason. Empo ends killed, which closes the game too.
+    func testRestoreStopsForAGameLaunch() {
+        let game = env["EMPO_GAME"] ?? "In Search of Immortality"
+        let after = env["EMPO_LAUNCH_AFTER"] ?? "40"
+        launchEmpo(arguments: restoreArguments + ["-launchGame", game, "-launchGameAfter", after])
+        sleep(UInt32(after)! + 25)
+        shot("game-over-restore")
+        empo.terminate()
+        note("killed Empo with the game open")
+    }
+
+    /// The launch after a stopped restore asks once. Not now keeps
+    /// the record, and the next launch asks nothing. A manual run on
+    /// that launch has to leave the half-restored game alone.
+    func testRestoreResumeQuestionOnce() {
+        launchEmpo(arguments: ["-debugLogs", "YES"])
+        note("restore question shows: \(restoreTitle.waitForExistence(timeout: 15))")
+        shot("restore-question")
+        empo.buttons["Not now"].firstMatch.tap()
+        note("tapped Not now, question gone: \(!restoreTitle.waitForExistence(timeout: 3))")
+        sleep(2)
+        empo.terminate()
+        launchEmpo(arguments: ["-debugLogs", "YES", "-backupPressNow", "YES"])
+        note("restore question shows again: \(restoreTitle.waitForExistence(timeout: 10))")
+        note("pill after the press: \(watchThePill(within: 300))")
+        shot("run-with-a-held-game")
+    }
+
     // MARK: - 018 checks 1 to 4, and 016 check 5
 
     /// Watches a large first backup from the first pill to past 100 MB,
