@@ -60,8 +60,7 @@ struct NamespaceListScreen: View {
     private func ask(about row: BackupNamespaceRow) {
         guard
             let sheet = NamespaceListRules.confirmation(
-                for: row, gameCount: row.snapshotCount,
-                dateRangeText: Self.rangeText(row))
+                for: row, dateRangeText: Self.rangeText(row))
         else { return }
         confirmation = NamespaceDeleteConfirmationItem(
             namespaceId: row.namespaceId, confirmation: sheet)

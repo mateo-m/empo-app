@@ -199,11 +199,11 @@ final class BackupsScreenTests: XCTestCase {
     // MARK: - 6 and 7. The namespace list
 
     private func namespace(
-        id: String = "ns-1", device: String = "Old iPhone", snapshots: Int = 34,
+        id: String = "ns-1", device: String = "Old iPhone", snapshots: Int = 34, games: Int = 3,
         isThisDevice: Bool = false, isEarlierSpace: Bool = false
     ) -> BackupNamespaceRow {
         BackupNamespaceRow(
-            namespaceId: id, deviceName: device, snapshotCount: snapshots,
+            namespaceId: id, deviceName: device, snapshotCount: snapshots, gameCount: games,
             totalBytes: 1_000, isThisDevice: isThisDevice, isEarlierSpace: isEarlierSpace)
     }
 
@@ -211,7 +211,7 @@ final class BackupsScreenTests: XCTestCase {
         let mine = namespace(device: "Sam's iPhone", isThisDevice: true)
         XCTAssertFalse(NamespaceListRules.canDelete(mine))
         XCTAssertNil(
-            NamespaceListRules.confirmation(for: mine, gameCount: 3, dateRangeText: "March"))
+            NamespaceListRules.confirmation(for: mine, dateRangeText: "March"))
         XCTAssertTrue(NamespaceListRules.canDelete(namespace()))
     }
 
@@ -223,7 +223,7 @@ final class BackupsScreenTests: XCTestCase {
 
     func testTheDestructiveButtonNamesTheExactSnapshotCount() {
         let confirmation = NamespaceListRules.confirmation(
-            for: namespace(snapshots: 34), gameCount: 5,
+            for: namespace(snapshots: 34, games: 5),
             dateRangeText: "4 March to 2 August 2026")
         XCTAssertEqual(confirmation?.buttonLabel, "Delete 34 snapshots")
         XCTAssertEqual(
@@ -234,7 +234,7 @@ final class BackupsScreenTests: XCTestCase {
     func testTheDestructiveButtonCountsOneSnapshotInTheSingular() {
         XCTAssertEqual(
             NamespaceListRules.confirmation(
-                for: namespace(snapshots: 1), gameCount: 1, dateRangeText: "2 August 2026"
+                for: namespace(snapshots: 1, games: 1), dateRangeText: "2 August 2026"
             )?.buttonLabel,
             "Delete 1 snapshot")
     }

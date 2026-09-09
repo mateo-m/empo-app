@@ -7,6 +7,7 @@ public struct BackupNamespaceRow: Equatable, Sendable {
     /// The device name the namespace recorded.
     public var deviceName: String
     public var snapshotCount: Int
+    public var gameCount: Int
     public var totalBytes: Int64
     public var oldestSnapshotAt: Date?
     public var newestSnapshotAt: Date?
@@ -19,6 +20,7 @@ public struct BackupNamespaceRow: Equatable, Sendable {
         namespaceId: String,
         deviceName: String,
         snapshotCount: Int,
+        gameCount: Int,
         totalBytes: Int64,
         oldestSnapshotAt: Date? = nil,
         newestSnapshotAt: Date? = nil,
@@ -28,6 +30,7 @@ public struct BackupNamespaceRow: Equatable, Sendable {
         self.namespaceId = namespaceId
         self.deviceName = deviceName
         self.snapshotCount = snapshotCount
+        self.gameCount = gameCount
         self.totalBytes = totalBytes
         self.oldestSnapshotAt = oldestSnapshotAt
         self.newestSnapshotAt = newestSnapshotAt
@@ -80,11 +83,11 @@ public enum NamespaceListRules {
     /// `dateRangeText` carries the range in the words the caller
     /// formatted, such as "4 March to 2 August 2026".
     public static func confirmation(
-        for row: BackupNamespaceRow, gameCount: Int, dateRangeText: String
+        for row: BackupNamespaceRow, dateRangeText: String
     ) -> NamespaceDeleteConfirmation? {
         guard canDelete(row) else { return nil }
         let snapshots = row.snapshotCount == 1 ? "1 snapshot" : "\(row.snapshotCount) snapshots"
-        let games = gameCount == 1 ? "1 game" : "\(gameCount) games"
+        let games = row.gameCount == 1 ? "1 game" : "\(row.gameCount) games"
         return NamespaceDeleteConfirmation(
             title: "Delete the backups from \(title(of: row))?",
             lines: [title(of: row), games, snapshots, dateRangeText],

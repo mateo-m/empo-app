@@ -262,6 +262,7 @@ final class BackupsScreenModel {
                 namespaceId: scanned.id,
                 deviceName: scanned.deviceName,
                 snapshotCount: rows.count,
+                gameCount: Set(scanned.gameRows.map(\.identity.containerFolderName)).count,
                 totalBytes: rows.reduce(0) { $0 + $1.bytesToDownload },
                 oldestSnapshotAt: rows.map(\.createdAt).min(),
                 newestSnapshotAt: rows.map(\.createdAt).max(),
