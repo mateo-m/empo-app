@@ -153,14 +153,6 @@ final class BackupsScreenModel {
 
     // MARK: - "Back up now", per 13.11
 
-    /// The row states its own condition instead of greying out
-    /// mutely, per 13.11.
-    var backUpNowLine: String {
-        let enabled = targets.filter { !$0.descriptor.isPaused }
-        if enabled.isEmpty { return "Every backup target is paused" }
-        return "Covers every game with new data, on every target."
-    }
-
     var canBackUpNow: Bool {
         targets.contains { !$0.descriptor.isPaused }
     }
@@ -193,6 +185,16 @@ final class BackupsScreenModel {
     }
 
     // MARK: - Writing
+
+    /// Runs the sign-in of 13.7 again and returns the sheet that
+    /// shows what the check found, or `nil` where the sign-in itself
+    /// did not finish.
+    func signInAgain(_ item: BackupTargetItem) async -> PermissionCheckOutcomeSheet? {
+        let outcome = await BackupTargetAdd.signInAgain(item.descriptor)
+        await refresh()
+        guard case .checked(let descriptor, let result) = outcome else { return nil }
+        return PermissionCheckOutcomeSheet(targetLabel: descriptor.displayName, result: result)
+    }
 
     func setPaused(_ isPaused: Bool, targetId: String) async {
         await change(targetId: targetId) { $0.isPaused = isPaused }

@@ -81,7 +81,7 @@ final class BackupsScreenTests: XCTestCase {
             TargetRowFacts(
                 descriptor: target(label: "Homelab", accountHint: "homelab.lan"),
                 failure: .unreachable, failedAt: failedAt, failedAtText: "14:03"))
-        XCTAssertEqual(row.stateLine, "Could not reach homelab.lan at 14:03")
+        XCTAssertEqual(row.stateLine, "Couldn't connect at 14:03")
         XCTAssertNil(row.action)
     }
 
@@ -102,7 +102,8 @@ final class BackupsScreenTests: XCTestCase {
                 descriptor: target(id: "c", label: "S3"), failure: .full(reason: "no room")),
         ]
         let status = BackupsScreenStatusRules.status(of: targets)
-        XCTAssertEqual(status?.line, "Dropbox needs you to sign in again")
+        XCTAssertEqual(status?.line, "Check Dropbox")
+        XCTAssertEqual(status?.detail, "Sign in again to continue")
         XCTAssertEqual(status?.targetId, "b")
         XCTAssertEqual(status?.isHealthy, false)
     }
@@ -115,8 +116,12 @@ final class BackupsScreenTests: XCTestCase {
             TargetRowFacts(descriptor: target(id: "b", label: "Homelab")),
         ]
         let status = BackupsScreenStatusRules.status(of: targets, lastSuccessText: "today")
-        XCTAssertEqual(status?.line, "All games backed up today")
+        XCTAssertEqual(status?.line, "All games backed up")
+        XCTAssertEqual(status?.detail, "Last backup today")
         XCTAssertTrue(status?.isHealthy == true)
+        let fresh = BackupsScreenStatusRules.status(of: targets)
+        XCTAssertEqual(fresh?.line, "Ready to back up")
+        XCTAssertEqual(fresh?.detail, "No backup yet")
     }
 
     func testAScreenWithNoTargetCarriesNoStatusLine() {

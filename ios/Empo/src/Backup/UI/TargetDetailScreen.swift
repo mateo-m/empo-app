@@ -16,6 +16,7 @@ struct TargetDetailScreen: View {
     @State private var showsEveryGame = false
     @State private var showsRemoveSheet = false
     @State private var removalFailure: String?
+    @State private var signInOutcome: PermissionCheckOutcomeSheet?
     @State private var gameNames: [String: String] = [:]
 
     private var item: BackupTargetItem? {
@@ -25,13 +26,13 @@ struct TargetDetailScreen: View {
     var body: some View {
         List {
             if let item {
-                usageSection(item)
+                headerSection(item)
                 gamesSection(item)
-                limitsSection(item)
                 pauseSection(item)
-                maintenanceSection(item)
-                namespaceSection(item)
-                removeSection(item)
+                limitsSection(item)
+                cleanupSection(item)
+                devicesSection
+                removeSection
             }
         }
         .navigationTitle(item?.descriptor.displayName ?? "")
@@ -48,8 +49,11 @@ struct TargetDetailScreen: View {
                 }
             }
         }
+        .sheet(item: $signInOutcome) { outcome in
+            PermissionCheckSheet(targetLabel: outcome.targetLabel, result: outcome.result)
+        }
         .alert(
-            "Remove failed", isPresented: .constant(removalFailure != nil),
+            "Couldn't remove this location", isPresented: .constant(removalFailure != nil),
             presenting: removalFailure
         ) { _ in
             Button("OK") { removalFailure = nil }
@@ -58,30 +62,63 @@ struct TargetDetailScreen: View {
         }
     }
 
-    // MARK: - Usage, per 13.6
+    // MARK: - The header, per 13.5 and 13.6
 
-    private func usageSection(_ item: BackupTargetItem) -> some View {
+    private func headerSection(_ item: BackupTargetItem) -> some View {
         Section {
-            switch item.usage {
-            case .bar(let used, let limit):
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    ProgressView(value: Double(used), total: Double(max(limit, 1)))
-                    Text(
-                        TargetUsageRules.line(
-                            item.usage, usedText: BackupText.bytes(used),
-                            limitText: BackupText.bytes(limit))
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                HStack(spacing: Spacing.lg) {
+                    Image(systemName: item.descriptor.provider.symbolName)
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.brand)
+                        .frame(width: 40)
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(item.descriptor.provider.serviceName)
+                            .font(.headline)
+                        if let hint = item.descriptor.accountHint {
+                            Text(hint)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(item.row.stateLine)
+                            .font(.footnote)
+                            .foregroundStyle(item.row.state == .current ? Color.secondary : Color.warning)
+                    }
                 }
-                .padding(.vertical, Spacing.xs)
-            case .bytesWritten(let written):
+                usage(item)
+            }
+            .padding(.vertical, Spacing.sm)
+            if let action = item.row.action {
+                switch action {
+                case .signIn:
+                    Button("Sign in again") { Task { signInOutcome = await model.signInAgain(item) } }
+                case .resume:
+                    Button("Resume backups") { Task { await model.setPaused(false, targetId: targetId) } }
+                case .makeSpace:
+                    EmptyView()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func usage(_ item: BackupTargetItem) -> some View {
+        switch item.usage {
+        case .bar(let used, let limit):
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                ProgressView(value: Double(used), total: Double(max(limit, 1)))
+                    .tint(.brand)
                 Text(
-                    TargetUsageRules.line(item.usage, usedText: BackupText.bytes(written))
+                    TargetUsageRules.line(
+                        item.usage, usedText: BackupText.bytes(used),
+                        limitText: BackupText.bytes(limit))
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             }
+        case .bytesWritten(let written):
+            Text(TargetUsageRules.line(item.usage, usedText: BackupText.bytes(written)))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -94,17 +131,33 @@ struct TargetDetailScreen: View {
                 ForEach(shown, id: \.gameKey) { game in
                     HStack {
                         Text(gameNames[game.gameKey] ?? game.gameKey)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                         Spacer()
                         Text(BackupText.bytes(game.bytes))
                             .foregroundStyle(.secondary)
                     }
                 }
                 if item.games.count > 5 && !showsEveryGame {
-                    Button("Show all") { showsEveryGame = true }
+                    Button("Show all \(item.games.count) games") { showsEveryGame = true }
                 }
             } header: {
-                Text("Games")
+                Text("Games backed up here")
             }
+        }
+    }
+
+    // MARK: - Pause, the only off state, per 13.8
+
+    private func pauseSection(_ item: BackupTargetItem) -> some View {
+        Section {
+            Toggle(
+                "Pause backups",
+                isOn: Binding(
+                    get: { item.descriptor.isPaused },
+                    set: { isPaused in Task { await model.setPaused(isPaused, targetId: targetId) } }))
+        } footer: {
+            Text("While paused, nothing new is backed up here.")
         }
     }
 
@@ -113,23 +166,27 @@ struct TargetDetailScreen: View {
     private func limitsSection(_ item: BackupTargetItem) -> some View {
         Section {
             SizeLimitPicker(
-                label: "Cap",
-                offLabel: "No cap",
+                label: "Storage limit",
+                offLabel: "None",
                 presets: Self.capPresets,
                 bytes: item.descriptor.capBytes
             ) { bytes in
                 Task { await model.setCap(bytes, targetId: targetId) }
             }
             SizeLimitPicker(
-                label: "Ask above",
-                offLabel: "\(BackupText.bytes(BackupThreshold.defaultBytes)) (default)",
+                label: "Ask for games over",
+                offLabel: BackupText.bytes(BackupThreshold.defaultBytes),
                 presets: Self.thresholdPresets,
                 bytes: item.descriptor.sizeThresholdBytes
             ) { bytes in
                 Task { await model.setThreshold(bytes, targetId: targetId) }
             }
+        } header: {
+            Text("Limits")
         } footer: {
-            Text("A game over this size asks whether to back up the whole folder.")
+            Text(
+                "Empo stops adding backups here at the storage limit. For a game over the "
+                    + "second size, it asks whether to back up the whole game or only its saves.")
         }
     }
 
@@ -141,56 +198,43 @@ struct TargetDetailScreen: View {
         100 << 20, 250 << 20, 500 << 20, 2 << 30, 5 << 30,
     ]
 
-    // MARK: - Pause, the only off state, per 13.8
-
-    private func pauseSection(_ item: BackupTargetItem) -> some View {
-        Section {
-            Toggle(
-                "Pause",
-                isOn: Binding(
-                    get: { item.descriptor.isPaused },
-                    set: { isPaused in Task { await model.setPaused(isPaused, targetId: targetId) } }))
-        } footer: {
-            Text("A paused target joins no backup, and it leaves the 7-day promise.")
-        }
-    }
-
     // MARK: - Pending deletions and the sweep, per 13.8
 
-    @ViewBuilder private func maintenanceSection(_ item: BackupTargetItem) -> some View {
+    @ViewBuilder private func cleanupSection(_ item: BackupTargetItem) -> some View {
         let overdue = SweepSchedule.isOverdue(lastSweepAt: item.lastSweep, now: Date())
         let needsAction = overdue || !item.capabilities.reportsObjectAge
         if item.pendingDeletions > 0 || needsAction {
             Section {
                 if item.pendingDeletions > 0 {
-                    Text(
-                        "\(item.pendingDeletions) deletions waiting for "
-                            + item.descriptor.displayName)
+                    let count = item.pendingDeletions == 1 ? "1 old backup" : "\(item.pendingDeletions) old backups"
+                    Text("\(count) waiting to be deleted")
                 }
                 if needsAction {
-                    Button("Reclaim space") {
+                    Button("Delete old backups now") {
                         BackupScheduler.shared.pressBackUpNow(.library)
                     }
                 }
+            } footer: {
+                Text("Empo deletes backups over the Keep old backups limit at the next backup.")
             }
         }
     }
 
     // MARK: - The namespace list and Remove, per 13.9 and 13.10
 
-    private func namespaceSection(_ item: BackupTargetItem) -> some View {
+    private var devicesSection: some View {
         Section {
-            NavigationLink {
+            NavigationLink("Devices") {
                 NamespaceListScreen(model: model, targetId: targetId)
-            } label: {
-                Text("Devices")
             }
+        } footer: {
+            Text("Every device that backs up here, with its games and backups.")
         }
     }
 
-    private func removeSection(_ item: BackupTargetItem) -> some View {
+    private var removeSection: some View {
         Section {
-            Button("Remove", role: .destructive) { showsRemoveSheet = true }
+            Button("Remove location", role: .destructive) { showsRemoveSheet = true }
         }
     }
 }

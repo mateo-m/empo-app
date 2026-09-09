@@ -72,10 +72,9 @@ final class WriterConflictsTests: XCTestCase {
     func testTheQuestionNamesTheOtherDeviceAndTheTarget() {
         XCTAssertEqual(
             WriterConflictQuestion.line(deviceName: "Other iPhone", targetLabel: "bob"),
-            "Another device, Other iPhone, is using this backup location on bob. "
-                + "Where should new backups go?")
+            "Other iPhone also backs up to bob. Where should new backups from this device go?")
         XCTAssertEqual(WriterConflictQuestion.defaultResolution, .split)
-        XCTAssertEqual(WriterConflictQuestion.label(of: .split), "Use a new space")
+        XCTAssertEqual(WriterConflictQuestion.label(of: .split), "Keep separate")
         XCTAssertEqual(WriterConflictQuestion.label(of: .takeOver), "Take over")
     }
 }

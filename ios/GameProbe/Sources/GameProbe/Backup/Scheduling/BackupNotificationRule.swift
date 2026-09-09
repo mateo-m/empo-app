@@ -76,8 +76,8 @@ public enum BackupNotificationRule {
     /// 7.11 and 5.12. It heals itself, so a notification would
     /// report a problem that is not one.
     public static let writerSplitLine =
-        "Another device was using this backup location. New snapshots go to a new space, "
-        + "and both keep their history."
+        "Another device also backs up to this location. This device now keeps its own "
+        + "backups there, and both keep their history."
 
     /// Whether to ask for notification permission now.
     ///

@@ -22,17 +22,17 @@ extension RetentionPreset {
 
     var label: String {
         switch self {
-        case .small: return "Small"
+        case .small: return "Less"
         case .standard: return "Standard"
-        case .deep: return "Deep"
+        case .deep: return "More"
         }
     }
 
     var line: String {
         switch self {
-        case .small: return "Keeps about half the history of Standard."
-        case .standard: return "Keeps the last 10 snapshots, 7 days, and 4 weeks."
-        case .deep: return "Keeps about twice the history of Standard."
+        case .small: return "Keeps the last 5 backups, one a day for 3 days, and one a week for 2 weeks."
+        case .standard: return "Keeps the last 10 backups, one a day for 7 days, and one a week for 4 weeks."
+        case .deep: return "Keeps the last 20 backups, one a day for 14 days, and one a week for 8 weeks."
         }
     }
 }

@@ -96,7 +96,7 @@ struct SettingsView: View {
                     SettingsNavigationRow(
                         title: "Backups",
                         description:
-                            "Copy your save files to iCloud Drive, Dropbox, Google Drive, or a server you own."
+                            "Keep copies of your saves in iCloud Drive, Dropbox, Google Drive, or on your own server."
                     ) {
                         BackupsScreen()
                     }

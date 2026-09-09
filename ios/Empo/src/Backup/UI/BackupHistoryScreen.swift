@@ -12,29 +12,39 @@ struct BackupHistoryScreen: View {
     var body: some View {
         List {
             if model.history.isEmpty {
-                Text("No backup has run yet.")
-                    .foregroundStyle(.secondary)
+                ContentUnavailableView(
+                    "No backups yet",
+                    systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                    description: Text("Your first backup shows up here."))
+                .listRowBackground(Color.clear)
             }
             ForEach(model.history, id: \.id) { run in
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    HStack {
-                        Text(Self.title(of: run))
-                        Spacer()
-                        if let finishedAt = run.finishedAt {
-                            Text(BackupText.ago(finishedAt))
+                HStack(alignment: .top, spacing: Spacing.lg) {
+                    Image(systemName: Self.symbol(of: run))
+                        .font(.title3)
+                        .foregroundStyle(Self.color(of: run))
+                        .frame(width: IconSize.row + Spacing.md)
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(Self.title(of: run))
+                            Spacer()
+                            if let finishedAt = run.finishedAt {
+                                Text(BackupText.ago(finishedAt))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Text(Self.line(of: run, target: label(of: run)))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        if let detail = run.detail {
+                            Text(detail.prefix(1).uppercased() + detail.dropFirst())
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text(Self.line(of: run, target: label(of: run)))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    if let detail = run.detail {
-                        Text(detail)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
                 }
+                .padding(.vertical, Spacing.xxs)
             }
         }
         .navigationTitle("Backup history")
@@ -44,19 +54,38 @@ struct BackupHistoryScreen: View {
     private static func title(of run: BackupRunRecord) -> String {
         switch run.outcome {
         case .success: return "Backed up"
-        case .partial: return "Backed up in part"
-        case .failed: return "Did not finish"
+        case .partial: return "Partly backed up"
+        case .failed: return "Didn't finish"
         case .cancelled: return "Stopped"
+        }
+    }
+
+    private static func symbol(of run: BackupRunRecord) -> String {
+        switch run.outcome {
+        case .success: return "checkmark.circle.fill"
+        case .partial: return "exclamationmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .cancelled: return "stop.circle.fill"
+        }
+    }
+
+    private static func color(of run: BackupRunRecord) -> Color {
+        switch run.outcome {
+        case .success: return .success
+        case .partial: return .warning
+        case .failed: return .destructive
+        case .cancelled: return .secondary
         }
     }
 
     private static func line(of run: BackupRunRecord, target: String) -> String {
         let games = run.gameCount == 1 ? "1 game" : "\(run.gameCount) games"
-        return "\(target), \(games), \(BackupText.bytes(run.uploadedBytes))"
+        guard run.uploadedBytes > 0 else { return "\(target) · \(games)" }
+        return "\(target) · \(games) · \(BackupText.bytes(run.uploadedBytes))"
     }
 
     private func label(of run: BackupRunRecord) -> String {
         model.items?.first { $0.id == run.targetId }?.descriptor.displayName
-            ?? "a removed target"
+            ?? "a removed location"
     }
 }

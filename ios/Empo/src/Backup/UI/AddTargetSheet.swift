@@ -40,7 +40,7 @@ struct AddTargetSheet: View {
                     }
                 }
             }
-            .navigationTitle("Add a target")
+            .navigationTitle("Add a location")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

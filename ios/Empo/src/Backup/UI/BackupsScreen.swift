@@ -3,9 +3,9 @@ import SwiftUI
 
 /// The Backups screen of SPEC 13.4.
 ///
-/// The order is fixed: the status line, the adopt banner, the run
-/// block, "Back up now", the target list, Manual transfer, the
-/// app-wide settings, and Backup history.
+/// The order is fixed: the status card with "Back up now" and the
+/// history, the open questions, the locations, the options, the
+/// export and import rows, and the settings sync.
 struct BackupsScreen: View {
 
     @State private var model = BackupsScreenModel()
@@ -39,28 +39,24 @@ struct BackupsScreen: View {
                     emptyState
                 } else {
                     statusSection
-                    splitLine
                     writerQuestions
+                    splitLine
                     adoptBanners
-                    runBlock
-                    backUpNowSection
-                    targetList(items)
-                    manualTransfer
-                    settingsSection
+                    locations(items)
+                    optionsSection
+                    fileSection
+                    syncSection
                 }
             }
-            historySection
         }
         .navigationTitle("Backups")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if model.items?.isEmpty == false {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Add") { showsAddSheet = true }
-                }
-            }
-        }
         .task { await model.refresh() }
+        // The card reads "Last backup" from the store, so the end of
+        // a run needs a fresh read.
+        .onChange(of: BackupRunMonitor.shared.isRunning) { _, running in
+            if !running { Task { await model.refresh() } }
+        }
         .task { readTheUnsavedPackage() }
         .refreshable { await model.refresh() }
         .sheet(isPresented: $exports) {
@@ -160,160 +156,36 @@ struct BackupsScreen: View {
 
     private var emptyState: some View {
         Section {
-            VStack(alignment: .leading, spacing: Spacing.lg) {
-                Text(
-                    "Empo can copy your saves to a service you already use, "
-                        + "so a lost phone does not lose your games."
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                Button("Add a backup target") { showsAddSheet = true }
+            ContentUnavailableView {
+                Label("No backups yet", systemImage: "externaldrive.badge.icloud")
+            } description: {
+                Text("Add a place to keep copies of your saves, like iCloud Drive or your own server.")
+            } actions: {
+                Button("Add a location") { showsAddSheet = true }
                     .buttonStyle(PrimaryButtonStyle(size: .md))
             }
-            .padding(.vertical, Spacing.md)
         }
+        .listRowBackground(Color.clear)
     }
 
-    // MARK: - The status line, per 13.4
+    // MARK: - The status card, per 13.4 and 13.11
 
-    @ViewBuilder private var statusSection: some View {
-        if let status = model.status {
-            Section {
-                Text(status.line)
-                    .font(.headline)
-                    .foregroundStyle(status.isHealthy ? Color.primary : Color.orange)
-                    .padding(.vertical, Spacing.xs)
-            }
-        }
-    }
-
-    // MARK: - The writer question, per 5.12
-
-    @ViewBuilder private var writerQuestions: some View {
-        ForEach(model.writerQuestions) { item in
-            Section {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text(
-                        WriterConflictQuestion.line(
-                            deviceName: item.deviceName, targetLabel: item.targetLabel)
-                    )
-                    .font(.subheadline)
-                    Text(WriterConflictQuestion.note)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: Spacing.lg) {
-                        Button(WriterConflictQuestion.label(of: .split)) {
-                            model.answerTheWriterQuestion(item, resolution: .split)
-                        }
-                        .buttonStyle(PrimaryButtonStyle(size: .sm))
-                        Button(WriterConflictQuestion.label(of: .takeOver)) {
-                            model.answerTheWriterQuestion(item, resolution: .takeOver)
-                        }
-                        .buttonStyle(SecondaryButtonStyle(size: .sm))
-                    }
-                }
-                .padding(.vertical, Spacing.xs)
-            }
-        }
-    }
-
-    @ViewBuilder private var splitLine: some View {
-        if model.showsTheSplitLine {
-            Section {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text(BackupNotificationRule.writerSplitLine)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Button("OK") { model.closeTheSplitLine() }
-                        .buttonStyle(SecondaryButtonStyle(size: .sm))
-                }
-                .padding(.vertical, Spacing.xs)
-            }
-        }
-    }
-
-    // MARK: - The adopt banner, per 13.13
-
-    @ViewBuilder private var adoptBanners: some View {
-        ForEach(model.adoptBanners) { banner in
-            Section {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text(AdoptQuestion.question)
-                        .font(.subheadline)
-                    Text("On \(banner.targetLabel).")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: Spacing.lg) {
-                        Button(AdoptQuestion.label(of: .adopt)) {
-                            model.answerTheAdoptBanner(banner, adopts: true)
-                        }
-                        .buttonStyle(PrimaryButtonStyle(size: .sm))
-                        Button(AdoptQuestion.label(of: .startFresh)) {
-                            model.answerTheAdoptBanner(banner, adopts: false)
-                        }
-                        .buttonStyle(SecondaryButtonStyle(size: .sm))
-                    }
-                }
-                .padding(.vertical, Spacing.xs)
-            }
-        }
-    }
-
-    // MARK: - The run block, per 13.4
-
-    /// The run block shows while a pass is in flight, per 13.4.
     private var isRunning: Bool { BackupRunMonitor.shared.isRunning }
 
-    @ViewBuilder private var runBlock: some View {
-        if isRunning {
-            let monitor = BackupRunMonitor.shared
-            Section {
-                VStack(alignment: .leading, spacing: Spacing.md) {
-                    Text(monitor.line)
-                        .font(.subheadline.weight(.medium))
-                    // The bar counts the run plan the engine froze at
-                    // staging end, per 13.2.
-                    ProgressView(value: monitor.fraction ?? 0)
-                        .progressViewStyle(.linear)
-                    Button("Pause") { BackupScheduler.shared.pauseTheRun() }
-                        .buttonStyle(SecondaryButtonStyle(size: .sm))
-                }
-                .padding(.vertical, Spacing.xs)
-
-                ForEach(monitor.queue) { row in
-                    HStack {
-                        Text(row.name)
-                            .font(.footnote)
-                        Spacer()
-                        if monitor.isDone(row.gameKey) {
-                            Image(systemName: "checkmark")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            } header: {
-                Text("Backing up")
-            }
-        }
-    }
-
-    // MARK: - "Back up now", per 13.11
-
-    private var backUpNowSection: some View {
+    @ViewBuilder private var statusSection: some View {
         Section {
-            Button {
-                Task { await press() }
-            } label: {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("Back up now")
-                    Text(model.backUpNowLine)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, Spacing.xxs)
+            if let status = model.status {
+                BackupStatusCard(status: status)
             }
-            .disabled(!model.canBackUpNow)
+            if isRunning {
+                Button("Pause backup") { BackupScheduler.shared.pauseTheRun() }
+            } else {
+                Button("Back up now") { Task { await press() } }
+                    .disabled(!model.canBackUpNow)
+            }
+            NavigationLink("Backup history") {
+                BackupHistoryScreen(model: model)
+            }
         }
     }
 
@@ -330,86 +202,118 @@ struct BackupsScreen: View {
         model.backUpNow()
     }
 
-    // MARK: - The target list, per 13.5
+    // MARK: - The writer question, per 5.12
 
-    private func targetList(_ items: [BackupTargetItem]) -> some View {
+    @ViewBuilder private var writerQuestions: some View {
+        ForEach(model.writerQuestions) { item in
+            Section {
+                question(
+                    WriterConflictQuestion.line(
+                        deviceName: item.deviceName, targetLabel: item.targetLabel),
+                    note: WriterConflictQuestion.note)
+                Button(WriterConflictQuestion.label(of: .split)) {
+                    model.answerTheWriterQuestion(item, resolution: .split)
+                }
+                Button(WriterConflictQuestion.label(of: .takeOver)) {
+                    model.answerTheWriterQuestion(item, resolution: .takeOver)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var splitLine: some View {
+        if model.showsTheSplitLine {
+            Section {
+                question(BackupNotificationRule.writerSplitLine, note: nil)
+                Button("OK") { model.closeTheSplitLine() }
+            }
+        }
+    }
+
+    // MARK: - The adopt banner, per 13.13
+
+    @ViewBuilder private var adoptBanners: some View {
+        ForEach(model.adoptBanners) { banner in
+            Section {
+                question(AdoptQuestion.question, note: "On \(banner.targetLabel).")
+                Button(AdoptQuestion.label(of: .adopt)) {
+                    model.answerTheAdoptBanner(banner, adopts: true)
+                }
+                Button(AdoptQuestion.label(of: .startFresh)) {
+                    model.answerTheAdoptBanner(banner, adopts: false)
+                }
+            }
+        }
+    }
+
+    /// The text row of a question section. The answers are the rows
+    /// under it, so every answer is a whole row.
+    private func question(_ line: String, note: String?) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(line)
+                .font(.subheadline.weight(.medium))
+            if let note {
+                Text(note)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, Spacing.xxs)
+    }
+
+    // MARK: - The locations, per 13.5
+
+    private func locations(_ items: [BackupTargetItem]) -> some View {
         Section {
             ForEach(items) { item in
                 HStack(spacing: Spacing.lg) {
                     NavigationLink {
                         TargetDetailScreen(model: model, targetId: item.id)
                     } label: {
-                        TargetRowView(row: item.row)
+                        TargetRowView(row: item.row, provider: item.descriptor.provider)
                     }
                     .disabled(item.row.isDisabled)
-                    if let action = item.row.action {
-                        Button(action.label) { Task { await press(item) } }
-                            .buttonStyle(.borderless)
-                            .font(.subheadline)
+                    if let action = item.row.action, action != .makeSpace {
+                        Button(action.label) { Task { await press(action, on: item) } }
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.capsule)
+                            .controlSize(.small)
+                            .font(.subheadline.weight(.medium))
                     }
                 }
             }
-            Button("Add a target") { showsAddSheet = true }
+            Button {
+                showsAddSheet = true
+            } label: {
+                Label("Add a location", systemImage: "plus.circle.fill")
+            }
         } header: {
-            Text("Targets")
+            Text("Locations")
         }
     }
 
-    private func press(_ item: BackupTargetItem) async {
-        switch item.row.action {
+    private func press(_ action: TargetRowAction, on item: BackupTargetItem) async {
+        switch action {
         case .resume:
             await model.setPaused(false, targetId: item.id)
         case .signIn:
-            let outcome = await BackupTargetAdd.signInAgain(item.descriptor)
-            if case .checked(let descriptor, let result) = outcome {
-                addedTarget = PermissionCheckOutcomeSheet(
-                    targetLabel: descriptor.displayName, result: result)
-            }
-            await model.refresh()
-        case .makeSpace, .none:
+            addedTarget = await model.signInAgain(item)
+        case .makeSpace:
             break
         }
     }
 
-    // MARK: - Manual transfer, per 12.5
+    // MARK: - The options, per 13.14 and 13.19
 
-    /// Both doors close while a game runs, per 7.6.
-    private var manualTransferOpens: Bool {
-        PackageDoors.opens(gameIsPlaying: BackupDeviceConditions.isSessionLive)
-    }
-
-    private var manualTransfer: some View {
-        Section {
-            Button("Export library") { exports = true }
-                .disabled(!manualTransferOpens)
-            Button("Import backup") { showsTheZipPicker = true }
-                .disabled(!manualTransferOpens)
-            if let unsavedPackage {
-                Button(PackageSaveChoice.question(fileName: unsavedPackage.fileName)) {
-                    savesAgain = unsavedPackage
-                }
-            }
-        } header: {
-            Text("Manual transfer")
-        } footer: {
-            Text(
-                PackageDoors.line(gameName: EngineSessionCoordinator.shared.openGameName)
-                    ?? "A backup package is a ZIP file you keep in Files. "
-                    + "It needs no backup target.")
-        }
-    }
-
-    // MARK: - The app-wide settings, per 13.14
-
-    private var settingsSection: some View {
+    private var optionsSection: some View {
         Section {
             SettingsToggle(
-                title: "Back up over cellular",
+                title: "Use cellular data",
                 isOn: $overCellular,
-                description: "Off keeps every upload on Wi-Fi. Low Data Mode always stops uploads.")
+                description: "Backs up over cellular as well as Wi-Fi. Low Data Mode always pauses backups.")
 
             SettingsPicker(
-                title: "Keep",
+                title: "Keep old backups",
                 selection: $retention,
                 description: retention.line
             ) {
@@ -419,6 +323,51 @@ struct BackupsScreen: View {
             }
             .onChange(of: retention) { _, preset in BackupSettings.retention = preset }
 
+            if model.asksForNotifications {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Button(BackupNotificationAsk.rowLabel) {
+                        Task { await model.pressTheNotificationRow() }
+                    }
+                    Text("Get a notification when a backup stops and needs you.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, Spacing.xxs)
+            }
+        } header: {
+            Text("Options")
+        }
+    }
+
+    // MARK: - Export and import, per 12.5
+
+    /// Both doors close while a game runs, per 7.6.
+    private var fileDoorsOpen: Bool {
+        PackageDoors.opens(gameIsPlaying: BackupDeviceConditions.isSessionLive)
+    }
+
+    private var fileSection: some View {
+        Section {
+            Button("Export all saves") { exports = true }
+                .disabled(!fileDoorsOpen)
+            Button("Import a backup") { showsTheZipPicker = true }
+                .disabled(!fileDoorsOpen)
+            if let unsavedPackage {
+                Button(PackageSaveChoice.question(fileName: unsavedPackage.fileName)) {
+                    savesAgain = unsavedPackage
+                }
+            }
+        } footer: {
+            Text(
+                PackageDoors.line(gameName: EngineSessionCoordinator.shared.openGameName)
+                    ?? "An export is a ZIP file you keep in Files. It needs no backup location.")
+        }
+    }
+
+    // MARK: - The settings sync, per 10.4
+
+    private var syncSection: some View {
+        Section {
             Button {
                 lookForAGroup()
             } label: {
@@ -429,10 +378,8 @@ struct BackupsScreen: View {
                 }
             }
             .disabled(looksForAGroup)
-
+        } footer: {
             Text(SyncGroupCopy.stableLine)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -444,23 +391,6 @@ struct BackupsScreen: View {
             let ask = await SyncJoin.ask()
             looksForAGroup = false
             joinAsk = SyncJoinPrompt(ask: ask)
-        }
-    }
-
-    // MARK: - Notifications and history, per 13.19 and 13.12
-
-    private var historySection: some View {
-        Section {
-            if model.asksForNotifications {
-                Button(BackupNotificationAsk.rowLabel) {
-                    Task { await model.pressTheNotificationRow() }
-                }
-            }
-            NavigationLink {
-                BackupHistoryScreen(model: model)
-            } label: {
-                Text("Backup history")
-            }
         }
     }
 }

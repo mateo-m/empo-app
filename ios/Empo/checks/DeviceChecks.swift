@@ -210,7 +210,7 @@ final class DeviceChecks: XCTestCase {
         note("Backups sheet opens: \(title.waitForExistence(timeout: 10))")
         note("run block header shows: \(empo.staticTexts["Backing up"].firstMatch.exists)")
         note("Pause button shows: \(empo.buttons["Pause"].firstMatch.exists)")
-        note("Targets header shows: \(empo.staticTexts["Targets"].firstMatch.exists)")
+        note("Targets header shows: \(empo.staticTexts["Locations"].firstMatch.exists)")
         shot("backups-sheet-mid-run")
         title.swipeDown()
         sleep(2)
@@ -273,7 +273,7 @@ final class DeviceChecks: XCTestCase {
         note("Sign in button shows: \(empo.buttons["Sign in"].firstMatch.exists)")
         shot("row-needs-sign-in")
         targetRow.tap()
-        let pause = empo.switches["Pause"].firstMatch
+        let pause = empo.switches["Pause backups"].firstMatch
         XCTAssertTrue(pause.waitForExistence(timeout: 10), "no Pause switch on the target screen")
         (pause.switches.firstMatch.exists ? pause.switches.firstMatch : pause).tap()
         sleep(1)
@@ -1000,7 +1000,7 @@ final class DeviceChecks: XCTestCase {
     /// Fills the Add form for `service` and taps Add. Ends with the
     /// permission sheet on its way up.
     private func addTargetThroughTheForm(service: String, name: String) {
-        if !empo.navigationBars["Add a target"].exists { tapAdd() }
+        if !empo.navigationBars["Add a location"].exists { tapAdd() }
         let row = empo.buttons[service].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10), "no \(service) row on the Add sheet")
         note("Add sheet rows: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })")
@@ -1130,7 +1130,7 @@ final class DeviceChecks: XCTestCase {
         note("restore sheet seen \(restoreSeen), notification ask seen \(askSeen)")
         XCTAssertTrue(restoreSeen, "the restore sheet of 11.4 never came")
         XCTAssertTrue(askSeen, "the notification ask of 13.19 never came")
-        let row = empo.buttons["Turn on backup notifications"].firstMatch
+        let row = empo.buttons["Turn on notifications"].firstMatch
         for _ in 0..<4 where !row.waitForExistence(timeout: 2) { empo.swipeUp() }
         note("Turn on backup notifications row: \(row.exists)")
         if row.exists {
@@ -1221,10 +1221,10 @@ final class DeviceChecks: XCTestCase {
     }
 
     private func openAddSheet() -> Bool {
-        let names = ["Add", "Add a backup target", "Add a target"]
+        let names = ["Add a location", "Add", "Add a backup target", "Add a target"]
         for name in names where empo.buttons[name].firstMatch.waitForExistence(timeout: 3) {
             empo.buttons[name].firstMatch.tap()
-            return empo.navigationBars["Add a target"].waitForExistence(timeout: 10)
+            return empo.navigationBars["Add a location"].waitForExistence(timeout: 10)
         }
         XCTFail("no Add button on the Backups screen")
         return false
@@ -1286,11 +1286,11 @@ final class DeviceChecks: XCTestCase {
         openBackupsScreen()
         let question = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Another device,'")).firstMatch
         note("question shows: \(question.waitForExistence(timeout: 10)), reads \"\(question.label)\"")
-        note("answers: \(["Use a new space", "Take over"].map { "\($0)=\(empo.buttons[$0].firstMatch.exists)" })")
+        note("answers: \(["Keep separate", "Take over"].map { "\($0)=\(empo.buttons[$0].firstMatch.exists)" })")
         note("target rows: \(targetRows())")
         shot("writer-question")
         guard question.exists else { return }
-        empo.buttons["Use a new space"].firstMatch.tap()
+        empo.buttons["Keep separate"].firstMatch.tap()
         sleep(2)
         note("question gone after the answer: \(!question.exists)")
         empo.navigationBars.buttons.firstMatch.tap()
@@ -1378,10 +1378,10 @@ final class DeviceChecks: XCTestCase {
     func testExportLibrary() {
         launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
         openBackupsScreen()
-        let export = empo.buttons["Export library"].firstMatch
+        let export = empo.buttons["Export all saves"].firstMatch
         for _ in 0..<6 where !export.waitForExistence(timeout: 2) { empo.swipeUp() }
-        XCTAssertTrue(export.exists, "no Export library row")
-        note("Export library enabled: \(export.isEnabled)")
+        XCTAssertTrue(export.exists, "no Export all saves row")
+        note("Export all saves enabled: \(export.isEnabled)")
         export.tap()
         let save = empo.buttons["Save"].firstMatch
         let began = Date()
@@ -1548,6 +1548,56 @@ final class DeviceChecks: XCTestCase {
         let state = ((knob.value as? String) == "1") ? "on" : "off"
         XCTAssertEqual(state, on ? "on" : "off", "\(name) did not flip")
         note("\(name) is now \(state)")
+    }
+
+    /// Screenshots of the Backups screen, one target, and the history.
+    func testShotBackupsScreens() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        openBackupsScreen()
+        sleep(3)
+        shot("backups-1")
+        note("texts: \(texts())")
+        let history = empo.staticTexts["Backup history"]
+        if history.waitForExistence(timeout: 2) {
+            history.tap()
+            _ = empo.navigationBars["Backup history"].waitForExistence(timeout: 5)
+            sleep(1)
+            shot("history")
+            empo.navigationBars.buttons.element(boundBy: 0).tap()
+            sleep(1)
+        }
+        empo.swipeUp()
+        sleep(1)
+        shot("backups-2")
+        empo.swipeDown()
+        sleep(1)
+        let name = env["EMPO_NAME"] ?? "192.168.0.40"
+        let target = empo.staticTexts[name].firstMatch
+        for _ in 0..<4 where !target.waitForExistence(timeout: 2) { empo.swipeDown() }
+        if target.exists {
+            target.tap()
+            _ = empo.navigationBars.matching(NSPredicate(format: "identifier != 'Backups'")).firstMatch.waitForExistence(timeout: 5)
+            sleep(1)
+            shot("detail-1")
+            empo.swipeUp()
+            sleep(1)
+            shot("detail-2")
+        }
+    }
+
+    func testVideoBackupRun() {
+        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let deny = springboard.buttons["Don’t Allow"]
+        if deny.waitForExistence(timeout: 3) { deny.tap() }
+        openBackupsScreen()
+        let row = empo.staticTexts[env["EMPO_NAME"] ?? "192.168.0.40"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 60), "no location row")
+        sleep(3)
+        let now = empo.buttons["Back up now"]
+        XCTAssertTrue(now.waitForExistence(timeout: 5))
+        now.tap()
+        sleep(20)
     }
 
     // MARK: - Evidence

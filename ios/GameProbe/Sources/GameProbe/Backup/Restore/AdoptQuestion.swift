@@ -30,7 +30,7 @@ public enum AdoptQuestion {
         case startFresh = "start-fresh"
     }
 
-    public static let question = "Empo found backups from this device. Continue its backup history?"
+    public static let question = "Empo found earlier backups from this device. Continue them?"
 
     /// Continue is the default.
     public static let defaultAnswer: Answer = .adopt

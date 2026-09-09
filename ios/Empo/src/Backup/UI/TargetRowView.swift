@@ -1,37 +1,67 @@
 import GameProbe
 import SwiftUI
 
-/// One row of the target list, per SPEC 13.5.
+extension BackupProviderKind {
+
+    var symbolName: String {
+        switch self {
+        case .iCloudDrive: return "icloud"
+        case .dropbox: return "shippingbox"
+        case .googleDrive: return "externaldrive"
+        case .s3: return "cylinder.split.1x2"
+        case .webdav: return "server.rack"
+        case .sftp: return "lock.shield"
+        }
+    }
+}
+
+/// One row of the location list, per SPEC 13.5.
 ///
-/// First line: the service name and the account hint. Second line:
-/// exactly one state. The action button of 13.5 is a sibling of this
-/// view and not a child, because a button inside a `NavigationLink`
-/// label takes no tap of its own.
+/// The service symbol, the name, and exactly one state under it. The
+/// account hint shows only where it adds a fact the name lacks.
 struct TargetRowView: View {
 
     let row: TargetRow
+    let provider: BackupProviderKind
+
+    private var hint: String? {
+        guard let hint = row.accountHint, hint != row.title else { return nil }
+        return hint
+    }
+
+    private var stateColor: Color {
+        switch row.state {
+        case .current, .paused, .cannotOpen: return .secondary
+        case .placeholder, .needsSignIn, .blockedByPermissions, .rejected, .full, .unreachable:
+            return .warning
+        }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(spacing: Spacing.sm) {
+        HStack(spacing: Spacing.lg) {
+            Image(systemName: provider.symbolName)
+                .font(.title3)
+                .foregroundStyle(.brand)
+                .frame(width: IconSize.row + Spacing.md)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(row.title)
-                if let hint = row.accountHint {
+                if let hint {
                     Text(hint)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-            }
-            Text(row.stateLine)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            if let line = row.foregroundOnlyLine {
-                Text(line)
+                Text(row.stateLine)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(stateColor)
+                if let line = row.foregroundOnlyLine {
+                    Text(line)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, Spacing.xxs)
-        .opacity(row.isDisabled ? 0.5 : 1)
+        .opacity(row.isDisabled ? Alpha.disabled : 1)
     }
 }

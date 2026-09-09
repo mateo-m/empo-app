@@ -165,7 +165,7 @@ public enum TargetRowRules {
 
     /// The line an iCloud target shows while the runtime gate of 9.1
     /// answers nil.
-    public static let iCloudOffLine = "iCloud is off or not signed in on this device"
+    public static let iCloudOffLine = "iCloud Drive is off on this device"
 
     /// The one state the row shows.
     public static func state(of facts: TargetRowFacts) -> TargetRowState {
@@ -195,7 +195,8 @@ public enum TargetRowRules {
         }
     }
 
-    /// The second line of the row.
+    /// The second line of the row. The row already names the target,
+    /// so no line repeats it.
     ///
     /// `time` is the failure time in the words the caller formatted,
     /// such as "14:03". The unreachable line reads as a past event,
@@ -210,18 +211,17 @@ public enum TargetRowRules {
         case .cannotOpen:
             return "This build cannot open \(target.provider.serviceName)"
         case .placeholder:
-            return "Sign in on this device to use this target"
+            return "Sign in on this device to start"
         case .paused:
             return "Paused"
         case .needsSignIn:
-            return StaleCause.needsSignIn.line(targetLabel: target.displayName)
+            return "Sign in again to continue"
         case .blockedByPermissions(let reason), .full(let reason):
             return reason
         case .rejected(let message):
             return message
         case .unreachable:
-            let host = target.accountHint ?? target.displayName
-            return "Could not reach \(host) at \(time)"
+            return "Couldn't connect at \(time)"
         case .current:
             guard let lastSuccessText else { return "No backup yet" }
             return "Last backup \(lastSuccessText)"

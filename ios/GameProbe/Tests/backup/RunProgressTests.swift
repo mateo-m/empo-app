@@ -243,8 +243,8 @@ final class RunProgressTests: XCTestCase {
         XCTAssertNil(BackupNotificationRule.failFastCause(of: .writerConflict(claim)))
         XCTAssertEqual(
             BackupNotificationRule.writerSplitLine,
-            "Another device was using this backup location. New snapshots go to a new space, "
-                + "and both keep their history.")
+            "Another device also backs up to this location. This device now keeps its own "
+                + "backups there, and both keep their history.")
     }
 
     // MARK: - The pill's four wordings, per 13.2

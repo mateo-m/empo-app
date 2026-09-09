@@ -54,7 +54,7 @@ public enum BackupNotificationAsk {
 
     /// The row the Backups screen carries above Backup history while
     /// the permission is off.
-    public static let rowLabel = "Turn on backup notifications"
+    public static let rowLabel = "Turn on notifications"
 
     /// "Not now" opens nothing and spends nothing, and the sheet
     /// never comes back by itself.

@@ -95,18 +95,17 @@ public struct WriterConflicts: Codable, Equatable, Sendable {
 public enum WriterConflictQuestion {
 
     public static func line(deviceName: String, targetLabel: String) -> String {
-        "Another device, \(deviceName), is using this backup location on \(targetLabel). "
-            + "Where should new backups go?"
+        "\(deviceName) also backs up to \(targetLabel). Where should new backups from this device go?"
     }
 
     public static let note =
-        "A new space starts with a full upload. Both spaces keep their history."
+        "Keep separate starts with a full upload. Both devices keep their history."
 
     public static let defaultResolution: WriterClaimResolution = .split
 
     public static func label(of resolution: WriterClaimResolution) -> String {
         switch resolution {
-        case .split: return "Use a new space"
+        case .split: return "Keep separate"
         case .takeOver: return "Take over"
         }
     }
