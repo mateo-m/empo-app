@@ -201,6 +201,22 @@ final class PreferenceSyncTests: XCTestCase {
         XCTAssertTrue(group.overlaid(with: local).layoutProfiles["p1"]?.isDeleted ?? false)
     }
 
+    func testTheLocalValuesKeepTheOriginNoteOfAConflictProfile() {
+        var group = SyncDocumentModel()
+        group.layoutProfiles = [
+            "c1": SyncProfile(
+                name: "Small hands from iPad", controls: ["portrait.dpad": .string("{}")],
+                origin: SyncProfileConflict.originNote(deviceName: "iPad"))
+        ]
+        var local = SyncDocumentModel()
+        local.layoutProfiles = [
+            "c1": SyncProfile(name: "Small hands from iPad", controls: ["portrait.dpad": .string("{}")])
+        ]
+        XCTAssertEqual(
+            group.overlaid(with: local).layoutProfiles["c1"]?.origin,
+            SyncProfileConflict.originNote(deviceName: "iPad"))
+    }
+
     func testDeletingAndRecreatingAProfileMintsANewIdentity() {
         var identities = SyncProfileIdentities()
         let first = identities.id(ofProfile: "Small hands")

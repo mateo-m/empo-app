@@ -62,12 +62,15 @@ public struct SyncDocumentModel: Equatable, Sendable {
     }
 
     /// A deletion wins over a concurrent edit, per 10.6, whichever
-    /// side holds it.
+    /// side holds it. The local values read from disk carry no origin
+    /// note, so the one the document holds stays.
     private func merged(theirs: SyncProfile?, mine: SyncProfile) -> SyncProfile {
         guard let theirs else { return mine }
         if theirs.isDeleted { return theirs }
-        guard let deleted = mine.deletedAt else { return mine }
-        var out = theirs
+        var out = mine
+        out.origin = mine.origin ?? theirs.origin
+        guard let deleted = mine.deletedAt else { return out }
+        out = theirs
         out.deletedAt = deleted
         return out
     }
