@@ -225,11 +225,20 @@ struct GameLibraryView: View {
                     library.games.map { BackupBadgeGame(id: $0.id, lastPlayed: $0.lastPlayed) }
                 }
             }
-            .task {
-                // The question of 13.18 comes once, at the launch
-                // after the interruption.
-                resumeAsk = ResumeQuestionAsk.pending()
+            .task { takeTheResumeQuestion() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                takeTheResumeQuestion()
             }
+    }
+
+    /// The question of 13.18 comes once, at the launch after the
+    /// interruption. The system relaunches Empo in the background for
+    /// a finished upload, and that launch never reaches the user, so
+    /// only an active app takes the question. `scenePhase` stays
+    /// `.inactive` under the UIHostingController, so this reads UIKit.
+    private func takeTheResumeQuestion() {
+        guard UIApplication.shared.applicationState == .active, resumeAsk == nil else { return }
+        resumeAsk = ResumeQuestionAsk.pending()
     }
 
     private var libraryPresentedContent: some View {

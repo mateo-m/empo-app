@@ -112,8 +112,7 @@ struct ResumeQuestionAsk: Identifiable {
 ///
 /// The first step asks Resume. Stop sits one step deeper, where the
 /// title asks again and the body says what stays. The close icon is
-/// Not now, and so is a swipe down, so the record is marked asked
-/// whichever way the sheet goes.
+/// Not now, and so is a swipe down.
 struct ResumeQuestionSheet: View {
 
     private enum Step { case ask, stop }

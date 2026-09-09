@@ -127,11 +127,14 @@ public actor SnapshotEngine {
             try await applyPendingDeletions(context)
             try await runStreams(context)
         } catch let stop as BackupRunStop {
-            return finish(context, startedAt: startedAt, stop: stop)
+            return finish(context, startedAt: startedAt, stop: Task.isCancelled ? .paused : stop)
         } catch {
+            // A pause cancels the upload in flight, and that error
+            // arrives before the file boundary reads the cancel.
             return finish(
                 context, startedAt: startedAt,
-                stop: .rejected(message: "the run could not read a local file"))
+                stop: Task.isCancelled
+                    ? .paused : .rejected(message: "the run could not read a local file"))
         }
         return finish(context, startedAt: startedAt, stop: nil)
     }
@@ -165,6 +168,7 @@ public actor SnapshotEngine {
         // The run reached its end with the process alive, so it left
         // no interruption to ask about at the next launch, per 6.5.
         save(try store.clearIntent(kind: .interruptedRun), "the end of the interrupted run")
+        save(try store.clearIntent(kind: .pausedRun), "the end of the paused run")
         // The target row of 13.5 outlives this run, and a run that
         // reached the target clears what an earlier one left.
         save(
@@ -219,6 +223,8 @@ public actor SnapshotEngine {
             return message
         case .gameStarted:
             return "a game started, the rest waits for the session end"
+        case .paused:
+            return "the user paused the run"
         }
     }
 
@@ -321,6 +327,7 @@ public actor SnapshotEngine {
         }
 
         for game in try order(context.request.games, targetId: context.request.descriptor.id) {
+            guard !Task.isCancelled else { throw BackupRunStop.paused }
             guard await observer?.runMayGoOn() ?? true else { throw BackupRunStop.gameStarted }
             var setRequest = game.set
             if game.isOneOffFullSnapshot { setRequest.mode = .full }

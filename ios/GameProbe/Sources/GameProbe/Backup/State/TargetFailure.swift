@@ -28,7 +28,7 @@ public enum TargetFailure: Equatable, Sendable {
             return .unreachable
         case .rejected(let message):
             return .rejected(message: message)
-        case .writerConflict, .readOnlyFormat, .gameStarted:
+        case .writerConflict, .readOnlyFormat, .gameStarted, .paused:
             // A split keeps backing up, per 5.12, and a read-only
             // format needs a newer Empo, not an action on the row.
             return nil

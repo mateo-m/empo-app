@@ -223,7 +223,11 @@ final class RestoreCoordinator {
         // `try?` flattens the optional the store returns, so this is
         // one level, not two.
         let record = try? store.intent(kind: .interruptedRestore)
-        return RestoreResumeQuestion.asks(record) ? record : nil
+        guard RestoreResumeQuestion.asks(record) else { return nil }
+        // Marked asked at show time. A kill with the sheet open runs
+        // no `onDisappear`, so the answer is too late to mark it.
+        try? store.markIntentAsked(kind: .interruptedRestore)
+        return record
     }
 
     /// Continues the restore the record names, with the same scope
@@ -287,11 +291,6 @@ final class RestoreCoordinator {
     func answerResume(_ action: RestoreResumeQuestion.Action, record: BackupIntentRecord) {
         guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
         defer { store.close() }
-
-        // Every answer marks the record asked, because the question
-        // was asked. That is what keeps one interruption from asking
-        // twice.
-        try? store.markIntentAsked(kind: .interruptedRestore)
 
         let effect = RestoreResumeQuestion.effect(of: action)
         guard !effect.keepsRecord else { return }

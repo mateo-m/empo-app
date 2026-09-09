@@ -17,7 +17,13 @@ final class BackupSheetModel {
 
     private(set) var status = GameBackupStatus(state: .notSetUp)
     private(set) var lastSuccessAt: Date?
-    private(set) var locks = BackupSheetLocks()
+    /// Read live, so a pause from this sheet flips "Pause" back to
+    /// "Back up now" while the sheet stays open.
+    var locks: BackupSheetLocks {
+        BackupSheetLockRules.locks(
+            runInFlight: BackupRunMonitor.shared.runningGameKeys.contains(gameKey),
+            openGameName: EngineSessionCoordinator.shared.openGameName)
+    }
     private(set) var mode: BackupMode?
     /// What each mode would upload for this game, per 5.14.
     private(set) var fullBytes: Int64 = 0
@@ -63,9 +69,6 @@ final class BackupSheetModel {
         defer { store?.close() }
         readTheStatus(descriptors, store: store)
         readTheStore(descriptors, store: store)
-        locks = BackupSheetLockRules.locks(
-            runInFlight: BackupRunMonitor.shared.runningGameKeys.contains(gameKey),
-            openGameName: EngineSessionCoordinator.shared.openGameName)
         pendingAsks = GameSaveWatch.shared.pendingAsks(forGame: container.id)
     }
 

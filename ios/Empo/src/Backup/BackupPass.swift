@@ -56,6 +56,12 @@ final class BackupPass: BackupRunning {
             }
 
             let result = await run(descriptor, provider: provider, games: games)
+            guard !Task.isCancelled else {
+                // A pause. The target row and the notices stay as
+                // they were, because the run proved nothing.
+                BackupRunMonitor.shared.runEnds()
+                return BackupPassResult(didFinish: false, targets: rows)
+            }
             BackupRunMonitor.shared.targetEnds()
             guard let result else {
                 didFinish = false

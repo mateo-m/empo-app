@@ -215,10 +215,7 @@ enum BackupTaskScheduler {
                     task.updateTitle(task.title, subtitle: line)
                 }
             }
-            await BackupScheduler.shared.run(
-                trigger: .manual,
-                press: press,
-                progress: task.progress)
+            await BackupScheduler.shared.startManualRun(press, progress: task.progress).value
             subtitle.cancel()
             guard !expired.withLock({ $0 }) else { return }
             // A run that ends by itself did its work. A target that

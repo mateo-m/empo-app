@@ -46,6 +46,8 @@ final class BackupRunMonitor: BackupRunObserver {
     private var progress: Progress?
     private var targetCount = 0
     private var targetsDone = 0
+    /// What the plan had confirmed when the target in flight began.
+    private var confirmedBeforeThisTarget: Int64 = 0
     /// The bytes sent of the one upload in flight. A 300 MB blob
     /// confirms nothing for a minute, and the pill must still move.
     private var inFlightBytes: Int64 = 0
@@ -58,6 +60,7 @@ final class BackupRunMonitor: BackupRunObserver {
         self.progress = progress
         self.targetCount = targetCount
         targetsDone = 0
+        confirmedBeforeThisTarget = 0
         runningGameKeys = Set(names.keys)
         plan = BackupRunPlan()
         startedAt = Date()
@@ -75,6 +78,7 @@ final class BackupRunMonitor: BackupRunObserver {
 
     func targetEnds() {
         targetsDone += 1
+        confirmedBeforeThisTarget = plan.confirmedBytes
         inFlightBytes = 0
         report()
     }
@@ -132,11 +136,13 @@ final class BackupRunMonitor: BackupRunObserver {
 
     private var totalBytes: Int64 { plan.plannedBytes * Int64(max(1, targetCount)) }
 
-    /// A blob a target already holds confirms nothing, so a finished
-    /// target is the floor.
+    /// A finished target counts as one full share of the plan, whether
+    /// it confirmed every blob or already held them all. The target in
+    /// flight adds only what it confirmed itself.
     private var completedBytes: Int64 {
         let doneTargets = plan.plannedBytes * Int64(targetsDone)
-        return min(totalBytes, max(plan.confirmedBytes, doneTargets) + inFlightBytes)
+        let thisTarget = plan.confirmedBytes - confirmedBeforeThisTarget
+        return min(totalBytes, doneTargets + thisTarget + inFlightBytes)
     }
 
     /// The share of every target's bytes that landed, or `nil`
@@ -174,7 +180,8 @@ final class BackupRunMonitor: BackupRunObserver {
     }
 
     var line: String {
-        ProgressPill.line(phase, leftText: BackupText.bytes(totalBytes - completedBytes))
+        let left = totalBytes - completedBytes
+        return ProgressPill.line(phase, leftText: left > 0 ? BackupText.bytes(left) : nil)
     }
 
     /// The name of the game the run uploads now, or `nil` while the

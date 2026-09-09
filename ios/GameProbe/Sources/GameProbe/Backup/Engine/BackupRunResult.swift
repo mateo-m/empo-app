@@ -72,6 +72,9 @@ public enum BackupRunStop: Error, Equatable, Sendable {
     /// A play session started mid-run, per 7.6. The games the run
     /// did not reach stay dirty and wait for the session end.
     case gameStarted
+    /// The user paused the run, per 6.5. The staging and the outbox
+    /// stay, and the next run carries on from the checkpoint.
+    case paused
 }
 
 public struct BackupRunResult: Equatable, Sendable {

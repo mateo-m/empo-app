@@ -85,6 +85,9 @@ extension SnapshotEngine {
         defer { try? fm.removeItem(at: run.staging) }
 
         for (index, member) in run.plan.changed.enumerated() {
+            // The file boundary of 7.6: a pause leaves whole files
+            // behind, and the checkpoint carries the rest.
+            guard !Task.isCancelled else { throw BackupRunStop.paused }
             try await upload(member, at: index, of: run, in: context)
         }
         context.uploadedBytes += run.result.uploadedBytes
@@ -223,7 +226,9 @@ extension SnapshotEngine {
                     updatedAt: now)),
             "the checkpoint of \(run.key)")
         // The record a process death leaves behind, per 6.5. The run
-        // clears it at its end, so only a death keeps it.
+        // clears it at its end, so only a death keeps it. The bytes
+        // are what the target holds of the plan, across every attempt,
+        // so a resumed run killed past the floor asks like a first one.
         save(
             try store.saveIntent(
                 BackupIntentRecord(
@@ -231,7 +236,7 @@ extension SnapshotEngine {
                     targetId: targetId,
                     gameKey: run.key,
                     snapshotId: run.snapshotId,
-                    uploadedBytes: run.result.uploadedBytes,
+                    uploadedBytes: run.confirmedBytes,
                     remainingBytes: max(0, run.plannedBytes - run.confirmedBytes),
                     createdAt: now)),
             "the interrupted-run record of \(run.key)")

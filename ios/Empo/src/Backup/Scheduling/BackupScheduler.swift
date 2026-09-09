@@ -201,13 +201,22 @@ final class BackupScheduler {
         // as long as the hold lasts, so the pass runs without one.
         if BackupNetwork.isConstrained {
             log("manual press in Low Data Mode, the pass runs without a task")
-            runTask = Task { await run(trigger: .manual, press: press) }
+            startManualRun(press)
             return
         }
         guard !BackupTaskScheduler.submitManual(press) else { return }
         // The system refused the task, so the pass runs in the
         // foreground and hands its uploads to the background session.
-        runTask = Task { await run(trigger: .manual, press: press) }
+        startManualRun(press)
+    }
+
+    /// Every manual pass starts here, under the system task or
+    /// without one, so that Pause finds it in `runTask`.
+    @discardableResult
+    func startManualRun(_ press: ManualBackupPress, progress: Progress? = nil) -> Task<Void, Never> {
+        let task = Task { _ = await run(trigger: .manual, press: press, progress: progress) }
+        runTask = task
+        return task
     }
 
     /// Pause, from the run block of 13.4 or the Backup sheet of
@@ -215,11 +224,14 @@ final class BackupScheduler {
     ///
     /// The engine reads `Task.isCancelled` at every file boundary,
     /// per 7.6, so a cancel leaves whole files behind and the
-    /// checkpoint of 6.5 carries the rest to the next run.
+    /// checkpoint of 6.5 carries the rest to the next run. The
+    /// upload in flight is cancelled too, per 7.5.
     func pauseTheRun() {
+        log("the user paused the run")
         runTask?.cancel()
         runTask = nil
         recordThePause()
+        Task { await BackupTransferSession.shared.cancelEveryTransfer() }
     }
 
     // MARK: - The resume question of 6.5 and 13.18
@@ -237,20 +249,22 @@ final class BackupScheduler {
 
     /// The run the process did not survive, or `nil` when the last
     /// launch left nothing to ask about.
+    ///
+    /// The record is marked asked here, when the sheet shows. A kill
+    /// with the sheet open runs no `onDisappear`, so marking on the
+    /// answer let the same interruption ask at the next launch too.
     func pendingResume() -> BackupIntentRecord? {
         guard let store else { return nil }
         let record = try? store.intent(kind: .interruptedRun)
-        return BackupResumeQuestion.asks(record) ? record : nil
+        guard BackupResumeQuestion.asks(record) else { return nil }
+        try? store.markIntentAsked(kind: .interruptedRun)
+        return record
     }
 
     /// Applies one answer to the resume question.
-    ///
-    /// Every answer marks the record asked, because the question was
-    /// asked. That is what keeps one interruption from asking twice.
     func answerResume(_ action: BackupResumeQuestion.Action, gameName: String) {
         guard let store else { return }
         let record = try? store.intent(kind: .interruptedRun)
-        try? store.markIntentAsked(kind: .interruptedRun)
 
         let effect = BackupResumeQuestion.effect(of: action)
         if effect.startsRunNow, let gameKey = record?.gameKey {
