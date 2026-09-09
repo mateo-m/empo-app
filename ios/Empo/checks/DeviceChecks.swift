@@ -293,7 +293,12 @@ final class DeviceChecks: XCTestCase {
     }
 
     private func targetRowLabel() -> String {
-        targetRow.waitForExistence(timeout: 10) ? targetRow.label : "(no row)"
+        // A run in progress adds a section above the list, so the row
+        // can sit below the fold.
+        for _ in 0..<3 where !targetRow.waitForExistence(timeout: 4) {
+            empo.swipeUp()
+        }
+        return targetRow.exists ? targetRow.label : "(no row)"
     }
 
     /// Library gear, then the Backups row of Settings.
