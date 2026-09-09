@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import GameProbe
 
@@ -109,6 +110,35 @@ actor S3Target: BackupProvider {
                 try await self.deleteOne(path)
             }
         }
+    }
+
+    func deleteEverything(under prefix: String) async throws(BackupProviderError) {
+        let keys = try await list(prefix: prefix).map(\.path)
+        var start = 0
+        while start < keys.count {
+            let batch = Array(keys[start..<min(start + S3.deleteBatchSize, keys.count)])
+            try await gate.request { () async throws(BackupProviderError) in
+                try await self.deleteBatch(batch)
+            }
+            start += batch.count
+        }
+    }
+
+    private func deleteBatch(_ keys: [String]) async throws(BackupProviderError) {
+        let body = S3.deleteBody(keys: keys)
+        // `DeleteObjects` is the one call that wants a Content-MD5.
+        let digest = Data(Insecure.MD5.hash(data: body)).base64EncodedString()
+        var request = try signed(
+            method: "POST", query: S3.deleteQuery, body: body,
+            headers: ["Content-MD5": digest])
+        request.httpBody = body
+        let answer = try await BackupAPISession.shared.send(request)
+        try check(answer)
+        if let failure = S3.deleteFailures(inBody: answer.body).first {
+            throw S3.error(status: S3.Status.badRequest, failure: failure)
+        }
+        throttleAttempt = 1
+        committed.subtract(keys)
     }
 
     private func head(_ path: String) async throws(BackupProviderError) -> PutConfirmation {
@@ -388,7 +418,8 @@ actor S3Target: BackupProvider {
         method: String,
         key: String = "",
         query: [URLQueryItem] = [],
-        body: Data? = nil
+        body: Data? = nil,
+        headers extra: [String: String] = [:]
     ) throws(BackupProviderError) -> URLRequest {
         if let refusal = bucket.refusal { throw refusal }
         guard let url = bucket.url(key: key, query: query), let host = bucket.hostHeader else {
@@ -396,7 +427,8 @@ actor S3Target: BackupProvider {
         }
 
         let payloadHash = body.map { ContentHash.hex(of: $0) } ?? S3SigV4.emptyPayloadHash
-        var headers = ["host": host]
+        var headers = extra
+        headers["host"] = host
         if body != nil { headers["Content-Type"] = "application/xml" }
 
         let signature = S3SigV4.signInHeader(

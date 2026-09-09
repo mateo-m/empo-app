@@ -199,6 +199,11 @@ struct FreshInstallSheet: View {
                             Text(Self.line(of: row))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
+                            if row.isSavesOnly {
+                                Text(FreshInstallGameRow.savesOnlyNote)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -267,7 +272,8 @@ struct FreshInstallSheet: View {
     /// The date and the device of the snapshot the row picked.
     private static func line(of row: FreshInstallGameRow) -> String {
         guard let selected = row.selected else { return "" }
-        return "\(BackupText.date(selected.createdAt)), \(row.sourceDeviceName)"
+        let when = "\(BackupText.date(selected.createdAt)), \(row.sourceDeviceName)"
+        return row.isSavesOnly ? "\(FreshInstallGameRow.savesOnlyLabel), \(when)" : when
     }
 
     // MARK: - The confirm tap

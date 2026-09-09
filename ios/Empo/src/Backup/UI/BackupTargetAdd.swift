@@ -119,6 +119,7 @@ enum BackupTargetAdd {
             root: form["root"] ?? "")
         do {
             let provider = try S3Gate.shared.connect(connection, targetId: descriptor.id)
+            await LocalNetworkAccess.waitForTheAnswer(to: address)
             return await check(descriptor, provider: provider)
         } catch {
             return .failed("The access key could not go in the Keychain.")
@@ -140,6 +141,7 @@ enum BackupTargetAdd {
             root: form["root"] ?? "")
         do {
             let provider = try WebDAVGate.shared.connect(connection, targetId: descriptor.id)
+            await LocalNetworkAccess.waitForTheAnswer(to: address)
             return await check(descriptor, provider: provider)
         } catch {
             return .failed("The password could not go in the Keychain.")

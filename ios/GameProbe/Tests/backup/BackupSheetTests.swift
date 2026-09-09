@@ -321,7 +321,7 @@ final class BackupSheetTests: XCTestCase {
     func testARightsBlockAsksForASignInAndATransientFailureSaysNothing() {
         XCTAssertEqual(StaleCause.of(.needsSignIn), .needsSignIn)
         XCTAssertEqual(
-            StaleCause.of(.blockedByPermissions(reason: "no delete right")), .needsSignIn)
+            StaleCause.of(.blockedByPermissions(reason: "no delete right")), .refusedTheRequest)
         XCTAssertEqual(StaleCause.of(.full(reason: "the drive is full")), .targetBlocked)
         XCTAssertNil(StaleCause.of(.unreachable))
         XCTAssertNil(StaleCause.of(.rejected(message: "bad request")))

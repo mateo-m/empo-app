@@ -97,6 +97,7 @@ final class BackupScheduler {
         observeAppLifetime()
         BackupTaskScheduler.scheduleNightly()
         countTheRunsThatVanished()
+        PackageRecord.deleteThePackagesWithoutARecord(localRoot: BackupRoot.layout.root)
         log("the schedule started")
         BackupDeviceCheck.run()
     }

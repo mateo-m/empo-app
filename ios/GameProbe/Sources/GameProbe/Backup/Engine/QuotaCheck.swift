@@ -62,11 +62,13 @@ public enum QuotaCheck {
     /// The reason the target row and the run record carry, per 13.5
     /// and 6.6.
     public static func blockedLine(_ shortfall: Shortfall) -> String {
-        "this target needs \(shortfall.missingBytes) more bytes for the next snapshot"
+        let missing = ByteCountFormatter.string(
+            fromByteCount: shortfall.missingBytes, countStyle: .file)
+        return "This target needs \(missing) more for the next backup"
     }
 
     /// The reason a target blocked by an upload error carries, when
     /// the prune of 5.14 freed too little.
     public static let prunedAndStillFullLine =
-        "this target is full. Make space or raise the cap to continue."
+        "This target is full. Make space or raise the cap to continue."
 }

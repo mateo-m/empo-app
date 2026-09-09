@@ -72,6 +72,21 @@ public struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
+    /// Deletes every package folder that has no record. A build the
+    /// process death cut short leaves its ZIP behind with no
+    /// `package.json`, and nothing finds it again.
+    public static func deleteThePackagesWithoutARecord(localRoot: URL) {
+        let fm = FileManager.default
+        let root = BackupRootLayout(root: localRoot).packages
+        for name in (try? fm.contentsOfDirectory(atPath: root.path)) ?? [] {
+            let directory = root.appendingPathComponent(name)
+            guard !fm.fileExists(atPath: directory.appendingPathComponent(fileName).path) else {
+                continue
+            }
+            try? fm.removeItem(at: directory)
+        }
+    }
+
     /// The package that still waits for a save, per 12.5.
     public static func waitingForASave(localRoot: URL) -> PackageRecord? {
         all(localRoot: localRoot).first { record in

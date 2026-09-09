@@ -11,10 +11,12 @@ struct BackupsScreen: View {
     @State private var model = BackupsScreenModel()
     @State private var showsAddSheet = false
     @State private var addedTarget: PermissionCheckOutcomeSheet?
-    /// The fresh-install flow of 11.4. It waits for the permission
-    /// sheet of the added target to close, because one view shows one
-    /// sheet at a time.
+    /// The fresh-install flow of 11.4 and the notification ask of
+    /// 13.19 wait for the permission sheet of the added target to
+    /// close. SwiftUI drops a sheet asked for while another one is
+    /// up, and keeps its flag set, so no later sheet opens either.
     @State private var pendingFreshInstall: FreshInstallItem?
+    @State private var pendingNotificationAsk = false
     @State private var freshInstall: FreshInstallItem?
     /// The games the ask of 3.5 still waits on, per the press below.
     @State private var waiting: [BackupModeAsk] = []
@@ -83,26 +85,24 @@ struct BackupsScreen: View {
                     targetLabel: descriptor.displayName, result: result)
                 Task {
                     await model.refresh()
-                    model.askAboutNotificationsIfNeeded()
+                    pendingNotificationAsk = model.asksAboutNotifications()
                     if let scan = await model.freshInstall(after: descriptor) {
                         pendingFreshInstall = FreshInstallItem(descriptor: descriptor, scan: scan)
                     } else {
                         await model.readTheAdoptBanners(of: descriptor.id)
                     }
+                    showTheNextSheet()
                 }
             }
         }
         .sheet(
             item: $addedTarget,
-            onDismiss: {
-                freshInstall = pendingFreshInstall
-                pendingFreshInstall = nil
-            },
+            onDismiss: showTheNextSheet,
             content: { outcome in
                 PermissionCheckSheet(targetLabel: outcome.targetLabel, result: outcome.result)
             }
         )
-        .sheet(item: $freshInstall) { item in
+        .sheet(item: $freshInstall, onDismiss: showTheNextSheet) { item in
             FreshInstallSheet(
                 model: FreshInstallModel(descriptor: item.descriptor, scan: item.scan))
         }
@@ -118,6 +118,19 @@ struct BackupsScreen: View {
             NotificationAskSheet { answer in
                 Task { await model.answerTheNotificationSheet(answer) }
             }
+        }
+    }
+
+    /// The permission sheet goes first, the fresh-install sheet
+    /// second, and the notification ask last.
+    private func showTheNextSheet() {
+        guard addedTarget == nil, freshInstall == nil else { return }
+        if let item = pendingFreshInstall {
+            pendingFreshInstall = nil
+            freshInstall = item
+        } else if pendingNotificationAsk {
+            pendingNotificationAsk = false
+            model.showsTheNotificationSheet = true
         }
     }
 

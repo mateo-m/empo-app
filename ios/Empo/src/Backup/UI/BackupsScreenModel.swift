@@ -228,7 +228,7 @@ final class BackupsScreenModel {
             let namespaceId = try? BackupKeychain.namespaceId()
         else { return }
         let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
-        try await deleteEverything(under: paths.namespacePrefix, on: provider)
+        try await provider.deleteEverything(under: paths.namespacePrefix + "/")
     }
 
     func deleteNamespace(_ namespaceId: String, targetId: String) async {
@@ -236,15 +236,8 @@ final class BackupsScreenModel {
             let provider = await BackupTargets.provider(for: descriptor)
         else { return }
         let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
-        try? await deleteEverything(under: paths.namespacePrefix, on: provider)
+        try? await provider.deleteEverything(under: paths.namespacePrefix + "/")
         await refresh()
-    }
-
-    private func deleteEverything(
-        under prefix: String, on provider: any BackupProvider
-    ) async throws {
-        let objects = try await provider.list(prefix: prefix + "/")
-        try await provider.delete(paths: objects.map(\.path))
     }
 
     // MARK: - The namespace list, per 13.9
@@ -359,9 +352,9 @@ final class BackupsScreenModel {
 
     /// The sheet comes up after the first target, and never by
     /// itself after that.
-    func askAboutNotificationsIfNeeded() {
+    func asksAboutNotifications() -> Bool {
         let asked = UserDefaults.standard.bool(forKey: DefaultsKey.backupNotificationsAsked)
-        showsTheNotificationSheet = BackupNotificationRule.asksForPermission(
+        return BackupNotificationRule.asksForPermission(
             configuredTargetCount: targets.count, hasAsked: asked)
     }
 

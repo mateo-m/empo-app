@@ -123,9 +123,15 @@ final class BackupTransferSession: NSObject {
     ///
     /// The launch recovery of 7.10 reads it. A run that never
     /// finished and has no task left here died with the process.
+    /// iOS 27 keeps a task that finished while the app was dead in
+    /// `allTasks` as `.completed` until the delegate hears about it,
+    /// so only a running or suspended task counts as live.
     func liveTaskPaths() async -> Set<String> {
         let tasks = await session.allTasks
-        return Set(tasks.compactMap(\.taskDescription))
+        return Set(
+            tasks
+                .filter { $0.state == .running || $0.state == .suspended }
+                .compactMap(\.taskDescription))
     }
 
     /// Cancels every transfer in flight. A user pause is the one

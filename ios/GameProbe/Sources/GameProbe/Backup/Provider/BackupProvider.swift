@@ -91,7 +91,19 @@ public protocol BackupProvider: Sendable {
     /// because the delete has already got what it asked for.
     func delete(paths: [String]) async throws(BackupProviderError)
 
+    /// Deletes every object under `prefix`, which ends with a
+    /// separator. The namespace delete of 13.9 and 5.13 calls it.
+    func deleteEverything(under prefix: String) async throws(BackupProviderError)
+
     /// The used bytes and the limit, or `nil` where this target does
     /// not answer a space query, per 9.7.
     func quota() async throws(BackupProviderError) -> QuotaReading?
+}
+
+extension BackupProvider {
+
+    public func deleteEverything(under prefix: String) async throws(BackupProviderError) {
+        let objects = try await list(prefix: prefix)
+        try await delete(paths: objects.map(\.path))
+    }
 }

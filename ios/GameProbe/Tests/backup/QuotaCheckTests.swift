@@ -66,10 +66,10 @@ final class QuotaCheckTests: XCTestCase {
         XCTAssertNil(QuotaCheck.shortfall(pendingBytes: 700, reading: nil, capBytes: 100))
     }
 
-    func testTheBlockedLineNamesTheMissingBytes() {
+    func testTheBlockedLineNamesTheMissingBytesInHumanUnits() {
         let line = QuotaCheck.blockedLine(
-            QuotaCheck.Shortfall(neededBytes: 700, freeBytes: 400))
+            QuotaCheck.Shortfall(neededBytes: 2_500_000_000, freeBytes: 400_000_000))
 
-        XCTAssertTrue(line.contains("300"))
+        XCTAssertEqual(line, "This target needs 2,1 GB more for the next backup")
     }
 }

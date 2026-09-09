@@ -36,6 +36,16 @@ public struct FreshInstallGameRow: Equatable, Sendable {
     public var sourceDeviceName: String {
         selected?.deviceName ?? ""
     }
+
+    /// A slim snapshot holds the saves and the settings and not the
+    /// game, per 3.1. Restored alone on a fresh install it makes a
+    /// container with no game in it.
+    public var isSavesOnly: Bool {
+        selected?.mode == .slim
+    }
+
+    public static let savesOnlyLabel = "saves only"
+    public static let savesOnlyNote = "Restore the game files first, then these saves."
 }
 
 /// The two rows below the games, per 11.4.
@@ -173,7 +183,8 @@ public enum FreshInstallMerge {
                 return FreshInstallGameRow(
                     name: newest.identity.containerFolderName,
                     snapshots: group,
-                    selectedSnapshotId: newest.snapshotId)
+                    selectedSnapshotId: newest.snapshotId,
+                    isSelected: newest.mode == .full)
             }
             .sorted { $0.name < $1.name }
     }

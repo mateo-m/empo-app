@@ -23,14 +23,15 @@ final class RestorePickerTests: XCTestCase {
         namespace: String = "ns-1",
         folderName: String = "Quest",
         alias: String? = nil,
-        formatVersion: Int = FormatDescriptor.currentVersion
+        formatVersion: Int = FormatDescriptor.currentVersion,
+        mode: BackupMode = .full
     ) -> SnapshotRow {
         let id = snapshotId(offset)
         return SnapshotRow(
             targetId: "target-1", targetLabel: "Homelab", namespaceId: namespace,
             deviceName: device, snapshotId: id,
             createdAt: BackupKeys.timestamp(ofSnapshotId: id) ?? stamp,
-            mode: .slim, bytesToDownload: 10, hasPartialPaths: false,
+            mode: mode, bytesToDownload: 10, hasPartialPaths: false,
             versionMarkerDiffers: false,
             identity: SnapshotIdentity(containerFolderName: folderName, identityAlias: alias),
             formatVersion: formatVersion)
@@ -137,6 +138,17 @@ final class RestorePickerTests: XCTestCase {
         XCTAssertEqual(
             game.snapshots.map(\.deviceName), ["New iPad", "Old iPad", "Old iPhone"])
         XCTAssertTrue(game.isSelected)
+    }
+
+    /// A saves-only snapshot restored alone makes a container with
+    /// no game in it, so the row starts off and says so.
+    func testASavesOnlyGameStartsOffAndNamesItself() {
+        let plan = FreshInstallMerge.plan(gameRows: [row(0, mode: .slim), row(-100)])
+
+        let game = plan.games[0]
+        XCTAssertTrue(game.isSavesOnly)
+        XCTAssertFalse(game.isSelected)
+        XCTAssertEqual(FreshInstallGameRow.savesOnlyLabel, "saves only")
     }
 
     func testTwoGamesEachKeepTheirOwnRow() {

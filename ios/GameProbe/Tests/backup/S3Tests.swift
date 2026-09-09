@@ -574,3 +574,27 @@ extension Array where Element: Hashable {
     /// How many different values the array holds.
     fileprivate var uniqueCount: Int { Set(self).count }
 }
+
+extension S3Tests {
+
+    func testTheDeleteBodyIsQuietAndEscapesTheKeys() {
+        let body = String(
+            decoding: S3.deleteBody(keys: ["Empo/a.json", "Empo/b&c.json"]), as: UTF8.self)
+
+        XCTAssertEqual(
+            body,
+            "<Delete><Quiet>true</Quiet><Object><Key>Empo/a.json</Key></Object>"
+                + "<Object><Key>Empo/b&amp;c.json</Key></Object></Delete>")
+    }
+
+    func testTheDeleteAnswerNamesTheKeysItRefused() {
+        let body = Data(
+            """
+            <DeleteResult><Error><Key>Empo/a.json</Key><Code>AccessDenied</Code>\
+            <Message>Access Denied</Message></Error></DeleteResult>
+            """.utf8)
+
+        XCTAssertEqual(S3.deleteFailures(inBody: body).map(\.code), ["AccessDenied"])
+        XCTAssertTrue(S3.deleteFailures(inBody: Data("<DeleteResult/>".utf8)).isEmpty)
+    }
+}

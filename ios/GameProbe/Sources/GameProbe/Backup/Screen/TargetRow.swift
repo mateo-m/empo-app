@@ -223,7 +223,7 @@ public enum TargetRowRules {
             let host = target.accountHint ?? target.displayName
             return "Could not reach \(host) at \(time)"
         case .current:
-            guard let lastSuccessText else { return "Up to date" }
+            guard let lastSuccessText else { return "No backup yet" }
             return "Last backup \(lastSuccessText)"
         }
     }

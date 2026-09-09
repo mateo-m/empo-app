@@ -104,6 +104,14 @@ actor WebDAVTarget: BackupProvider {
         }
     }
 
+    func deleteEverything(under prefix: String) async throws(BackupProviderError) {
+        let collection = WebDAV.collectionPath(ofPrefix: prefix)
+        try await gate.request { () async throws(BackupProviderError) in
+            try await self.deleteOne(collection + "/")
+        }
+        committed = committed.filter { !$0.hasPrefix(prefix) }
+    }
+
     private func propfindOne(
         _ path: String
     ) async throws(BackupProviderError) -> PutConfirmation {

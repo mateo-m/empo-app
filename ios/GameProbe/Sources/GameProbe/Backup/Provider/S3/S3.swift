@@ -175,6 +175,34 @@ public enum S3 {
         [URLQueryItem(name: "uploadId", value: uploadId)]
     }
 
+    // MARK: - DeleteObjects
+
+    /// The most keys one `DeleteObjects` takes.
+    public static let deleteBatchSize = 1000
+
+    public static let deleteQuery = [URLQueryItem(name: "delete", value: nil)]
+
+    /// A quiet body, so the answer names the failed keys alone.
+    public static func deleteBody(keys: [String]) -> Data {
+        var text = "<Delete><Quiet>true</Quiet>"
+        for key in keys {
+            text += "<Object><Key>\(S3XML.escape(key))</Key></Object>"
+        }
+        text += "</Delete>"
+        return Data(text.utf8)
+    }
+
+    /// The keys a `DeleteObjects` answer refused. The service answers
+    /// 200 and writes them into the body.
+    public static func deleteFailures(inBody body: Data) -> [Failure] {
+        guard let xml = String(data: body, encoding: .utf8) else { return [] }
+        return S3XML.blocks(named: "Error", in: xml).map { block in
+            Failure(
+                code: S3XML.value(of: "Code", in: block) ?? "",
+                message: S3XML.value(of: "Message", in: block) ?? "")
+        }
+    }
+
     // MARK: - The commit body
 
     /// One part as the service reported it.

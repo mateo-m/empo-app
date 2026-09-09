@@ -43,7 +43,8 @@ enum BackupDeviceCheck {
             let sixteenMebibytes: Int64 = 16 * 1024 * 1024
             S3Gate.shared.useSmallParts(
                 singleUploadLimit: sixteenMebibytes, partBase: sixteenMebibytes)
-            log("S3 uploads in parts of 16 MiB for this check")
+            let partBytes = S3.partSize(forFileOfSize: 0, base: sixteenMebibytes)
+            log("S3 uploads in parts of \(partBytes / 1024 / 1024) MiB for this check")
         }
 
         // A cause posts once, per 7.11, so a second device check on

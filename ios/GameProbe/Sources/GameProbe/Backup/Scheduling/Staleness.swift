@@ -23,6 +23,9 @@ public enum StaleCause: Equatable, Sendable {
     /// unprotected as a dead token does.
     case waitingForWiFi
     case needsSignIn
+    /// The target answered a write with a rights error. A sign-in
+    /// with full access fixes it, per 8.4.
+    case refusedTheRequest
     /// Quota or cap reached after the prune ladder of 5.14 ran out.
     case targetBlocked
     case deviceStorageLow
@@ -43,6 +46,8 @@ public enum StaleCause: Equatable, Sendable {
             return "waiting for Wi-Fi"
         case .needsSignIn:
             return "\(target) needs you to sign in again"
+        case .refusedTheRequest:
+            return "\(target) refused the request"
         case .targetBlocked:
             return "\(target) is full"
         case .deviceStorageLow:
@@ -59,13 +64,13 @@ public enum StaleCause: Equatable, Sendable {
     /// The cause a target's last failure of 13.5 leaves on every
     /// game that target carries.
     ///
-    /// A rights block asks for a sign-in, the way the notification
-    /// rule of 7.11 does. A rejection and an unreachable target say
-    /// nothing about the game, so the clock alone speaks for it.
+    /// A rejection and an unreachable target say nothing about the
+    /// game, so the clock alone speaks for it.
     public static func of(_ failure: TargetFailure?) -> StaleCause? {
         switch failure {
         case .none: return nil
-        case .needsSignIn, .blockedByPermissions: return .needsSignIn
+        case .needsSignIn: return .needsSignIn
+        case .blockedByPermissions: return .refusedTheRequest
         case .full: return .targetBlocked
         case .rejected, .unreachable: return nil
         }
@@ -75,7 +80,7 @@ public enum StaleCause: Equatable, Sendable {
     public var action: StaleAction {
         switch self {
         case .waitingForWiFi: return .allowThisRunOverCellular
-        case .needsSignIn: return .signInAgain
+        case .needsSignIn, .refusedTheRequest: return .signInAgain
         case .targetBlocked: return .makeSpaceOnTheTarget
         case .deviceStorageLow: return .freeSpaceOnThisDevice
         case .savesPartial, .runsInterrupted, .waitingForARun: return .backUpNow

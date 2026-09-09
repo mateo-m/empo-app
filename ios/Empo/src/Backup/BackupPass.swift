@@ -73,7 +73,7 @@ final class BackupPass: BackupRunning {
                 didFinish = false
                 if BackupRunMonitor.shared.stopLine == nil, result.stop != .gameStarted {
                     BackupRunMonitor.shared.stopLine = Self.stopLine(
-                        causes: causes, label: descriptor.label)
+                        of: result, causes: causes, label: descriptor.label)
                 }
             }
             // A run the system cut short proves nothing about the
@@ -193,16 +193,19 @@ final class BackupPass: BackupRunning {
         return values?.volumeAvailableCapacityForImportantUsage ?? 0
     }
 
-    /// The three causes of 7.11 this run carries. Everything else is
-    /// transient and feeds only the stale line.
-    /// What the pill says after the run, per 13.2. The notice of 7.11
-    /// names the cause, so the pill uses the same words.
-    private static func stopLine(causes: Set<BackupFailFastCause>, label: String) -> String {
+    /// What the pill says after the run, per 13.2. The target row
+    /// names the stop, so the pill uses the same words.
+    private static func stopLine(
+        of result: BackupRunResult, causes: Set<BackupFailFastCause>, label: String
+    ) -> String {
+        let device = BackupDeviceConditions.deviceName
+        if let cause = StaleCause.of(result.stop.flatMap(TargetFailure.of)) {
+            return cause.line(targetLabel: label, deviceName: device)
+        }
         guard let cause = BackupFailFastCause.allCases.first(where: causes.contains) else {
             return "\(label) did not finish"
         }
-        return cause.staleCause.line(
-            targetLabel: label, deviceName: BackupDeviceConditions.deviceName)
+        return cause.staleCause.line(targetLabel: label, deviceName: device)
     }
 
     private static func causes(of result: BackupRunResult) -> Set<BackupFailFastCause> {
