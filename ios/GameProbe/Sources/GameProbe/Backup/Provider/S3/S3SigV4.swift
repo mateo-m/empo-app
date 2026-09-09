@@ -326,7 +326,8 @@ public enum S3SigV4 {
     ///
     /// `host` is the only signed header, which is what lets the
     /// background daemon send the request without a header of its
-    /// own. `expires` is clamped to the 7 days of 9.4.
+    /// own. A stated `port` goes into the signed host, as URLSession
+    /// sends it. `expires` is clamped to the 7 days of 9.4.
     public static func presign(
         method: String,
         scheme: String,
@@ -358,7 +359,7 @@ public enum S3SigV4 {
             method: method,
             canonicalPath: canonicalPath,
             canonicalQuery: canonicalItems,
-            headers: ["host": host],
+            headers: ["host": port.map { "\(host):\($0)" } ?? host],
             payloadHash: unsignedPayload)
         let toSign = stringToSign(
             amzDate: amz, scope: credentialScope, canonicalRequest: canonical.text)

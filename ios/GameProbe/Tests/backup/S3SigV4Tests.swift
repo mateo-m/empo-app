@@ -193,6 +193,21 @@ final class S3SigV4Tests: XCTestCase {
 
     // MARK: - 2. The presigned URL
 
+    func testAPresignedURLSignsTheHostWithItsPort() {
+        let withPort = S3SigV4.presign(
+            method: "PUT", scheme: "https", host: "192.168.0.40", port: 8483,
+            canonicalPath: "/empo-backups/Empo/probe",
+            credentials: s3Credentials, region: "us-east-1", date: exampleDate)
+        let asIfNoPort = S3SigV4.presign(
+            method: "PUT", scheme: "https", host: "192.168.0.40", port: nil,
+            canonicalPath: "/empo-backups/Empo/probe",
+            credentials: s3Credentials, region: "us-east-1", date: exampleDate)
+
+        XCTAssertNotEqual(withPort?.signature, asIfNoPort?.signature)
+        XCTAssertTrue(
+            (withPort?.url.absoluteString ?? "").hasPrefix("https://192.168.0.40:8483/empo-backups/Empo/probe?"))
+    }
+
     func testAPresignedURLReproducesTheQueryStringVector() {
         let presigned = S3SigV4.presign(
             method: "GET",

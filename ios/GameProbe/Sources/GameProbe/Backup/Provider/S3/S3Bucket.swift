@@ -53,7 +53,21 @@ public struct S3Bucket: Codable, Equatable, Sendable {
     }
 
     public var scheme: String? { address.scheme?.lowercased() }
-    public var port: Int? { address.port }
+
+    /// The port the address states, unless it is the usual one of the
+    /// scheme. URLSession drops a usual port from the Host header, so
+    /// the URL drops it too and the two read the same.
+    public var port: Int? {
+        guard let port = address.port else { return nil }
+        return port == (scheme == "http" ? 80 : 443) ? nil : port
+    }
+
+    /// The Host header as URLSession sends it. S3 signs that exact
+    /// string, so a stated port belongs in it.
+    public var hostHeader: String? {
+        guard let host else { return nil }
+        return port.map { "\(host):\($0)" } ?? host
+    }
 
     /// The part of the path the address itself carries, such as the
     /// `/s3` of a MinIO behind a reverse proxy. It never ends with a

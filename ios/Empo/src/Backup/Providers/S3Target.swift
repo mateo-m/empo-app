@@ -391,7 +391,7 @@ actor S3Target: BackupProvider {
         body: Data? = nil
     ) throws(BackupProviderError) -> URLRequest {
         if let refusal = bucket.refusal { throw refusal }
-        guard let url = bucket.url(key: key, query: query), let host = bucket.host else {
+        guard let url = bucket.url(key: key, query: query), let host = bucket.hostHeader else {
             throw BackupProviderError.rejected(message: "Empo built no address for the bucket")
         }
 

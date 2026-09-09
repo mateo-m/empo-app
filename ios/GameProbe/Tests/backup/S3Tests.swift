@@ -479,6 +479,23 @@ final class S3Tests: XCTestCase {
             bucket.canonicalPath(key: "Empo/a b$c"), "/my-saves/Empo/a%20b%24c")
     }
 
+    func testTheHostHeaderCarriesAStatedPortAndDropsTheUsualOne() throws {
+        let stated = S3Bucket(
+            address: try XCTUnwrap(URL(string: "https://192.168.0.40:8483")),
+            region: "us-east-1", name: "empo-backups", usesPathStyle: true)
+        XCTAssertEqual(stated.port, 8483)
+        XCTAssertEqual(stated.hostHeader, "192.168.0.40:8483")
+        XCTAssertEqual(
+            stated.url(key: "Empo/probe")?.absoluteString,
+            "https://192.168.0.40:8483/empo-backups/Empo/probe")
+
+        let usual = S3Bucket(
+            address: try XCTUnwrap(URL(string: "https://s3.eu-west-1.amazonaws.com:443")),
+            region: "eu-west-1", name: "saves", usesPathStyle: false)
+        XCTAssertNil(usual.port)
+        XCTAssertEqual(usual.hostHeader, "saves.s3.eu-west-1.amazonaws.com")
+    }
+
     func testTheAddFormOffersTheStyleTheHostUses() {
         XCTAssertFalse(
             S3Bucket.prefersPathStyle(address: URL(string: "https://s3.amazonaws.com")!))
