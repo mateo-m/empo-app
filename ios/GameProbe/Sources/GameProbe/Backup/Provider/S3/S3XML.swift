@@ -44,18 +44,47 @@ enum S3XML {
         value(of: name, in: xml)?.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
     }
 
-    /// The five entities XML defines. A key of Empo's own is hex or
-    /// a fixed ASCII name, per 5.2, so none of them appears today.
-    /// A namespace another writer made can hold any of them.
+    /// The five named entities and the numeric ones. MinIO and the
+    /// other Go services write a quote as `&#34;`, so the ETag of a
+    /// ListParts answer reads wrong without the numeric form, and
+    /// the commit that quotes it back gets InvalidPart.
     static func unescape(_ text: String) -> String {
         guard text.contains("&") else { return text }
-        return
-            text
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&apos;", with: "'")
-            .replacingOccurrences(of: "&amp;", with: "&")
+        var out = ""
+        var rest = Substring(text)
+        while let amp = rest.firstIndex(of: "&") {
+            out += rest[..<amp]
+            rest = rest[amp...]
+            guard let semi = rest.firstIndex(of: ";") else { break }
+            let name = rest[rest.index(after: amp)..<semi]
+            if let decoded = character(ofEntity: name) {
+                out.append(decoded)
+                rest = rest[rest.index(after: semi)...]
+            } else {
+                out.append("&")
+                rest = rest.dropFirst()
+            }
+        }
+        out += rest
+        return out
+    }
+
+    private static func character(ofEntity name: Substring) -> Character? {
+        switch name {
+        case "lt": return "<"
+        case "gt": return ">"
+        case "quot": return "\""
+        case "apos": return "'"
+        case "amp": return "&"
+        default: break
+        }
+        guard name.hasPrefix("#") else { return nil }
+        let digits = name.dropFirst()
+        let code =
+            digits.hasPrefix("x") || digits.hasPrefix("X")
+            ? UInt32(digits.dropFirst(), radix: 16) : UInt32(digits)
+        guard let code, let scalar = Unicode.Scalar(code) else { return nil }
+        return Character(scalar)
     }
 
     /// The same five, the other way, for the body Empo writes.

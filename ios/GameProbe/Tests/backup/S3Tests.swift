@@ -294,6 +294,21 @@ final class S3Tests: XCTestCase {
         XCTAssertEqual(parts.map(\.eTag), ["\"one\"", "\"two\""])
     }
 
+    func testAResumedRunReadsTheETagAGoServiceWritesWithNumericQuotes() {
+        // MinIO answers ListParts with `&#34;` for the quotes.
+        let body = Data(
+            """
+            <ListPartsResult><Part><PartNumber>1</PartNumber>\
+            <ETag>&#34;5f363e0e58a95f06cbe9bbc662c5dfb6&#34;</ETag></Part>\
+            <Part><PartNumber>2</PartNumber><ETag>&#x22;two&#x22;</ETag></Part></ListPartsResult>
+            """.utf8)
+        let parts = S3.completedParts(fromBody: body)
+        XCTAssertEqual(parts.map(\.eTag), ["\"5f363e0e58a95f06cbe9bbc662c5dfb6\"", "\"two\""])
+        let commit = String(decoding: S3.completeBody(parts: parts), as: UTF8.self)
+        XCTAssertTrue(commit.contains("<ETag>&quot;5f363e0e58a95f06cbe9bbc662c5dfb6&quot;</ETag>"))
+        XCTAssertEqual(S3XML.unescape("a &amp; b &lt; c &#65;&#x42; &bogus; &"), "a & b < c AB &bogus; &")
+    }
+
     func testTheCommitBodyListsThePartsInOrder() {
         let body = S3.completeBody(parts: [
             S3.CompletedPart(number: 2, eTag: "\"two\""),
