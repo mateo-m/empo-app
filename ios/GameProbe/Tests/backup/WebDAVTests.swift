@@ -381,7 +381,15 @@ final class WebDAVTests: XCTestCase {
         // query asks about.
         XCTAssertEqual(
             nextcloud.url()?.absoluteString,
-            "https://cloud.example.com/remote.php/dav/files/alice")
+            "https://cloud.example.com/remote.php/dav/files/alice/")
+    }
+
+    func testACollectionKeepsItsTrailingSlash() {
+        XCTAssertEqual(
+            nextcloud.url(path: "Empo/devices/")?.absoluteString,
+            "https://cloud.example.com/remote.php/dav/files/alice/Empo/devices/")
+        let bare = WebDAVServer(address: URL(string: "https://dav.example.com")!, username: "dave")
+        XCTAssertEqual(bare.url()?.absoluteString, "https://dav.example.com/")
     }
 
     func testItEncodesAPathTheServerAnsweredAndReadsItBack() {

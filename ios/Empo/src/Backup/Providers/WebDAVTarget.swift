@@ -175,7 +175,7 @@ actor WebDAVTarget: BackupProvider {
         while let collection = left.popLast() {
             guard seen.insert(collection).inserted else { continue }
             let answer = try await send(
-                WebDAV.Method.propfind, path: collection,
+                WebDAV.Method.propfind, path: collection + "/",
                 headers: ["Depth": WebDAV.Depth.one],
                 body: WebDAV.listPropertiesBody)
             // A collection that is not there holds no object, and the

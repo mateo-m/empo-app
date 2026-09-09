@@ -57,10 +57,15 @@ public struct WebDAVServer: Codable, Equatable, Sendable {
     }
 
     /// The path of one provider path on this server, encoded once.
+    ///
+    /// A collection keeps its trailing slash, and the root gets one.
+    /// Apache answers a `PROPFIND` on a collection named without the
+    /// slash with a 301, and the request that follows the redirect
+    /// carries no `Authorization` header.
     public func absolutePath(_ path: String) -> String {
         let trimmed = path.hasPrefix("/") ? String(path.dropFirst()) : path
         let base = Self.encode(basePath)
-        guard !trimmed.isEmpty else { return base.isEmpty ? "/" : base }
+        guard !trimmed.isEmpty else { return base + "/" }
         return base + "/" + Self.encode(trimmed)
     }
 
