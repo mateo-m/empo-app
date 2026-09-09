@@ -1130,6 +1130,55 @@ final class DeviceChecks: XCTestCase {
         return texts
     }
 
+    /// Presses Back up now and follows the pill to the end of the run.
+    /// `EMPO_KILL_AFTER=N` kills Empo N seconds into the upload and
+    /// relaunches it, which is the mid-upload kill of 011 and 012.
+    /// `EMPO_WAIT` caps the watch in seconds, 1800 by default.
+    func testWatchRun() {
+        launchEmpo(arguments: ["-debugLogs", "YES", "-backupPressNow", "YES"], answeringNotNow: true)
+        let cap = TimeInterval(env["EMPO_WAIT"] ?? "") ?? 1800
+        let killAfter = TimeInterval(env["EMPO_KILL_AFTER"] ?? "")
+        let began = Date()
+        var last = ""
+        var seen = false
+        var uploadSince: Date?
+        var killed = false
+        while Date().timeIntervalSince(began) < cap {
+            let line = pillLine()
+            if line != last {
+                note("pill reads \"\(line)\" after \(Int(Date().timeIntervalSince(began))) s")
+                last = line
+            }
+            if line.hasPrefix("Backing up"), uploadSince == nil { uploadSince = Date() }
+            if line != "(no pill)" { seen = true }
+            if seen, line == "(no pill)" || line.hasPrefix("Backup complete") || line.hasPrefix("Backup stopped") {
+                sleep(3)
+                if pillLine() == "(no pill)" || pillLine() == line { break }
+            }
+            if let killAfter, let since = uploadSince, !killed, Date().timeIntervalSince(since) >= killAfter {
+                shot("before-kill")
+                empo.terminate()
+                killed = true
+                note("killed Empo \(Int(killAfter)) s into the upload")
+                sleep(5)
+                launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+                note("relaunched, pill reads \"\(pillLine())\"")
+            }
+            sleep(5)
+        }
+        note("run watch ended after \(Int(Date().timeIntervalSince(began))) s, pill reads \"\(pillLine())\"")
+        shot("run-end")
+        guard empo.buttons["Settings"].firstMatch.waitForExistence(timeout: 5) else {
+            note("no library on screen at the end, so no rows to read")
+            return
+        }
+        openBackupsScreen()
+        sleep(2)
+        let rows = empo.buttons.matching(NSPredicate(format: "label CONTAINS ' at '")).allElementsBoundByIndex.map(\.label)
+        note("target rows: \(rows)")
+        shot("rows-after-run")
+    }
+
     /// Taps the question row of an unsaved package on the Backups
     /// screen and answers Delete.
     func testDeleteTheUnsavedLibraryPackage() {
