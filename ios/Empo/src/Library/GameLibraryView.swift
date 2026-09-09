@@ -237,9 +237,17 @@ struct GameLibraryView: View {
     /// only an active app takes the question. `scenePhase` stays
     /// `.inactive` under the UIHostingController, so this reads UIKit.
     private func takeTheResumeQuestion() {
-        guard UIApplication.shared.applicationState == .active, resumeAsk == nil else { return }
+        guard UIApplication.shared.applicationState == .active, !Self.tookTheResumeQuestion else {
+            return
+        }
+        // The library comes back from the player with a new `.task`,
+        // and a run that a game start stopped still holds its record
+        // for a moment. Only the first active look is the launch.
+        Self.tookTheResumeQuestion = true
         resumeAsk = ResumeQuestionAsk.pending()
     }
+
+    @MainActor private static var tookTheResumeQuestion = false
 
     private var libraryPresentedContent: some View {
         libraryScene
