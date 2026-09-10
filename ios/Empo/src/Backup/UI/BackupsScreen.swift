@@ -278,21 +278,21 @@ struct BackupsScreen: View {
     private func locations(_ items: [BackupTargetItem]) -> some View {
         Section {
             ForEach(items) { item in
-                HStack(spacing: Spacing.lg) {
-                    NavigationLink {
-                        TargetDetailScreen(model: model, targetId: item.id)
-                    } label: {
+                NavigationLink {
+                    TargetDetailScreen(model: model, targetId: item.id)
+                } label: {
+                    HStack(spacing: Spacing.lg) {
                         TargetRowView(row: item.row, provider: item.descriptor.provider)
-                    }
-                    .disabled(item.row.isDisabled)
-                    if let action = item.row.action, action != .makeSpace {
-                        Button(action.label) { Task { await press(action, on: item) } }
-                            .buttonStyle(.bordered)
-                            .buttonBorderShape(.capsule)
-                            .controlSize(.small)
-                            .font(.subheadline.weight(.medium))
+                        if let action = item.row.action, action != .makeSpace {
+                            Button(action.label) { Task { await press(action, on: item) } }
+                                .buttonStyle(.bordered)
+                                .buttonBorderShape(.capsule)
+                                .controlSize(.small)
+                                .font(.subheadline.weight(.medium))
+                        }
                     }
                 }
+                .disabled(item.row.isDisabled)
             }
             Button {
                 showsAddSheet = true

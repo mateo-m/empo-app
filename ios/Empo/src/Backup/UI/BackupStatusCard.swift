@@ -91,15 +91,8 @@ struct BackupStatusCard: View {
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder private var progress: some View {
-        if let fraction = monitor.fraction {
-            ProgressView(value: fraction)
-                .tint(.brand)
-        } else {
-            ProgressView()
-                .progressViewStyle(.linear)
-                .tint(.brand)
-        }
+    private var progress: some View {
+        ProgressBar(fraction: monitor.fraction)
     }
 
     @ViewBuilder private var symbol: some View {
