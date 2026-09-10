@@ -125,7 +125,9 @@ class AppWindow: UIWindow {
             // permissive.
             let gameRect = EngineState.shared.gameRect
             if gameRect.isEmpty || gameRect.contains(point) {
-                return GameViewEmbedder.embeddedView
+                // Ticket 015 A/B. The routing decision above is the
+                // same on both paths. Only the receiver changes.
+                return PointerInjection.activeView ?? GameViewEmbedder.embeddedView
             }
             return hit
         }
@@ -152,6 +154,15 @@ class AppWindow: UIWindow {
             event.allTouches?.contains(where: { $0.phase == .began }) == true
         {
             NotificationCenter.default.post(name: .gameAreaTouchBegan, object: nil)
+        }
+        // Ticket 015. The latency probe. It runs on both paths and
+        // before any view sees the touch, so it never changes which
+        // view receives what.
+        if AppState.shared.phase == .playing,
+            event.type == .touches,
+            AppSettings.shared.debugLogs
+        {
+            PointerTrace.observe(event, in: self)
         }
         super.sendEvent(event)
     }
@@ -307,7 +318,11 @@ class AppWindow: UIWindow {
                 clearPassThroughBackdrop(in: root)
             }
             GameViewEmbedder.embedWithRetry()
+            if let root = window.rootViewController?.view {
+                PointerInjection.install(in: root)
+            }
         } else {
+            PointerInjection.remove()
             GameViewEmbedder.detach()
             window.isHidden = false
             window.isOpaque = false

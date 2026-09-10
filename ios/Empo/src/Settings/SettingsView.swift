@@ -129,6 +129,13 @@ struct SettingsView: View {
                     )
 
                     SettingsToggle(
+                        title: "Pointer injection",
+                        isOn: $settings.pointerInjection,
+                        description:
+                            "Send game-area touches to the game through the app instead of the engine window."
+                    )
+
+                    SettingsToggle(
                         title: "Clean up broken imports",
                         isOn: $settings.cleanupInvalidGames,
                         description: "On the next app launch, removes games that did not import correctly."

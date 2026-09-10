@@ -15,6 +15,7 @@ enum DefaultsKey {
     static let debugMode = "debugMode"
     static let showViewportBounds = "showViewportBounds"
     static let showTouchZone = "showTouchZone"
+    static let pointerInjection = "pointerInjection"
     static let debugLogs = "debugLogs"
     static let maxLogFiles = "maxLogFiles"
     static let interfaceHaptics = "interfaceHaptics"

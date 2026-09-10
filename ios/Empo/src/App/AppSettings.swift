@@ -167,6 +167,19 @@ class AppSettings {
         didSet { UserDefaults.standard.set(showTouchZone, forKey: DefaultsKey.showTouchZone) }
     }
 
+    /// Ticket 015 spike. Off sends game-area touches to SDL's view,
+    /// which is the shipped behaviour. On sends them to Empo's own
+    /// capture view, which pushes them through the engine bridge.
+    var pointerInjection: Bool {
+        didSet {
+            UserDefaults.standard.set(pointerInjection, forKey: DefaultsKey.pointerInjection)
+            // The spike flips this inside a live session, so the
+            // trace file must say where one path stops and the
+            // other starts.
+            PointerTrace.append("# path=\(pointerInjection ? "B" : "A")")
+        }
+    }
+
     var debugLogs: Bool {
         didSet { UserDefaults.standard.set(debugLogs, forKey: DefaultsKey.debugLogs) }
     }
@@ -235,6 +248,7 @@ class AppSettings {
         self.diagnosticsOverlay = ud.bool(forKey: DefaultsKey.debugMode)
         self.showViewportBounds = ud.bool(forKey: DefaultsKey.showViewportBounds)
         self.showTouchZone = ud.bool(forKey: DefaultsKey.showTouchZone)
+        self.pointerInjection = ud.bool(forKey: DefaultsKey.pointerInjection)
         self.viewportBoundsColor = Self.loadViewportBoundsColor()
         self.debugLogs = (ud.object(forKey: DefaultsKey.debugLogs) as? Bool) ?? true
         let storedMax = ud.integer(forKey: DefaultsKey.maxLogFiles)

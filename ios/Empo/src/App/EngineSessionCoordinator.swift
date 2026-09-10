@@ -85,6 +85,14 @@ final class EngineSessionCoordinator {
     }
 
     func configureEngine(_ input: GameSession.LaunchInput) {
+        // Ticket 015. One trace file spans every game in an app run,
+        // so each session needs to say which game it is and which
+        // path was active when it started.
+        if AppSettings.shared.debugLogs {
+            PointerTrace.append(
+                "# game=\(input.game.title) path="
+                    + (AppSettings.shared.pointerInjection ? "B" : "A"))
+        }
         GameSession.configureEngine(
             input,
             crashTracker: crashTracker,
@@ -238,6 +246,26 @@ final class EngineSessionCoordinator {
                     EngineSessionCoordinator.shared.textInputModeHandler?(on)
                 }
             }, nil)
+
+        // Ticket 015. Traces every mouse event on the SDL queue, so the
+        // two input paths can be diffed through one lens. It logs
+        // straight from SDL's event thread: a hop to the main actor
+        // would reorder the stream and distort the timings the spike
+        // measures. Installed per session, so the toggle is read once
+        // rather than raced across threads.
+        if AppSettings.shared.debugLogs {
+            PointerTrace.start(
+                label: "session path=\(AppSettings.shared.pointerInjection ? "B" : "A")")
+            mkxp_setMouseTraceCallback(
+                { type, x, y, button, which, uptime, _ in
+                    let line = String(
+                        format: "sdl type=%d x=%d y=%d button=%d which=%d uptime=%.6f",
+                        type, x, y, button, which, uptime
+                    )
+                    PointerTrace.append(line)
+                    NSLog("[pointer] %@", line)
+                }, nil)
+        }
     }
 
     private func registerBridgeCallbacks() {
