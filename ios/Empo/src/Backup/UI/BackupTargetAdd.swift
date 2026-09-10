@@ -96,7 +96,9 @@ enum BackupTargetAdd {
         return await check(descriptor, provider: provider)
     }
 
-    static func s3(form: [String: String]) async -> Outcome {
+    /// `id` is the target that signs in again. A new target takes a
+    /// fresh id.
+    static func s3(form: [String: String], id: String = UUID().uuidString) async -> Outcome {
         guard let address = URL(string: form["address"] ?? "") else {
             return .failed("Type the address of the service.")
         }
@@ -112,7 +114,7 @@ enum BackupTargetAdd {
                 accessKeyId: form["accessKeyId"] ?? "",
                 secretAccessKey: form["secretAccessKey"] ?? ""))
         let descriptor = TargetDescriptor(
-            id: UUID().uuidString,
+            id: id,
             provider: .s3,
             label: form["label"] ?? bucket.name,
             accountHint: connection.accountHint,
@@ -126,7 +128,7 @@ enum BackupTargetAdd {
         }
     }
 
-    static func webdav(form: [String: String]) async -> Outcome {
+    static func webdav(form: [String: String], id: String = UUID().uuidString) async -> Outcome {
         guard let address = URL(string: form["address"] ?? "") else {
             return .failed("Type the address of the server.")
         }
@@ -134,7 +136,7 @@ enum BackupTargetAdd {
         if let refusal = server.refusal { return .failed(line(of: refusal)) }
         let connection = WebDAVConnection(server: server, password: form["password"] ?? "")
         let descriptor = TargetDescriptor(
-            id: UUID().uuidString,
+            id: id,
             provider: .webdav,
             label: form["label"] ?? address.host ?? "WebDAV",
             accountHint: connection.accountHint,
@@ -148,8 +150,43 @@ enum BackupTargetAdd {
         }
     }
 
-    /// Signs in again to a target that already exists, then runs the
-    /// same check, per 13.7.
+    /// The typed services have no browser. Their sign-in is the add
+    /// form again, per 8.8, with the secret left out.
+    static func signsInThroughTheForm(_ kind: BackupProviderKind) -> Bool {
+        switch kind {
+        case .s3, .webdav, .sftp: return true
+        case .iCloudDrive, .dropbox, .googleDrive: return false
+        }
+    }
+
+    /// What the sign-in form starts with. A placeholder of 8.8 knows
+    /// its label and its root only, and a target that lost its
+    /// password still knows its address and its user name.
+    static func signInForm(of target: TargetDescriptor) -> [String: String] {
+        var values = ["label": target.label, "root": target.root]
+        switch target.provider {
+        case .webdav:
+            if let connection = WebDAVConnectionStore.connection(targetId: target.id) {
+                values["address"] = connection.server.address.absoluteString
+                values["username"] = connection.server.username
+            }
+        case .s3:
+            if let connection = S3ConnectionStore.connection(targetId: target.id) {
+                values["address"] = connection.bucket.address.absoluteString
+                values["bucket"] = connection.bucket.name
+                values["region"] = connection.bucket.region
+                values["accessKeyId"] = connection.credentials.accessKeyId
+                values["usesPathStyle"] = connection.bucket.usesPathStyle ? "true" : "false"
+            }
+        case .iCloudDrive, .dropbox, .googleDrive, .sftp:
+            break
+        }
+        return values
+    }
+
+    /// Signs in again to a browser or iCloud target, then runs the
+    /// same check, per 13.7. The typed services go through
+    /// `signInForm` and the form instead.
     static func signInAgain(_ target: TargetDescriptor) async -> Outcome {
         switch target.provider {
         case .iCloudDrive:
@@ -174,12 +211,7 @@ enum BackupTargetAdd {
             }
             return await check(target, provider: provider)
         case .s3, .webdav, .sftp:
-            // The secret is typed and not granted, so the target
-            // opens with what the Keychain already holds.
-            guard let provider = await BackupTargets.provider(for: target) else {
-                return .failed("Type the password of this target again to use it.")
-            }
-            return await check(target, provider: provider)
+            return .failed("Type the password of this target again to use it.")
         }
     }
 

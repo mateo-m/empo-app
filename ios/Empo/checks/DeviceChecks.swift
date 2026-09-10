@@ -297,26 +297,97 @@ final class DeviceChecks: XCTestCase {
         empo.terminate()
     }
 
-    /// 016 check 3 for WebDAV. Server B is back on its password, and
-    /// the row's Sign in reruns the permission check with what the
-    /// Keychain holds.
+    /// 016 check 3 for WebDAV, on demand. `-backupWrongSecret` puts a
+    /// wrong password in the Keychain, the run meets a 401, and the
+    /// row's Sign in opens the form with the address filled in.
     func testSignInAgainRecoversTarget() {
-        launchEmpo(arguments: ["-debugLogs", "YES"], answeringNotNow: true)
+        launchEmpo(
+            arguments: ["-debugLogs", "YES", "-backupWrongSecret", "webdav", "-backupPressNow", "YES"],
+            answeringNotNow: true)
         openBackupsScreen()
-        note("row before Sign in: \(targetRowLabel())")
-        let signIn = empo.buttons["Sign in"].firstMatch
+        waitForRow(ending: "Sign in again to continue")
+        signInThroughTheForm(rowEnding: "Sign in again to continue")
+    }
+
+    /// 8.8: a descriptor without its secret is a placeholder, and its
+    /// Sign in asks for the address and the password.
+    func testSignInOnPlaceholder() {
+        launchEmpo(
+            arguments: ["-debugLogs", "YES", "-backupForgetSecret", "webdav"], answeringNotNow: true)
+        openBackupsScreen()
+        waitForRow(ending: "Sign in on this device to start")
+        signInThroughTheForm(rowEnding: "Sign in on this device to start")
+    }
+
+    /// Another row can carry the same name, so the state line picks
+    /// the row.
+    private func row(ending suffix: String) -> XCUIElement {
+        let name = env["EMPO_TARGET"] ?? "192.168.0.40"
+        return empo.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@", name + ",", suffix)
+        ).firstMatch
+    }
+
+    private func waitForRow(ending suffix: String) {
+        let row = row(ending: suffix)
+        for _ in 0..<20 where !row.exists {
+            sleep(2)
+            if !row.exists { empo.swipeUp() }
+        }
+        note("row before Sign in: \(row.exists ? row.label : targetRowLabel())")
+        XCTAssertTrue(row.exists, "the row never read \(suffix)")
+    }
+
+    /// Taps the row's Sign in, fills what the form left empty, and
+    /// reads the permission sheet and the row after it.
+    private func signInThroughTheForm(rowEnding suffix: String) {
+        let name = env["EMPO_TARGET"] ?? "192.168.0.40"
+        let signIn = row(ending: suffix).buttons["Sign in"].firstMatch
         XCTAssertTrue(signIn.waitForExistence(timeout: 10), "no Sign in button on the row")
         signIn.tap()
-        let close = empo.buttons["Close"].firstMatch
-        note("permission check sheet shows: \(close.waitForExistence(timeout: 30))")
-        sleep(2)
-        note("sheet texts: \(empo.staticTexts.allElementsBoundByIndex.prefix(12).map(\.label))")
+        XCTAssertTrue(empo.navigationBars["WebDAV server"].waitForExistence(timeout: 10), "no sign-in form")
+        note("form fields: \(empo.textFields.allElementsBoundByIndex.map { "\($0.value ?? "")" })")
+        fillIfEmpty(hint: "https://cloud.example.com/remote.php/dav/files/alice", with: env["EMPO_ADDRESS"] ?? "")
+        fillIfEmpty(hint: "alice", with: env["EMPO_USER"] ?? "")
+        fill(hint: "", with: env["EMPO_PASSWORD"] ?? "", secret: true)
+        hideKeyboard()
+        shot("sign-in-form")
+        let submit = empo.buttons["submitTarget"].firstMatch
+        for _ in 0..<3 where !submit.isHittable { empo.swipeUp() }
+        note("form Sign in enabled: \(submit.isEnabled), hittable: \(submit.isHittable)")
+        submit.tap()
+        sleep(3)
+        if empo.navigationBars["WebDAV server"].exists {
+            note("the form stayed after the Sign in tap, tapping the row by coordinate")
+            submit.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.5)).tap()
+        }
+        waitForPermissionSheet(name: name)
+        notePermissionSheet()
         shot("permission-check-after-sign-in")
+        XCTAssertTrue(empo.staticTexts["\(name) is ready"].exists, "the permission check did not pass")
+        dismissSavePasswordAsk()
+        let close = empo.buttons["Close"].firstMatch
         close.tap()
-        sleep(2)
+        if !empo.staticTexts["\(name) is ready"].waitForNonExistence(timeout: 3) {
+            note("the sheet stayed after Close, tapping again")
+            close.tap()
+            sleep(2)
+        }
         note("row after Sign in: \(targetRowLabel())")
-        note("Sign in button shows: \(signIn.exists)")
+        let recovered = empo.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH %@ AND NOT label ENDSWITH %@", name + ",", suffix)
+        ).firstMatch
+        XCTAssertTrue(recovered.exists, "no row of \(name) left the sign-in state")
         shot("row-after-sign-in")
+    }
+
+    /// An empty SwiftUI field reports its prompt as its value.
+    private func fillIfEmpty(hint: String, with text: String) {
+        let field = empo.textFields.matching(NSPredicate(format: "placeholderValue == %@", hint)).firstMatch
+        guard field.waitForExistence(timeout: 3) else { return }
+        let value = "\(field.value ?? "")"
+        guard value.isEmpty || value == hint else { return }
+        fill(hint: hint, with: text)
     }
 
     /// Puts 192.168.0.40 back to work through the row's Resume button.
@@ -1210,6 +1281,10 @@ final class DeviceChecks: XCTestCase {
             let notNow = app.buttons["Not Now"].firstMatch
             if notNow.waitForExistence(timeout: 3) {
                 notNow.tap()
+                // The ask belongs to another process. A tap on the app
+                // during its exit lands on nothing.
+                XCTAssertTrue(notNow.waitForNonExistence(timeout: 5), "the Save Password ask stayed")
+                sleep(1)
                 note("closed the Save Password ask")
                 return
             }
@@ -1259,7 +1334,21 @@ final class DeviceChecks: XCTestCase {
             field.tap()
             usleep(500_000)
         }
-        field.typeText(text)
+        // The software keyboard of the simulator drops or swaps keys
+        // of a fast typeText. The value of a secure field is one dot
+        // per character.
+        for attempt in 0..<3 {
+            for character in text {
+                field.typeText(String(character))
+                usleep(60_000)
+            }
+            if "\(field.value ?? "")".count == text.count { return }
+            note("the field holds \("\(field.value ?? "")".count) characters after attempt \(attempt), typing again")
+            field.press(forDuration: 1.2)
+            let selectAll = empo.menuItems["Select All"].firstMatch
+            if selectAll.waitForExistence(timeout: 2) { selectAll.tap() }
+            field.typeText(XCUIKeyboardKey.delete.rawValue)
+        }
     }
 
     /// A tap under the keyboard hits the keyboard, not the form.
@@ -1270,9 +1359,11 @@ final class DeviceChecks: XCTestCase {
     }
 
     private func notePermissionSheet() {
-        let texts = empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        // The status card under the sheet redraws during a run, so an
+        // index into the tree can point at a text that is gone.
+        let texts = empo.staticTexts.allElementsBoundByAccessibilityElement.map(\.label).filter { !$0.isEmpty }
         note("sheet texts: \(texts.suffix(10))")
-        let marks = empo.images.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
+        let marks = empo.images.allElementsBoundByAccessibilityElement.map(\.label).filter { !$0.isEmpty }
         note("sheet marks: \(marks.suffix(6))")
     }
 

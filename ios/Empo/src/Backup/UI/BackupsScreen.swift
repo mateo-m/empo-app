@@ -11,6 +11,7 @@ struct BackupsScreen: View {
     @State private var model = BackupsScreenModel()
     @State private var showsAddSheet = false
     @State private var addedTarget: PermissionCheckOutcomeSheet?
+    @State private var signingIn: BackupTargetItem?
     /// The fresh-install flow of 11.4 and the notification ask of
     /// 13.19 wait for the permission sheet of the added target to
     /// close. SwiftUI drops a sheet asked for while another one is
@@ -98,6 +99,13 @@ struct BackupsScreen: View {
                     }
                     showTheNextSheet()
                 }
+            }
+        }
+        .sheet(item: $signingIn) { item in
+            TargetSignInSheet(target: item.descriptor) { descriptor, result in
+                addedTarget = PermissionCheckOutcomeSheet(
+                    targetLabel: descriptor.displayName, result: result)
+                Task { await model.refresh() }
             }
         }
         .sheet(
@@ -309,7 +317,11 @@ struct BackupsScreen: View {
         case .resume:
             await model.setPaused(false, targetId: item.id)
         case .signIn:
-            addedTarget = await model.signInAgain(item)
+            if BackupTargetAdd.signsInThroughTheForm(item.descriptor.provider) {
+                signingIn = item
+            } else {
+                addedTarget = await model.signInAgain(item)
+            }
         case .makeSpace:
             break
         }

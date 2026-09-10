@@ -36,8 +36,11 @@ enum BackupTargets {
     /// Adds one target, or replaces the one that carries its id.
     static func add(_ target: TargetDescriptor) throws {
         try update { targets in
-            targets.removeAll { $0.id == target.id }
-            targets.append(target)
+            if let at = targets.firstIndex(where: { $0.id == target.id }) {
+                targets[at] = target
+            } else {
+                targets.append(target)
+            }
         }
         try SyncStore.update { $0.keep(targetId: target.id) }
         SyncJoin.startAGroup()

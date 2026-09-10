@@ -115,9 +115,22 @@ struct AddTargetSheet: View {
 struct TargetFormScreen: View {
 
     let service: BackupProviderKind
+    let submitTitle: String
+    let failure: String?
     let submit: ([String: String]) -> Void
 
-    @State private var values: [String: String] = [:]
+    @State private var values: [String: String]
+
+    init(
+        service: BackupProviderKind, values: [String: String] = [:], submitTitle: String = "Add",
+        failure: String? = nil, submit: @escaping ([String: String]) -> Void
+    ) {
+        self.service = service
+        self.submitTitle = submitTitle
+        self.failure = failure
+        self.submit = submit
+        _values = State(initialValue: values)
+    }
 
     private var fields: [TargetFormField] {
         switch service {
@@ -141,8 +154,11 @@ struct TargetFormScreen: View {
                 }
             }
             Section {
-                Button("Add") { submit(values) }
+                Button(submitTitle) { submit(values) }
+                    .accessibilityIdentifier("submitTarget")
                     .disabled(!isComplete)
+            } footer: {
+                if let failure { Text(failure).foregroundStyle(.red) }
             }
         }
         .navigationTitle(service.serviceName)

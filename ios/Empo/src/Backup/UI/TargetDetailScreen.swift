@@ -17,6 +17,7 @@ struct TargetDetailScreen: View {
     @State private var showsRemoveSheet = false
     @State private var removalFailure: String?
     @State private var signInOutcome: PermissionCheckOutcomeSheet?
+    @State private var signsInThroughTheForm = false
     @State private var gameNames: [String: String] = [:]
 
     private var item: BackupTargetItem? {
@@ -46,6 +47,15 @@ struct TargetDetailScreen: View {
                             targetId: targetId, deleteBackups: deletesBackups)
                         if removalFailure == nil { dismiss() }
                     }
+                }
+            }
+        }
+        .sheet(isPresented: $signsInThroughTheForm) {
+            if let item {
+                TargetSignInSheet(target: item.descriptor) { descriptor, result in
+                    signInOutcome = PermissionCheckOutcomeSheet(
+                        targetLabel: descriptor.displayName, result: result)
+                    Task { await model.refresh() }
                 }
             }
         }
@@ -91,7 +101,13 @@ struct TargetDetailScreen: View {
             if let action = item.row.action {
                 switch action {
                 case .signIn:
-                    Button("Sign in again") { Task { signInOutcome = await model.signInAgain(item) } }
+                    Button("Sign in again") {
+                        if BackupTargetAdd.signsInThroughTheForm(item.descriptor.provider) {
+                            signsInThroughTheForm = true
+                        } else {
+                            Task { signInOutcome = await model.signInAgain(item) }
+                        }
+                    }
                 case .resume:
                     Button("Resume backups") { Task { await model.setPaused(false, targetId: targetId) } }
                 case .makeSpace:

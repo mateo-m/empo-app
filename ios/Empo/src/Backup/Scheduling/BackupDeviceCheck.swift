@@ -29,12 +29,18 @@ enum BackupDeviceCheck {
         let rearms = defaults.bool(forKey: "backupRearmNotifications")
         let restores = defaults.string(forKey: "restoreGame")
         let launches = defaults.string(forKey: "launchGame")
+        let forgets = defaults.string(forKey: "backupForgetSecret")
+        let breaks = defaults.string(forKey: "backupWrongSecret")
         guard
             addsICloud || addsDropbox || addsGoogleDrive || addsS3 || addsWebDAV || presses
-                || uploadsBig || rearms || restores != nil || launches != nil
+                || uploadsBig || rearms || restores != nil || launches != nil || forgets != nil
+                || breaks != nil
         else {
             return
         }
+
+        if let forgets { forgetTheSecret(targetId: forgets) }
+        if let breaks { breakTheWebDAVPassword(targetId: breaks) }
 
         // `-backupS3SmallParts YES` lowers the two upload numbers of
         // 9.4, so the big upload takes the multipart path with a file
@@ -84,6 +90,33 @@ enum BackupDeviceCheck {
             if let restores { await restoreTheNewestSnapshot(folderName: restores) }
         }
         if let launches { launchTheGame(title: launches) }
+    }
+
+    // MARK: - The sign-in fixtures
+
+    /// `-backupForgetSecret <id>` turns a WebDAV or S3 target into
+    /// the placeholder of 8.8: no Keychain item and no account hint.
+    private static func forgetTheSecret(targetId: String) {
+        try? BackupKeychain.removeSecret(targetId: targetId)
+        try? BackupTargets.update { targets in
+            for index in targets.indices where targets[index].id == targetId {
+                targets[index].accountHint = nil
+            }
+        }
+        log("\(targetId) is a placeholder again")
+    }
+
+    /// `-backupWrongSecret <id>` stores a wrong password for a WebDAV
+    /// target, so the next run meets a 401 and the row asks to sign
+    /// in again.
+    private static func breakTheWebDAVPassword(targetId: String) {
+        guard var connection = WebDAVConnectionStore.connection(targetId: targetId) else {
+            log("\(targetId) holds no WebDAV password to break")
+            return
+        }
+        connection.password = "wrong"
+        try? WebDAVConnectionStore.write(connection, targetId: targetId)
+        log("\(targetId) holds a wrong password now")
     }
 
     // MARK: - The restore
