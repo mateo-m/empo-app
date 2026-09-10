@@ -45,28 +45,42 @@ struct BackupStatusCard: View {
         }
     }
 
+    private var swap: AnyTransition { reduceMotion ? .opacity : .stateChange }
+
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.lg) {
             ZStack {
                 symbol
                     .id(mark)
-                    .transition(reduceMotion ? .opacity : .fadeBlur)
+                    .transition(swap)
             }
             .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(headline)
-                    .font(.headline)
-                    .contentTransition(.opacity)
-                if let detail {
-                    Text(detail)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                // The texts swap on the mark, not on their content,
+                // so the run line can tick every second without a
+                // swap. The stacks keep the old and new copy on one
+                // row while both are on screen.
+                ZStack(alignment: .leading) {
+                    Text(headline)
+                        .font(.headline)
                         .contentTransition(.opacity)
+                        .id(mark)
+                        .transition(swap)
+                }
+                if let detail {
+                    ZStack(alignment: .leading) {
+                        Text(detail)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.opacity)
+                            .id(mark)
+                            .transition(swap)
+                    }
                 }
                 if monitor.isRunning {
                     progress
                         .padding(.top, Spacing.xs)
-                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+                        .transition(swap)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

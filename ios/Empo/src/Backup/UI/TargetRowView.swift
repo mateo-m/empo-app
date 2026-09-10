@@ -33,7 +33,7 @@ struct TargetRowView: View {
         switch row.state {
         case .current, .paused, .cannotOpen: return .secondary
         case .placeholder, .needsSignIn, .blockedByPermissions, .rejected, .full, .unreachable:
-            return .warning
+            return .brand
         }
     }
 

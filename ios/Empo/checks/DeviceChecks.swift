@@ -1597,7 +1597,11 @@ final class DeviceChecks: XCTestCase {
         let now = empo.buttons["Back up now"]
         XCTAssertTrue(now.waitForExistence(timeout: 5))
         now.tap()
-        sleep(20)
+        sleep(15)
+        if now.waitForExistence(timeout: 30) {
+            now.tap()
+            sleep(15)
+        }
     }
 
     // MARK: - Evidence

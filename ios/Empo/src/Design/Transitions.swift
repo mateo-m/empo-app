@@ -101,10 +101,11 @@ struct BlurModifier: ViewModifier {
 struct ScaleFadeBlurTransition: ViewModifier {
     let active: Bool
     let blurRadius: CGFloat
+    var scale: CGFloat = 0.8
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(active ? 0.8 : 1)
+            .scaleEffect(active ? scale : 1)
             .opacity(active ? 0 : 1)
             .blur(radius: active ? blurRadius : 0)
     }
@@ -152,6 +153,16 @@ extension AnyTransition {
         .modifier(
             active: FadeBlurTransition(active: true, blurRadius: 6),
             identity: FadeBlurTransition(active: false, blurRadius: 6)
+        )
+    }
+
+    /// One element that changes state in place: the old one shrinks
+    /// a little as it fades and blurs out, the new one grows into
+    /// place.
+    static var stateChange: AnyTransition {
+        .modifier(
+            active: ScaleFadeBlurTransition(active: true, blurRadius: 6, scale: 0.9),
+            identity: ScaleFadeBlurTransition(active: false, blurRadius: 6, scale: 0.9)
         )
     }
 

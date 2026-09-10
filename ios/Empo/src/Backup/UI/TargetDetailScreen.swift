@@ -82,7 +82,7 @@ struct TargetDetailScreen: View {
                         }
                         Text(item.row.stateLine)
                             .font(.footnote)
-                            .foregroundStyle(item.row.state == .current ? Color.secondary : Color.warning)
+                            .foregroundStyle(item.row.state == .current ? Color.secondary : Color.brand)
                     }
                 }
                 usage(item)

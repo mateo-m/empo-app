@@ -28,6 +28,7 @@ struct BackupsScreen: View {
     /// The package a launch found waiting for its save, per 12.5.
     @State private var unsavedPackage: PackageRecord?
     @State private var savesAgain: PackageRecord?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The join ask of 10.4, once the user presses the row.
     @State private var joinAsk: SyncJoinPrompt?
     @State private var looksForAGroup = false
@@ -49,6 +50,9 @@ struct BackupsScreen: View {
                 }
             }
         }
+        // The card grows a bar and the button changes its title when
+        // a run starts. The list animates the row heights from here.
+        .animation(reduceMotion ? nil : Motion.standard, value: isRunning)
         .navigationTitle("Backups")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.refresh() }
@@ -177,12 +181,20 @@ struct BackupsScreen: View {
             if let status = model.status {
                 BackupStatusCard(status: status)
             }
-            if isRunning {
-                Button("Pause backup") { BackupScheduler.shared.pauseTheRun() }
-            } else {
-                Button("Back up now") { Task { await press() } }
-                    .disabled(!model.canBackUpNow)
+            Button {
+                if isRunning {
+                    BackupScheduler.shared.pauseTheRun()
+                } else {
+                    Task { await press() }
+                }
+            } label: {
+                ZStack(alignment: .leading) {
+                    Text(isRunning ? "Pause backup" : "Back up now")
+                        .id(isRunning)
+                        .transition(reduceMotion ? .opacity : .stateChange)
+                }
             }
+            .disabled(!isRunning && !model.canBackUpNow)
             NavigationLink("Backup history") {
                 BackupHistoryScreen(model: model)
             }
