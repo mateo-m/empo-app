@@ -95,8 +95,9 @@ final class BackupsScreenModel {
         for descriptor in descriptors {
             let capabilities = await BackupTargets.provider(for: descriptor)?.capabilities
             let status = try? store?.targetStatus(targetId: descriptor.id)
-            let games = (try? store?.usage(targetId: descriptor.id)) ?? []
-            let written = games.reduce(0) { $0 + $1.bytes }
+            let usage = (try? store?.usage(targetId: descriptor.id)) ?? []
+            let written = usage.reduce(0) { $0 + $1.bytes }
+            let games = usage.filter { $0.gameKey != BackupStream.preferencesKey }
             let row = TargetRowFacts(
                 descriptor: descriptor,
                 reach: descriptor.provider == .iCloudDrive ? iCloudReach : .open,

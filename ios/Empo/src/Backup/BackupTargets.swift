@@ -39,6 +39,7 @@ enum BackupTargets {
             targets.removeAll { $0.id == target.id }
             targets.append(target)
         }
+        try SyncStore.update { $0.keep(targetId: target.id) }
         SyncJoin.startAGroup()
     }
 

@@ -22,19 +22,35 @@ public struct SyncState: Codable, Equatable, Sendable {
     public var joinedAt: Date?
     /// What each target confirmed, per 10.5 step 6.
     public var targets: [SyncTargetProgress]
+    /// The targets this device removed. The merged document still
+    /// carries them, and a pass must not add them back here.
+    public var removedTargetIds: [String]
 
     public init(
         version: Int = SyncState.currentVersion,
         actorId: String,
         groupId: String? = nil,
         joinedAt: Date? = nil,
-        targets: [SyncTargetProgress] = []
+        targets: [SyncTargetProgress] = [],
+        removedTargetIds: [String] = []
     ) {
         self.version = version
         self.actorId = actorId
         self.groupId = groupId
         self.joinedAt = joinedAt
         self.targets = targets
+        self.removedTargetIds = removedTargetIds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        version = try values.decode(Int.self, forKey: .version)
+        actorId = try values.decode(String.self, forKey: .actorId)
+        groupId = try values.decodeIfPresent(String.self, forKey: .groupId)
+        joinedAt = try values.decodeIfPresent(Date.self, forKey: .joinedAt)
+        targets = try values.decode([SyncTargetProgress].self, forKey: .targets)
+        removedTargetIds =
+            try values.decodeIfPresent([String].self, forKey: .removedTargetIds) ?? []
     }
 
     public var hasJoined: Bool { groupId != nil }
@@ -67,6 +83,14 @@ public struct SyncState: Codable, Equatable, Sendable {
     /// target stays local-only, per 10.8.
     public mutating func forget(targetId: String) {
         targets.removeAll { $0.targetId == targetId }
+        if !removedTargetIds.contains(targetId) {
+            removedTargetIds.append(targetId)
+        }
+    }
+
+    /// A target the user adds again is one this device holds once more.
+    public mutating func keep(targetId: String) {
+        removedTargetIds.removeAll { $0 == targetId }
     }
 
     /// The first device creates the group id when it adds its first

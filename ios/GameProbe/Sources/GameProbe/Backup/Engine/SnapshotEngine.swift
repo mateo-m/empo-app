@@ -165,7 +165,8 @@ public actor SnapshotEngine {
         recordRun(
             context.request, startedAt: startedAt, finishedAt: now, outcome: outcome,
             uploadedBytes: result.uploadedBytes,
-            gameCount: context.streams.count, detail: result.detail)
+            gameCount: context.streams.filter { $0.streamKey != BackupStream.preferencesKey }.count,
+            detail: result.detail)
         // The run reached its end with the process alive, so it left
         // no interruption to ask about at the next launch, per 6.5.
         save(try store.clearIntent(kind: .interruptedRun), "the end of the interrupted run")

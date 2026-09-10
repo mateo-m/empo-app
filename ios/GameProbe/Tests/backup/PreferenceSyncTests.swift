@@ -407,6 +407,22 @@ final class PreferenceSyncTests: XCTestCase {
         var forgotten = read
         forgotten.forget(targetId: "t1")
         XCTAssertTrue(forgotten.targets.isEmpty)
+        XCTAssertEqual(forgotten.removedTargetIds, ["t1"])
+        try forgotten.write(applicationSupport: support)
+        XCTAssertEqual(
+            SyncState.read(applicationSupport: support, actorId: "actor-3").removedTargetIds,
+            ["t1"])
+        forgotten.keep(targetId: "t1")
+        XCTAssertTrue(forgotten.removedTargetIds.isEmpty)
+
+        let old = """
+            {"actorId":"actor-1","targets":[],"version":1}
+            """
+        try old.write(
+            to: support.appendingPathComponent(SyncState.fileName), atomically: true,
+            encoding: .utf8)
+        XCTAssertEqual(
+            SyncState.read(applicationSupport: support, actorId: "actor-4").actorId, "actor-1")
     }
 
     func testTheIdentityFileKeepsTheNamesAndTheDeletions() throws {

@@ -130,12 +130,14 @@ enum SyncLocalValues {
 
     /// The descriptors of 10.8. A descriptor Empo does not hold
     /// arrives without its secret, which is the target placeholder.
-    /// Removing a target stays local-only, so nothing here deletes.
+    /// Removing a target stays local-only, so nothing here deletes,
+    /// and a target this device removed does not come back.
     private static func applyDescriptors(_ descriptors: [String: TargetDescriptor]) {
+        let removed = Set(SyncStore.state().removedTargetIds)
         try? BackupTargets.update { local in
             for (id, incoming) in descriptors {
                 guard let index = local.firstIndex(where: { $0.id == id }) else {
-                    local.append(incoming)
+                    if !removed.contains(id) { local.append(incoming) }
                     continue
                 }
                 local[index] = local[index].withSyncedFields(from: incoming)
