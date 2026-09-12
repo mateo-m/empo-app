@@ -363,6 +363,7 @@ enum GameImportValidator {
                 return entry.isPreviewTitleArtwork
             }
         )
+        try EnigmaVirtualBoxImport.unpackProbeFiles(under: scratchDir)
 
         var choices: [ImportRootChoice] = []
         var firstArchiveError: Error?

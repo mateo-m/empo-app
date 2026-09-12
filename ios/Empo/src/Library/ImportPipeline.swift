@@ -640,14 +640,33 @@ private enum ImportPipelineService {
                 if accessing { url.stopAccessingSecurityScopedResource() }
             }
 
+            let fm = FileManager.default
             guard ArchiveExtractor.Format(extension: url.pathExtension) != nil else {
-                return ImportPreparedSource(
-                    workingURL: url,
-                    cleanupDirectoryURL: nil
+                // A folder with a packed exe gets a private copy, so
+                // the probe can unpack into it without touching the
+                // user's folder.
+                guard EnigmaVirtualBoxImport.containsPackedExecutable(under: url) else {
+                    return ImportPreparedSource(
+                        workingURL: url,
+                        cleanupDirectoryURL: nil
+                    )
+                }
+                let copyDirectoryURL = try ImportTemporaryDirectory.makeScopedDirectory(
+                    kind: .stagedArchive,
+                    fm: fm
                 )
+                let copyURL = copyDirectoryURL.appendingPathComponent(url.lastPathComponent)
+                do {
+                    try fm.copyItem(at: url, to: copyURL)
+                } catch {
+                    try? fm.removeItem(at: copyDirectoryURL)
+                    throw error
+                }
+                try EnigmaVirtualBoxImport.unpackProbeFiles(under: copyURL)
+                return ImportPreparedSource(
+                    workingURL: copyURL, cleanupDirectoryURL: copyDirectoryURL)
             }
 
-            let fm = FileManager.default
             let archiveCopyDirectoryURL = try ImportTemporaryDirectory.makeScopedDirectory(
                 kind: .stagedArchive,
                 fm: fm
@@ -1120,6 +1139,12 @@ extension GameLibrary {
                     for surfacer in surfacers.values {
                         surfacer.drain()
                     }
+                    try ImportSignpost.interval("unpack-packed-exe", id: batchID) {
+                        try EnigmaVirtualBoxImport.unpackAll(under: tmpDir) {
+                            checkCancellations()
+                            return active.isEmpty
+                        }
+                    }
                     stagedBaseURL = tmpDir
                 } else {
                     let folderName = sourceURL.lastPathComponent
@@ -1130,6 +1155,12 @@ extension GameLibrary {
                             try fm.moveItem(at: sourceURL, to: tmpDest)
                         } catch {
                             try fm.copyItem(at: sourceURL, to: tmpDest)
+                        }
+                    }
+                    try ImportSignpost.interval("unpack-packed-exe", id: batchID) {
+                        try EnigmaVirtualBoxImport.unpackAll(under: tmpDest) {
+                            checkCancellations()
+                            return active.isEmpty
                         }
                     }
 

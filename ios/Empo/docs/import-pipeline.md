@@ -36,6 +36,13 @@ app-owned tmp copy) accepts:
   "Compress Game Data" output) go through the vendored **libmspack**, because libarchive
   mis-locates the cabinet and has a broken LZX decoder. 7z/RAR payloads go through libarchive via
   offset-translating callbacks. Zip-based SFX falls through to libarchive whole-file reading.
+- **Enigma Virtual Box `.exe`**: a Windows program whose game files sit in a file table inside
+  the `.enigma1` PE section. `GameProbe.EnigmaVirtualBox` reads the table and unpacks each entry
+  (stored or aPLib-compressed). `EnigmaVirtualBoxImport` runs it in two places: the probe unpacks
+  only the marker files (INI, `mkxp.json`, `Data/Scripts.*`, RGSS archives, title artwork) so the
+  root check can see them, and the full import unpacks everything next to the exe and then
+  deletes the packed exe. A packed entry overwrites a loose file at the same path, because that
+  is the order the packer uses at runtime.
 
 ## Flow
 
