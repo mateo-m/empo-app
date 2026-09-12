@@ -1,4 +1,3 @@
-import CryptoKit
 import XCTest
 
 @testable import GameProbe
@@ -12,8 +11,10 @@ final class EnigmaVirtualBoxTests: XCTestCase {
         Bundle.module.url(forResource: "packed-table", withExtension: "exe", subdirectory: "Fixtures/enigma")!
     }
 
-    private func sha256(_ url: URL) throws -> String {
-        SHA256.hash(data: try Data(contentsOf: url)).map { String(format: "%02x", $0) }.joined()
+    private func fixture(_ name: String) throws -> Data {
+        let url = try XCTUnwrap(
+            Bundle.module.url(forResource: name, withExtension: nil, subdirectory: "Fixtures/enigma"))
+        return try Data(contentsOf: url)
     }
 
     func testReadsTheFileTable() throws {
@@ -37,11 +38,11 @@ final class EnigmaVirtualBoxTests: XCTestCase {
             try package.unpack(entry, to: dir.appendingPathComponent(entry.path))
         }
         XCTAssertEqual(
-            try sha256(dir.appendingPathComponent("Data/abilities.dat")),
-            "4f9257888616b6f88a95a5e1c604e1505e4c5aac9fa52d35e6ef09d77ecfd402")
+            try Data(contentsOf: dir.appendingPathComponent("Data/abilities.dat")),
+            try fixture("abilities.dat"))
         XCTAssertEqual(
-            try sha256(dir.appendingPathComponent("Data/Actors.rxdata")),
-            "b4861ee54eeeb66197707325547be87fd271f5c67a122a473b8915eee5f86ec7")
+            try Data(contentsOf: dir.appendingPathComponent("Data/Actors.rxdata")),
+            try fixture("Actors.rxdata"))
     }
 
     func testRejectsAnExeWithoutAContainer() throws {
@@ -85,7 +86,7 @@ final class EnigmaVirtualBoxTests: XCTestCase {
             let out = dir.appendingPathComponent(entry.path)
             try package.unpack(entry, to: out)
             let reference = URL(fileURLWithPath: refPath).appendingPathComponent(entry.path)
-            XCTAssertEqual(try sha256(out), try sha256(reference), entry.path)
+            XCTAssertEqual(try Data(contentsOf: out), try Data(contentsOf: reference), entry.path)
         }
     }
 }
