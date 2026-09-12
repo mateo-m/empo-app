@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.6.9",
+          "buildVersion": "690",
+          "date": "2026-09-12",
+          "localizedDescription": "### Bug Fixes\n\n- Compare unpacked bytes with fixtures instead of CryptoKit hashes ([`d03fcce`](https://github.com/mateo-m/empo-app/commit/d03fccef8acc5dc65fcb09ec6a537d9e7043c2cb))\n\n### Chores\n\n- Pick up the pointer injection bridge and the async mouse fix (#147) ([`ea7385b`](https://github.com/mateo-m/empo-app/commit/ea7385b80b05e3df70dff77a4df903c4787d5697))\n\n### Features\n\n- Unpack games packed with Enigma Virtual Box ([`7332eff`](https://github.com/mateo-m/empo-app/commit/7332effd6f384d95719121c70dbd69e8bca250ba))",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.6.9/Empo-0.6.9-unsigned.ipa",
+          "size": 19380389,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.6.8",
           "buildVersion": "685",
           "date": "2026-09-08",
