@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.9 - 2026-09-12
+
+### Bug Fixes
+
+- Compare unpacked bytes with fixtures instead of CryptoKit hashes ([`d03fcce`](https://github.com/mateo-m/empo-app/commit/d03fccef8acc5dc65fcb09ec6a537d9e7043c2cb))
+
+### Chores
+
+- Pick up the pointer injection bridge and the async mouse fix (#147) ([`ea7385b`](https://github.com/mateo-m/empo-app/commit/ea7385b80b05e3df70dff77a4df903c4787d5697))
+
+### Features
+
+- Unpack games packed with Enigma Virtual Box ([`7332eff`](https://github.com/mateo-m/empo-app/commit/7332effd6f384d95719121c70dbd69e8bca250ba))
+
 ## 0.6.8 - 2026-09-08
 
 ### Bug Fixes
