@@ -1216,7 +1216,7 @@ private struct ImportReplaceAlert: ViewModifier {
         let possessive = prompt.titles.count == 1 ? "its" : "their"
         return "\(names) \(verb) already in your library. "
             + "Importing replaces \(possessive) files with the new ones. "
-            + "Your saves and settings stay."
+            + "Your saves and settings stay. You can't undo this."
     }
 
     func body(content: Content) -> some View {
@@ -1352,7 +1352,7 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Button("Keep game", role: .cancel) {}
             } message: { game in
                 Text(
-                    "Empo couldn't move the saves for \"\(game.title)\" to Rescued Saves. Free up space and delete again, or delete now and lose those saves for good."
+                    "Empo couldn't move the saves for \"\(game.title)\" to Rescued Saves. Free up space and delete again, or delete now and lose those saves. You can't undo this."
                 )
             }
             .alert("This game won't open", isPresented: $showInvalidAlert) {

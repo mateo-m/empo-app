@@ -140,7 +140,7 @@ enum UpdateChecker {
                 return .failed(message: "Could not reach GitHub. Check your connection and try again.")
             }
             guard http.statusCode == 200 else {
-                return .failed(message: "Could not reach GitHub. Check your connection and try again.")
+                return .failed(message: "Could not find the latest release on GitHub. Try again later.")
             }
             guard
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],

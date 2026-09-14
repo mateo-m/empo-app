@@ -581,18 +581,11 @@ final class ImportPipeline {
             if succeeded > 0 {
                 Haptics.impact()
             }
-            let surfacedFailures = failures.filter { !($0.1 is GameLibrary.ImportCancelled) }
-            if let first = surfacedFailures.first {
+            for (selection, error) in failures where !(error is GameLibrary.ImportCancelled) {
                 self.presentError(
-                    name: archiveName,
-                    message: first.1.localizedDescription
+                    name: selection.displayName,
+                    message: error.localizedDescription
                 )
-                for extra in surfacedFailures.dropFirst() {
-                    NSLog(
-                        "[ImportPipeline] Additional import failure: %@",
-                        extra.1.localizedDescription
-                    )
-                }
             }
         }
     }

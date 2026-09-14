@@ -166,7 +166,7 @@ can go wrong.
 
 - The disclaimer says "Here be dragons, or bugs!" and "I build Empo alone in my spare
   time."
-- The empty library says "No Games Yet. Add your favorite RPG Maker games to get started!"
+- The empty library says "No games yet. Import an RPG Maker game to get started."
 - The settings footer says "Made with ☕ by Grid."
 - Alerts state the reason and the one action, and nothing else.
 - Hints use the filled lightbulb and one sentence.
