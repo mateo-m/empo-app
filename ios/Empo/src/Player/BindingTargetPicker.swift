@@ -25,7 +25,7 @@ struct BindingTargetPicker: View {
                             target: .action(action.id)
                         )
                     }
-                    actionRow(label: "Unbound", target: .unbound)
+                    actionRow(label: "Do nothing", target: .unbound)
                 }
 
                 if offersElements {

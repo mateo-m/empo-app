@@ -157,10 +157,10 @@ struct RootView: View {
             }
         }
         .alert(
-            (engineHung || appState.phase != nil) ? "Restart Empo" : "Something went wrong",
+            (engineHung || appState.phase != nil) ? "Restart Empo" : "Last session ended early",
             isPresented: showErrorAlert
         ) {
-            Button("OK") {
+            Button("Got it") {
                 dismissErrorAlert()
                 if engineHung {
                     return
@@ -175,7 +175,7 @@ struct RootView: View {
                 Text("The game stopped responding. Close Empo and reopen it.")
             } else if appState.phase != nil {
                 Text(
-                    "\(appState.errorMessage ?? "An error occurred.") Close Empo from the app switcher and reopen it to continue."
+                    "\(appState.errorMessage ?? "The game stopped.")\n\nClose Empo from the app switcher, then reopen it."
                 )
             } else {
                 Text(appState.errorMessage ?? "")
@@ -185,7 +185,7 @@ struct RootView: View {
             infoAlertTitle,
             isPresented: showInfoAlert
         ) {
-            Button("OK") {
+            Button("Continue") {
                 dismissInfoAlert()
             }
         } message: {
@@ -266,7 +266,7 @@ struct RootView: View {
     private var infoAlertTitle: String {
         appState.selectedGame?.title
             ?? PauseManager.shared.pausedGame?.title
-            ?? "Message"
+            ?? "Game message"
     }
 
     /// Unblocks the engine thread that waits in `mkxp_presentInfoAndWait()`.
@@ -345,6 +345,7 @@ private struct SplashView: View {
             PixelDitherPattern(color: .white)
                 .ignoresSafeArea()
                 .opacity(exiting ? 0 : 1)
+                .accessibilityHidden(true)
 
             // Logo + wordmark. During the disclaimer phase these fade/
             // blur/scale out but the splash background stays. Same
@@ -355,6 +356,7 @@ private struct SplashView: View {
                     .scaledToFit()
                     .frame(width: 96, height: 96)
                     .foregroundStyle(.white)
+                    .accessibilityHidden(true)
                 Text(AppInfo.name)
                     .font(AppFont.wordmark)
                     .foregroundStyle(.white)

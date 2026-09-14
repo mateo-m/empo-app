@@ -7,7 +7,7 @@ How Empo builds bottom sheets. These rules keep every sheet
 consistent with the system's own sheet language (welcome, What's
 New, and activity-summary sheets) and with each other. Reference
 implementations: `SaveRecoverySheet`, `ImageSourceSheet`, the
-Build Info sheet in `SettingsView`, and `PlayerMoreSheet` for the
+Build info sheet in `SettingsView`, and `PlayerMoreSheet` for the
 in-game exception.
 
 ## Build with the components

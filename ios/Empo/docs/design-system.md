@@ -164,8 +164,8 @@ Rules:
 The interface copy is short, first person where the author speaks, and honest about what
 can go wrong.
 
-- The disclaimer says "Here be dragons, or bugs!" and "I am a lone dev who builds this in
-  my spare time."
+- The disclaimer says "Here be dragons, or bugs!" and "I build Empo alone in my spare
+  time."
 - The empty library says "No Games Yet. Add your favorite RPG Maker games to get started!"
 - The settings footer says "Made with ☕ by Grid."
 - Alerts state the reason and the one action, and nothing else.

@@ -11,7 +11,7 @@ import SwiftUI
 /// shows, the vocabulary decides HOW it looks.
 ///
 /// ```swift
-/// StandardSheet(title: "Saves Recovered", emblem: "checkmark.seal") {
+/// StandardSheet(title: "Saves recovered", emblem: "checkmark.seal") {
 ///     SheetBodyText("What happened and why.")
 ///     SheetCard { /* rows */ }
 ///     SheetFootnote("The fine print.")

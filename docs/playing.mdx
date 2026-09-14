@@ -11,11 +11,11 @@ after a session.
 ## The library
 
 - Sort the list, search it, and switch between a grid and a list.
-- Touch and hold a card for **Info**, **Settings**, **Select**, and **Delete**.
-- **Select** turns on multiple selection, so you can delete several games at once.
+- Touch and hold a card for **Info**, **Settings**, **Select multiple**, and **Delete**.
+- **Select multiple** turns on multiple selection, so you can delete several games at once.
 - A paused game keeps its place in the library. Tap it to continue.
 
-**Settings → Look & Feel** changes the library itself: the theme, the layout, the position of
+**Settings → Appearance** changes the library itself: the theme, the layout, the position of
 the title, and the interface haptics.
 
 ## On-screen controls
@@ -25,10 +25,10 @@ buttons:
 
 | Button          | What it does                                              |
 | --------------- | --------------------------------------------------------- |
-| Keyboard        | Shows the keyboard, for games that ask you to type.       |
+| Show keyboard   | Shows the keyboard, for games that ask you to type.       |
 | Edit controls   | Starts edit mode.                                         |
 | Hide controls   | Hides the overlay. Tap again to show it.                  |
-| Menu            | Opens the in-game menu.                                   |
+| More options    | Opens the in-game menu.                                   |
 
 ### Edit mode
 
@@ -68,16 +68,16 @@ layout with a game.
 ## Controllers and keyboards
 
 Empo supports Bluetooth controllers and hardware keyboards. To change a mapping, open the
-in-game menu and tap **Buttons**. The screen lists the controller elements (face buttons, D-pad,
-sticks, shoulders, and system buttons) and the keys that each one sends.
+in-game menu and tap **Controller buttons**. The screen lists the controller elements (face
+buttons, D-pad, sticks, shoulders, and system buttons) and the keys that each one sends.
 
 Set the scope at the top of the screen:
 
 - **This game** keeps the mapping for the open game only.
 - **All games** keeps the mapping everywhere.
 
-Each row shows the Empo default until you override it. **Remove override** puts the default
-back, and **Reset** clears every override in the current scope.
+Each row shows the Empo default until you override it. **Reset to default** puts the default
+back, and the reset button in the top right clears every override in the current scope.
 
 :::note
 iOS reserves some controller buttons, such as Home and Guide. A reserved button never reaches
@@ -88,9 +88,9 @@ the game.
 
 | Entry               | What it does                                                                     |
 | ------------------- | --------------------------------------------------------------------------------- |
-| Cheats              | Sets the `$CHEATS` flag. Games that read the flag react to it. Others do not.    |
+| Show cheats         | Sets the `$CHEATS` flag. Games that read the flag react to it. Others do not.    |
 | Diagnostics overlay | Shows frame timings and engine state over the game.                              |
-| Buttons             | Opens the controller and keyboard mapping.                                       |
+| Controller buttons  | Opens the controller and keyboard mapping.                                       |
 | Layout profile      | Picks the control layout for this game.                                          |
 | Pause               | Freezes the game and returns to the library.                                     |
 | Quit                | Ends the session.                                                                |
@@ -100,7 +100,7 @@ the game.
 Pause keeps the game in memory. Empo shows a frozen frame while it moves you back to the
 library, so the transition stays smooth. Tap the card again to continue where you stopped.
 
-**Settings → Look & Feel → Continue playing** controls whether the library offers the paused
+**Settings → Appearance → Continue playing** controls whether the library offers the paused
 game first.
 
 For the engine side of the frozen frame, see [`pause-resume.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/pause-resume.md).
@@ -108,7 +108,7 @@ For the engine side of the frozen frame, see [`pause-resume.md`](https://github.
 ## Settings for one game
 
 Touch and hold a card, and tap **Settings**. These options apply to that game only. **Reset to
-Defaults** removes all of them.
+defaults** removes all of them.
 
 | Group       | Options                                                                                             |
 | ----------- | ---------------------------------------------------------------------------------------------------- |

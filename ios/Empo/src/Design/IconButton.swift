@@ -16,6 +16,7 @@ enum IconButtonSize {
 
 struct IconButton: View {
     let systemName: String
+    let label: String
     let style: Style
     let size: IconButtonSize
     let tint: Color?
@@ -26,6 +27,7 @@ struct IconButton: View {
 
     init(
         _ systemName: String,
+        label: String,
         style: Style = .outline,
         size: IconButtonSize = .md,
         tint: Color? = nil,
@@ -33,6 +35,7 @@ struct IconButton: View {
         action: (() -> Void)? = nil
     ) {
         self.systemName = systemName
+        self.label = label
         self.style = style
         self.size = size
         self.tint = tint
@@ -44,8 +47,10 @@ struct IconButton: View {
         if let action {
             Button(action: action) { icon }
                 .buttonStyle(IconPressStyle())
+                .accessibilityLabel(label)
         } else {
             icon
+                .accessibilityLabel(label)
         }
     }
 

@@ -4,11 +4,11 @@ struct GameContextMenuModifier: ViewModifier {
     let game: GameEntry
     var appState: AppState
     let onPlay: () -> Void
-    /// Cancel an in-flight import. When set and the game is
+    /// Stop an in-flight import. When set and the game is
     /// `.importing`, the menu shows only this action (matching the
     /// stop control on the card/row).
     let onCancelImport: (() -> Void)?
-    /// Optional "Select" action that pre-seeds selection mode with
+    /// Optional "Select multiple" action that pre-seeds selection mode with
     /// this game. nil hides the row (e.g. while the library is
     /// already in selection mode, where the entry would be a no-op).
     let onSelect: (() -> Void)?
@@ -24,7 +24,7 @@ struct GameContextMenuModifier: ViewModifier {
         content.contextMenu {
             if game.isImporting, let onCancelImport {
                 Button(role: .destructive, action: onCancelImport) {
-                    Label("Cancel", systemImage: "xmark.circle")
+                    Label("Stop import", systemImage: "xmark.circle")
                 }
             } else {
                 if case .ready = game.status {
@@ -52,7 +52,7 @@ struct GameContextMenuModifier: ViewModifier {
                 if let onSelect {
                     Divider()
                     Button(action: onSelect) {
-                        Label("Select", systemImage: "checklist")
+                        Label("Select multiple", systemImage: "checklist")
                     }
                 }
 

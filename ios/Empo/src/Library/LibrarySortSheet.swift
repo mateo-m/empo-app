@@ -50,9 +50,11 @@ struct LibrarySortSheet: View {
                     Image(systemName: "checkmark")
                         .foregroundStyle(.brand)
                         .fontWeight(.semibold)
+                        .accessibilityHidden(true)
                 }
             }
         }
         .tint(.primary)
+        .accessibilityAddTraits(settings.librarySortOption == option ? [.isSelected] : [])
     }
 }

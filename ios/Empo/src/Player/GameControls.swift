@@ -435,7 +435,7 @@ struct DPad: View {
         // circles.
         .darkGlass()
         .contentShape(Circle())
-        .accessibilityLabel("Directional pad")
+        .accessibilityLabel("D-pad")
         .accessibilityHint("Touch and drag to move the character")
         .accessibilityAddTraits(.allowsDirectInteraction)
     }
@@ -518,7 +518,7 @@ struct Joystick: View {
         .frame(width: size, height: size)
         .darkGlass()
         .contentShape(Circle())
-        .accessibilityLabel("Movement stick")
+        .accessibilityLabel("Joystick")
         .accessibilityHint("Touch and drag to move the character")
         .accessibilityAddTraits(.allowsDirectInteraction)
     }

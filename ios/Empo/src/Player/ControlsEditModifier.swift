@@ -30,7 +30,7 @@ struct AddButtonSheet: View {
                         actionRow(for: action)
                     }
                 }
-                Section("Common") {
+                Section("Common keys") {
                     ForEach(keyCatalog.filter { isCommon($0) }) { entry in
                         row(for: entry)
                     }
@@ -65,10 +65,15 @@ struct AddButtonSheet: View {
 
     private func row(for entry: KeyEntry) -> some View {
         HStack {
-            Text(entry.label)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.label)
+                if let hint = entry.hint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Spacer()
-            Text(scancodeDisplayName(entry.scancode))
-                .foregroundStyle(.secondary)
         }
         .contentShape(Rectangle())
         .opacity(atCap ? 0.4 : 1)
@@ -130,13 +135,13 @@ struct AddButtonSheet: View {
 enum ControlSizePresets {
     static let button: [(String, CGFloat)] = [
         ("Small", 44), ("Medium", 50),
-        ("Default", 56), ("Large", 68), ("Extra large", 80),
+        ("Standard", 56), ("Large", 68), ("Extra large", 80),
     ]
     /// Matches the button progression's feel. The D-pad's default
     /// (140pt) is the middle preset.
     static let dpad: [(String, CGFloat)] = [
         ("Small", 110), ("Medium", 125),
-        ("Default", 140), ("Large", 160), ("Extra large", 180),
+        ("Standard", 140), ("Large", 160), ("Extra large", 180),
     ]
 }
 
@@ -236,7 +241,7 @@ struct ButtonEditSheet: View {
                         HStack {
                             Text("Label")
                             Spacer()
-                            TextField("Label", text: $labelText)
+                            TextField("e.g. Z", text: $labelText)
                                 .multilineTextAlignment(.trailing)
                                 .onChange(of: labelText) { _, newValue in
                                     if !labelEditSnapshotRecorded && newValue != button.label {
@@ -300,7 +305,14 @@ struct ButtonEditSheet: View {
         List {
             ForEach(keyCatalog) { entry in
                 HStack {
-                    Text(entry.label)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.label)
+                        if let hint = entry.hint {
+                            Text(hint)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     Spacer()
                     if entry.scancode == scancode {
                         Image(systemName: "checkmark")
@@ -314,7 +326,7 @@ struct ButtonEditSheet: View {
                 }
             }
         }
-        .navigationTitle("Emulated key")
+        .navigationTitle("Key")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -462,7 +474,7 @@ struct ControlsEditDialogs: ViewModifier {
                 AddButtonSheet(layout: layout)
             }
             .alert(layout.resetConfirmationTitle, isPresented: $showResetConfirm) {
-                Button("Reset", role: .destructive) {
+                Button(layout.resetConfirmationActionTitle, role: .destructive) {
                     layout.resetToResolvedDefault()
                 }
                 .keyboardShortcut(.defaultAction)

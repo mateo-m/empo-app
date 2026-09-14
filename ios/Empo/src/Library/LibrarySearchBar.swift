@@ -35,19 +35,18 @@ struct LibrarySearchBar: View {
             .frame(height: searchBarHeight)
             .glassEffect(.regular.interactive(), in: .capsule)
 
-            IconButton("arrow.up.arrow.down", style: .outline) {
+            IconButton("arrow.up.arrow.down", label: "Sort games", style: .outline) {
                 showSortSheet = true
             }
-            .accessibilityLabel("Sort games")
 
             IconButton(
                 settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2",
+                label: settings.libraryDisplayMode == .grid ? "Switch to list" : "Switch to grid",
                 style: .outline,
                 contentTransition: .symbolEffect(.replace)
             ) {
                 onDisplayModeToggle()
             }
-            .accessibilityLabel(settings.libraryDisplayMode == .grid ? "Switch to list" : "Switch to grid")
         }
         .padding(.horizontal)
         .padding(.bottom, Spacing.xs)

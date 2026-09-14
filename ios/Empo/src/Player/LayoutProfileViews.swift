@@ -33,7 +33,7 @@ struct LayoutProfilePickerSheet: View {
                     }
                 } footer: {
                     Text(
-                        "Automatic uses the game's own layout first. No layout? Your default profile. No default? Empo's built-in one."
+                        "Automatic tries the game's own layout, then your default profile, then the Empo default."
                     )
                 }
 
@@ -153,7 +153,7 @@ struct LayoutProfilesSettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Built in profiles")
+                    Text("Built-in profile")
                 } footer: {
                     Text("Empo comes with this layout. Games use it when nothing else applies.")
                 }
@@ -177,7 +177,7 @@ struct LayoutProfilesSettingsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    createText = LayoutProfilesManager.store.uniqueName(base: "Layout")
+                    createText = LayoutProfilesManager.store.uniqueName(base: "My layout")
                     showCreateDialog = true
                 } label: {
                     Image(systemName: "plus")
@@ -204,11 +204,11 @@ struct LayoutProfilesSettingsView: View {
         ) {
             if deleting == defaultName, profiles.count > 1 {
                 ForEach(profiles.filter { $0 != deleting }, id: \.self) { successor in
-                    Button("Delete, make \(successor) the default") {
+                    Button("Delete and make \(successor) the default", role: .destructive) {
                         performDelete(successor: successor)
                     }
                 }
-                Button("Delete, no default", role: .destructive) {
+                Button("Delete and use no default", role: .destructive) {
                     performDelete(successor: nil)
                 }
             } else {
@@ -223,8 +223,13 @@ struct LayoutProfilesSettingsView: View {
     private var deleteTitle: String {
         guard let deleting else { return "" }
         let count = LayoutProfilesManager.store.gamesPinned(to: deleting).count
-        let games = count == 1 ? "1 game uses it." : "\(count) games use it."
-        return "Delete \(deleting)? \(games)"
+        let games =
+            switch count {
+            case 0: "No game uses it."
+            case 1: "1 game uses it and will switch to Automatic."
+            default: "\(count) games use it and will switch to Automatic."
+            }
+        return "Delete \(deleting)? \(games) You can't undo this."
     }
 
     private var renameBinding: Binding<Bool> {
@@ -261,7 +266,7 @@ struct LayoutProfilesSettingsView: View {
                     reload()
                 }
             } else {
-                Button("Remove default") {
+                Button("Clear default") {
                     LayoutProfilesManager.defaultProfileName = nil
                     reload()
                 }
@@ -488,7 +493,7 @@ struct LayoutProfileEditorView: View {
             }
 
             HStack(spacing: Spacing.xl) {
-                Button("+ Add") { showAddSheet = true }
+                Button("Add button") { showAddSheet = true }
                 Button {
                     layout.undoLastEdit()
                 } label: {
@@ -721,7 +726,7 @@ struct EditorCanvasShell<UnderControls: View>: View {
             Rectangle()
                 .fill(Color.white.opacity(0.08))
                 .overlay(
-                    Text("Game")
+                    Text("Game screen")
                         .font(.headline)
                         .foregroundStyle(.white.opacity(0.3))
                 )
@@ -753,14 +758,14 @@ struct EditorCanvasShell<UnderControls: View>: View {
 }
 
 extension View {
-    /// The shared "Name not allowed" alert, so the wording exists
-    /// once for the editor, the viewer, and the settings list.
+    /// The shared name-error alert, so the wording exists once for
+    /// the editor, the viewer, and the settings list.
     func profileNameErrorAlert(isPresented: Binding<Bool>) -> some View {
-        alert("Name not allowed", isPresented: isPresented) {
-            Button("OK") {}
+        alert("Pick a different name", isPresented: isPresented) {
+            Button("Got it") {}
         } message: {
             Text(
-                "Profile names cannot be empty, start with $ or a dot, contain slashes, or repeat an existing name."
+                "That name is taken or uses characters Empo can't save. Try letters, numbers and spaces."
             )
         }
     }
@@ -802,18 +807,16 @@ struct BuiltinLayoutViewerView: View {
             }
 
             VStack(alignment: .leading, spacing: Spacing.sm) {
+                Text("Empo comes with this layout. Games use it when nothing else applies.")
                 Text(
-                    "Empo comes with this layout. A game uses it when the game has no layout of its own and no profile applies."
-                )
-                Text(
-                    "You cannot edit this layout. Empo keeps it unchanged as a fallback that works for every game. To make your own version, duplicate it as a profile and edit the copy."
+                    "This layout is read-only. To make your own, duplicate it and edit the copy."
                 )
             }
             .font(.footnote)
             .foregroundStyle(.secondary)
             .padding(.horizontal, Spacing.xl)
 
-            Button("Duplicate as a profile") {
+            Button("Duplicate as profile") {
                 createText = LayoutProfilesManager.store.uniqueName(base: "My layout")
                 showCreateDialog = true
             }
@@ -830,7 +833,7 @@ struct BuiltinLayoutViewerView: View {
             Button("Create") { duplicateAsProfile() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The new profile starts as a copy of the Empo default layout.")
+            Text("A new profile starts from the Empo default layout.")
         }
         .profileNameErrorAlert(isPresented: $showNameError)
     }

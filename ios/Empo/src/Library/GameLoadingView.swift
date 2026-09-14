@@ -180,33 +180,33 @@ struct GameLoadingView: View {
     /// user has dismissed the alert. Switches the loading view's
     /// inner content from `<title> + spinner` to a stable error
     /// message so the user does not face an endless spinner after
-    /// tapping "OK".
+    /// tapping "Got it".
     private var showErrorContent: Bool {
         appState.sessionHadError && appState.errorMessage == nil
     }
 
     private var errorContent: some View {
         VStack(spacing: Spacing.md) {
-            Text("Error occurred")
+            Text("\(game.title) didn't start")
                 .font(.title)
                 .fontWeight(.bold)
                 .foregroundStyle(.white)
 
-            Text("An unexpected error happened when Empo tried to start \(game.title).")
+            Text("Empo hit a problem while loading this game.")
                 .font(.system(size: 15))
                 .foregroundStyle(.white.opacity(0.85))
                 .multilineTextAlignment(.center)
 
-            Text("Please restart Empo and try again.")
+            Text("Close Empo from the app switcher, then open it again.")
                 .font(.system(size: 15))
                 .foregroundStyle(.white.opacity(0.85))
                 .multilineTextAlignment(.center)
 
             // The GitHub link routes to the issues page since that is
-            // where the user can act on "the error keeps happening":
+            // where the user can act on "this keeps happening":
             // filing a bug report, not browsing the repo.
-            (Text("If the error keeps happening, please open an issue on ")
-                + Text("[GitHub](\(GitInfo.issuesURL))")
+            (Text("If this keeps happening, ")
+                + Text("[report it on GitHub](\(GitInfo.issuesURL))")
                 .foregroundColor(.brand)
                 + Text("."))
                 .font(.system(size: 15))

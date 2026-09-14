@@ -77,10 +77,10 @@ struct BindingsView: View {
                     }
                 }
             }
-            .navigationTitle("Buttons")
+            .navigationTitle("Controller buttons")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -170,9 +170,8 @@ struct BindingsView: View {
         } footer: {
             Text(
                 """
-                A controller in keyboard mode sends keys, not buttons. \
-                Bind its keys to controller buttons here and every \
-                button binding applies to it.
+                Some controllers send keys instead of buttons. Map \
+                those keys here to reuse your button bindings.
                 """
             )
         }
@@ -189,16 +188,15 @@ struct BindingsView: View {
     }
 
     private var resetTitle: String {
-        scope == .thisGame ? "Reset this game's overrides" : "Reset global overrides"
+        scope == .thisGame ? "Reset buttons for this game" : "Reset buttons for all games"
     }
 
     private var resetMessage: String {
         switch scope {
         case .thisGame:
-            return
-                "Remove all button overrides for \(gameTitle). Game defaults and global settings will apply again."
+            return "\(gameTitle) goes back to its default buttons. You can't undo this."
         case .allGames:
-            return "Remove every global button change. Empo's defaults apply until you set new buttons."
+            return "Every game goes back to Empo's default buttons. You can't undo this."
         }
     }
 
@@ -230,7 +228,7 @@ struct BindingsView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     if provenance == .gameDefault {
-                        Text("game default")
+                        Text("Game default")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     } else if provenance == .empoDefault {
@@ -264,7 +262,7 @@ struct BindingsView: View {
         provenance: BindingsCatalog.Provenance?
     ) -> some View {
         if provenance == .userOverride {
-            Button("Remove override", role: .destructive) {
+            Button("Reset to default", role: .destructive) {
                 BindingsCatalog.removeOverride(
                     source: row.source,
                     scope: scope,

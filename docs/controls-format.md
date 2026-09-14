@@ -288,9 +288,9 @@ would be a chain, and Empo rejects it (V023).
 A key you do not name reaches the game unchanged, so a real keyboard
 keeps typing. Use `null` to silence a key.
 
-Players do the same thing in the app: **Menu → Buttons → Keyboard →
-Add a key** asks them to press the button, reads the key it sends, and
-binds it.
+Players do the same thing in the app: **More options → Controller
+buttons → Keyboard → Add a key** asks them to press the button, reads
+the key it sends, and binds it.
 
 **Your map is a patch.** Empo has a built-in mapping (table below).
 Your file changes only the elements you list, and `null` removes a

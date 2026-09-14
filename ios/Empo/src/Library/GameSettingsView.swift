@@ -78,8 +78,8 @@ enum CompatibilityPick: String, CaseIterable, Hashable {
     var displayLabel: String {
         switch self {
         case .auto: return "Auto-detect"
-        case .modern: return "Modern (Ruby 3 strict)"
-        case .legacy: return "Legacy (rewrite Ruby 1.x syntax)"
+        case .modern: return "Modern (newer Ruby)"
+        case .legacy: return "Legacy (older Ruby)"
         }
     }
 }
@@ -105,9 +105,10 @@ struct GameSettingsView: View {
     @State private var autoDetectedVersion: Int?
     /// Cached modern-Ruby classification from
     /// `metadata.modernRubyScriptsDetected`, populated when the sheet
-    /// opens or after Reset to Defaults. Used to dress the
+    /// opens or after Reset to defaults. Used to dress the
     /// "Auto-detect" row of the compatibility picker.
     @State private var autoDetectedModernScripts: Bool?
+    @State private var showResetConfirm = false
 
     private let gameDirectory: URL
     private let stateDirectory: URL
@@ -250,11 +251,11 @@ struct GameSettingsView: View {
 
                 if hasAnyCustomizations {
                     Section {
-                        Button("Reset to Defaults", role: .destructive) {
-                            resetToDefaults()
+                        Button("Reset to defaults", role: .destructive) {
+                            showResetConfirm = true
                         }
                     } footer: {
-                        Text("Remove all custom settings and use the game's original values.")
+                        Text("Clears every change you made and uses the game's original values.")
                     }
                 }
             }
@@ -297,6 +298,12 @@ struct GameSettingsView: View {
             }
             .animation(.smooth(duration: 0.25), value: restartHint != nil)
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Reset all settings?", isPresented: $showResetConfirm) {
+                Button("Reset", role: .destructive) { resetToDefaults() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This clears every change you made to \"\(game.title)\". You can't undo this.")
+            }
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 1) {
@@ -334,7 +341,7 @@ struct GameSettingsView: View {
         Section {
             if engineSettings.gameDefaultsUnknown {
                 Text(
-                    "Empo can't read this game's mkxp.json. Game defaults are unknown."
+                    "Empo can't read this game's own settings, so the values below start from Empo's defaults."
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -370,7 +377,7 @@ struct GameSettingsView: View {
 
                         Text(
                             effectiveRenderScale.description
-                                + " The game's proportions and on-screen layout do not change. This only makes the picture sharper on high-resolution screens."
+                                + " The game's size and layout stay the same, only sharper."
                         )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -411,7 +418,7 @@ struct GameSettingsView: View {
         } header: {
             Text("Display")
         } footer: {
-            Text("Control how the game looks on screen.")
+            Text("How the game looks on screen.")
         }
     }
 
@@ -502,7 +509,7 @@ struct GameSettingsView: View {
         } header: {
             Text("Performance")
         } footer: {
-            Text("Change how the engine handles heavy scenes.")
+            Text("How the engine handles heavy scenes.")
         }
     }
 
@@ -512,7 +519,7 @@ struct GameSettingsView: View {
                 title: "Postload scripts",
                 isOn: postloadScriptsBinding,
                 description:
-                    "Run Empo's compatibility scripts after the game loads its own. They fill in common RPG Maker gaps, like missing plugins and the cheat menu, plus fixes for Pokemon Essentials graphics, input, online play, and tilemaps."
+                    "Run Empo's fix-up scripts after the game loads. They add the cheat menu and patch common RPG Maker and Pokemon Essentials problems."
             )
 
             engineFieldRow(.pathCache) {
@@ -542,14 +549,14 @@ struct GameSettingsView: View {
                 title: "JoiPlay compatibility",
                 isOn: joiplayCompatBinding,
                 description:
-                    "Tell the game it's running on JoiPlay ($joiplay). Some games then switch to their mobile version. Others were patched for JoiPlay's older engine and will misbehave here. Worth trying if a game breaks on something its PC version handles fine."
+                    "Tell the game it's running on JoiPlay. Some games switch to their mobile version. Worth trying if a game misbehaves here but works on PC."
             )
 
             SettingsToggle(
                 title: "Network access",
                 isOn: networkEnabledBinding,
                 description:
-                    "Let this game use the internet for update checks, downloads, and online features. The game chooses which servers it contacts, and some games do not encrypt what they send. When off, the game acts as if the device is in airplane mode."
+                    "Let this game use the internet for updates and online features. Some games send data unencrypted. When off, the game sees no network."
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -579,7 +586,7 @@ struct GameSettingsView: View {
                     .pickerStyle(.navigationLink)
 
                     Text(
-                        "Set whether the engine rewrites old Ruby 1.x code into a form Ruby 3 accepts. Ruby 1.8 and 1.9 read the old code directly, so this option only shows for Ruby 3. Switch to Legacy if a Pokemon Essentials game shows an error such as `private method called for Kernel:Module`."
+                        "Legacy rewrites old Ruby code so newer Ruby can run it. Switch to Legacy if a Pokemon Essentials game crashes with a \"private method\" error."
                     )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -589,7 +596,7 @@ struct GameSettingsView: View {
         } header: {
             Text("Engine")
         } footer: {
-            Text("Engine options that change how games load and how well they run.")
+            Text("How games load and how well they run.")
         }
     }
 
@@ -625,7 +632,7 @@ struct GameSettingsView: View {
             // Cheats live in App Settings (Experimental section).
             // The per-game toggle was orthogonal stored-but-unused
             // state. See the commit message and TODO.md "P0 #3".
-            Text("Options that change how you play the game.")
+            Text("How you play the game.")
         }
     }
 
@@ -824,7 +831,7 @@ struct GameSettingsView: View {
         }
         .contextMenu {
             if provenance == .yours {
-                Button("Use game value", role: .destructive) {
+                Button("Reset to game value") {
                     resetEngineField(field)
                 }
             }
@@ -854,7 +861,7 @@ struct GameSettingsView: View {
     /// sniffers so the Auto-detect picker rows show what the
     /// engine would route to. Reads cached metadata on sheet open.
     /// `forceRefresh` re-sniffs the game folder and rewrites
-    /// `metadata.json` (Reset to Defaults).
+    /// `metadata.json` (Reset to defaults).
     private func refreshAutoDetection(forceRefresh: Bool) {
         guard let container = game.container else { return }
         var metadata = GameMetadata.load(from: container)

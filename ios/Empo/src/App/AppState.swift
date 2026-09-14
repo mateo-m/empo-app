@@ -154,10 +154,8 @@ class AppState {
     /// Cross-session play is disabled (`ios/Empo/docs/multi-session.md`), so
     /// we cannot safely return to the library and launch another
     /// game in the same process. The user has to force-close and
-    /// reopen. RootView appends "Close Empo from the app switcher
-    /// and reopen it to continue." so the body reads as one natural
-    /// sentence.
-    private static let cleanExitMessage = "The game has ended or requested a restart."
+    /// reopen, which RootView says on the line below this one.
+    private static let cleanExitMessage = "The game ended."
 
     func consumeCrashRecovery() {
         if let message = session.consumeCrashRecovery() {

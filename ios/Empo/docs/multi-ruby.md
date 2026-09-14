@@ -181,7 +181,7 @@ The same preload also restores `Thread.critical` / `Thread.critical=` as no-ops 
 
 ## Cross-session play
 
-Currently disabled. After a clean engine exit, the iOS host shows an alert ("The game has ended or requested a restart. Close Empo from the app switcher and reopen it to continue.") instead of returning to the library. A Ruby VM does not survive a switch to a different game's scripts. Class definitions from the previous session leak into the next one. They then cause superclass-mismatch errors and other faults.
+Currently disabled. After a clean engine exit, the iOS host shows an alert ("The game ended." then "Close Empo from the app switcher, then reopen it.") instead of returning to the library. A Ruby VM does not survive a switch to a different game's scripts. Class definitions from the previous session leak into the next one. They then cause superclass-mismatch errors and other faults.
 
 A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method scrubbing, intrusive-list detachment for disposables, etc.). It worked for narrow game pairs but did not survive contact with a broader corpus, especially across different Ruby versions. Until that cleanup is reliable, the app asks the user to force-close and relaunch.
 

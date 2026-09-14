@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// Bottom sheet of secondary in-game actions reachable from the
-/// player toolbar's "Menu" button. Houses options that don't earn a
-/// permanent toolbar slot: pause, cheats, debug overlay, fast
-/// forward. Toggles update host state directly. Tap actions
+/// player toolbar's "More options" button. Houses options that
+/// don't earn a permanent toolbar slot: pause, cheats, debug
+/// overlay, fast forward. Toggles update host state directly. Tap actions
 /// dismiss the sheet via `dismiss()` so the user lands back in the
 /// game.
 ///
@@ -14,8 +14,8 @@ import SwiftUI
 struct PlayerMoreSheet: View {
     /// Display title of the running game. The pause row interpolates
     /// it ("Pause <title>") so the user sees exactly what they act
-    /// on. Falls back to "Game" if `selectedGame` is nil at present
-    /// time.
+    /// on. Falls back to "this game" if `selectedGame` is nil at
+    /// present time.
     let gameTitle: String
     @Binding var showDebugOverlay: Bool
     @Binding var fastForwardActive: Bool
@@ -73,7 +73,7 @@ struct PlayerMoreSheet: View {
                         content: {
                             // Cheats: graduated from experimental in
                             // May 2026, always enabled now.
-                            MenuRow(icon: "wand.and.stars", label: "Cheats") {
+                            MenuRow(icon: "wand.and.stars", label: "Show cheats") {
                                 onCheats()
                                 dismiss()
                             }
@@ -92,7 +92,7 @@ struct PlayerMoreSheet: View {
                                 )
                             }
                             if showControllerRemap {
-                                MenuRow(icon: "gamecontroller.fill", label: "Buttons") {
+                                MenuRow(icon: "gamecontroller.fill", label: "Controller buttons") {
                                     onControllerRemap()
                                     dismiss()
                                 }
@@ -139,7 +139,7 @@ struct PlayerMoreSheet: View {
             // shows through around the row-cards. Painting a solid
             // `systemGroupedBackground` here looked like a flat white
             // panel hovering over the game.
-            .navigationTitle("Menu")
+            .navigationTitle("More")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
