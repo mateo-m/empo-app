@@ -27,7 +27,7 @@ struct GameLibraryView: View {
     // copy fallbacks should move into it alongside the other
     // user-facing text. Keep the literals here for now so the
     // existing string-search audit still points at a single spot.
-    @State private var errorTitle: String = "Oops!"
+    @State private var errorTitle: String = "Couldn't delete this game"
     @State private var showErrorAlert = false
     @State private var showCancelValidationAlert = false
     @State private var gameToDelete: GameEntry?
@@ -444,8 +444,8 @@ struct GameLibraryView: View {
     private var emptyStateContent: some View {
         EmptyStateView(
             icon: Image(.empoMark),
-            title: "No Games Yet",
-            subtitle: "Add your favorite RPG Maker\ngames to get started!",
+            title: "No games yet",
+            subtitle: "Import an RPG Maker game to get started.",
             revealed: splashDismissed,
             initialDelay: entranceDelay
         )
@@ -463,8 +463,8 @@ struct GameLibraryView: View {
                 Spacer()
                 Text(
                     selectedIDs.isEmpty
-                        ? "Select Games"
-                        : "\(selectedIDs.count) Selected"
+                        ? "Select games"
+                        : "\(selectedIDs.count) selected"
                 )
                 .font(.headline)
                 Spacer()
@@ -472,8 +472,7 @@ struct GameLibraryView: View {
                     .font(.body.weight(.semibold))
                     .tint(.brand)
             } else {
-                IconButton("gearshape", style: .outline) { showSettings = true }
-                    .accessibilityLabel("Settings")
+                IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
                 Spacer()
                 Text("Library")
                     .font(.title)
@@ -956,7 +955,10 @@ struct GameLibraryView: View {
         Button(role: .destructive) {
             showBulkDeleteConfirm = true
         } label: {
-            Label("Delete (\(selectedIDs.count))", systemImage: "trash")
+            Label(
+                "Delete \(selectedIDs.count) game\(selectedIDs.count == 1 ? "" : "s")",
+                systemImage: "trash"
+            )
         }
         .buttonStyle(.primary(tint: .red))
     }
@@ -1116,7 +1118,7 @@ private struct BulkDeleteAlert: ViewModifier {
     let onConfirm: () -> Void
 
     func body(content: Content) -> some View {
-        content.alert("Delete \(count) Games?", isPresented: $isPresented) {
+        content.alert("Delete \(count) game\(count == 1 ? "" : "s")?", isPresented: $isPresented) {
             Button("Delete", role: .destructive) {
                 onConfirm()
             }
@@ -1124,7 +1126,7 @@ private struct BulkDeleteAlert: ViewModifier {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "This deletes the game files for the selected games. Saves in the Data folder are kept. Empo moves the save files it finds in the game folders to Rescued Saves. If Empo does not recognize a save file, it is deleted with its game."
+                "This deletes the selected games from your device. Empo keeps the saves it recognizes and moves them to Rescued Saves. Any saves it doesn't recognize go with their game. You can't undo this."
             )
         }
     }
@@ -1155,12 +1157,10 @@ private struct DuplicateGamesNotice: ViewModifier {
         let list = names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
             .map { "\u{2022} \($0)" }
             .joined(separator: "\n")
-        return "Empo now stores each game in a folder named after its title, "
-            + "and the library keeps one copy per title because games locate "
-            + "their data by that name. The most recently played copy of each "
-            + "game stayed in your library. These extra copies were moved, "
-            + "saves included, to \"Duplicate Games\" inside Empo's folder in "
-            + "the Files app:\n\n\(list)"
+        return "Empo keeps one copy of each game, so it moved the extra copies "
+            + "below out of your library. The most recently played copy stayed. "
+            + "The rest, saves included, are in \"Duplicate Games\" in Empo's "
+            + "folder in Files:\n\n\(list)"
     }
 
     private func acknowledge() {
@@ -1170,10 +1170,10 @@ private struct DuplicateGamesNotice: ViewModifier {
 
     func body(content: Content) -> some View {
         content.alert(
-            "Duplicate Games Moved",
+            "Empo moved your duplicate games",
             isPresented: isPresented
         ) {
-            Button("OK", action: acknowledge)
+            Button("Got it", action: acknowledge)
         } message: {
             Text(message)
         }
@@ -1206,15 +1206,17 @@ private struct ImportReplaceAlert: ViewModifier {
 
     private var title: String {
         (prompt?.titles.count ?? 1) > 1
-            ? "Games Already in Library" : "Game Already in Library"
+            ? "These games are already in your library"
+            : "This game is already in your library"
     }
 
     private func message(for prompt: ImportReplacePrompt) -> String {
         let names = prompt.titles.map { "\"\($0)\"" }.joined(separator: ", ")
         let verb = prompt.titles.count == 1 ? "is" : "are"
+        let possessive = prompt.titles.count == 1 ? "its" : "their"
         return "\(names) \(verb) already in your library. "
-            + "Importing overwrites the installed files that the import also contains. "
-            + "Saves, settings, and everything else are kept."
+            + "Importing replaces \(possessive) files with the new ones. "
+            + "Your saves and settings stay. You can't undo this."
     }
 
     func body(content: Content) -> some View {
@@ -1223,7 +1225,7 @@ private struct ImportReplaceAlert: ViewModifier {
             isPresented: isPresented,
             presenting: prompt
         ) { _ in
-            Button("Import", role: .destructive, action: onReplace)
+            Button("Update game", role: .destructive, action: onReplace)
             Button("Cancel", role: .cancel, action: onCancel)
         } message: { prompt in
             Text(message(for: prompt))
@@ -1299,15 +1301,15 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Alert(
                     title: Text(alert.title),
                     message: Text(alert.message),
-                    dismissButton: .default(Text("OK"), action: onDismissImportPipelineAlert)
+                    dismissButton: .default(Text("Got it"), action: onDismissImportPipelineAlert)
                 )
             }
             .alert(title, isPresented: $showErrorAlert) {
-                Button("OK") {}
+                Button("Got it") {}
             } message: {
-                Text(errorMessage ?? "Something went wrong.")
+                Text(errorMessage ?? "Empo couldn't finish this. Reopen Empo and try again.")
             }
-            .alert("Delete Game?", isPresented: $showDeleteConfirm) {
+            .alert("Delete this game?", isPresented: $showDeleteConfirm) {
                 Button("Delete", role: .destructive, action: onDeleteGame)
                     .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
@@ -1319,17 +1321,17 @@ private struct LibraryAlertPresentation: ViewModifier {
                         // stays - promising file removal here would
                         // be false.
                         Text(
-                            "This stops the import of \"\(game.title)\". An update leaves the installed game as it was."
+                            "This stops importing \"\(game.title)\". If you were updating a game you already have, that copy stays as it is."
                         )
                     } else {
                         Text(
-                            "This deletes the game files for \"\(game.title)\". Saves in the Data folder are kept. Empo moves the save files it finds in the game folder to Rescued Saves. If Empo does not recognize a save file, it is deleted with the game."
+                            "This deletes \"\(game.title)\" from your device. Empo keeps the saves it recognizes and moves them to Rescued Saves. Any saves it doesn't recognize go with the game. You can't undo this."
                         )
                     }
                 }
             }
             .alert(
-                "Couldn't Move Saves",
+                "Couldn't move the saves",
                 isPresented: Binding(
                     get: { !saveRescueFailures.isEmpty },
                     set: { presented in
@@ -1344,50 +1346,47 @@ private struct LibraryAlertPresentation: ViewModifier {
                 ),
                 presenting: saveRescueFailures.first
             ) { game in
-                Button("Delete Anyway", role: .destructive) {
+                Button("Delete anyway", role: .destructive) {
                     onDeleteGameDiscardingSaves(game)
                 }
-                Button("Keep Game", role: .cancel) {}
+                Button("Keep game", role: .cancel) {}
             } message: { game in
                 Text(
-                    "Empo could not rescue the saves for \"\(game.title)\". If you delete the game anyway, these saves are lost forever. You can also keep the game and try again."
+                    "Empo couldn't move the saves for \"\(game.title)\" to Rescued Saves. Free up space and delete again, or delete now and lose those saves. You can't undo this."
                 )
             }
-            .alert("Invalid Game", isPresented: $showInvalidAlert) {
-                Button("OK") {}
+            .alert("This game won't open", isPresented: $showInvalidAlert) {
+                Button("Got it") {}
             } message: {
-                Text("Empo could not load this game correctly. You can delete it and import it again.")
+                Text("Empo can't read this game's files. Delete it, then import it again.")
             }
-            .alert("Run-Time Package Required", isPresented: $showRTPRequiredAlert) {
+            .alert("This game needs extra RPG Maker files", isPresented: $showRTPRequiredAlert) {
                 Button("Cancel", role: .cancel) {}
-                Button("Continue") {
+                Button("Play anyway") {
                     onContinueDespiteRTP()
                 }
             } message: {
                 if let game = rtpWarnedGame, let requirement = rtpWarnedRequirement {
                     Text(
                         """
-                        "\(game.title)" needs shared RPG Maker assets from \
-                        \(requirement.friendlySummary) (\(requirement.summary)). \
-                        These Run-Time Packages are not bundled with the game.
-
-                        Empo cannot load Run-Time Packages yet, so the game \
-                        may fail to start or be missing graphics and audio.
+                        "\(game.title)" expects shared \(requirement.friendlySummary) \
+                        assets that don't ship with it. Empo can't add them yet, so \
+                        the game may not start or may be missing graphics and sound.
                         """
                     )
                 }
             }
-            .alert("Cancel import?", isPresented: $showCancelValidationAlert) {
+            .alert("Stop import?", isPresented: $showCancelValidationAlert) {
                 Button("Keep importing", role: .cancel) {}
-                Button("Cancel import", role: .destructive, action: onCancelValidation)
+                Button("Stop import", role: .destructive, action: onCancelValidation)
             } message: {
-                Text("Empo is still validating the game. If you cancel, the import stops.")
+                Text("Empo is still checking this game. Stopping now discards it.")
             }
             .alert("A game is paused", isPresented: $showPausedGameAlert) {
                 // The alert is informational. To play another game the
                 // user resumes the paused one from its card, or
                 // force-closes the app. See `ios/Empo/docs/multi-session.md`.
-                Button("OK", role: .cancel, action: onDismissPausedGameAlert)
+                Button("Got it", role: .cancel, action: onDismissPausedGameAlert)
             } message: {
                 if let pausedGame {
                     Text(

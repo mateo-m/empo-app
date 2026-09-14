@@ -48,7 +48,7 @@ struct GameInfoView: View {
         self.originalTitle =
             meta.baseTitle
             ?? GameINI.gameTitle(at: container.gameURL)
-            ?? "Unknown Game"
+            ?? "Untitled game"
     }
 
     private var container: GameContainer? { game.container }
@@ -144,7 +144,7 @@ struct GameInfoView: View {
 
                             Divider().padding(.leading, Spacing.xl)
 
-                            DetailRow("Local ID") {
+                            DetailRow("Folder name") {
                                 Text(game.id)
                                     .monospaced()
                                     .font(.caption)
@@ -227,7 +227,7 @@ struct GameInfoView: View {
                             Button {
                                 openInFiles()
                             } label: {
-                                Label("Browse game files", systemImage: "folder")
+                                Label("Open in Files", systemImage: "folder")
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, Spacing.xl)
                                     .padding(.vertical, Spacing.lg)
@@ -264,12 +264,12 @@ struct GameInfoView: View {
                         // Subtitle cross-fades between headline and caption sizes.
                         // Font changes aren't animatable, so both are overlaid.
                         ZStack {
-                            Text("Information")
+                            Text("Info")
                                 .font(.headline)
                                 .opacity(1 - titleScrollProgress)
                                 .blur(radius: titleScrollProgress * 4)
 
-                            Text("Information")
+                            Text("Info")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .opacity(titleScrollProgress)
@@ -284,7 +284,7 @@ struct GameInfoView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close") { dismiss() }
+                    Button("Done") { dismiss() }
                         .tint(.brand)
                 }
             }

@@ -16,20 +16,21 @@ enum GameImportValidator {
         var errorDescription: String? {
             switch self {
             case .unzipFailed:
-                return "Failed to extract the zip file."
-            case .corruptZip(let detail):
-                return "Corrupt zip file: \(detail)"
+                return "Empo couldn't unpack this archive. Download the game again, then import it."
+            case .corruptZip:
+                return "This archive is damaged. Download the game again, then import it."
             case .notAnRPGMakerGame:
                 return
-                    "This does not look like an RPG Maker game. Empo found no known game configuration."
+                    "Empo found no RPG Maker game here. Pick the folder that contains Game.exe, then import again."
             case .unsupportedRuntime(let detail):
                 return detail
-            case .missingScripts(let path):
-                return "Script file not found: \(path)"
-            case .invalidScripts(let path):
-                return "Script file is not a valid RGSS data file: \(path)"
+            case .missingScripts:
+                return
+                    "This game is missing the script file it needs to run. Download the game again, then import it."
+            case .invalidScripts:
+                return "Empo can't read this game's script file. Download the game again, then import it."
             case .invalidJgpManifest:
-                return "The JoiPlay archive is missing or has an invalid manifest.json."
+                return "Empo can't read this JoiPlay archive. Download it again, then import it."
             }
         }
     }

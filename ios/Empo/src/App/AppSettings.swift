@@ -29,12 +29,12 @@ enum LibrarySortOption: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .titleAZ: "A → Z"
-        case .titleZA: "Z → A"
+        case .titleAZ: "Title A to Z"
+        case .titleZA: "Title Z to A"
         case .recentlyAdded: "Recently added"
-        case .leastRecentlyAdded: "Least recently added"
+        case .leastRecentlyAdded: "Added longest ago"
         case .recentlyPlayed: "Recently played"
-        case .leastRecentlyPlayed: "Least recently played"
+        case .leastRecentlyPlayed: "Played longest ago"
         case .mostPlayed: "Most played"
         case .leastPlayed: "Least played"
         case .largestSize: "Largest first"
@@ -95,7 +95,7 @@ enum AppTheme: String, CaseIterable {
         switch self {
         case .dark: "Dark"
         case .light: "Light"
-        case .auto: "Auto"
+        case .auto: "System"
         }
     }
 

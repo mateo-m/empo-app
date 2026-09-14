@@ -45,8 +45,8 @@ final class EngineSessionCoordinator {
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
 
     static let crashMessage =
-        "The game did not exit cleanly last time. "
-        + "Your save data should be fine."
+        "The game crashed last time. Your saves are safe. "
+        + "Open it again to keep playing."
 
     private init() {
         sessionLogger.onPlayTimeFlushed = { gameID in

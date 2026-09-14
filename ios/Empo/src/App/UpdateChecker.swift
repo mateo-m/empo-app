@@ -118,7 +118,7 @@ enum UpdateChecker {
                 string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest"
             )
         else {
-            return .failed(message: "Could not build the update URL.")
+            return .failed(message: "Could not check for updates. Try again later.")
         }
         var request = URLRequest(url: url)
         // GitHub recommends an explicit Accept header in their
@@ -137,10 +137,10 @@ enum UpdateChecker {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                return .failed(message: "No HTTP response.")
+                return .failed(message: "Could not reach GitHub. Check your connection and try again.")
             }
             guard http.statusCode == 200 else {
-                return .failed(message: "GitHub returned \(http.statusCode).")
+                return .failed(message: "Could not find the latest release on GitHub. Try again later.")
             }
             guard
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -148,7 +148,7 @@ enum UpdateChecker {
                 let htmlURLString = json["html_url"] as? String,
                 let htmlURL = URL(string: htmlURLString)
             else {
-                return .failed(message: "Could not parse the GitHub response.")
+                return .failed(message: "GitHub sent something Empo could not read. Try again later.")
             }
             let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
             persist(latestVersion: latest)

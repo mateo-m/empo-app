@@ -11,7 +11,7 @@ struct ImportButton: View {
             case .idle:
                 return "Import game"
             case .validating:
-                return "Validating"
+                return "Checking game"
             case .multipleGames:
                 return "Choose game"
             }
@@ -22,7 +22,7 @@ struct ImportButton: View {
             case .idle:
                 return "Import game"
             case .validating:
-                return "Cancel import"
+                return "Checking game, tap to stop"
             case .multipleGames:
                 return "Choose game"
             }

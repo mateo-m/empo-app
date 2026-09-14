@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Modal sheet offering the three image-source options (Photos /
-/// Camera / Files) plus an optional "Remove" action when the
+/// Camera / Files) plus an optional "Delete image" action when the
 /// caller already has an image set. Replaces the previous
 /// `confirmationDialog` action-sheet so the UI matches the rest
 /// of the app's bottom-sheet patterns (library sort, experimental
@@ -16,7 +16,7 @@ struct ImageSourceSheet: View {
     let onPickFile: () -> Void
     let onRemove: (() -> Void)?
 
-    /// Hide the "Take Photo" row when the device cannot
+    /// Hide the "Take photo" row when the device cannot
     /// launch the camera (iPad without a rear camera, Simulator).
     private var cameraAvailable: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)
@@ -30,7 +30,7 @@ struct ImageSourceSheet: View {
             SheetCard {
                 ImageSourceRow(
                     icon: "photo.on.rectangle",
-                    label: "Camera Roll"
+                    label: "Photos"
                 ) {
                     isPresented = false
                     onPickPhoto()
@@ -40,7 +40,7 @@ struct ImageSourceSheet: View {
                     SheetRowSeparator(leadingColumn: 24)
                     ImageSourceRow(
                         icon: "camera",
-                        label: "Take Photo"
+                        label: "Take photo"
                     ) {
                         isPresented = false
                         onTakePhoto()
@@ -50,7 +50,7 @@ struct ImageSourceSheet: View {
                 SheetRowSeparator(leadingColumn: 24)
                 ImageSourceRow(
                     icon: "folder",
-                    label: "Choose File"
+                    label: "Choose file"
                 ) {
                     isPresented = false
                     onPickFile()
@@ -58,13 +58,13 @@ struct ImageSourceSheet: View {
             }
 
             if hasExisting, let onRemove {
-                // Destructive "Remove" action as its own card so
+                // Destructive delete action as its own card so
                 // it reads as separate from the sources, per the
                 // sheet rules.
                 SheetCard {
                     ImageSourceRow(
                         icon: "trash",
-                        label: "Remove",
+                        label: "Delete image",
                         role: .destructive
                     ) {
                         isPresented = false

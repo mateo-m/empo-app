@@ -212,7 +212,7 @@ struct PlayerControlsOverlay: View {
             )
             .overlay(alignment: .bottom) {
                 if editMode && !isPreview && !actions.isAvailable(button.action) {
-                    Text("Unavailable in this game")
+                    Text("Turn this on in Game settings")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)

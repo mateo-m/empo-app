@@ -7,7 +7,7 @@ How Empo builds bottom sheets. These rules keep every sheet
 consistent with the system's own sheet language (welcome, What's
 New, and activity-summary sheets) and with each other. Reference
 implementations: `SaveRecoverySheet`, `ImageSourceSheet`, the
-Build Info sheet in `SettingsView`, and `PlayerMoreSheet` for the
+Build info sheet in `SettingsView`, and `PlayerMoreSheet` for the
 in-game exception.
 
 ## Build with the components
@@ -16,7 +16,7 @@ New sheets compose the vocabulary in `Design/Sheet.swift` instead
 of hand-writing chrome:
 
 ```swift
-StandardSheet(title: "Saves Recovered", emblem: "checkmark.seal") {
+StandardSheet(title: "Saves recovered", emblem: "checkmark.seal") {
     SheetProse("What happened and why.")
     SheetCard { /* rows, SheetRowSeparator between them */ }
     SheetFootnote("The fine print.")

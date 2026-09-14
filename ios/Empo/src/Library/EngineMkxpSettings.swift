@@ -12,7 +12,7 @@ struct EngineMkxpSettings: Equatable {
     /// the display refresh, so the engine cannot turn VSync off and
     /// a toggle would promise something it cannot do. The field
     /// stays because overlays written by older builds and imported
-    /// JGP profiles still carry the value, and "Reset to Defaults"
+    /// JGP profiles still carry the value, and "Reset to defaults"
     /// must be able to clear it.
     var vsync: Bool?
     var pathCache: Bool?

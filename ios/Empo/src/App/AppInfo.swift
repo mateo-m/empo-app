@@ -19,7 +19,7 @@ enum AppInfo {
         if let bundle = info?["CFBundleName"] as? String, !bundle.isEmpty {
             return bundle
         }
-        return "App"
+        return "Empo"
     }()
 
     /// Marketing version string (e.g. "1.0").

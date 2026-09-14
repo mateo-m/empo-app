@@ -72,13 +72,13 @@ struct ImportRootPickerSheet: View {
     }
 
     private var navigationTitle: String {
-        step == .add ? "Add Games" : "Already in Library"
+        step == .add ? "Add games" : "Already in your library"
     }
 
     private var bannerText: String {
         step == .add
             ? "This import includes more than one game"
-            : "Importing replaces installed game files"
+            : "Importing replaces the installed games"
     }
 
     private var bannerSystemImage: String {
@@ -88,15 +88,13 @@ struct ImportRootPickerSheet: View {
     private var explainerText: String {
         switch step {
         case .add where updateChoices.isEmpty:
-            return "Choose one or more games to add to your library, "
-                + "or cancel to go back without importing anything."
+            return "Choose the games you want to add to your library."
         case .add:
-            return "Choose which new games to add to your library. "
-                + "Next, you'll review the games that are already in your library."
+            return "Choose the new games to add. "
+                + "Next, review the ones you already have."
         case .update:
-            return "Choose which installed games get the imported files. "
-                + "Deselected games keep their current files. "
-                + "Saves and settings are always kept."
+            return "Choose which games to update. "
+                + "The others stay as they are, and saves are always kept."
         }
     }
 
@@ -193,6 +191,7 @@ struct ImportRootPickerSheet: View {
                     ImportRootChoiceRow(choice: choice, isSelected: isSelected(choice.id))
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected(choice.id) ? [.isSelected] : [])
             }
         }
     }
@@ -280,6 +279,7 @@ private struct ImportRootChoiceRow: View {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(isSelected ? AnyShapeStyle(Color.brand) : AnyShapeStyle(.tertiary))
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, Spacing._2xl)
         .padding(.vertical, Spacing.md)

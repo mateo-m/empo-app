@@ -277,10 +277,17 @@ class ControlsLayout {
     }
 
     var resetConfirmationTitle: String {
-        if case .pinnedProfile = provenance {
-            return "Stop using the profile"
+        if case .pinnedProfile(let name) = provenance {
+            return "Stop using \(name)?"
         }
         return hasManifestTouchSection ? "Reset to game default" : "Reset to Empo default"
+    }
+
+    var resetConfirmationActionTitle: String {
+        if case .pinnedProfile = provenance {
+            return "Stop using"
+        }
+        return "Reset"
     }
 
     /// A method, not a property: building the message resolves the
@@ -293,8 +300,8 @@ class ControlsLayout {
                 ? base + " The screen returns to automatic placement." : base
         }
         return screenChangesOnReset()
-            ? "This removes your custom layout. The screen returns to automatic placement."
-            : "This removes your custom layout."
+            ? "This deletes your custom layout and returns the screen to automatic placement. You can't undo this."
+            : "This deletes your custom layout. You can't undo this."
     }
 
     /// The reset clause must only promise "automatic placement" when
@@ -1745,8 +1752,7 @@ class ControlsLayout {
         case .pinToExisting(let profile, let renameToShared, let hash):
             var target = profile
             if renameToShared {
-                let count = store.gamesPinned(to: profile).count + 1
-                let shared = store.uniqueName(base: "Shared layout (\(count) games)")
+                let shared = store.uniqueName(base: "Shared layout")
                 if LayoutProfilesManager.renameProfile(from: profile, to: shared) {
                     target = shared
                     for (gameID, entry) in record.games where entry.profile == profile {
