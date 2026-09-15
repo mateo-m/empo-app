@@ -323,6 +323,11 @@ Notes:
 - Triggers and stick directions act as digital buttons. They press at
   50% travel and release below 40%, so a half-pulled trigger never
   flutters.
+- A stick has eight sectors. A push within 30 degrees of an axis
+  sends that direction alone. The 30 degrees in the middle of each
+  quadrant send both directions at once. A sector boundary moves 5
+  degrees away from the current sector, so a thumb that rests on a
+  boundary does not flicker.
 - iOS often reserves `guide` for the system. You can bind it, but test
   on a real device before you rely on it.
 - Paddles and touchpad only exist on some controllers (Xbox Elite,
