@@ -86,6 +86,18 @@ xcrun simctl launch "$SIM" sh.mateo.empo
 
 For device builds, swap `iphonesimulator` for `iphoneos` and create a gitignored `ios/Empo/Signing.xcconfig` with your `DEVELOPMENT_TEAM`.
 
+### Tests
+
+`scripts/run-swift-tests.sh` runs the GameProbe and Json5 package tests on macOS.
+
+`EmpoTests` runs inside the app on a simulator. It drives `ControllerInputManager` with snapshot controllers (`GCController.withMicroGamepad()`, `withExtendedGamepad()`), so it covers the controller path without a physical pad:
+
+```sh
+SIM=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)
+xcodebuild test -project ios/Empo/Empo.xcodeproj -scheme Empo \
+  -destination "id=$SIM" -only-testing:EmpoTests CODE_SIGNING_ALLOWED=NO
+```
+
 ## Notable hacks
 
 If you read the code, note these unusual parts. The build depends on them:

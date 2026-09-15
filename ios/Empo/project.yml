@@ -427,11 +427,28 @@ targets:
           - -lGLESv2_static
     dependencies:
       - package: GameProbe
+  EmpoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: Empo
+    settings:
+      base:
+        TEST_TARGET_NAME: Empo
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.tests
+        CODE_SIGNING_ALLOWED: NO
 schemes:
   Empo:
     build:
       targets:
         Empo: all
+        EmpoTests: [test]
+    test:
+      config: Debug
+      targets:
+        - EmpoTests
     run:
       config: Debug
     profile:
