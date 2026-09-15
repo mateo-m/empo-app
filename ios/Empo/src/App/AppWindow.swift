@@ -103,13 +103,20 @@ class AppWindow: UIWindow {
     /// published by `PlayerView`. `_UIHostingView` is hit-testable
     /// across the full window and owns every SwiftUI gesture, so view
     /// identity cannot distinguish empty game area from chrome.
+    ///
+    /// A presented sheet lives in its own `UITransitionView`, outside
+    /// the root view. Its content is a `HostingView` too, so the rule
+    /// stays limited to the root view tree. Before that limit, a sheet
+    /// row over the game rect sent its tap to the game (iPad, where the
+    /// Menu sheet sits over the game).
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
         guard AppState.shared.phase == .playing else { return hit }
         guard let hit else { return nil }
+        guard let rootView = rootViewController?.view, hit.isDescendant(of: rootView) else { return hit }
 
         let typeName = String(describing: type(of: hit))
-        let isHostingLayer = typeName.contains("Hosting") || hit === rootViewController?.view
+        let isHostingLayer = typeName.contains("Hosting") || hit === rootView
 
         if isHostingLayer {
             if ChromeHitRegions.contains(point) {
