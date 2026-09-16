@@ -13,5 +13,8 @@ final class EmpoSceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
         AppWindow.install(in: windowScene)
+        #if DEBUG
+        UITestVirtualController.connectIfRequested()
+        #endif
     }
 }

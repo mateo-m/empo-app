@@ -200,6 +200,9 @@ final class ControllerInputManager {
 
     private func attach(_ controller: GCController) {
         guard sessionActive else { return }
+        #if DEBUG
+        guard UITestVirtualController.admits(controller) else { return }
+        #endif
         logDevice(controller)
         guard Self.isMappable(controller) else { return }
         let id = Self.controllerID(controller)
