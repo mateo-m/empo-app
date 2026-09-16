@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.10 - 2026-09-16
+
+### Bug Fixes
+
+- Apply the UX writing audit to every user-visible string (#148) ([`225e9ec`](https://github.com/mateo-m/empo-app/commit/225e9ecdcecc38ca3737df2e089ec4c1cd5695ad))
+- Read sticks as eight sectors and rebuild controller input on the physical profile ([`d426ed8`](https://github.com/mateo-m/empo-app/commit/d426ed82cb6452bcb3512627d7328dbe01d3c7ae))
+- Keep taps on a presented sheet out of the game view ([`cca37b6`](https://github.com/mateo-m/empo-app/commit/cca37b6d84d83fe4c6847fa4fce42d6dc5c30ca9))
+- Count only session logs against the per-game log limit ([`9ddad9d`](https://github.com/mateo-m/empo-app/commit/9ddad9ddbb5502a50223ea84d7dcefcd0f295d4f))
+
+### Other
+
+- Add the EmpoTests target with controller input manager tests ([`002ba85`](https://github.com/mateo-m/empo-app/commit/002ba851dc6de8e4eefd3c5d41728cee95491799))
+- Let UI tests drive a virtual pad and ignore the simulator gamepad ([`9e5a887`](https://github.com/mateo-m/empo-app/commit/9e5a887b1e2212d7131443f74d227d943e06dbf2))
+
 ## 0.6.9 - 2026-09-12
 
 ### Bug Fixes
