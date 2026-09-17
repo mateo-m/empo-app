@@ -68,6 +68,16 @@ struct BindingsView: View {
                         if input.keyboard.hasHadKeyboardThisSession {
                             keyboardSection
                         }
+
+                        if BindingsCatalog.hasOverrides(scope: scope, container: container) {
+                            Section {
+                                Button("Reset to defaults", role: .destructive) {
+                                    showResetConfirm = true
+                                }
+                            } footer: {
+                                Text(resetFooter)
+                            }
+                        }
                     }
                     .listStyle(.insetGrouped)
                     .onChange(of: highlighted) { _, row in
@@ -81,14 +91,8 @@ struct BindingsView: View {
             .navigationTitle("Controller buttons")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(resetTitle) {
-                        showResetConfirm = true
-                    }
-                    .disabled(!BindingsCatalog.hasOverrides(scope: scope, container: container))
+                    Button("Done") { dismiss() }
                 }
             }
             .alert(resetTitle, isPresented: $showResetConfirm) {
@@ -191,15 +195,25 @@ struct BindingsView: View {
     }
 
     private var resetTitle: String {
-        scope == .thisGame ? "Reset buttons for this game" : "Reset buttons for all games"
+        scope == .thisGame ? "Reset buttons for this game?" : "Reset buttons for all games?"
+    }
+
+    private var resetFooter: String {
+        switch scope {
+        case .thisGame:
+            return "Clears the buttons you changed for this game."
+        case .allGames:
+            return "Clears the buttons you changed for all games. Buttons you changed for one game stay."
+        }
     }
 
     private var resetMessage: String {
         switch scope {
         case .thisGame:
-            return "\(gameTitle) goes back to its default buttons. You can't undo this."
+            return "The buttons you changed for \(gameTitle) go back to their defaults. You can't undo this."
         case .allGames:
-            return "Every game goes back to Empo's default buttons. You can't undo this."
+            return
+                "The buttons you changed for all games go back to their defaults. Buttons you changed for one game stay. You can't undo this."
         }
     }
 
