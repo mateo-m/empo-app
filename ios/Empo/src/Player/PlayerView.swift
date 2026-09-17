@@ -425,7 +425,8 @@ struct PlayerView: View {
                 container: layout.currentContainer,
                 gameTitle: appState.selectedGame?.title ?? "this game",
                 manifest: layout.activeManifest?.bindings,
-                input: input
+                input: input,
+                actions: actions
             )
         }
         .onChange(of: showMoreSheet) { _, opened in
@@ -441,6 +442,7 @@ struct PlayerView: View {
         .tint(nil)
         .controlsEditDialogs(
             layout: layout,
+            actions: actions,
             showAddSheet: $showAddSheet,
             showResetConfirm: $showResetConfirm,
             editingButton: $editingButton,
