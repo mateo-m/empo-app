@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AddButtonSheet: View {
     var layout: ControlsLayout
+    var actions: PlayerActionRegistry?
     @Environment(\.dismiss) private var dismiss
 
     /// The file format caps key buttons + action buttons at 21 per
@@ -93,6 +94,13 @@ struct AddButtonSheet: View {
                 Text(action.blurb)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let actions, !actions.isAvailable(action.id) {
+                    Text(
+                        "Fast forward is off for this game. The button shows in games that have Fast forward on."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
             Spacer()
         }
@@ -461,6 +469,7 @@ struct DPadEditSheet: View {
 
 struct ControlsEditDialogs: ViewModifier {
     var layout: ControlsLayout
+    var actions: PlayerActionRegistry?
 
     @Binding var showAddSheet: Bool
     @Binding var showResetConfirm: Bool
@@ -471,7 +480,7 @@ struct ControlsEditDialogs: ViewModifier {
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: $showAddSheet) {
-                AddButtonSheet(layout: layout)
+                AddButtonSheet(layout: layout, actions: actions)
             }
             .alert(layout.resetConfirmationTitle, isPresented: $showResetConfirm) {
                 Button(layout.resetConfirmationActionTitle, role: .destructive) {
@@ -497,6 +506,7 @@ struct ControlsEditDialogs: ViewModifier {
 extension View {
     func controlsEditDialogs(
         layout: ControlsLayout,
+        actions: PlayerActionRegistry?,
         showAddSheet: Binding<Bool>,
         showResetConfirm: Binding<Bool>,
         editingButton: Binding<ButtonModel?>,
@@ -506,6 +516,7 @@ extension View {
         modifier(
             ControlsEditDialogs(
                 layout: layout,
+                actions: actions,
                 showAddSheet: showAddSheet,
                 showResetConfirm: showResetConfirm,
                 editingButton: editingButton,

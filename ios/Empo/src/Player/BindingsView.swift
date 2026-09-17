@@ -8,6 +8,7 @@ struct BindingsView: View {
     let gameTitle: String
     let manifest: BindingMap?
     var input: SessionInput
+    let actions: PlayerActionRegistry
 
     @Environment(\.dismiss) private var dismiss
 
@@ -111,7 +112,9 @@ struct BindingsView: View {
                             scope: scope,
                             container: container,
                             manifest: manifest
-                        )
+                        ),
+                        scope: scope,
+                        actions: actions
                     ) { target in
                         BindingsCatalog.save(
                             source: row.source,

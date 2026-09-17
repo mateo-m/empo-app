@@ -5,6 +5,8 @@ import SwiftUI
 struct BindingTargetPicker: View {
     let source: BindingSource
     let current: BindingMap.Target?
+    let scope: BindingsCatalog.Scope
+    let actions: PlayerActionRegistry
     let onSelect: (BindingMap.Target) -> Void
 
     /// A key can stand in for a controller button, which hands it
@@ -19,10 +21,13 @@ struct BindingTargetPicker: View {
             List {
                 Section("Actions") {
                     ForEach(EmpoActionCatalog.all, id: \.id) { action in
+                        let available = actions.isAvailable(action.id)
                         actionRow(
                             label: action.displayName,
                             blurb: action.blurb,
-                            target: .action(action.id)
+                            note: available ? nil : unavailableNote,
+                            target: .action(action.id),
+                            enabled: available || scope == .allGames
                         )
                     }
                     actionRow(label: "Do nothing", target: .unbound)
@@ -67,16 +72,32 @@ struct BindingTargetPicker: View {
         .presentationDragIndicator(.visible)
     }
 
+    private var unavailableNote: String {
+        switch scope {
+        case .thisGame:
+            return "Fast forward is off for this game. Turn it on in Game settings."
+        case .allGames:
+            return "Fast forward is off for this game. The binding works in games that have Fast forward on."
+        }
+    }
+
     private func actionRow(
         label: String,
         blurb: String? = nil,
-        target: BindingMap.Target
+        note: String? = nil,
+        target: BindingMap.Target,
+        enabled: Bool = true
     ) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
                 if let blurb {
                     Text(blurb)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let note {
+                    Text(note)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -88,10 +109,12 @@ struct BindingTargetPicker: View {
             }
         }
         .contentShape(Rectangle())
+        .opacity(enabled ? 1 : 0.4)
         .onTapGesture {
             onSelect(target)
             dismiss()
         }
+        .disabled(!enabled)
     }
 
     private func keyRow(code: String, group: KeyCodePickerGroup) -> some View {

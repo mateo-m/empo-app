@@ -537,6 +537,9 @@ struct LayoutProfileEditorView: View {
         }
         .controlsEditDialogs(
             layout: layout,
+            // The editor's registry has no game, so it reports fast
+            // forward as off.
+            actions: nil,
             showAddSheet: $showAddSheet,
             // Reset is a per-game concept (unpin, or back to the
             // ambient chain). The editor has neither. Rename and
