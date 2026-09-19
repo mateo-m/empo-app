@@ -9,6 +9,14 @@
 # Usage:
 #   tools/psdk-core/run-test-host-ios.sh --game <dir> [--seconds 90]
 #                                       [--snap-every 5] [--device <udid>]
+#                                       [--keys 50:36,56:2] [--rotate 60:4]
+#
+# --keys presses SFML scancodes at the given second, to drive the game
+# without a person at the keyboard. host.m explains the format.
+#
+# The snapshots come from `simctl io screenshot`, not from the game. A
+# picture of the display proves the frame was presented. A picture the
+# game draws for itself only proves it rendered.
 #
 # Prerequisite: tools/psdk-core/build-test-host-ios.sh
 set -eu
@@ -21,6 +29,8 @@ GAME=
 SECONDS_TO_RUN=90
 SNAP_EVERY=5
 DEVICE=
+KEYS=
+ROTATE=
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -38,6 +48,14 @@ while [ "$#" -gt 0 ]; do
             ;;
         --device)
             DEVICE="$2"
+            shift 2
+            ;;
+        --keys)
+            KEYS="$2"
+            shift 2
+            ;;
+        --rotate)
+            ROTATE="$2"
             shift 2
             ;;
         *)
@@ -89,11 +107,29 @@ mkdir -p "$DOCS/Game" "$DOCS/snaps"
 # spelling it did not ship. normalize-case.py explains the whole thing.
 python3 "$(dirname "$0")/normalize-case.py" "$DOCS/Game"
 
+SNAPS="$ROOT/build/psdk-core/snaps"
+rm -rf "$SNAPS"
+mkdir -p "$SNAPS"
+
 echo "[psdk-run] launching for ${SECONDS_TO_RUN}s"
 SIMCTL_CHILD_PSDK_RUN_FOR="$SECONDS_TO_RUN" \
-    SIMCTL_CHILD_PSDK_SNAP_EVERY="$SNAP_EVERY" \
-    SIMCTL_CHILD_PSDK_SNAP_DIR="$DOCS/snaps" \
-    xcrun simctl launch --console-pty "$DEVICE" "$BUNDLE_ID" || true
+    SIMCTL_CHILD_PSDK_KEYS="$KEYS" \
+    SIMCTL_CHILD_PSDK_ROTATE="$ROTATE" \
+    xcrun simctl launch --console-pty "$DEVICE" "$BUNDLE_ID" &
+LAUNCH_PID=$!
 
-echo "[psdk-run] snapshots in $DOCS/snaps"
-ls -la "$DOCS/snaps"
+# simctl gives no frame-ready event, so the shots go on a fixed beat.
+# The beat is the test's sampling rate, not a wait for a signal.
+ELAPSED=0
+while [ "$ELAPSED" -lt "$SECONDS_TO_RUN" ]; do
+    sleep "$SNAP_EVERY"
+    ELAPSED=$((ELAPSED + SNAP_EVERY))
+    kill -0 "$LAUNCH_PID" 2>/dev/null || break
+    xcrun simctl io "$DEVICE" screenshot --type=png \
+        "$SNAPS/$(printf 't%03d' "$ELAPSED").png" >/dev/null 2>&1 || true
+done
+
+wait "$LAUNCH_PID" || true
+
+echo "[psdk-run] snapshots in $SNAPS"
+ls -la "$SNAPS"

@@ -1,9 +1,12 @@
 # End-to-end harness for the PSDK core. psdk_run loads this before
 # Game.rb.
 #
-# It writes a PNG every SNAP_EVERY seconds, prints the current scene,
-# and leaves after RUN_FOR seconds. A released game never returns from
-# its own loop, so a run without a time limit never ends.
+# It only watches. It reports input, audio and errors, and it never
+# wraps Graphics.update. PSDK replaces that method from FPSBalancer
+# while the game boots, and a wrapper that lands on the wrong side of
+# that replacement makes the two call each other until the stack runs
+# out. The driving script takes its pictures with `simctl io screenshot`
+# instead, which also proves the frame reached the display.
 $stdout.sync = true
 $stderr.sync = true
 
@@ -16,35 +19,63 @@ def STDERR.reopen(*)
   self
 end
 
-SNAP_DIR = ENV.fetch('PSDK_SNAP_DIR', File.join(Dir.pwd, '..', 'snaps'))
-SNAP_EVERY = ENV.fetch('PSDK_SNAP_EVERY', '5').to_f
-RUN_FOR = ENV.fetch('PSDK_RUN_FOR', '90').to_f
-
-Dir.mkdir(SNAP_DIR) unless Dir.exist?(SNAP_DIR)
-
-module SnapFrames
-  def update(*)
-    result = super
-    @snap_start ||= Time.now
-    @snap_frames = @snap_frames.to_i + 1
-    elapsed = Time.now - @snap_start
-    if elapsed >= (@snap_next ||= SNAP_EVERY)
-      @snap_next += SNAP_EVERY
-      snap_to_bitmap.to_png_file(File.join(SNAP_DIR, format('t%03d.png', elapsed)))
-      puts format('PSDK-SNAP t=%.1f frames=%d scene=%s', elapsed, @snap_frames, $scene.class)
+# Report what LiteRGSS hands PSDK for an injected key, and what PSDK
+# makes of it. The first number is the SFML key code and the second is
+# the scancode. PSDK versions read different ones, and input.yml is
+# written in whichever space that version uses, so seeing both is the
+# only way to know a key arrived in a form the game can match.
+Thread.new do
+  sleep 0.05 until defined?(::Input) && ::Input.respond_to?(:press?)
+  class << ::Input
+    alias_method :psdk_probe_on_key_down, :on_key_down
+    def on_key_down(*args)
+      psdk_probe_on_key_down(*args)
+      vkey, = ::Input::Keys.find { |_, v| args.any? { |a| v.include?(a) } }
+      state = ::Input.instance_variable_get(:@current_state) || {}
+      $stderr.puts "PSDK-KEY args=#{args.inspect} vkey=#{vkey.inspect} down=#{state[vkey]}"
+      $stderr.flush
     end
-    if elapsed > RUN_FOR
-      puts format('PSDK-DONE t=%.1f frames=%d scene=%s', elapsed, @snap_frames, $scene.class)
-      exit!(0)
+  end
+  $stderr.puts 'PSDK-HOOK Input'
+end
+
+# Report whether sound really plays. Without a capture device the
+# playing offset is the only signal: it advances only while the driver
+# pulls samples from the file. This reads the SFMLAudio objects through
+# ObjectSpace, because every PSDK version keeps them somewhere else.
+Thread.new do
+  sleep 0.05 until defined?(::SFMLAudio)
+  $stderr.puts 'PSDK-AUDIO SFMLAudio is loaded'
+  loop do
+    sleep 5
+    report = []
+    ObjectSpace.each_object(::SFMLAudio::Music) do |m|
+      report << format('music@%.2fs', m.get_playing_offset) if m.playing?
     end
-    result
+    ObjectSpace.each_object(::SFMLAudio::Sound) do |o|
+      report << format('sound@%.2fs', o.get_playing_offset) if o.playing?
+    end
+    $stderr.puts "PSDK-AUDIO #{report.empty? ? 'nothing plays' : report.join(' ')}"
+    $stderr.flush
   end
 end
 
+# Yuki::EXC catches every error in the game loop and shows a window that
+# waits for a key. Nothing prints, and by the time the process leaves, $!
+# is whatever killed the window, not the first error. Report the error as
+# EXC receives it, then leave, so a run does not sit in that window until
+# the test times out.
 Thread.new do
-  sleep 0.05 until defined?(Graphics) && Graphics.respond_to?(:snap_to_bitmap)
-  Graphics.singleton_class.prepend(SnapFrames)
-  puts 'PSDK-HOOK Graphics'
+  sleep 0.05 until defined?(::Yuki) && defined?(::Yuki::EXC) && ::Yuki::EXC.respond_to?(:run)
+  class << ::Yuki::EXC
+    def run(error, *)
+      $stderr.puts "PSDK-EXC #{error.class}: #{error.message}"
+      $stderr.puts Array(error.backtrace).join("\n")
+      $stderr.flush
+      exit!(0)
+    end
+  end
+  $stderr.puts 'PSDK-HOOK EXC'
 end
 
 # Edelweiss Chronicles stops unless $0 is 'Game.rb' and $0.__id__ is 24.
