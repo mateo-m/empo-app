@@ -43,17 +43,33 @@ int loadRubyFile(const std::string &path) {
 
 } // namespace
 
-int psdk_run(const char *gameDir, const char *preludePath) {
+int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
+             const char *preludePath) {
+    if (!supportDir || !supportDir[0]) {
+        fprintf(stderr, "[psdk] no support folder\n");
+        return PSDK_SUPPORT_MISSING;
+    }
+
+    // PSDK builds the path to its native extensions from this, as
+    // "#{ENV['GAMEDEPS']}/ruby-dist/lib" on macOS. The support folder
+    // holds an empty LiteRGSS.rb there, so PSDK's require succeeds
+    // against the classes Init_LiteRGSS already registered.
+    //
+    // Set before ruby_options. ruby_init_setproctitle replaces environ
+    // with a copy of its own, so a later setenv is not safe.
+    setenv("GAMEDEPS", supportDir, 1);
+
     if (!gameDir || chdir(gameDir) != 0) {
         fprintf(stderr, "[psdk] cannot enter %s\n", gameDir ? gameDir : "(null)");
         return PSDK_CHDIR_FAILED;
     }
 
-    {
-        int argc = 0;
-        char **argv = nullptr;
-        ruby_sysinit(&argc, &argv);
-    }
+    // The real argv, not a made-up one. Ruby writes the process title
+    // into the argv region on a `$0 =`, and the kernel's argv is the only
+    // block that is writable and next to the environment. With a stack
+    // array of string literals instead, that write lands in read-only
+    // memory and the process stops with a bus error.
+    ruby_sysinit(&argc, &argv);
     RUBY_INIT_STACK;
     ruby_init();
 
@@ -67,6 +83,16 @@ int psdk_run(const char *gameDir, const char *preludePath) {
         fprintf(stderr, "[psdk] ruby_options failed\n");
         return PSDK_RUBY_BOOT_FAILED;
     }
+
+    // Ruby was cross-compiled, so its built-in $LOAD_PATH points at a
+    // prefix that does not exist on the device. Without this, the game's
+    // `require 'uri'` raises LoadError.
+    rb_ary_unshift(rb_gv_get("$LOAD_PATH"), rb_str_new_cstr(supportDir));
+
+    // Every released PSDK game runs as `ruby Game.rb`, and its scripts
+    // read $0. ruby_script sets it without the process-title hook that a
+    // Ruby-level `$0 =` goes through.
+    ruby_script("Game.rb");
 
     Init_LiteRGSS();
     // Registering the classes is not enough. PSDK still calls
@@ -89,7 +115,11 @@ int psdk_run(const char *gameDir, const char *preludePath) {
 
     // Game.rb is one line in every released PSDK game:
     // `RubyVM::InstructionSequence.load_from_binary(File.binread('Game.yarb')).eval`
-    if (loadRubyFile("Game.rb") != 0) {
+    //
+    // The full path, not "Game.rb". rb_load searches $LOAD_PATH for a
+    // bare name, and the current folder has not been on $LOAD_PATH since
+    // Ruby 1.9.2.
+    if (loadRubyFile(std::string(gameDir) + "/Game.rb") != 0) {
         return PSDK_GAME_RAISED;
     }
     return PSDK_OK;

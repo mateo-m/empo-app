@@ -19,6 +19,7 @@ enum PsdkResult {
     PSDK_CHDIR_FAILED = -3,
     PSDK_PRELUDE_RAISED = -4,
     PSDK_GAME_RAISED = -5,
+    PSDK_SUPPORT_MISSING = -6,
 };
 
 // Runs the game in gameDir and returns when it stops.
@@ -28,13 +29,23 @@ enum PsdkResult {
 // calls to the main thread with dispatch_sync, so the main thread has
 // to stay free to answer them.
 //
+// argc and argv come straight from main. Ruby keeps them and reads
+// argv[0] later for its own paths, so a caller that passes 0 and null
+// leaves Ruby to fall back on whatever it can find.
+//
+// supportDir names the core's Ruby support folder, which the
+// `psdk-support` make target builds. The core prepends it to $LOAD_PATH
+// and points the GAMEDEPS variable at it. PSDK reads GAMEDEPS to find
+// its native extensions.
+//
 // preludePath, when it is not null, names a Ruby file that runs after
 // LiteRGSS registers its classes and before Game.rb. Per-game
 // compatibility code belongs there, not in this core.
 //
 // Returns PSDK_OK when the game stopped on its own, or a negative
 // PsdkResult.
-int psdk_run(const char *gameDir, const char *preludePath);
+int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
+             const char *preludePath);
 
 // Presses or releases one SFML scancode. Call from any thread.
 void psdk_inject_scancode(int scancode, int pressed);
