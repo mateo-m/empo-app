@@ -460,11 +460,17 @@ $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 # extlibs/libs-ios prebuilts. Those are device-only fat archives and
 # fail to link for the simulator. With it on, SFML finds the freetype,
 # vorbis and FLAC we built for this SDK under $(BUILD_PREFIX).
-sfml: init_dirs freetype libogg libvorbis libflac $(LIBDIR)/libsfml-system-s.a
-
-$(LIBDIR)/libsfml-system-s.a: $(LIBDIR)/libfreetype.a $(LIBDIR)/libogg.a $(LIBDIR)/libvorbis.a $(LIBDIR)/libFLAC.a $(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile
+# `sfml` runs the build step every time instead of stopping at a
+# timestamp. An edit inside sources/sfml would otherwise leave a stale
+# archive in place, because the archive's only prerequisite is the
+# generated cmake Makefile. cmake itself decides what to recompile, so a
+# no-change run costs about a second.
+sfml: init_dirs freetype libogg libvorbis libflac $(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile
 	cd $(SOURCES)/sfml/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
+
+$(LIBDIR)/libsfml-system-s.a:
+	$(MAKE) -f $(SDK).make sfml
 
 $(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sfml/CMakeLists.txt
 	cd $(SOURCES)/sfml; \
@@ -489,11 +495,12 @@ $(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sfml/CMakeLists.txt
 # gets built. Upstream ships no install() rule, so the archive and the
 # headers are copied by hand.
 #
-# PhysFS stays off here. Empo already builds its own libphysfs.a, and
-# LiteCGSS's bundled FetchContent points at a dead hg.icculus.org URL.
-litecgss: init_dirs sfml $(LIBDIR)/libLiteCGSS_engine.a
-
-$(LIBDIR)/libLiteCGSS_engine.a: $(LIBDIR)/libsfml-system-s.a $(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile $(SOURCES)/litecgss/external/skalog/CMakeLists.txt
+# PhysFS stays off. A released PSDK game reads its assets through
+# Yuki::VD volumes in Data/*.dat, not through PhysFS, and LiteCGSS's
+# bundled FetchContent for it points at a dead hg.icculus.org URL.
+#
+# Runs its build step every time, for the reason given above `sfml`.
+litecgss: init_dirs sfml $(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile $(SOURCES)/litecgss/external/skalog/CMakeLists.txt
 	cd $(SOURCES)/litecgss/$(CMAKE_BUILDDIR); \
 	cmake --build . --target LiteCGSS_engine --parallel $(NPROC); \
 	cp lib/libLiteCGSS_engine.a $(LIBDIR)/; \
@@ -505,6 +512,9 @@ $(LIBDIR)/libLiteCGSS_engine.a: $(LIBDIR)/libsfml-system-s.a $(SOURCES)/litecgss
 	cp $(SOURCES)/litecgss/external/lodepng/lodepng.h $(INCLUDEDIR)/lodepng/; \
 	cp $(SOURCES)/litecgss/external/libnsgif/*.h $(SOURCES)/litecgss/external/libnsgif/*.hpp $(INCLUDEDIR)/libnsgif/
 
+$(LIBDIR)/libLiteCGSS_engine.a:
+	$(MAKE) -f $(SDK).make litecgss
+
 $(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/litecgss/CMakeLists.txt
 	cd $(SOURCES)/litecgss; \
 	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
@@ -512,8 +522,7 @@ $(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/litecgss/CMakeLists.t
 	-DBUILD_SHARED_LIBS=OFF \
 	-DSFML_STATIC_LIBRARIES=TRUE \
 	-DLITECGSS_NO_TEST=ON \
-	-DSKALOG_NO_TEST=ON \
-	-DCGSS_WINDOW_PRESERVATION=OFF
+	-DSKALOG_NO_TEST=ON
 
 $(SOURCES)/litecgss/external/skalog/CMakeLists.txt:
 	cd $(SOURCES)/litecgss; \
@@ -713,16 +722,84 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	    $(PSDK_OBJDIR)/*.o \
 	    -o $(LIBDIR)/litergss30-merged.o
 	@echo "[psdk] Verifying the merged object..."
-	@EXPORTED=$$(nm -g $(LIBDIR)/litergss30-merged.o | awk '$$2 == "T" {print $$3}' | sort -u); \
+	@# The merged object also carries a few dozen weak definitions from
+	@# C++ templates and inline functions, which ld marks "weak external
+	@# automatically hidden". Repeating those across merged objects is
+	@# safe, so the check reads plain external text symbols only. Same
+	@# rule as $(ENGINE)/tools/build-binding-ios.sh.
+	@EXPORTED=$$(nm -gUm $(LIBDIR)/litergss30-merged.o \
+	    | grep -E '\(__TEXT,__text\) external ' \
+	    | awk '{print $$NF}' | sort -u); \
 	echo "$$EXPORTED" | sed 's/^/  /'; \
-	[ "$$(echo "$$EXPORTED" | wc -l | tr -d ' ')" = "2" ] || { \
-	    echo "ERROR: litergss30-merged.o must export exactly psdk_run and psdk_inject_scancode"; \
+	[ "$$(echo "$$EXPORTED" | tr '\n' ' ')" = "_psdk_inject_scancode _psdk_run " ] || { \
+	    echo "ERROR: litergss30-merged.o must export exactly _psdk_run and _psdk_inject_scancode"; \
 	    rm -f $(LIBDIR)/litergss30-merged.o; \
 	    exit 1; \
 	}
 
+# The Ruby support folder the PSDK core needs at run time. The host
+# copies it into the app, and the core both prepends it to $LOAD_PATH and
+# points the GAMEDEPS variable at it (psdk_core.cpp).
+#
+# Two things live in it.
+#
+# 1. The pure-Ruby half of the stdlib a released PSDK game requires. A
+#    Windows release ships the same files under lib/ruby/3.0.0, but the
+#    core carries its own copy for two reasons. A macOS release ships
+#    none of them, and the openssl half has to come from the same gem as
+#    the C half. The ruby30 recipe replaces ext/openssl with Ruby 3.1's
+#    openssl 3.0.1, because openssl 2.2.2 refuses to build against
+#    OpenSSL 3. GameLoader/3_load_extensions.rb names the top of the
+#    list, and the rest is its transitive closure.
+#
+# 2. ruby-dist/lib/LiteRGSS.rb, an empty file. PSDK loads its native
+#    extension with `require File.join(PSDK_LIB_PATH, 'LiteRGSS')`,
+#    where PSDK_LIB_PATH is "#{ENV['GAMEDEPS']}/ruby-dist/lib" on macOS.
+#    The classes are already in the binary, so the file only has to
+#    exist for the require to succeed. The core owns GAMEDEPS, so the
+#    path PSDK builds always lands here.
+PSDK_SUPPORT_DIR := $(BUILD_PREFIX)/psdk-support
+
+# A live run of Edelweiss Chronicles loaded the first two lines. The
+# third line is what files in the folder require but that run never
+# reached, mostly through net/http and tempfile. The run covered boot,
+# the intro and the title menu, so it did not exercise saving or
+# networking.
+PSDK_SUPPORT_LIB := uri.rb uri net csv.rb csv yaml.rb \
+	ostruct.rb forwardable.rb forwardable English.rb timeout.rb ipaddr.rb \
+	securerandom.rb set.rb tsort.rb singleton.rb time.rb delegate.rb \
+	tmpdir.rb tempfile.rb fileutils.rb
+
+PSDK_SUPPORT_EXT := socket digest openssl date json psych
+
+psdk-support: init_dirs
+	rm -rf $(PSDK_SUPPORT_DIR)
+	mkdir -p $(PSDK_SUPPORT_DIR)/ruby-dist/lib
+	touch $(PSDK_SUPPORT_DIR)/ruby-dist/lib/LiteRGSS.rb
+	@for item in $(PSDK_SUPPORT_LIB); do \
+		cp -R $(SOURCES)/ruby30/lib/$$item $(PSDK_SUPPORT_DIR)/ || exit 1; \
+	done
+	@for ext in $(PSDK_SUPPORT_EXT); do \
+		cp -R $(SOURCES)/ruby30/ext/$$ext/lib/ $(PSDK_SUPPORT_DIR)/ || exit 1; \
+	done
+	@find $(PSDK_SUPPORT_DIR) -name "*.gemspec" -delete
+	@# Same warning-only audit as the mkxp ruby-stdlib target. A require
+	@# that resolves to neither a shipped file nor a linked C extension
+	@# is a gap. Conditional requires make a hard failure too noisy.
+	@grep -rhoE "^[[:space:]]*require ['\"][a-z0-9_/.-]+['\"]" $(PSDK_SUPPORT_DIR) 2>/dev/null \
+	  | sed -E "s/^[[:space:]]*require ['\"]([^'\"]+)['\"]/\1/" | sort -u \
+	  | while read -r feat; do \
+		base=$${feat%.rb}; \
+		[ -f "$(PSDK_SUPPORT_DIR)/$$base.rb" ] && continue; \
+		[ -d "$(PSDK_SUPPORT_DIR)/$$base" ] && continue; \
+		nm -gU $(LIBDIR)/libruby.3.0-ext.a $(LIBDIR)/libruby.3.0-static.a 2>/dev/null \
+		  | grep -q " T _Init_$$(basename $${base%.so})$$" && continue; \
+		echo "  [psdk-support audit] unresolved require: $$feat"; \
+	done; true
+	@echo "psdk-support installed under $(PSDK_SUPPORT_DIR)"
+
 # The whole PSDK core.
-psdk: init_dirs sfml litecgss ruby30 litergss30-merged
+psdk: init_dirs sfml litecgss ruby30 litergss30-merged psdk-support
 
 
 # Ruby 3.1 (submodule: sources/ruby)
