@@ -1,0 +1,234 @@
+--- a/compile.c
++++ b/compile.c
+@@ -9966,6 +9966,8 @@
+     rb_iseq_t *iseq;
+     VALUE str;
+     struct ibf_load_buffer *current_buffer;
++    int foreign32;          /* binary comes from a 32-bit x86 Ruby */
++    unsigned int dbl_align; /* alignment of double in that Ruby */
+ };
+ 
+ struct pinned_list {
+@@ -10286,7 +10288,22 @@
+     }
+ 
+     *offset += n;
++    if (load->foreign32) x = (VALUE)(SIGNED_VALUE)(int32_t)(uint32_t)x;
+     return x;
++}
++
++static VALUE
++ibf_foreign32_special_const(VALUE v)
++{
++    /* 32-bit Ruby has no flonum: Qfalse=0 Qtrue=2 Qnil=4 Qundef=6 */
++    if (v & 1) return v; /* fixnum, already sign-extended */
++    switch (v) {
++      case 0: return Qfalse;
++      case 2: return Qtrue;
++      case 4: return Qnil;
++      case 6: return Qundef;
++    }
++    rb_raise(rb_eRuntimeError, "unknown 32-bit special constant: %"PRIxVALUE, v);
+ }
+ 
+ static void
+@@ -10501,6 +10518,15 @@
+ {
+     if (opt_num > 0) {
+         VALUE *table = ALLOC_N(VALUE, opt_num+1);
++        if (load->foreign32) {
++            int i;
++            for (i = 0; i < opt_num+1; i++) {
++                uint32_t v;
++                memcpy(&v, load->current_buffer->buff + opt_table_offset + i * 4, 4);
++                table[i] = (VALUE)v;
++            }
++            return table;
++        }
+         MEMCPY(table, load->current_buffer->buff + opt_table_offset, VALUE, opt_num+1);
+         return table;
+     }
+@@ -10537,7 +10563,36 @@
+ static const struct rb_iseq_param_keyword *
+ ibf_load_param_keyword(const struct ibf_load *load, ibf_offset_t param_keyword_offset)
+ {
+-    if (param_keyword_offset) {
++    if (param_keyword_offset && load->foreign32) {
++        struct { int num, required_num, bits_start, rest_start; uint32_t table, default_values; } fkw;
++        struct rb_iseq_param_keyword *kw = ZALLOC(struct rb_iseq_param_keyword);
++        int i, dv_num;
++        ID *ids;
++        VALUE *dvs;
++
++        memcpy(&fkw, load->current_buffer->buff + param_keyword_offset, sizeof(fkw));
++        kw->num = fkw.num;
++        kw->required_num = fkw.required_num;
++        kw->bits_start = fkw.bits_start;
++        kw->rest_start = fkw.rest_start;
++        dv_num = kw->num - kw->required_num;
++        ids = kw->num > 0 ? ALLOC_N(ID, kw->num) : NULL;
++        dvs = dv_num > 0 ? ALLOC_N(VALUE, dv_num) : NULL;
++        for (i=0; i<kw->num; i++) {
++            uint32_t v;
++            memcpy(&v, load->current_buffer->buff + fkw.table + i * 4, 4);
++            ids[i] = ibf_load_id(load, (ID)v);
++        }
++        for (i=0; i<dv_num; i++) {
++            uint32_t v;
++            memcpy(&v, load->current_buffer->buff + fkw.default_values + i * 4, 4);
++            dvs[i] = ibf_load_object(load, (VALUE)v);
++        }
++        kw->table = ids;
++        kw->default_values = dvs;
++        return kw;
++    }
++    else if (param_keyword_offset) {
+         struct rb_iseq_param_keyword *kw = IBF_R(param_keyword_offset, struct rb_iseq_param_keyword, 1);
+         ID *ids = IBF_R(kw->table, ID, kw->num);
+         int dv_num = kw->num - kw->required_num;
+@@ -10640,7 +10695,18 @@
+ static ID *
+ ibf_load_local_table(const struct ibf_load *load, ibf_offset_t local_table_offset, int size)
+ {
+-    if (size > 0) {
++    if (size > 0 && load->foreign32) {
++        ID *table = ALLOC_N(ID, size);
++        int i;
++
++        for (i=0; i<size; i++) {
++            uint32_t v;
++            memcpy(&v, load->current_buffer->buff + local_table_offset + i * 4, 4);
++            table[i] = ibf_load_id(load, (ID)v);
++        }
++        return table;
++    }
++    else if (size > 0) {
+         ID *table = IBF_R(local_table_offset, ID, size);
+         int i;
+ 
+@@ -11264,7 +11330,20 @@
+     ((((offset) - 1) / (align) + 1) * (align))
+ #define IBF_OBJBODY(type, offset) (const type *)\
+     ibf_load_check_offset(load, IBF_ALIGNED_OFFSET(RUBY_ALIGNOF(type), offset))
++
++#define IBF_FOREIGN32_BODY(align, offset) \
++    ((const char *)ibf_load_check_offset(load, IBF_ALIGNED_OFFSET((align), offset)))
++
++static const void *ibf_load_check_offset(const struct ibf_load *load, size_t offset);
+ 
++static int32_t
++ibf_foreign32_long(const char *body, int index)
++{
++    int32_t v;
++    memcpy(&v, body + index * 4, 4);
++    return v;
++}
++
+ static const void *
+ ibf_load_check_offset(const struct ibf_load *load, size_t offset)
+ {
+@@ -11352,6 +11431,11 @@
+ static VALUE
+ ibf_load_object_float(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
+ {
++    if (load->foreign32) {
++        double d;
++        memcpy(&d, IBF_FOREIGN32_BODY(load->dbl_align, offset), sizeof(d));
++        return DBL2NUM(d);
++    }
+     const double *dblp = IBF_OBJBODY(double, offset);
+     return DBL2NUM(*dblp);
+ }
+@@ -11528,6 +11612,15 @@
+ static VALUE
+ ibf_load_object_struct(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
+ {
++    if (load->foreign32) {
++        const char *body = IBF_FOREIGN32_BODY(4, offset);
++        VALUE fbeg = ibf_load_object(load, (VALUE)ibf_foreign32_long(body, 2));
++        VALUE fend = ibf_load_object(load, (VALUE)ibf_foreign32_long(body, 3));
++        VALUE fobj = rb_range_new(fbeg, fend, ibf_foreign32_long(body, 4));
++        if (header->internal) rb_obj_hide(fobj);
++        if (header->frozen)   rb_obj_freeze(fobj);
++        return fobj;
++    }
+     const struct ibf_object_struct_range *range = IBF_OBJBODY(struct ibf_object_struct_range, offset);
+     VALUE beg = ibf_load_object(load, range->beg);
+     VALUE end = ibf_load_object(load, range->end);
+@@ -11551,6 +11644,17 @@
+ static VALUE
+ ibf_load_object_bignum(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
+ {
++    if (load->foreign32) {
++        const char *body = IBF_FOREIGN32_BODY(4, offset);
++        int32_t fslen = ibf_foreign32_long(body, 0);
++        size_t flen = fslen > 0 ? fslen : -fslen;
++        VALUE fobj = rb_integer_unpack(body + 4, flen, 4, 0,
++                                       INTEGER_PACK_LSWORD_FIRST | INTEGER_PACK_LITTLE_ENDIAN |
++                                       (fslen > 0 ? 0 : INTEGER_PACK_NEGATIVE));
++        if (header->internal) rb_obj_hide(fobj);
++        if (header->frozen)   rb_obj_freeze(fobj);
++        return fobj;
++    }
+     const struct ibf_object_bignum *bignum = IBF_OBJBODY(struct ibf_object_bignum, offset);
+     int sign = bignum->slen > 0;
+     ssize_t len = sign > 0 ? bignum->slen : -1 * bignum->slen;
+@@ -11582,6 +11686,13 @@
+ static VALUE
+ ibf_load_object_data(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
+ {
++    if (load->foreign32) {
++        const char *fbody = IBF_FOREIGN32_BODY(4, offset);
++        if (ibf_foreign32_long(fbody, 0) == IBF_OBJECT_DATA_ENCODING) {
++            return rb_enc_from_encoding(rb_enc_find(fbody + 8));
++        }
++        return ibf_load_object_unsupported(load, header, offset);
++    }
+     const long *body = IBF_OBJBODY(long, offset);
+     const enum ibf_object_data_type type = (enum ibf_object_data_type)body[0];
+     /* const long len = body[1]; */
+@@ -11611,7 +11722,17 @@
+ static VALUE
+ ibf_load_object_complex_rational(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
+ {
+-    const struct ibf_object_complex_rational *nums = IBF_OBJBODY(struct ibf_object_complex_rational, offset);
++    struct ibf_object_complex_rational fnums;
++    const struct ibf_object_complex_rational *nums;
++    if (load->foreign32) {
++        const char *body = IBF_FOREIGN32_BODY(4, offset);
++        fnums.a = ibf_foreign32_long(body, 0);
++        fnums.b = ibf_foreign32_long(body, 1);
++        nums = &fnums;
++    }
++    else {
++        nums = IBF_OBJBODY(struct ibf_object_complex_rational, offset);
++    }
+     VALUE a = ibf_load_object(load, nums->a);
+     VALUE b = ibf_load_object(load, nums->b);
+     VALUE obj = header->type == T_COMPLEX ?
+@@ -11796,6 +11917,7 @@
+                 ibf_offset_t reading_pos = offset;
+ 
+                 obj = ibf_load_small_value(load, &reading_pos);
++                if (load->foreign32) obj = ibf_foreign32_special_const(obj);
+             }
+             else {
+                 obj = (*load_object_functions[header.type])(load, &header, offset);
+@@ -12076,8 +12198,16 @@
+ 	rb_raise(rb_eRuntimeError, "unmatched version file (%u.%u for %u.%u)",
+ 		 load->header->major_version, load->header->minor_version, IBF_MAJOR_VERSION, IBF_MINOR_VERSION);
+     }
++    load->foreign32 = 0;
++    load->dbl_align = RUBY_ALIGNOF(double);
+     if (strcmp(load->global_buffer.buff + sizeof(struct ibf_header), RUBY_PLATFORM) != 0) {
+-	rb_raise(rb_eRuntimeError, "unmatched platform");
++        const char *platform = load->global_buffer.buff + sizeof(struct ibf_header);
++        if (strncmp(platform, "i386-", 5) != 0 && strncmp(platform, "i686-", 5) != 0) {
++            rb_raise(rb_eRuntimeError, "unmatched platform");
++        }
++        load->foreign32 = 1;
++        /* The Windows i386 ABI aligns double to 8 bytes, the System V i386 ABI to 4. */
++        load->dbl_align = strstr(platform, "mingw") || strstr(platform, "mswin") ? 8 : 4;
+     }
+     if (load->header->iseq_list_offset % RUBY_ALIGNOF(ibf_offset_t)) {
+         rb_raise(rb_eArgError, "unaligned iseq list offset: %u",
