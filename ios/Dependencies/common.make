@@ -521,17 +521,29 @@ litecgss: init_dirs sfml $(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile $(SOURCE
 	rm -rf $(INCLUDEDIR)/LiteCGSS $(INCLUDEDIR)/Logging; \
 	cp -R $(SOURCES)/litecgss/src/src/LiteCGSS $(INCLUDEDIR)/LiteCGSS; \
 	cp -R $(SOURCES)/litecgss/external/skalog/src/src/Logging $(INCLUDEDIR)/Logging; \
-	mkdir -p $(INCLUDEDIR)/lodepng $(INCLUDEDIR)/libnsgif; \
-	cp $(SOURCES)/litecgss/external/lodepng/lodepng.h $(INCLUDEDIR)/lodepng/; \
-	cp $(SOURCES)/litecgss/external/libnsgif/*.h $(SOURCES)/litecgss/external/libnsgif/*.hpp $(INCLUDEDIR)/libnsgif/
+	mkdir -p $(INCLUDEDIR)/lodepng; \
+	cp $(SOURCES)/litecgss/external/lodepng/lodepng.h $(INCLUDEDIR)/lodepng/
+	@BAD=$$(nm -gUm $(LIBDIR)/libLiteCGSS_engine.a \
+	    | grep -E '\(__TEXT,__text\) external _(gif|lzw)_' \
+	    | awk '{print $$NF}' | sort -u); \
+	[ -z "$$BAD" ] || { \
+	    echo "ERROR: libLiteCGSS_engine.a exports unprefixed libnsgif names: $$BAD"; \
+	    echo "       add them to psdk/nsgif_prefix.h"; \
+	    rm -f $(LIBDIR)/libLiteCGSS_engine.a; exit 1; }
 
 $(LIBDIR)/libLiteCGSS_engine.a:
 	$(MAKE) -f $(SDK).make litecgss
 
-$(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/litecgss/CMakeLists.txt
+# CMAKE_C_FLAGS and CMAKE_CXX_FLAGS are cached, so a changed prefix
+# header only takes effect after the build dir goes. The C++ flag is
+# needed as well: YukiGif.cpp is the only caller of the gif_ names.
+$(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/litecgss/CMakeLists.txt ${PWD}/psdk/nsgif_prefix.h
 	cd $(SOURCES)/litecgss; \
+	rm -rf $(CMAKE_BUILDDIR); \
 	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) \
+	-DCMAKE_C_FLAGS="$(CFLAGS) -include ${PWD}/psdk/nsgif_prefix.h" \
+	-DCMAKE_CXX_FLAGS="$(CXXFLAGS) -include ${PWD}/psdk/nsgif_prefix.h" \
 	-DBUILD_SHARED_LIBS=OFF \
 	-DSFML_STATIC_LIBRARIES=TRUE \
 	-DLITECGSS_NO_TEST=ON \
