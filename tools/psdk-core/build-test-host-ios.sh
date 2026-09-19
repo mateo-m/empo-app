@@ -61,13 +61,10 @@ echo "[psdk-host] Compiling the host..."
     -c "$HERE/host.m" -o "$OBJ/host.o"
 
 echo "[psdk-host] Linking..."
-# The framework carries its own link set, so the host names two symbols
-# and nothing else. -rpath is needed because the framework's install name
-# is @rpath/PsdkCore.framework/PsdkCore.
+# The host does not link the core. It opens the framework with dlopen at
+# run time, so nothing here names PsdkCore.
 "$CC" -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
     -mios-simulator-version-min="$MIN_OS" \
-    -F"$TREE" -framework PsdkCore \
-    -Wl,-rpath,@executable_path/Frameworks \
     -o "$APP/PsdkTests" \
     "$OBJ/host.o" \
     -framework Foundation -framework UIKit

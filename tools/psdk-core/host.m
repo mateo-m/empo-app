@@ -16,8 +16,11 @@
 //
 //   PSDK_GAME      the game folder, relative to Documents.
 //                  "Game" by default.
-// The core's Ruby support folder ships inside PsdkCore.framework, so the
-// host reads it from Frameworks/PsdkCore.framework/PsdkSupport.
+// The host does not link the core. It opens
+// Frameworks/PsdkCore.framework/PsdkCore with dlopen when the game
+// starts, and reads the Ruby support folder from the same bundle. Empo
+// does the same on the game the user picks, so the test host and the
+// launcher take one path.
 //
 //   PSDK_KEYS      key presses to inject. scheduleKeys gives the format.
 //
@@ -31,12 +34,18 @@
 //   PSDK_ROTATE    the second at which to run the rotation test.
 //                  scheduleRotation says what it does and does not do.
 
+#include <dlfcn.h>
 #include <pthread.h>
 #include <stdlib.h>
 
 #import <UIKit/UIKit.h>
 
 #include "psdk_core.h"
+
+// RTLD_LOCAL keeps the core's names out of the global namespace, so a
+// second core opened later cannot bind to them.
+static int (*gPsdkRun)(int, char **, const char *, const char *, const char *);
+static void (*gPsdkInjectScancode)(int, int);
 
 // Ruby's parser and the PSDK boot scripts recurse deeply. The default
 // 512 KB worker stack overflows. mkxp-z gives its RGSS thread the same
@@ -51,7 +60,7 @@ static char **gArgv;
 
 static void *runGame(void *unused) {
     (void)unused;
-    int result = psdk_run(gArgc, gArgv, gGamePath, gSupportPath, gPreludePath);
+    int result = gPsdkRun(gArgc, gArgv, gGamePath, gSupportPath, gPreludePath);
     fprintf(stderr, "[host] psdk_run returned %d\n", result);
     // The bundle holds no interface to go back to, and the run loop
     // would keep the process alive forever. Leave with the core's
@@ -82,10 +91,10 @@ static void scheduleKeys(const char *spec) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(when * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             fprintf(stderr, "[host] key down %d at %.1fs\n", scancode, when);
-            psdk_inject_scancode(scancode, 1);
+            gPsdkInjectScancode(scancode, 1);
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
-                psdk_inject_scancode(scancode, 0);
+                gPsdkInjectScancode(scancode, 0);
             });
         });
     }
@@ -162,13 +171,28 @@ static void scheduleRotation(const char *spec) {
     }
     gGamePath = strdup(game.fileSystemRepresentation);
 
-    NSString *support = [NSBundle.mainBundle.privateFrameworksPath
-        stringByAppendingPathComponent:@"PsdkCore.framework/PsdkSupport"];
+    NSString *core = [NSBundle.mainBundle.privateFrameworksPath
+        stringByAppendingPathComponent:@"PsdkCore.framework"];
+    NSString *support = [core stringByAppendingPathComponent:@"PsdkSupport"];
     if (![NSFileManager.defaultManager fileExistsAtPath:support]) {
         fprintf(stderr, "[host] no support folder at %s\n", support.UTF8String);
         exit(4);
     }
     gSupportPath = strdup(support.fileSystemRepresentation);
+
+    void *image = dlopen([core stringByAppendingPathComponent:@"PsdkCore"]
+                             .fileSystemRepresentation,
+                         RTLD_NOW | RTLD_LOCAL);
+    if (!image) {
+        fprintf(stderr, "[host] cannot open the core: %s\n", dlerror());
+        exit(5);
+    }
+    gPsdkRun = dlsym(image, "psdk_run");
+    gPsdkInjectScancode = dlsym(image, "psdk_inject_scancode");
+    if (!gPsdkRun || !gPsdkInjectScancode) {
+        fprintf(stderr, "[host] the core is missing psdk_run or psdk_inject_scancode\n");
+        exit(6);
+    }
 
     const char *wantPrelude = getenv("PSDK_PRELUDE");
     NSString *prelude = (wantPrelude && !*wantPrelude)
