@@ -1,10 +1,13 @@
 // PSDK core: the boundary between a host app and a released Pokemon SDK
 // game running on LiteRGSS2, LiteCGSS, SFML and Ruby 3.0.
 //
-// Everything below is the whole interface. The core links as one
-// relocatable object, `litergss30-merged.o`, which hides every Ruby and
-// LiteRGSS symbol so it cannot clash with the mkxp-z engine's three
-// Rubys in the same binary.
+// Everything below is the whole interface. The core ships as
+// PsdkCore.framework, one dynamic image per SDK, and that image
+// boundary is what keeps its Ruby 3.0 and its LiteRGSS classes away
+// from the mkxp-z engine. Do not link litergss30-merged.o into a binary
+// that holds mkxp-z: `ld -r` cannot demote a common symbol or a
+// coalesced weak definition, so the merged object still shares 212 Ruby
+// and openssl slots and its ViewportElement vtable with that engine.
 #ifndef PSDK_CORE_H
 #define PSDK_CORE_H
 

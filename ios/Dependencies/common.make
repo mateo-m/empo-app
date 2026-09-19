@@ -678,10 +678,10 @@ $(SOURCES)/ruby30/configure: $(SOURCES)/ruby30/configure.ac $(SOURCES)/ruby/ext/
 # (submodule: sources/litergss2).
 #
 # Same pattern as the mkxp{18,19,31}-merged objects: `ld -r` with an
-# unexport list demotes every Ruby and LiteRGSS symbol to local, so the
-# PSDK core's Ruby 3.0 cannot clash with the engine's 1.8, 1.9 and 3.1
-# in the same binary. The merged object exports two names, psdk_run and
-# psdk_inject_scancode.
+# unexport list demotes the Ruby text and data symbols to local. It
+# leaves 212 Ruby and openssl commons external and every LiteRGSS vtable
+# weak, so this object is an input to the PsdkCore.framework link
+# (tools/psdk-core/build-framework-ios.sh), not a boundary of its own.
 #
 # LiteCGSS, skalog and the SFML archives stay out of the merge. They
 # link separately, the same way SDL2 and libpng do not merge into
@@ -732,14 +732,13 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	    $(LIBDIR)/libruby.3.0-static.a $(LIBDIR)/libruby.3.0-ext.a \
 	    $(LIBDIR)/libssl.a $(LIBDIR)/libcrypto.a \
 	    > $(BUILD_PREFIX)/litergss30-unexports.txt.raw
-	@# Every C++ typeinfo, typeinfo name and vtable in the LiteRGSS
-	@# objects gets hidden too. LiteRGSS and mkxp-z both declare a
-	@# `ViewportElement` and a `RectangleElement` at global scope, and
-	@# the two mangle to the same vtable symbols. With both visible the
-	@# linker picks one winner for the whole binary, and a LiteRGSS
-	@# Viewport then dispatches through mkxp's vtable and calls a pure
-	@# virtual. The `__cxa_*` helpers stay exported so libc++ resolves
-	@# them once.
+	@# LiteRGSS and mkxp-z both declare a `ViewportElement` and a
+	@# `RectangleElement` at global scope, and the two mangle to the
+	@# same vtable symbols. Naming them here only marks them "weak
+	@# external automatically hidden", which still loses to mkxp-z's
+	@# strong definition at a final link. The framework's export list
+	@# is what makes them local. The `__cxa_*` helpers stay exported so
+	@# libc++ resolves them once.
 	@nm -gU $(PSDK_OBJDIR)/*.o 2>/dev/null \
 	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
 	    | sort -u \
@@ -762,11 +761,10 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	    $(PSDK_OBJDIR)/*.o \
 	    -o $(LIBDIR)/litergss30-merged.o
 	@echo "[psdk] Verifying the merged object..."
-	@# The merged object also carries a few dozen weak definitions from
-	@# C++ templates and inline functions, which ld marks "weak external
-	@# automatically hidden". Repeating those across merged objects is
-	@# safe, so the check reads plain external text symbols only. Same
-	@# rule as $(ENGINE)/tools/build-binding-ios.sh.
+	@# The check reads plain external text symbols only, the same rule
+	@# as $(ENGINE)/tools/build-binding-ios.sh. It sees neither the 212
+	@# external commons nor the weak definitions, so it does not prove
+	@# this object is safe to link next to mkxp-z. Nothing does.
 	@EXPORTED=$$(nm -gUm $(LIBDIR)/litergss30-merged.o \
 	    | grep -E '\(__TEXT,__text\) external ' \
 	    | awk '{print $$NF}' | sort -u); \
@@ -843,7 +841,12 @@ psdk-support: init_dirs
 	@echo "psdk-support installed under $(PSDK_SUPPORT_DIR)"
 
 # The whole PSDK core.
-psdk: init_dirs sfml litecgss ruby30 litergss30-merged psdk-support
+psdk: init_dirs sfml litecgss ruby30 litergss30-merged psdk-support psdk-framework
+
+# The artifact a launcher embeds. The link line lives in the script,
+# next to the test host's, because the two must stay the same.
+psdk-framework: litergss30-merged psdk-support
+	${PWD}/../../tools/psdk-core/build-framework-ios.sh --sdk $(SDK)
 
 
 # Ruby 3.1 (submodule: sources/ruby)

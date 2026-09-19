@@ -16,8 +16,8 @@
 //
 //   PSDK_GAME      the game folder, relative to Documents.
 //                  "Game" by default.
-// The core's Ruby support folder comes from PsdkTests.app/PsdkSupport,
-// which the build script copies out of the psdk-support make target.
+// The core's Ruby support folder ships inside PsdkCore.framework, so the
+// host reads it from Frameworks/PsdkCore.framework/PsdkSupport.
 //
 //   PSDK_KEYS      key presses to inject. scheduleKeys gives the format.
 //
@@ -162,8 +162,8 @@ static void scheduleRotation(const char *spec) {
     }
     gGamePath = strdup(game.fileSystemRepresentation);
 
-    NSString *support = [NSBundle.mainBundle.resourcePath
-        stringByAppendingPathComponent:@"PsdkSupport"];
+    NSString *support = [NSBundle.mainBundle.privateFrameworksPath
+        stringByAppendingPathComponent:@"PsdkCore.framework/PsdkSupport"];
     if (![NSFileManager.defaultManager fileExistsAtPath:support]) {
         fprintf(stderr, "[host] no support folder at %s\n", support.UTF8String);
         exit(4);

@@ -108,6 +108,11 @@ for f in ruby-dist/lib/LiteRGSS.rb ruby-dist/lib/SFMLAudio.rb uri.rb net/http.rb
         fail "psdk-support/$f missing (run: make -f ${PLATFORM}.make psdk-support)"
 done
 
+# PsdkCore.framework is the artifact a launcher embeds, and its export
+# list is what keeps the core's Ruby 3.0 and its LiteRGSS classes away
+# from the mkxp-z engine. litergss30-merged.o does not do that job.
+PLATFORM_NAME="$PLATFORM" "$REPO_ROOT/scripts/check-psdk-framework.sh" --sdk "$PLATFORM"
+
 for tree in 3.1.0/net/http.rb 3.1.0/openssl.rb 1.9.1/uri.rb 1.8/uri.rb; do
     [ -f "$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/ruby-stdlib/$tree" ] ||
         fail "ruby-stdlib/$tree missing (run: make -f ${PLATFORM}.make ruby-stdlib)"

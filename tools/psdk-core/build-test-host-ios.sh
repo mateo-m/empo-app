@@ -12,6 +12,7 @@
 #
 # Prerequisite:
 #   cd ios/Dependencies && make -f iphonesimulator.make psdk
+#   tools/psdk-core/build-framework-ios.sh --sdk iphonesimulator
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -37,16 +38,9 @@ while [ "$#" -gt 0 ]; do
 done
 
 TREE="$DEPS/build-$SDK-$ARCH"
-ANGLE="$DEPS/ANGLE/$SDK"
 
-if [ ! -f "$TREE/lib/litergss30-merged.o" ]; then
-    echo "build-test-host-ios: litergss30-merged.o missing." >&2
-    echo "Run: cd ios/Dependencies && make -f $SDK.make psdk" >&2
-    exit 1
-fi
-
-if [ ! -d "$TREE/psdk-support" ]; then
-    echo "build-test-host-ios: psdk-support missing." >&2
+if [ ! -d "$TREE/PsdkCore.framework" ]; then
+    echo "build-test-host-ios: PsdkCore.framework missing." >&2
     echo "Run: cd ios/Dependencies && make -f $SDK.make psdk" >&2
     exit 1
 fi
@@ -55,9 +49,6 @@ APP="$OUT/PsdkTests.app"
 OBJ="$OUT/obj"
 SYSROOT="$(xcrun --sdk "$SDK" --show-sdk-path)"
 CC="$(xcrun --sdk "$SDK" -f clang)"
-# The core, LiteCGSS and SFML are C++, so the link driver has to be
-# clang++. It brings in libc++ and the C++ ABI runtime.
-CXX="$(xcrun --sdk "$SDK" -f clang++)"
 TARGET="${ARCH}-apple-ios${MIN_OS}-simulator"
 
 mkdir -p "$OBJ" "$APP"
@@ -70,31 +61,23 @@ echo "[psdk-host] Compiling the host..."
     -c "$HERE/host.m" -o "$OBJ/host.o"
 
 echo "[psdk-host] Linking..."
-"$CXX" -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
+# The framework carries its own link set, so the host names two symbols
+# and nothing else. -rpath is needed because the framework's install name
+# is @rpath/PsdkCore.framework/PsdkCore.
+"$CC" -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
     -mios-simulator-version-min="$MIN_OS" \
-    -L"$TREE/lib" -L"$ANGLE/lib" \
+    -F"$TREE" -framework PsdkCore \
+    -Wl,-rpath,@executable_path/Frameworks \
     -o "$APP/PsdkTests" \
     "$OBJ/host.o" \
-    "$TREE/lib/litergss30-merged.o" \
-    -lLiteCGSS_engine -lskalog \
-    -lsfml-graphics-s -lsfml-window-s -lsfml-audio-s -lsfml-system-s \
-    -lfreetype -lpng16 -logg -lvorbis -lvorbisfile -lvorbisenc -lFLAC \
-    -lz -lbz2 -liconv \
-    -lANGLE_static -lEGL_static -lGLESv2_static \
-    -framework Foundation -framework UIKit -framework CoreFoundation \
-    -framework CoreGraphics -framework CoreVideo -framework CoreAudio \
-    -framework AudioToolbox -framework AVFoundation -framework Metal \
-    -framework QuartzCore -framework GameController -framework CoreMotion \
-    -framework IOSurface -lopenal \
-    -weak_framework CoreBluetooth -weak_framework CoreHaptics \
-    -weak_framework OpenGLES
+    -framework Foundation -framework UIKit
 
 echo "[psdk-host] Assembling the bundle..."
 cp "$HERE/Info.plist" "$APP/Info.plist"
 cp "$HERE/prelude.rb" "$APP/prelude.rb"
-# The core prepends this folder to $LOAD_PATH and points GAMEDEPS at it.
-rm -rf "$APP/PsdkSupport"
-cp -R "$TREE/psdk-support" "$APP/PsdkSupport"
+rm -rf "$APP/Frameworks"
+mkdir -p "$APP/Frameworks"
+cp -R "$TREE/PsdkCore.framework" "$APP/Frameworks/"
 
 # An unsigned bundle installs on some simulator runtimes and not on
 # others. An ad-hoc signature works everywhere and needs no identity.
