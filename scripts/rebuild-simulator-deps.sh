@@ -58,6 +58,9 @@ make -f iphonesimulator.make mkxp-merged
 echo "==> building libmkxpz-core.a"
 make -f iphonesimulator.make mkxp-core
 
+echo "==> building the PSDK core"
+make -f iphonesimulator.make psdk
+
 echo "==> simulator deps rebuild complete"
 PLATFORM_NAME=iphonesimulator "$REPO_ROOT/scripts/verify-native-deps.sh"
 "$REPO_ROOT/scripts/write-deps-manifest.sh" iphonesimulator full "$DEPS_BUILT_AT" none

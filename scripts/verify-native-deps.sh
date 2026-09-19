@@ -79,6 +79,35 @@ for ext in libruby18-ext.a libruby19-ext.a "libruby.3.1-ext.a"; do
 done
 nm "$LIB/libruby.3.1-ext.a" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_openssl" {found=1} END {exit !found}' ||
     fail "libruby.3.1-ext.a missing Init_openssl"
+# The PSDK core. Its merged object must export the two core entry
+# points and nothing else, or a second core would collide with it at
+# link time. The support folder holds the pure-Ruby half the core
+# prepends to $LOAD_PATH.
+PSDK_MERGED="$LIB/litergss30-merged.o"
+require_file_min "$PSDK_MERGED" 1000000 "litergss30-merged.o"
+require_platform "$PSDK_MERGED" "$EXPECTED_PLATFORM" "litergss30-merged.o"
+PSDK_EXPORTS=$(nm -gUm "$PSDK_MERGED" 2>/dev/null |
+    grep -E '\(__TEXT,__text\) external ' | awk '{print $NF}' | sort -u | tr '\n' ' ')
+[ "$PSDK_EXPORTS" = "_psdk_inject_scancode _psdk_run " ] ||
+    fail "litergss30-merged.o must export exactly _psdk_run and _psdk_inject_scancode (got: $PSDK_EXPORTS)"
+for name in libLiteCGSS_engine.a libsfml-graphics-s.a libsfml-window-s.a \
+    libsfml-audio-s.a libsfml-system-s.a libruby.3.0-static.a libruby.3.0-ext.a; do
+    min=100000
+    case "$name" in
+        libsfml-system-s.a) min=50000 ;;
+        libruby.3.0-static.a | libruby.3.0-ext.a) min=1000000 ;;
+    esac
+    require_file_min "$LIB/$name" "$min" "$name"
+    require_platform "$LIB/$name" "$EXPECTED_PLATFORM" "$name"
+done
+nm "$LIB/libruby.3.0-ext.a" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_socket" {found=1} END {exit !found}' ||
+    fail "libruby.3.0-ext.a missing Init_socket"
+PSDK_SUPPORT="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/psdk-support"
+for f in ruby-dist/lib/LiteRGSS.rb uri.rb net/http.rb openssl.rb psych.rb; do
+    [ -f "$PSDK_SUPPORT/$f" ] ||
+        fail "psdk-support/$f missing (run: make -f ${PLATFORM}.make psdk-support)"
+done
+
 for tree in 3.1.0/net/http.rb 3.1.0/openssl.rb 1.9.1/uri.rb 1.8/uri.rb; do
     [ -f "$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/ruby-stdlib/$tree" ] ||
         fail "ruby-stdlib/$tree missing (run: make -f ${PLATFORM}.make ruby-stdlib)"
