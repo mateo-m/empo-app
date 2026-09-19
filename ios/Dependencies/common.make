@@ -460,19 +460,30 @@ $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 # extlibs/libs-ios prebuilts. Those are device-only fat archives and
 # fail to link for the simulator. With it on, SFML finds the freetype,
 # vorbis and FLAC we built for this SDK under $(BUILD_PREFIX).
+#
+# SFML_USE_SYSTEM_DEPS does not cover OpenAL. SFML's FindOpenAL searches
+# the frameworks first, so it picks Apple's OpenAL.framework, and Empo
+# already links openal-soft. Two OpenAL libraries in one binary give the
+# same symbol twice, and which one answers alcOpenDevice is up to the
+# link order. OPENAL_LIBRARY and OPENAL_INCLUDE_DIR are cache entries, so
+# setting them makes find_library and find_path return at once and search
+# nothing. SFML includes <al.h> bare, not <AL/al.h>, so the include
+# directory is the AL folder itself. The fork also guards FindOpenAL's
+# Apple branch on IS_DIRECTORY, because that branch only opens a
+# .framework bundle and used to stop the configure for a plain archive.
 # `sfml` runs the build step every time instead of stopping at a
 # timestamp. An edit inside sources/sfml would otherwise leave a stale
 # archive in place, because the archive's only prerequisite is the
 # generated cmake Makefile. cmake itself decides what to recompile, so a
 # no-change run costs about a second.
-sfml: init_dirs freetype libogg libvorbis libflac $(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile
+sfml: init_dirs freetype libogg libvorbis libflac openal $(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile
 	cd $(SOURCES)/sfml/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
 
 $(LIBDIR)/libsfml-system-s.a:
 	$(MAKE) -f $(SDK).make sfml
 
-$(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sfml/CMakeLists.txt
+$(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sfml/CMakeLists.txt $(LIBDIR)/libopenal.a
 	cd $(SOURCES)/sfml; \
 	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) \
@@ -486,6 +497,8 @@ $(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sfml/CMakeLists.txt
 	-DSFML_BUILD_AUDIO=ON \
 	-DSFML_USE_SYSTEM_DEPS=ON \
 	-DSFML_BUILD_FRAMEWORKS=OFF \
+	-DOPENAL_LIBRARY=$(LIBDIR)/libopenal.a \
+	-DOPENAL_INCLUDE_DIR=$(INCLUDEDIR)/AL \
 	-DSFML_IOS_ANGLE_DIR=${PWD}/ANGLE/$(SDK)
 
 # LiteCGSS (submodule: sources/litecgss).

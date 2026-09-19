@@ -85,7 +85,7 @@ echo "[psdk-host] Linking..."
     -framework CoreGraphics -framework CoreVideo -framework CoreAudio \
     -framework AudioToolbox -framework AVFoundation -framework Metal \
     -framework QuartzCore -framework GameController -framework CoreMotion \
-    -framework IOSurface -framework OpenAL \
+    -framework IOSurface -lopenal \
     -weak_framework CoreBluetooth -weak_framework CoreHaptics \
     -weak_framework OpenGLES
 
