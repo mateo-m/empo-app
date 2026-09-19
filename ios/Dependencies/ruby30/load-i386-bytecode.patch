@@ -1,22 +1,23 @@
 --- a/compile.c
 +++ b/compile.c
-@@ -9966,6 +9966,8 @@
+@@ -9966,6 +9966,9 @@
      rb_iseq_t *iseq;
      VALUE str;
      struct ibf_load_buffer *current_buffer;
 +    int foreign32;          /* binary comes from a 32-bit x86 Ruby */
 +    unsigned int dbl_align; /* alignment of double in that Ruby */
++    int pre_303;            /* binary comes from Ruby 3.0.0, 3.0.1 or 3.0.2 */
  };
  
  struct pinned_list {
-@@ -10286,7 +10288,22 @@
+@@ -10286,9 +10289,24 @@
      }
  
      *offset += n;
 +    if (load->foreign32) x = (VALUE)(SIGNED_VALUE)(int32_t)(uint32_t)x;
      return x;
-+}
-+
+ }
+ 
 +static VALUE
 +ibf_foreign32_special_const(VALUE v)
 +{
@@ -29,10 +30,12 @@
 +      case 6: return Qundef;
 +    }
 +    rb_raise(rb_eRuntimeError, "unknown 32-bit special constant: %"PRIxVALUE, v);
- }
- 
++}
++
  static void
-@@ -10501,6 +10518,15 @@
+ ibf_dump_builtin(struct ibf_dump *dump, const struct rb_builtin_function *bf)
+ {
+@@ -10501,6 +10519,15 @@
  {
      if (opt_num > 0) {
          VALUE *table = ALLOC_N(VALUE, opt_num+1);
@@ -48,7 +51,7 @@
          MEMCPY(table, load->current_buffer->buff + opt_table_offset, VALUE, opt_num+1);
          return table;
      }
-@@ -10537,7 +10563,36 @@
+@@ -10537,7 +10564,36 @@
  static const struct rb_iseq_param_keyword *
  ibf_load_param_keyword(const struct ibf_load *load, ibf_offset_t param_keyword_offset)
  {
@@ -86,7 +89,7 @@
          struct rb_iseq_param_keyword *kw = IBF_R(param_keyword_offset, struct rb_iseq_param_keyword, 1);
          ID *ids = IBF_R(kw->table, ID, kw->num);
          int dv_num = kw->num - kw->required_num;
-@@ -10640,7 +10695,18 @@
+@@ -10640,7 +10696,18 @@
  static ID *
  ibf_load_local_table(const struct ibf_load *load, ibf_offset_t local_table_offset, int size)
  {
@@ -106,7 +109,27 @@
          ID *table = IBF_R(local_table_offset, ID, size);
          int i;
  
-@@ -11264,7 +11330,20 @@
+@@ -11052,7 +11119,9 @@
+     const int parent_iseq_index = (int)ibf_load_small_value(load, &reading_pos);
+     const int local_iseq_index = (int)ibf_load_small_value(load, &reading_pos);
+     const ibf_offset_t ci_entries_offset = (ibf_offset_t)IBF_BODY_OFFSET(ibf_load_small_value(load, &reading_pos));
+-    const ibf_offset_t outer_variables_offset = (ibf_offset_t)IBF_BODY_OFFSET(ibf_load_small_value(load, &reading_pos));
++    /* Ruby 3.0.3 added this field and kept the format version. Files from 3.0.0 to 3.0.2 do not have it. */
++    const ibf_offset_t outer_variables_offset = load->pre_303 ? 0 :
++        (ibf_offset_t)IBF_BODY_OFFSET(ibf_load_small_value(load, &reading_pos));
+     const rb_snum_t variable_flip_count = (rb_snum_t)ibf_load_small_value(load, &reading_pos);
+     const unsigned int local_table_size = (unsigned int)ibf_load_small_value(load, &reading_pos);
+     const unsigned int is_size = (unsigned int)ibf_load_small_value(load, &reading_pos);
+@@ -11102,7 +11171,7 @@
+ 
+     load_body->is_entries           = ZALLOC_N(union iseq_inline_storage_entry, is_size);
+                                       ibf_load_ci_entries(load, ci_entries_offset, ci_size, &load_body->call_data);
+-    load_body->outer_variables      = ibf_load_outer_variables(load, outer_variables_offset);
++    load_body->outer_variables      = load->pre_303 ? NULL : ibf_load_outer_variables(load, outer_variables_offset);
+     load_body->param.opt_table      = ibf_load_param_opt_table(load, param_opt_table_offset, param_opt_num);
+     load_body->param.keyword        = ibf_load_param_keyword(load, param_keyword_offset);
+     load_body->param.flags.has_kw   = (param_flags >> 4) & 1;
+@@ -11264,6 +11333,19 @@
      ((((offset) - 1) / (align) + 1) * (align))
  #define IBF_OBJBODY(type, offset) (const type *)\
      ibf_load_check_offset(load, IBF_ALIGNED_OFFSET(RUBY_ALIGNOF(type), offset))
@@ -115,7 +138,7 @@
 +    ((const char *)ibf_load_check_offset(load, IBF_ALIGNED_OFFSET((align), offset)))
 +
 +static const void *ibf_load_check_offset(const struct ibf_load *load, size_t offset);
- 
++
 +static int32_t
 +ibf_foreign32_long(const char *body, int index)
 +{
@@ -123,11 +146,10 @@
 +    memcpy(&v, body + index * 4, 4);
 +    return v;
 +}
-+
+ 
  static const void *
  ibf_load_check_offset(const struct ibf_load *load, size_t offset)
- {
-@@ -11352,6 +11431,11 @@
+@@ -11352,6 +11434,11 @@
  static VALUE
  ibf_load_object_float(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
  {
@@ -139,7 +161,7 @@
      const double *dblp = IBF_OBJBODY(double, offset);
      return DBL2NUM(*dblp);
  }
-@@ -11528,6 +11612,15 @@
+@@ -11528,6 +11615,15 @@
  static VALUE
  ibf_load_object_struct(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
  {
@@ -155,7 +177,7 @@
      const struct ibf_object_struct_range *range = IBF_OBJBODY(struct ibf_object_struct_range, offset);
      VALUE beg = ibf_load_object(load, range->beg);
      VALUE end = ibf_load_object(load, range->end);
-@@ -11551,6 +11644,17 @@
+@@ -11551,6 +11647,17 @@
  static VALUE
  ibf_load_object_bignum(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
  {
@@ -173,7 +195,7 @@
      const struct ibf_object_bignum *bignum = IBF_OBJBODY(struct ibf_object_bignum, offset);
      int sign = bignum->slen > 0;
      ssize_t len = sign > 0 ? bignum->slen : -1 * bignum->slen;
-@@ -11582,6 +11686,13 @@
+@@ -11582,6 +11689,13 @@
  static VALUE
  ibf_load_object_data(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
  {
@@ -187,7 +209,7 @@
      const long *body = IBF_OBJBODY(long, offset);
      const enum ibf_object_data_type type = (enum ibf_object_data_type)body[0];
      /* const long len = body[1]; */
-@@ -11611,7 +11722,17 @@
+@@ -11611,7 +11725,17 @@
  static VALUE
  ibf_load_object_complex_rational(const struct ibf_load *load, const struct ibf_object_header *header, ibf_offset_t offset)
  {
@@ -206,7 +228,7 @@
      VALUE a = ibf_load_object(load, nums->a);
      VALUE b = ibf_load_object(load, nums->b);
      VALUE obj = header->type == T_COMPLEX ?
-@@ -11796,6 +11917,7 @@
+@@ -11796,6 +11920,7 @@
                  ibf_offset_t reading_pos = offset;
  
                  obj = ibf_load_small_value(load, &reading_pos);
@@ -214,11 +236,59 @@
              }
              else {
                  obj = (*load_object_functions[header.type])(load, &header, offset);
-@@ -12076,8 +12198,16 @@
+@@ -12050,6 +12175,46 @@
+     }
+ }
+ 
++/*
++ * Ruby 3.0.3 added one field (outer_variables) to each iseq body and kept the
++ * format version, so the header does not tell the two layouts apart.
++ * The dumper writes the bodies in list order, then zero padding to a 4-byte
++ * boundary, then the iseq offset list. The first byte of a small value is
++ * never zero in a 32-bit file. So exactly one field count makes the last body
++ * end at the padding.
++ */
++static int
++ibf_foreign32_body_ends_at_list_p(const struct ibf_load *load, int field_count)
++{
++    const unsigned char *buff = (const unsigned char *)load->global_buffer.buff;
++    const ibf_offset_t list_offset = load->header->iseq_list_offset;
++    const ibf_offset_t *offsets = (const ibf_offset_t *)(buff + list_offset);
++    ibf_offset_t pos;
++    int i;
++
++    if (load->header->iseq_list_size == 0) return 0;
++    pos = offsets[load->header->iseq_list_size - 1];
++    for (i = 0; i < field_count; i++) {
++        if (pos >= list_offset) return 0;
++        (void)ibf_load_small_value(load, &pos);
++    }
++    if (pos > list_offset || list_offset - pos >= sizeof(ibf_offset_t)) return 0;
++    for (; pos < list_offset; pos++) {
++        if (buff[pos] != 0) return 0;
++    }
++    return 1;
++}
++
++static int
++ibf_foreign32_pre_303_p(const struct ibf_load *load)
++{
++    enum { fields_pre_303 = 39, fields_303 = 40 };
++
++    if (ibf_foreign32_body_ends_at_list_p(load, fields_303)) return 0;
++    if (ibf_foreign32_body_ends_at_list_p(load, fields_pre_303)) return 1;
++    rb_raise(rb_eRuntimeError, "unknown Ruby 3.0 iseq body layout");
++}
++
+ static void
+ ibf_load_setup_bytes(struct ibf_load *load, VALUE loader_obj, const char *bytes, size_t size)
+ {
+@@ -12076,8 +12241,18 @@
  	rb_raise(rb_eRuntimeError, "unmatched version file (%u.%u for %u.%u)",
  		 load->header->major_version, load->header->minor_version, IBF_MAJOR_VERSION, IBF_MINOR_VERSION);
      }
 +    load->foreign32 = 0;
++    load->pre_303 = 0;
 +    load->dbl_align = RUBY_ALIGNOF(double);
      if (strcmp(load->global_buffer.buff + sizeof(struct ibf_header), RUBY_PLATFORM) != 0) {
 -	rb_raise(rb_eRuntimeError, "unmatched platform");
@@ -227,6 +297,7 @@
 +            rb_raise(rb_eRuntimeError, "unmatched platform");
 +        }
 +        load->foreign32 = 1;
++        load->pre_303 = ibf_foreign32_pre_303_p(load);
 +        /* The Windows i386 ABI aligns double to 8 bytes, the System V i386 ABI to 4. */
 +        load->dbl_align = strstr(platform, "mingw") || strstr(platform, "mswin") ? 8 : 4;
      }

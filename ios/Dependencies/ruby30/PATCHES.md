@@ -27,4 +27,14 @@ The 32-bit layout differs from the 64-bit layout in these places:
 
 The Ruby version check stays. Bytecode from Ruby 3.1 or later does not load.
 
+### Two Ruby 3.0 layouts
+
+Ruby 3.0.3 added one field (`outer_variables`) to each compiled method and kept
+the format version. Games made with Ruby 3.0.0 to 3.0.2 do not have the field.
+Edelweiss Chronicles uses Ruby 3.0.1. The PSDK binaries of 2026 use Ruby 3.0.6.
+
+The header does not tell the two layouts apart. The patch reads the last
+compiled method with each field count. Only the correct count ends at the zero
+padding before the offset list. If no count fits, the loader raises an error.
+
 `tools/psdk-bytecode-check/` has the test and its result.
