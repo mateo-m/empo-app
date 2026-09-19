@@ -46,3 +46,23 @@
 	url = https://github.com/ruby/ruby.git
 	branch = ruby_1_9_3
 	ignore = dirty
+[submodule "ios/Dependencies/sources/sfml"]
+	path = ios/Dependencies/sources/sfml
+	url = git@github.com:mateo-m/sfml-apple-mobile
+	branch = feat/ios-angle-context
+[submodule "ios/Dependencies/sources/litecgss"]
+	path = ios/Dependencies/sources/litecgss
+	url = https://gitlab.com/NuriYuri/litecgss.git
+	branch = development
+[submodule "ios/Dependencies/sources/litergss2"]
+	path = ios/Dependencies/sources/litergss2
+	url = git@github.com:mateo-m/litergss2-apple-mobile
+	branch = dev
+[submodule "ios/Dependencies/sources/ruby-physfs"]
+	path = ios/Dependencies/sources/ruby-physfs
+	url = git@github.com:mateo-m/ruby-physfs
+	branch = fix/glob-trailing-double-star
+[submodule "ios/Dependencies/sources/ruby30"]
+	path = ios/Dependencies/sources/ruby30
+	url = git@github.com:ruby/ruby.git
+	branch = ruby_3_0
