@@ -207,6 +207,33 @@ $(DOWNLOADS)/physfs/$(CMAKE_BUILDDIR)/Makefile: $(DOWNLOADS)/physfs/CMakeLists.t
 $(DOWNLOADS)/physfs/CMakeLists.txt:
 	$(CLONE) $(GITHUB)/icculus/physfs -b release-3.2.0 $(DOWNLOADS)/physfs
 
+# FLAC (xiph). SFML's Audio module needs it. SFML's FindFLAC.cmake looks
+# for `libFLAC.a` with a capital F, which is the name xiph/flac installs.
+# Only the C decoder is necessary, so the C++ bindings, the programs, the
+# examples, the tests and the docs stay off.
+libflac: init_dirs libogg $(LIBDIR)/libFLAC.a
+
+$(LIBDIR)/libFLAC.a: $(LIBDIR)/libogg.a $(DOWNLOADS)/flac/$(CMAKE_BUILDDIR)/Makefile
+	cd $(DOWNLOADS)/flac/$(CMAKE_BUILDDIR); \
+	make -j$(NPROC); make install
+
+$(DOWNLOADS)/flac/$(CMAKE_BUILDDIR)/Makefile: $(DOWNLOADS)/flac/CMakeLists.txt
+	cd $(DOWNLOADS)/flac; \
+	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
+	$(CMAKE) \
+	-DBUILD_SHARED_LIBS=OFF \
+	-DBUILD_CXXLIBS=OFF \
+	-DBUILD_PROGRAMS=OFF \
+	-DBUILD_EXAMPLES=OFF \
+	-DBUILD_TESTING=OFF \
+	-DBUILD_DOCS=OFF \
+	-DINSTALL_MANPAGES=OFF \
+	-DWITH_OGG=ON \
+	-DWITH_STACK_PROTECTOR=OFF
+
+$(DOWNLOADS)/flac/CMakeLists.txt:
+	$(CLONE) $(GITHUB)/xiph/flac -b 1.4.3 $(DOWNLOADS)/flac
+
 # libpng
 libpng: init_dirs $(LIBDIR)/libpng.a
 
@@ -416,6 +443,287 @@ $(SOURCES)/freetype/.configured-$(SDK_TAG): $(SOURCES)/freetype/builds/unix/conf
 
 $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 	cd $(SOURCES)/freetype; ./autogen.sh
+
+# ---------------------------------------------------------------------
+# PSDK core: SFML + LiteCGSS + LiteRGSS2 + Ruby 3.0
+# ---------------------------------------------------------------------
+
+# SFML (submodule: sources/sfml, fork mateo-m/sfml-apple-mobile).
+#
+# LiteCGSS draws through SFML's graphics classes, so SFML cannot be
+# swapped for SDL without rewriting LiteCGSS. The fork replaces SFML's
+# iOS EAGL backend with ANGLE over EGL, which is the same GL path
+# mkxp-z already uses on iOS, and makes SFAppDelegate lazy so Empo can
+# own the app start-up.
+#
+# SFML_USE_SYSTEM_DEPS=ON stops SFML from linking its own
+# extlibs/libs-ios prebuilts. Those are device-only fat archives and
+# fail to link for the simulator. With it on, SFML finds the freetype,
+# vorbis and FLAC we built for this SDK under $(BUILD_PREFIX).
+sfml: init_dirs freetype libogg libvorbis libflac $(LIBDIR)/libsfml-system-s.a
+
+$(LIBDIR)/libsfml-system-s.a: $(LIBDIR)/libfreetype.a $(LIBDIR)/libogg.a $(LIBDIR)/libvorbis.a $(LIBDIR)/libFLAC.a $(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile
+	cd $(SOURCES)/sfml/$(CMAKE_BUILDDIR); \
+	make -j$(NPROC); make install
+
+$(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sfml/CMakeLists.txt
+	cd $(SOURCES)/sfml; \
+	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
+	$(CMAKE) \
+	-DBUILD_SHARED_LIBS=OFF \
+	-DSFML_BUILD_EXAMPLES=OFF \
+	-DSFML_BUILD_DOC=OFF \
+	-DSFML_BUILD_TEST_SUITE=OFF \
+	-DSFML_BUILD_NETWORK=OFF \
+	-DSFML_BUILD_GRAPHICS=ON \
+	-DSFML_BUILD_WINDOW=ON \
+	-DSFML_BUILD_AUDIO=ON \
+	-DSFML_USE_SYSTEM_DEPS=ON \
+	-DSFML_BUILD_FRAMEWORKS=OFF \
+	-DSFML_IOS_ANGLE_DIR=${PWD}/ANGLE/$(SDK)
+
+# LiteCGSS (submodule: sources/litecgss).
+#
+# The C++ layer under LiteRGSS2. Its top-level CMakeLists also adds a
+# playground and a test executable, so only the LiteCGSS_engine target
+# gets built. Upstream ships no install() rule, so the archive and the
+# headers are copied by hand.
+#
+# PhysFS stays off here. Empo already builds its own libphysfs.a, and
+# LiteCGSS's bundled FetchContent points at a dead hg.icculus.org URL.
+litecgss: init_dirs sfml $(LIBDIR)/libLiteCGSS_engine.a
+
+$(LIBDIR)/libLiteCGSS_engine.a: $(LIBDIR)/libsfml-system-s.a $(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile $(SOURCES)/litecgss/external/skalog/CMakeLists.txt
+	cd $(SOURCES)/litecgss/$(CMAKE_BUILDDIR); \
+	cmake --build . --target LiteCGSS_engine --parallel $(NPROC); \
+	cp lib/libLiteCGSS_engine.a $(LIBDIR)/; \
+	cp lib/libskalog.a $(LIBDIR)/; \
+	rm -rf $(INCLUDEDIR)/LiteCGSS $(INCLUDEDIR)/Logging; \
+	cp -R $(SOURCES)/litecgss/src/src/LiteCGSS $(INCLUDEDIR)/LiteCGSS; \
+	cp -R $(SOURCES)/litecgss/external/skalog/src/src/Logging $(INCLUDEDIR)/Logging; \
+	mkdir -p $(INCLUDEDIR)/lodepng $(INCLUDEDIR)/libnsgif; \
+	cp $(SOURCES)/litecgss/external/lodepng/lodepng.h $(INCLUDEDIR)/lodepng/; \
+	cp $(SOURCES)/litecgss/external/libnsgif/*.h $(SOURCES)/litecgss/external/libnsgif/*.hpp $(INCLUDEDIR)/libnsgif/
+
+$(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/litecgss/CMakeLists.txt
+	cd $(SOURCES)/litecgss; \
+	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
+	$(CMAKE) \
+	-DBUILD_SHARED_LIBS=OFF \
+	-DSFML_STATIC_LIBRARIES=TRUE \
+	-DLITECGSS_NO_TEST=ON \
+	-DSKALOG_NO_TEST=ON \
+	-DCGSS_WINDOW_PRESERVATION=OFF
+
+$(SOURCES)/litecgss/external/skalog/CMakeLists.txt:
+	cd $(SOURCES)/litecgss; \
+	git submodule update --init --recursive external/skalog
+
+
+# Ruby 3.0 (submodule: sources/ruby30)
+#
+# For the PSDK core only. A released PSDK game ships pre-compiled
+# YARV bytecode (`Game.yarb`, `Data/Scripts.dat`) that only a Ruby
+# 3.0 loader reads, so the PSDK core needs its own 3.0 interpreter.
+# The engine's 1.8 / 1.9 / 3.1 Rubys cannot load it.
+#
+# The patch list has no syntax-transform patches. Those exist only in
+# the 3.1 source, for Pokemon Essentials forks with old grammar.
+ruby30: init_dirs openssl $(LIBDIR)/libruby.3.0-static.a $(LIBDIR)/libruby.3.0-ext.a
+
+$(LIBDIR)/libruby.3.0-static.a: $(SOURCES)/ruby30/.configured-$(SDK_TAG)
+	cd $(SOURCES)/ruby30; \
+	$(CONFIGURE_ENV) make -j$(NPROC) libruby.3.0-static.a; \
+	cp libruby.3.0-static.a $(LIBDIR)/; \
+	mkdir -p $(INCLUDEDIR)/ruby30; \
+	cp -R include/* $(INCLUDEDIR)/ruby30/; \
+	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby30/ruby/config.h 2>/dev/null || true
+
+# Same ext recipe as 3.1's, on the 3.0 source tree. A released PSDK
+# game requires socket, openssl, net/http, csv, json and zlib at
+# boot, so a lost extension stops the game at its first `require`.
+$(LIBDIR)/libruby.3.0-ext.a: $(LIBDIR)/libruby.3.0-static.a
+	cd $(SOURCES)/ruby30; \
+	$(CONFIGURE_ENV) make -j1 miniruby exts.mk encs; \
+	EXT_TARGETS=$$(awk '/^extensions =/,/[^\\]$$/' exts.mk | tr '\\' ' ' | grep -oE 'ext/[^ ]+' | sed 's|/\.$$|/static|'); \
+	$(CONFIGURE_ENV) make -j1 -f exts.mk ext/extinit.o $$EXT_TARGETS; \
+	$(CONFIGURE_ENV) make -j1 enc/encinit.o
+	@TMPDIR=$$(mktemp -d); \
+	cd $$TMPDIR; \
+	for a in $$(find $(SOURCES)/ruby30/ext -name "*.a" -not -path "*/test/*") \
+	         $(SOURCES)/ruby30/enc/libenc.a $(SOURCES)/ruby30/enc/libtrans.a; do \
+		[ -f "$$a" ] || continue; \
+		sub=$$(basename $$a .a); \
+		mkdir -p "$$sub"; \
+		(cd "$$sub" && $(AR) x "$$a"); \
+	done; \
+	cp $(SOURCES)/ruby30/ext/extinit.o .; \
+	cp $(SOURCES)/ruby30/enc/encinit.o .; \
+	$(AR) rcs $(LIBDIR)/libruby.3.0-ext.a extinit.o encinit.o */*.o; \
+	$(RANLIB) $(LIBDIR)/libruby.3.0-ext.a; \
+	rm -rf $$TMPDIR
+	$(AR) d $(LIBDIR)/libruby.3.0-static.a dmyext.o dmyenc.o || true
+	$(RANLIB) $(LIBDIR)/libruby.3.0-static.a
+	@for sym in _Init_socket _Init_openssl _Init_zlib _Init_parser _Init_generator; do \
+	    nm $(LIBDIR)/libruby.3.0-ext.a 2>/dev/null | grep -q "T $$sym" || { \
+	        echo "ERROR: $$sym missing from libruby.3.0-ext.a (extconf failure? check $(SOURCES)/ruby30/ext/*/mkmf.log)"; \
+	        rm -f $(LIBDIR)/libruby.3.0-ext.a; \
+	        exit 1; \
+	    }; \
+	done
+
+# `-Wno-default-const-init-field-unsafe` is load-bearing, not cosmetic.
+# Ruby 3.0's own `include/ruby/internal/core/rstring.h` declares an
+# uninitialised `struct RString` whose first member is const. Clang 26
+# reports that, and mkmf runs its probes with `-Werror`. So
+# `ext/socket/extconf.rb` sees its IN6_IS_ADDR_UNSPECIFIED probe fail,
+# takes an old-Apple-header path, and tries to read
+# `/usr/include/netinet6/in6.h`. That file does not exist in a current
+# SDK, so extconf raises and the whole socket extension disappears.
+# Ruby 3.1 rewrote that header, so only the 3.0 build needs the flag.
+$(SOURCES)/ruby30/.configured-$(SDK_TAG): $(SOURCES)/ruby30/configure $(LIBDIR)/libcrypto.a
+	cd $(SOURCES)/ruby30; $(MAKE) distclean 2>/dev/null || true
+	cd $(SOURCES)/ruby30; \
+	export $(CONFIGURE_ENV); \
+	export CFLAGS="-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__ -Wno-default-const-init-field-unsafe $$CFLAGS"; \
+	export LDFLAGS="$$LDFLAGS"; \
+	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) \
+	--with-baseruby=/usr/bin/ruby \
+	--with-openssl-dir="$(BUILD_PREFIX)" \
+	ac_cv_func_setpgrp_void=yes \
+	ac_cv_func_fork=no \
+	ac_cv_func_dup3=no \
+	ac_cv_func_pipe2=no \
+	ac_cv_func_getentropy=no \
+	ac_cv_func_posix_spawn=no \
+	ac_cv_func_posix_spawnp=no \
+	ac_cv_func_fdatasync=no \
+	ac_cv_func_preadv=no \
+	ac_cv_func_pwritev=no \
+	ac_cv_func_copy_file_range=no \
+	ac_cv_func_close_range=no \
+	cross_compiling=yes; \
+	sed -i '' 's|^ASFLAGS.*=.*|ASFLAGS = $$(ARCH_FLAG) $$(INCFLAGS) $(TARGETFLAGS)|' Makefile
+	$(MARK_SDK_CONFIGURED)
+
+# Ruby 3.0 bundles the openssl gem 2.2.2, which refuses to build
+# against OpenSSL 3 and stops with
+# "OpenSSL >= 1.0.1, < 3.0.0 ... is required". Empo builds OpenSSL
+# 3.5.7. Ruby 3.1 bundles the openssl gem 3.0.1, which main already
+# builds against that same OpenSSL, so the 3.1 copy of ext/openssl
+# goes into the 3.0 tree. A released PSDK game requires openssl at
+# boot, so the extension cannot be dropped.
+#
+# The copy makes the ruby30 build depend on the ruby submodule. Both
+# are submodules of this repo, so a clone has one when it has the
+# other. The `git checkout` above restores the tracked 2.2.2 files
+# first, so the copy always starts from a clean tree.
+$(SOURCES)/ruby30/configure: $(SOURCES)/ruby30/configure.ac $(SOURCES)/ruby/ext/openssl/extconf.rb
+	cd $(SOURCES)/ruby30; \
+	git checkout -- . 2>/dev/null; \
+	$(PATCHES)/apply-ruby-patches.sh 30 $(SOURCES)/ruby30 \
+		--patches-root $(PATCHES) --engine $(ENGINE); \
+	rm -rf ext/openssl; \
+	cp -R $(SOURCES)/ruby/ext/openssl ext/openssl; \
+	rm -f ext/openssl/depend; \
+	autoreconf -i
+
+
+# LiteRGSS2 binding plus Ruby 3.0, merged into one relocatable object
+# (submodule: sources/litergss2).
+#
+# Same pattern as the mkxp{18,19,31}-merged objects: `ld -r` with an
+# unexport list demotes every Ruby and LiteRGSS symbol to local, so the
+# PSDK core's Ruby 3.0 cannot clash with the engine's 1.8, 1.9 and 3.1
+# in the same binary. The merged object exports two names, psdk_run and
+# psdk_inject_scancode.
+#
+# LiteCGSS, skalog and the SFML archives stay out of the merge. They
+# link separately, the same way SDL2 and libpng do not merge into
+# mkxp31-merged.o.
+PSDK_OBJDIR := $(BUILD_PREFIX)/binding-litergss30
+
+PSDK_INCLUDES := \
+    -I$(INCLUDEDIR)/ruby30 \
+    -I$(INCLUDEDIR) \
+    -I$(SOURCES)/litergss2/ext/LiteRGSS \
+    -I$(SOURCES)/litecgss/src/src \
+    -I$(SOURCES)/litecgss/external/skalog/src/src \
+    -I$(SOURCES)/litecgss/external/lodepng \
+    -I$(SOURCES)/litecgss/external/libnsgif
+
+litergss30-merged: init_dirs ruby30 litecgss openssl $(LIBDIR)/litergss30-merged.o
+
+$(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
+                               $(LIBDIR)/libruby.3.0-ext.a \
+                               $(LIBDIR)/libLiteCGSS_engine.a \
+                               $(LIBDIR)/libssl.a \
+                               $(LIBDIR)/libcrypto.a \
+                               ${PWD}/psdk/psdk_core.cpp \
+                               ${PWD}/psdk/psdk_core.h
+	@echo "[psdk] Compiling ext/LiteRGSS against Ruby 3.0..."
+	@mkdir -p $(PSDK_OBJDIR)
+	@for src in $(SOURCES)/litergss2/ext/LiteRGSS/*.cpp; do \
+	    obj=$(PSDK_OBJDIR)/$$(basename $$src .cpp).o; \
+	    echo "  -> $$(basename $$obj)"; \
+	    $(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
+	        $(PSDK_INCLUDES) -DHAVE_CONFIG_H \
+	        -c $$src -o $$obj || exit 1; \
+	done
+	@echo "[psdk] Compiling the core..."
+	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
+	    -I$(INCLUDEDIR)/ruby30 \
+	    -c ${PWD}/psdk/psdk_core.cpp -o $(PSDK_OBJDIR)/_psdk_core.o
+	@echo "[psdk] Generating the unexport list..."
+	@# libssl and libcrypto go in the list as well. The Ruby openssl
+	@# extension is their only caller and it sits inside this same
+	@# merged object, so internal linkage keeps it working while the
+	@# symbols stay invisible to the rest of the binary.
+	$(ENGINE)/tools/generate-ruby-unexports.sh \
+	    $(LIBDIR)/libruby.3.0-static.a $(LIBDIR)/libruby.3.0-ext.a \
+	    $(LIBDIR)/libssl.a $(LIBDIR)/libcrypto.a \
+	    > $(BUILD_PREFIX)/litergss30-unexports.txt.raw
+	@# Every C++ typeinfo, typeinfo name and vtable in the LiteRGSS
+	@# objects gets hidden too. LiteRGSS and mkxp-z both declare a
+	@# `ViewportElement` and a `RectangleElement` at global scope, and
+	@# the two mangle to the same vtable symbols. With both visible the
+	@# linker picks one winner for the whole binary, and a LiteRGSS
+	@# Viewport then dispatches through mkxp's vtable and calls a pure
+	@# virtual. The `__cxa_*` helpers stay exported so libc++ resolves
+	@# them once.
+	@nm -gU $(PSDK_OBJDIR)/*.o 2>/dev/null \
+	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
+	    | sort -u \
+	    | grep -vE '^_psdk_run$$|^_psdk_inject_scancode$$' \
+	    | grep -vE '^___cxa_' \
+	    >> $(BUILD_PREFIX)/litergss30-unexports.txt.raw
+	@sort -u $(BUILD_PREFIX)/litergss30-unexports.txt.raw \
+	    > $(BUILD_PREFIX)/litergss30-unexports.txt
+	@rm -f $(BUILD_PREFIX)/litergss30-unexports.txt.raw
+	@echo "[psdk] Merging via ld -r..."
+	@LD=$$(xcrun --sdk $(SDK) -f ld); \
+	"$$LD" -r -arch $(ARCH) \
+	    $(LD_PLATFORM_VERSION) \
+	    -syslibroot $(SYSROOT) \
+	    -unexported_symbols_list $(BUILD_PREFIX)/litergss30-unexports.txt \
+	    $(LIBDIR)/libruby.3.0-static.a \
+	    $(LIBDIR)/libruby.3.0-ext.a \
+	    $(LIBDIR)/libssl.a \
+	    $(LIBDIR)/libcrypto.a \
+	    $(PSDK_OBJDIR)/*.o \
+	    -o $(LIBDIR)/litergss30-merged.o
+	@echo "[psdk] Verifying the merged object..."
+	@EXPORTED=$$(nm -g $(LIBDIR)/litergss30-merged.o | awk '$$2 == "T" {print $$3}' | sort -u); \
+	echo "$$EXPORTED" | sed 's/^/  /'; \
+	[ "$$(echo "$$EXPORTED" | wc -l | tr -d ' ')" = "2" ] || { \
+	    echo "ERROR: litergss30-merged.o must export exactly psdk_run and psdk_inject_scancode"; \
+	    rm -f $(LIBDIR)/litergss30-merged.o; \
+	    exit 1; \
+	}
+
+# The whole PSDK core.
+psdk: init_dirs sfml litecgss ruby30 litergss30-merged
+
 
 # Ruby 3.1 (submodule: sources/ruby)
 ruby: init_dirs openssl $(LIBDIR)/libruby.3.1-static.a $(LIBDIR)/libruby.3.1-ext.a

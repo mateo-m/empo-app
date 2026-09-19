@@ -1,0 +1,5 @@
+# Ruby 3.0 iOS cross-compile patches, plus the loader change that lets a
+# 64-bit Ruby read the 32-bit Windows bytecode of a released PSDK game.
+# No syntax-transform patches: those exist only for Ruby 3.1.
+ruby30/ios.patch
+ruby30/load-i386-bytecode.patch

@@ -2,7 +2,7 @@
 # Apply Ruby source patches for iOS native builds in manifest order.
 #
 # Usage:
-#   apply-ruby-patches.sh <18|19|31> <source-dir> [--patches-root DIR] [--engine DIR]
+#   apply-ruby-patches.sh <18|19|30|31> <source-dir> [--patches-root DIR] [--engine DIR]
 #
 # Manifest: ios/Dependencies/ruby<ver>.patches.lst
 #   - Blank lines and # comments are ignored.
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 usage() {
-    echo "usage: $0 <18|19|31> <source-dir> [--patches-root DIR] [--engine DIR]" >&2
+    echo "usage: $0 <18|19|30|31> <source-dir> [--patches-root DIR] [--engine DIR]" >&2
     exit 2
 }
 
