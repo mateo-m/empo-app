@@ -12,15 +12,16 @@
 // and every eglSwapBuffers succeeds, but the display stays black.
 // Empo has a real window already, so this only matters for the test.
 //
-// Four variables, all read at launch:
-//
-//   PSDK_GAME      the game folder, relative to Documents.
-//                  "Game" by default.
 // The host does not link the core. It opens
 // Frameworks/PsdkCore.framework/PsdkCore with dlopen when the game
 // starts, and reads the Ruby support folder from the same bundle. Empo
 // does the same on the game the user picks, so the test host and the
 // launcher take one path.
+//
+// Four variables, all read at launch:
+//
+//   PSDK_GAME      the game folder, relative to Documents.
+//                  "Game" by default.
 //
 //   PSDK_KEYS      key presses to inject. scheduleKeys gives the format.
 //
@@ -37,6 +38,7 @@
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #import <UIKit/UIKit.h>
 
@@ -212,7 +214,12 @@ static void scheduleRotation(const char *spec) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             fprintf(stderr, "[host] run limit reached at %.1fs\n", seconds);
-            exit(0);
+            // _exit, not exit. The game thread runs Ruby code. exit()
+            // runs the atexit handlers and the static destructors, which
+            // free the Ruby VM under that thread. Ruby then faults, and
+            // its SEGV handler faults again on a thread whose VM is
+            // gone ("SEGV received in SEGV handler").
+            _exit(0);
         });
     }
 
