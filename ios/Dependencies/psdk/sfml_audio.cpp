@@ -1,13 +1,23 @@
 // SFMLAudio, the Ruby extension PSDK's SFMLAudioDriver calls.
 //
-// PSDK asks for RubyFmod first and falls back to this. RubyFmod is
-// closed source and ships only as a Windows DLL, so on iOS this is the
-// only audio driver. Upstream publishes no source for SFMLAudio, so the
-// class and method names below come from two places: what the current
-// driver calls, in scripts/0 Dependencies/2 Audio/101
-// SFMLAudioDriver.rb, and what a released game's own audio code calls.
-// Edelweiss Chronicles ships an older audio module that also asks for
-// playing? and paused?, which the current driver never uses.
+// PSDK asks for RubyFmod first and falls back to this. RubyFmod is closed
+// source and ships only as a Windows DLL, so on iOS this is the only audio
+// driver.
+//
+// The reference extension is at gitlab.com/NuriYuri/sfmlaudio. It carries
+// no licence file and no licence header, so the code here is an independent
+// implementation. The method names come from that reference, and the set is
+// the one PSDK asks for: every method the current driver calls, in
+// scripts/0 Dependencies/2 Audio/101 SFMLAudioDriver.rb, and every method
+// a released game's own audio module calls. Edelweiss Chronicles asks for
+// playing? too, which the current driver never uses.
+//
+// The reference also defines SoundSource, SoundStream, Listener and
+// InputSoundFile, plus open_from_file, load_from_file, the 3D position,
+// attenuation and listener-relative methods, and get_channel_count. PSDK
+// calls none of them. It reads every audio file itself, out of the Yuki::VD
+// volumes in Data/*.dat, and hands over the bytes, which is why the file
+// loaders stay out.
 
 #include "ruby.h"
 

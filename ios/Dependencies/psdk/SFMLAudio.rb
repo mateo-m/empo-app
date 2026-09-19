@@ -13,6 +13,12 @@
 # 00700 Audio___Fmod.rb, line 688 of the SFML branch. FMOD takes 0 to 1
 # and SFML takes 0 to 100, so the name and the range both need the
 # change. Every other call in that branch already uses the SFML names.
+#
+# The reference extension has no setVolume either, only set_volume, so that
+# line raised NoMethodError on Windows as well. Nobody met it there, because
+# a Windows build finds RubyFmod and runs the FMOD branch, where setVolume
+# with 0 to 1 is right. PSDK carried the line in releases 26.16 to 26.20 and
+# dropped it in 26.21, so a game built from a later release needs no patch.
 module SFMLAudio
   module FmodVolume
     def setVolume(volume)
