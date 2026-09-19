@@ -669,7 +669,8 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
                                $(LIBDIR)/libssl.a \
                                $(LIBDIR)/libcrypto.a \
                                ${PWD}/psdk/psdk_core.cpp \
-                               ${PWD}/psdk/psdk_core.h
+                               ${PWD}/psdk/psdk_core.h \
+                               ${PWD}/psdk/sfml_audio.cpp
 	@echo "[psdk] Compiling ext/LiteRGSS against Ruby 3.0..."
 	@mkdir -p $(PSDK_OBJDIR)
 	@for src in $(SOURCES)/litergss2/ext/LiteRGSS/*.cpp; do \
@@ -683,6 +684,9 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
 	    -I$(INCLUDEDIR)/ruby30 \
 	    -c ${PWD}/psdk/psdk_core.cpp -o $(PSDK_OBJDIR)/_psdk_core.o
+	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
+	    -I$(INCLUDEDIR)/ruby30 -I$(INCLUDEDIR) \
+	    -c ${PWD}/psdk/sfml_audio.cpp -o $(PSDK_OBJDIR)/_psdk_sfml_audio.o
 	@echo "[psdk] Generating the unexport list..."
 	@# libssl and libcrypto go in the list as well. The Ruby openssl
 	@# extension is their only caller and it sits inside this same
@@ -752,12 +756,15 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 #    OpenSSL 3. GameLoader/3_load_extensions.rb names the top of the
 #    list, and the rest is its transitive closure.
 #
-# 2. ruby-dist/lib/LiteRGSS.rb, an empty file. PSDK loads its native
-#    extension with `require File.join(PSDK_LIB_PATH, 'LiteRGSS')`,
+# 2. ruby-dist/lib/LiteRGSS.rb and ruby-dist/lib/SFMLAudio.rb. PSDK loads
+#    a native extension with `require File.join(PSDK_LIB_PATH, name)`,
 #    where PSDK_LIB_PATH is "#{ENV['GAMEDEPS']}/ruby-dist/lib" on macOS.
-#    The classes are already in the binary, so the file only has to
-#    exist for the require to succeed. The core owns GAMEDEPS, so the
-#    path PSDK builds always lands here.
+#    The classes are already in the binary, so a file only has to exist
+#    for the require to succeed. LiteRGSS.rb is empty for that reason.
+#    SFMLAudio.rb carries one patch, which it explains itself. The core
+#    owns GAMEDEPS, so the path PSDK builds always lands here. RubyFmod
+#    gets no file on purpose. PSDK tries it first, and the LoadError is
+#    what sends it to SFMLAudio.
 PSDK_SUPPORT_DIR := $(BUILD_PREFIX)/psdk-support
 
 # A live run of Edelweiss Chronicles loaded the first two lines. The
@@ -776,6 +783,7 @@ psdk-support: init_dirs
 	rm -rf $(PSDK_SUPPORT_DIR)
 	mkdir -p $(PSDK_SUPPORT_DIR)/ruby-dist/lib
 	touch $(PSDK_SUPPORT_DIR)/ruby-dist/lib/LiteRGSS.rb
+	cp ${PWD}/psdk/SFMLAudio.rb $(PSDK_SUPPORT_DIR)/ruby-dist/lib/SFMLAudio.rb
 	@for item in $(PSDK_SUPPORT_LIB); do \
 		cp -R $(SOURCES)/ruby30/lib/$$item $(PSDK_SUPPORT_DIR)/ || exit 1; \
 	done

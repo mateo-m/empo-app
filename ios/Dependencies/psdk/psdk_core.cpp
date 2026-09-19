@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 extern "C" void Init_LiteRGSS();
+extern "C" void Init_SFMLAudio();
 
 // SFML's iOS input backend keeps a scancode bitset that polling engines
 // read, and a UIKit event queue that event-driven engines read. LiteRGSS
@@ -100,6 +101,13 @@ int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
     // library and raise LoadError. iOS allows no shared library load, so
     // mark the name satisfied.
     rb_provide("LiteRGSS");
+
+    // PSDK asks for RubyFmod first, gets a LoadError because that one is
+    // a closed-source Windows DLL, and falls back to SFMLAudio. Without
+    // this the game prints "Could not load Audio" and plays nothing.
+    // GameLoader/3_load_extensions.rb holds that chain.
+    Init_SFMLAudio();
+    rb_provide("SFMLAudio");
 
     state = 0;
     VALUE hasModule = rb_eval_string_protect("defined?(LiteRGSS::Sprite) ? true : false", &state);

@@ -103,7 +103,7 @@ done
 nm "$LIB/libruby.3.0-ext.a" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_socket" {found=1} END {exit !found}' ||
     fail "libruby.3.0-ext.a missing Init_socket"
 PSDK_SUPPORT="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/psdk-support"
-for f in ruby-dist/lib/LiteRGSS.rb uri.rb net/http.rb openssl.rb psych.rb; do
+for f in ruby-dist/lib/LiteRGSS.rb ruby-dist/lib/SFMLAudio.rb uri.rb net/http.rb openssl.rb psych.rb; do
     [ -f "$PSDK_SUPPORT/$f" ] ||
         fail "psdk-support/$f missing (run: make -f ${PLATFORM}.make psdk-support)"
 done
