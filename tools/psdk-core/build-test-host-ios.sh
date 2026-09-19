@@ -25,8 +25,14 @@ OUT="$ROOT/build/psdk-core"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --out) OUT="$2"; shift 2 ;;
-        *) echo "build-test-host-ios: unknown argument $1" >&2; exit 2 ;;
+        --out)
+            OUT="$2"
+            shift 2
+            ;;
+        *)
+            echo "build-test-host-ios: unknown argument $1" >&2
+            exit 2
+            ;;
     esac
 done
 
@@ -35,6 +41,12 @@ ANGLE="$DEPS/ANGLE/$SDK"
 
 if [ ! -f "$TREE/lib/litergss30-merged.o" ]; then
     echo "build-test-host-ios: litergss30-merged.o missing." >&2
+    echo "Run: cd ios/Dependencies && make -f $SDK.make psdk" >&2
+    exit 1
+fi
+
+if [ ! -d "$TREE/psdk-support" ]; then
+    echo "build-test-host-ios: psdk-support missing." >&2
     echo "Run: cd ios/Dependencies && make -f $SDK.make psdk" >&2
     exit 1
 fi
@@ -80,6 +92,9 @@ echo "[psdk-host] Linking..."
 echo "[psdk-host] Assembling the bundle..."
 cp "$HERE/Info.plist" "$APP/Info.plist"
 cp "$HERE/prelude.rb" "$APP/prelude.rb"
+# The core prepends this folder to $LOAD_PATH and points GAMEDEPS at it.
+rm -rf "$APP/PsdkSupport"
+cp -R "$TREE/psdk-support" "$APP/PsdkSupport"
 
 # An unsigned bundle installs on some simulator runtimes and not on
 # others. An ad-hoc signature works everywhere and needs no identity.

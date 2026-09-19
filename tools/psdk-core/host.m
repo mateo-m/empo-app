@@ -6,13 +6,19 @@
 // has to stay in its run loop and answer them. A host that called
 // psdk_run from the main thread would deadlock on the first window.
 //
-// SFML creates its own UIWindow above this app's, so this host needs no
-// view of its own.
+// The host still makes one empty UIWindow. iOS keeps its launch screen
+// over the app until the app puts a window on screen, and SFML's own
+// window does not count for that. Without this window the game renders
+// and every eglSwapBuffers succeeds, but the display stays black.
+// Empo has a real window already, so this only matters for the test.
 //
 // Two variables, both read at launch:
 //
 //   PSDK_GAME      the game folder, relative to Documents.
 //                  "Game" by default.
+// The core's Ruby support folder comes from PsdkTests.app/PsdkSupport,
+// which the build script copies out of the psdk-support make target.
+//
 //   PSDK_PRELUDE   a Ruby file in the bundle that runs before Game.rb.
 //                  "prelude.rb" by default. Set it empty to run none.
 
@@ -29,11 +35,14 @@
 static const size_t kWorkerStackBytes = 16 * 1024 * 1024;
 
 static char *gGamePath;
+static char *gSupportPath;
 static char *gPreludePath;
+static int gArgc;
+static char **gArgv;
 
 static void *runGame(void *unused) {
     (void)unused;
-    int result = psdk_run(gGamePath, gPreludePath);
+    int result = psdk_run(gArgc, gArgv, gGamePath, gSupportPath, gPreludePath);
     fprintf(stderr, "[host] psdk_run returned %d\n", result);
     // The bundle holds no interface to go back to, and the run loop
     // would keep the process alive forever. Leave with the core's
@@ -42,6 +51,7 @@ static void *runGame(void *unused) {
 }
 
 @interface PsdkTestHostDelegate : UIResponder <UIApplicationDelegate>
+@property(nonatomic, strong) UIWindow *window;
 @end
 
 @implementation PsdkTestHostDelegate
@@ -60,6 +70,14 @@ static void *runGame(void *unused) {
     }
     gGamePath = strdup(game.fileSystemRepresentation);
 
+    NSString *support = [NSBundle.mainBundle.resourcePath
+        stringByAppendingPathComponent:@"PsdkSupport"];
+    if (![NSFileManager.defaultManager fileExistsAtPath:support]) {
+        fprintf(stderr, "[host] no support folder at %s\n", support.UTF8String);
+        exit(4);
+    }
+    gSupportPath = strdup(support.fileSystemRepresentation);
+
     const char *wantPrelude = getenv("PSDK_PRELUDE");
     NSString *prelude = (wantPrelude && !*wantPrelude)
                             ? nil
@@ -69,8 +87,13 @@ static void *runGame(void *unused) {
                                                                     : @"prelude.rb"];
     gPreludePath = prelude ? strdup(prelude.fileSystemRepresentation) : NULL;
 
-    fprintf(stderr, "[host] game=%s prelude=%s\n", gGamePath,
-            gPreludePath ? gPreludePath : "(none)");
+    self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    self.window.rootViewController = [[UIViewController alloc] init];
+    self.window.backgroundColor = UIColor.blackColor;
+    [self.window makeKeyAndVisible];
+
+    fprintf(stderr, "[host] game=%s support=%s prelude=%s\n", gGamePath,
+            gSupportPath, gPreludePath ? gPreludePath : "(none)");
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -88,6 +111,8 @@ static void *runGame(void *unused) {
 @end
 
 int main(int argc, char **argv) {
+    gArgc = argc;
+    gArgv = argv;
     @autoreleasepool {
         return UIApplicationMain(argc, argv, nil,
                                  NSStringFromClass(PsdkTestHostDelegate.class));

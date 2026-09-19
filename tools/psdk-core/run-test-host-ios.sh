@@ -24,22 +24,49 @@ DEVICE=
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --game) GAME="$2"; shift 2 ;;
-        --seconds) SECONDS_TO_RUN="$2"; shift 2 ;;
-        --snap-every) SNAP_EVERY="$2"; shift 2 ;;
-        --device) DEVICE="$2"; shift 2 ;;
-        *) echo "run-test-host-ios: unknown argument $1" >&2; exit 2 ;;
+        --game)
+            GAME="$2"
+            shift 2
+            ;;
+        --seconds)
+            SECONDS_TO_RUN="$2"
+            shift 2
+            ;;
+        --snap-every)
+            SNAP_EVERY="$2"
+            shift 2
+            ;;
+        --device)
+            DEVICE="$2"
+            shift 2
+            ;;
+        *)
+            echo "run-test-host-ios: unknown argument $1" >&2
+            exit 2
+            ;;
     esac
 done
 
-[ -n "$GAME" ] || { echo "run-test-host-ios: --game is required" >&2; exit 2; }
-[ -f "$GAME/Game.rb" ] || { echo "run-test-host-ios: $GAME holds no Game.rb" >&2; exit 1; }
-[ -d "$APP" ] || { echo "run-test-host-ios: build the host first" >&2; exit 1; }
+[ -n "$GAME" ] || {
+    echo "run-test-host-ios: --game is required" >&2
+    exit 2
+}
+[ -f "$GAME/Game.rb" ] || {
+    echo "run-test-host-ios: $GAME holds no Game.rb" >&2
+    exit 1
+}
+[ -d "$APP" ] || {
+    echo "run-test-host-ios: build the host first" >&2
+    exit 1
+}
 
 if [ -z "$DEVICE" ]; then
     DEVICE=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)
 fi
-[ -n "$DEVICE" ] || { echo "run-test-host-ios: no booted simulator" >&2; exit 1; }
+[ -n "$DEVICE" ] || {
+    echo "run-test-host-ios: no booted simulator" >&2
+    exit 1
+}
 
 echo "[psdk-run] device $DEVICE"
 xcrun simctl install "$DEVICE" "$APP"
@@ -58,10 +85,14 @@ mkdir -p "$DOCS/Game" "$DOCS/snaps"
     --exclude='*.so' --exclude='*.bundle' \
     .) | (cd "$DOCS/Game" && tar -xf -)
 
+# iOS opens files case-sensitively, and a released game can ask for a
+# spelling it did not ship. normalize-case.py explains the whole thing.
+python3 "$(dirname "$0")/normalize-case.py" "$DOCS/Game"
+
 echo "[psdk-run] launching for ${SECONDS_TO_RUN}s"
 SIMCTL_CHILD_PSDK_RUN_FOR="$SECONDS_TO_RUN" \
-SIMCTL_CHILD_PSDK_SNAP_EVERY="$SNAP_EVERY" \
-SIMCTL_CHILD_PSDK_SNAP_DIR="$DOCS/snaps" \
+    SIMCTL_CHILD_PSDK_SNAP_EVERY="$SNAP_EVERY" \
+    SIMCTL_CHILD_PSDK_SNAP_DIR="$DOCS/snaps" \
     xcrun simctl launch --console-pty "$DEVICE" "$BUNDLE_ID" || true
 
 echo "[psdk-run] snapshots in $DOCS/snaps"
