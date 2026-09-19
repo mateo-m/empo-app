@@ -479,14 +479,26 @@ $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 sfml: init_dirs freetype libogg libvorbis libflac openal $(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile
 	cd $(SOURCES)/sfml/$(CMAKE_BUILDDIR); \
 	make -j$(NPROC); make install
+	@BAD=$$(nm -gUm $(LIBDIR)/libsfml-audio-s.a \
+	    | awk '$$NF ~ /^_drmp3/ {print $$NF}' | sort -u); \
+	[ -z "$$BAD" ] || { \
+	    echo "ERROR: libsfml-audio-s.a exports unprefixed dr_mp3 names: $$BAD"; \
+	    echo "       add them to psdk/drmp3_prefix.h"; \
+	    rm -f $(LIBDIR)/libsfml-audio-s.a; exit 1; }
 
 $(LIBDIR)/libsfml-system-s.a:
 	$(MAKE) -f $(SDK).make sfml
 
-$(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sfml/CMakeLists.txt $(LIBDIR)/libopenal.a
+# The prefix header renames SFML's dr_mp3 copy. CMAKE_C_FLAGS and
+# CMAKE_CXX_FLAGS are cached, so a changed header only takes effect
+# after the build dir goes.
+$(SOURCES)/sfml/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sfml/CMakeLists.txt $(LIBDIR)/libopenal.a ${PWD}/psdk/drmp3_prefix.h
 	cd $(SOURCES)/sfml; \
+	rm -rf $(CMAKE_BUILDDIR); \
 	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) \
+	-DCMAKE_C_FLAGS="$(CFLAGS) -include ${PWD}/psdk/drmp3_prefix.h" \
+	-DCMAKE_CXX_FLAGS="$(CXXFLAGS) -include ${PWD}/psdk/drmp3_prefix.h" \
 	-DBUILD_SHARED_LIBS=OFF \
 	-DSFML_BUILD_EXAMPLES=OFF \
 	-DSFML_BUILD_DOC=OFF \
@@ -524,8 +536,7 @@ litecgss: init_dirs sfml $(SOURCES)/litecgss/$(CMAKE_BUILDDIR)/Makefile $(SOURCE
 	mkdir -p $(INCLUDEDIR)/lodepng; \
 	cp $(SOURCES)/litecgss/external/lodepng/lodepng.h $(INCLUDEDIR)/lodepng/
 	@BAD=$$(nm -gUm $(LIBDIR)/libLiteCGSS_engine.a \
-	    | grep -E '\(__TEXT,__text\) external _(gif|lzw)_' \
-	    | awk '{print $$NF}' | sort -u); \
+	    | awk '$$NF ~ /^_(gif|lzw)_/ {print $$NF}' | sort -u); \
 	[ -z "$$BAD" ] || { \
 	    echo "ERROR: libLiteCGSS_engine.a exports unprefixed libnsgif names: $$BAD"; \
 	    echo "       add them to psdk/nsgif_prefix.h"; \
