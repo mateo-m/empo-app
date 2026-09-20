@@ -41,7 +41,7 @@ enum ScreenRegionApplier {
     // MARK: - Session lifecycle
 
     /// Called from the engine configure path, after
-    /// `mkxp_resetSessionState()` cleared the previous session's
+    /// `gamecore_resetSessionState()` cleared the previous session's
     /// region and before the engine boots (the boot-time recalc
     /// already consumes the bridge statics).
     static func beginSession(container: GameContainer) {
@@ -63,7 +63,7 @@ enum ScreenRegionApplier {
         activeContainer = nil
         previewActive = false
         resolutionCache = nil
-        mkxp_clearHostViewportRegion()
+        gamecore_clearHostViewportRegion()
     }
 
     // MARK: - Apply
@@ -236,11 +236,11 @@ enum ScreenRegionApplier {
 
     private static func send(_ region: ScreenRegion?, isPortrait: Bool) {
         guard let region else {
-            mkxp_clearHostViewportRegion()
+            gamecore_clearHostViewportRegion()
             return
         }
         let clamped = clampToSafeArea(region)
-        mkxp_setHostViewportRegion(
+        gamecore_setHostViewportRegion(
             Float(clamped.x), Float(clamped.y), Float(clamped.w), Float(clamped.h),
             isPortrait)
     }

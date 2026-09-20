@@ -617,9 +617,9 @@ struct PlayerView: View {
         // The shared preset calculator holds the ONE copy of the
         // fit-and-align math.
         let preset: ScreenPreset
-        switch mkxp_getVerticalAlignment() {
-        case MKXP_VALIGN_TOP: preset = .top
-        case MKXP_VALIGN_CENTER: preset = .center
+        switch gamecore_getVerticalAlignment() {
+        case GAMECORE_VALIGN_TOP: preset = .top
+        case GAMECORE_VALIGN_CENTER: preset = .center
         default: preset = .topCenter
         }
         let safeArea = AppWindow.currentSafeArea
@@ -759,8 +759,8 @@ struct PlayerView: View {
         var covered = Set<Int32>()
         if !controlsHidden {
             covered.formUnion([
-                Int32(MKXP_SCANCODE_UP), Int32(MKXP_SCANCODE_DOWN),
-                Int32(MKXP_SCANCODE_LEFT), Int32(MKXP_SCANCODE_RIGHT),
+                Int32(GAMECORE_SCANCODE_UP), Int32(GAMECORE_SCANCODE_DOWN),
+                Int32(GAMECORE_SCANCODE_LEFT), Int32(GAMECORE_SCANCODE_RIGHT),
             ])
             for button in layout.buttons {
                 covered.insert(button.scancode)

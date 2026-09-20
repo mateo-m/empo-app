@@ -46,15 +46,15 @@ Build targets: `make mkxp18-merged`, `mkxp19-merged`, `mkxp31-merged`, or `mkxp-
 The host (Empo iOS app) tells the engine which Ruby version to use before each session, via the `app_bridge.h` API:
 
 ```c
-mkxp_applySessionConfig(&(MKXPSessionConfig){
-    .rubyVersion = MKXP_RUBY_31,
-    .syntaxTransformMode = MKXP_SYNTAX_TRANSFORM_LEGACY,
+gamecore_applySessionConfig(&(GameCoreSessionConfig){
+    .rubyVersion = GAMECORE_RUBY_31,
+    .syntaxTransformMode = GAMECORE_SYNTAX_TRANSFORM_LEGACY,
     /* managedConfigDir, userDataDirectory, alignment, ... */
 });
-mkxp_setGamePath(...);  // session starts
+gamecore_setGamePath(...);  // session starts
 ```
 
-Individual setters (`mkxp_setActiveRubyVersion`, `mkxp_setSyntaxTransformMode`, …) remain for mid-session toggles. `GameSession.configureEngine()` prefers `mkxp_applySessionConfig()` at launch.
+Individual setters (`gamecore_setActiveRubyVersion`, `gamecore_setSyntaxTransformMode`, …) remain for mid-session toggles. `GameSession.configureEngine()` prefers `gamecore_applySessionConfig()` at launch.
 
 `mkxp-z-apple-mobile/src/binding.h`'s `getActiveScriptBinding()` reads the atomic and calls the matching `_mkxp_get_script_binding_NN()` entry point. If the requested version's merged.o is a build-time stub (returns nullptr), the dispatcher falls back to the next available version with a warning.
 
@@ -152,7 +152,7 @@ The patches themselves target Ruby 3.1's parser internals (`parse.y`, `compile.c
 
 ### When it activates
 
-The host sets the mode per session, before `mkxp_setGamePath()`:
+The host sets the mode per session, before `gamecore_setGamePath()`:
 
 | Mode                             | When                                                                                                                                      | Effect                                                                                              |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -207,6 +207,6 @@ Same-game re-entry is safe in principle (no class leak). But the iOS layer curre
 - **iOS**:
   - `ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` - unified per-game detection.
   - `ios/GameProbe/Sources/GameProbe/RubyScriptGrammarSniffer.swift` - Marshal + zlib decoder for Scripts.\* files.
-  - `ios/Empo/src/App/GameSession.swift` - `configureEngine()` before `mkxp_setGamePath`.
+  - `ios/Empo/src/App/GameSession.swift` - `configureEngine()` before `gamecore_setGamePath`.
   - `ios/Empo/src/Library/GameMetadata.swift` - persisted detection result + schema string.
   - `ios/Empo/src/Library/GameSettings.swift` - `rubyVersionOverride` + `useModernRuby` per-game settings.

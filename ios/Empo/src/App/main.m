@@ -15,7 +15,7 @@
 #import <UIKit/UIKit.h>
 
 #include "EmpoCore.h"
-#include "app_bridge.h"
+#include "GameCore.h"
 
 @interface EmpoAppDelegate : UIResponder <UIApplicationDelegate>
 @end
@@ -27,7 +27,7 @@ static int gArgc;
 static char **gArgv;
 
 int EmpoCoreRunEngine(void) {
-    return mkxp_run_app(gArgc, gArgv);
+    return gamecore_run_app(gArgc, gArgv);
 }
 
 int main(int argc, char *argv[]) {

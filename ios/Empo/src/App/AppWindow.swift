@@ -101,7 +101,7 @@ class AppWindow: UIWindow {
     /// calls it once the core is in.
     static func pushSafeAreaInsets() {
         guard EmpoCoreIsOpen() != 0, let insets = instance?.safeAreaInsets else { return }
-        mkxp_setSafeAreaInsets(
+        gamecore_setSafeAreaInsets(
             Float(insets.top), Float(insets.bottom),
             Float(insets.left), Float(insets.right)
         )

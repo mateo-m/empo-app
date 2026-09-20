@@ -4,10 +4,10 @@
 // The on-screen action button and D-pad live in GameControls.swift.
 // The keyboard accessory bar lives in KeyboardAccessoryBar.swift.
 //
-// Engine communication goes through app_bridge.h functions.
+// Core communication goes through GameCore.h functions.
 
 #import "TouchControls.h"
-#include "app_bridge.h"
+#include "GameCore.h"
 
 // Minimum time a key stays down, in seconds. The engine samples key
 // states once per frame, and heavy scenes run well below 40 fps. A
@@ -16,7 +16,7 @@
 static const CGFloat kKeyMinHold = 0.1;
 
 static void injectKey(int scancode, BOOL pressed) {
-    mkxp_injectKeyEvent(scancode, pressed ? 1 : 0);
+    gamecore_injectKeyEvent(scancode, pressed ? 1 : 0);
 }
 
 // TCKeyboardField (intercepts backspace)
@@ -24,9 +24,9 @@ static void injectKey(int scancode, BOOL pressed) {
 @implementation TCKeyboardField
 
 - (void)deleteBackward {
-    injectKey(MKXP_SCANCODE_BACKSPACE, YES);
+    injectKey(GAMECORE_SCANCODE_BACKSPACE, YES);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kKeyMinHold * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{ injectKey(MKXP_SCANCODE_BACKSPACE, NO); });
+                   dispatch_get_main_queue(), ^{ injectKey(GAMECORE_SCANCODE_BACKSPACE, NO); });
 }
 
 - (CGRect)caretRectForPosition:(UITextPosition *)position {

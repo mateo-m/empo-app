@@ -3,7 +3,7 @@ import GameProbe
 import Synchronization
 
 /// Resolves the writable data directory a session hands the engine
-/// (`MKXPSessionConfig.userDataDirectory`, surfaced to games as
+/// (`GameCoreSessionConfig.userDataDirectory`, surfaced to games as
 /// `System.data_directory`).
 ///
 /// Every game resolves to

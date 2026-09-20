@@ -58,11 +58,11 @@ enum VerticalAlignment: String, Codable, CaseIterable {
         }
     }
 
-    var bridgeValue: MKXPVerticalAlignment {
+    var bridgeValue: GameCoreVerticalAlignment {
         switch self {
-        case .top: MKXP_VALIGN_TOP
-        case .topCenter: MKXP_VALIGN_TOP_CENTER
-        case .center: MKXP_VALIGN_CENTER
+        case .top: GAMECORE_VALIGN_TOP
+        case .topCenter: GAMECORE_VALIGN_TOP_CENTER
+        case .center: GAMECORE_VALIGN_CENTER
         }
     }
 }
@@ -178,7 +178,7 @@ struct GameSettings: Codable, Equatable {
     // Performance
     /// fast-forward multiplier (2-9, nil = disabled). Runtime-only,
     /// applied via PlayerMoreSheet's Fast forward toggle through
-    /// `mkxp_setFastForwardMultiplier`.
+    /// `gamecore_setFastForwardMultiplier`.
     @Setting<Int?, RuntimeFlag> var speedMultiplier: Int?
 
     // Engine
@@ -186,8 +186,8 @@ struct GameSettings: Codable, Equatable {
     @Setting<Bool?, RestartFlag> var postloadScripts: Bool?
     /// Override for the engine's syntax-transform mode. nil = auto
     /// (the script scanner picks based on the source's grammar).
-    /// true = `MKXP_SYNTAX_TRANSFORM_DISABLED` (Ruby 3 strict, no
-    /// rewrites). false = `MKXP_SYNTAX_TRANSFORM_LEGACY` (rewrite
+    /// true = `GAMECORE_SYNTAX_TRANSFORM_DISABLED` (Ruby 3 strict, no
+    /// rewrites). false = `GAMECORE_SYNTAX_TRANSFORM_LEGACY` (rewrite
     /// `when X:`, hash rockets, kwarg shorthand etc into Ruby-3
     /// compatible forms). Only the patched Ruby 3.1 parser applies
     /// the transforms. On the 1.8 / 1.9 / 3.0 builds the value is
@@ -199,7 +199,7 @@ struct GameSettings: Codable, Equatable {
     /// nil = use auto-detection from import. 18 / 19 / 30 / 31 forces
     /// that interpreter. Surfaced as the "Ruby version" picker in
     /// GameSettingsView and read by `AppState.selectGame` (calls
-    /// `mkxp_setActiveRubyVersion()` before engine boot).
+    /// `gamecore_setActiveRubyVersion()` before engine boot).
     ///
     /// Stored as Int so unknown values from a future Empo build don't
     /// break decoding. Restart-required because the active Ruby
@@ -210,7 +210,7 @@ struct GameSettings: Codable, Equatable {
     /// entry instead of the iOS soft keyboard. Default false (the
     /// soft keyboard works for IF / Reborn / Insurgence). Flip on
     /// for games whose keyboard scene adds custom keys the soft
-    /// keyboard can't drive. Routes through `mkxp_setUseInGameKeyboard`
+    /// keyboard can't drive. Routes through `gamecore_setUseInGameKeyboard`
     /// to `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
     ///
     /// A bridge setter carries this value, but a restart is still
@@ -228,7 +228,7 @@ struct GameSettings: Codable, Equatable {
     /// JoiPlay-specific code paths (mobile-friendly API calls, but
     /// also patches written against JoiPlay's old mkxp fork that can
     /// misbehave on our engine). Default off. Routes through
-    /// `MKXPSessionConfig.joiplayCompat` to `platform_compat.rb`,
+    /// `GameCoreSessionConfig.joiplayCompat` to `platform_compat.rb`,
     /// which sets the global before game scripts load, so a
     /// restart is required.
     @Setting<Bool?, RestartFlag> var joiplayCompat: Bool?
@@ -240,7 +240,7 @@ struct GameSettings: Codable, Equatable {
     /// airplane mode: libraries still load, but every connection
     /// attempt fails the way it does with no connectivity, so games
     /// take their own offline fallback paths. Routes through
-    /// `MKXPSessionConfig.networkEnabled`. The preload layer reads it
+    /// `GameCoreSessionConfig.networkEnabled`. The preload layer reads it
     /// via `System.network_enabled?` before game scripts load, so a
     /// restart is required.
     @Setting<Bool?, RestartFlag> var networkEnabled: Bool?
@@ -408,7 +408,7 @@ struct GameSettings: Codable, Equatable {
     func resolveSyntaxTransformMode(
         gameDirectory: URL,
         autoDetectedModern: Bool? = nil
-    ) -> MKXPSyntaxTransformMode {
+    ) -> GameCoreSyntaxTransformMode {
         let modern: Bool
         if let m = useModernRuby {
             modern = m
@@ -418,8 +418,8 @@ struct GameSettings: Codable, Equatable {
             modern = GameScriptProfile.analyze(gameDirectory: gameDirectory).modernRubyScripts
         }
         return modern
-            ? MKXP_SYNTAX_TRANSFORM_DISABLED
-            : MKXP_SYNTAX_TRANSFORM_LEGACY
+            ? GAMECORE_SYNTAX_TRANSFORM_DISABLED
+            : GAMECORE_SYNTAX_TRANSFORM_LEGACY
     }
 
     /// Reads the game's mkxp.json defaults straight from the

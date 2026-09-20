@@ -44,7 +44,7 @@ but the native client refuses requests. Socket connects raise
 `Errno::ENETDOWN`, and downloads report failure. Games then take the same
 offline fallback paths that they ship for desktop players without internet.
 Postload stubs for Windows-only online modules still apply while the game is
-offline. The host provides the TLS trust store (`mkxp_setCABundlePath`,
+offline. The host provides the TLS trust store (`gamecore_setCABundlePath`,
 exported to Ruby as `SSL_CERT_FILE`). The launcher refreshes the store
 silently.
 

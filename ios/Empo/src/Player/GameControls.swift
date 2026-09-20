@@ -545,10 +545,10 @@ typealias DPadDirection = DPadTouchReducer.Direction
 extension DPadDirection {
     var scancode: Int32 {
         switch self {
-        case .up: Int32(MKXP_SCANCODE_UP)
-        case .down: Int32(MKXP_SCANCODE_DOWN)
-        case .left: Int32(MKXP_SCANCODE_LEFT)
-        case .right: Int32(MKXP_SCANCODE_RIGHT)
+        case .up: Int32(GAMECORE_SCANCODE_UP)
+        case .down: Int32(GAMECORE_SCANCODE_DOWN)
+        case .left: Int32(GAMECORE_SCANCODE_LEFT)
+        case .right: Int32(GAMECORE_SCANCODE_RIGHT)
         }
     }
 

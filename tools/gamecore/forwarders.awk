@@ -1,17 +1,7 @@
-# Read the MKXPZ_MOBILE block of app_bridge.h and print one dlsym
-# forwarder for every mkxp_* function it declares.
-# tools/mkxp-core/generate-core-forwarders.sh runs this.
+# Read ios/Empo/src/App/GameCore.h and print one dlsym forwarder for
+# every gamecore_* function it declares.
+# tools/gamecore/generate-core-forwarders.sh runs this.
 
-/^#if MKXPZ_MOBILE/ {
-    inblock = 1
-    next
-}
-/^#else/ {
-    inblock = 0
-}
-!inblock {
-    next
-}
 /^[ \t]*#/ {
     next
 }
@@ -66,7 +56,7 @@
     params = substr(buf, open + 1, shut - open - 1)
 
     # The name is the last identifier of the head, and the return type
-    # is everything before it. "const char *mkxp_getX" has no space
+    # is everything before it. "const char *gamecore_getX" has no space
     # between the star and the name, so cut on the identifier.
     if (match(head, /[A-Za-z_][A-Za-z0-9_]*[ \t]*$/) == 0) {
         buf = ""
@@ -76,7 +66,7 @@
     gsub(/[ \t]/, "", name)
     ret = substr(head, 1, RSTART - 1)
     sub(/ $/, "", ret)
-    if (name !~ /^mkxp_/) {
+    if (name !~ /^gamecore_/) {
         buf = ""
         next
     }
@@ -100,10 +90,14 @@
         args = (args == "") ? arg : args ", " arg
     }
 
+    # The core answers under its own prefix, so the forwarder asks for
+    # the name without one. coreSymbol puts the open core's prefix back.
+    suffix = substr(name, length("gamecore_") + 1)
+
     printf "%s %s(%s) {\n", ret, name, params
     printf "    static %s (*fn)(%s);\n", ret, params
     printf "    if (fn == NULL) {\n"
-    printf "        fn = coreSymbol(\"%s\");\n", name
+    printf "        fn = coreSymbol(\"%s\");\n", suffix
     printf "    }\n"
     if (ret == "void") {
         printf "    fn(%s);\n", args

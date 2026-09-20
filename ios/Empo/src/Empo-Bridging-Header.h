@@ -1,7 +1,7 @@
 // Empo-Bridging-Header.h
 // Exposes C bridge functions and ObjC touch control classes to Swift
 
-#import "app_bridge.h"
+#import "GameCore.h"
 #import "EmpoCore.h"
 #import "TouchControls.h"
 

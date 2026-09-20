@@ -5,9 +5,9 @@
 // game runs on. A core that is never picked is never loaded, so two
 // cores never share a definition.
 //
-// MkxpCoreForwarders.c implements this for MkxpCore.framework. Every
-// mkxp_* call in the app goes through a forwarder that reads its symbol
-// from the open core.
+// GameCoreForwarders.c implements this. Every gamecore_* call in the
+// app goes through a forwarder that reads its symbol from the open
+// core, under that core's own prefix.
 
 #ifndef EMPO_CORE_H
 #define EMPO_CORE_H
@@ -20,7 +20,11 @@ extern "C" {
 // framework bundle, not the bundle. Returns 1 on success and 0 when
 // dlopen fails, after it writes the reason to stderr. A second call
 // with the core already open succeeds and changes nothing.
-int EmpoCoreOpen(const char *binaryPath);
+//
+// symbolPrefix is what that core puts in front of every interface name
+// ("mkxp_" for MkxpCore, "psdk_" for PsdkCore). The forwarders build
+// each symbol from it.
+int EmpoCoreOpen(const char *binaryPath, const char *symbolPrefix);
 
 int EmpoCoreIsOpen(void);
 
@@ -31,7 +35,7 @@ int EmpoCoreIsOpen(void);
 // block on the main dispatch queue. The engine holds the thread for the
 // whole session, so a main queue block would stop that queue from
 // draining, and the engine's RGSS thread deadlocks on the first
-// mkxp_getScreenScale, which dispatch_syncs to that queue.
+// gamecore_getScreenScale, which dispatch_syncs to that queue.
 int EmpoCoreRunEngine(void);
 
 #ifdef __cplusplus

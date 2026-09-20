@@ -103,7 +103,7 @@ final class SessionLogger {
         enabled: Bool
     ) {
         guard enabled else {
-            mkxp_setDebugLogPath(nil)
+            gamecore_setDebugLogPath(nil)
             return
         }
 
@@ -121,7 +121,7 @@ final class SessionLogger {
                 ]) + "\n"
         try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
 
-        mkxp_setDebugLogPath(logPath)
+        gamecore_setDebugLogPath(logPath)
 
         let maxLogFiles = UserDefaults.standard.object(forKey: DefaultsKey.maxLogFiles) as? Int ?? 20
         Self.pruneSessionLogs(in: logsDir, keeping: maxLogFiles)

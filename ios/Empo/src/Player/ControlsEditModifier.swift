@@ -115,26 +115,26 @@ struct AddButtonSheet: View {
 
     private func isCommon(_ entry: KeyEntry) -> Bool {
         let common: Set<Int32> = [
-            Int32(MKXP_SCANCODE_Z), Int32(MKXP_SCANCODE_X),
-            Int32(MKXP_SCANCODE_LSHIFT), Int32(MKXP_SCANCODE_LCTRL),
-            Int32(MKXP_SCANCODE_SPACE), Int32(MKXP_SCANCODE_RETURN),
-            Int32(MKXP_SCANCODE_ESCAPE), Int32(MKXP_SCANCODE_TAB),
-            Int32(MKXP_SCANCODE_LALT), Int32(MKXP_SCANCODE_BACKSPACE),
+            Int32(GAMECORE_SCANCODE_Z), Int32(GAMECORE_SCANCODE_X),
+            Int32(GAMECORE_SCANCODE_LSHIFT), Int32(GAMECORE_SCANCODE_LCTRL),
+            Int32(GAMECORE_SCANCODE_SPACE), Int32(GAMECORE_SCANCODE_RETURN),
+            Int32(GAMECORE_SCANCODE_ESCAPE), Int32(GAMECORE_SCANCODE_TAB),
+            Int32(GAMECORE_SCANCODE_LALT), Int32(GAMECORE_SCANCODE_BACKSPACE),
         ]
         return common.contains(entry.scancode)
     }
 
     private func isLetter(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(MKXP_SCANCODE_A) && entry.scancode <= Int32(MKXP_SCANCODE_Z)
+        entry.scancode >= Int32(GAMECORE_SCANCODE_A) && entry.scancode <= Int32(GAMECORE_SCANCODE_Z)
             && !isCommon(entry)
     }
 
     private func isNumber(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(MKXP_SCANCODE_1) && entry.scancode <= Int32(MKXP_SCANCODE_0)
+        entry.scancode >= Int32(GAMECORE_SCANCODE_1) && entry.scancode <= Int32(GAMECORE_SCANCODE_0)
     }
 
     private func isFunction(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(MKXP_SCANCODE_F1) && entry.scancode <= Int32(MKXP_SCANCODE_F12)
+        entry.scancode >= Int32(GAMECORE_SCANCODE_F1) && entry.scancode <= Int32(GAMECORE_SCANCODE_F12)
     }
 }
 

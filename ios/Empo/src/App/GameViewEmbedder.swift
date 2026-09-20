@@ -61,7 +61,7 @@ enum GameViewEmbedder {
     }
 
     private static func sdlUIKitWindow() -> UIWindow? {
-        guard let ptr = mkxp_getSDLUIKitWindow() else { return nil }
+        guard let ptr = gamecore_getSDLUIKitWindow() else { return nil }
         return Unmanaged<UIWindow>.fromOpaque(ptr).takeUnretainedValue()
     }
 }

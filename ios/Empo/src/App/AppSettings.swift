@@ -296,8 +296,8 @@ class AppSettings {
     /// in.
     func pushToCore() {
         guard EmpoCoreIsOpen() != 0 else { return }
-        mkxp_setShowViewportBounds(showViewportBounds)
+        gamecore_setShowViewportBounds(showViewportBounds)
         let c = resolvedRGBA()
-        mkxp_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
+        gamecore_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
     }
 }

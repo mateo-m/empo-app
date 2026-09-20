@@ -36,12 +36,12 @@ struct GameMetadata: Codable {
     var manifestDescription: String?
 
     // Ruby interpreter version this game expects, encoded as the
-    // engine bridge's MKXPRubyVersion enum raw value (18, 19, 30,
+    // engine bridge's GameCoreRubyVersion enum raw value (18, 19, 30,
     // or 31). nil = default, fall back to whatever the engine's
     // legacy path picks. Populated at import time by sniffing the bundled
     // Ruby DLL filename, script grammar, RGSS archive type, and
     // Game.ini's Library= field. AppState.selectGame reads this and
-    // calls `mkxp_setActiveRubyVersion()` so the multi-Ruby
+    // calls `gamecore_setActiveRubyVersion()` so the multi-Ruby
     // dispatcher (binding.h's getActiveScriptBinding) routes to the
     // correct per-version `_mkxp_get_script_binding_NN()` entry point.
     //

@@ -16,7 +16,7 @@ class AppState {
     var selectedGame: GameEntry?
     var errorMessage: String?
     /// A deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
-    /// The engine thread blocks in `mkxp_presentInfoAndWait()` until
+    /// The engine thread blocks in `gamecore_presentInfoAndWait()` until
     /// the user dismisses RootView's info alert. The game then
     /// continues to run, so the alert shows no restart framing.
     var infoMessage: String?

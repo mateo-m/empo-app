@@ -180,10 +180,11 @@ targets:
           rm -rf "$BUNDLE/SplashIcons"
           mkdir -p "$BUNDLE/SplashIcons"
           cp "${PROJECT_DIR}/curated-splash-icons/"*.svg "$BUNDLE/SplashIcons/"
-      - name: Embed MkxpCore.framework
-        # The engine, its three Ruby versions, its SDL and its own
-        # Assets.bundle and Ruby stdlib. The app links none of it and
-        # opens the framework with dlopen when the user picks a game
+      - name: Embed the cores
+        # One framework for each engine. MkxpCore holds mkxp-z, its
+        # three Ruby versions and its SDL. PsdkCore holds LiteRGSS2,
+        # LiteCGSS, SFML and Ruby 3.0. The app links neither and opens
+        # one of them with dlopen when the user picks a game
         # (EngineSessionCoordinator.openCore).
         #
         # A copy phase, not a linked dependency. The app must not bind
@@ -195,22 +196,29 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           set -e
-          CORE_SRC="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/MkxpCore.framework"
-          if [ ! -d "$CORE_SRC" ]; then
-            echo "error: $CORE_SRC missing - run: cd ios/Dependencies && make -f ${PLATFORM_NAME}.make mkxp-framework (or refetch native deps)" >&2
-            exit 1
-          fi
+          TREE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64"
           DEST="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
           mkdir -p "$DEST"
-          rsync -a --delete "$CORE_SRC" "$DEST/"
-          # A nested framework carries its own signature. The app's own
-          # signing step does not reach inside it, so sign it here, the
-          # way Xcode's Embed Frameworks phase does.
-          if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] && [ "${CODE_SIGNING_ALLOWED:-YES}" != "NO" ]; then
-            codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
-              --preserve-metadata=identifier,entitlements,flags \
-              --timestamp=none "$DEST/MkxpCore.framework"
-          fi
+          for CORE in MkxpCore PsdkCore; do
+            CORE_SRC="$TREE/$CORE.framework"
+            if [ ! -d "$CORE_SRC" ]; then
+              case "$CORE" in
+                MkxpCore) HOW="cd ios/Dependencies && make -f ${PLATFORM_NAME}.make mkxp-framework" ;;
+                PsdkCore) HOW="tools/psdk-core/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
+              esac
+              echo "error: $CORE_SRC missing - run: $HOW (or refetch native deps)" >&2
+              exit 1
+            fi
+            rsync -a --delete "$CORE_SRC" "$DEST/"
+            # A nested framework carries its own signature. The app's
+            # own signing step does not reach inside it, so sign it
+            # here, the way Xcode's Embed Frameworks phase does.
+            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] && [ "${CODE_SIGNING_ALLOWED:-YES}" != "NO" ]; then
+              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
+                --preserve-metadata=identifier,entitlements,flags \
+                --timestamp=none "$DEST/$CORE.framework"
+            fi
+          done
       - name: Generate Git Info
         # Force this script to run every build. Without this, Xcode sees
         # the declared output file already on disk and skips the script,
@@ -290,11 +298,11 @@ targets:
             echo "$NEW" > "$OUT"
           fi
     sources:
-      # The mkxp-z engine is neither compiled nor linked here. It is
-      # built into MkxpCore.framework, which the "Embed
-      # MkxpCore.framework" phase copies into the app. The engine core,
-      # the three per-Ruby binding objects, every Ruby, SDL and the
-      # Ruby stdlib all sit inside that one image.
+      # No engine is compiled or linked here. Each one is built into
+      # its own framework, which the "Embed the cores" phase copies
+      # into the app. MkxpCore holds the mkxp-z core, the three
+      # per-Ruby binding objects, every Ruby, SDL and the Ruby stdlib.
+      # PsdkCore holds LiteRGSS2, LiteCGSS, SFML and Ruby 3.0.
       #
       # `make -f <platform>.make mkxp-framework` builds it in
       # ios/Dependencies, or it arrives with the published artifact
@@ -343,11 +351,12 @@ targets:
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/Empo-Bridging-Header.h
         OTHER_LDFLAGS:
-          # The engine is not here. It lives in MkxpCore.framework,
-          # which the "Embed MkxpCore.framework" phase copies into the
-          # app and EngineSessionCoordinator.openCore opens with dlopen.
-          # Every mkxp_* name the app calls resolves through
-          # MkxpCoreForwarders.c, so the linker sees none of them.
+          # The engine is not here. It lives in MkxpCore.framework or
+          # PsdkCore.framework, which the "Embed the cores" phase
+          # copies into the app and EngineSessionCoordinator.openCore
+          # opens with dlopen.
+          # Every gamecore_* name the app calls resolves through
+          # GameCoreForwarders.c, so the linker sees none of them.
           #
           # What stays is what Empo itself uses: libarchive and its
           # compressors for the importer, and the frameworks its own

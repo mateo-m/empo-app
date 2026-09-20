@@ -918,18 +918,18 @@ class ControlsLayout {
     /// 2x2 button grid in the bottom-right of a portrait viewport.
     nonisolated static let defaultButtonsPortrait: [ButtonModel] = [
         ButtonModel(
-            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN),
+            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
             relativeCenter: CGPoint(x: 0.70, y: 0.67),
             size: 56),
         ButtonModel(
-            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE),
+            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
             relativeCenter: CGPoint(x: 0.88, y: 0.67),
             size: 56),
         ButtonModel(
-            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.70, y: 0.76),
+            label: "Z", scancode: Int32(GAMECORE_SCANCODE_Z), relativeCenter: CGPoint(x: 0.70, y: 0.76),
             size: 56),
         ButtonModel(
-            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.76),
+            label: "B", scancode: Int32(GAMECORE_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.76),
             size: 56),
     ]
 
@@ -939,18 +939,18 @@ class ControlsLayout {
     /// game viewport's center.
     nonisolated static let defaultButtonsLandscape: [ButtonModel] = [
         ButtonModel(
-            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN),
+            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
             relativeCenter: CGPoint(x: 0.80, y: 0.59),
             size: 56),
         ButtonModel(
-            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE),
+            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
             relativeCenter: CGPoint(x: 0.88, y: 0.59),
             size: 56),
         ButtonModel(
-            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.80, y: 0.75),
+            label: "Z", scancode: Int32(GAMECORE_SCANCODE_Z), relativeCenter: CGPoint(x: 0.80, y: 0.75),
             size: 56),
         ButtonModel(
-            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.75),
+            label: "B", scancode: Int32(GAMECORE_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.75),
             size: 56),
     ]
 

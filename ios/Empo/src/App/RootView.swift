@@ -248,9 +248,9 @@ struct RootView: View {
         )
     }
 
-    /// Unblocks any engine thread waiting in `mkxp_presentErrorAndWait()`.
+    /// Unblocks any engine thread waiting in `gamecore_presentErrorAndWait()`.
     private func dismissErrorAlert() {
-        if EmpoCoreIsOpen() != 0 { mkxp_signalErrorDismissed() }
+        if EmpoCoreIsOpen() != 0 { gamecore_signalErrorDismissed() }
         appState.errorMessage = nil
     }
 
@@ -269,10 +269,10 @@ struct RootView: View {
             ?? "Game message"
     }
 
-    /// Unblocks the engine thread that waits in `mkxp_presentInfoAndWait()`.
+    /// Unblocks the engine thread that waits in `gamecore_presentInfoAndWait()`.
     /// The game resumes right where it called `msgbox`.
     private func dismissInfoAlert() {
-        if EmpoCoreIsOpen() != 0 { mkxp_signalInfoDismissed() }
+        if EmpoCoreIsOpen() != 0 { gamecore_signalInfoDismissed() }
         appState.infoMessage = nil
     }
 
@@ -282,7 +282,7 @@ struct RootView: View {
     /// way out is for the user to close and reopen the app manually.
     /// We do not call `exit()`, per App Store guideline 2.5.1.
     private var engineHung: Bool {
-        EmpoCoreIsOpen() != 0 && mkxp_isEngineHung() != 0
+        EmpoCoreIsOpen() != 0 && gamecore_isEngineHung() != 0
     }
 
     /// Wait (up to `scanGraceDuration`) for the initial library scan.
