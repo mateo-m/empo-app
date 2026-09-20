@@ -31,6 +31,43 @@ one either. `scripts/check-mkxp-framework.sh` and
 They also fail when a core leaves the two-level namespace, because a flat
 namespace would let a second core bind to the first core's names.
 
+## What a launcher setting means for each core
+
+Empo sends both cores the same settings. Each core answers with what its
+own engine has. The PSDK core answers four:
+
+| Setting | What the PSDK core does |
+| --- | --- |
+| Fixed aspect ratio | `placeOutputRegion` fits the picture in the launcher's region and centres it. |
+| Smooth scaling | The SFML fork reads the flag in the `sf::Texture` constructor, so every picture the game makes after that is smooth. The game's own resolution goes up to the screen with the GL viewport, so the filter of each texture decides how the whole picture looks. A texture reads the flag once, so a new value needs a restart. |
+| Touch acts as mouse | LiteRGSS2 keeps the touch events out of the game while it is off. |
+| Fast forward | `runtime_prelude.rb` multiplies the frame rate that `Graphics::FPSBalancer` reads. The balancer divides the real clock by that rate and runs that many game frames, so the game runs faster and still draws at the same rate. A new value applies while the game runs. |
+
+The other rows belong to mkxp-z: render scale, frame skip, solid fonts,
+postload scripts, the path cache, the in-game keyboard, JoiPlay
+compatibility, the Ruby version and network access. `GameSettingsView`
+shows a PSDK game only the rows above and the layout profile.
+
+## What the engine asks the bridge
+
+`psdk_app_bridge.cpp` answers two sets of names. The launcher interface
+is the set in `psdk_app_bridge.h`. The other set is what the engine and
+the SFML fork call, and no header declares it:
+
+| Name | Who calls it |
+| --- | --- |
+| `psdk_game_resolution` | LiteRGSS2, with the resolution the game asked for |
+| `psdk_frame_rendered` | the SFML fork, on every frame it swaps |
+| `psdk_picture_rect_pixels` | LiteRGSS2, to put a touch inside the picture |
+| `psdk_touch_mouse_enabled` | LiteRGSS2, before it sends a touch to the game |
+| `psdk_smooth_scaling_enabled` | the SFML fork, in the `sf::Texture` constructor, and LiteRGSS2 for the window settings |
+| `psdk_fast_forward_multiplier` | LiteRGSS2, for `LiteRGSS.fast_forward_multiplier` |
+
+Each name is weak where the engine declares it, so both forks still build
+without a launcher behind them. `check-core-interface.sh` reads the
+header, so a name here never reaches the other two copies of the
+interface.
+
 ## One interface, one prefix for each side
 
 The same interface exists three times, once on each side, and each side owns
