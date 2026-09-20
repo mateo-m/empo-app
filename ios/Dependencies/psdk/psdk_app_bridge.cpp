@@ -77,6 +77,9 @@ std::atomic<float> gHostRegionH{1.0f};
 std::atomic<int> gGameWidth{0};
 std::atomic<int> gGameHeight{0};
 std::atomic<bool> gFixedAspectRatio{true};
+// The window size the last placement used, width in the high half and
+// height in the low half.
+std::atomic<unsigned long long> gPlacedWindowSize{0};
 
 std::atomic<bool> gGameReady{false};
 std::atomic<bool> gEngineTerminatedFlag{false};
@@ -212,17 +215,6 @@ void *runGame(void *) {
 
 } // namespace
 
-// SFML calls this from Window::display on every frame it swaps.
-extern "C" void psdk_frame_rendered() {
-    bool first = !gGameReady.exchange(true);
-    if (first) {
-        fprintf(stderr, "[psdk-bridge] first frame\n");
-    }
-    if (gFrameRendered.fn) {
-        reinterpret_cast<psdk_FrameRenderedCallback>(gFrameRendered.fn)(gFrameRendered.userdata);
-    }
-}
-
 namespace {
 
 // The launcher's own setting, from the same overlay it gives mkxp-z.
@@ -329,6 +321,31 @@ extern "C" void psdk_game_resolution(long width, long height) {
     gGameWidth.store(static_cast<int>(width));
     gGameHeight.store(static_cast<int>(height));
     placeOutputRegion();
+}
+
+// SFML calls this from Window::display on every frame it swaps.
+extern "C" void psdk_frame_rendered() {
+    // The game reports its resolution from DisplayWindow.new, which runs
+    // before SFML makes the window, so that first placement has no
+    // window to measure and does nothing. A drawn frame proves the
+    // window exists. The size also changes on every rotation, so the
+    // check reads the size itself instead of a "first frame" flag.
+    unsigned int windowW = 0;
+    unsigned int windowH = 0;
+    sfml_window_pixel_size(&windowW, &windowH);
+    const unsigned long long size =
+        (static_cast<unsigned long long>(windowW) << 32) | static_cast<unsigned long long>(windowH);
+    if (size != 0 && gPlacedWindowSize.exchange(size) != size) {
+        placeOutputRegion();
+    }
+
+    bool first = !gGameReady.exchange(true);
+    if (first) {
+        fprintf(stderr, "[psdk-bridge] first frame\n");
+    }
+    if (gFrameRendered.fn) {
+        reinterpret_cast<psdk_FrameRenderedCallback>(gFrameRendered.fn)(gFrameRendered.userdata);
+    }
 }
 
 // MARK: - Starting the game
@@ -448,6 +465,7 @@ void psdk_resetSessionState(void) {
     gHasHostRegion.store(false);
     gGameWidth.store(0);
     gGameHeight.store(0);
+    gPlacedWindowSize.store(0);
 }
 
 // MARK: - Pause
