@@ -65,6 +65,19 @@ int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
         return PSDK_CHDIR_FAILED;
     }
 
+    // A released PSDK game keeps files of its own under the player's
+    // home folder. Edelweiss Chronicles writes
+    // `.Edelweiss Chronicles/input.json` there, and its save path script
+    // reads Dir.home. On iOS, HOME is the app container's root folder,
+    // and the sandbox permits no write there, so the game stopped with
+    // Errno::EPERM before its first frame. The game folder is writable,
+    // because a PSDK game saves next to its own files.
+    //
+    // Set before ruby_options, for the same reason as GAMEDEPS.
+    setenv("HOME", gameDir, 1);
+
+    fprintf(stderr, "[psdk] boot in %s\n", gameDir);
+
     // The real argv, not a made-up one. Ruby writes the process title
     // into the argv region on a `$0 =`, and the kernel's argv is the only
     // block that is writable and next to the environment. With a stack
@@ -84,6 +97,8 @@ int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
         fprintf(stderr, "[psdk] ruby_options failed\n");
         return PSDK_RUBY_BOOT_FAILED;
     }
+
+    fprintf(stderr, "[psdk] boot ruby is up\n");
 
     // Ruby was cross-compiled, so its built-in $LOAD_PATH points at a
     // prefix that does not exist on the device. Without this, the game's
@@ -109,6 +124,8 @@ int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
     Init_SFMLAudio();
     rb_provide("SFMLAudio");
 
+    fprintf(stderr, "[psdk] boot LiteRGSS and SFMLAudio are in\n");
+
     state = 0;
     VALUE hasModule = rb_eval_string_protect("defined?(LiteRGSS::Sprite) ? true : false", &state);
     if (state != 0 || hasModule != Qtrue) {
@@ -121,6 +138,11 @@ int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
         return PSDK_PRELUDE_RAISED;
     }
 
+    // The last line the log holds says how far the boot got. A released
+    // game leaves through `exit!`, which writes no crash report, so
+    // these lines are the only record of where it stopped.
+    fprintf(stderr, "[psdk] boot Game.rb starts\n");
+
     // Game.rb is one line in every released PSDK game:
     // `RubyVM::InstructionSequence.load_from_binary(File.binread('Game.yarb')).eval`
     //
@@ -130,6 +152,7 @@ int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
     if (loadRubyFile(std::string(gameDir) + "/Game.rb") != 0) {
         return PSDK_GAME_RAISED;
     }
+    fprintf(stderr, "[psdk] boot Game.rb returned\n");
     return PSDK_OK;
 }
 
