@@ -706,6 +706,7 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
                                $(LIBDIR)/libcrypto.a \
                                ${PWD}/psdk/psdk_core.cpp \
                                ${PWD}/psdk/psdk_core.h \
+                               ${PWD}/psdk/psdk_app_bridge.cpp \
                                ${PWD}/psdk/sfml_audio.cpp
 	@echo "[psdk] Compiling ext/LiteRGSS against Ruby 3.0..."
 	@mkdir -p $(PSDK_OBJDIR)
@@ -723,6 +724,10 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
 	    -I$(INCLUDEDIR)/ruby30 -I$(INCLUDEDIR) \
 	    -c ${PWD}/psdk/sfml_audio.cpp -o $(PSDK_OBJDIR)/_psdk_sfml_audio.o
+	@# The launcher interface, psdk_app_bridge.h.
+	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
+	    -I$(INCLUDEDIR) \
+	    -c ${PWD}/psdk/psdk_app_bridge.cpp -o $(PSDK_OBJDIR)/_psdk_app_bridge.o
 	@echo "[psdk] Generating the unexport list..."
 	@# libssl and libcrypto go in the list as well. The Ruby openssl
 	@# extension is their only caller and it sits inside this same
@@ -742,7 +747,7 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	@nm -gU $(PSDK_OBJDIR)/*.o 2>/dev/null \
 	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
 	    | sort -u \
-	    | grep -vE '^_psdk_run$$|^_psdk_inject_scancode$$' \
+	    | grep -vE '^_psdk_' \
 	    | grep -vE '^___cxa_' \
 	    >> $(BUILD_PREFIX)/litergss30-unexports.txt.raw
 	@sort -u $(BUILD_PREFIX)/litergss30-unexports.txt.raw \
@@ -765,15 +770,21 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	@# as $(ENGINE)/tools/build-binding-ios.sh. It sees neither the 212
 	@# external commons nor the weak definitions, so it does not prove
 	@# this object is safe to link next to mkxp-z. Nothing does.
+	@# Only a psdk_ name may be out: psdk_core.h declares psdk_run and
+	@# psdk_inject_scancode, and psdk_app_bridge.h declares the rest for
+	@# a launcher. A Ruby, an openssl or a LiteRGSS name here would
+	@# reach a second core at the final link.
 	@EXPORTED=$$(nm -gUm $(LIBDIR)/litergss30-merged.o \
 	    | grep -E '\(__TEXT,__text\) external ' \
 	    | awk '{print $$NF}' | sort -u); \
-	echo "$$EXPORTED" | sed 's/^/  /'; \
-	[ "$$(echo "$$EXPORTED" | tr '\n' ' ')" = "_psdk_inject_scancode _psdk_run " ] || { \
-	    echo "ERROR: litergss30-merged.o must export exactly _psdk_run and _psdk_inject_scancode"; \
+	LEAK=$$(echo "$$EXPORTED" | grep -vE '^_psdk_' || true); \
+	[ -z "$$LEAK" ] || { \
+	    echo "ERROR: litergss30-merged.o exports names that are not _psdk_*:"; \
+	    echo "$$LEAK" | sed 's/^/  /'; \
 	    rm -f $(LIBDIR)/litergss30-merged.o; \
 	    exit 1; \
-	}
+	}; \
+	echo "  $$(echo "$$EXPORTED" | wc -l | tr -d ' ') exported names, all _psdk_*"
 
 # The Ruby support folder the PSDK core needs at run time. The host
 # copies it into the app, and the core both prepends it to $LOAD_PATH and

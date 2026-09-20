@@ -2,7 +2,7 @@
 # Fail when PsdkCore.framework stops being a closed boundary.
 #
 # The export list is the whole isolation mechanism, so it is the thing to
-# check. Two names out, no Ruby and no LiteRGSS name in.
+# check. Only psdk_ names out, no Ruby and no LiteRGSS name in.
 #
 # Usage:
 #   scripts/check-psdk-framework.sh [--sdk iphoneos|iphonesimulator]
@@ -41,9 +41,26 @@ BIN="$FW/PsdkCore"
 [ -f "$BIN" ] ||
     fail "missing $BIN (run: tools/psdk-core/build-framework-ios.sh --sdk $SDK)"
 
-EXPORTS=$(dyld_info -exports "$BIN" | awk '/^ *0x/ {print $2}' | sort -u | tr '\n' ' ')
-[ "$EXPORTS" = "_psdk_inject_scancode _psdk_run " ] ||
-    fail "PsdkCore must export exactly _psdk_run and _psdk_inject_scancode (got: $EXPORTS)"
+EXPORTS=$(dyld_info -exports "$BIN" | awk '/^ *0x/ {print $2}' | sort -u)
+
+# psdk_run and psdk_inject_scancode are what psdk_core.h declares, and
+# the test host calls them straight. Everything else is the launcher
+# interface from psdk_app_bridge.cpp.
+for want in _psdk_run _psdk_inject_scancode; do
+    grep -qx "$want" <<<"$EXPORTS" || fail "PsdkCore does not export $want"
+done
+
+STRAY=$(grep -vE '^_psdk_' <<<"$EXPORTS" || true)
+[ -z "$STRAY" ] ||
+    fail "PsdkCore exports names that are not psdk_*: $(tr '\n' ' ' <<<"$STRAY")"
+
+# A launcher opens the core and calls these, so a missing one aborts in
+# the forwarder instead of failing here.
+for want in _psdk_run_app _psdk_setGamePath _psdk_waitForGamePath \
+    _psdk_injectKeyEvent _psdk_getSDLUIKitWindow \
+    _psdk_setFrameRenderedCallback _psdk_setEngineTerminatedCallback; do
+    grep -qx "$want" <<<"$EXPORTS" || fail "PsdkCore does not export $want"
+done
 
 LEAK=$(dyld_info -imports "$BIN" | grep -E '_rb_|_ruby_|ViewportElement' || true)
 [ -z "$LEAK" ] || fail "PsdkCore imports engine internals: $LEAK"
@@ -60,7 +77,7 @@ otool -l "$BIN" | grep -Eq "platform ${WANT}([[:space:]]|$)" ||
     fail "PsdkCore is not built for $SDK (platform $WANT)"
 
 for f in PsdkSupport/ruby-dist/lib/LiteRGSS.rb PsdkSupport/ruby-dist/lib/SFMLAudio.rb \
-    PsdkSupport/uri.rb Headers/psdk_core.h Info.plist; do
+    PsdkSupport/uri.rb Headers/psdk_core.h runtime_prelude.rb Info.plist; do
     [ -e "$FW/$f" ] || fail "PsdkCore.framework/$f missing"
 done
 

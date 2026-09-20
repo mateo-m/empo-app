@@ -82,7 +82,25 @@ fi
 
 rm -rf "$FW"
 mkdir -p "$FW/Headers"
-printf '_psdk_run\n_psdk_inject_scancode\n' >"$TREE/psdk-core.exports"
+# Two groups go out. psdk_run and psdk_inject_scancode, which
+# psdk_core.h declares for a host that drives the core directly (the
+# test host does). The launcher interface, which psdk_app_bridge.h
+# declares, and which a launcher resolves name by name in the core it
+# opened.
+{
+    printf '_psdk_run\n_psdk_inject_scancode\n'
+    grep -oE '\bpsdk_[A-Za-z0-9_]+\(' "$DEPS/psdk/psdk_app_bridge.h" |
+        sed 's/(//' | sort -u | sed 's/^/_/'
+} | sort -u >"$TREE/psdk-core.exports.want"
+
+# Only the names this core really defines. psdk_app_bridge.h declares
+# 102 and psdk_app_bridge.cpp answers the ones a launcher calls. A name
+# in the list that no object defines makes the linker warn and the
+# export list drift away from what the core can do.
+nm -gU "$TREE/lib/litergss30-merged.o" |
+    awk '/^[0-9a-f]+ [TDSR] /{print $3}' | sort -u >"$TREE/psdk-core.defined"
+comm -12 "$TREE/psdk-core.exports.want" "$TREE/psdk-core.defined" \
+    >"$TREE/psdk-core.exports"
 
 echo "[psdk-framework] Linking..."
 "$CXX" -dynamiclib -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
@@ -111,6 +129,10 @@ cp "$DEPS/psdk/psdk_core.h" "$FW/Headers/"
 rm -rf "$FW/PsdkSupport"
 cp -R "$TREE/psdk-support" "$FW/PsdkSupport"
 
+# Per-game compatibility code. psdk_app_bridge.cpp finds it next to the
+# core binary with dladdr and hands the path to psdk_run.
+cp "$DEPS/psdk/runtime_prelude.rb" "$FW/"
+
 cat >"$FW/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -126,6 +148,7 @@ cat >"$FW/Info.plist" <<EOF
 	<key>CFBundleVersion</key><string>1</string>
 	<key>CFBundleSupportedPlatforms</key><array><string>$PLATFORM</string></array>
 	<key>MinimumOSVersion</key><string>$MIN_OS</string>
+	<key>EmpoCoreRGSSVersionMask</key><integer>0</integer>
 </dict>
 </plist>
 EOF

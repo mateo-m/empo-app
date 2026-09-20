@@ -105,6 +105,18 @@ nm -gU "$CORE" | awk '$3 !~ /^_mkxp_/ {print $3}' | grep -q . &&
 codesign --verify --strict "$CORE" 2>/dev/null ||
     fail "MkxpCore.framework is not signed (the app's own signature does not reach inside it)"
 
+# The PSDK core. Empo opens this one for a PSDK game folder.
+PSDK="$APP/Frameworks/PsdkCore.framework/PsdkCore"
+[[ -f "$PSDK" ]] || fail "PsdkCore.framework missing from the app bundle"
+has_platform "$PSDK" 2 || fail "PsdkCore is not device (platform 2)"
+! has_platform "$PSDK" 7 || fail "PsdkCore contains simulator objects"
+
+nm -gU "$PSDK" | awk '$3 !~ /^_psdk_/ {print $3}' | grep -q . &&
+    fail "PsdkCore exports a name that is not psdk_*"
+
+codesign --verify --strict "$PSDK" 2>/dev/null ||
+    fail "PsdkCore.framework is not signed"
+
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
