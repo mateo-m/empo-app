@@ -2,6 +2,7 @@
 // Exposes C bridge functions and ObjC touch control classes to Swift
 
 #import "app_bridge.h"
+#import "EmpoCore.h"
 #import "TouchControls.h"
 
 // libarchive - for zip/7z/rar extraction in ArchiveExtractor.

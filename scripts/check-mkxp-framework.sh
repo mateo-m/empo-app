@@ -72,4 +72,12 @@ for f in Assets.bundle/Shaders/common.h Assets.bundle/Fonts/liberation.ttf \
     [ -e "$FW/$f" ] || fail "MkxpCore.framework/$f missing"
 done
 
+# GameImportValidator reads this at import, before any core is open. A
+# missing key makes every RPG Maker import fail as unsupported.
+MASK="$(/usr/libexec/PlistBuddy -c 'Print :EmpoCoreRGSSVersionMask' "$FW/Info.plist" 2>/dev/null || true)"
+case "$MASK" in
+    3 | 7) ;;
+    *) fail "Info.plist EmpoCoreRGSSVersionMask must be 3 or 7 (got: ${MASK:-missing})" ;;
+esac
+
 echo "OK: MkxpCore.framework is closed for $SDK"

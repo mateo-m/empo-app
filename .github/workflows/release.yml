@@ -333,9 +333,6 @@ jobs:
             build 2>&1 | tail -n 40
           test -d build/Release-iphoneos/Empo.app
 
-      - name: Audit binary
-        run: scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
-
       # Ad-hoc signature with our entitlements blob embedded. The
       # template sideloaders (AltStore/Sideloadly/ESign) re-sign over.
       # See the detailed rationale in scripts/release.sh.
@@ -343,10 +340,17 @@ jobs:
         id: package
         run: |
           set -e
+          # Inside out. A nested framework carries its own signature,
+          # and signing the app root does not reach inside it. The
+          # build ran with CODE_SIGNING_ALLOWED=NO, so
+          # MkxpCore.framework arrives unsigned.
+          codesign --force --sign - --timestamp=none \
+            build/Release-iphoneos/Empo.app/Frameworks/MkxpCore.framework
           codesign --force --sign - \
             --generate-entitlement-der \
             --entitlements ios/Empo/Empo.entitlements \
             build/Release-iphoneos/Empo.app
+          scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
           mkdir -p build/ipa/Payload
           cp -R build/Release-iphoneos/Empo.app build/ipa/Payload/Empo.app
           IPA_NAME="Empo-${{ steps.meta.outputs.version }}-unsigned.ipa"

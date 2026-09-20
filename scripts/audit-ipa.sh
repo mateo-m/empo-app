@@ -83,11 +83,27 @@ if has_platform "$BIN" 7; then
     fail "Empo binary contains simulator objects"
 fi
 
+# The engine is in MkxpCore.framework, not in the app binary. Empo
+# opens it with dlopen when the user picks a game, so nothing here
+# names it and nm on the app finds no engine symbol.
+CORE="$APP/Frameworks/MkxpCore.framework/MkxpCore"
+[[ -f "$CORE" ]] || fail "MkxpCore.framework missing from the app bundle"
+has_platform "$CORE" 2 || fail "MkxpCore is not device (platform 2)"
+! has_platform "$CORE" 7 || fail "MkxpCore contains simulator objects"
+
 for ver in 18 19 31; do
     sym="_mkxp_get_script_binding_${ver}"
-    nm "$BIN" 2>/dev/null | awk -v sym="$sym" '$3 == sym {found=1} END {exit !found}' ||
-        fail "Empo binary missing ${sym}"
+    nm "$CORE" 2>/dev/null | awk -v sym="$sym" '$3 == sym {found=1} END {exit !found}' ||
+        fail "MkxpCore missing ${sym}"
 done
+
+# The whole point of the framework: no Ruby and no SDL name escapes it,
+# so a second core cannot bind to this one's definitions.
+nm -gU "$CORE" | awk '$3 !~ /^_mkxp_/ {print $3}' | grep -q . &&
+    fail "MkxpCore exports a name that is not mkxp_*"
+
+codesign --verify --strict "$CORE" 2>/dev/null ||
+    fail "MkxpCore.framework is not signed (the app's own signature does not reach inside it)"
 
 BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist")
@@ -111,10 +127,15 @@ if grep -Eq ' \(dirty\)' < <(strings "$BIN"); then
 fi
 
 SIZE=$(stat -f%z "$BIN")
-[[ "$SIZE" -ge 25000000 ]] || fail "Empo binary suspiciously small (${SIZE} bytes)"
+# The app binary is the launcher alone now, a few MB. The engine sits
+# in MkxpCore, which is the large one.
+[[ "$SIZE" -ge 2000000 ]] || fail "Empo binary suspiciously small (${SIZE} bytes)"
+CORE_SIZE=$(stat -f%z "$CORE")
+[[ "$CORE_SIZE" -ge 25000000 ]] || fail "MkxpCore suspiciously small (${CORE_SIZE} bytes)"
 
 echo "OK: release artifact audit passed"
 echo "    bundle: $BUNDLE_ID"
 echo "    version: $VERSION ($BUILD)"
 echo "    commit: $EMBEDDED_COMMIT"
 echo "    binary: ${SIZE} bytes"
+echo "    core: ${CORE_SIZE} bytes"

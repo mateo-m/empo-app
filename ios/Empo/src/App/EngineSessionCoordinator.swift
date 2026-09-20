@@ -29,6 +29,7 @@ final class EngineSessionCoordinator {
     private let sessionLogger = SessionLogger()
     private var textInputModeHandler: ((Bool) -> Void)?
     private var inputBridgesInstalled = false
+    private var coreOpened = false
     /// Per-scancode press start times. Light taps release before the
     /// RGSS thread observes a pressed-edge. We defer KEYUP until the
     /// key has been down for at least one frame (~16ms @ 60fps, with
@@ -52,30 +53,57 @@ final class EngineSessionCoordinator {
         sessionLogger.onPlayTimeFlushed = { gameID in
             GameLibrary.shared.refreshGameEntry(id: gameID)
         }
+        CABundleStore.refreshIfStale {
+            EngineSessionCoordinator.shared.pushCABundlePath()
+        }
+    }
+
+    /// Opens the core for the game the user picked, then pushes the
+    /// launcher state into it.
+    ///
+    /// Nothing calls the engine before this. The app links no engine,
+    /// and every `mkxp_*` name resolves through a forwarder that reads
+    /// the open core (`MkxpCoreForwarders.c`). A call before the core
+    /// opens aborts, on purpose, because a silent no-op would hide it.
+    ///
+    /// One core runs for each process. Empo plays one game for each
+    /// process (`ios/Empo/docs/multi-session.md`), so a second open is
+    /// the same core and changes nothing.
+    func openCore() {
+        guard !coreOpened else { return }
+        let framework = Bundle.main.privateFrameworksURL?
+            .appendingPathComponent("MkxpCore.framework")
+            .appendingPathComponent("MkxpCore")
+        guard let framework, EmpoCoreOpen(framework.path) != 0 else {
+            fatalError("MkxpCore.framework is missing from the app bundle")
+        }
+        coreOpened = true
+
         // Game scripts see `$userAgent = "empo"` and `$empo = true`,
         // alongside the engine's JoiPlay-compat `$joiplay`.
         mkxp_setLauncherIdentity("empo")
-        // TLS trust store for the engine's networking (native HTTP
-        // client + Ruby openssl via SSL_CERT_FILE). Without it, TLS
-        // fails closed. Plain http still works. CABundleStore keeps
-        // the store refreshed silently. The native client re-reads
-        // the path on each request, so a refresh that lands mid-run
-        // applies to that side immediately (Ruby picks it up next
-        // session).
+        pushCABundlePath()
+        AppSettings.shared.pushToCore()
+        AppWindow.pushSafeAreaInsets()
+        registerBridgeCallbacks()
+        installInputBridgesIfNeeded()
+    }
+
+    /// TLS trust store for the engine's networking (native HTTP client
+    /// plus Ruby openssl through SSL_CERT_FILE). Without it, TLS fails
+    /// closed. Plain http still works. CABundleStore keeps the store
+    /// refreshed silently. The native client re-reads the path on each
+    /// request, so a refresh that lands mid-run applies to that side
+    /// immediately, and Ruby picks it up next session.
+    private func pushCABundlePath() {
+        guard coreOpened else { return }
         if let caPath = CABundleStore.effectivePath {
             mkxp_setCABundlePath(caPath)
         } else {
-            // Bundle assembly must have skipped the CA store. Catch
-            // it in development. In release, fail closed (no TLS).
+            // Bundle assembly must have skipped the CA store. Catch it
+            // in development. In release, fail closed (no TLS).
             assertionFailure("cacert.pem missing from Assets.bundle")
         }
-        CABundleStore.refreshIfStale {
-            if let caPath = CABundleStore.effectivePath {
-                mkxp_setCABundlePath(caPath)
-            }
-        }
-        registerBridgeCallbacks()
-        installInputBridgesIfNeeded()
     }
 
     func consumeCrashRecovery() -> String? {
@@ -85,6 +113,7 @@ final class EngineSessionCoordinator {
     }
 
     func configureEngine(_ input: GameSession.LaunchInput) {
+        openCore()
         GameSession.configureEngine(
             input,
             crashTracker: crashTracker,
@@ -92,15 +121,21 @@ final class EngineSessionCoordinator {
         )
     }
 
-    /// Hands the RGSS thread its game path.
+    /// Hands the engine its game path and starts it.
     ///
-    /// There is no wait for an earlier session to tear down. Empo
-    /// plays one game for each process, per `ios/Empo/docs/multi-session.md`,
-    /// and `selectGame` refuses a second launch while a game is
-    /// paused or an exit alert is up. So the thread is always parked
-    /// in `waitForGamePath` when this runs.
+    /// The path goes in first. The engine reads it in
+    /// `mkxp_waitForGamePath` as its first step, so a path that is
+    /// already set lets it run straight through.
+    ///
+    /// `RunLoop.main.perform`, not a main queue block. `EmpoCoreRunEngine`
+    /// holds the main thread until the game ends, and a main queue
+    /// block would stop that queue from draining for the whole
+    /// session. The header on `EmpoCoreRunEngine` says what breaks.
     func launchGamePath(_ path: String) {
         mkxp_setGamePath(path)
+        RunLoop.main.perform {
+            _ = EmpoCoreRunEngine()
+        }
     }
 
     func requestPause() {

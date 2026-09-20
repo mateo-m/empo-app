@@ -138,6 +138,17 @@ cp "$ENGINE"/scripts/preload/*.rb "$FW/Assets.bundle/Preload/"
 cp "$ENGINE"/scripts/postload/*.rb "$FW/Assets.bundle/Postload/"
 rsync -a "$TREE/ruby-stdlib/" "$FW/Ruby/"
 
+# The launcher reads this before it opens the core. A game that needs
+# RGSS3 has to fail at import, and import runs off the main thread where
+# no core is open. app_bridge.cpp answers the same question from
+# MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES, which build-core-ios.sh sets, so
+# read it from there instead of writing a number here.
+if grep -q 'DMKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES' "$ENGINE/tools/build-core-ios.sh"; then
+    RGSS_MASK=7
+else
+    RGSS_MASK=3
+fi
+
 cat >"$FW/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -153,6 +164,7 @@ cat >"$FW/Info.plist" <<EOF
 	<key>CFBundleVersion</key><string>1</string>
 	<key>CFBundleSupportedPlatforms</key><array><string>$PLATFORM</string></array>
 	<key>MinimumOSVersion</key><string>$MIN_OS</string>
+	<key>EmpoCoreRGSSVersionMask</key><integer>$RGSS_MASK</integer>
 </dict>
 </plist>
 EOF

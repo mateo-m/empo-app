@@ -374,13 +374,18 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         exit 1
     fi
 
-    "$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" "$APP_PATH"
-
     echo "==> ad-hoc signing with entitlements"
+    # Inside out. A nested framework carries its own signature, and
+    # signing the app root does not reach inside it. The build ran with
+    # CODE_SIGNING_ALLOWED=NO, so MkxpCore.framework arrives unsigned.
+    codesign --force --sign - --timestamp=none \
+        "$APP_PATH/Frameworks/MkxpCore.framework"
     codesign --force --sign - \
         --generate-entitlement-der \
         --entitlements "$PROJECT_DIR/Empo.entitlements" \
         "$APP_PATH"
+
+    "$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" "$APP_PATH"
 
     mkdir -p "$IPA_DIR/Payload"
     cp -R "$APP_PATH" "$IPA_DIR/Payload/Empo.app"

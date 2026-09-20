@@ -92,7 +92,15 @@ class AppWindow: UIWindow {
 
     override func safeAreaInsetsDidChange() {
         super.safeAreaInsetsDidChange()
-        let insets = safeAreaInsets
+        AppWindow.pushSafeAreaInsets()
+    }
+
+    /// The engine keeps a copy of the safe area. The user can rotate
+    /// the device in the library, before any core is open, so this
+    /// reads the live window and `EngineSessionCoordinator.openCore`
+    /// calls it once the core is in.
+    static func pushSafeAreaInsets() {
+        guard EmpoCoreIsOpen() != 0, let insets = instance?.safeAreaInsets else { return }
         mkxp_setSafeAreaInsets(
             Float(insets.top), Float(insets.bottom),
             Float(insets.left), Float(insets.right)
@@ -270,11 +278,7 @@ class AppWindow: UIWindow {
         window.makeKeyAndVisible()
         instance = window
 
-        let insets = window.safeAreaInsets
-        mkxp_setSafeAreaInsets(
-            Float(insets.top), Float(insets.bottom),
-            Float(insets.left), Float(insets.right)
-        )
+        pushSafeAreaInsets()
 
         window.overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle
 

@@ -194,22 +194,37 @@ targets:
           rm -rf "$BUNDLE/SplashIcons"
           mkdir -p "$BUNDLE/SplashIcons"
           cp "${PROJECT_DIR}/curated-splash-icons/"*.svg "$BUNDLE/SplashIcons/"
-      - name: Assemble Ruby stdlib
-        # Pure-Ruby stdlib subsets from the prebuilt dep tree, landing
-        # at Empo.app/Ruby/{3.1.0,1.9.1,1.8}. The engine pushes the
-        # per-VM directory onto $LOAD_PATH (binding-mri.cpp), which is
-        # what makes `require 'net/http'` etc. resolve in games.
+      - name: Embed MkxpCore.framework
+        # The engine, its three Ruby versions, its SDL and its own
+        # Assets.bundle and Ruby stdlib. The app links none of it and
+        # opens the framework with dlopen when the user picks a game
+        # (EngineSessionCoordinator.openCore).
+        #
+        # A copy phase, not a linked dependency. The app must not bind
+        # a single engine name at launch, or a second core could bind
+        # to the first core's definitions.
+        #
         # Force every build: content follows the fetched deps version,
         # not any file Xcode tracks.
         basedOnDependencyAnalysis: false
         script: |
           set -e
-          STDLIB_SRC="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/ruby-stdlib"
-          if [ ! -d "$STDLIB_SRC" ]; then
-            echo "error: $STDLIB_SRC missing - run: cd ios/Dependencies && make -f ${PLATFORM_NAME}.make ruby-stdlib (or refetch native deps)" >&2
+          CORE_SRC="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/MkxpCore.framework"
+          if [ ! -d "$CORE_SRC" ]; then
+            echo "error: $CORE_SRC missing - run: cd ios/Dependencies && make -f ${PLATFORM_NAME}.make mkxp-framework (or refetch native deps)" >&2
             exit 1
           fi
-          rsync -a --delete "$STDLIB_SRC/" "${PROJECT_DIR}/Ruby/"
+          DEST="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          mkdir -p "$DEST"
+          rsync -a --delete "$CORE_SRC" "$DEST/"
+          # A nested framework carries its own signature. The app's own
+          # signing step does not reach inside it, so sign it here, the
+          # way Xcode's Embed Frameworks phase does.
+          if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] && [ "${CODE_SIGNING_ALLOWED:-YES}" != "NO" ]; then
+            codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
+              --preserve-metadata=identifier,entitlements,flags \
+              --timestamp=none "$DEST/MkxpCore.framework"
+          fi
       - name: Generate Git Info
         # Force this script to run every build. Without this, Xcode sees
         # the declared output file already on disk and skips the script,
@@ -285,22 +300,17 @@ targets:
             echo "$NEW" > "$OUT"
           fi
     sources:
-      # The mkxp-z engine is NOT compiled here.
+      # The mkxp-z engine is neither compiled nor linked here. It is
+      # built into MkxpCore.framework, which the "Embed
+      # MkxpCore.framework" phase copies into the app. The engine core,
+      # the three per-Ruby binding objects, every Ruby, SDL and the
+      # Ruby stdlib all sit inside that one image.
       #
-      # - Engine core (mkxp-z-apple-mobile/src/**) is prebuilt into
-      #   libmkxpz-core.a by the engine repo's tools/build-core-ios.sh
-      #   (invoked via `make -f <platform>.make mkxp-core` in
-      #   ios/Dependencies, or hydrated from a published artifact per
-      #   ios/Dependencies/engine/.version). Linked via -force_load in
-      #   OTHER_LDFLAGS below. Staleness is caught per build by
-      #   scripts/verify-native-deps.sh against .mkxp-core-fingerprint.
-      #
-      # - Binding half (binding/*.cpp + hmode7/*.cpp, all Ruby-API
-      #   users) compiles per-Ruby-version inside common.make's
-      #   mkxp*-merged targets. Each version's libruby + binding code
-      #   merges into a single relocatable .o via `ld -r` with Ruby
-      #   symbols hidden via the unexport list. The merged .o files
-      #   are linked below in OTHER_LDFLAGS.
+      # `make -f <platform>.make mkxp-framework` builds it in
+      # ios/Dependencies, or it arrives with the published artifact
+      # (ios/Dependencies/engine/.version). scripts/verify-native-deps.sh
+      # catches a stale one per build, and scripts/check-mkxp-framework.sh
+      # proves it exports nothing but mkxp_*.
       # Vendored libmspack CAB reader (see vendor/libmspack/README.md).
       - path: vendor/libmspack
         type: group
@@ -315,13 +325,6 @@ targets:
       - path: Assets.bundle
         type: folder
         buildPhase: resources
-      # Populated by the "Assemble Ruby stdlib" script phase from the
-      # prebuilt dep tree. Gitignored (content is versioned by the
-      # native-deps pin, not this repo).
-      - path: Ruby
-        type: folder
-        buildPhase: resources
-        optional: true
     # Code signing is configured via a local, untracked xcconfig
     # (Signing.xcconfig in this directory) so each machine can set
     # DEVELOPMENT_TEAM and optionally override PRODUCT_BUNDLE_IDENTIFIER
@@ -350,81 +353,27 @@ targets:
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/Empo-Bridging-Header.h
         OTHER_LDFLAGS:
-          - -lSDL2
-          - -lSDL2main
-          - -lSDL2_image
-          - -lSDL2_sound
-          - -lSDL2_ttf
-          # Ruby static libs (1.8 / 1.9 / 3.1) are linked indirectly
-          # via the per-version mkxpNN-merged.o files below in
-          # OTHER_LDFLAGS. Their symbols are private-extern inside
-          # those merged .o's, so versions don't clash on `_rb_*`.
-          - -lfreetype
-          - -lpixman-1
-          - -lpng16
-          - -logg
-          - -lvorbis
-          - -lvorbisfile
-          - -ltheora
-          - -ltheoradec
-          - -lphysfs
-          - -luchardet
+          # The engine is not here. It lives in MkxpCore.framework,
+          # which the "Embed MkxpCore.framework" phase copies into the
+          # app and EngineSessionCoordinator.openCore opens with dlopen.
+          # Every mkxp_* name the app calls resolves through
+          # MkxpCoreForwarders.c, so the linker sees none of them.
+          #
+          # What stays is what Empo itself uses: libarchive and its
+          # compressors for the importer, and the frameworks its own
+          # UI, audio session and controller code need.
+          - -larchive
           - -lz
           - -lbz2
           - -liconv
-          - -larchive
-          # OpenAL-Soft static lib (replaces Apple's deprecated
-          # `-framework OpenAL`). Must precede system libs so the
-          # static archive is searched before any system fallback.
-          - -lopenal
-          # Multi-Ruby Phase D: per-version binding+libruby merged
-          # objects, one per supported Ruby (1.8 / 1.9 / 3.1).
-          # Each exposes a single `_mkxp_get_script_binding_<NN>()`
-          # entry. Everything else (libruby's `_rb_*` + mkxp-z
-          # binding internals) is private-extern, hidden inside the
-          # merged .o so versions coexist without symbol clashes.
-          # Native Ruby 3.0 was dropped: the syntax-transform parser
-          # patches only exist in the 3.1 source, so 3.0 + Legacy
-          # compat was a silent no-op. Auto-detect now folds
-          # 3.0-bundling games (Pokemon Essentials forks shipping
-          # `x64-msvcrt-ruby300.dll`) onto 3.1 + Legacy.
-          #
-          # `binding.h`'s `getActiveScriptBinding()` dispatches at
-          # runtime based on the host's `mkxp_setActiveRubyVersion()`
-          # setting (per-game detection in RubyVersionDetection.swift).
-          # Default + UNSET fall through to 3.1, matching the legacy
-          # behaviour before multi-Ruby. Adding 1.9 / 1.8 is a
-          # mechanical extension. Drop the new merged.o here, add
-          # the case in `getActiveScriptBinding()`.
-          # Engine core (src/**) as a prebuilt static library. See
-          # the note at the top of `sources`. -force_load keeps every
-          # member (ObjC impls and constructors included) so behavior
-          # matches the old compile-into-app layout exactly.
-          - -Wl,-force_load,$(DEPENDENCY_SEARCH_PATH)/lib/libmkxpz-core.a
-          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp18-merged.o
-          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp19-merged.o
-          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp31-merged.o
-          - -lssl
-          - -lcrypto
-          - -ldl
-          - -lpthread
           - -framework Foundation
           - -framework UIKit
           - -framework CoreFoundation
           - -framework CoreGraphics
-          - -framework CoreVideo
-          - -framework CoreAudio
-          - -framework AudioToolbox
-          - -framework AVFoundation
-          - -framework Metal
           - -framework QuartzCore
+          - -framework AVFoundation
           - -framework GameController
-          - -framework CoreMotion
-          - -weak_framework CoreBluetooth
           - -weak_framework CoreHaptics
-          - -lANGLE_static
-          - -lEGL_static
-          - -lGLESv2_static
     dependencies:
       - package: GameProbe
   EmpoTests:

@@ -757,11 +757,30 @@ enum GameImportValidator {
         return script
     }
 
+    /// Which RGSS versions MkxpCore runs. The mask depends on the Ruby
+    /// versions the core carries: Ruby 1.8 alone runs RGSS1 and RGSS2,
+    /// and Ruby 3.x with the syntax transform runs all three.
+    ///
+    /// This reads the framework's Info.plist, not
+    /// `mkxp_getSupportedRGSSVersionMask`. Import runs off the main
+    /// thread, before the user picks a game, so no core is open yet.
+    /// tools/mkxp-core/build-framework-ios.sh writes the key from the
+    /// same build flag the engine reads.
+    private static let supportedRGSSVersionMask: Int = {
+        guard
+            let core = Bundle.main.privateFrameworksURL?
+                .appendingPathComponent("MkxpCore.framework"),
+            let mask = Bundle(url: core)?.object(forInfoDictionaryKey: "EmpoCoreRGSSVersionMask")
+                as? Int
+        else {
+            assertionFailure("MkxpCore.framework does not declare EmpoCoreRGSSVersionMask")
+            return 0
+        }
+        return mask
+    }()
+
     private static func checkRuntimeSupport(_ version: RGSSVersion) throws {
-        // Ask the engine which RGSS versions this build supports. The mask
-        // depends on which Ruby runtime is linked: legacy Ruby 1.8 only runs
-        // RGSS1 + RGSS2, while Ruby 3.x with syntax transform runs all three.
-        let mask = Int(mkxp_getSupportedRGSSVersionMask())
+        let mask = supportedRGSSVersionMask
         let bit = 1 << (version.rawValue - 1)
         if mask & bit != 0 { return }
 

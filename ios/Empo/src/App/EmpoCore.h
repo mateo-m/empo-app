@@ -24,6 +24,16 @@ int EmpoCoreOpen(const char *binaryPath);
 
 int EmpoCoreIsOpen(void);
 
+// Runs the engine and returns when the game ends. main.m implements
+// this, because it holds argc and argv.
+//
+// Call it from a run loop callout on the main thread, and never from a
+// block on the main dispatch queue. The engine holds the thread for the
+// whole session, so a main queue block would stop that queue from
+// draining, and the engine's RGSS thread deadlocks on the first
+// mkxp_getScreenScale, which dispatch_syncs to that queue.
+int EmpoCoreRunEngine(void);
+
 #ifdef __cplusplus
 }
 #endif
