@@ -979,6 +979,28 @@ struct GameLibraryView: View {
             let game = library.games.first(where: { $0.title == wanted })
         else { return }
         handleGameTap(game)
+        autoPressKeysFromEnvironment()
+        #endif
+    }
+
+    /// Presses the keys that `EMPO_AUTOKEYS` names, as
+    /// `<second>:<scancode>` pairs separated by commas. The scancodes are
+    /// the GAMECORE_SCANCODE numbers.
+    ///
+    /// A test on a real iPhone cannot tap the screen, so this is the only
+    /// way a script reaches the on-screen controls.
+    private func autoPressKeysFromEnvironment() {
+        #if DEBUG
+        guard let plan = ProcessInfo.processInfo.environment["EMPO_AUTOKEYS"] else { return }
+        for pair in plan.split(separator: ",") {
+            let parts = pair.split(separator: ":")
+            guard parts.count == 2, let second = Double(parts[0]), let code = Int32(parts[1])
+            else { continue }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(second))
+                EngineSessionCoordinator.shared.injectKeyTap(scancode: code, holdMilliseconds: 200)
+            }
+        }
         #endif
     }
 
