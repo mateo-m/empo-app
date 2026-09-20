@@ -18,7 +18,7 @@
 // does the same on the game the user picks, so the test host and the
 // launcher take one path.
 //
-// Four variables, all read at launch:
+// The host reads these variables at launch:
 //
 //   PSDK_GAME      the game folder, relative to Documents.
 //                  "Game" by default.
@@ -34,6 +34,8 @@
 //
 //   PSDK_ROTATE    the second at which to run the rotation test.
 //                  scheduleRotation says what it does and does not do.
+//
+//   PSDK_FAST_FORWARD  game updates for each drawn frame. 1 by default.
 
 #include <dlfcn.h>
 #include <pthread.h>
@@ -194,6 +196,36 @@ static void scheduleRotation(const char *spec) {
     if (!gPsdkRun || !gPsdkInjectScancode) {
         fprintf(stderr, "[host] the core is missing psdk_run or psdk_inject_scancode\n");
         exit(6);
+    }
+
+    // PSDK_FAST_FORWARD asks the core for that many game updates for each
+    // drawn frame. The prelude reports the update rate, so a run at 1 and
+    // a run at 4 say whether the skip works.
+    const char *fastForward = getenv("PSDK_FAST_FORWARD");
+    if (fastForward && *fastForward) {
+        void (*setMultiplier)(int) = dlsym(image, "psdk_setFastForwardMultiplier");
+        if (!setMultiplier) {
+            fprintf(stderr, "[host] the core is missing psdk_setFastForwardMultiplier\n");
+            exit(6);
+        }
+        setMultiplier(atoi(fastForward));
+    }
+
+    // The drawn rate says whether a skipped draw reached the screen. The
+    // prelude reports the update rate, so the two together tell a fast
+    // run from a slow one.
+    double (*averageFPS)(void) = dlsym(image, "psdk_getAverageFPS");
+    int (*getMultiplier)(void) = dlsym(image, "psdk_getFastForwardMultiplier");
+    if (averageFPS) {
+        static dispatch_source_t timer;
+        timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+        dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC),
+                                  5 * NSEC_PER_SEC, NSEC_PER_SEC / 10);
+        dispatch_source_set_event_handler(timer, ^{
+            fprintf(stderr, "PSDK-DRAWN per_second=%.1f multiplier=%d\n", averageFPS(),
+                    getMultiplier ? getMultiplier() : -1);
+        });
+        dispatch_resume(timer);
     }
 
     const char *wantPrelude = getenv("PSDK_PRELUDE");

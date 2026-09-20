@@ -10,6 +10,12 @@
 $stdout.sync = true
 $stderr.sync = true
 
+# psdk_run takes one prelude, and the test host gives it this file. The
+# core gives it runtime_prelude.rb, which holds the per-game fixes and
+# the fast forward patch. Load that file first, so a test run has what
+# the app runs.
+load File.join(__dir__, 'Frameworks/PsdkCore.framework/runtime_prelude.rb')
+
 # A released PSDK game runs `STDERR.reopen(IO::NULL)` when
 # Data/Scripts.dat is present. The public GameLoader source guards that
 # with `!ARGV.include?('verbose')`, but the bytecode in Edelweiss
@@ -57,6 +63,45 @@ Thread.new do
     end
     $stderr.puts "PSDK-AUDIO #{report.empty? ? 'nothing plays' : report.join(' ')}"
     $stderr.flush
+  end
+end
+
+# Count the game frames that FPSBalancer runs, and report the rate.
+# Graphics.frame_count counts drawn frames, so only this number shows a
+# fast run. The balancer runs its block frame_to_execute times for each
+# drawn frame.
+$psdk_logic_frames = 0
+Thread.new do
+  sleep 0.05 until defined?(::Graphics::FPSBalancer)
+  ::Graphics::FPSBalancer.prepend(Module.new do
+    def run(&block)
+      super { $psdk_logic_frames += 1; block.call }
+    end
+  end)
+end
+
+# Report how many updates the game gets each second. Reading Graphics from
+# another thread is safe. The prelude must not wrap Graphics.update, for
+# the reason at the top of this file.
+Thread.new do
+  sleep 0.05 until defined?(::Graphics) && ::Graphics.respond_to?(:frame_count)
+  last_count = nil
+  last_logic = 0
+  last_time = nil
+  loop do
+    sleep 5
+    count = ::Graphics.frame_count
+    now = Time.now
+    if last_count
+      rate = (count - last_count) / (now - last_time)
+      logic = ($psdk_logic_frames - last_logic) / (now - last_time)
+      $stderr.puts format('PSDK-RATE frames=%d per_second=%.1f logic_per_second=%.1f',
+                          count, rate, logic)
+      $stderr.flush
+    end
+    last_count = count
+    last_logic = $psdk_logic_frames
+    last_time = now
   end
 end
 
