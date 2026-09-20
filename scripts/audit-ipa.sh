@@ -117,14 +117,20 @@ if [[ -n "$EXPECTED_VERSION" && "$VERSION" != "$EXPECTED_VERSION" ]]; then
 fi
 
 HEAD_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD)
-EMBEDDED_COMMIT=$(grep -m1 -E '^commit: [0-9a-f]+$' < <(strings "$BIN") | awk '{print $2}')
-[[ -n "$EMBEDDED_COMMIT" ]] || fail "embedded GitInfo commit not found in binary"
+
+# The Release optimiser folds the whole line into one string, so the
+# dirty marker arrives on the commit line and not on a line of its own.
+# Read the line first, then test it. A grep that finds nothing inside a
+# command substitution fails the assignment, and set -e would end the
+# script with no word about why.
+GIT_LINE=$(grep -m1 -E '^commit: ' < <(strings "$BIN") || true)
+[[ -n "$GIT_LINE" ]] || fail "embedded GitInfo commit not found in binary"
+[[ "$GIT_LINE" != *"(dirty)"* ]] ||
+    fail "binary embeds a dirty GitInfo marker ($GIT_LINE)"
+
+EMBEDDED_COMMIT=$(awk '{print $2}' <<<"$GIT_LINE")
 [[ "$EMBEDDED_COMMIT" == "$HEAD_COMMIT" ]] ||
     fail "embedded commit $EMBEDDED_COMMIT != HEAD $HEAD_COMMIT"
-
-if grep -Eq ' \(dirty\)' < <(strings "$BIN"); then
-    fail "binary embeds dirty GitInfo marker"
-fi
 
 SIZE=$(stat -f%z "$BIN")
 # The app binary is the launcher alone now, a few MB. The engine sits
