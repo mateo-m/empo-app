@@ -216,6 +216,9 @@ struct GameLibraryView: View {
             .task {
                 duplicateNoticeNames = GameContainerMigration.pendingDuplicateNoticeNames()
             }
+            .task(id: library.initialScanCompleted) {
+                autoStartGameFromEnvironment()
+            }
     }
 
     private var libraryPresentedContent: some View {
@@ -961,6 +964,22 @@ struct GameLibraryView: View {
             )
         }
         .buttonStyle(.primary(tint: .red))
+    }
+
+    /// Opens the game that `EMPO_AUTOSTART_GAME` names.
+    ///
+    /// A test on a real iPhone cannot tap the screen, and
+    /// `devicectl device process launch --environment-variables` is the
+    /// only way a script reaches the app. The scan fills `games` off the
+    /// main thread, so this waits for `initialScanCompleted`.
+    private func autoStartGameFromEnvironment() {
+        #if DEBUG
+        guard library.initialScanCompleted,
+            let wanted = ProcessInfo.processInfo.environment["EMPO_AUTOSTART_GAME"],
+            let game = library.games.first(where: { $0.title == wanted })
+        else { return }
+        handleGameTap(game)
+        #endif
     }
 
     private func handleGameTap(_ game: GameEntry, from source: GameTapSource = .item) {
