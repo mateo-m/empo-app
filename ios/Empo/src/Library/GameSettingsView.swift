@@ -250,8 +250,10 @@ struct GameSettingsView: View {
         NavigationStack {
             Form {
                 if isPsdkGame {
+                    gameplaySection
                     psdkDisplaySection
                     layoutSection
+                    psdkControlsSection
                 } else {
                     gameplaySection
                     displaySection
@@ -348,13 +350,36 @@ struct GameSettingsView: View {
         .tint(.brand)
     }
 
-    /// The Display section for a PSDK game. One row, because the
-    /// PSDK core answers one of these settings today
-    /// (`ios/Dependencies/psdk/psdk_app_bridge.cpp`). The others reach
-    /// mkxp-z only, so showing them here would promise something the
-    /// game never does.
+    private var psdkControlsSection: some View {
+        Section {
+            SettingsToggle(
+                title: "Touch acts as mouse",
+                isOn: touchMouseBinding,
+                description:
+                    "Send taps and drags on the game screen to the game as mouse input."
+            )
+        } header: {
+            Text("Controls")
+        } footer: {
+            Text("The game has to use the mouse for this to do anything.")
+        }
+    }
+
+    /// The PSDK sheet holds only the rows the PSDK core answers
+    /// (`ios/Dependencies/psdk/psdk_app_bridge.cpp`). The other rows
+    /// reach mkxp-z only, so showing them here would promise something
+    /// the game never does.
     private var psdkDisplaySection: some View {
         Section {
+            engineFieldRow(.smoothScaling) {
+                SettingsToggle(
+                    title: "Smooth scaling",
+                    isOn: smoothScalingBinding,
+                    description:
+                        "Smooth the picture when the game scales up. Turn it off to keep the pixels crisp."
+                )
+            }
+
             engineFieldRow(.fixedAspectRatio) {
                 SettingsToggle(
                     title: "Fixed aspect ratio",
