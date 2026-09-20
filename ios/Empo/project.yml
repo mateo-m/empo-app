@@ -226,7 +226,11 @@ targets:
         script: |
           REPO="${PROJECT_DIR}/../.."
           COMMIT=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-          if git -C "$REPO" diff --quiet HEAD 2>/dev/null; then DIRTY="false"; else DIRTY="true"; fi
+          # --ignore-submodules=dirty: a build leaves object files inside
+          # ios/Dependencies/sources and mkxp-z-apple-mobile, and that is
+          # not a change to Empo. A submodule pointer that moved still
+          # counts. tools/deps-fingerprint.sh reads the tree the same way.
+          if git -C "$REPO" diff --quiet --ignore-submodules=dirty HEAD 2>/dev/null; then DIRTY="false"; else DIRTY="true"; fi
           BRANCH=$(git -C "$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
           DEFAULT_BRANCH=$(git -C "$REPO" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || echo "main")
           [ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH="main"
