@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
 #include <libgen.h>
@@ -25,6 +26,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string>
+#include <time.h>
 
 // WindowImplUIKit.mm records the UIWindow it makes.
 extern "C" void *sfml_ios_game_window();
@@ -77,9 +79,16 @@ std::atomic<float> gHostRegionH{1.0f};
 std::atomic<int> gGameWidth{0};
 std::atomic<int> gGameHeight{0};
 std::atomic<bool> gFixedAspectRatio{true};
+std::atomic<bool> gSmoothScaling{false};
 // The window size the last placement used, width in the high half and
 // height in the low half.
 std::atomic<unsigned long long> gPlacedWindowSize{0};
+// Where the picture landed, in window pixels. The engine needs it to turn
+// a touch on the screen into a point inside the game.
+std::atomic<int> gPictureX{0};
+std::atomic<int> gPictureY{0};
+std::atomic<int> gPictureW{0};
+std::atomic<int> gPictureH{0};
 
 std::atomic<bool> gGameReady{false};
 std::atomic<bool> gEngineTerminatedFlag{false};
@@ -91,6 +100,12 @@ std::atomic<bool> gShowViewportBounds{false};
 std::atomic<bool> gControllerCaptureEnabled{false};
 std::atomic<bool> gUseInGameKeyboard{false};
 std::atomic<int> gFastForwardMultiplier{1};
+// Drawn frames, and the clock and the count the last read took. The
+// average covers the time between two reads, so a reader that asks once
+// a second gets the last second.
+std::atomic<unsigned long long> gDrawnFrames{0};
+std::atomic<unsigned long long> gFpsMarkFrames{0};
+std::atomic<double> gFpsMarkSeconds{0.0};
 std::atomic<int> gArgc{0};
 std::atomic<char **> gArgv{nullptr};
 
@@ -217,18 +232,34 @@ void *runGame(void *) {
 
 namespace {
 
-// The launcher's own setting, from the same overlay it gives mkxp-z.
-// A missing key means the default, which keeps the game's proportions.
-// This reads the one key instead of parsing the whole document, because
-// the value is a bare true or false.
-bool readFixedAspectRatio(const std::string &json) {
-    size_t at = json.find("\"fixedAspectRatio\"");
+// A launcher switch out of the same overlay it gives mkxp-z. A missing
+// key means the default. This reads one key instead of parsing the whole
+// document. mkxp-z reads some of these keys as a number and some as a
+// boolean, so Empo writes `"smoothScaling": 1` but `"fixedAspectRatio":
+// true`. Both forms mean on here.
+bool readFlagKey(const std::string &json, const std::string &key, bool fallback) {
+    const size_t keyAt = json.find("\"" + key + "\"");
+    if (keyAt == std::string::npos) {
+        return fallback;
+    }
+    const size_t colonAt = json.find(':', keyAt);
+    if (colonAt == std::string::npos) {
+        return fallback;
+    }
+    const size_t at = json.find_first_not_of(" \t\r\n", colonAt + 1);
     if (at == std::string::npos) {
+        return fallback;
+    }
+    if (json.compare(at, 4, "true") == 0) {
         return true;
     }
-    size_t falseAt = json.find("false", at);
-    size_t trueAt = json.find("true", at);
-    return falseAt == std::string::npos || (trueAt != std::string::npos && trueAt < falseAt);
+    if (json.compare(at, 5, "false") == 0) {
+        return false;
+    }
+    if (json[at] == '-' || (json[at] >= '0' && json[at] <= '9')) {
+        return std::strtod(json.c_str() + at, nullptr) != 0.0;
+    }
+    return fallback;
 }
 
 // Puts the picture in the launcher's region and tells the launcher where
@@ -301,6 +332,11 @@ void placeOutputRegion() {
 
     sfml_set_output_region(x, y, w, h);
 
+    gPictureX.store(static_cast<int>(x * static_cast<float>(windowW)));
+    gPictureY.store(static_cast<int>(y * static_cast<float>(windowH)));
+    gPictureW.store(static_cast<int>(w * static_cast<float>(windowW)));
+    gPictureH.store(static_cast<int>(h * static_cast<float>(windowH)));
+
     if (gGameRectChanged.fn) {
         // The launcher draws its touch controls around the picture and
         // works in points, so the pixel rect divides by the screen
@@ -314,6 +350,31 @@ void placeOutputRegion() {
 }
 
 } // namespace
+
+// The four hooks below answer LiteRGSS2 and the SFML fork, which declare
+// them weak. They are not part of the launcher interface, so the
+// framework keeps them to itself and exports none of them.
+
+// Zero until the first placement, which needs both a window and the
+// game's resolution.
+extern "C" int psdk_picture_rect_pixels(int *x, int *y, int *width, int *height) {
+    const int w = gPictureW.load();
+    const int h = gPictureH.load();
+    if (w <= 0 || h <= 0) {
+        return 0;
+    }
+    *x = gPictureX.load();
+    *y = gPictureY.load();
+    *width = w;
+    *height = h;
+    return 1;
+}
+
+extern "C" int psdk_touch_mouse_enabled(void) { return gTouchMouseEnabled.load() ? 1 : 0; }
+
+extern "C" int psdk_smooth_scaling_enabled(void) { return gSmoothScaling.load() ? 1 : 0; }
+
+extern "C" int psdk_fast_forward_multiplier(void) { return gFastForwardMultiplier.load(); }
 
 // LiteRGSS2 calls this with the resolution the game asked for, from
 // DisplayWindow.new and from resize_screen.
@@ -338,6 +399,8 @@ extern "C" void psdk_frame_rendered() {
     if (size != 0 && gPlacedWindowSize.exchange(size) != size) {
         placeOutputRegion();
     }
+
+    gDrawnFrames.fetch_add(1);
 
     bool first = !gGameReady.exchange(true);
     if (first) {
@@ -466,6 +529,8 @@ void psdk_resetSessionState(void) {
     gGameWidth.store(0);
     gGameHeight.store(0);
     gPlacedWindowSize.store(0);
+    gPictureW.store(0);
+    gPictureH.store(0);
 }
 
 // MARK: - Pause
@@ -558,7 +623,8 @@ void psdk_setDebugLogPath(const char *path) {
 void psdk_setConfigOverlayJSON(const char *jsonUTF8) {
     std::lock_guard<std::mutex> guard(gLock);
     gConfigOverlayJSON = jsonUTF8 ? jsonUTF8 : "";
-    gFixedAspectRatio.store(readFixedAspectRatio(gConfigOverlayJSON));
+    gFixedAspectRatio.store(readFlagKey(gConfigOverlayJSON, "fixedAspectRatio", true));
+    gSmoothScaling.store(readFlagKey(gConfigOverlayJSON, "smoothScaling", false));
 }
 
 void psdk_setCheatsEnabled(bool enabled) { gCheatsEnabled.store(enabled); }
@@ -633,5 +699,15 @@ const char *psdk_getGameTitle(void) { return ""; }
 const char *psdk_getRubyVersion(void) { return "3.0"; }
 const char *psdk_getANGLEVersion(void) { return ""; }
 const char *psdk_getMetalDeviceName(void) { return ""; }
-double psdk_getAverageFPS(void) { return 0.0; }
+double psdk_getAverageFPS(void) {
+    const unsigned long long frames = gDrawnFrames.load();
+    const double now = static_cast<double>(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9;
+    const double then = gFpsMarkSeconds.exchange(now);
+    const unsigned long long before = gFpsMarkFrames.exchange(frames);
+    const double span = now - then;
+    if (then <= 0.0 || span <= 0.0) {
+        return 0.0;
+    }
+    return static_cast<double>(frames - before) / span;
+}
 int psdk_getTargetFPS(void) { return 60; }
