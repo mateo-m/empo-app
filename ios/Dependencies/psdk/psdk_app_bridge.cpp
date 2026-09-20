@@ -21,12 +21,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <libgen.h>
 #include <mutex>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string>
 #include <time.h>
+#include <unistd.h>
 
 // WindowImplUIKit.mm records the UIWindow it makes.
 extern "C" void *sfml_ios_game_window();
@@ -618,6 +620,31 @@ void psdk_setCABundlePath(const char *path) {
 void psdk_setDebugLogPath(const char *path) {
     std::lock_guard<std::mutex> guard(gLock);
     gDebugLogPath = path ? path : "";
+    if (gDebugLogPath.empty()) {
+        return;
+    }
+    // A released PSDK game reports a failed boot on stderr and then ends
+    // the process with `exit!`. A phone has no console, so without this
+    // the report is lost and the app only disappears. The launcher
+    // writes the file's header before this call, so append to it.
+    //
+    // dup2 on the descriptor, not freopen on the stream. Ruby writes to
+    // descriptor 2 itself and never goes through C stdio, so only a
+    // descriptor swap catches both the core's fprintf and the game's
+    // `$stderr.puts`. Descriptor 1 goes too, because PSDK prints its
+    // script-load progress there and that says how far the boot got.
+    const int fd = open(gDebugLogPath.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd < 0) {
+        return;
+    }
+    dup2(fd, STDOUT_FILENO);
+    dup2(fd, STDERR_FILENO);
+    if (fd != STDOUT_FILENO && fd != STDERR_FILENO) {
+        close(fd);
+    }
+    setvbuf(stdout, nullptr, _IOLBF, 0);
+    setvbuf(stderr, nullptr, _IOLBF, 0);
+    fprintf(stderr, "[psdk] log is attached\n");
 }
 
 void psdk_setConfigOverlayJSON(const char *jsonUTF8) {
