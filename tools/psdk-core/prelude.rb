@@ -25,20 +25,25 @@ def STDERR.reopen(*)
   self
 end
 
-# Report what LiteRGSS hands PSDK for an injected key, and what PSDK
-# makes of it. The first number is the SFML key code and the second is
-# the scancode. PSDK versions read different ones, and input.yml is
-# written in whichever space that version uses, so seeing both is the
-# only way to know a key arrived in a form the game can match.
+# Report what LiteRGSS hands PSDK for an injected key, and which
+# virtual keys PSDK then holds down. Input.press? is the answer the game
+# itself reads, so it is the only proof a key arrived in a form the game
+# matches. A guess from the numbers alone is wrong: a PSDK version reads
+# the key code and another reads the scancode.
+#
+# Input::Keys goes out once as well. It says which number each virtual
+# key answers to in this game, which is what a launcher needs to pick a
+# button.
 Thread.new do
   sleep 0.05 until defined?(::Input) && ::Input.respond_to?(:press?)
+  $stderr.puts "PSDK-MAP #{::Input::Keys.inspect}"
+
   class << ::Input
     alias_method :psdk_probe_on_key_down, :on_key_down
     def on_key_down(*args)
       psdk_probe_on_key_down(*args)
-      vkey, = ::Input::Keys.find { |_, v| args.any? { |a| v.include?(a) } }
-      state = ::Input.instance_variable_get(:@current_state) || {}
-      $stderr.puts "PSDK-KEY args=#{args.inspect} vkey=#{vkey.inspect} down=#{state[vkey]}"
+      down = ::Input::Keys.keys.select { |k| ::Input.press?(k) }
+      $stderr.puts "PSDK-KEY args=#{args.inspect} down=#{down.inspect}"
       $stderr.flush
     end
   end
