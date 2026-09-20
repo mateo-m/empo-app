@@ -9,6 +9,7 @@
 #   tools/mkxp-core/run-test-host-ios.sh --game <dir> [--seconds 90]
 #                                        [--snap-every 5] [--device <udid>]
 #                                        [--keys 20:29,26:40] [--load-at 2]
+#                                        [--also-open PsdkCore.framework]
 #
 # --keys presses MKXP_SCANCODE_* values at the given second, to drive
 # the game without a person at the keyboard. host.m explains the format.
@@ -29,6 +30,7 @@ SNAP_EVERY=5
 DEVICE=
 KEYS=
 LOAD_AT=2
+ALSO_OPEN=
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -54,6 +56,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --load-at)
             LOAD_AT="$2"
+            shift 2
+            ;;
+        --also-open)
+            ALSO_OPEN="$2"
             shift 2
             ;;
         *)
@@ -107,6 +113,7 @@ echo "[mkxp-run] launching for ${SECONDS_TO_RUN}s"
 SIMCTL_CHILD_MKXP_RUN_FOR="$SECONDS_TO_RUN" \
     SIMCTL_CHILD_MKXP_KEYS="$KEYS" \
     SIMCTL_CHILD_MKXP_LOAD_AT="$LOAD_AT" \
+    SIMCTL_CHILD_MKXP_ALSO_OPEN="$ALSO_OPEN" \
     xcrun simctl launch --console-pty "$DEVICE" "$BUNDLE_ID" &
 LAUNCH_PID=$!
 

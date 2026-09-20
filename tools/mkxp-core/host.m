@@ -26,6 +26,11 @@
 //   MKXP_RUN_FOR   seconds before the host leaves. A game never returns
 //                  from its own loop, so a run without a limit never
 //                  ends. Unset or 0 means no limit.
+//
+//   MKXP_ALSO_OPEN a second framework to open before the engine, named
+//                  the way it sits in Frameworks (PsdkCore.framework).
+//                  It proves two cores load in one process without one
+//                  binding to the other.
 
 #include <dlfcn.h>
 #include <stdlib.h>
@@ -74,18 +79,42 @@ static void scheduleKeys(const char *spec) {
     }
 }
 
-static void openCore(void) {
-    NSString *core = [NSBundle.mainBundle.privateFrameworksPath
-        stringByAppendingPathComponent:@"MkxpCore.framework"];
-
-    // RTLD_LOCAL keeps the core's names out of the global namespace, so
-    // a second core opened later cannot bind to them.
-    void *image = dlopen([core stringByAppendingPathComponent:@"MkxpCore"].fileSystemRepresentation,
-                         RTLD_NOW | RTLD_LOCAL);
+// RTLD_LOCAL keeps a core's names out of the global namespace, so a
+// second core opened later cannot bind to them.
+static void *openFramework(NSString *name) {
+    NSString *bundle = [NSBundle.mainBundle.privateFrameworksPath
+        stringByAppendingPathComponent:[name stringByAppendingPathExtension:@"framework"]];
+    NSString *binary = [bundle stringByAppendingPathComponent:name];
+    void *image = dlopen(binary.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
     if (!image) {
-        fprintf(stderr, "[host] cannot open the core: %s\n", dlerror());
+        fprintf(stderr, "[host] cannot open %s: %s\n", name.UTF8String, dlerror());
         exit(5);
     }
+    return image;
+}
+
+// Every core keeps its own Ruby, and no core exports a Ruby name. A
+// name that answers here came from the host or from a system library,
+// never from a core, whatever order the cores opened in.
+static void reportGlobalRuby(const char *when) {
+    fprintf(stderr, "[host] %s: global rb_cObject=%p ruby_init=%p\n", when,
+            dlsym(RTLD_DEFAULT, "rb_cObject"), dlsym(RTLD_DEFAULT, "ruby_init"));
+}
+
+static void openCore(void) {
+    reportGlobalRuby("before any core");
+
+    const char *also = getenv("MKXP_ALSO_OPEN");
+    if (also && *also) {
+        NSString *other = @(also).stringByDeletingPathExtension;
+        void *otherImage = openFramework(other);
+        fprintf(stderr, "[host] opened %s at %p\n", also, otherImage);
+        reportGlobalRuby("after the first core");
+    }
+
+    void *image = openFramework(@"MkxpCore");
+    fprintf(stderr, "[host] opened MkxpCore.framework at %p\n", image);
+    reportGlobalRuby("after both cores");
     gMkxpRunApp = dlsym(image, "mkxp_run_app");
     gMkxpSetGamePath = dlsym(image, "mkxp_setGamePath");
     gMkxpInjectKeyEvent = dlsym(image, "mkxp_injectKeyEvent");

@@ -58,6 +58,9 @@ make -f iphonesimulator.make mkxp-merged
 echo "==> building libmkxpz-core.a"
 make -f iphonesimulator.make mkxp-core
 
+echo "==> building MkxpCore.framework"
+make -f iphonesimulator.make mkxp-framework
+
 echo "==> building the PSDK core"
 make -f iphonesimulator.make psdk
 

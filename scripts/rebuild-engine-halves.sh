@@ -49,6 +49,7 @@ is_engine_output() {
         ./lib/mkxp18-merged.o | ./lib/mkxp19-merged.o | ./lib/mkxp31-merged.o) return 0 ;;
         ./lib/.mkxp-binding-fingerprint | ./lib/.mkxp-core-fingerprint | ./lib/libmkxpz-core.a) return 0 ;;
         ./ruby18-unexports.txt | ./ruby19-unexports.txt | ./ruby31-unexports.txt) return 0 ;;
+        ./MkxpCore.framework/* | ./mkxp-core.exports) return 0 ;;
         ./MANIFEST) return 0 ;;
     esac
     return 1
@@ -109,10 +110,11 @@ echo "==> removing engine outputs"
     rm -rf binding18 binding19 binding31 core-obj
     rm -f lib/mkxp18-merged.o lib/mkxp19-merged.o lib/mkxp31-merged.o
     rm -f lib/.mkxp-binding-fingerprint lib/.mkxp-core-fingerprint lib/libmkxpz-core.a
+    rm -rf MkxpCore.framework
     rm -f ruby18-unexports.txt ruby19-unexports.txt ruby31-unexports.txt
 )
 
-echo "==> building mkxp{18,19,31}-merged.o and libmkxpz-core.a"
+echo "==> building the engine half and MkxpCore.framework"
 (
     cd "$DEPS"
     # -o: the archive is final. make must not look at its rule, which
@@ -122,7 +124,7 @@ echo "==> building mkxp{18,19,31}-merged.o and libmkxpz-core.a"
         -o "$LIB/libruby.3.1-static.a" -o "$LIB/libruby.3.1-ext.a" \
         -o "$LIB/libruby18-static.a" -o "$LIB/libruby18-ext.a" \
         -o "$LIB/libruby19-static.a" -o "$LIB/libruby19-ext.a" \
-        engine-halves
+        engine-halves mkxp-framework
 )
 
 echo "==> checking the dependency half did not change"

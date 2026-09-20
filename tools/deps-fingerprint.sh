@@ -74,6 +74,7 @@ scripts/rebuild-device-deps.sh
 scripts/rebuild-simulator-deps.sh
 tools/deps-fingerprint.sh
 tools/psdk-core/build-framework-ios.sh
+tools/mkxp-core/build-framework-ios.sh
 "
 
 for path in $INPUTS; do

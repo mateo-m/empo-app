@@ -239,4 +239,9 @@ sources. Rebuild with: cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-core
 Set EMPO_ALLOW_UNSTAMPED=1 to bypass."
 fi
 
+# MkxpCore.framework is the artifact a launcher embeds. Its export list
+# is what keeps the engine's three Ruby versions and its SDL away from
+# another core in the same process. libmkxpz-core.a does not do that job.
+PLATFORM_NAME="$PLATFORM" "$REPO_ROOT/scripts/check-mkxp-framework.sh" --sdk "$PLATFORM"
+
 echo "OK: $PLATFORM native dependency artifacts look healthy"

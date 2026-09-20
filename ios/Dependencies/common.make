@@ -992,6 +992,11 @@ mkxp-core: init_dirs $(LIBDIR)/libmkxpz-core.a
 # passes `-o` for each archive so make never looks at those rules.
 engine-halves: init_dirs $(LIBDIR)/.mkxp-binding-fingerprint $(LIBDIR)/libmkxpz-core.a
 
+# The artifact a launcher embeds. The link line lives in the script,
+# next to the test host's, because the two must stay the same.
+mkxp-framework: engine-halves ruby-stdlib
+	${PWD}/../../tools/mkxp-core/build-framework-ios.sh --sdk $(SDK)
+
 # ---- Engine core static library --------------------------------------
 # Everything under $(ENGINE)/src compiled into libmkxpz-core.a. The
 # recipe lives in the engine repo (tools/build-core-ios.sh) so this
