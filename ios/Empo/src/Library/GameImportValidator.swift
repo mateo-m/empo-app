@@ -40,6 +40,9 @@ enum GameImportValidator {
         let title: String
         let subtitle: String
         let artwork: ImportRootChoiceArtwork?
+        /// True when the game declared no title and the name above is
+        /// only the name of the folder the game sits in.
+        let titleIsFolderName: Bool
 
         var id: String { relativePath }
     }
@@ -140,7 +143,11 @@ enum GameImportValidator {
             archiveURL: nil,
             scratchDir: nil
         )
-        return ArchiveProbeResult(choices: choices, inventory: nil)
+        return ArchiveProbeResult(
+            choices: nameLoneRootAfterSource(
+                choices, fallbackRootName: sourceURL.lastPathComponent),
+            inventory: nil
+        )
     }
 
     /// Finds the actual game directory inside `url`, walking down
@@ -425,7 +432,8 @@ enum GameImportValidator {
                     relativePath: normalized,
                     title: title,
                     subtitle: subtitle,
-                    artwork: artwork
+                    artwork: artwork,
+                    titleIsFolderName: !normalized.isEmpty
                 )
             )
         }
@@ -434,7 +442,12 @@ enum GameImportValidator {
             throw firstMeaningfulArchiveError ?? firstArchiveError ?? ImportError.notAnRPGMakerGame
         }
         return ArchiveProbeResult(
-            choices: sortImportRootChoices(choices),
+            choices: sortImportRootChoices(
+                nameLoneRootAfterSource(
+                    choices,
+                    fallbackRootName: archiveURL.deletingPathExtension().lastPathComponent
+                )
+            ),
             inventory: inventory
         )
     }
@@ -473,9 +486,9 @@ enum GameImportValidator {
             // adopt the container the migration named after the
             // manifest - an archive-name fallback here would mint
             // a second container for the same game.
+            let declaredTitle = GameINI.gameTitle(at: root) ?? jgpManifestName(at: root)
             let title =
-                GameINI.gameTitle(at: root)
-                ?? jgpManifestName(at: root)
+                declaredTitle
                 ?? (relativePath.isEmpty ? fallbackRootName : root.lastPathComponent)
             let subtitle = relativePath.isEmpty ? fallbackRootName : relativePath
             choices.append(
@@ -483,7 +496,8 @@ enum GameImportValidator {
                     relativePath: relativePath,
                     title: title,
                     subtitle: subtitle,
-                    artwork: previewArtwork(at: directoryURL, relativePath: relativePath)
+                    artwork: previewArtwork(at: directoryURL, relativePath: relativePath),
+                    titleIsFolderName: declaredTitle == nil && !relativePath.isEmpty
                 )
             )
         }
@@ -500,6 +514,34 @@ enum GameImportValidator {
         guard let name = Jgp.parseBundle(at: root)?.manifest.name else { return nil }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Renames a single nameless game root after the source the user
+    /// picked.
+    ///
+    /// A release often nests the game in a wrapper folder, and the
+    /// wrapper is named after the layout instead of the game: the
+    /// Windows release of Edelweiss Chronicles ships its game in `app/`
+    /// next to `patcher/`, so the library showed "app". The leaf name
+    /// has one job, to tell two games in one source apart. With one
+    /// root it carries nothing, and the name of what the user picked is
+    /// always closer to the truth.
+    private static func nameLoneRootAfterSource(
+        _ choices: [ImportRootChoice],
+        fallbackRootName: String
+    ) -> [ImportRootChoice] {
+        guard choices.count == 1, let only = choices.first, only.titleIsFolderName else {
+            return choices
+        }
+        return [
+            ImportRootChoice(
+                relativePath: only.relativePath,
+                title: fallbackRootName,
+                subtitle: only.subtitle,
+                artwork: only.artwork,
+                titleIsFolderName: false
+            )
+        ]
     }
 
     private static func sortImportRootChoices(_ choices: [ImportRootChoice]) -> [ImportRootChoice] {
