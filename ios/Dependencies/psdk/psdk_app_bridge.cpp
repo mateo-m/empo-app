@@ -36,6 +36,11 @@ extern "C" void *sfml_ios_game_window();
 // The three SFML names this core uses to place the picture.
 // sfml_set_output_region takes fractions of the window with the origin at
 // the top left, and 0, 0, 1, 1 gives the whole window back.
+// sfml_window_pixel_size gives pixels: it multiplies -[UIView frame],
+// which UIKit reports in points, by the backing scale.
+// sfml_ios_backing_scale is that number, and it is the screen scale.
+// The launcher speaks points, so every value it sends or reads crosses
+// this scale.
 extern "C" void sfml_set_output_region(float x, float y, float w, float h);
 extern "C" void sfml_window_pixel_size(unsigned int *width, unsigned int *height);
 extern "C" float sfml_ios_backing_scale();
@@ -82,6 +87,13 @@ std::atomic<int> gGameWidth{0};
 std::atomic<int> gGameHeight{0};
 std::atomic<bool> gFixedAspectRatio{true};
 std::atomic<bool> gSmoothScaling{false};
+// The safe area, in points, as the launcher last reported it. Automatic
+// placement keeps the picture clear of the notch and the home indicator.
+std::atomic<float> gSafeTop{0.0f};
+std::atomic<float> gSafeBottom{0.0f};
+std::atomic<float> gSafeLeft{0.0f};
+std::atomic<float> gSafeRight{0.0f};
+std::atomic<int> gVerticalAlignment{PSDK_VALIGN_TOP_CENTER};
 // The window size the last placement used, width in the high half and
 // height in the low half.
 std::atomic<unsigned long long> gPlacedWindowSize{0};
@@ -264,6 +276,13 @@ bool readFlagKey(const std::string &json, const std::string &key, bool fallback)
     return fallback;
 }
 
+// SFML answers 0 until it makes the window. A scale of 0 would divide
+// the game rect by zero, so the first placement reads 1.
+float backingScale() {
+    const float scale = sfml_ios_backing_scale();
+    return scale > 0.0f ? scale : 1.0f;
+}
+
 // Puts the picture in the launcher's region and tells the launcher where
 // it landed.
 //
@@ -282,22 +301,49 @@ void placeOutputRegion() {
         return;
     }
 
+    const bool windowIsPortrait = windowH > windowW;
+
     float x = 0.0f;
     float y = 0.0f;
     float w = 1.0f;
     float h = 1.0f;
+    bool hostRegionApplies = false;
     if (gHasHostRegion.load()) {
         // Rotation safety: the launcher sets one region for each
         // orientation. A region tagged for the other one belongs to the
         // rotation that has not landed yet, so the whole window holds the
         // picture until the matching call arrives. mkxp-z reads the same
         // tag for the same reason.
-        const bool windowIsPortrait = windowH > windowW;
         if (gHostRegionPortrait.load() == windowIsPortrait) {
+            hostRegionApplies = true;
             x = gHostRegionX.load();
             y = gHostRegionY.load();
             w = gHostRegionW.load();
             h = gHostRegionH.load();
+        }
+    }
+
+    if (!hostRegionApplies) {
+        // Automatic placement. The launcher clamps its own region to the
+        // safe area before it sends one, so the insets apply on this path
+        // only. mkxp-z states the same rule in app_bridge.h, and the
+        // launcher's reset animation aims at this rect, so the two must
+        // give the same answer (ScreenPresetPlacement.swift).
+        //
+        // The launcher sends the insets in points and the window
+        // measures in pixels, so the insets take the backing scale.
+        const float scale = backingScale();
+        const float left = gSafeLeft.load() * scale;
+        const float right = gSafeRight.load() * scale;
+        x = left / static_cast<float>(windowW);
+        w = 1.0f - (left + right) / static_cast<float>(windowW);
+        if (windowIsPortrait) {
+            // Landscape keeps the full height, so the picture stays as
+            // large as the screen permits. mkxp-z makes the same choice.
+            const float top = gSafeTop.load() * scale;
+            const float bottom = gSafeBottom.load() * scale;
+            y = top / static_cast<float>(windowH);
+            h = 1.0f - (top + bottom) / static_cast<float>(windowH);
         }
     }
 
@@ -310,6 +356,9 @@ void placeOutputRegion() {
     if (w <= 0.0f || h <= 0.0f) {
         return;
     }
+
+    const float boxY = y;
+    const float boxH = h;
 
     if (gFixedAspectRatio.load()) {
         // Keep the game's proportions: fit the picture in the region and
@@ -332,6 +381,25 @@ void placeOutputRegion() {
         h = newH;
     }
 
+    if (!hostRegionApplies && windowIsPortrait) {
+        // The fit above centered the picture in the safe box. Top pins it
+        // to the top of the box, and top-center sits halfway between the
+        // two. Landscape keeps the centered fit for every setting.
+        const float topY = boxY;
+        const float centerY = boxY + (boxH - h) / 2.0f;
+        switch (gVerticalAlignment.load()) {
+        case PSDK_VALIGN_TOP:
+            y = topY;
+            break;
+        case PSDK_VALIGN_CENTER:
+            y = centerY;
+            break;
+        default:
+            y = (topY + centerY) / 2.0f;
+            break;
+        }
+    }
+
     sfml_set_output_region(x, y, w, h);
 
     gPictureX.store(static_cast<int>(x * static_cast<float>(windowW)));
@@ -340,10 +408,9 @@ void placeOutputRegion() {
     gPictureH.store(static_cast<int>(h * static_cast<float>(windowH)));
 
     if (gGameRectChanged.fn) {
-        // The launcher draws its touch controls around the picture and
-        // works in points, so the pixel rect divides by the screen
-        // factor.
-        const float scale = sfml_ios_backing_scale() > 0.0f ? sfml_ios_backing_scale() : 1.0f;
+        // The launcher draws its touch controls in points, so the rect
+        // leaves in points.
+        const float scale = backingScale();
         reinterpret_cast<psdk_GameRectChangedCallback>(gGameRectChanged.fn)(
             x * static_cast<float>(windowW) / scale, y * static_cast<float>(windowH) / scale,
             w * static_cast<float>(windowW) / scale, h * static_cast<float>(windowH) / scale,
@@ -406,7 +473,11 @@ extern "C" void psdk_frame_rendered() {
 
     bool first = !gGameReady.exchange(true);
     if (first) {
-        fprintf(stderr, "[psdk-bridge] first frame\n");
+        // The window size says which picture the screen got. A phone that
+        // reports fewer pixels than its screen has drew a small picture
+        // and let iOS stretch it, and every glyph loses pixels.
+        fprintf(stderr, "[psdk-bridge] first frame, window %ux%u px, scale %.1f\n",
+                windowW, windowH, sfml_ios_backing_scale());
     }
     if (gFrameRendered.fn) {
         reinterpret_cast<psdk_FrameRenderedCallback>(gFrameRendered.fn)(gFrameRendered.userdata);
@@ -689,10 +760,13 @@ void psdk_clearHostViewportRegion(void) {
     placeOutputRegion();
 }
 
-// The launcher clamps its own region to the safe area before it sends it,
-// so nothing here reads the insets. mkxp-z needs them because it also
-// places the picture on its own when no region applies.
-void psdk_setSafeAreaInsets(float, float, float, float) {}
+void psdk_setSafeAreaInsets(float top, float bottom, float left, float right) {
+    gSafeTop.store(top);
+    gSafeBottom.store(bottom);
+    gSafeLeft.store(left);
+    gSafeRight.store(right);
+    placeOutputRegion();
+}
 
 // RGSS is RPG Maker's runtime. A PSDK game runs on LiteRGSS, so these
 // answer "no RGSS version" and the mask says this core runs none. The
@@ -703,18 +777,22 @@ void psdk_setSyntaxTransformMode(PsdkSyntaxTransformMode) {}
 PsdkSyntaxTransformMode psdk_getSyntaxTransformMode(void) { return PSDK_SYNTAX_TRANSFORM_UNSET; }
 int psdk_getRGSSVersion(void) { return 0; }
 int psdk_getSupportedRGSSVersionMask(void) { return 0; }
-PsdkVerticalAlignment psdk_getVerticalAlignment(void) { return PSDK_VALIGN_CENTER; }
+PsdkVerticalAlignment psdk_getVerticalAlignment(void) {
+    return static_cast<PsdkVerticalAlignment>(gVerticalAlignment.load());
+}
 
-// Only one field reaches this core. A PSDK game keeps its saves in its
-// own folder and loads its own fonts, so managedConfigDir,
-// userDataDirectory and sharedFontsDirectory name nothing here.
-// rubyVersion, syntaxTransformMode, verticalAlignment, postloadEnabled
-// and joiplayCompat are all mkxp-z settings.
+// Two fields reach this core. A PSDK game keeps its saves in its own
+// folder and loads its own fonts, so managedConfigDir, userDataDirectory
+// and sharedFontsDirectory name nothing here. rubyVersion,
+// syntaxTransformMode, postloadEnabled and joiplayCompat are all mkxp-z
+// settings.
 void psdk_applySessionConfig(const PsdkSessionConfig *config) {
     if (!config) {
         return;
     }
     psdk_setUseInGameKeyboard(config->useInGameKeyboard);
+    gVerticalAlignment.store(config->verticalAlignment);
+    placeOutputRegion();
 }
 
 // MARK: - What the launcher reads
