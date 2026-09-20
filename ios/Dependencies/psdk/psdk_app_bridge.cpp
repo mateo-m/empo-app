@@ -466,6 +466,7 @@ extern "C" void psdk_frame_rendered() {
     const unsigned long long size =
         (static_cast<unsigned long long>(windowW) << 32) | static_cast<unsigned long long>(windowH);
     if (size != 0 && gPlacedWindowSize.exchange(size) != size) {
+        fprintf(stderr, "[psdk-bridge] window %ux%u px\n", windowW, windowH);
         placeOutputRegion();
     }
 
