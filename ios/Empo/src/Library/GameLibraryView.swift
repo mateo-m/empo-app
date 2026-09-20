@@ -980,6 +980,36 @@ struct GameLibraryView: View {
         else { return }
         handleGameTap(game)
         autoPressKeysFromEnvironment()
+        autoRotateFromEnvironment()
+        #endif
+    }
+
+    /// Turns the device as `EMPO_AUTOROTATE` names, as
+    /// `<second>:<portrait|landscape>` pairs separated by commas.
+    ///
+    /// simctl has no rotate command, and this machine holds no Simulator
+    /// application, so a script cannot turn a simulator from outside.
+    /// requestGeometryUpdate turns the scene, which runs the same path a
+    /// real turn runs: UIKit changes the interface orientation and
+    /// resizes every window in the scene.
+    private func autoRotateFromEnvironment() {
+        #if DEBUG
+        guard let plan = ProcessInfo.processInfo.environment["EMPO_AUTOROTATE"] else { return }
+        for pair in plan.split(separator: ",") {
+            let parts = pair.split(separator: ":")
+            guard parts.count == 2, let second = Double(parts[0]) else { continue }
+            let mask: UIInterfaceOrientationMask =
+                parts[1] == "landscape" ? .landscapeRight : .portrait
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(second))
+                guard
+                    let scene = UIApplication.shared.connectedScenes
+                        .compactMap({ $0 as? UIWindowScene }).first
+                else { return }
+                NSLog("[empo] rotate to %@ at %.1fs", String(parts[1]), second)
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+            }
+        }
         #endif
     }
 
