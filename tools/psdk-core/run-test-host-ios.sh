@@ -120,6 +120,7 @@ mkdir -p "$SNAPS"
 echo "[psdk-run] launching for ${SECONDS_TO_RUN}s"
 SIMCTL_CHILD_PSDK_RUN_FOR="$SECONDS_TO_RUN" \
     SIMCTL_CHILD_PSDK_KEYS="$KEYS" \
+    SIMCTL_CHILD_PSDK_SCALE="${PSDK_SCALE:-}" \
     SIMCTL_CHILD_PSDK_ROTATE="$ROTATE" \
     SIMCTL_CHILD_PSDK_FAST_FORWARD="$FAST_FORWARD" \
     xcrun simctl launch --console-pty "$DEVICE" "$BUNDLE_ID" &

@@ -164,3 +164,19 @@ at_exit do
   $stderr.puts Array($!.backtrace).join("\n")
   $stderr.flush
 end
+
+# Change the window scale the way the in-game options menu does, at the
+# second PSDK_SCALE names, as `<second>:<scale>`. PSDK's Options scene
+# writes Graphics.screen_scale, which rebuilds the window settings and
+# reloads them. Driving the setter is the same call with no menu to
+# walk through.
+if (plan = ENV['PSDK_SCALE']) && !plan.empty?
+  second, scale = plan.split(':')
+  Thread.new do
+    sleep 0.05 until defined?(::Graphics) && ::Graphics.respond_to?(:screen_scale=)
+    sleep second.to_f
+    $stderr.puts "PSDK-SCALE setting #{scale}"
+    $stderr.flush
+    ::Graphics.screen_scale = scale.to_f
+  end
+end
