@@ -64,4 +64,13 @@ for f in PsdkSupport/ruby-dist/lib/LiteRGSS.rb PsdkSupport/ruby-dist/lib/SFMLAud
     [ -e "$FW/$f" ] || fail "PsdkCore.framework/$f missing"
 done
 
+# The tree keeps the framework between builds, so a change to the build
+# script leaves a framework nothing rebuilt. Match the recorded hash
+# against the script on disk.
+SCRIPT="$REPO_ROOT/tools/psdk-core/build-framework-ios.sh"
+WANT_SCRIPT="$(shasum -a 256 "$SCRIPT" | awk '{print $1}')"
+GOT_SCRIPT="$(cat "$FW/.build-script-sha256" 2>/dev/null || true)"
+[ "$WANT_SCRIPT" = "$GOT_SCRIPT" ] ||
+    fail "PsdkCore.framework was built by a different build-framework-ios.sh (run: scripts/rebuild-engine-halves.sh $SDK)"
+
 echo "OK: PsdkCore.framework is closed for $SDK"

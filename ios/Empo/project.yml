@@ -144,46 +144,32 @@ targets:
             "${PROJECT_DIR}/../../scripts/verify-native-deps.sh"
 
       - name: Assemble Assets.bundle
-        # Force every build. The script globs the engine's shader/font/
-        # script directories and copies whatever is there, so declaring
-        # a static outputFiles list would drift out of date and silently
-        # drop newly-added assets.
+        # Force every build. The script copies whatever is in the
+        # source directories, so a static outputFiles list would drift
+        # and drop a new file without a word.
+        #
+        # The engine's own assets are not here. Shaders, fonts,
+        # gamecontrollerdb.txt, icon.png, the preload and the postload
+        # scripts all live in MkxpCore.framework/Assets.bundle, which
+        # the engine reads through dladdr on its own image
+        # (filesystemImplIOS.mm mkxpOwnBundle). A second copy in the
+        # app is dead weight, and nothing in the app reads one.
         basedOnDependencyAnalysis: false
         script: |
           ENGINE="${PROJECT_DIR}/../../mkxp-z-apple-mobile"
           BUNDLE="${PROJECT_DIR}/Assets.bundle"
 
-          # Shaders
-          mkdir -p "$BUNDLE/Shaders"
-          cp "$ENGINE"/shader/*.frag "$BUNDLE/Shaders/" 2>/dev/null || true
-          cp "$ENGINE"/shader/*.vert "$BUNDLE/Shaders/" 2>/dev/null || true
-          cp "$ENGINE"/shader/*.h    "$BUNDLE/Shaders/" 2>/dev/null || true
+          # Mozilla CA root bundle. CABundleStore reads this copy from
+          # the main bundle and pushes the path into the engine, so
+          # the app needs its own.
+          mkdir -p "$BUNDLE"
+          cp "$ENGINE"/assets/cacert.pem "$BUNDLE/"
 
-          # Fonts
-          mkdir -p "$BUNDLE/Fonts"
-          cp "$ENGINE"/assets/liberation.ttf   "$BUNDLE/Fonts/"
-          cp "$ENGINE"/assets/wqymicrohei.ttf  "$BUNDLE/Fonts/"
-
-          # Loose assets
-          cp "$ENGINE"/assets/gamecontrollerdb.txt "$BUNDLE/"
-          cp "$ENGINE"/assets/icon.png             "$BUNDLE/"
-          # Mozilla CA root bundle: TLS trust store for the native
-          # HTTP client and Ruby's openssl (via SSL_CERT_FILE).
-          cp "$ENGINE"/assets/cacert.pem           "$BUNDLE/"
-
-          # Preload scripts
-          mkdir -p "$BUNDLE/Preload"
-          cp "$ENGINE"/scripts/preload/*.rb "$BUNDLE/Preload/"
-
-          # Postload scripts
-          mkdir -p "$BUNDLE/Postload"
-          cp "$ENGINE"/scripts/postload/*.rb "$BUNDLE/Postload/"
-
-          # Curated patch distribution was removed (2026-07): the
-          # engine's generic Patcher (scriptPatches / game-folder
-          # patches.json) remains, but Empo no longer ships or merges
-          # a curated patch bundle. Drop any stale assembled copy.
-          rm -rf "$BUNDLE/Patches"
+          # Assets that moved into the framework. Drop a stale copy
+          # from a tree built before that move.
+          rm -rf "$BUNDLE/Shaders" "$BUNDLE/Fonts" "$BUNDLE/Preload" \
+            "$BUNDLE/Postload" "$BUNDLE/Patches"
+          rm -f "$BUNDLE/gamecontrollerdb.txt" "$BUNDLE/icon.png"
 
           # Splash background icon pack. Pixelated 16x16 SVGs that
           # the splash's PixelDitherPattern picks N random ones from

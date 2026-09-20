@@ -36,6 +36,14 @@ DEPS=ios/Dependencies
 # Submodules hash as their gitlink commit. Directories hash every
 # tracked file under them. Add a path here when a new file starts to
 # feed a dependency build.
+#
+# tools/{mkxp,psdk}-core/build-framework-ios.sh are not here. They
+# build an engine output, which rebuild-engine-halves.sh redoes in
+# minutes. A change to one of them writes a new .build-script-sha256
+# into the framework, and scripts/check-*-framework.sh fails until the
+# engine half runs again. Listing them here would force the full
+# dependency rebuild instead, which takes hours and rebuilds nothing
+# the scripts touch.
 INPUTS="
 $DEPS/sources/sdl2
 $DEPS/sources/sdl2_image
@@ -73,8 +81,6 @@ $DEPS/sdl_sound
 scripts/rebuild-device-deps.sh
 scripts/rebuild-simulator-deps.sh
 tools/deps-fingerprint.sh
-tools/psdk-core/build-framework-ios.sh
-tools/mkxp-core/build-framework-ios.sh
 "
 
 for path in $INPUTS; do

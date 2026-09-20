@@ -130,5 +130,11 @@ cat >"$FW/Info.plist" <<EOF
 </plist>
 EOF
 
+# The tree keeps the framework, and Xcode only copies it. Record which
+# script wrote it, so check-psdk-framework.sh can fail when this file
+# changed and nobody rebuilt the engine half.
+shasum -a 256 "$ROOT/tools/psdk-core/build-framework-ios.sh" |
+    awk '{print $1}' >"$FW/.build-script-sha256"
+
 "$ROOT/scripts/check-psdk-framework.sh" --framework "$FW" --sdk "$SDK"
 echo "[psdk-framework] Done: $FW"
