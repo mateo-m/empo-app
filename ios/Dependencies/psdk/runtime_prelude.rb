@@ -55,3 +55,30 @@ at_exit do
   $stderr.puts Array($!.backtrace).join("\n")
   $stderr.flush
 end
+
+# PSDK paces the game with Graphics::FPSBalancer. The balancer divides
+# the real clock by 1000000 / Graphics.frame_rate, and it runs that many
+# game frames. So the frame rate that the balancer reads is the only way
+# to make the game go faster. The window keeps its own draw limit, and the
+# balancer reads Graphics.frame_rate on each update, so a change applies
+# while the game runs.
+#
+# PSDK defines the reader with attr_accessor, later than this file. This
+# module opens Graphics first and waits for that definition, because a
+# game loads its scripts from compiled bytecode, and bytecode carries no
+# trace instructions, so TracePoint never reports the end of the body.
+module Graphics
+  class << self
+    def singleton_method_added(name)
+      super
+      return unless name == :frame_rate
+      return if @psdk_fast_forward_patch
+
+      @psdk_fast_forward_patch = true
+      psdk_base_frame_rate = method(:frame_rate)
+      define_singleton_method(:frame_rate) do
+        psdk_base_frame_rate.call * LiteRGSS.fast_forward_multiplier
+      end
+    end
+  end
+end
