@@ -93,6 +93,13 @@ enum GameImportValidator {
             lowercaseName.hasSuffix(".exe")
         }
 
+        /// The pair a PSDK game is known by. Both files go into the
+        /// probe, because the check reads Game.yarb's first four bytes
+        /// (`PsdkGame.isGameRoot`).
+        var isPsdkMarker: Bool {
+            lowercaseName == "game.rb" || lowercaseName == "game.yarb"
+        }
+
         var isPreviewTitleArtwork: Bool {
             guard parentComponents.count >= 2 else { return false }
             guard parentComponents[parentComponents.count - 2].lowercased() == "graphics" else {
@@ -214,6 +221,11 @@ enum GameImportValidator {
         scratchDir: URL? = nil,
         shouldCancel: (() -> Bool)? = nil
     ) throws {
+        // A PSDK game carries none of what the checks below read: no
+        // RGSS archive, no .ini with a Scripts entry, no Scripts file.
+        // The PSDK core runs it, so no RGSS version applies either.
+        if PsdkGame.isGameRoot(url) { return }
+
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(atPath: url.path) else {
             throw ImportError.notAnRPGMakerGame
@@ -301,6 +313,8 @@ enum GameImportValidator {
         _ url: URL,
         fm: FileManager
     ) -> Bool {
+        if PsdkGame.isGameRoot(url, fileManager: fm) { return true }
+
         guard let items = try? fm.contentsOfDirectory(atPath: url.path) else {
             return false
         }
@@ -348,7 +362,7 @@ enum GameImportValidator {
             include: { path in
                 guard let entry = ArchiveEntryDescriptor(path) else { return false }
 
-                if entry.isIni || entry.isMkxpJson {
+                if entry.isIni || entry.isMkxpJson || entry.isPsdkMarker {
                     return true
                 }
                 if let version = entry.archiveMarkerVersion {
@@ -762,7 +776,7 @@ enum GameImportValidator {
     /// and Ruby 3.x with the syntax transform runs all three.
     ///
     /// This reads the framework's Info.plist, not
-    /// `mkxp_getSupportedRGSSVersionMask`. Import runs off the main
+    /// `gamecore_getSupportedRGSSVersionMask`. Import runs off the main
     /// thread, before the user picks a game, so no core is open yet.
     /// tools/mkxp-core/build-framework-ios.sh writes the key from the
     /// same build flag the engine reads.
