@@ -179,6 +179,24 @@ other, and `tools/mkxp-core/host.m` proves that with `MKXP_ALSO_OPEN`. Running
 two at once is a different question. Both want the working directory, the
 signal handlers, the audio device and the main thread.
 
+## Which source a release names
+
+Each core comes from its own engine repo: `MkxpCore` from
+`mkxp-z-apple-mobile`, `PsdkCore` from `litergss2-apple-mobile`. A release
+tags the pinned commit in both repos with `empo-v<version>`, so anyone can
+check out the source that built the shipped binary. `scripts/release.sh` and
+the `cut` job in `.github/workflows/release.yml` create the two tags, and both
+refuse a commit that is not on that repo's `dev` branch.
+
+`EmpoCoreVersion` holds `git describe` of that repo, so both rows on the Game
+cores screen carry the same tag name after a release. Before the first release
+that ships a core, `describe` has no tag to name and falls back to the short
+commit.
+
+The PSDK core also links LiteCGSS, the SFML fork and Ruby 3.0, and no tag
+names those. The dependency fingerprint ties the framework to every pinned
+commit, so the tagged commit is still the one that built it.
+
 ## How the framework stays fresh
 
 The native tree keeps the built framework between builds, and Xcode only
