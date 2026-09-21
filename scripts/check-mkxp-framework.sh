@@ -73,12 +73,26 @@ for f in Assets.bundle/Shaders/common.h Assets.bundle/Fonts/liberation.ttf \
 done
 
 # GameImportValidator reads this at import, before any core is open. A
-# missing key makes every RPG Maker import fail as unsupported.
+# missing key makes every RPG Maker import fail as unsupported, and a
+# key that says 3 on a core that runs RGSS3 refuses every VX Ace game.
+#
+# So check it against the image: mask 7 means the patched Ruby 3.1 is
+# linked, and the patched Ruby defines
+# mkxp_syntax_transform_target_ruby_version_major. The same #ifdef
+# drives mkxp_getSupportedRGSSVersionMask, so the two answers are one
+# fact. nm -a, because the merged objects hide every Ruby name.
+#
+# grep -c and not grep -q: grep -q leaves on the first match, nm dies on
+# SIGPIPE, and pipefail reads that as no match.
 MASK="$(/usr/libexec/PlistBuddy -c 'Print :EmpoCoreRGSSVersionMask' "$FW/Info.plist" 2>/dev/null || true)"
-case "$MASK" in
-    3 | 7) ;;
-    *) fail "Info.plist EmpoCoreRGSSVersionMask must be 3 or 7 (got: ${MASK:-missing})" ;;
-esac
+PATCHED_RUBY_COUNT="$(nm -a "$BIN" | grep -c '_mkxp_syntax_transform_target_ruby_version_major$' || true)"
+if [ "$PATCHED_RUBY_COUNT" -gt 0 ]; then
+    WANT_MASK=7
+else
+    WANT_MASK=3
+fi
+[ "$MASK" = "$WANT_MASK" ] ||
+    fail "Info.plist EmpoCoreRGSSVersionMask is ${MASK:-missing}, but the image says $WANT_MASK"
 
 # The tree keeps the framework between builds, so a change to the build
 # script leaves a framework nothing rebuilt. Match the recorded hash

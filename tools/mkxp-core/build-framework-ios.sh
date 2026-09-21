@@ -138,12 +138,46 @@ cp "$ENGINE"/scripts/preload/*.rb "$FW/Assets.bundle/Preload/"
 cp "$ENGINE"/scripts/postload/*.rb "$FW/Assets.bundle/Postload/"
 rsync -a "$TREE/ruby-stdlib/" "$FW/Ruby/"
 
-# The launcher reads this before it opens the core. A game that needs
-# RGSS3 has to fail at import, and import runs off the main thread where
-# no core is open. app_bridge.cpp answers the same question from
-# MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES, which build-core-ios.sh sets, so
-# read it from there instead of writing a number here.
+# Which RGSS versions this core runs. The launcher reads it before it
+# opens the core: a game that needs RGSS3 has to fail at import, and
+# import runs off the main thread where no core is open.
+#
+# RGSS1 and RGSS2 run on any Ruby. RGSS3 needs the patched Ruby 3.1,
+# which is what mkxp_getSupportedRGSSVersionMask answers from
+# MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES (src/app_bridge.cpp). Two reads of
+# that one fact, so the plist cannot drift from the core:
+#
+#   the binary   the patched Ruby defines
+#                mkxp_syntax_transform_target_ruby_version_major, which
+#                binding-util.cpp reads behind that same #ifdef. The
+#                name is in the linked image or it is not.
+#   the define   what the compiler saw, which is what the core answers
+#                at run time.
+#
+# nm -a, because the merged objects hide every Ruby name, so the symbol
+# is local. This script never strips the image. grep -c and not grep -q,
+# so that a shell with pipefail cannot read the SIGPIPE from nm as no
+# match.
+PATCHED_RUBY_COUNT="$(nm -a "$FW/MkxpCore" |
+    grep -c '_mkxp_syntax_transform_target_ruby_version_major$' || true)"
+if [ "$PATCHED_RUBY_COUNT" -gt 0 ]; then
+    PATCHED_RUBY_LINKED=yes
+else
+    PATCHED_RUBY_LINKED=no
+fi
 if grep -q 'DMKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES' "$ENGINE/tools/build-core-ios.sh"; then
+    PATCHES_COMPILED_IN=yes
+else
+    PATCHES_COMPILED_IN=no
+fi
+if [ "$PATCHED_RUBY_LINKED" != "$PATCHES_COMPILED_IN" ]; then
+    echo "error: the framework and the core disagree about the syntax-transform patches" >&2
+    echo "       patched Ruby in $FW/MkxpCore: $PATCHED_RUBY_LINKED" >&2
+    echo "       MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES in build-core-ios.sh: $PATCHES_COMPILED_IN" >&2
+    echo "       EmpoCoreRGSSVersionMask would not match what the core answers." >&2
+    exit 1
+fi
+if [ "$PATCHED_RUBY_LINKED" = yes ]; then
     RGSS_MASK=7
 else
     RGSS_MASK=3
