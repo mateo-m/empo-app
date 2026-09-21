@@ -51,6 +51,40 @@ final class GameImportValidatorTests: XCTestCase {
         XCTAssertEqual(choices.map(\.relativePath), [""])
     }
 
+    /// An RPG Maker game keeps the name it had before Empo learned to
+    /// name a lone root after the source. The name becomes the container
+    /// folder, and the importer matches an installed game by that folder
+    /// (`ImportNameResolution.resolve`). A name that moves between two
+    /// Empo versions installs the same game twice.
+    func testAnRPGMakerGameKeepsItsFolderName() throws {
+        let picked = scratch.appendingPathComponent("Alpha Quest 1.2", isDirectory: true)
+        try makeRPGMakerGame(at: picked.appendingPathComponent("Game", isDirectory: true))
+
+        let choices = try GameImportValidator.importRootChoices(for: picked).choices
+
+        XCTAssertEqual(choices.map(\.title), ["Game"])
+        XCTAssertEqual(choices.map(\.relativePath), ["Game"])
+    }
+
+    func testAnRPGMakerGameStillPrefersItsDeclaredTitle() throws {
+        let picked = scratch.appendingPathComponent("Alpha Quest 1.2", isDirectory: true)
+        let root = picked.appendingPathComponent("Game", isDirectory: true)
+        try makeRPGMakerGame(at: root)
+        try Data("[Game]\nTitle=Alpha Quest\n".utf8)
+            .write(to: root.appendingPathComponent("Game.ini"))
+
+        let choices = try GameImportValidator.importRootChoices(for: picked).choices
+
+        XCTAssertEqual(choices.map(\.title), ["Alpha Quest"])
+    }
+
+    /// An RGSS archive is proof enough for `validate`, and RGSS1 runs on
+    /// every core build, so the mask check passes either way.
+    private func makeRPGMakerGame(at url: URL) throws {
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try Data("RGSSAD".utf8).write(to: url.appendingPathComponent("Game.rgssad"))
+    }
+
     /// `PsdkGame.isGameRoot` needs a Game.rb next to a Game.yarb whose
     /// first 4 bytes are YARB.
     private func makePsdkGame(at url: URL) throws {

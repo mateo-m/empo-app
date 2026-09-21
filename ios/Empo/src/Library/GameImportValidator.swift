@@ -40,9 +40,11 @@ enum GameImportValidator {
         let title: String
         let subtitle: String
         let artwork: ImportRootChoiceArtwork?
-        /// True when the game declared no title and the name above is
-        /// only the name of the folder the game sits in.
-        let titleIsFolderName: Bool
+        /// True when the title above is only the name of the folder the
+        /// game sits in, and taking the name of the source instead
+        /// cannot rename an installed game. `nameLoneRootAfterSource`
+        /// reads it.
+        let canTakeTheSourceName: Bool
 
         var id: String { relativePath }
     }
@@ -438,7 +440,8 @@ enum GameImportValidator {
                     title: title,
                     subtitle: subtitle,
                     artwork: artwork,
-                    titleIsFolderName: !normalized.isEmpty
+                    // An RGSS archive root, so the name stays as it was.
+                    canTakeTheSourceName: false
                 )
             )
         }
@@ -502,7 +505,8 @@ enum GameImportValidator {
                     title: title,
                     subtitle: subtitle,
                     artwork: previewArtwork(at: directoryURL, relativePath: relativePath),
-                    titleIsFolderName: declaredTitle == nil && !relativePath.isEmpty
+                    canTakeTheSourceName: declaredTitle == nil && !relativePath.isEmpty
+                        && PsdkGame.isGameRoot(root)
                 )
             )
         }
@@ -521,7 +525,7 @@ enum GameImportValidator {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// Renames a single nameless game root after the source the user
+    /// Renames a single nameless PSDK root after the source the user
     /// picked.
     ///
     /// A release often nests the game in a wrapper folder, and the
@@ -531,11 +535,18 @@ enum GameImportValidator {
     /// has one job, to tell two games in one source apart. With one
     /// root it carries nothing, and the name of what the user picked is
     /// always closer to the truth.
+    ///
+    /// PSDK games only. The title becomes the container folder name,
+    /// and the importer matches an installed game by that folder
+    /// (`ImportNameResolution.resolve`), so a title that changes
+    /// between two Empo versions installs the same game twice. PSDK
+    /// support arrives with this naming, so no PSDK game can carry the
+    /// older name. An RPG Maker game can, and keeps it.
     private static func nameLoneRootAfterSource(
         _ choices: [ImportRootChoice],
         fallbackRootName: String
     ) -> [ImportRootChoice] {
-        guard choices.count == 1, let only = choices.first, only.titleIsFolderName else {
+        guard choices.count == 1, let only = choices.first, only.canTakeTheSourceName else {
             return choices
         }
         return [
@@ -544,7 +555,7 @@ enum GameImportValidator {
                 title: fallbackRootName,
                 subtitle: only.subtitle,
                 artwork: only.artwork,
-                titleIsFolderName: false
+                canTakeTheSourceName: false
             )
         ]
     }
