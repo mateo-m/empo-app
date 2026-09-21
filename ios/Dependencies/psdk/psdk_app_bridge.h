@@ -160,16 +160,6 @@ typedef enum {
     PSDK_RUBY_31    = 31,
 } PsdkRubyVersion;
 
-// Phase of a host-injected pointer event. Pointer injection lets a
-// host drive game mouse input from its own views instead of the SDL
-// view. A host that never injects keeps the platform behaviour.
-typedef enum {
-    PSDK_POINTER_DOWN   = 0,
-    PSDK_POINTER_MOVE   = 1,
-    PSDK_POINTER_UP     = 2,
-    PSDK_POINTER_CANCEL = 3,
-} PsdkPointerPhase;
-
 typedef struct {
     const char *managedConfigDir;
     const char *userDataDirectory;
@@ -182,8 +172,6 @@ typedef struct {
     bool joiplayCompat;
     bool networkEnabled;
 } PsdkSessionConfig;
-
-
 
 // ---------------------------------------------------------------------------
 // Live bridge (mobile). Implemented in app_bridge.cpp and the
@@ -217,7 +205,6 @@ int         psdk_run_app(int argc, char **argv);
 
 // Game lifecycle
 
-void        psdk_setGameReady(void);
 int         psdk_isGameReady(void);
 
 // Game selection (Library -> Engine)
@@ -227,21 +214,17 @@ const char *psdk_waitForGamePath(void);
 
 // Engine termination
 
-void        psdk_requestTerminate(void);
 int         psdk_isEngineTerminated(void);
-void        psdk_setEngineTerminated(void);
 
 // Set when the session ends because Ruby raised SystemExit (e.g. the
 // game's "Exit to desktop" menu). The UI checks this in its
 // engine-terminated callback to skip the "didn't exit cleanly" alert.
 int         psdk_didEngineExitCleanly(void);
-void        psdk_setEngineExitedCleanly(void);
 
 // Set when the RGSS thread failed to respond to a termination
 // request. Engine is unrecoverable. The UI surfaces a "close from
 // app switcher" alert because we can't recover in-process.
 int         psdk_isEngineHung(void);
-void        psdk_setEngineHung(void);
 
 void        psdk_setEngineTerminatedCallback(psdk_EngineTerminatedCallback cb, void *userdata);
 void        psdk_setGameRectChangedCallback(psdk_GameRectChangedCallback cb, void *userdata);
@@ -250,16 +233,6 @@ void        psdk_setGameRectChangedCallback(psdk_GameRectChangedCallback cb, voi
 
 // scancode: PSDK_SCANCODE_* value. pressed: 1=down, 0=up.
 void        psdk_injectKeyEvent(int scancode, int pressed);
-
-void        psdk_setKeyEventCallback(psdk_KeyEventCallback cb, void *userdata);
-
-// Pushes one left-button pointer event in top-left window points.
-//
-// The host owns the policy: which finger owns the pointer, and how
-// coordinates are clamped. This call pushes what it is given. The
-// events carry `SDL_TOUCH_MOUSEID`, so `psdk_setTouchMouseEnabled`
-// still gates whether the game sees them.
-void        psdk_injectPointerEvent(int x, int y, PsdkPointerPhase phase);
 
 // Managed-config directory (UI -> Engine).
 //
@@ -273,8 +246,6 @@ void        psdk_injectPointerEvent(int x, int y, PsdkPointerPhase phase);
 //
 // Pass NULL/"" to clear the override (cwd-only behavior, matches
 // desktop builds).
-void        psdk_setManagedConfigDir(const char *path);
-const char *psdk_getManagedConfigDir(void);
 
 // In-memory config overlay (UI -> Engine).
 //
@@ -289,7 +260,6 @@ const char *psdk_getManagedConfigDir(void);
 // Set before each session start. NULL or "" clears any previous
 // overlay. Reject inputs over 1 MiB (warn log, keep previous state).
 void        psdk_setConfigOverlayJSON(const char *jsonUTF8);
-const char *psdk_getConfigOverlayJSON(void);
 
 // Per-game UserData directory (UI -> Engine).
 //
@@ -300,8 +270,6 @@ const char *psdk_getConfigOverlayJSON(void);
 // (`System.data_directory`, `MKXP.data_directory`, fake APPDATA env)
 // and games that use relative RGSS save filenames are both routed
 // here by the engine + preload compatibility layer.
-void        psdk_setUserDataDirectory(const char *path);
-const char *psdk_getUserDataDirectory(void);
 
 // Shared fonts directory (UI -> Engine).
 //
@@ -312,8 +280,6 @@ const char *psdk_getUserDataDirectory(void);
 // Windows-style "<SystemRoot>\Fonts\<file>" writes (Essentials'
 // FontInstaller) into it. Unset = no shared pool. Per-game fonts
 // only.
-void        psdk_setSharedFontsDirectory(const char *path);
-const char *psdk_getSharedFontsDirectory(void);
 
 // Launcher identity (UI -> Engine).
 //
@@ -329,7 +295,6 @@ const char *psdk_getSharedFontsDirectory(void);
 // patches can branch on the specific launcher. Set once before the
 // engine boots. Pass NULL/"" to clear (no globals are defined).
 void        psdk_setLauncherIdentity(const char *name);
-const char *psdk_getLauncherIdentity(void);
 
 // CA certificate bundle (UI -> Engine).
 //
@@ -342,7 +307,6 @@ const char *psdk_getLauncherIdentity(void);
 // When unset, TLS connections fail closed (certificate verification
 // has no roots to succeed against). Plain http still works.
 void        psdk_setCABundlePath(const char *path);
-const char *psdk_getCABundlePath(void);
 
 // The text road (launcher <-> core).
 //
@@ -404,17 +368,10 @@ const char *psdk_getMetalDeviceName(void);
 
 // Game viewport rect (logical points)
 
-void        psdk_setGameRect(float x, float y, float w, float h);
-
 // Safe area insets (logical points, cached atomics)
-
-void        psdk_getSafeAreaInsets(float *top, float *bottom, float *left, float *right);
 
 // Push from UIKit main thread. Sets a "needs relayout" flag.
 void        psdk_setSafeAreaInsets(float top, float bottom, float left, float right);
-
-// Returns true (once) if insets changed since last check.
-bool        psdk_consumeSafeAreaInsetsChanged(void);
 
 // Host viewport region (dimensionless window fractions)
 //
@@ -435,13 +392,6 @@ void        psdk_setHostViewportRegion(float x, float y, float w, float h,
 // Back to automatic placement, as if no region was ever set.
 void        psdk_clearHostViewportRegion(void);
 
-// Engine-side read. Returns false when no region is set.
-bool        psdk_getHostViewportRegion(float *x, float *y, float *w, float *h,
-                                       bool *isPortrait);
-
-// Screen scale factor (e.g. 3.0 on iPhone Pro).
-float       psdk_getScreenScale(void);
-
 // SDL's UIKit UIWindow*, or NULL before the engine creates its window.
 // Owned by SDL. Do not retain. For embedding host controls in the
 // same window stack as the game view on iOS.
@@ -454,17 +404,12 @@ void       *psdk_getSDLUIKitWindow(void);
 // groups the fields the host sets together on every launch. Individual
 // setters remain for mid-session toggles and legacy call sites.
 
-void        psdk_applyPerGameSettings(PsdkVerticalAlignment verticalAlignment,
-                                      bool postloadEnabled);
-
 PsdkVerticalAlignment psdk_getVerticalAlignment(void);
-bool        psdk_getPostloadEnabled(void);
 
 void                    psdk_setSyntaxTransformMode(PsdkSyntaxTransformMode mode);
 PsdkSyntaxTransformMode psdk_getSyntaxTransformMode(void);
 
 void             psdk_setActiveRubyVersion(PsdkRubyVersion version);
-PsdkRubyVersion  psdk_getActiveRubyVersion(void);
 
 void        psdk_applySessionConfig(const PsdkSessionConfig *config);
 
@@ -480,15 +425,12 @@ void        psdk_applySessionConfig(const PsdkSessionConfig *config);
 // can't drive. `pokemon_input.rb` re-applies the historical
 // `USEKEYBOARDTEXTENTRY = false` overrides when this is set.
 void psdk_setUseInGameKeyboard(bool enabled);
-bool psdk_getUseInGameKeyboard(void);
 
 // JoiPlay-compat signal (`$joiplay = true` in the game's Ruby VM).
 // Several games ship JoiPlay-specific patches that branch on the
 // global. Whether those help or hurt depends on the game, so the
 // host decides per boot. Default false. `platform_compat.rb` reads
 // this via `System.joiplay_compat?` before game scripts load.
-void psdk_setJoiplayCompat(bool enabled);
-bool psdk_getJoiplayCompat(void);
 
 // Network access (UI -> Engine). When disabled, the game sees the
 // equivalent of airplane mode: network libraries load and their
@@ -498,11 +440,8 @@ bool psdk_getJoiplayCompat(void);
 // failure). Games then take the same offline fallback paths they
 // ship for desktop players without internet. Ruby reads this via
 // `System.network_enabled?`. Default false (host must opt in).
-void psdk_setNetworkEnabled(bool enabled);
-bool psdk_getNetworkEnabled(void);
 
 void        psdk_setShowViewportBounds(bool enabled);
-bool        psdk_getShowViewportBounds(void);
 
 // Cheat menu toggle (UI -> Engine). The postload layer reads the
 // current value each update. Ruby reassigns $CHEATS from the bridge
@@ -516,22 +455,17 @@ bool        psdk_getCheatsEnabled(void);
  * Default: enabled. Must be set before or during session start.
  * Takes effect immediately. */
 void        psdk_setGameControllerCaptureEnabled(bool enabled);
-bool        psdk_getGameControllerCaptureEnabled(void);
 
 /* Controls whether touch-synthesized SDL mouse events
  * (which == SDL_TOUCH_MOUSEID) are delivered to the engine input
  * layer. Default: false = upstream behavior (touch never synthesizes
  * mouse input). Hosts that want touch-as-mouse set it true. */
 void        psdk_setTouchMouseEnabled(bool enabled);
-bool        psdk_getTouchMouseEnabled(void);
 
 void        psdk_setViewportBoundsColor(float r, float g, float b, float a);
-void        psdk_getViewportBoundsColor(float *r, float *g, float *b, float *a);
 
 // Error routing (Engine -> UI). `SDL_ShowSimpleMessageBox` is a no-op
 // on iOS, so errors come through here for the UI to present.
-
-void        psdk_setErrorMessage(const char *message);
 
 /* Present an error in the host UI and block the calling thread until
  * the user dismisses the alert. iOS only. No-op elsewhere. */
@@ -540,12 +474,6 @@ void        psdk_presentErrorAndWait(const char *message);
 /* Called by the host UI when the user dismisses an error alert that
  * may be blocking an engine thread in psdk_presentErrorAndWait(). */
 void        psdk_signalErrorDismissed(void);
-
-/* Report a fatal error to the host UI, debug log, and termination
- * path. Safe from any thread once the bridge is live. */
-void        psdk_reportFatalError(const char *message);
-
-void        psdk_installFatalErrorHandlers(void);
 
 void        psdk_setErrorMessageCallback(psdk_ErrorMessageCallback cb, void *userdata);
 
@@ -569,22 +497,14 @@ void        psdk_setInfoMessageCallback(psdk_InfoMessageCallback cb, void *userd
 
 // Pause / Resume (UI <-> Engine).
 //   1. UI calls `psdk_requestPause()`
-//   2. Engine's `psdk_checkPause()` (called from Graphics blocking
-//      points) pauses audio, fires the paused callback, and blocks
+//   2. The engine, at a Graphics blocking point, pauses audio, fires the paused callback, and blocks
 //      on a condvar
 //   3. UI calls `psdk_requestResume()` to unblock
 
 void        psdk_requestPause(void);
 void        psdk_requestResume(void);
 
-// Engine-internal: checks for pause request, blocks if needed. NOT for UI.
-void        psdk_checkPause(void);
-
-bool        psdk_isPauseRequested(void);
 bool        psdk_isPaused(void);
-
-// Snapshot: RGBA pixel buffer captured before blocking.
-void        psdk_setSnapshot(const unsigned char *data, int width, int height);
 
 // Copy the snapshot into `dest` (must be at least width*height*4 bytes).
 // Returns true if a snapshot was available, false if empty.
@@ -598,13 +518,7 @@ void        psdk_setPausedCallback(psdk_PausedCallback cb, void *userdata);
 void        psdk_setResumedCallback(psdk_ResumedCallback cb, void *userdata);
 void        psdk_setFrameRenderedCallback(psdk_FrameRenderedCallback cb, void *userdata);
 
-// Engine-internal: fires the one-shot frame-rendered signal. NOT for UI.
-void        psdk_signalFrameRendered(void);
-
 // GL context crash detection (set by SDL layer on caught SIGSEGV/SIGBUS).
-
-void        psdk_setGLContextBroken(void);
-bool        psdk_isGLContextBroken(void);
 
 // Runtime fast-forward multiplier. When > 1 the FPS limiter scales
 // target ticks-per-frame down so the game paces N times faster.
@@ -626,15 +540,6 @@ void        psdk_resetSessionState(void);
 
 // Set log file path for this session (NULL/"" to disable).
 void        psdk_setDebugLogPath(const char *path);
-
-// Append a tagged log line (no-op if disabled).
-void        psdk_debugLog(const char *tag, const char *source, const char *message);
-
-// Fast-path predicate so hot-path callers can skip formatting the
-// log message entirely when debug logging is off. Approximate: it
-// may race with psdk_setDebugLogPath but that's acceptable for a
-// debug facility.
-int         psdk_debugLogEnabled(void);
 
 #ifdef __cplusplus
 }

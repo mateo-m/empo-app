@@ -43,9 +43,10 @@ game.
 
 ## What a core exports
 
-A core exports its bridge and nothing else. `MkxpCore` exports the 102 `mkxp_*`
-names that `mkxp-z-apple-mobile/src/app_bridge.h` declares. `PsdkCore` exports
-the same 102 names under `psdk_*`, from
+A core exports its bridge and nothing else. `ios/Empo/src/App/GameCore.h`
+declares the 58 functions Empo calls. `MkxpCore` exports every `mkxp_*` name
+that `mkxp-z-apple-mobile/src/app_bridge.h` declares, which is those 58 plus
+the names its own engine calls. `PsdkCore` exports the 58 under `psdk_*`, from
 `ios/Dependencies/psdk/psdk_app_bridge.h`, plus the two `psdk_*` entry points in
 `ios/Dependencies/psdk/psdk_core.h`.
 
@@ -108,8 +109,8 @@ follow the other. Empo names no engine in its own header, and its forwarder puts
 the open core's prefix in front of the name at `dlsym` time.
 
 The price is three copies to keep in step.
-`scripts/check-core-interface.sh` strips the three prefixes and compares the
-files, and fails when one of them drifts. Read it as the rule: a core that drops
+`scripts/check-core-interface.sh` strips the three prefixes and fails when a
+core header lacks a statement of `GameCore.h`. Every Xcode build runs it. Read it as the rule: a core that drops
 a name or changes an argument makes Empo abort in the forwarder at run time.
 
 ## How a launcher opens a core

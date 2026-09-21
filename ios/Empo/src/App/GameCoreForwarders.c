@@ -59,14 +59,6 @@ int gamecore_run_app(int argc, char **argv) {
     return fn(argc, argv);
 }
 
-void gamecore_setGameReady(void) {
-    static void (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("setGameReady");
-    }
-    fn();
-}
-
 int gamecore_isGameReady(void) {
     static int (*fn)(void);
     if (fn == NULL) {
@@ -91,28 +83,12 @@ const char *gamecore_waitForGamePath(void) {
     return fn();
 }
 
-void gamecore_requestTerminate(void) {
-    static void (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("requestTerminate");
-    }
-    fn();
-}
-
 int gamecore_isEngineTerminated(void) {
     static int (*fn)(void);
     if (fn == NULL) {
         fn = coreSymbol("isEngineTerminated");
     }
     return fn();
-}
-
-void gamecore_setEngineTerminated(void) {
-    static void (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("setEngineTerminated");
-    }
-    fn();
 }
 
 int gamecore_didEngineExitCleanly(void) {
@@ -123,28 +99,12 @@ int gamecore_didEngineExitCleanly(void) {
     return fn();
 }
 
-void gamecore_setEngineExitedCleanly(void) {
-    static void (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("setEngineExitedCleanly");
-    }
-    fn();
-}
-
 int gamecore_isEngineHung(void) {
     static int (*fn)(void);
     if (fn == NULL) {
         fn = coreSymbol("isEngineHung");
     }
     return fn();
-}
-
-void gamecore_setEngineHung(void) {
-    static void (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("setEngineHung");
-    }
-    fn();
 }
 
 void gamecore_setEngineTerminatedCallback(gamecore_EngineTerminatedCallback cb, void *userdata) {
@@ -171,84 +131,12 @@ void gamecore_injectKeyEvent(int scancode, int pressed) {
     fn(scancode, pressed);
 }
 
-void gamecore_setKeyEventCallback(gamecore_KeyEventCallback cb, void *userdata) {
-    static void (*fn)(gamecore_KeyEventCallback cb, void *userdata);
-    if (fn == NULL) {
-        fn = coreSymbol("setKeyEventCallback");
-    }
-    fn(cb, userdata);
-}
-
-void gamecore_injectPointerEvent(int x, int y, GameCorePointerPhase phase) {
-    static void (*fn)(int x, int y, GameCorePointerPhase phase);
-    if (fn == NULL) {
-        fn = coreSymbol("injectPointerEvent");
-    }
-    fn(x, y, phase);
-}
-
-void gamecore_setManagedConfigDir(const char *path) {
-    static void (*fn)(const char *path);
-    if (fn == NULL) {
-        fn = coreSymbol("setManagedConfigDir");
-    }
-    fn(path);
-}
-
-const char *gamecore_getManagedConfigDir(void) {
-    static const char *(*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getManagedConfigDir");
-    }
-    return fn();
-}
-
 void gamecore_setConfigOverlayJSON(const char *jsonUTF8) {
     static void (*fn)(const char *jsonUTF8);
     if (fn == NULL) {
         fn = coreSymbol("setConfigOverlayJSON");
     }
     fn(jsonUTF8);
-}
-
-const char *gamecore_getConfigOverlayJSON(void) {
-    static const char *(*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getConfigOverlayJSON");
-    }
-    return fn();
-}
-
-void gamecore_setUserDataDirectory(const char *path) {
-    static void (*fn)(const char *path);
-    if (fn == NULL) {
-        fn = coreSymbol("setUserDataDirectory");
-    }
-    fn(path);
-}
-
-const char *gamecore_getUserDataDirectory(void) {
-    static const char *(*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getUserDataDirectory");
-    }
-    return fn();
-}
-
-void gamecore_setSharedFontsDirectory(const char *path) {
-    static void (*fn)(const char *path);
-    if (fn == NULL) {
-        fn = coreSymbol("setSharedFontsDirectory");
-    }
-    fn(path);
-}
-
-const char *gamecore_getSharedFontsDirectory(void) {
-    static const char *(*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getSharedFontsDirectory");
-    }
-    return fn();
 }
 
 void gamecore_setLauncherIdentity(const char *name) {
@@ -259,28 +147,12 @@ void gamecore_setLauncherIdentity(const char *name) {
     fn(name);
 }
 
-const char *gamecore_getLauncherIdentity(void) {
-    static const char *(*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getLauncherIdentity");
-    }
-    return fn();
-}
-
 void gamecore_setCABundlePath(const char *path) {
     static void (*fn)(const char *path);
     if (fn == NULL) {
         fn = coreSymbol("setCABundlePath");
     }
     fn(path);
-}
-
-const char *gamecore_getCABundlePath(void) {
-    static const char *(*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getCABundlePath");
-    }
-    return fn();
 }
 
 void gamecore_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *userdata) {
@@ -371,36 +243,12 @@ const char *gamecore_getMetalDeviceName(void) {
     return fn();
 }
 
-void gamecore_setGameRect(float x, float y, float w, float h) {
-    static void (*fn)(float x, float y, float w, float h);
-    if (fn == NULL) {
-        fn = coreSymbol("setGameRect");
-    }
-    fn(x, y, w, h);
-}
-
-void gamecore_getSafeAreaInsets(float *top, float *bottom, float *left, float *right) {
-    static void (*fn)(float *top, float *bottom, float *left, float *right);
-    if (fn == NULL) {
-        fn = coreSymbol("getSafeAreaInsets");
-    }
-    fn(top, bottom, left, right);
-}
-
 void gamecore_setSafeAreaInsets(float top, float bottom, float left, float right) {
     static void (*fn)(float top, float bottom, float left, float right);
     if (fn == NULL) {
         fn = coreSymbol("setSafeAreaInsets");
     }
     fn(top, bottom, left, right);
-}
-
-bool gamecore_consumeSafeAreaInsetsChanged(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("consumeSafeAreaInsetsChanged");
-    }
-    return fn();
 }
 
 void gamecore_setHostViewportRegion(float x, float y, float w, float h, bool isPortrait) {
@@ -419,22 +267,6 @@ void gamecore_clearHostViewportRegion(void) {
     fn();
 }
 
-bool gamecore_getHostViewportRegion(float *x, float *y, float *w, float *h, bool *isPortrait) {
-    static bool (*fn)(float *x, float *y, float *w, float *h, bool *isPortrait);
-    if (fn == NULL) {
-        fn = coreSymbol("getHostViewportRegion");
-    }
-    return fn(x, y, w, h, isPortrait);
-}
-
-float gamecore_getScreenScale(void) {
-    static float (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getScreenScale");
-    }
-    return fn();
-}
-
 void *gamecore_getSDLUIKitWindow(void) {
     static void *(*fn)(void);
     if (fn == NULL) {
@@ -443,26 +275,10 @@ void *gamecore_getSDLUIKitWindow(void) {
     return fn();
 }
 
-void gamecore_applyPerGameSettings(GameCoreVerticalAlignment verticalAlignment, bool postloadEnabled) {
-    static void (*fn)(GameCoreVerticalAlignment verticalAlignment, bool postloadEnabled);
-    if (fn == NULL) {
-        fn = coreSymbol("applyPerGameSettings");
-    }
-    fn(verticalAlignment, postloadEnabled);
-}
-
 GameCoreVerticalAlignment gamecore_getVerticalAlignment(void) {
     static GameCoreVerticalAlignment (*fn)(void);
     if (fn == NULL) {
         fn = coreSymbol("getVerticalAlignment");
-    }
-    return fn();
-}
-
-bool gamecore_getPostloadEnabled(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getPostloadEnabled");
     }
     return fn();
 }
@@ -491,14 +307,6 @@ void gamecore_setActiveRubyVersion(GameCoreRubyVersion version) {
     fn(version);
 }
 
-GameCoreRubyVersion gamecore_getActiveRubyVersion(void) {
-    static GameCoreRubyVersion (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getActiveRubyVersion");
-    }
-    return fn();
-}
-
 void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
     static void (*fn)(const GameCoreSessionConfig *config);
     if (fn == NULL) {
@@ -515,60 +323,12 @@ void gamecore_setUseInGameKeyboard(bool enabled) {
     fn(enabled);
 }
 
-bool gamecore_getUseInGameKeyboard(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getUseInGameKeyboard");
-    }
-    return fn();
-}
-
-void gamecore_setJoiplayCompat(bool enabled) {
-    static void (*fn)(bool enabled);
-    if (fn == NULL) {
-        fn = coreSymbol("setJoiplayCompat");
-    }
-    fn(enabled);
-}
-
-bool gamecore_getJoiplayCompat(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getJoiplayCompat");
-    }
-    return fn();
-}
-
-void gamecore_setNetworkEnabled(bool enabled) {
-    static void (*fn)(bool enabled);
-    if (fn == NULL) {
-        fn = coreSymbol("setNetworkEnabled");
-    }
-    fn(enabled);
-}
-
-bool gamecore_getNetworkEnabled(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getNetworkEnabled");
-    }
-    return fn();
-}
-
 void gamecore_setShowViewportBounds(bool enabled) {
     static void (*fn)(bool enabled);
     if (fn == NULL) {
         fn = coreSymbol("setShowViewportBounds");
     }
     fn(enabled);
-}
-
-bool gamecore_getShowViewportBounds(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getShowViewportBounds");
-    }
-    return fn();
 }
 
 void gamecore_setCheatsEnabled(bool enabled) {
@@ -595,14 +355,6 @@ void gamecore_setGameControllerCaptureEnabled(bool enabled) {
     fn(enabled);
 }
 
-bool gamecore_getGameControllerCaptureEnabled(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getGameControllerCaptureEnabled");
-    }
-    return fn();
-}
-
 void gamecore_setTouchMouseEnabled(bool enabled) {
     static void (*fn)(bool enabled);
     if (fn == NULL) {
@@ -611,36 +363,12 @@ void gamecore_setTouchMouseEnabled(bool enabled) {
     fn(enabled);
 }
 
-bool gamecore_getTouchMouseEnabled(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("getTouchMouseEnabled");
-    }
-    return fn();
-}
-
 void gamecore_setViewportBoundsColor(float r, float g, float b, float a) {
     static void (*fn)(float r, float g, float b, float a);
     if (fn == NULL) {
         fn = coreSymbol("setViewportBoundsColor");
     }
     fn(r, g, b, a);
-}
-
-void gamecore_getViewportBoundsColor(float *r, float *g, float *b, float *a) {
-    static void (*fn)(float *r, float *g, float *b, float *a);
-    if (fn == NULL) {
-        fn = coreSymbol("getViewportBoundsColor");
-    }
-    fn(r, g, b, a);
-}
-
-void gamecore_setErrorMessage(const char *message) {
-    static void (*fn)(const char *message);
-    if (fn == NULL) {
-        fn = coreSymbol("setErrorMessage");
-    }
-    fn(message);
 }
 
 void gamecore_presentErrorAndWait(const char *message) {
@@ -655,22 +383,6 @@ void gamecore_signalErrorDismissed(void) {
     static void (*fn)(void);
     if (fn == NULL) {
         fn = coreSymbol("signalErrorDismissed");
-    }
-    fn();
-}
-
-void gamecore_reportFatalError(const char *message) {
-    static void (*fn)(const char *message);
-    if (fn == NULL) {
-        fn = coreSymbol("reportFatalError");
-    }
-    fn(message);
-}
-
-void gamecore_installFatalErrorHandlers(void) {
-    static void (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("installFatalErrorHandlers");
     }
     fn();
 }
@@ -723,36 +435,12 @@ void gamecore_requestResume(void) {
     fn();
 }
 
-void gamecore_checkPause(void) {
-    static void (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("checkPause");
-    }
-    fn();
-}
-
-bool gamecore_isPauseRequested(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("isPauseRequested");
-    }
-    return fn();
-}
-
 bool gamecore_isPaused(void) {
     static bool (*fn)(void);
     if (fn == NULL) {
         fn = coreSymbol("isPaused");
     }
     return fn();
-}
-
-void gamecore_setSnapshot(const unsigned char *data, int width, int height) {
-    static void (*fn)(const unsigned char *data, int width, int height);
-    if (fn == NULL) {
-        fn = coreSymbol("setSnapshot");
-    }
-    fn(data, width, height);
 }
 
 bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
@@ -795,30 +483,6 @@ void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *
     fn(cb, userdata);
 }
 
-void gamecore_signalFrameRendered(void) {
-    static void (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("signalFrameRendered");
-    }
-    fn();
-}
-
-void gamecore_setGLContextBroken(void) {
-    static void (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("setGLContextBroken");
-    }
-    fn();
-}
-
-bool gamecore_isGLContextBroken(void) {
-    static bool (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("isGLContextBroken");
-    }
-    return fn();
-}
-
 void gamecore_setFastForwardMultiplier(int multiplier) {
     static void (*fn)(int multiplier);
     if (fn == NULL) {
@@ -849,20 +513,4 @@ void gamecore_setDebugLogPath(const char *path) {
         fn = coreSymbol("setDebugLogPath");
     }
     fn(path);
-}
-
-void gamecore_debugLog(const char *tag, const char *source, const char *message) {
-    static void (*fn)(const char *tag, const char *source, const char *message);
-    if (fn == NULL) {
-        fn = coreSymbol("debugLog");
-    }
-    fn(tag, source, message);
-}
-
-int gamecore_debugLogEnabled(void) {
-    static int (*fn)(void);
-    if (fn == NULL) {
-        fn = coreSymbol("debugLogEnabled");
-    }
-    return fn();
 }

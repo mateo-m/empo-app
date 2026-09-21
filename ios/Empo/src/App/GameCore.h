@@ -195,16 +195,6 @@ typedef enum {
     GAMECORE_RUBY_31 = 31,
 } GameCoreRubyVersion;
 
-// Phase of a host-injected pointer event. Pointer injection lets a
-// host drive game mouse input from its own views instead of the SDL
-// view. A host that never injects keeps the platform behaviour.
-typedef enum {
-    GAMECORE_POINTER_DOWN = 0,
-    GAMECORE_POINTER_MOVE = 1,
-    GAMECORE_POINTER_UP = 2,
-    GAMECORE_POINTER_CANCEL = 3,
-} GameCorePointerPhase;
-
 typedef struct {
     const char *managedConfigDir;
     const char *userDataDirectory;
@@ -250,7 +240,6 @@ int gamecore_run_app(int argc, char **argv);
 
 // Game lifecycle
 
-void gamecore_setGameReady(void);
 int gamecore_isGameReady(void);
 
 // Game selection (Library -> Engine)
@@ -260,21 +249,17 @@ const char *gamecore_waitForGamePath(void);
 
 // Engine termination
 
-void gamecore_requestTerminate(void);
 int gamecore_isEngineTerminated(void);
-void gamecore_setEngineTerminated(void);
 
 // Set when the session ends because Ruby raised SystemExit (e.g. the
 // game's "Exit to desktop" menu). The UI checks this in its
 // engine-terminated callback to skip the "didn't exit cleanly" alert.
 int gamecore_didEngineExitCleanly(void);
-void gamecore_setEngineExitedCleanly(void);
 
 // Set when the RGSS thread failed to respond to a termination
 // request. Engine is unrecoverable. The UI surfaces a "close from
 // app switcher" alert because we can't recover in-process.
 int gamecore_isEngineHung(void);
-void gamecore_setEngineHung(void);
 
 void gamecore_setEngineTerminatedCallback(gamecore_EngineTerminatedCallback cb, void *userdata);
 void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, void *userdata);
@@ -283,16 +268,6 @@ void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, vo
 
 // scancode: GAMECORE_SCANCODE_* value. pressed: 1=down, 0=up.
 void gamecore_injectKeyEvent(int scancode, int pressed);
-
-void gamecore_setKeyEventCallback(gamecore_KeyEventCallback cb, void *userdata);
-
-// Pushes one left-button pointer event in top-left window points.
-//
-// The host owns the policy: which finger owns the pointer, and how
-// coordinates are clamped. This call pushes what it is given. The
-// events carry `SDL_TOUCH_MOUSEID`, so `gamecore_setTouchMouseEnabled`
-// still gates whether the game sees them.
-void gamecore_injectPointerEvent(int x, int y, GameCorePointerPhase phase);
 
 // Managed-config directory (UI -> Engine).
 //
@@ -306,8 +281,6 @@ void gamecore_injectPointerEvent(int x, int y, GameCorePointerPhase phase);
 //
 // Pass NULL/"" to clear the override (cwd-only behavior, matches
 // desktop builds).
-void gamecore_setManagedConfigDir(const char *path);
-const char *gamecore_getManagedConfigDir(void);
 
 // In-memory config overlay (UI -> Engine).
 //
@@ -322,7 +295,6 @@ const char *gamecore_getManagedConfigDir(void);
 // Set before each session start. NULL or "" clears any previous
 // overlay. Reject inputs over 1 MiB (warn log, keep previous state).
 void gamecore_setConfigOverlayJSON(const char *jsonUTF8);
-const char *gamecore_getConfigOverlayJSON(void);
 
 // Per-game UserData directory (UI -> Engine).
 //
@@ -333,8 +305,6 @@ const char *gamecore_getConfigOverlayJSON(void);
 // (`System.data_directory`, `MKXP.data_directory`, fake APPDATA env)
 // and games that use relative RGSS save filenames are both routed
 // here by the engine + preload compatibility layer.
-void gamecore_setUserDataDirectory(const char *path);
-const char *gamecore_getUserDataDirectory(void);
 
 // Shared fonts directory (UI -> Engine).
 //
@@ -345,8 +315,6 @@ const char *gamecore_getUserDataDirectory(void);
 // Windows-style "<SystemRoot>\Fonts\<file>" writes (Essentials'
 // FontInstaller) into it. Unset = no shared pool. Per-game fonts
 // only.
-void gamecore_setSharedFontsDirectory(const char *path);
-const char *gamecore_getSharedFontsDirectory(void);
 
 // Launcher identity (UI -> Engine).
 //
@@ -362,7 +330,6 @@ const char *gamecore_getSharedFontsDirectory(void);
 // patches can branch on the specific launcher. Set once before the
 // engine boots. Pass NULL/"" to clear (no globals are defined).
 void gamecore_setLauncherIdentity(const char *name);
-const char *gamecore_getLauncherIdentity(void);
 
 // CA certificate bundle (UI -> Engine).
 //
@@ -375,7 +342,6 @@ const char *gamecore_getLauncherIdentity(void);
 // When unset, TLS connections fail closed (certificate verification
 // has no roots to succeed against). Plain http still works.
 void gamecore_setCABundlePath(const char *path);
-const char *gamecore_getCABundlePath(void);
 
 // Text-input bridge (UI <-> Engine).
 //
@@ -435,17 +401,10 @@ const char *gamecore_getMetalDeviceName(void);
 
 // Game viewport rect (logical points)
 
-void gamecore_setGameRect(float x, float y, float w, float h);
-
 // Safe area insets (logical points, cached atomics)
-
-void gamecore_getSafeAreaInsets(float *top, float *bottom, float *left, float *right);
 
 // Push from UIKit main thread. Sets a "needs relayout" flag.
 void gamecore_setSafeAreaInsets(float top, float bottom, float left, float right);
-
-// Returns true (once) if insets changed since last check.
-bool gamecore_consumeSafeAreaInsetsChanged(void);
 
 // Host viewport region (dimensionless window fractions)
 //
@@ -465,12 +424,6 @@ void gamecore_setHostViewportRegion(float x, float y, float w, float h, bool isP
 // Back to automatic placement, as if no region was ever set.
 void gamecore_clearHostViewportRegion(void);
 
-// Engine-side read. Returns false when no region is set.
-bool gamecore_getHostViewportRegion(float *x, float *y, float *w, float *h, bool *isPortrait);
-
-// Screen scale factor (e.g. 3.0 on iPhone Pro).
-float gamecore_getScreenScale(void);
-
 // SDL's UIKit UIWindow*, or NULL before the engine creates its window.
 // Owned by SDL. Do not retain. For embedding host controls in the
 // same window stack as the game view on iOS.
@@ -483,16 +436,12 @@ void *gamecore_getSDLUIKitWindow(void);
 // groups the fields the host sets together on every launch. Individual
 // setters remain for mid-session toggles and legacy call sites.
 
-void gamecore_applyPerGameSettings(GameCoreVerticalAlignment verticalAlignment, bool postloadEnabled);
-
 GameCoreVerticalAlignment gamecore_getVerticalAlignment(void);
-bool gamecore_getPostloadEnabled(void);
 
 void gamecore_setSyntaxTransformMode(GameCoreSyntaxTransformMode mode);
 GameCoreSyntaxTransformMode gamecore_getSyntaxTransformMode(void);
 
 void gamecore_setActiveRubyVersion(GameCoreRubyVersion version);
-GameCoreRubyVersion gamecore_getActiveRubyVersion(void);
 
 void gamecore_applySessionConfig(const GameCoreSessionConfig *config);
 
@@ -508,15 +457,12 @@ void gamecore_applySessionConfig(const GameCoreSessionConfig *config);
 // can't drive. `pokemon_input.rb` re-applies the historical
 // `USEKEYBOARDTEXTENTRY = false` overrides when this is set.
 void gamecore_setUseInGameKeyboard(bool enabled);
-bool gamecore_getUseInGameKeyboard(void);
 
 // JoiPlay-compat signal (`$joiplay = true` in the game's Ruby VM).
 // Several games ship JoiPlay-specific patches that branch on the
 // global. Whether those help or hurt depends on the game, so the
 // host decides per boot. Default false. `platform_compat.rb` reads
 // this via `System.joiplay_compat?` before game scripts load.
-void gamecore_setJoiplayCompat(bool enabled);
-bool gamecore_getJoiplayCompat(void);
 
 // Network access (UI -> Engine). When disabled, the game sees the
 // equivalent of airplane mode: network libraries load and their
@@ -526,11 +472,8 @@ bool gamecore_getJoiplayCompat(void);
 // failure). Games then take the same offline fallback paths they
 // ship for desktop players without internet. Ruby reads this via
 // `System.network_enabled?`. Default false (host must opt in).
-void gamecore_setNetworkEnabled(bool enabled);
-bool gamecore_getNetworkEnabled(void);
 
 void gamecore_setShowViewportBounds(bool enabled);
-bool gamecore_getShowViewportBounds(void);
 
 // Cheat menu toggle (UI -> Engine). The postload layer reads the
 // current value each update. Ruby reassigns $CHEATS from the bridge
@@ -544,22 +487,17 @@ bool gamecore_getCheatsEnabled(void);
  * Default: enabled. Must be set before or during session start.
  * Takes effect immediately. */
 void gamecore_setGameControllerCaptureEnabled(bool enabled);
-bool gamecore_getGameControllerCaptureEnabled(void);
 
 /* Controls whether touch-synthesized SDL mouse events
  * (which == SDL_TOUCH_MOUSEID) are delivered to the engine input
  * layer. Default: false = upstream behavior (touch never synthesizes
  * mouse input). Hosts that want touch-as-mouse set it true. */
 void gamecore_setTouchMouseEnabled(bool enabled);
-bool gamecore_getTouchMouseEnabled(void);
 
 void gamecore_setViewportBoundsColor(float r, float g, float b, float a);
-void gamecore_getViewportBoundsColor(float *r, float *g, float *b, float *a);
 
 // Error routing (Engine -> UI). `SDL_ShowSimpleMessageBox` is a no-op
 // on iOS, so errors come through here for the UI to present.
-
-void gamecore_setErrorMessage(const char *message);
 
 /* Present an error in the host UI and block the calling thread until
  * the user dismisses the alert. iOS only. No-op elsewhere. */
@@ -568,12 +506,6 @@ void gamecore_presentErrorAndWait(const char *message);
 /* Called by the host UI when the user dismisses an error alert that
  * may be blocking an engine thread in gamecore_presentErrorAndWait(). */
 void gamecore_signalErrorDismissed(void);
-
-/* Report a fatal error to the host UI, debug log, and termination
- * path. Safe from any thread once the bridge is live. */
-void gamecore_reportFatalError(const char *message);
-
-void gamecore_installFatalErrorHandlers(void);
 
 void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata);
 
@@ -597,22 +529,14 @@ void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *user
 
 // Pause / Resume (UI <-> Engine).
 //   1. UI calls `gamecore_requestPause()`
-//   2. Engine's `gamecore_checkPause()` (called from Graphics blocking
-//      points) pauses audio, fires the paused callback, and blocks
+//   2. The engine, at a Graphics blocking point, pauses audio, fires the paused callback, and blocks
 //      on a condvar
 //   3. UI calls `gamecore_requestResume()` to unblock
 
 void gamecore_requestPause(void);
 void gamecore_requestResume(void);
 
-// Engine-internal: checks for pause request, blocks if needed. NOT for UI.
-void gamecore_checkPause(void);
-
-bool gamecore_isPauseRequested(void);
 bool gamecore_isPaused(void);
-
-// Snapshot: RGBA pixel buffer captured before blocking.
-void gamecore_setSnapshot(const unsigned char *data, int width, int height);
 
 // Copy the snapshot into `dest` (must be at least width*height*4 bytes).
 // Returns true if a snapshot was available, false if empty.
@@ -626,13 +550,7 @@ void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata);
 void gamecore_setResumedCallback(gamecore_ResumedCallback cb, void *userdata);
 void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata);
 
-// Engine-internal: fires the one-shot frame-rendered signal. NOT for UI.
-void gamecore_signalFrameRendered(void);
-
 // GL context crash detection (set by SDL layer on caught SIGSEGV/SIGBUS).
-
-void gamecore_setGLContextBroken(void);
-bool gamecore_isGLContextBroken(void);
 
 // Runtime fast-forward multiplier. When > 1 the FPS limiter scales
 // target ticks-per-frame down so the game paces N times faster.
@@ -654,15 +572,6 @@ void gamecore_resetSessionState(void);
 
 // Set log file path for this session (NULL/"" to disable).
 void gamecore_setDebugLogPath(const char *path);
-
-// Append a tagged log line (no-op if disabled).
-void gamecore_debugLog(const char *tag, const char *source, const char *message);
-
-// Fast-path predicate so hot-path callers can skip formatting the
-// log message entirely when debug logging is off. Approximate: it
-// may race with gamecore_setDebugLogPath but that's acceptable for a
-// debug facility.
-int gamecore_debugLogEnabled(void);
 
 #ifdef __cplusplus
 }

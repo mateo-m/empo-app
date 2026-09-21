@@ -54,13 +54,12 @@ STRAY=$(grep -vE '^_psdk_' <<<"$EXPORTS" || true)
 [ -z "$STRAY" ] ||
     fail "PsdkCore exports names that are not psdk_*: $(tr '\n' ' ' <<<"$STRAY")"
 
-# A launcher opens the core and calls these, so a missing one aborts in
-# the forwarder instead of failing here.
-for want in _psdk_run_app _psdk_setGamePath _psdk_waitForGamePath \
-    _psdk_injectKeyEvent _psdk_getSDLUIKitWindow \
-    _psdk_setFrameRenderedCallback _psdk_setEngineTerminatedCallback; do
-    grep -qx "$want" <<<"$EXPORTS" || fail "PsdkCore does not export $want"
-done
+# A launcher opens the core and calls every name the header declares. A
+# missing one aborts in the forwarder, so fail here first.
+WANT_NAMES=$(grep -oE '\bpsdk_[A-Za-z0-9_]+\(' "$REPO_ROOT/ios/Dependencies/psdk/psdk_app_bridge.h" |
+    sed 's/(//' | sort -u | sed 's/^/_/')
+MISSING=$(comm -23 <(echo "$WANT_NAMES") <(echo "$EXPORTS"))
+[ -z "$MISSING" ] || fail "PsdkCore does not export: $(tr '\n' ' ' <<<"$MISSING")"
 
 LEAK=$(dyld_info -imports "$BIN" | grep -E '_rb_|_ruby_|ViewportElement' || true)
 [ -z "$LEAK" ] || fail "PsdkCore imports engine internals: $LEAK"

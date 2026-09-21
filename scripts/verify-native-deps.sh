@@ -249,4 +249,7 @@ fi
 # another core in the same process. libmkxpz-core.a does not do that job.
 PLATFORM_NAME="$PLATFORM" "$REPO_ROOT/scripts/check-mkxp-framework.sh" --sdk "$PLATFORM"
 
+# A core that drops a name Empo calls aborts in the forwarder at run time.
+"$REPO_ROOT/scripts/check-core-interface.sh"
+
 echo "OK: $PLATFORM native dependency artifacts look healthy"

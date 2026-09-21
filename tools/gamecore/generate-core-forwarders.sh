@@ -97,7 +97,7 @@ HEAD
 awk -f "$ROOT/tools/gamecore/forwarders.awk" "$HEADER" >>"$TMP"
 
 COUNT="$(grep -c '^    if (fn == NULL) {' "$TMP")"
-if [ "$COUNT" -lt 80 ]; then
+if [ "$COUNT" -lt 50 ]; then
     echo "generate-core-forwarders: only $COUNT forwarders parsed, refusing" >&2
     exit 1
 fi
