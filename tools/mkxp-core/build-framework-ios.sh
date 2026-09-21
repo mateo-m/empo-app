@@ -151,7 +151,14 @@ fi
 
 # The engine source this core was linked from. Empo's Game cores
 # screen shows it.
-CORE_VERSION="$(git -C "$ENGINE" describe --tags --always --dirty 2>/dev/null || true)"
+#
+# A copy of the engine without .git makes git walk up to the top repo
+# and answer with Empo's own tag, so ask for the gitlink in that case.
+if [ -e "$ENGINE/.git" ]; then
+    CORE_VERSION="$(git -C "$ENGINE" describe --tags --always --dirty 2>/dev/null || true)"
+else
+    CORE_VERSION="$(git -C "$ROOT" rev-parse --short HEAD:mkxp-z-apple-mobile 2>/dev/null || true)"
+fi
 [ -n "$CORE_VERSION" ] || CORE_VERSION=unknown
 
 cat >"$FW/Info.plist" <<EOF

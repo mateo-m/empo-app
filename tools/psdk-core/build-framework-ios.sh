@@ -135,7 +135,15 @@ cp "$DEPS/psdk/runtime_prelude.rb" "$FW/"
 
 # The LiteRGSS2 source this core was linked from. Empo's Game cores
 # screen shows it.
-CORE_VERSION="$(git -C "$DEPS/sources/litergss2" describe --tags --always --dirty 2>/dev/null || true)"
+#
+# A copy of the source without .git makes git walk up to the top repo
+# and answer with Empo's own tag, so ask for the gitlink in that case.
+LITERGSS="$DEPS/sources/litergss2"
+if [ -e "$LITERGSS/.git" ]; then
+    CORE_VERSION="$(git -C "$LITERGSS" describe --tags --always --dirty 2>/dev/null || true)"
+else
+    CORE_VERSION="$(git -C "$ROOT" rev-parse --short HEAD:ios/Dependencies/sources/litergss2 2>/dev/null || true)"
+fi
 [ -n "$CORE_VERSION" ] || CORE_VERSION=unknown
 
 cat >"$FW/Info.plist" <<EOF
