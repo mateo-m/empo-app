@@ -88,6 +88,6 @@ SCRIPT="$REPO_ROOT/tools/psdk-core/build-framework-ios.sh"
 WANT_SCRIPT="$(shasum -a 256 "$SCRIPT" | awk '{print $1}')"
 GOT_SCRIPT="$(cat "$FW/.build-script-sha256" 2>/dev/null || true)"
 [ "$WANT_SCRIPT" = "$GOT_SCRIPT" ] ||
-    fail "PsdkCore.framework was built by a different build-framework-ios.sh (run: scripts/rebuild-engine-halves.sh $SDK)"
+    fail "PsdkCore.framework was built by a different build-framework-ios.sh (run: tools/psdk-core/build-framework-ios.sh --sdk $SDK)"
 
 echo "OK: PsdkCore.framework is closed for $SDK"

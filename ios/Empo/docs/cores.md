@@ -184,7 +184,9 @@ signal handlers, the audio device and the main thread.
 The native tree keeps the built framework between builds, and Xcode only
 copies it. `build-framework-ios.sh` writes its own sha256 into
 `.build-script-sha256` inside the framework, and `check-*-framework.sh` fails
-when that hash stops matching the script on disk. Rebuild with
-`scripts/rebuild-engine-halves.sh <sdk>`, which takes minutes. The dependency
+when that hash stops matching the script on disk. Rebuild MkxpCore with
+`scripts/rebuild-engine-halves.sh <sdk>`, and PsdkCore with
+`tools/psdk-core/build-framework-ios.sh --sdk <sdk>`. Both take minutes.
+`rebuild-engine-halves.sh` builds the mkxp half only. The dependency
 fingerprint does not list the packaging scripts, because they build an engine
 output and a full dependency rebuild takes hours.
