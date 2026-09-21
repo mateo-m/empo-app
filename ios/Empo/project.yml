@@ -36,6 +36,11 @@ settings:
       -Wno-deprecated-literal-operator
       -Wno-unused-function
     DEPENDENCY_SEARCH_PATH: $(PROJECT_DIR)/../Dependencies/build-$(PLATFORM_NAME)-arm64
+    # Which game cores the app ships. The "Embed the cores" phase reads
+    # it, and the Game cores screen lists what it finds in the bundle.
+    # Build one core only by passing it on the command line:
+    #   xcodebuild ... EMPO_CORES=PsdkCore
+    EMPO_CORES: MkxpCore PsdkCore
     HEADER_SEARCH_PATHS:
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src
@@ -191,6 +196,10 @@ targets:
         # a single engine name at launch, or a second core could bind
         # to the first core's definitions.
         #
+        # EMPO_CORES says which cores to embed, so a release can ship
+        # one core or both. The app reads the bundle to find out what it
+        # got (BuiltInGameCore), and refuses a game it cannot run.
+        #
         # Force every build: content follows the fetched deps version,
         # not any file Xcode tracks.
         basedOnDependencyAnalysis: false
@@ -199,13 +208,21 @@ targets:
           TREE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64"
           DEST="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
           mkdir -p "$DEST"
-          for CORE in MkxpCore PsdkCore; do
+          if [ -z "${EMPO_CORES:-}" ]; then
+            echo "error: EMPO_CORES is empty - the app would ship no game core" >&2
+            exit 1
+          fi
+          for CORE in ${EMPO_CORES}; do
+            case "$CORE" in
+              MkxpCore) HOW="cd ios/Dependencies && make -f ${PLATFORM_NAME}.make mkxp-framework" ;;
+              PsdkCore) HOW="tools/psdk-core/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
+              *)
+                echo "error: EMPO_CORES names an unknown core: $CORE" >&2
+                exit 1
+                ;;
+            esac
             CORE_SRC="$TREE/$CORE.framework"
             if [ ! -d "$CORE_SRC" ]; then
-              case "$CORE" in
-                MkxpCore) HOW="cd ios/Dependencies && make -f ${PLATFORM_NAME}.make mkxp-framework" ;;
-                PsdkCore) HOW="tools/psdk-core/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
-              esac
               echo "error: $CORE_SRC missing - run: $HOW (or refetch native deps)" >&2
               exit 1
             fi
@@ -218,6 +235,14 @@ targets:
                 --preserve-metadata=identifier,entitlements,flags \
                 --timestamp=none "$DEST/$CORE.framework"
             fi
+          done
+          # An incremental build keeps the framework folder from the last
+          # build, so remove a core this build does not ship.
+          for CORE in MkxpCore PsdkCore; do
+            case " ${EMPO_CORES} " in
+              *" $CORE "*) continue ;;
+            esac
+            rm -rf "$DEST/$CORE.framework"
           done
       - name: Generate Git Info
         # Force this script to run every build. Without this, Xcode sees

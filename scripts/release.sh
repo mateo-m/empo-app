@@ -354,6 +354,21 @@ git -C "$ENGINE_DIR" tag -s "$ENGINE_TAG" "$ENGINE_COMMIT" -m "Engine pinned by 
 if [[ "$LOCAL_BUILD" == "1" ]]; then
 
     # 9. Build unsigned .ipa from the clean release commit.
+    #
+    # EMPO_CORES in the environment ships one core instead of both:
+    #   EMPO_CORES=PsdkCore scripts/release.sh --local-build patch
+    # Empty means the project default, which is both cores.
+    # macOS ships bash 3.2, where `set -u` plus "${EMPTY[@]}" aborts the
+    # script. `${A[@]+"${A[@]}"}` expands to nothing when the array is
+    # empty, and keeps the quoting when it is not.
+    CORE_SETTING=()
+    AUDIT_CORES=()
+    if [[ -n "${EMPO_CORES:-}" ]]; then
+        CORE_SETTING=("EMPO_CORES=$EMPO_CORES")
+        AUDIT_CORES=(--cores "$EMPO_CORES")
+        echo "==> cores for this build: $EMPO_CORES"
+    fi
+
     echo "==> building unsigned ipa"
     BUILD_DIR="$PROJECT_DIR/build/Release-iphoneos"
     rm -rf "$BUILD_DIR"
@@ -366,6 +381,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         CODE_SIGNING_ALLOWED=NO \
         PRODUCT_BUNDLE_IDENTIFIER=sh.mateo.empo \
         CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
+        ${CORE_SETTING[@]+"${CORE_SETTING[@]}"} \
         build 2>&1 | grep -E "^(Build|error:|warning: |CompileSwift|Ld )" || true
 
     APP_PATH="$BUILD_DIR/Empo.app"
@@ -377,15 +393,19 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     echo "==> ad-hoc signing with entitlements"
     # Inside out. A nested framework carries its own signature, and
     # signing the app root does not reach inside it. The build ran with
-    # CODE_SIGNING_ALLOWED=NO, so MkxpCore.framework arrives unsigned.
-    codesign --force --sign - --timestamp=none \
-        "$APP_PATH/Frameworks/MkxpCore.framework"
+    # CODE_SIGNING_ALLOWED=NO, so every core framework arrives unsigned.
+    # Sign what the bundle has: a build ships one core or both.
+    for FRAMEWORK in "$APP_PATH"/Frameworks/*.framework; do
+        [[ -d "$FRAMEWORK" ]] || continue
+        codesign --force --sign - --timestamp=none "$FRAMEWORK"
+    done
     codesign --force --sign - \
         --generate-entitlement-der \
         --entitlements "$PROJECT_DIR/Empo.entitlements" \
         "$APP_PATH"
 
-    "$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" "$APP_PATH"
+    "$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" \
+        ${AUDIT_CORES[@]+"${AUDIT_CORES[@]}"} "$APP_PATH"
 
     mkdir -p "$IPA_DIR/Payload"
     cp -R "$APP_PATH" "$IPA_DIR/Payload/Empo.app"

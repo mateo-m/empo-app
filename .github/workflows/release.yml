@@ -342,10 +342,13 @@ jobs:
           set -e
           # Inside out. A nested framework carries its own signature,
           # and signing the app root does not reach inside it. The
-          # build ran with CODE_SIGNING_ALLOWED=NO, so
-          # MkxpCore.framework arrives unsigned.
-          codesign --force --sign - --timestamp=none \
-            build/Release-iphoneos/Empo.app/Frameworks/MkxpCore.framework
+          # build ran with CODE_SIGNING_ALLOWED=NO, so every core
+          # framework arrives unsigned. Sign what the bundle has:
+          # EMPO_CORES in ios/Empo/project.yml decides whether this
+          # build ships one core or both.
+          for FRAMEWORK in build/Release-iphoneos/Empo.app/Frameworks/*.framework; do
+            codesign --force --sign - --timestamp=none "$FRAMEWORK"
+          done
           codesign --force --sign - \
             --generate-entitlement-der \
             --entitlements ios/Empo/Empo.entitlements \

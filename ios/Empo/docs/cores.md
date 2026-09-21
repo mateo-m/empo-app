@@ -7,7 +7,7 @@ description: What a game core is, what it must export, and the rules a launcher 
 
 A core is one dynamic framework that holds a whole game engine. It carries
 its own Ruby, its own classes, its own SDL or SFML, and its own assets. Empo
-ships two:
+has two:
 
 - `MkxpCore.framework`: mkxp-z, with Ruby 1.8, 1.9 and 3.1, on SDL2.
 - `PsdkCore.framework`: LiteRGSS2 and LiteCGSS, with Ruby 3.0, on SFML.
@@ -16,6 +16,30 @@ Both engines declare a class named `ViewportElement` at global scope, and both
 carry a full Ruby. Linking both into one binary makes them share those names.
 A dynamic framework with an export list does not. That is why a core is a
 framework and not a static library.
+
+## What a build ships
+
+A build carries one core or both. `EMPO_CORES` in `ios/Empo/project.yml`
+names the cores, and the "Embed the cores" phase copies those frameworks into
+the app. Ship one core from the command line:
+
+```sh
+xcodebuild ... EMPO_CORES=PsdkCore
+```
+
+The app reads its own bundle to find what it got. `BuiltInGameCore` lists the
+core frameworks that are there, the Game cores screen shows that list, and
+`GameCoreKind.forGame` says which core a game folder needs. Empo refuses a game
+whose core is absent in two places. The import stops and names the missing core,
+and the library shows the same sentence when the player taps the card.
+
+`GameImportValidator` answers a different question: are these files a game.
+It must not ask which cores the build has. `GameCatalog` calls it on every scan
+and can delete a container it calls invalid, and a missing core is not a broken
+game.
+
+`scripts/audit-ipa.sh` audits the cores it finds in the bundle. Pass
+`--cores "MkxpCore PsdkCore"` to demand an exact set.
 
 ## What a core exports
 
@@ -142,7 +166,10 @@ Empo has to reject a game its core cannot run, and import runs off the main
 thread before any core is open. So the answer cannot come from a bridge call.
 `tools/mkxp-core/build-framework-ios.sh` writes `EmpoCoreRGSSVersionMask` into
 the framework's `Info.plist` from the same build flag the engine reads, and
-`GameImportValidator` reads the key from the bundle.
+`BuiltInGameCore.rgssVersionMask` reads the key from the bundle.
+
+Both `build-framework-ios.sh` scripts also write `EmpoCoreVersion`, which names
+the engine source the core was linked from. The Game cores screen shows it.
 
 ## One core for each process
 
