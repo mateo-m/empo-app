@@ -1250,6 +1250,19 @@ extension GameLibrary {
                         continue
                     }
 
+                    // This build can carry one core instead of both
+                    // (EMPO_CORES). Refuse the game here, where the
+                    // message reaches the user, instead of importing a
+                    // game no core can open.
+                    let core = GameCoreKind.forGame(at: gameRoot)
+                    guard BuiltInGameCore.isInThisBuild(core) else {
+                        failSelection(
+                            sel,
+                            GameImportValidator.ImportError.unsupportedRuntime(
+                                core.notInThisBuildMessage))
+                        continue
+                    }
+
                     let jgpBundle: Jgp.Bundle?
                     if sourceURL.pathExtension.lowercased() == "jgp" {
                         do {

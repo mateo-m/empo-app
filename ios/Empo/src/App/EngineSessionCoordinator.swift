@@ -77,19 +77,16 @@ final class EngineSessionCoordinator {
     /// the same core and changes nothing.
     func openCore(for gameDirectory: URL) {
         guard !coreOpened else { return }
-        let isPsdk = PsdkGame.isGameRoot(gameDirectory)
-        let name = isPsdk ? "PsdkCore" : "MkxpCore"
-        // Each core answers the interface under its own prefix, so the
-        // forwarders need the one this core uses.
-        let prefix = isPsdk ? "psdk_" : "mkxp_"
-        let framework = Bundle.main.privateFrameworksURL?
-            .appendingPathComponent("\(name).framework")
-            .appendingPathComponent(name)
-        guard let framework, EmpoCoreOpen(framework.path, prefix) != 0 else {
-            fatalError("\(name).framework is missing from the app bundle")
+        let kind = GameCoreKind.forGame(at: gameDirectory)
+        // AppState.selectGame refuses a game whose core this build does
+        // not carry, so a missing framework here is a broken bundle.
+        guard let binary = BuiltInGameCore.binaryURL(for: kind),
+            EmpoCoreOpen(binary.path, kind.symbolPrefix) != 0
+        else {
+            fatalError("\(kind.rawValue).framework is missing from the app bundle")
         }
         coreOpened = true
-        NSLog("[empo] core opened: %@", name)
+        NSLog("[empo] core opened: %@", kind.rawValue)
 
         // Game scripts see `$userAgent = "empo"` and `$empo = true`,
         // alongside the engine's JoiPlay-compat `$joiplay`.

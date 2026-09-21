@@ -38,6 +38,7 @@ struct GameLibraryView: View {
     /// Anyway / Keep Game choice, one alert after another.
     @State private var saveRescueFailures: [GameEntry] = []
     @State private var showInvalidAlert = false
+    @State private var gameWithNoCore: GameEntry?
     @State private var path = NavigationPath()
     @State private var searchText = ""
     /// Search text applied to the catalog. Trails
@@ -267,6 +268,7 @@ struct GameLibraryView: View {
                     showCancelValidationAlert: $showCancelValidationAlert,
                     showPausedGameAlert: $showPausedGameAlert,
                     showRTPRequiredAlert: $showRTPRequiredAlert,
+                    gameWithNoCore: $gameWithNoCore,
                     rtpWarnedGame: rtpWarnedGame,
                     rtpWarnedRequirement: rtpWarnedRequirement,
                     importPipelineAlert: importPipelineAlertBinding,
@@ -1043,6 +1045,10 @@ struct GameLibraryView: View {
             pendingGame = game
             showPausedGameAlert = true
         } else if let container = game.container,
+            AppState.missingCore(for: container) != nil
+        {
+            gameWithNoCore = game
+        } else if let container = game.container,
             AppState.needsRTPLaunchWarning(for: container),
             let requirement = GameRTPRequirement.detect(at: container.gameURL)
         {
@@ -1354,6 +1360,7 @@ private struct LibraryAlertPresentation: ViewModifier {
     @Binding var showCancelValidationAlert: Bool
     @Binding var showPausedGameAlert: Bool
     @Binding var showRTPRequiredAlert: Bool
+    @Binding var gameWithNoCore: GameEntry?
     let rtpWarnedGame: GameEntry?
     let rtpWarnedRequirement: GameRTPRequirement?
     @Binding var importPipelineAlert: ImportPipelineAlert?
@@ -1425,6 +1432,24 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Text(
                     "Empo couldn't move the saves for \"\(game.title)\" to Rescued Saves. Free up space and delete again, or delete now and lose those saves. You can't undo this."
                 )
+            }
+            .alert(
+                "Empo can't run this game",
+                isPresented: Binding(
+                    get: { gameWithNoCore != nil },
+                    set: { presented in if !presented { gameWithNoCore = nil } }
+                ),
+                presenting: gameWithNoCore
+            ) { _ in
+                Button("Got it") { gameWithNoCore = nil }
+            } message: { game in
+                if let container = game.container,
+                    let core = AppState.missingCore(for: container)
+                {
+                    Text(
+                        "This build of Empo has no \(core.displayName), so it can't run \"\(game.title)\"."
+                    )
+                }
             }
             .alert("This game won't open", isPresented: $showInvalidAlert) {
                 Button("Got it") {}

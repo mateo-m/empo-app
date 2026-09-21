@@ -228,10 +228,15 @@ enum GameImportValidator {
         scratchDir: URL? = nil,
         shouldCancel: (() -> Bool)? = nil
     ) throws {
+        // Which core this build carries is not a property of these
+        // files. GameCatalog calls this on every scan and deletes a
+        // container it calls invalid, so a missing core must not fail
+        // here. ImportPipeline and GameLibraryView refuse instead.
+        //
         // A PSDK game carries none of what the checks below read: no
         // RGSS archive, no .ini with a Scripts entry, no Scripts file.
         // The PSDK core runs it, so no RGSS version applies either.
-        if PsdkGame.isGameRoot(url) { return }
+        if GameCoreKind.forGame(at: url) == .psdk { return }
 
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(atPath: url.path) else {
@@ -813,30 +818,15 @@ enum GameImportValidator {
         return script
     }
 
-    /// Which RGSS versions MkxpCore runs. The mask depends on the Ruby
-    /// versions the core carries: Ruby 1.8 alone runs RGSS1 and RGSS2,
-    /// and Ruby 3.x with the syntax transform runs all three.
-    ///
-    /// This reads the framework's Info.plist, not
-    /// `gamecore_getSupportedRGSSVersionMask`. Import runs off the main
-    /// thread, before the user picks a game, so no core is open yet.
-    /// tools/mkxp-core/build-framework-ios.sh writes the key from the
-    /// same build flag the engine reads.
-    private static let supportedRGSSVersionMask: Int = {
-        guard
-            let core = Bundle.main.privateFrameworksURL?
-                .appendingPathComponent("MkxpCore.framework"),
-            let mask = Bundle(url: core)?.object(forInfoDictionaryKey: "EmpoCoreRGSSVersionMask")
-                as? Int
-        else {
-            assertionFailure("MkxpCore.framework does not declare EmpoCoreRGSSVersionMask")
-            return 0
-        }
-        return mask
-    }()
-
     private static func checkRuntimeSupport(_ version: RGSSVersion) throws {
-        let mask = supportedRGSSVersionMask
+        // The mask depends on the Ruby versions the core carries: Ruby
+        // 1.8 alone runs RGSS1 and RGSS2, and Ruby 3.x with the syntax
+        // transform runs all three.
+        let mask = BuiltInGameCore.rgssVersionMask
+        // Zero means this build carries no RPG Maker core. The files are
+        // still a game, so say nothing here and let ImportPipeline and
+        // GameLibraryView name the missing core.
+        guard mask != 0 else { return }
         let bit = 1 << (version.rawValue - 1)
         if mask & bit != 0 { return }
 

@@ -80,6 +80,7 @@ class AppState {
 
         guard phase == nil, pauseManager.pausedGame == nil else { return }
         guard let container = game.container else { return }
+        guard AppState.missingCore(for: container) == nil else { return }
         SaveMigration.migrateLegacySavesIfNeeded(for: container)
         selectedGame = game
         sessionHadError = false
@@ -264,6 +265,20 @@ class AppState {
     /// background while the game is still in the `.playing` phase.
     func resumeSessionTimingAfterBackground() {
         session.resumeSessionTiming(for: activeSessionGame)
+    }
+}
+
+// MARK: - Missing game core
+
+extension AppState {
+    /// The core the game needs, when this build does not carry it, and
+    /// nil when it does. `GameLibraryView` refuses the tap.
+    ///
+    /// Import refuses such a game too, so this covers a library the user
+    /// filled with a build that had both cores.
+    static func missingCore(for container: GameContainer) -> GameCoreKind? {
+        let kind = GameCoreKind.forGame(at: container.gameURL)
+        return BuiltInGameCore.isInThisBuild(kind) ? nil : kind
     }
 }
 

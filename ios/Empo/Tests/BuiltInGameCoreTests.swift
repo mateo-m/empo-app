@@ -8,16 +8,16 @@ final class BuiltInGameCoreTests: XCTestCase {
     func testTheScreenNamesEveryCoreTheAppCanOpen() throws {
         let frameworks = try XCTUnwrap(Bundle.main.privateFrameworksURL)
 
-        for framework in ["MkxpCore", "PsdkCore"] {
+        for kind in GameCoreKind.allCases {
             let binary =
                 frameworks
-                .appendingPathComponent("\(framework).framework")
-                .appendingPathComponent(framework)
+                .appendingPathComponent("\(kind.rawValue).framework")
+                .appendingPathComponent(kind.rawValue)
             let inBundle = FileManager.default.fileExists(atPath: binary.path)
-            let onScreen = BuiltInGameCore.all.contains { $0.id == framework }
+            let onScreen = BuiltInGameCore.isInThisBuild(kind)
             XCTAssertEqual(
                 onScreen, inBundle,
-                "\(framework): the screen says \(onScreen), the bundle says \(inBundle)")
+                "\(kind.rawValue): the screen says \(onScreen), the bundle says \(inBundle)")
         }
     }
 
@@ -28,5 +28,40 @@ final class BuiltInGameCoreTests: XCTestCase {
                 core.version, "unknown",
                 "\(core.id).framework has no EmpoCoreVersion in its Info.plist")
         }
+    }
+
+    /// A zero mask makes GameImportValidator refuse every RPG Maker
+    /// game, which is right only when the core is absent.
+    func testTheRGSSMaskFollowsTheRPGMakerCore() {
+        let mask = BuiltInGameCore.rgssVersionMask
+        if BuiltInGameCore.isInThisBuild(.rpgMaker) {
+            XCTAssertTrue(mask == 3 || mask == 7, "unexpected RGSS mask \(mask)")
+        } else {
+            XCTAssertEqual(mask, 0)
+        }
+    }
+
+    func testAPsdkFolderAsksForThePsdkCore() throws {
+        let psdk = FileManager.default.temporaryDirectory
+            .appendingPathComponent("psdk-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: psdk, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: psdk) }
+        try Data("RubyVM\n".utf8).write(to: psdk.appendingPathComponent("Game.rb"))
+        try Data("YARB".utf8).write(to: psdk.appendingPathComponent("Game.yarb"))
+
+        XCTAssertEqual(GameCoreKind.forGame(at: psdk), .psdk)
+
+        let other = psdk.appendingPathComponent("Graphics", isDirectory: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        XCTAssertEqual(GameCoreKind.forGame(at: other), .rpgMaker)
+    }
+
+    func testTheRefusalNamesTheMissingCore() {
+        XCTAssertTrue(
+            GameCoreKind.psdk.notInThisBuildMessage.contains("Pokemon SDK core"),
+            GameCoreKind.psdk.notInThisBuildMessage)
+        XCTAssertTrue(
+            GameCoreKind.rpgMaker.notInThisBuildMessage.contains("RPG Maker core"),
+            GameCoreKind.rpgMaker.notInThisBuildMessage)
     }
 }
