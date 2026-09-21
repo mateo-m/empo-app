@@ -157,6 +157,12 @@ struct SettingsView: View {
 
                 Section {
                     NavigationLink {
+                        GameCoresView()
+                    } label: {
+                        Label("Game cores", systemImage: "cpu")
+                    }
+
+                    NavigationLink {
                         LicensesView()
                     } label: {
                         Label("Open-source licenses", systemImage: "doc.text")

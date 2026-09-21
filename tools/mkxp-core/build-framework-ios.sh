@@ -149,6 +149,11 @@ else
     RGSS_MASK=3
 fi
 
+# The engine source this core was linked from. Empo's Game cores
+# screen shows it.
+CORE_VERSION="$(git -C "$ENGINE" describe --tags --always --dirty 2>/dev/null || true)"
+[ -n "$CORE_VERSION" ] || CORE_VERSION=unknown
+
 cat >"$FW/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -165,6 +170,7 @@ cat >"$FW/Info.plist" <<EOF
 	<key>CFBundleSupportedPlatforms</key><array><string>$PLATFORM</string></array>
 	<key>MinimumOSVersion</key><string>$MIN_OS</string>
 	<key>EmpoCoreRGSSVersionMask</key><integer>$RGSS_MASK</integer>
+	<key>EmpoCoreVersion</key><string>$CORE_VERSION</string>
 </dict>
 </plist>
 EOF
