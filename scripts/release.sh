@@ -342,7 +342,10 @@ ENGINE_TAG="empo-v$VERSION"
 CORE_SOURCES=("mkxp-z-apple-mobile" "ios/Dependencies/sources/litergss2")
 
 tag_core_source() {
-    local path="$1" dir="$REPO_ROOT/$1" commit tagged
+    local path="$1" dir="$REPO_ROOT/$1" branch commit tagged
+    # .gitmodules names the branch each submodule tracks, so a branch
+    # rename there reaches this check too.
+    branch="$(git config -f "$REPO_ROOT/.gitmodules" --get "submodule.$path.branch" || printf 'dev')"
     commit="$(git -C "$REPO_ROOT" rev-parse "HEAD:$path")"
     # A release that fails between the two tags leaves the first one
     # behind. The same tag on the same commit is that release again, so
@@ -357,10 +360,10 @@ tag_core_source() {
         echo "error: $path carries $ENGINE_TAG on commit $tagged, not $commit"
         exit 1
     fi
-    git -C "$dir" fetch -q origin dev
-    if ! git -C "$dir" merge-base --is-ancestor "$commit" origin/dev; then
-        echo "error: pinned commit $commit is not on $path origin/dev"
-        echo "       push the submodule first (policy: gitlink must be an ancestor of origin/dev)"
+    git -C "$dir" fetch -q origin "$branch"
+    if ! git -C "$dir" merge-base --is-ancestor "$commit" "origin/$branch"; then
+        echo "error: pinned commit $commit is not on $path origin/$branch"
+        echo "       push the submodule first (policy: gitlink must be an ancestor of origin/$branch)"
         exit 1
     fi
     git -C "$dir" tag -s "$ENGINE_TAG" "$commit" -m "Engine pinned by Empo v$VERSION"

@@ -23,7 +23,8 @@
 # Secrets:
 #   EMPO_DEPS_READ_TOKEN         read empo-deps (dep tarballs)
 #   EMPO_RELEASE_TOKEN           fine-grained PAT, Contents: RW on
-#                                THIS repo + mkxp-z-apple-mobile.
+#                                THIS repo + mkxp-z-apple-mobile +
+#                                litergss2-apple-mobile.
 #                                Powers the cut and sync commits
 #   DISCORD_RELEASE_WEBHOOK_URL  release announcements
 
@@ -165,6 +166,7 @@ jobs:
             REST="${ENTRY#*:}"
             FORK="${REST%%:*}"
             VAR="${REST##*:}"
+            BRANCH=$(git config -f .gitmodules --get "submodule.$SUBMODULE.branch" || echo dev)
             GITLINK=$(git ls-tree HEAD "$SUBMODULE" | awk '{print $3}')
             if [ -z "$GITLINK" ]; then
               echo "::error::no submodule commit for $SUBMODULE"
@@ -178,11 +180,11 @@ jobs:
               echo "::error::$FORK carries empo-v$VERSION on commit $TAGGED, not $GITLINK"
               exit 1
             fi
-            STATUS=$(gh api "repos/$FORK/compare/dev...$GITLINK" --jq .status)
+            STATUS=$(gh api "repos/$FORK/compare/$BRANCH...$GITLINK" --jq .status)
             case "$STATUS" in
               identical | behind) ;;
               *)
-                echo "::error::pinned commit $GITLINK is not on $FORK dev (compare status: $STATUS)"
+                echo "::error::pinned commit $GITLINK is not on $FORK $BRANCH (compare status: $STATUS)"
                 exit 1
                 ;;
             esac
