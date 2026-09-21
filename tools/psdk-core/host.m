@@ -24,6 +24,7 @@
 //                  "Game" by default.
 //
 //   PSDK_KEYS      key presses to inject. scheduleKeys gives the format.
+//   PSDK_TEXT      text to type, as "seconds:string". scheduleText.
 //
 //   PSDK_PRELUDE   a Ruby file in the bundle that runs before Game.rb.
 //                  "prelude.rb" by default. Set it empty to run none.
@@ -49,7 +50,7 @@
 // RTLD_LOCAL keeps the core's names out of the global namespace, so a
 // second core opened later cannot bind to them.
 static int (*gPsdkRun)(int, char **, const char *, const char *, const char *);
-static void (*gPsdkInjectScancode)(int, int);
+static void (*gPsdkInjectKeyEvent)(int, int);
 
 // Ruby's parser and the PSDK boot scripts recurse deeply. The default
 // 512 KB worker stack overflows. mkxp-z gives its RGSS thread the same
@@ -74,7 +75,9 @@ static void *runGame(void *unused) {
 
 // PSDK_KEYS drives the game without a person at the keyboard. Its
 // format is "seconds:scancode" pairs joined by commas, and the numbers
-// are SFML scancodes, the same space psdk_inject_scancode takes.
+// are the scancodes psdk_app_bridge.h names, the same space Empo's
+// buttons use. The press goes through psdk_injectKeyEvent, which is the
+// call Empo makes, so a run proves that road and not another one.
 //
 // The press lasts 150 ms. PSDK reads a button as triggered when it is
 // down on one frame and was up on the one before, so a press has to
@@ -95,13 +98,46 @@ static void scheduleKeys(const char *spec) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(when * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             fprintf(stderr, "[host] key down %d at %.1fs\n", scancode, when);
-            gPsdkInjectScancode(scancode, 1);
+            gPsdkInjectKeyEvent(scancode, 1);
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
-                gPsdkInjectScancode(scancode, 0);
+                gPsdkInjectKeyEvent(scancode, 0);
             });
         });
     }
+}
+
+// PSDK_TEXT sends typed text into the core, as "seconds:string". It
+// runs the same two calls Empo runs from its keyboard:
+// psdk_isTextInputActive tells whether the game waits for text, and
+// psdk_pushTextInput carries what the player typed.
+static void (*gPsdkPushTextInput)(const char *);
+static int (*gPsdkIsTextInputActive)(void);
+
+static void scheduleText(const char *spec) {
+    if (!spec || !*spec || !gPsdkPushTextInput) {
+        return;
+    }
+    NSRange split = [@(spec) rangeOfString:@":"];
+    if (split.location == NSNotFound) {
+        return;
+    }
+    double when = [@(spec) substringToIndex:split.location].doubleValue;
+    NSString *text = [@(spec) substringFromIndex:split.location + 1];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(when * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        int active = gPsdkIsTextInputActive ? gPsdkIsTextInputActive() : -1;
+        fprintf(stderr, "[host] text \"%s\" at %.1fs, the game waits for text: %d\n",
+                text.UTF8String, when, active);
+        gPsdkPushTextInput(text.UTF8String);
+    });
+}
+
+// The game asks for the keyboard through this callback. Empo puts the
+// keyboard up here. The test host only says that the call arrived.
+static void reportTextInputMode(int active, void *userdata) {
+    (void)userdata;
+    fprintf(stderr, "PSDK-TEXTMODE %d\n", active);
 }
 
 static UIWindow *gHostWindow;
@@ -192,9 +228,9 @@ static void scheduleRotation(const char *spec) {
         exit(5);
     }
     gPsdkRun = dlsym(image, "psdk_run");
-    gPsdkInjectScancode = dlsym(image, "psdk_inject_scancode");
-    if (!gPsdkRun || !gPsdkInjectScancode) {
-        fprintf(stderr, "[host] the core is missing psdk_run or psdk_inject_scancode\n");
+    gPsdkInjectKeyEvent = dlsym(image, "psdk_injectKeyEvent");
+    if (!gPsdkRun || !gPsdkInjectKeyEvent) {
+        fprintf(stderr, "[host] the core is missing psdk_run or psdk_injectKeyEvent\n");
         exit(6);
     }
 
@@ -237,8 +273,17 @@ static void scheduleRotation(const char *spec) {
                                                                     : @"prelude.rb"];
     gPreludePath = prelude ? strdup(prelude.fileSystemRepresentation) : NULL;
 
+    gPsdkPushTextInput = dlsym(image, "psdk_pushTextInput");
+    gPsdkIsTextInputActive = dlsym(image, "psdk_isTextInputActive");
+    void (*setTextInputModeCallback)(void (*)(int, void *), void *) =
+        dlsym(image, "psdk_setTextInputModeCallback");
+    if (setTextInputModeCallback) {
+        setTextInputModeCallback(reportTextInputMode, NULL);
+    }
+
     scheduleKeys(getenv("PSDK_KEYS"));
     scheduleRotation(getenv("PSDK_ROTATE"));
+    scheduleText(getenv("PSDK_TEXT"));
 
     const char *runFor = getenv("PSDK_RUN_FOR");
     double seconds = runFor ? atof(runFor) : 0;

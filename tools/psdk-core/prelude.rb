@@ -180,3 +180,60 @@ if (plan = ENV['PSDK_SCALE']) && !plan.empty?
     ::Graphics.screen_scale = scale.to_f
   end
 end
+
+# Report the typed text the game receives, and whether it accepts it.
+# Input.get_text answers nil unless Graphics.focus? is true, and it
+# clears the text on every frame, so the report has to sit on the
+# handler and not on a poll.
+Thread.new do
+  sleep 0.05 until defined?(::Input) && ::Input.respond_to?(:get_text)
+  class << ::Input
+    alias_method :psdk_probe_on_text_entered, :on_text_entered
+    def on_text_entered(text)
+      psdk_probe_on_text_entered(text)
+      $stderr.puts format('PSDK-TEXT got=%p focus=%p get_text=%p',
+                          text, ::Graphics.focus?, ::Input.get_text)
+      $stderr.flush
+    end
+
+    if method_defined?(:open_virtual_keyboard) || private_method_defined?(:open_virtual_keyboard)
+      alias_method :psdk_probe_open_virtual_keyboard, :open_virtual_keyboard
+      def open_virtual_keyboard
+        $stderr.puts 'PSDK-TEXT the game asks for the keyboard'
+        $stderr.flush
+        psdk_probe_open_virtual_keyboard
+      end
+    else
+      $stderr.puts 'PSDK-TEXT this build has no Input.open_virtual_keyboard'
+    end
+  end
+  $stderr.puts 'PSDK-HOOK text'
+end
+
+# Open the name screen at the second PSDK_NAME_SCREEN names. The scene
+# must start on the game thread, so the probe hangs on GamePlay::Base#update,
+# which runs there after Graphics.update returns. A scene started from
+# another thread would run its loop next to the game's own loop.
+if (at = ENV['PSDK_NAME_SCREEN']) && !at.empty?
+  Thread.new do
+    sleep 0.05 until defined?(::GamePlay) && defined?(::GamePlay::NameInput)
+    started = Time.now
+    opened = false
+    ::GamePlay::Base.prepend(Module.new do
+      define_method(:update) do
+        result = super()
+        if !opened && Time.now - started > at.to_f && !is_a?(::GamePlay::NameInput)
+          opened = true
+          $stderr.puts 'PSDK-NAME opening the name screen'
+          $stderr.flush
+          scene = ::GamePlay::NameInput.new('', 12)
+          scene.main
+          $stderr.puts "PSDK-NAME the name screen closed, name=#{scene.return_name.inspect}"
+          $stderr.flush
+        end
+        result
+      end
+    end)
+    $stderr.puts 'PSDK-HOOK name screen'
+  end
+end
