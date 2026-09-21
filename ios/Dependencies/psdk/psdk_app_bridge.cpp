@@ -13,6 +13,7 @@
 #include "psdk_app_bridge.h"
 #include "psdk_core.h"
 
+#include <SFML/System/String.hpp>
 #include <SFML/Window/Keyboard.hpp>
 
 #include <algorithm>
@@ -45,6 +46,13 @@ extern "C" void sfml_set_output_region(float x, float y, float w, float h);
 extern "C" void sfml_window_pixel_size(unsigned int *width, unsigned int *height);
 extern "C" float sfml_ios_backing_scale();
 
+// The text road. A game asks for the keyboard through
+// sf::Keyboard::setVirtualKeyboardVisible, which SFML reports through
+// the callback below, and it reads what the player typed from
+// sf::Event::TextEntered, which sfml_ios_inject_character makes.
+extern "C" void sfml_ios_inject_character(unsigned int unicode);
+extern "C" void sfml_ios_set_virtual_keyboard_callback(void (*callback)(int, void *), void *userdata);
+
 namespace {
 
 std::mutex gLock;
@@ -72,6 +80,15 @@ Callback gInfoMessage;
 Callback gPaused;
 Callback gResumed;
 Callback gTextInputMode;
+
+// SFML carries the game's keyboard request out through a plain C
+// callback, and the launcher takes it through psdk_TextInputModeCallback.
+// This turns one into the other.
+void forwardTextInputMode(int active, void *) {
+    if (gTextInputMode.fn) {
+        reinterpret_cast<psdk_TextInputModeCallback>(gTextInputMode.fn)(active, gTextInputMode.userdata);
+    }
+}
 
 // Where the picture goes. The launcher gives a region of its window, the
 // game gives its own resolution, and placeOutputRegion turns the two into
@@ -539,6 +556,20 @@ void psdk_injectKeyEvent(int scancode, int pressed) {
         return;
     }
     psdk_inject_scancode(sfScan, pressed);
+
+    // PSDK's name screen reads Return and Backspace as text, not as
+    // keys: `update_name` confirms on code point 13 and deletes on 8.
+    // On a desktop, SFML sends a text event with those code points
+    // next to the key event. The iOS backend sends no text of its own,
+    // so the two keys get theirs here. Escape gets none, because the
+    // name screen would eat it and the player could not leave.
+    if (pressed) {
+        if (scancode == PSDK_SCANCODE_RETURN) {
+            sfml_ios_inject_character('\r');
+        } else if (scancode == PSDK_SCANCODE_BACKSPACE) {
+            sfml_ios_inject_character('\b');
+        }
+    }
 }
 
 // MARK: - The window
@@ -577,6 +608,7 @@ void psdk_setResumedCallback(psdk_ResumedCallback cb, void *userdata) {
 
 void psdk_setTextInputModeCallback(psdk_TextInputModeCallback cb, void *userdata) {
     gTextInputMode = {reinterpret_cast<void *>(cb), userdata};
+    sfml_ios_set_virtual_keyboard_callback(cb ? forwardTextInputMode : nullptr, nullptr);
 }
 
 // MARK: - Session state
@@ -648,10 +680,30 @@ bool psdk_copySnapshotRGBA(unsigned char *, int, int *, int *) { return false; }
 
 // MARK: - Text input
 
-// PSDK draws its own name-entry screen and reads keys from it, so no
-// system keyboard opens and nothing here is ever active.
-int psdk_isTextInputActive(void) { return 0; }
-void psdk_pushTextInput(const char *) {}
+// PSDK keeps one typed string, and `Input.swap_states` clears it on
+// every frame, so text that no screen reads is dropped by the next
+// frame. There is no buffer to fill, so the answer is always yes. The
+// gate the launcher puts on this call is for a core that queues text.
+//
+// The game's own request still goes out through the mode callback, so
+// the launcher can put the keyboard up by itself. Only a PSDK build
+// with `Input.open_virtual_keyboard` makes that request. An older
+// build makes none, and the player opens the keyboard from the
+// toolbar.
+int psdk_isTextInputActive(void) { return 1; }
+
+// The launcher sends what the player typed as UTF-8, and an SFML text
+// event carries one code point, so the string goes out one code point
+// at a time.
+void psdk_pushTextInput(const char *utf8) {
+    if (!utf8 || !utf8[0]) {
+        return;
+    }
+    const sf::String text = sf::String::fromUtf8(utf8, utf8 + std::strlen(utf8));
+    for (const auto character : text) {
+        sfml_ios_inject_character(character);
+    }
+}
 
 // MARK: - Alerts
 

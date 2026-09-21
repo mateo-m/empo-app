@@ -82,3 +82,32 @@ module Graphics
     end
   end
 end
+
+# PSDK keeps one typed string: `Input.on_text_entered` assigns it, and
+# `Input.swap_states` clears it on the next frame. A second character in
+# the same frame overwrites the first. A touch keyboard hits that every
+# time, because iOS hands over a whole word at once from a suggestion or
+# a paste, and every character of it lands between two game frames. Add
+# the characters instead of replacing them. `GamePlay::NameInput` reads
+# the value with `text.chars`, so it takes a longer string.
+#
+# PSDK defines the method later than this file, so the patch waits for
+# the definition the same way the frame rate patch above does.
+module Input
+  class << self
+    def singleton_method_added(name)
+      super
+      return unless name == :on_text_entered
+      return if @psdk_keep_text_patch
+
+      @psdk_keep_text_patch = true
+      psdk_base_on_text_entered = method(:on_text_entered)
+      was_private = singleton_class.private_method_defined?(:on_text_entered)
+      define_singleton_method(:on_text_entered) do |text|
+        previous = instance_variable_get(:@last_text)
+        psdk_base_on_text_entered.call(previous ? previous + text : text)
+      end
+      singleton_class.send(:private, :on_text_entered) if was_private
+    end
+  end
+end

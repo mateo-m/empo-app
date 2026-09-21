@@ -344,20 +344,22 @@ const char *psdk_getLauncherIdentity(void);
 void        psdk_setCABundlePath(const char *path);
 const char *psdk_getCABundlePath(void);
 
-// Text-input bridge (UI <-> Engine).
+// The text road (launcher <-> core).
 //
-// Games request text input via `Input.text_input = true`, which calls
-// `SDL_StartTextInput()` inside EventThread. The mode callback fires
-// from the main thread on state changes. iOS uses it to auto-show
-// the system keyboard.
+// A PSDK game that waits for a typed name calls
+// `Input.open_virtual_keyboard`, which reaches
+// `sf::Keyboard::setVirtualKeyboardVisible`. The mode callback carries
+// that call to the launcher, which then shows the keyboard. It fires on
+// the game thread.
 //
-// `psdk_pushTextInput` is the inverse: the soft keyboard's
-// UITextField delegate forwards typed UTF-8 strings here, wrapped as
-// SDL_TEXTINPUT events and read by Ruby `Input.gets`. Strings longer
-// than SDL's 32-byte per-event limit are chunked at UTF-8 boundaries.
+// psdk_pushTextInput goes the other way: the launcher sends what the
+// player typed as UTF-8, and the core turns it into the text events the
+// game reads with `Input.get_text`.
 //
-// `psdk_isTextInputActive()` lets the UI skip pushing events when SDL
-// text mode is off (otherwise the buffer fills with input nobody reads).
+// psdk_isTextInputActive always answers yes. PSDK keeps one typed
+// string and clears it every frame, so text that no screen reads costs
+// nothing. Not every PSDK build calls `open_virtual_keyboard`, so a
+// launcher that waits for the callback would never type at all.
 void        psdk_setTextInputModeCallback(psdk_TextInputModeCallback cb, void *userdata);
 void        psdk_pushTextInput(const char *utf8);
 int         psdk_isTextInputActive(void);
