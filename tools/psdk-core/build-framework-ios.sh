@@ -119,8 +119,7 @@ echo "[psdk-framework] Linking..."
     -framework AudioToolbox -framework AVFoundation -framework Metal \
     -framework QuartzCore -framework GameController -framework CoreMotion \
     -framework IOSurface -lopenal \
-    -weak_framework CoreBluetooth -weak_framework CoreHaptics \
-    -weak_framework OpenGLES
+    -weak_framework CoreBluetooth -weak_framework CoreHaptics
 
 echo "[psdk-framework] Assembling the bundle..."
 cp "$DEPS/psdk/psdk_core.h" "$FW/Headers/"

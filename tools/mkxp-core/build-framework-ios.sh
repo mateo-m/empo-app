@@ -116,8 +116,7 @@ echo "[mkxp-framework] Linking..."
     -framework AudioToolbox -framework AVFoundation -framework Metal \
     -framework QuartzCore -framework GameController -framework CoreMotion \
     -framework IOSurface \
-    -weak_framework CoreBluetooth -weak_framework CoreHaptics \
-    -weak_framework OpenGLES
+    -weak_framework CoreBluetooth -weak_framework CoreHaptics
 
 echo "[mkxp-framework] Assembling the bundle..."
 cp "$ENGINE/src/app_bridge.h" "$FW/Headers/"

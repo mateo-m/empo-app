@@ -266,12 +266,20 @@ $(SOURCES)/sdl2/.patched-$(SDK_TAG): $(PATCHES)/sdl2.patches.lst $(PATCHES)/sdl2
 	$(PATCHES)/apply-sdl-patches.sh $(SOURCES)/sdl2 --patches-root $(PATCHES); \
 	touch $@
 
+# SDL_OPENGLES stays OFF. mkxp-z drives ANGLE through EGL itself and
+# creates its window without SDL_WINDOW_OPENGL, so it never asks SDL for
+# a GL context. With it ON, SDL_uikitopenglview still linked in and
+# dragged EAGLContext, CAEAGLLayer and four OES entry points behind it,
+# which forced -weak_framework OpenGLES on the MkxpCore link. It was also
+# a hazard: SDL_GL_DeleteContext on an ANGLE context reaches SDL's EAGL
+# backend, which reads it as an Objective-C view and crashes. See the
+# comment at mkxp-z-apple-mobile/src/main.cpp EngineHost::shutdown.
 $(SOURCES)/sdl2/$(CMAKE_BUILDDIR)/Makefile: $(SOURCES)/sdl2/CMakeLists.txt $(SOURCES)/sdl2/.patched-$(SDK_TAG)
 	cd $(SOURCES)/sdl2; \
 	mkdir -p $(CMAKE_BUILDDIR); cd $(CMAKE_BUILDDIR); \
 	$(CMAKE) -DBUILD_SHARED_LIBS=no \
 	-DSDL_OPENGL=OFF \
-	-DSDL_OPENGLES=ON \
+	-DSDL_OPENGLES=OFF \
 	-DSDL_METAL=ON \
 	-DSDL_RENDER_METAL=ON
 
