@@ -161,11 +161,6 @@ struct PlayerView: View {
                         onToggleEditMode: { toggleEditMode() },
                         onToggleHideControls: { toggleHideControls() },
                         onShowMore: { showMoreSheet = true },
-                        menuVisible: PlayerMoreSheet.hasContent(
-                            settings: settings,
-                            fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
-                            controllerRemapAvailable: input.hasSeenPhysicalInput
-                        ),
                         onResetIdleTimer: { resetToolbarIdleTimer() }
                     )
                     .opacity(editMode ? 0 : 1)
@@ -207,6 +202,14 @@ struct PlayerView: View {
                     )
                 )
                 .allowsHitTesting(showDebugOverlay)
+                .onChange(of: appState.selectedGame?.title, initial: true) { _, title in
+                    // The RPG Maker core reads the title from Game.ini
+                    // and wins once it lands. The PSDK core reports no
+                    // title, so the library name is all the overlay gets.
+                    if !debugOverlayState.metadataLoaded, let title {
+                        debugOverlayState.gameTitle = title
+                    }
+                }
 
                 // Stays mounted in both keyboard states. Removing the
                 // field while it is first responder kills the input
@@ -409,6 +412,7 @@ struct PlayerView: View {
                 ),
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: input.hasSeenPhysicalInput,
+                core: EngineSessionCoordinator.shared.openedCore,
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { appState.requestPause() },

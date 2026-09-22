@@ -33,6 +33,18 @@ enum GameCoreKind: String, CaseIterable {
         "This build of Empo has no \(displayName), so it can't run this game."
     }
 
+    /// Whether this core answers the cheat toggle. The RPG Maker core
+    /// loads a cheat menu script and copies the bridge flag into
+    /// `$CHEATS` on every update. The PSDK core stores the flag and
+    /// nothing reads it. The menu scripts cannot run there either,
+    /// because they subclass the RGSS class `Window_Selectable`.
+    var supportsCheats: Bool {
+        switch self {
+        case .rpgMaker: return true
+        case .psdk: return false
+        }
+    }
+
     static func forGame(at gameDirectory: URL) -> GameCoreKind {
         PsdkGame.isGameRoot(gameDirectory) ? .psdk : .rpgMaker
     }

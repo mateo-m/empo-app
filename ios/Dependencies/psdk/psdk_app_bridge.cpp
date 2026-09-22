@@ -850,13 +850,14 @@ void psdk_applySessionConfig(const PsdkSessionConfig *config) {
 
 // MARK: - What the launcher reads
 
-// The launcher shows these on its debug overlay. PSDK gives no title and
-// no frame timing through any interface, so the overlay reads what this
-// core knows and shows nothing for the rest.
+// The launcher shows these on its debug overlay. PSDK gives no title
+// through any interface, so the launcher falls back to the library name.
+// "unknown" is what the interface says a core returns for a renderer
+// string it cannot read, and the overlay hides a row that says it.
 const char *psdk_getGameTitle(void) { return ""; }
 const char *psdk_getRubyVersion(void) { return "3.0"; }
-const char *psdk_getANGLEVersion(void) { return ""; }
-const char *psdk_getMetalDeviceName(void) { return ""; }
+const char *psdk_getANGLEVersion(void) { return "unknown"; }
+const char *psdk_getMetalDeviceName(void) { return "unknown"; }
 double psdk_getAverageFPS(void) {
     const unsigned long long frames = gDrawnFrames.load();
     const double now = static_cast<double>(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9;

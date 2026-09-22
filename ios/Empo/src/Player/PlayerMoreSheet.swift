@@ -23,6 +23,10 @@ struct PlayerMoreSheet: View {
     /// fast-forward is off for this game, so the row stays hidden.
     let fastForwardMultiplier: Int?
     let showControllerRemap: Bool
+    /// The core running the game. Rows the core cannot answer stay
+    /// hidden. Nil before a core opens, which the sheet never sees,
+    /// because the toolbar that opens it only exists during a session.
+    let core: GameCoreKind?
     let onControllerRemap: () -> Void
     let onLayoutProfile: () -> Void
     let onPause: () -> Void
@@ -37,30 +41,6 @@ struct PlayerMoreSheet: View {
         (fastForwardMultiplier ?? 0) >= 2
     }
 
-    /// Whether the sheet would render any actionable row given the
-    /// current settings + per-game state. Mirrors the row-gating
-    /// logic in `body` exactly.
-    ///
-    /// Used by `PlayerToolbar` to hide the Menu button when this
-    /// returns false - otherwise the toolbar offers a button that
-    /// opens an empty sheet, which has been confusing users who
-    /// disable all the experimental features in app settings.
-    static func hasContent(
-        settings: AppSettings,
-        fastForwardMultiplier: Int?,
-        controllerRemapAvailable: Bool = false
-    ) -> Bool {
-        // Cheats and pause graduated from experimental in May 2026
-        // and are now always enabled. Diagnostics overlay and
-        // fast-forward remain user-gated (the former via app
-        // settings, the latter per-game).
-        let cheats = true
-        let fastFwd = (fastForwardMultiplier ?? 0) >= 2
-        let diag = settings.diagnosticsOverlay
-        let pause = true
-        return cheats || fastFwd || diag || pause || controllerRemapAvailable
-    }
-
     var body: some View {
         NavigationStack {
             VStack(spacing: Spacing.lg) {
@@ -71,11 +51,11 @@ struct PlayerMoreSheet: View {
                     InterleavedRows(
                         separator: { rowSeparator },
                         content: {
-                            // Cheats: graduated from experimental in
-                            // May 2026, always enabled now.
-                            MenuRow(icon: "wand.and.stars", label: "Show cheats") {
-                                onCheats()
-                                dismiss()
+                            if core?.supportsCheats == true {
+                                MenuRow(icon: "wand.and.stars", label: "Show cheats") {
+                                    onCheats()
+                                    dismiss()
+                                }
                             }
                             if fastForwardEnabled {
                                 MenuToggleRow(

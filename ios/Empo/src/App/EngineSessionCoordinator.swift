@@ -30,7 +30,9 @@ final class EngineSessionCoordinator {
     private let sessionLogger = SessionLogger()
     private var textInputModeHandler: ((Bool) -> Void)?
     private var inputBridgesInstalled = false
-    private var coreOpened = false
+    /// The core `openCore` opened, or nil before it runs. The player
+    /// UI reads this to hide a row the running core does not answer.
+    private(set) var openedCore: GameCoreKind?
     /// Per-scancode press start times. Light taps release before the
     /// RGSS thread observes a pressed-edge. We defer KEYUP until the
     /// key has been down for at least one frame (~16ms @ 60fps, with
@@ -76,7 +78,7 @@ final class EngineSessionCoordinator {
     /// process (`ios/Empo/docs/multi-session.md`), so a second open is
     /// the same core and changes nothing.
     func openCore(for gameDirectory: URL) {
-        guard !coreOpened else { return }
+        guard openedCore == nil else { return }
         let kind = GameCoreKind.forGame(at: gameDirectory)
         // AppState.selectGame refuses a game whose core this build does
         // not carry, so a missing framework here is a broken bundle.
@@ -85,7 +87,7 @@ final class EngineSessionCoordinator {
         else {
             fatalError("\(kind.rawValue).framework is missing from the app bundle")
         }
-        coreOpened = true
+        openedCore = kind
         NSLog("[empo] core opened: %@", kind.rawValue)
 
         // Game scripts see `$userAgent = "empo"` and `$empo = true`,
@@ -105,7 +107,7 @@ final class EngineSessionCoordinator {
     /// request, so a refresh that lands mid-run applies to that side
     /// immediately, and Ruby picks it up next session.
     private func pushCABundlePath() {
-        guard coreOpened else { return }
+        guard openedCore != nil else { return }
         if let caPath = CABundleStore.effectivePath {
             gamecore_setCABundlePath(caPath)
         } else {
