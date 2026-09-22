@@ -456,6 +456,19 @@ $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 # mkxp-z already uses on iOS, and makes SFAppDelegate lazy so Empo can
 # own the app start-up.
 #
+# Why ANGLE and not EAGL: fast rotation on the iOS Simulator killed
+# mkxp-z with SIGSEGV inside libGLImage.dylib, Apple's GLES emulation
+# for the simulator. The crash stayed with the renderbuffer resize
+# disabled and with every GL call removed from the resize path, and it
+# never appeared on a device. ANGLE draws through Metal, so it never
+# loads libGLImage.dylib. SFML followed mkxp-z three weeks later to
+# keep one GL path in the app. EAGL is deprecated but still shipped,
+# so deprecation is not the reason.
+#
+# ANGLE costs about 680 lines of the SFML fork, because SFML 2.x draws
+# on iOS with GLES1 fixed-function calls that an ANGLE GLES2 context
+# does not have. See src/SFML/Graphics/GLES1Emu.cpp in the fork.
+#
 # SFML_USE_SYSTEM_DEPS=ON stops SFML from linking its own
 # extlibs/libs-ios prebuilts. Those are device-only fat archives and
 # fail to link for the simulator. With it on, SFML finds the freetype,
