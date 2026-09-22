@@ -62,3 +62,4 @@
 	path = ios/Dependencies/sources/ruby30
 	url = git@github.com:ruby/ruby.git
 	branch = ruby_3_0
+	ignore = dirty
