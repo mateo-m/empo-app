@@ -103,7 +103,9 @@ typedef void (*psdk_TextInputModeCallback)(int active, void *userdata);
 typedef void (*psdk_ErrorMessageCallback)(const char *message, void *userdata);
 typedef void (*psdk_InfoMessageCallback)(const char *message, void *userdata);
 
-// Fires on engine thread when paused (snapshot captured, audio suspended).
+// Fires on the engine thread at the frame after the pause request, with
+// that frame already stored as the snapshot. The game and its audio keep
+// running: this core stops the picture, not the engine.
 typedef void (*psdk_PausedCallback)(void *userdata);
 typedef void (*psdk_ResumedCallback)(void *userdata);
 
@@ -497,9 +499,9 @@ void        psdk_setInfoMessageCallback(psdk_InfoMessageCallback cb, void *userd
 
 // Pause / Resume (UI <-> Engine).
 //   1. UI calls `psdk_requestPause()`
-//   2. The engine, at a Graphics blocking point, pauses audio, fires the paused callback, and blocks
-//      on a condvar
-//   3. UI calls `psdk_requestResume()` to unblock
+//   2. The engine, at the next frame it draws, stores that frame as the snapshot and fires the
+//      paused callback
+//   3. UI calls `psdk_requestResume()`, which drops the snapshot
 
 void        psdk_requestPause(void);
 void        psdk_requestResume(void);

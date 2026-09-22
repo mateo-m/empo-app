@@ -726,7 +726,7 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 	    -c ${PWD}/psdk/sfml_audio.cpp -o $(PSDK_OBJDIR)/_psdk_sfml_audio.o
 	@# The launcher interface, psdk_app_bridge.h.
 	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
-	    -I$(INCLUDEDIR) \
+	    -I$(INCLUDEDIR) -I${PWD}/ANGLE/$(SDK)/include \
 	    -c ${PWD}/psdk/psdk_app_bridge.cpp -o $(PSDK_OBJDIR)/_psdk_app_bridge.o
 	@echo "[psdk] Generating the unexport list..."
 	@# libssl and libcrypto go in the list as well. The Ruby openssl

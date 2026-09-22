@@ -30,6 +30,9 @@
 #include <string>
 #include <time.h>
 #include <unistd.h>
+#include <vector>
+
+#include <GLES2/gl2.h>
 
 // WindowImplUIKit.mm records the UIWindow it makes.
 extern "C" void *sfml_ios_game_window();
@@ -125,6 +128,13 @@ std::atomic<bool> gGameReady{false};
 std::atomic<bool> gEngineTerminatedFlag{false};
 std::atomic<bool> gExitedCleanly{false};
 std::atomic<bool> gPausedFlag{false};
+// The frame the launcher shows while the pause menu is up. Non-empty
+// exactly while a pause holds a captured frame: the frame hook fills it
+// on the first frame after the request, and resume empties it.
+std::mutex gSnapshotLock;
+std::vector<unsigned char> gSnapshotRGBA;
+int gSnapshotW = 0;
+int gSnapshotH = 0;
 std::atomic<bool> gCheatsEnabled{false};
 std::atomic<bool> gTouchMouseEnabled{false};
 std::atomic<bool> gShowViewportBounds{false};
@@ -435,6 +445,45 @@ void placeOutputRegion() {
     }
 }
 
+// Reads the frame the game just drew, for the pause menu behind it.
+// SFML calls the frame hook one line before it swaps, so the default
+// framebuffer still holds the picture here.
+//
+// The launcher asks for the snapshot from the paused callback, which
+// fires below only after this returns, so it can never ask for a frame
+// that does not exist yet.
+void captureSnapshot() {
+    const int x = gPictureX.load();
+    const int y = gPictureY.load();
+    const int w = gPictureW.load();
+    const int h = gPictureH.load();
+    unsigned int windowW = 0;
+    unsigned int windowH = 0;
+    sfml_window_pixel_size(&windowW, &windowH);
+    if (w <= 0 || h <= 0 || windowH == 0) {
+        return;
+    }
+    const size_t stride = static_cast<size_t>(w) * 4;
+    std::vector<unsigned char> rows(stride * static_cast<size_t>(h));
+    // glReadPixels counts rows from the bottom of the window.
+    // placeOutputRegion measures the picture from the top.
+    glReadPixels(x, static_cast<int>(windowH) - y - h, w, h, GL_RGBA, GL_UNSIGNED_BYTE,
+                 rows.data());
+    std::lock_guard<std::mutex> lock(gSnapshotLock);
+    gSnapshotRGBA.resize(stride * static_cast<size_t>(h));
+    for (int row = 0; row < h; ++row) {
+        memcpy(gSnapshotRGBA.data() + stride * static_cast<size_t>(row),
+               rows.data() + stride * static_cast<size_t>(h - 1 - row), stride);
+    }
+    gSnapshotW = w;
+    gSnapshotH = h;
+}
+
+bool hasSnapshot() {
+    std::lock_guard<std::mutex> lock(gSnapshotLock);
+    return !gSnapshotRGBA.empty();
+}
+
 } // namespace
 
 // The four hooks below answer LiteRGSS2 and the SFML fork, which declare
@@ -499,6 +548,15 @@ extern "C" void psdk_frame_rendered() {
     }
     if (gFrameRendered.fn) {
         reinterpret_cast<psdk_FrameRenderedCallback>(gFrameRendered.fn)(gFrameRendered.userdata);
+    }
+
+    // The pause menu opens on this callback, so it opens one frame after
+    // the request, with the frame it shows already stored.
+    if (gPausedFlag.load() && !hasSnapshot()) {
+        captureSnapshot();
+        if (gPaused.fn) {
+            reinterpret_cast<psdk_PausedCallback>(gPaused.fn)(gPaused.userdata);
+        }
     }
 }
 
@@ -637,25 +695,30 @@ void psdk_resetSessionState(void) {
     gPlacedWindowSize.store(0);
     gPictureW.store(0);
     gPictureH.store(0);
+    std::lock_guard<std::mutex> lock(gSnapshotLock);
+    gSnapshotRGBA.clear();
+    gSnapshotW = 0;
+    gSnapshotH = 0;
 }
 
 // MARK: - Pause
 
-// PSDK has no pause interface. The game keeps running behind the pause
-// menu, and the menu still opens, because the launcher needs the
-// callback to open it.
+// The game keeps running behind the pause menu. Only the picture stops.
 //
 // ponytail: the real stop is LiteCGSS's game loop, which Graphics.update
-// drives. Add it when the menu has to freeze the game.
-void psdk_requestPause(void) {
-    gPausedFlag.store(true);
-    if (gPaused.fn) {
-        reinterpret_cast<psdk_PausedCallback>(gPaused.fn)(gPaused.userdata);
-    }
-}
+// drives. Add it when the menu has to freeze the game, together with the
+// audio stop: SFMLAudio hands sf::Music and sf::Sound to Ruby and keeps
+// no list, so a paused game would still play its music.
+void psdk_requestPause(void) { gPausedFlag.store(true); }
 
 void psdk_requestResume(void) {
     gPausedFlag.store(false);
+    {
+        std::lock_guard<std::mutex> lock(gSnapshotLock);
+        gSnapshotRGBA.clear();
+        gSnapshotW = 0;
+        gSnapshotH = 0;
+    }
     if (gResumed.fn) {
         reinterpret_cast<psdk_ResumedCallback>(gResumed.fn)(gResumed.userdata);
     }
@@ -665,18 +728,29 @@ bool psdk_isPaused(void) { return gPausedFlag.load(); }
 
 // MARK: - Snapshots
 
-// MkxpCore reads its last frame out of the GL buffer. This core does
-// not, so the pause menu shows its own background instead of the frame.
-//
-// ponytail: LiteCGSS keeps a Snapshot member on DisplayWindow. Read that
-// when the menu needs the frame behind it.
 bool psdk_getSnapshotSize(int *width, int *height) {
-    if (width) *width = 0;
-    if (height) *height = 0;
-    return false;
+    std::lock_guard<std::mutex> lock(gSnapshotLock);
+    if (gSnapshotRGBA.empty()) {
+        return false;
+    }
+    if (width) *width = gSnapshotW;
+    if (height) *height = gSnapshotH;
+    return true;
 }
 
-bool psdk_copySnapshotRGBA(unsigned char *, int, int *, int *) { return false; }
+bool psdk_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
+    std::lock_guard<std::mutex> lock(gSnapshotLock);
+    if (dest == nullptr || gSnapshotRGBA.empty()) {
+        return false;
+    }
+    if (destSize < 0 || static_cast<size_t>(destSize) < gSnapshotRGBA.size()) {
+        return false;
+    }
+    memcpy(dest, gSnapshotRGBA.data(), gSnapshotRGBA.size());
+    if (width) *width = gSnapshotW;
+    if (height) *height = gSnapshotH;
+    return true;
+}
 
 // MARK: - Text input
 
