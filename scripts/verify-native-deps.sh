@@ -3,7 +3,7 @@
 # iphonesimulator). Xcode pre-build, fetch-native-deps.sh, and CI use it.
 #
 # Usage:
-#   PLATFORM_NAME=iphoneos scripts/verify-native-deps.sh
+#   scripts/verify-native-deps.sh [--sdk iphoneos|iphonesimulator]
 #   PLATFORM_NAME=iphonesimulator scripts/verify-native-deps.sh
 #
 # Exits 0 when mkxp merged objects and core Ruby/OpenSSL archives look
@@ -12,12 +12,29 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLATFORM="${PLATFORM_NAME:-iphoneos}"
-LIB="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/lib"
 
 fail() {
     echo "error: $*" >&2
     exit 1
 }
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --sdk)
+            [ "$#" -ge 2 ] || fail "--sdk needs a value"
+            PLATFORM="$2"
+            shift 2
+            ;;
+        *) fail "unknown argument $1" ;;
+    esac
+done
+
+case "$PLATFORM" in
+    iphoneos | iphonesimulator) ;;
+    *) fail "unknown sdk $PLATFORM" ;;
+esac
+
+LIB="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/lib"
 
 require_file_min() {
     local path="$1" min_bytes="$2" label="$3"
