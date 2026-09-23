@@ -499,9 +499,9 @@ void        psdk_setInfoMessageCallback(psdk_InfoMessageCallback cb, void *userd
 
 // Pause / Resume (UI <-> Engine).
 //   1. UI calls `psdk_requestPause()`
-//   2. The engine, at the next frame it draws, stores that frame as the snapshot and fires the
-//      paused callback
-//   3. UI calls `psdk_requestResume()`, which drops the snapshot
+//   2. The engine, at the next frame it draws, stores that frame as the snapshot, pauses audio,
+//      fires the paused callback, and blocks the game thread
+//   3. UI calls `psdk_requestResume()`, which unblocks the game thread and drops the snapshot
 
 void        psdk_requestPause(void);
 void        psdk_requestResume(void);

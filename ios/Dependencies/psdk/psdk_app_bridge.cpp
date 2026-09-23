@@ -5,8 +5,9 @@
 // LiteRGSS2, LiteCGSS, SFML and Ruby 3.0, and takes nothing from
 // another engine.
 //
-// Five things here do real work: the game thread, the key translator,
-// the game window, the frame signal and the picture placement. The rest
+// Six things here do real work: the game thread, the key translator,
+// the game window, the frame signal, the picture placement and the
+// pause. The rest
 // stores what the launcher pushes or gives a fixed answer. Every
 // function that gives less than a full answer says so where it is.
 
@@ -18,6 +19,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -32,6 +34,9 @@
 #include <unistd.h>
 #include <vector>
 
+#define AL_ALEXT_PROTOTYPES
+#include <AL/alc.h>
+#include <AL/alext.h>
 #include <GLES2/gl2.h>
 
 // WindowImplUIKit.mm records the UIWindow it makes.
@@ -128,6 +133,8 @@ std::atomic<bool> gGameReady{false};
 std::atomic<bool> gEngineTerminatedFlag{false};
 std::atomic<bool> gExitedCleanly{false};
 std::atomic<bool> gPausedFlag{false};
+std::mutex gPauseLock;
+std::condition_variable gResumeSignal;
 // The frame the launcher shows while the pause menu is up. Non-empty
 // exactly while a pause holds a captured frame: the frame hook fills it
 // on the first frame after the request, and resume empties it.
@@ -479,11 +486,6 @@ void captureSnapshot() {
     gSnapshotH = h;
 }
 
-bool hasSnapshot() {
-    std::lock_guard<std::mutex> lock(gSnapshotLock);
-    return !gSnapshotRGBA.empty();
-}
-
 } // namespace
 
 // The four hooks below answer LiteRGSS2 and the SFML fork, which declare
@@ -551,12 +553,29 @@ extern "C" void psdk_frame_rendered() {
     }
 
     // The pause menu opens on this callback, so it opens one frame after
-    // the request, with the frame it shows already stored.
-    if (gPausedFlag.load() && !hasSnapshot()) {
-        captureSnapshot();
-        if (gPaused.fn) {
-            reinterpret_cast<psdk_PausedCallback>(gPaused.fn)(gPaused.userdata);
-        }
+    // the request, with the frame it shows already stored. The game
+    // thread then waits here, before the swap, until the resume.
+    std::unique_lock<std::mutex> lock(gPauseLock);
+    if (!gPausedFlag.load()) {
+        return;
+    }
+    captureSnapshot();
+    // SFMLAudio hands sf::Music and sf::Sound to Ruby and keeps no list,
+    // so the pause stops the whole OpenAL Soft device. The context is
+    // null until the game plays its first sound.
+    ALCdevice *audio = alcGetContextsDevice(alcGetCurrentContext());
+    if (audio) {
+        alcDevicePauseSOFT(audio);
+    }
+    if (gPaused.fn) {
+        reinterpret_cast<psdk_PausedCallback>(gPaused.fn)(gPaused.userdata);
+    }
+    // PSDK's FPSBalancer counts frames from the microsecond part of the
+    // clock. So after a pause of any length, the game catches up less
+    // than one second of updates.
+    gResumeSignal.wait(lock, [] { return !gPausedFlag.load(); });
+    if (audio) {
+        alcDeviceResumeSOFT(audio);
     }
 }
 
@@ -703,16 +722,15 @@ void psdk_resetSessionState(void) {
 
 // MARK: - Pause
 
-// The game keeps running behind the pause menu. Only the picture stops.
-//
-// ponytail: the real stop is LiteCGSS's game loop, which Graphics.update
-// drives. Add it when the menu has to freeze the game, together with the
-// audio stop: SFMLAudio hands sf::Music and sf::Sound to Ruby and keeps
-// no list, so a paused game would still play its music.
+// psdk_frame_rendered stops the game thread and the audio.
 void psdk_requestPause(void) { gPausedFlag.store(true); }
 
 void psdk_requestResume(void) {
-    gPausedFlag.store(false);
+    {
+        std::lock_guard<std::mutex> lock(gPauseLock);
+        gPausedFlag.store(false);
+    }
+    gResumeSignal.notify_one();
     {
         std::lock_guard<std::mutex> lock(gSnapshotLock);
         gSnapshotRGBA.clear();
