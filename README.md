@@ -2,7 +2,7 @@
 
 # <p align="center"><a href="https://discord.gg/m3YnpXMxrB">Empo</a></p>
 
-> <p align="center">Run RPG Maker and Pokemon SDK games on iPhone and iPad.</p>
+> <p align="center">Run RPG Maker and PSDK games on iPhone and iPad.</p>
 
 <p align="center">
   <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-GPLv2%2B-blue.svg" /></a>
@@ -12,7 +12,7 @@
 
 <p align="center"><a href="https://discord.gg/m3YnpXMxrB">Discord</a></p>
 
-Empo is a game launcher for iPhone and iPad. It runs RPG Maker XP, VX, and VX Ace games, Pokemon Essentials games, and Pokemon SDK games. RPG Maker games run on [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), an iOS fork of the [mkxp-z](https://github.com/mkxp-z/mkxp-z) engine. Pokemon SDK games run on [litergss2-apple-mobile](https://github.com/mateo-m/litergss2-apple-mobile), an iOS fork of LiteRGSS2.
+Empo is a game launcher for iPhone and iPad. It runs RPG Maker XP, VX, and VX Ace games, Pokemon Essentials games, and PSDK games. RPG Maker games run on [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), an iOS fork of the [mkxp-z](https://github.com/mkxp-z/mkxp-z) engine. PSDK games run on [litergss2-apple-mobile](https://github.com/mateo-m/litergss2-apple-mobile), an iOS fork of LiteRGSS2.
 
 The name's from _emporos_, ancient Greek for a traveler riding on someone else's ship.
 
@@ -44,8 +44,8 @@ In-game battle:
 
 ## Highlights
 
-- Plays games made for RGSS1 (XP), RGSS2 (VX), RGSS3 (VX Ace), modern mkxp-z forks, and Pokemon SDK.
-- **Four Ruby versions in one app.** Empo includes Ruby 1.8, 1.9, and 3.1 for RPG Maker games, and Ruby 3.0 for Pokemon SDK games. Each game runs on the version it was written for. Newer Pokemon Essentials games that ship a `ruby300.dll` run on Ruby 3.1, and Empo rewrites their older syntax as needed. See [`ios/Empo/docs/multi-ruby.md`](ios/Empo/docs/multi-ruby.md).
+- Plays games made for RGSS1 (XP), RGSS2 (VX), RGSS3 (VX Ace), modern mkxp-z forks, and PSDK.
+- **Four Ruby versions in one app.** Empo includes Ruby 1.8, 1.9, and 3.1 for RPG Maker games, and Ruby 3.0 for PSDK games. Each game runs on the version it was written for. Newer Pokemon Essentials games that ship a `ruby300.dll` run on Ruby 3.1, and Empo rewrites their older syntax as needed. See [`ios/Empo/docs/multi-ruby.md`](ios/Empo/docs/multi-ruby.md).
 - Imports games from folders or archives (`.zip`, `.7z`, `.rar`, JoiPlay's `.jgp`, self-extractable `.exe`).
 - On-screen D-pad and action buttons you can move and resize. Layouts can differ per game and per screen orientation.
 - Pause and resume from the library.
@@ -55,7 +55,7 @@ In-game battle:
 
 Pre-release. Not on the App Store.
 
-The app works end to end with RGSS1/2/3 games, modern mkxp-z forks, and Pokemon SDK games. Per-game compatibility reports are welcome (open an issue).
+The app works end to end with RGSS1/2/3 games, modern mkxp-z forks, and PSDK games. Per-game compatibility reports are welcome (open an issue).
 
 Each tagged release on the [Releases page](https://github.com/mateo-m/empo-app/releases) includes pre-built unsigned `.ipa` files. Install them with [AltStore](https://altstore.io), [SideStore](https://sidestore.io) or [Sideloadly](https://sideloadly.io).
 
@@ -94,7 +94,7 @@ bun run docs:dev
 Empo accepts these input shapes:
 
 - A folder with a standard RPG Maker `Game.exe` and `Data/` layout.
-- A Pokemon SDK game folder with `Game.rb` and `Game.yarb`.
+- A PSDK game folder with `Game.rb` and `Game.yarb`.
 - A `.zip`, `.7z`, or `.rar` archive with the same content.
 - A `.jgp` (JoiPlay Game Package) manifest that points at game files.
 

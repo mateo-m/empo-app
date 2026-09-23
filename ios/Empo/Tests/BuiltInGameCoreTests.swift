@@ -58,7 +58,7 @@ final class BuiltInGameCoreTests: XCTestCase {
 
     func testTheRefusalNamesTheMissingCore() {
         XCTAssertTrue(
-            GameCoreKind.psdk.notInThisBuildMessage.contains("Pokemon SDK core"),
+            GameCoreKind.psdk.notInThisBuildMessage.contains("PSDK core"),
             GameCoreKind.psdk.notInThisBuildMessage)
         XCTAssertTrue(
             GameCoreKind.rpgMaker.notInThisBuildMessage.contains("RPG Maker core"),

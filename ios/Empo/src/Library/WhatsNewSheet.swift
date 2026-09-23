@@ -10,8 +10,8 @@ enum WhatsNew {
             items: [
                 WhatsNewItem(
                     symbol: "gamecontroller",
-                    title: "Pokemon SDK games",
-                    detail: "Empo now plays games made with Pokemon SDK. Import one the same way "
+                    title: "PSDK games",
+                    detail: "Empo now plays games made with PSDK. Import one the same way "
                         + "you import an RPG Maker game."
                 ),
                 WhatsNewItem(
