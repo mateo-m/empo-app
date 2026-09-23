@@ -175,8 +175,10 @@ jobs:
             # A cut that failed after it tagged one fork leaves that tag
             # behind. The same tag on the same commit is that cut again,
             # so go on. Another commit is two releases under one version.
-            TAGGED=$(gh api "repos/$FORK/git/ref/tags/empo-v$VERSION" --jq .object.sha 2>/dev/null || true)
-            if [ -n "$TAGGED" ] && [ "$TAGGED" != "$GITLINK" ]; then
+            # On a 404, gh api exits 1 but still prints the error body to
+            # stdout, so only the exit code says whether the tag exists.
+            if TAGGED=$(gh api "repos/$FORK/git/ref/tags/empo-v$VERSION" --jq .object.sha 2>/dev/null) \
+              && [ "$TAGGED" != "$GITLINK" ]; then
               echo "::error::$FORK carries empo-v$VERSION on commit $TAGGED, not $GITLINK"
               exit 1
             fi
