@@ -226,6 +226,23 @@ class AppSettings {
 
     func acknowledgeDisclaimer() {
         disclaimerAcknowledgedVersion = Self.currentDisclaimerVersion
+        acknowledgeWhatsNew()
+    }
+
+    // MARK: - What's new
+
+    var whatsNewSeenVersion: Int {
+        didSet {
+            UserDefaults.standard.set(whatsNewSeenVersion, forKey: DefaultsKey.whatsNewSeenVersion)
+        }
+    }
+
+    var needsWhatsNew: Bool {
+        whatsNewSeenVersion < WhatsNew.version
+    }
+
+    func acknowledgeWhatsNew() {
+        whatsNewSeenVersion = WhatsNew.version
     }
 
     private init() {
@@ -251,6 +268,7 @@ class AppSettings {
         let sortRaw = ud.string(forKey: DefaultsKey.librarySortOption) ?? LibrarySortOption.titleAZ.rawValue
         self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
         self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
+        self.whatsNewSeenVersion = ud.integer(forKey: DefaultsKey.whatsNewSeenVersion)
 
     }
 

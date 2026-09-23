@@ -244,6 +244,7 @@ struct GameLibraryView: View {
             .modifier(
                 SaveRecoveryPresentation(games: library.games, active: splashDismissed)
             )
+            .modifier(WhatsNewPresentation(active: splashDismissed))
             .modifier(
                 LibrarySheetPresentation(
                     showSettings: $showSettings,

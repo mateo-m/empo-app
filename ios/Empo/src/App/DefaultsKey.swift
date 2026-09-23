@@ -28,6 +28,11 @@ enum DefaultsKey {
 
     static let disclaimerAcknowledgedVersion = "disclaimerAcknowledgedVersion"
 
+    // MARK: - What's new
+
+    /// The last `WhatsNew.version` the user saw. Int.
+    static let whatsNewSeenVersion = "whatsNewSeenVersion"
+
     // MARK: - Library
 
     /// Folder names (inside `Duplicate Games/`) of legacy duplicate
