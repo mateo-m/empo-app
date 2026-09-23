@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 - 2026-09-23
+
+### Highlights
+
+- Run pokemon sdk games next to rpg maker games (#150) ([`2a9eb75`](https://github.com/mateo-m/empo-app/commit/2a9eb7533ef0e6db5aab27f55537ec18f5a1be51))
+
+### Features
+
+- Disable fast forward bindings for a game that has fast forward off (#149) ([`ab1f074`](https://github.com/mateo-m/empo-app/commit/ab1f0745b0490f3e818a35c6469ca8226c8d8590))
+- Show a what's new sheet once after an update (#151) ([`4653ff2`](https://github.com/mateo-m/empo-app/commit/4653ff2affd8918edfc74a139dd83ae516a33365))
+
 ## 0.6.10 - 2026-09-16
 
 ### Bug Fixes
