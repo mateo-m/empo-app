@@ -49,7 +49,7 @@ enum RubyVersionPick: String, CaseIterable, Hashable {
 
 /// Compatibility-mode pick for the Game Settings sheet. Backs
 /// `GameSettings.useModernRuby`. Resolved to a
-/// `MKXPSyntaxTransformMode` at engine boot via
+/// `GameCoreSyntaxTransformMode` at engine boot via
 /// `GameSettings.resolveSyntaxTransformMode`. Effective only on
 /// the patched Ruby 3.1 build. Selecting "Legacy" with the 1.x
 /// or 3.0 native interpreter is a no-op (the warning footer in
@@ -120,6 +120,11 @@ struct GameSettingsView: View {
     /// set `settings.useInGameKeyboard`. Cached so the toggle UI
     /// doesn't re-read the file on every render.
     private let isPokemonEssentialsDefault: Bool
+    /// Which core plays this game. The folder picks it, the same way
+    /// `EngineSessionCoordinator.openCore(for:)` picks it at launch.
+    /// Nearly every row below changes something inside mkxp-z, so a
+    /// PSDK game gets the short form of this sheet.
+    private let isPsdkGame: Bool
 
     init(game: GameEntry) {
         self.game = game
@@ -151,6 +156,7 @@ struct GameSettingsView: View {
         self.isPokemonEssentialsDefault = PokemonEssentialsDetection.detect(
             in: dir, stateDirectory: stateDir
         )
+        self.isPsdkGame = PsdkGame.isGameRoot(dir)
     }
 
     private var effectiveSmoothScaling: Bool {
@@ -243,11 +249,18 @@ struct GameSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                gameplaySection
-                displaySection
-                layoutSection
-                performanceSection
-                engineSection
+                if isPsdkGame {
+                    gameplaySection
+                    psdkDisplaySection
+                    layoutSection
+                    psdkControlsSection
+                } else {
+                    gameplaySection
+                    displaySection
+                    layoutSection
+                    performanceSection
+                    engineSection
+                }
 
                 if hasAnyCustomizations {
                     Section {
@@ -335,6 +348,51 @@ struct GameSettingsView: View {
             }
         }
         .tint(.brand)
+    }
+
+    private var psdkControlsSection: some View {
+        Section {
+            SettingsToggle(
+                title: "Touch acts as mouse",
+                isOn: touchMouseBinding,
+                description:
+                    "Send taps and drags on the game screen to the game as mouse input."
+            )
+        } header: {
+            Text("Controls")
+        } footer: {
+            Text("The game has to use the mouse for this to do anything.")
+        }
+    }
+
+    /// The PSDK sheet holds only the rows the PSDK core answers
+    /// (`ios/Dependencies/psdk/psdk_app_bridge.cpp`). The other rows
+    /// reach mkxp-z only, so showing them here would promise something
+    /// the game never does.
+    private var psdkDisplaySection: some View {
+        Section {
+            engineFieldRow(.smoothScaling) {
+                SettingsToggle(
+                    title: "Smooth scaling",
+                    isOn: smoothScalingBinding,
+                    description:
+                        "Smooth the picture when the game scales up. Turn it off to keep the pixels crisp."
+                )
+            }
+
+            engineFieldRow(.fixedAspectRatio) {
+                SettingsToggle(
+                    title: "Fixed aspect ratio",
+                    isOn: fixedAspectRatioBinding,
+                    description:
+                        "Preserve the game's proportions instead of stretching to fill the screen."
+                )
+            }
+        } header: {
+            Text("Display")
+        } footer: {
+            Text("How the game looks on screen.")
+        }
     }
 
     private var displaySection: some View {

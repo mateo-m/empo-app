@@ -150,14 +150,14 @@ class AppSettings {
     var showViewportBounds: Bool {
         didSet {
             UserDefaults.standard.set(showViewportBounds, forKey: DefaultsKey.showViewportBounds)
-            mkxp_setShowViewportBounds(showViewportBounds)
+            pushToCore()
         }
     }
 
     var viewportBoundsColor: Color {
         didSet {
             saveViewportBoundsColor()
-            pushViewportBoundsColor()
+            pushToCore()
         }
     }
 
@@ -252,8 +252,6 @@ class AppSettings {
         self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
         self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
 
-        mkxp_setShowViewportBounds(showViewportBounds)
-        pushViewportBoundsColor()
     }
 
     private static let defaultViewportBoundsColor = Color(
@@ -290,8 +288,16 @@ class AppSettings {
         ud.set(Double(c.a), forKey: DefaultsKey.viewportBoundsA)
     }
 
-    func pushViewportBoundsColor() {
+    /// Pushes the settings the engine holds a copy of.
+    ///
+    /// The user can change these in the library, before any core is
+    /// open. They live here until then, and
+    /// `EngineSessionCoordinator.openCore` calls this once the core is
+    /// in.
+    func pushToCore() {
+        guard EmpoCoreIsOpen() != 0 else { return }
+        gamecore_setShowViewportBounds(showViewportBounds)
         let c = resolvedRGBA()
-        mkxp_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
+        gamecore_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
     }
 }

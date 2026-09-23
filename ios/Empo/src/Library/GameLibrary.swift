@@ -271,12 +271,16 @@ class GameLibrary {
                     return
                 }
                 lib.localMutationDates[importID] = Date()
-                withAnimation {
-                    if let model = lib.games.first(where: { $0.id == importID }) {
-                        model.apply(snapshot)
-                    } else {
-                        lib.games.append(GameEntry(snapshot))
-                    }
+                if let model = lib.games.first(where: { $0.id == importID }) {
+                    // No animation here. The card keeps its cell and
+                    // only its status changes, from importing to
+                    // ready. An animated flip makes LazyVGrid lay the
+                    // departing importing card out in the first free
+                    // cell after the live ones, which slides the grey
+                    // card down the screen before it fades.
+                    model.apply(snapshot)
+                } else {
+                    withAnimation { lib.games.append(GameEntry(snapshot)) }
                 }
             }
         }

@@ -1,0 +1,193 @@
+# End-to-end harness for the PSDK core. psdk_run loads this before
+# Game.rb.
+#
+# It only watches. It reports input, audio and errors, and it never
+# wraps Graphics.update. PSDK replaces that method from FPSBalancer
+# while the game boots, and a wrapper that lands on the wrong side of
+# that replacement makes the two call each other until the stack runs
+# out. The driving script takes its pictures with `simctl io screenshot`
+# instead, which also proves the frame reached the display.
+$stdout.sync = true
+$stderr.sync = true
+
+# psdk_run takes one prelude, and the test host gives it this file. The
+# core gives it runtime_prelude.rb, which holds the per-game fixes and
+# the fast forward patch. Load that file first, so a test run has what
+# the app runs.
+load File.join(__dir__, 'Frameworks/PsdkCore.framework/runtime_prelude.rb')
+
+# Report what LiteRGSS hands PSDK for an injected key, and which
+# virtual keys PSDK then holds down. Input.press? is the answer the game
+# itself reads, so it is the only proof a key arrived in a form the game
+# matches. A guess from the numbers alone is wrong: a PSDK version reads
+# the key code and another reads the scancode.
+#
+# Input::Keys goes out once as well. It says which number each virtual
+# key answers to in this game, which is what a launcher needs to pick a
+# button.
+Thread.new do
+  sleep 0.05 until defined?(::Input) && ::Input.respond_to?(:press?)
+  $stderr.puts "PSDK-MAP #{::Input::Keys.inspect}"
+
+  class << ::Input
+    alias_method :psdk_probe_on_key_down, :on_key_down
+    def on_key_down(*args)
+      psdk_probe_on_key_down(*args)
+      down = ::Input::Keys.keys.select { |k| ::Input.press?(k) }
+      $stderr.puts "PSDK-KEY args=#{args.inspect} down=#{down.inspect}"
+      $stderr.flush
+    end
+  end
+  $stderr.puts 'PSDK-HOOK Input'
+end
+
+# Report whether sound really plays. Without a capture device the
+# playing offset is the only signal: it advances only while the driver
+# pulls samples from the file. This reads the SFMLAudio objects through
+# ObjectSpace, because every PSDK version keeps them somewhere else.
+Thread.new do
+  sleep 0.05 until defined?(::SFMLAudio)
+  $stderr.puts 'PSDK-AUDIO SFMLAudio is loaded'
+  loop do
+    sleep 5
+    report = []
+    ObjectSpace.each_object(::SFMLAudio::Music) do |m|
+      report << format('music@%.2fs', m.get_playing_offset) if m.playing?
+    end
+    ObjectSpace.each_object(::SFMLAudio::Sound) do |o|
+      report << format('sound@%.2fs', o.get_playing_offset) if o.playing?
+    end
+    $stderr.puts "PSDK-AUDIO #{report.empty? ? 'nothing plays' : report.join(' ')}"
+    $stderr.flush
+  end
+end
+
+# Count the game frames that FPSBalancer runs, and report the rate.
+# Graphics.frame_count counts drawn frames, so only this number shows a
+# fast run. The balancer runs its block frame_to_execute times for each
+# drawn frame.
+$psdk_logic_frames = 0
+Thread.new do
+  sleep 0.05 until defined?(::Graphics::FPSBalancer)
+  ::Graphics::FPSBalancer.prepend(Module.new do
+    def run(&block)
+      super { $psdk_logic_frames += 1; block.call }
+    end
+  end)
+end
+
+# Report how many updates the game gets each second. Reading Graphics from
+# another thread is safe. The prelude must not wrap Graphics.update, for
+# the reason at the top of this file.
+Thread.new do
+  sleep 0.05 until defined?(::Graphics) && ::Graphics.respond_to?(:frame_count)
+  last_count = nil
+  last_logic = 0
+  last_time = nil
+  loop do
+    sleep 5
+    count = ::Graphics.frame_count
+    now = Time.now
+    if last_count
+      rate = (count - last_count) / (now - last_time)
+      logic = ($psdk_logic_frames - last_logic) / (now - last_time)
+      $stderr.puts format('PSDK-RATE frames=%d per_second=%.1f logic_per_second=%.1f',
+                          count, rate, logic)
+      $stderr.flush
+    end
+    last_count = count
+    last_logic = $psdk_logic_frames
+    last_time = now
+  end
+end
+
+# Yuki::EXC catches every error in the game loop and shows a window that
+# waits for a key. Nothing prints, and by the time the process leaves, $!
+# is whatever killed the window, not the first error. Report the error as
+# EXC receives it, then leave, so a run does not sit in that window until
+# the test times out.
+Thread.new do
+  sleep 0.05 until defined?(::Yuki) && defined?(::Yuki::EXC) && ::Yuki::EXC.respond_to?(:run)
+  class << ::Yuki::EXC
+    def run(error, *)
+      $stderr.puts "PSDK-EXC #{error.class}: #{error.message}"
+      $stderr.puts Array(error.backtrace).join("\n")
+      $stderr.flush
+      exit!(0)
+    end
+  end
+  $stderr.puts 'PSDK-HOOK EXC'
+end
+
+# Change the window scale the way the in-game options menu does, at the
+# second PSDK_SCALE names, as `<second>:<scale>`. PSDK's Options scene
+# writes Graphics.screen_scale, which rebuilds the window settings and
+# reloads them. Driving the setter is the same call with no menu to
+# walk through.
+if (plan = ENV['PSDK_SCALE']) && !plan.empty?
+  second, scale = plan.split(':')
+  Thread.new do
+    sleep 0.05 until defined?(::Graphics) && ::Graphics.respond_to?(:screen_scale=)
+    sleep second.to_f
+    $stderr.puts "PSDK-SCALE setting #{scale}"
+    $stderr.flush
+    ::Graphics.screen_scale = scale.to_f
+  end
+end
+
+# Report the typed text the game receives, and whether it accepts it.
+# Input.get_text answers nil unless Graphics.focus? is true, and it
+# clears the text on every frame, so the report has to sit on the
+# handler and not on a poll.
+Thread.new do
+  sleep 0.05 until defined?(::Input) && ::Input.respond_to?(:get_text)
+  class << ::Input
+    alias_method :psdk_probe_on_text_entered, :on_text_entered
+    def on_text_entered(text)
+      psdk_probe_on_text_entered(text)
+      $stderr.puts format('PSDK-TEXT got=%p focus=%p get_text=%p',
+                          text, ::Graphics.focus?, ::Input.get_text)
+      $stderr.flush
+    end
+
+    if method_defined?(:open_virtual_keyboard) || private_method_defined?(:open_virtual_keyboard)
+      alias_method :psdk_probe_open_virtual_keyboard, :open_virtual_keyboard
+      def open_virtual_keyboard
+        $stderr.puts 'PSDK-TEXT the game asks for the keyboard'
+        $stderr.flush
+        psdk_probe_open_virtual_keyboard
+      end
+    else
+      $stderr.puts 'PSDK-TEXT this build has no Input.open_virtual_keyboard'
+    end
+  end
+  $stderr.puts 'PSDK-HOOK text'
+end
+
+# Open the name screen at the second PSDK_NAME_SCREEN names. The scene
+# must start on the game thread, so the probe hangs on GamePlay::Base#update,
+# which runs there after Graphics.update returns. A scene started from
+# another thread would run its loop next to the game's own loop.
+if (at = ENV['PSDK_NAME_SCREEN']) && !at.empty?
+  Thread.new do
+    sleep 0.05 until defined?(::GamePlay) && defined?(::GamePlay::NameInput)
+    started = Time.now
+    opened = false
+    ::GamePlay::Base.prepend(Module.new do
+      define_method(:update) do
+        result = super()
+        if !opened && Time.now - started > at.to_f && !is_a?(::GamePlay::NameInput)
+          opened = true
+          $stderr.puts 'PSDK-NAME opening the name screen'
+          $stderr.flush
+          scene = ::GamePlay::NameInput.new('', 12)
+          scene.main
+          $stderr.puts "PSDK-NAME the name screen closed, name=#{scene.return_name.inspect}"
+          $stderr.flush
+        end
+        result
+      end
+    end)
+    $stderr.puts 'PSDK-HOOK name screen'
+  end
+end

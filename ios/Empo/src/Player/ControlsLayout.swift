@@ -810,6 +810,8 @@ class ControlsLayout {
         separationLogSignature = nil
         activeManifestSource = nil
         resolutionInvolvesDerivation = false
+        Self.activeGameUsesPsdkCore =
+            container.map { PsdkGame.isGameRoot($0.gameURL) } ?? false
         loadManifest(from: container?.gameURL)
         if let container, newGameID != nil {
             migrateLegacyPersistenceIfNeeded(container: container)
@@ -902,8 +904,9 @@ class ControlsLayout {
     // MARK: - Defaults
     //
     // Default constants are `nonisolated` so legacy migration paths can
-    // read them without a hop to the main actor. They're plain Swift
-    // `let`s of value types, so any thread can read them safely.
+    // read them without a hop to the main actor. They hold value types,
+    // and only `switchGame` writes the core flag the button sets read,
+    // so any thread can read them safely.
 
     nonisolated static let defaultDPadCenterPortrait = CGPoint(x: 0.13, y: 0.72)
     nonisolated static let defaultDPadCenterLandscape = CGPoint(x: 0.10, y: 0.65)
@@ -915,42 +918,99 @@ class ControlsLayout {
     /// the more common case.
     nonisolated static let defaultDPadCenter = defaultDPadCenterPortrait
 
+    /// True while the active game runs on the PSDK core, which reads
+    /// its own key map. `switchGame` sets it before the layout
+    /// resolves, and the builtin button sets read it.
+    nonisolated(unsafe) private static var activeGameUsesPsdkCore = false
+
     /// 2x2 button grid in the bottom-right of a portrait viewport.
-    nonisolated static let defaultButtonsPortrait: [ButtonModel] = [
+    nonisolated static var defaultButtonsPortrait: [ButtonModel] {
+        activeGameUsesPsdkCore ? psdkButtonsPortrait : rpgMakerButtonsPortrait
+    }
+
+    /// 2x2 button grid in the bottom-right of a landscape viewport.
+    nonisolated static var defaultButtonsLandscape: [ButtonModel] {
+        activeGameUsesPsdkCore ? psdkButtonsLandscape : rpgMakerButtonsLandscape
+    }
+
+    private nonisolated static let rpgMakerButtonsPortrait: [ButtonModel] = [
         ButtonModel(
-            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN),
+            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
             relativeCenter: CGPoint(x: 0.70, y: 0.67),
             size: 56),
         ButtonModel(
-            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE),
+            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
             relativeCenter: CGPoint(x: 0.88, y: 0.67),
             size: 56),
         ButtonModel(
-            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.70, y: 0.76),
+            label: "Z", scancode: Int32(GAMECORE_SCANCODE_Z), relativeCenter: CGPoint(x: 0.70, y: 0.76),
             size: 56),
         ButtonModel(
-            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.76),
+            label: "B", scancode: Int32(GAMECORE_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.76),
             size: 56),
     ]
 
-    /// 2x2 button grid in the bottom-right of a landscape viewport.
-    /// Shorter screen height + wider screen width means the grid
-    /// can sit higher and more spread out without overlapping the
-    /// game viewport's center.
-    nonisolated static let defaultButtonsLandscape: [ButtonModel] = [
+    /// Landscape holds a shorter screen and a wider one, so the grid
+    /// sits higher and further apart without covering the middle of
+    /// the game viewport.
+    private nonisolated static let rpgMakerButtonsLandscape: [ButtonModel] = [
         ButtonModel(
-            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN),
+            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
             relativeCenter: CGPoint(x: 0.80, y: 0.59),
             size: 56),
         ButtonModel(
-            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE),
+            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
             relativeCenter: CGPoint(x: 0.88, y: 0.59),
             size: 56),
         ButtonModel(
-            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.80, y: 0.75),
+            label: "Z", scancode: Int32(GAMECORE_SCANCODE_Z), relativeCenter: CGPoint(x: 0.80, y: 0.75),
             size: 56),
         ButtonModel(
-            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.75),
+            label: "B", scancode: Int32(GAMECORE_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.75),
+            size: 56),
+    ]
+
+    // The PSDK sets keep the grid of the RPG Maker sets and change one
+    // key. A PSDK game reads Enter as confirm, Escape as cancel, V as
+    // the main menu and B as its Y button. Its key map answers nothing
+    // for Z. Measured with the probe in tools/psdk-core/prelude.rb on
+    // Edelweiss Chronicles version 1 and version 48.
+
+    private nonisolated static let psdkButtonsPortrait: [ButtonModel] = [
+        ButtonModel(
+            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
+            relativeCenter: CGPoint(x: 0.70, y: 0.67),
+            size: 56),
+        ButtonModel(
+            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
+            relativeCenter: CGPoint(x: 0.88, y: 0.67),
+            size: 56),
+        ButtonModel(
+            label: "V", scancode: Int32(GAMECORE_SCANCODE_V),
+            relativeCenter: CGPoint(x: 0.70, y: 0.76),
+            size: 56),
+        ButtonModel(
+            label: "B", scancode: Int32(GAMECORE_SCANCODE_B),
+            relativeCenter: CGPoint(x: 0.88, y: 0.76),
+            size: 56),
+    ]
+
+    private nonisolated static let psdkButtonsLandscape: [ButtonModel] = [
+        ButtonModel(
+            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
+            relativeCenter: CGPoint(x: 0.80, y: 0.59),
+            size: 56),
+        ButtonModel(
+            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
+            relativeCenter: CGPoint(x: 0.88, y: 0.59),
+            size: 56),
+        ButtonModel(
+            label: "V", scancode: Int32(GAMECORE_SCANCODE_V),
+            relativeCenter: CGPoint(x: 0.80, y: 0.75),
+            size: 56),
+        ButtonModel(
+            label: "B", scancode: Int32(GAMECORE_SCANCODE_B),
+            relativeCenter: CGPoint(x: 0.88, y: 0.75),
             size: 56),
     ]
 

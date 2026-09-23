@@ -1,0 +1,334 @@
+// Test host for the PSDK core.
+//
+// The app has no interface. It owns UIApplicationMain, then runs
+// psdk_run on a worker thread. SFML's iOS window code marshals every
+// UIKit call to the main thread with dispatch_sync, so the main thread
+// has to stay in its run loop and answer them. A host that called
+// psdk_run from the main thread would deadlock on the first window.
+//
+// The host still makes one empty UIWindow. iOS keeps its launch screen
+// over the app until the app puts a window on screen, and SFML's own
+// window does not count for that. Without this window the game renders
+// and every eglSwapBuffers succeeds, but the display stays black.
+// Empo has a real window already, so this only matters for the test.
+//
+// The host does not link the core. It opens
+// Frameworks/PsdkCore.framework/PsdkCore with dlopen when the game
+// starts, and reads the Ruby support folder from the same bundle. Empo
+// does the same on the game the user picks, so the test host and the
+// launcher take one path.
+//
+// The host reads these variables at launch:
+//
+//   PSDK_GAME      the game folder, relative to Documents.
+//                  "Game" by default.
+//
+//   PSDK_KEYS      key presses to inject. scheduleKeys gives the format.
+//   PSDK_TEXT      text to type, as "seconds:string". scheduleText.
+//
+//   PSDK_PRELUDE   a Ruby file in the bundle that runs before Game.rb.
+//                  "prelude.rb" by default. Set it empty to run none.
+//
+//   PSDK_RUN_FOR   seconds before the host leaves. A released game never
+//                  returns from its own loop, so a run without a limit
+//                  never ends. Unset or 0 means no limit.
+//
+//   PSDK_ROTATE    the second at which to run the rotation test.
+//                  scheduleRotation says what it does and does not do.
+//
+//   PSDK_FAST_FORWARD  game updates for each drawn frame. 1 by default.
+
+#include <dlfcn.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+#import <UIKit/UIKit.h>
+
+#include "psdk_core.h"
+
+// RTLD_LOCAL keeps the core's names out of the global namespace, so a
+// second core opened later cannot bind to them.
+static int (*gPsdkRun)(int, char **, const char *, const char *, const char *);
+static void (*gPsdkInjectKeyEvent)(int, int);
+
+// Ruby's parser and the PSDK boot scripts recurse deeply. The default
+// 512 KB worker stack overflows. mkxp-z gives its RGSS thread the same
+// 16 MB.
+static const size_t kWorkerStackBytes = 16 * 1024 * 1024;
+
+static char *gGamePath;
+static char *gSupportPath;
+static char *gPreludePath;
+static int gArgc;
+static char **gArgv;
+
+static void *runGame(void *unused) {
+    (void)unused;
+    int result = gPsdkRun(gArgc, gArgv, gGamePath, gSupportPath, gPreludePath);
+    fprintf(stderr, "[host] psdk_run returned %d\n", result);
+    // The bundle holds no interface to go back to, and the run loop
+    // would keep the process alive forever. Leave with the core's
+    // result so the driving script can read it.
+    exit(result == 0 ? 0 : 1);
+}
+
+// PSDK_KEYS drives the game without a person at the keyboard. Its
+// format is "seconds:scancode" pairs joined by commas, and the numbers
+// are the scancodes psdk_app_bridge.h names, the same space Empo's
+// buttons use. The press goes through psdk_injectKeyEvent, which is the
+// call Empo makes, so a run proves that road and not another one.
+//
+// The press lasts 150 ms. PSDK reads a button as triggered when it is
+// down on one frame and was up on the one before, so a press has to
+// cover at least one frame at 60 Hz. There is no signal to wait for
+// here: the injector is one-way and the game never reports that it
+// read the key.
+static void scheduleKeys(const char *spec) {
+    if (!spec || !*spec) {
+        return;
+    }
+    for (NSString *pair in [@(spec) componentsSeparatedByString:@","]) {
+        NSArray<NSString *> *parts = [pair componentsSeparatedByString:@":"];
+        if (parts.count != 2) {
+            continue;
+        }
+        double when = parts[0].doubleValue;
+        int scancode = parts[1].intValue;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(when * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            fprintf(stderr, "[host] key down %d at %.1fs\n", scancode, when);
+            gPsdkInjectKeyEvent(scancode, 1);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                gPsdkInjectKeyEvent(scancode, 0);
+            });
+        });
+    }
+}
+
+// PSDK_TEXT sends typed text into the core, as "seconds:string". It
+// runs the same two calls Empo runs from its keyboard:
+// psdk_isTextInputActive tells whether the game waits for text, and
+// psdk_pushTextInput carries what the player typed.
+static void (*gPsdkPushTextInput)(const char *);
+static int (*gPsdkIsTextInputActive)(void);
+
+static void scheduleText(const char *spec) {
+    if (!spec || !*spec || !gPsdkPushTextInput) {
+        return;
+    }
+    NSRange split = [@(spec) rangeOfString:@":"];
+    if (split.location == NSNotFound) {
+        return;
+    }
+    double when = [@(spec) substringToIndex:split.location].doubleValue;
+    NSString *text = [@(spec) substringFromIndex:split.location + 1];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(when * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        int active = gPsdkIsTextInputActive ? gPsdkIsTextInputActive() : -1;
+        fprintf(stderr, "[host] text \"%s\" at %.1fs, the game waits for text: %d\n",
+                text.UTF8String, when, active);
+        gPsdkPushTextInput(text.UTF8String);
+    });
+}
+
+// The game asks for the keyboard through this callback. Empo puts the
+// keyboard up here. The test host only says that the call arrived.
+static void reportTextInputMode(int active, void *userdata) {
+    (void)userdata;
+    fprintf(stderr, "PSDK-TEXTMODE %d\n", active);
+}
+
+static UIWindow *gHostWindow;
+
+// A turn of the device runs two paths in SFML. The notification reaches
+// deviceOrientationDidChange:, which forwards a Resized event to the
+// game. The new frame reaches SFView's layoutSubviews, which rebuilds
+// the render buffers and replaces the EGL surface under the game
+// thread. PSDK_ROTATE drives both.
+//
+// It cannot turn the real device. This machine has only headless
+// simctl, with no Simulator application, and simctl has no rotate
+// command. UIDevice's orientation is read-only and ignores a KVC write,
+// so the device stays in portrait. Swapping the SFML view's width and
+// height and forcing a layout runs the same code a turn would, and
+// posting the notification runs the other path. What this does not
+// cover is UIKit's own choice of interface orientation.
+static void scheduleRotation(const char *spec) {
+    if (!spec || !*spec) {
+        return;
+    }
+    double when = @(spec).doubleValue;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(when * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        UIDevice *device = UIDevice.currentDevice;
+        fprintf(stderr, "[host] rotation test at %.1fs, generating=%d orientation=%ld\n",
+                when, device.isGeneratingDeviceOrientationNotifications ? 1 : 0,
+                (long)device.orientation);
+        [NSNotificationCenter.defaultCenter
+            postNotificationName:UIDeviceOrientationDidChangeNotification
+                          object:device];
+
+        for (UIWindow *window in UIApplication.sharedApplication.windows) {
+            if (window == gHostWindow) {
+                continue;
+            }
+            UIView *view = window.rootViewController.view ?: window.subviews.firstObject;
+            if (!view) {
+                continue;
+            }
+            CGRect frame = view.frame;
+            fprintf(stderr, "[host] laying out %.0fx%.0f as %.0fx%.0f\n",
+                    frame.size.width, frame.size.height, frame.size.height,
+                    frame.size.width);
+            view.frame = CGRectMake(frame.origin.x, frame.origin.y,
+                                    frame.size.height, frame.size.width);
+            [view layoutIfNeeded];
+            view.frame = frame;
+            [view layoutIfNeeded];
+        }
+    });
+}
+
+@interface PsdkTestHostDelegate : UIResponder <UIApplicationDelegate>
+@property(nonatomic, strong) UIWindow *window;
+@end
+
+@implementation PsdkTestHostDelegate
+
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)options {
+    NSString *documents = NSSearchPathForDirectoriesInDomains(
+        NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+
+    const char *wantGame = getenv("PSDK_GAME");
+    NSString *game = [documents
+        stringByAppendingPathComponent:(wantGame && *wantGame) ? @(wantGame) : @"Game"];
+    if (![NSFileManager.defaultManager fileExistsAtPath:game]) {
+        fprintf(stderr, "[host] no game folder at %s\n", game.UTF8String);
+        exit(2);
+    }
+    gGamePath = strdup(game.fileSystemRepresentation);
+
+    NSString *core = [NSBundle.mainBundle.privateFrameworksPath
+        stringByAppendingPathComponent:@"PsdkCore.framework"];
+    NSString *support = [core stringByAppendingPathComponent:@"PsdkSupport"];
+    if (![NSFileManager.defaultManager fileExistsAtPath:support]) {
+        fprintf(stderr, "[host] no support folder at %s\n", support.UTF8String);
+        exit(4);
+    }
+    gSupportPath = strdup(support.fileSystemRepresentation);
+
+    void *image = dlopen([core stringByAppendingPathComponent:@"PsdkCore"]
+                             .fileSystemRepresentation,
+                         RTLD_NOW | RTLD_LOCAL);
+    if (!image) {
+        fprintf(stderr, "[host] cannot open the core: %s\n", dlerror());
+        exit(5);
+    }
+    gPsdkRun = dlsym(image, "psdk_run");
+    gPsdkInjectKeyEvent = dlsym(image, "psdk_injectKeyEvent");
+    if (!gPsdkRun || !gPsdkInjectKeyEvent) {
+        fprintf(stderr, "[host] the core is missing psdk_run or psdk_injectKeyEvent\n");
+        exit(6);
+    }
+
+    // PSDK_FAST_FORWARD asks the core for that many game updates for each
+    // drawn frame. The prelude reports the update rate, so a run at 1 and
+    // a run at 4 say whether the skip works.
+    const char *fastForward = getenv("PSDK_FAST_FORWARD");
+    if (fastForward && *fastForward) {
+        void (*setMultiplier)(int) = dlsym(image, "psdk_setFastForwardMultiplier");
+        if (!setMultiplier) {
+            fprintf(stderr, "[host] the core is missing psdk_setFastForwardMultiplier\n");
+            exit(6);
+        }
+        setMultiplier(atoi(fastForward));
+    }
+
+    // The drawn rate says whether a skipped draw reached the screen. The
+    // prelude reports the update rate, so the two together tell a fast
+    // run from a slow one.
+    double (*averageFPS)(void) = dlsym(image, "psdk_getAverageFPS");
+    int (*getMultiplier)(void) = dlsym(image, "psdk_getFastForwardMultiplier");
+    if (averageFPS) {
+        static dispatch_source_t timer;
+        timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+        dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC),
+                                  5 * NSEC_PER_SEC, NSEC_PER_SEC / 10);
+        dispatch_source_set_event_handler(timer, ^{
+            fprintf(stderr, "PSDK-DRAWN per_second=%.1f multiplier=%d\n", averageFPS(),
+                    getMultiplier ? getMultiplier() : -1);
+        });
+        dispatch_resume(timer);
+    }
+
+    const char *wantPrelude = getenv("PSDK_PRELUDE");
+    NSString *prelude = (wantPrelude && !*wantPrelude)
+                            ? nil
+                            : [NSBundle.mainBundle.resourcePath
+                                  stringByAppendingPathComponent:
+                                      (wantPrelude && *wantPrelude) ? @(wantPrelude)
+                                                                    : @"prelude.rb"];
+    gPreludePath = prelude ? strdup(prelude.fileSystemRepresentation) : NULL;
+
+    gPsdkPushTextInput = dlsym(image, "psdk_pushTextInput");
+    gPsdkIsTextInputActive = dlsym(image, "psdk_isTextInputActive");
+    void (*setTextInputModeCallback)(void (*)(int, void *), void *) =
+        dlsym(image, "psdk_setTextInputModeCallback");
+    if (setTextInputModeCallback) {
+        setTextInputModeCallback(reportTextInputMode, NULL);
+    }
+
+    scheduleKeys(getenv("PSDK_KEYS"));
+    scheduleRotation(getenv("PSDK_ROTATE"));
+    scheduleText(getenv("PSDK_TEXT"));
+
+    const char *runFor = getenv("PSDK_RUN_FOR");
+    double seconds = runFor ? atof(runFor) : 0;
+    if (seconds > 0) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(seconds * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            fprintf(stderr, "[host] run limit reached at %.1fs\n", seconds);
+            // _exit, not exit. The game thread runs Ruby code. exit()
+            // runs the atexit handlers and the static destructors, which
+            // free the Ruby VM under that thread. Ruby then faults, and
+            // its SEGV handler faults again on a thread whose VM is
+            // gone ("SEGV received in SEGV handler").
+            _exit(0);
+        });
+    }
+
+    self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    self.window.rootViewController = [[UIViewController alloc] init];
+    self.window.backgroundColor = UIColor.blackColor;
+    [self.window makeKeyAndVisible];
+    gHostWindow = self.window;
+
+    fprintf(stderr, "[host] game=%s support=%s prelude=%s\n", gGamePath,
+            gSupportPath, gPreludePath ? gPreludePath : "(none)");
+
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, kWorkerStackBytes);
+    pthread_t worker;
+    if (pthread_create(&worker, &attr, runGame, NULL) != 0) {
+        fprintf(stderr, "[host] cannot start the worker thread\n");
+        exit(3);
+    }
+    pthread_attr_destroy(&attr);
+    pthread_detach(worker);
+    return YES;
+}
+
+@end
+
+int main(int argc, char **argv) {
+    gArgc = argc;
+    gArgv = argv;
+    @autoreleasepool {
+        return UIApplicationMain(argc, argv, nil,
+                                 NSStringFromClass(PsdkTestHostDelegate.class));
+    }
+}

@@ -138,8 +138,12 @@ enum GameCatalog {
         fm: FileManager = .default,
         quick: Bool = false
     ) -> GameSnapshot? {
+        // A PSDK game ships no Game.ini, and its app_data.json holds
+        // installer state, not a title. The folder the import made is
+        // the only name on disk.
         let iniTitle =
             GameINI.gameTitle(at: container.gameURL)
+            ?? (PsdkGame.isGameRoot(container.gameURL) ? container.folderName : nil)
             ?? "Unknown Game"
         let defaultArtwork = quick ? quickFindArtwork(in: container) : findArtwork(in: container)
 

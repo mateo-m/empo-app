@@ -2,7 +2,7 @@ import Foundation
 import GameProbe
 
 /// Owns per-game engine launch: bridge configuration, patch
-/// distribution, logging, and the deferred `mkxp_setGamePath` handoff.
+/// distribution, logging, and the deferred `gamecore_setGamePath` handoff.
 @MainActor
 enum GameSession {
 
@@ -22,7 +22,7 @@ enum GameSession {
 
     /// Apply managed dirs, Ruby dispatch, syntax transform, patches,
     /// session logging, and bridge session config. Does not set
-    /// `mkxp_setGamePath`. The caller awaits engine termination first.
+    /// `gamecore_setGamePath`. The caller awaits engine termination first.
     static func configureEngine(
         _ input: LaunchInput,
         crashTracker: CrashTracker,
@@ -40,12 +40,12 @@ enum GameSession {
             autoDetectedModern: metadata.modernRubyScriptsDetected
         )
         let rubyVersionRaw = settings.rubyVersionOverride ?? metadata.rubyVersion
-        let rubyVer: MKXPRubyVersion = {
+        let rubyVer: GameCoreRubyVersion = {
             switch rubyVersionRaw {
-            case 18?: return MKXP_RUBY_18
-            case 19?: return MKXP_RUBY_19
-            case 30?, 31?: return MKXP_RUBY_31
-            default: return MKXP_RUBY_UNSET
+            case 18?: return GAMECORE_RUBY_18
+            case 19?: return GAMECORE_RUBY_19
+            case 30?, 31?: return GAMECORE_RUBY_31
+            default: return GAMECORE_RUBY_UNSET
             }
         }()
 
@@ -67,10 +67,10 @@ enum GameSession {
             gameDirectory: gameDir
         )
         if let overlayJSON {
-            overlayJSON.withCString { mkxp_setConfigOverlayJSON($0) }
+            overlayJSON.withCString { gamecore_setConfigOverlayJSON($0) }
             logEngineConfigOverlay(overlayJSON, container: container)
         } else {
-            mkxp_setConfigOverlayJSON(nil)
+            gamecore_setConfigOverlayJSON(nil)
         }
 
         // Never point managedConfigDir at EmpoState. The sparse
@@ -81,7 +81,7 @@ enum GameSession {
         "".withCString { managedPtr in
             input.userDataDir.path.withCString { userDataPtr in
                 DataDirectory.fontsRootURL.path.withCString { fontsPtr in
-                    var config = MKXPSessionConfig()
+                    var config = GameCoreSessionConfig()
                     config.managedConfigDir = managedPtr
                     config.userDataDirectory = userDataPtr
                     config.sharedFontsDirectory = fontsPtr
@@ -92,7 +92,7 @@ enum GameSession {
                     config.useInGameKeyboard = settings.useInGameKeyboard ?? inGameKeyboardDefault
                     config.joiplayCompat = settings.joiplayCompat ?? false
                     config.networkEnabled = settings.networkEnabled ?? true
-                    mkxp_applySessionConfig(&config)
+                    gamecore_applySessionConfig(&config)
                 }
             }
         }
@@ -104,18 +104,18 @@ enum GameSession {
             debugLogsEnabled: input.debugLogsEnabled
         )
 
-        mkxp_resetSessionState()
+        gamecore_resetSessionState()
         // After the reset (which clears the previous session's
         // region) and before boot: the engine's first recalc reads
         // the bridge statics, so the region is set pre-boot.
         ScreenRegionApplier.beginSession(container: container)
-        mkxp_setGameControllerCaptureEnabled(false)
+        gamecore_setGameControllerCaptureEnabled(false)
         // Seed the touch-mouse atomic before boot.
-        // `mkxp_resetSessionState` above leaves it alone, so without
+        // `gamecore_resetSessionState` above leaves it alone, so without
         // this the new game inherits the previous game's value until
         // `PlayerRuntimeState.reconcile` runs. That call owns every
         // later push, including the one on resume.
-        mkxp_setTouchMouseEnabled(settings.touchMouseEnabled)
+        gamecore_setTouchMouseEnabled(settings.touchMouseEnabled)
     }
 
     private static func logEngineConfigOverlay(

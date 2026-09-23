@@ -61,6 +61,12 @@ make -f iphoneos.make mkxp-merged
 echo "==> building libmkxpz-core.a"
 make -f iphoneos.make mkxp-core
 
+echo "==> building MkxpCore.framework"
+make -f iphoneos.make mkxp-framework
+
+echo "==> building the PSDK core"
+make -f iphoneos.make psdk
+
 echo "==> device deps rebuild complete"
 PLATFORM_NAME=iphoneos "$REPO_ROOT/scripts/verify-native-deps.sh"
 "$REPO_ROOT/scripts/write-deps-manifest.sh" iphoneos full "$DEPS_BUILT_AT" none

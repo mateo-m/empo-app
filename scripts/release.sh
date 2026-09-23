@@ -17,7 +17,7 @@ usage() {
     echo "Default flow (cut locally, CI finishes everything):"
     echo "  1. verifies empo-deps pins"
     echo "  2. bumps version, generates the changelog, commits, tags"
-    echo "     (v<version> here + empo-v<version> on the engine repo)"
+    echo "     (v<version> here + empo-v<version> on each core source)"
     echo "  3. pushes and exits. The Release workflow builds, audits,"
     echo "     and publishes the IPA. It syncs the AltStore manifest +"
     echo "     engine pin straight to main and announces on Discord."
@@ -325,27 +325,53 @@ git -C "$REPO_ROOT" add "$PROJECT_YML" \
 git -C "$REPO_ROOT" commit -S -m "chore: bump version to $VERSION (build $BUILD)"
 git -C "$REPO_ROOT" tag -s "v$VERSION" -m "v$VERSION"
 
-# 8b. Tag the engine submodule commit this release pins. This proves
-# the GPL binary->source correspondence per release: anyone can check
-# out mkxp-z-apple-mobile at empo-v<version> and get exactly the
-# engine source compiled into the shipped .ipa. The script creates
-# the tag locally here, before it pushes anything, so a failure
-# aborts the release cleanly. Step 11 pushes the tag alongside the
-# app tag.
+# 8b. Tag the engine commit each core comes from. This proves the GPL
+# binary to source correspondence per release: anyone can check out
+# mkxp-z-apple-mobile or litergss2-apple-mobile at empo-v<version> and
+# get exactly the source compiled into the shipped .ipa. The script
+# creates the tags locally here, before it pushes anything, so a
+# failure aborts the release cleanly. Step 11 pushes them alongside
+# the app tag.
+#
+# The PSDK core also links LiteCGSS, the SFML fork and Ruby 3.0, and
+# those repos carry no empo-v tag. The .deps-fingerprint guard ties the
+# shipped PsdkCore.framework to every pinned gitlink, so the commit
+# this tag names is the one that built the framework.
 ENGINE_TAG="empo-v$VERSION"
-ENGINE_DIR="$REPO_ROOT/mkxp-z-apple-mobile"
-ENGINE_COMMIT="$(git -C "$REPO_ROOT" rev-parse "HEAD:mkxp-z-apple-mobile")"
-if git -C "$ENGINE_DIR" rev-parse -q --verify "refs/tags/$ENGINE_TAG" >/dev/null; then
-    echo "error: engine tag $ENGINE_TAG already exists"
-    exit 1
-fi
-git -C "$ENGINE_DIR" fetch -q origin dev
-if ! git -C "$ENGINE_DIR" merge-base --is-ancestor "$ENGINE_COMMIT" origin/dev; then
-    echo "error: pinned engine commit $ENGINE_COMMIT is not on mkxp-z-apple-mobile origin/dev"
-    echo "       push the submodule first (policy: gitlink must be an ancestor of origin/dev)"
-    exit 1
-fi
-git -C "$ENGINE_DIR" tag -s "$ENGINE_TAG" "$ENGINE_COMMIT" -m "Engine pinned by Empo v$VERSION"
+# Where each core's engine source lives, as a submodule path here.
+CORE_SOURCES=("mkxp-z-apple-mobile" "ios/Dependencies/sources/litergss2")
+
+tag_core_source() {
+    local path="$1" dir="$REPO_ROOT/$1" branch commit tagged
+    # .gitmodules names the branch each submodule tracks, so a branch
+    # rename there reaches this check too.
+    branch="$(git config -f "$REPO_ROOT/.gitmodules" --get "submodule.$path.branch" || printf 'dev')"
+    commit="$(git -C "$REPO_ROOT" rev-parse "HEAD:$path")"
+    # A release that fails between the two tags leaves the first one
+    # behind. The same tag on the same commit is that release again, so
+    # keep it. The same tag on another commit is two releases under one
+    # version, which the tag cannot say.
+    tagged="$(git -C "$dir" rev-parse -q --verify "refs/tags/$ENGINE_TAG^{commit}" || true)"
+    if [[ -n "$tagged" ]]; then
+        if [[ "$tagged" == "$commit" ]]; then
+            echo "    $path already carries $ENGINE_TAG"
+            return 0
+        fi
+        echo "error: $path carries $ENGINE_TAG on commit $tagged, not $commit"
+        exit 1
+    fi
+    git -C "$dir" fetch -q origin "$branch"
+    if ! git -C "$dir" merge-base --is-ancestor "$commit" "origin/$branch"; then
+        echo "error: pinned commit $commit is not on $path origin/$branch"
+        echo "       push the submodule first (policy: gitlink must be an ancestor of origin/$branch)"
+        exit 1
+    fi
+    git -C "$dir" tag -s "$ENGINE_TAG" "$commit" -m "Engine pinned by Empo v$VERSION"
+}
+
+for CORE_SOURCE in "${CORE_SOURCES[@]}"; do
+    tag_core_source "$CORE_SOURCE"
+done
 
 # 9-10. Local build + AltStore sync, fallback path only. On the
 # default flow the Release workflow builds, audits, and publishes the
@@ -354,6 +380,21 @@ git -C "$ENGINE_DIR" tag -s "$ENGINE_TAG" "$ENGINE_COMMIT" -m "Engine pinned by 
 if [[ "$LOCAL_BUILD" == "1" ]]; then
 
     # 9. Build unsigned .ipa from the clean release commit.
+    #
+    # EMPO_CORES in the environment ships one core instead of both:
+    #   EMPO_CORES=PsdkCore scripts/release.sh --local-build patch
+    # Empty means the project default, which is both cores.
+    # macOS ships bash 3.2, where `set -u` plus "${EMPTY[@]}" aborts the
+    # script. `${A[@]+"${A[@]}"}` expands to nothing when the array is
+    # empty, and keeps the quoting when it is not.
+    CORE_SETTING=()
+    AUDIT_CORES=()
+    if [[ -n "${EMPO_CORES:-}" ]]; then
+        CORE_SETTING=("EMPO_CORES=$EMPO_CORES")
+        AUDIT_CORES=(--cores "$EMPO_CORES")
+        echo "==> cores for this build: $EMPO_CORES"
+    fi
+
     echo "==> building unsigned ipa"
     BUILD_DIR="$PROJECT_DIR/build/Release-iphoneos"
     rm -rf "$BUILD_DIR"
@@ -366,6 +407,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         CODE_SIGNING_ALLOWED=NO \
         PRODUCT_BUNDLE_IDENTIFIER=sh.mateo.empo \
         CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
+        ${CORE_SETTING[@]+"${CORE_SETTING[@]}"} \
         build 2>&1 | grep -E "^(Build|error:|warning: |CompileSwift|Ld )" || true
 
     APP_PATH="$BUILD_DIR/Empo.app"
@@ -374,13 +416,22 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         exit 1
     fi
 
-    "$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" "$APP_PATH"
-
     echo "==> ad-hoc signing with entitlements"
+    # Inside out. A nested framework carries its own signature, and
+    # signing the app root does not reach inside it. The build ran with
+    # CODE_SIGNING_ALLOWED=NO, so every core framework arrives unsigned.
+    # Sign what the bundle has: a build ships one core or both.
+    for FRAMEWORK in "$APP_PATH"/Frameworks/*.framework; do
+        [[ -d "$FRAMEWORK" ]] || continue
+        codesign --force --sign - --timestamp=none "$FRAMEWORK"
+    done
     codesign --force --sign - \
         --generate-entitlement-der \
         --entitlements "$PROJECT_DIR/Empo.entitlements" \
         "$APP_PATH"
+
+    "$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" \
+        ${AUDIT_CORES[@]+"${AUDIT_CORES[@]}"} "$APP_PATH"
 
     mkdir -p "$IPA_DIR/Payload"
     cp -R "$APP_PATH" "$IPA_DIR/Payload/Empo.app"
@@ -429,12 +480,14 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
 fi # LOCAL_BUILD
 
 # 11. Push. On the default flow this is the handoff: the v tag
-# triggers the Release workflow, and the empo-v tag triggers the
-# engine repo's artifact workflow.
+# triggers the Release workflow, and the empo-v tag on
+# mkxp-z-apple-mobile triggers that repo's artifact workflow.
 echo "==> pushing to origin"
 git -C "$REPO_ROOT" push origin main
 git -C "$REPO_ROOT" push origin "v$VERSION"
-git -C "$ENGINE_DIR" push origin "$ENGINE_TAG"
+for CORE_SOURCE in "${CORE_SOURCES[@]}"; do
+    git -C "$REPO_ROOT/$CORE_SOURCE" push origin "$ENGINE_TAG"
+done
 
 if [[ "$LOCAL_BUILD" == "1" ]]; then
     # 12. Create GitHub release from the locally-built artifact.

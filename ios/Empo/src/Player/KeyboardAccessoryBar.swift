@@ -165,7 +165,7 @@ struct AccessoryKey: Identifiable {
         AccessoryKey(
             id: "F\(number)",
             face: .text("F\(number)"),
-            scancode: Int32(MKXP_SCANCODE_F1) + number - 1,
+            scancode: Int32(GAMECORE_SCANCODE_F1) + number - 1,
             kind: .tap,
             name: "F\(number) key"
         )
@@ -197,33 +197,33 @@ struct KeyboardAccessoryBar: View {
     private static let allKeys: [AccessoryKey] =
         (1...12).map { .fKey(Int32($0)) } + [
             AccessoryKey(
-                id: "esc", face: .symbol("escape"), scancode: Int32(MKXP_SCANCODE_ESCAPE),
+                id: "esc", face: .symbol("escape"), scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
                 kind: .tap, name: "Escape key"),
             AccessoryKey(
                 id: "tab", face: .symbol("arrow.right.to.line"),
-                scancode: Int32(MKXP_SCANCODE_TAB),
+                scancode: Int32(GAMECORE_SCANCODE_TAB),
                 kind: .tap, name: "Tab key"),
             AccessoryKey(
-                id: "ctrl", face: .text("Ctrl"), scancode: Int32(MKXP_SCANCODE_LCTRL),
+                id: "ctrl", face: .text("Ctrl"), scancode: Int32(GAMECORE_SCANCODE_LCTRL),
                 kind: .modifier, name: "Control key"),
             AccessoryKey(
-                id: "shift", face: .text("Shift"), scancode: Int32(MKXP_SCANCODE_LSHIFT),
+                id: "shift", face: .text("Shift"), scancode: Int32(GAMECORE_SCANCODE_LSHIFT),
                 kind: .modifier, name: "Shift key"),
             AccessoryKey(
-                id: "alt", face: .text("Alt"), scancode: Int32(MKXP_SCANCODE_LALT),
+                id: "alt", face: .text("Alt"), scancode: Int32(GAMECORE_SCANCODE_LALT),
                 kind: .modifier, name: "Alt key"),
             AccessoryKey(
-                id: "left", face: .symbol("chevron.left"), scancode: Int32(MKXP_SCANCODE_LEFT),
+                id: "left", face: .symbol("chevron.left"), scancode: Int32(GAMECORE_SCANCODE_LEFT),
                 kind: .hold, name: "Left arrow key"),
             AccessoryKey(
-                id: "up", face: .symbol("chevron.up"), scancode: Int32(MKXP_SCANCODE_UP),
+                id: "up", face: .symbol("chevron.up"), scancode: Int32(GAMECORE_SCANCODE_UP),
                 kind: .hold, name: "Up arrow key"),
             AccessoryKey(
-                id: "down", face: .symbol("chevron.down"), scancode: Int32(MKXP_SCANCODE_DOWN),
+                id: "down", face: .symbol("chevron.down"), scancode: Int32(GAMECORE_SCANCODE_DOWN),
                 kind: .hold, name: "Down arrow key"),
             AccessoryKey(
                 id: "right", face: .symbol("chevron.right"),
-                scancode: Int32(MKXP_SCANCODE_RIGHT),
+                scancode: Int32(GAMECORE_SCANCODE_RIGHT),
                 kind: .hold, name: "Right arrow key"),
         ]
 

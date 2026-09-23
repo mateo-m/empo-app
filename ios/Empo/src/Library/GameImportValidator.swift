@@ -40,6 +40,11 @@ enum GameImportValidator {
         let title: String
         let subtitle: String
         let artwork: ImportRootChoiceArtwork?
+        /// True when the title above is only the name of the folder the
+        /// game sits in, and taking the name of the source instead
+        /// cannot rename an installed game. `nameLoneRootAfterSource`
+        /// reads it.
+        let canTakeTheSourceName: Bool
 
         var id: String { relativePath }
     }
@@ -93,6 +98,13 @@ enum GameImportValidator {
             lowercaseName.hasSuffix(".exe")
         }
 
+        /// The pair a PSDK game is known by. Both files go into the
+        /// probe, because the check reads Game.yarb's first four bytes
+        /// (`PsdkGame.isGameRoot`).
+        var isPsdkMarker: Bool {
+            lowercaseName == "game.rb" || lowercaseName == "game.yarb"
+        }
+
         var isPreviewTitleArtwork: Bool {
             guard parentComponents.count >= 2 else { return false }
             guard parentComponents[parentComponents.count - 2].lowercased() == "graphics" else {
@@ -133,7 +145,11 @@ enum GameImportValidator {
             archiveURL: nil,
             scratchDir: nil
         )
-        return ArchiveProbeResult(choices: choices, inventory: nil)
+        return ArchiveProbeResult(
+            choices: nameLoneRootAfterSource(
+                choices, fallbackRootName: sourceURL.lastPathComponent),
+            inventory: nil
+        )
     }
 
     /// Finds the actual game directory inside `url`, walking down
@@ -214,6 +230,16 @@ enum GameImportValidator {
         scratchDir: URL? = nil,
         shouldCancel: (() -> Bool)? = nil
     ) throws {
+        // Which core this build carries is not a property of these
+        // files. GameCatalog calls this on every scan and deletes a
+        // container it calls invalid, so a missing core must not fail
+        // here. ImportPipeline and GameLibraryView refuse instead.
+        //
+        // A PSDK game carries none of what the checks below read: no
+        // RGSS archive, no .ini with a Scripts entry, no Scripts file.
+        // The PSDK core runs it, so no RGSS version applies either.
+        if GameCoreKind.forGame(at: url) == .psdk { return }
+
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(atPath: url.path) else {
             throw ImportError.notAnRPGMakerGame
@@ -301,6 +327,8 @@ enum GameImportValidator {
         _ url: URL,
         fm: FileManager
     ) -> Bool {
+        if PsdkGame.isGameRoot(url, fileManager: fm) { return true }
+
         guard let items = try? fm.contentsOfDirectory(atPath: url.path) else {
             return false
         }
@@ -348,7 +376,7 @@ enum GameImportValidator {
             include: { path in
                 guard let entry = ArchiveEntryDescriptor(path) else { return false }
 
-                if entry.isIni || entry.isMkxpJson {
+                if entry.isIni || entry.isMkxpJson || entry.isPsdkMarker {
                     return true
                 }
                 if let version = entry.archiveMarkerVersion {
@@ -411,7 +439,9 @@ enum GameImportValidator {
                     relativePath: normalized,
                     title: title,
                     subtitle: subtitle,
-                    artwork: artwork
+                    artwork: artwork,
+                    // An RGSS archive root, so the name stays as it was.
+                    canTakeTheSourceName: false
                 )
             )
         }
@@ -420,7 +450,12 @@ enum GameImportValidator {
             throw firstMeaningfulArchiveError ?? firstArchiveError ?? ImportError.notAnRPGMakerGame
         }
         return ArchiveProbeResult(
-            choices: sortImportRootChoices(choices),
+            choices: sortImportRootChoices(
+                nameLoneRootAfterSource(
+                    choices,
+                    fallbackRootName: archiveURL.deletingPathExtension().lastPathComponent
+                )
+            ),
             inventory: inventory
         )
     }
@@ -459,9 +494,9 @@ enum GameImportValidator {
             // adopt the container the migration named after the
             // manifest - an archive-name fallback here would mint
             // a second container for the same game.
+            let declaredTitle = GameINI.gameTitle(at: root) ?? jgpManifestName(at: root)
             let title =
-                GameINI.gameTitle(at: root)
-                ?? jgpManifestName(at: root)
+                declaredTitle
                 ?? (relativePath.isEmpty ? fallbackRootName : root.lastPathComponent)
             let subtitle = relativePath.isEmpty ? fallbackRootName : relativePath
             choices.append(
@@ -469,7 +504,9 @@ enum GameImportValidator {
                     relativePath: relativePath,
                     title: title,
                     subtitle: subtitle,
-                    artwork: previewArtwork(at: directoryURL, relativePath: relativePath)
+                    artwork: previewArtwork(at: directoryURL, relativePath: relativePath),
+                    canTakeTheSourceName: declaredTitle == nil && !relativePath.isEmpty
+                        && PsdkGame.isGameRoot(root)
                 )
             )
         }
@@ -486,6 +523,41 @@ enum GameImportValidator {
         guard let name = Jgp.parseBundle(at: root)?.manifest.name else { return nil }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Renames a single nameless PSDK root after the source the user
+    /// picked.
+    ///
+    /// A release often nests the game in a wrapper folder, and the
+    /// wrapper is named after the layout instead of the game: the
+    /// Windows release of Edelweiss Chronicles ships its game in `app/`
+    /// next to `patcher/`, so the library showed "app". The leaf name
+    /// has one job, to tell two games in one source apart. With one
+    /// root it carries nothing, and the name of what the user picked is
+    /// always closer to the truth.
+    ///
+    /// PSDK games only. The title becomes the container folder name,
+    /// and the importer matches an installed game by that folder
+    /// (`ImportNameResolution.resolve`), so a title that changes
+    /// between two Empo versions installs the same game twice. PSDK
+    /// support arrives with this naming, so no PSDK game can carry the
+    /// older name. An RPG Maker game can, and keeps it.
+    private static func nameLoneRootAfterSource(
+        _ choices: [ImportRootChoice],
+        fallbackRootName: String
+    ) -> [ImportRootChoice] {
+        guard choices.count == 1, let only = choices.first, only.canTakeTheSourceName else {
+            return choices
+        }
+        return [
+            ImportRootChoice(
+                relativePath: only.relativePath,
+                title: fallbackRootName,
+                subtitle: only.subtitle,
+                artwork: only.artwork,
+                canTakeTheSourceName: false
+            )
+        ]
     }
 
     private static func sortImportRootChoices(_ choices: [ImportRootChoice]) -> [ImportRootChoice] {
@@ -758,10 +830,14 @@ enum GameImportValidator {
     }
 
     private static func checkRuntimeSupport(_ version: RGSSVersion) throws {
-        // Ask the engine which RGSS versions this build supports. The mask
-        // depends on which Ruby runtime is linked: legacy Ruby 1.8 only runs
-        // RGSS1 + RGSS2, while Ruby 3.x with syntax transform runs all three.
-        let mask = Int(mkxp_getSupportedRGSSVersionMask())
+        // The mask depends on the Ruby versions the core carries: Ruby
+        // 1.8 alone runs RGSS1 and RGSS2, and Ruby 3.x with the syntax
+        // transform runs all three.
+        let mask = BuiltInGameCore.rgssVersionMask
+        // Zero means this build carries no RPG Maker core. The files are
+        // still a game, so say nothing here and let ImportPipeline and
+        // GameLibraryView name the missing core.
+        guard mask != 0 else { return }
         let bit = 1 << (version.rawValue - 1)
         if mask & bit != 0 { return }
 

@@ -66,8 +66,8 @@ struct DebugOverlayView: View {
             }
 
             debugText(
-                mkxp_isGameReady() != 0 ? "Running" : "Loading\u{2026}",
-                color: mkxp_isGameReady() != 0 ? .success : .warning
+                gamecore_isGameReady() != 0 ? "Running" : "Loading\u{2026}",
+                color: gamecore_isGameReady() != 0 ? .success : .warning
             )
 
             memoryRow
@@ -127,9 +127,9 @@ struct DebugOverlayView: View {
             }
         )
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
-            guard mkxp_isEngineTerminated() == 0 else { return }
-            state.fps = mkxp_getAverageFPS()
-            state.targetFPS = Double(mkxp_getTargetFPS())
+            guard gamecore_isEngineTerminated() == 0 else { return }
+            state.fps = gamecore_getAverageFPS()
+            state.targetFPS = Double(gamecore_getTargetFPS())
             state.ringBuffer.append(state.fps)
             state.memoryMB = Self.currentMemoryMB()
             if state.memoryMB > 0 {
@@ -137,8 +137,8 @@ struct DebugOverlayView: View {
             }
 
             if !state.metadataLoaded {
-                state.rgssVersion = mkxp_getRGSSVersion()
-                if let title = mkxp_getGameTitle(), title[0] != 0 {
+                state.rgssVersion = gamecore_getRGSSVersion()
+                if let title = gamecore_getGameTitle(), title[0] != 0 {
                     state.gameTitle = String(cString: title)
                     state.metadataLoaded = true
                 }
@@ -286,22 +286,22 @@ struct DebugOverlayView: View {
     }
 
     private var rubyLine: String {
-        "Ruby \(String(cString: mkxp_getRubyVersion()))"
+        "Ruby \(String(cString: gamecore_getRubyVersion()))"
     }
 
     /// Reports the active syntax-transform mode set via
-    /// `mkxp_setSyntaxTransformMode`. The transforms only take
+    /// `gamecore_setSyntaxTransformMode`. The transforms only take
     /// effect on the patched Ruby 3.1 parser. On the Ruby
     /// 1.8 / 1.9 / 3.0 builds the value is a no-op, so we hide
     /// the line. Returns nil when the mode hasn't been set or
     /// when the active interpreter doesn't honor the patches.
     private var syntaxTransformLine: String? {
-        let rubyTag = String(cString: mkxp_getRubyVersion())
+        let rubyTag = String(cString: gamecore_getRubyVersion())
         guard rubyTag.hasPrefix("3.1") else { return nil }
-        switch mkxp_getSyntaxTransformMode() {
-        case MKXP_SYNTAX_TRANSFORM_LEGACY: return "Compatibility: legacy"
-        case MKXP_SYNTAX_TRANSFORM_DISABLED: return "Compatibility: modern"
-        case MKXP_SYNTAX_TRANSFORM_CUSTOM: return "Compatibility: custom"
+        switch gamecore_getSyntaxTransformMode() {
+        case GAMECORE_SYNTAX_TRANSFORM_LEGACY: return "Compatibility: legacy"
+        case GAMECORE_SYNTAX_TRANSFORM_DISABLED: return "Compatibility: modern"
+        case GAMECORE_SYNTAX_TRANSFORM_CUSTOM: return "Compatibility: custom"
         default: return nil
         }
     }
@@ -309,7 +309,7 @@ struct DebugOverlayView: View {
     /// Renderer line. Shows the ANGLE version once GL has initialized.
     /// Falls back to `ANGLE (Metal)` before then.
     private var rendererLine: String {
-        let version = String(cString: mkxp_getANGLEVersion())
+        let version = String(cString: gamecore_getANGLEVersion())
         if version == "unknown" {
             return "ANGLE (Metal)"
         }
@@ -318,7 +318,7 @@ struct DebugOverlayView: View {
 
     /// Metal device line. Hidden (returns nil) until GL has initialized.
     private var metalDeviceLine: String? {
-        let device = String(cString: mkxp_getMetalDeviceName())
+        let device = String(cString: gamecore_getMetalDeviceName())
         return device == "unknown" ? nil : device
     }
 }

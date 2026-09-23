@@ -18,12 +18,12 @@ Both modes use the same engine-side mechanism (a condvar block). They differ in 
 
 ### Flow
 
-1. The UI calls `mkxp_requestPause()`. This sets an atomic flag.
+1. The UI calls `gamecore_requestPause()`. This sets an atomic flag.
 2. On the next frame, `GraphicsPrivate::checkPause()` sees the flag and:
    - Captures a snapshot of the front buffer (see below).
    - Calls `mkxp_checkPause()`, which pauses all `AL_PLAYING` audio sources, fires the paused callback, and blocks on a condvar.
 3. The engine thread is now frozen. No rendering, no audio, no script execution.
-4. The UI calls `mkxp_requestResume()`. This signals the condvar.
+4. The UI calls `gamecore_requestResume()`. This signals the condvar.
 5. `mkxp_checkPause()` unblocks, resumes the paused audio sources, and returns.
 6. `checkPause()` resets frame timing so the FPS limiter does not try to catch up.
 
@@ -39,7 +39,7 @@ The fix: **never touch the OpenAL context**. No `alcMakeContextCurrent(NULL)`, n
 
 ### Terminate while paused
 
-`mkxp_requestTerminate()` also unblocks the condvar. It sets `s_terminateRequested`, clears the pause flags, signals the condvar, and pushes `SDL_QUIT`. The resume path in `mkxp_checkPause()` checks the terminate flag and skips audio restoration. The sources stay silent until cleanup.
+`gamecore_requestTerminate()` also unblocks the condvar. It sets `s_terminateRequested`, clears the pause flags, signals the condvar, and pushes `SDL_QUIT`. The resume path in `mkxp_checkPause()` checks the terminate flag and skips audio restoration. The sources stay silent until cleanup.
 
 ---
 
@@ -69,11 +69,11 @@ We read from the internal FBO, the engine's render target, and not from FBO 0, t
 
 **Storage (bridge, `app_bridge.cpp`):**
 
-`mkxp_setSnapshot()` copies the RGBA data into a `std::vector<unsigned char>`. A mutex guards the vector. The app reads it out through a two-call copy API: `mkxp_getSnapshotSize()` gives the dimensions, and `mkxp_copySnapshotRGBA()` copies bytes into a caller-owned buffer. We retired the previous pointer-returning API because its pointers dangled across threads.
+`mkxp_setSnapshot()` copies the RGBA data into a `std::vector<unsigned char>`. A mutex guards the vector. The app reads it out through a two-call copy API: `gamecore_getSnapshotSize()` gives the dimensions, and `gamecore_copySnapshotRGBA()` copies bytes into a caller-owned buffer. We retired the previous pointer-returning API because its pointers dangled across threads.
 
 **Retrieval (Swift, `AppState.swift`):**
 
-The paused callback runs on the engine thread. It reads the snapshot via `mkxp_getSnapshotSize()` + `mkxp_copySnapshotRGBA()`, converts the bytes to a `CGImage` -> `UIImage`, and dispatches to the main thread to store it as `pauseManager.pauseSnapshot`.
+The paused callback runs on the engine thread. It reads the snapshot via `gamecore_getSnapshotSize()` + `gamecore_copySnapshotRGBA()`, converts the bytes to a `CGImage` -> `UIImage`, and dispatches to the main thread to store it as `pauseManager.pauseSnapshot`.
 
 **Display (Swift, `GameLoadingView.swift`):**
 
@@ -98,7 +98,7 @@ The resume transition has two stages. Both use the snapshot in sequence for visu
 The hero zoom from game card → GameLoadingView requires a visible library. `resume()` delays the phase change so the library stays mounted:
 
 1. `handleGameTap` calls `appState.resume()` then `path.append(game)`.
-2. `resume()` immediately clears `pausedGame` and calls `mkxp_requestResume()`. The engine unblocks. `resume()` does **not** set `phase = .playing` yet.
+2. `resume()` immediately clears `pausedGame` and calls `gamecore_requestResume()`. The engine unblocks. `resume()` does **not** set `phase = .playing` yet.
 3. `path.append(game)` pushes `GameLoadingView` with the hero zoom. The destination shows the snapshot at `engineState.gameRect` on a black background.
 
 ### Stage 2: handoff to PlayerView

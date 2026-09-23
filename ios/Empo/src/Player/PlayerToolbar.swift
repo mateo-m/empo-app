@@ -15,12 +15,6 @@ struct PlayerToolbar: View {
     let onToggleEditMode: () -> Void
     let onToggleHideControls: () -> Void
     let onShowMore: () -> Void
-    /// `false` when `PlayerMoreSheet` would render no rows given
-    /// the current settings + per-game state - typically when the
-    /// user has disabled cheats, fast-forward, pause, and the
-    /// diagnostics overlay. We hide the Menu button rather than
-    /// surface an empty sheet.
-    let menuVisible: Bool
     let onResetIdleTimer: () -> Void
 
     var body: some View {
@@ -57,12 +51,8 @@ struct PlayerToolbar: View {
         .position(toolbarPosition)
     }
 
-    /// Build the toolbar entries imperatively so the `Menu` cap
-    /// can be appended only when `menuVisible` is true. Inlining
-    /// this in `body` collides with SwiftUI's ViewBuilder, which
-    /// disallows non-View `if` branches at expression scope.
     private func toolbarButtons() -> [ToolbarEntry] {
-        var entries: [ToolbarEntry] = [
+        [
             ToolbarEntry(
                 icon: "keyboard",
                 label: keyboardShown ? "Hide keyboard" : "Show keyboard",
@@ -80,17 +70,9 @@ struct PlayerToolbar: View {
                 tint: .white,
                 action: onToggleHideControls
             ),
+            ToolbarEntry(
+                icon: "ellipsis.circle", label: "More options", tint: .white, action: onShowMore),
         ]
-        if menuVisible {
-            // ellipsis.circle is the iOS-idiomatic "more options"
-            // cue. It opens PlayerMoreSheet for cheats / fast-forward
-            // / diagnostics-overlay / pause. It stays hidden when
-            // none of those rows would render.
-            entries.append(
-                ToolbarEntry(
-                    icon: "ellipsis.circle", label: "More options", tint: .white, action: onShowMore))
-        }
-        return entries
     }
 
     private struct ToolbarEntry {

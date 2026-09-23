@@ -92,8 +92,16 @@ class AppWindow: UIWindow {
 
     override func safeAreaInsetsDidChange() {
         super.safeAreaInsetsDidChange()
-        let insets = safeAreaInsets
-        mkxp_setSafeAreaInsets(
+        AppWindow.pushSafeAreaInsets()
+    }
+
+    /// The engine keeps a copy of the safe area. The user can rotate
+    /// the device in the library, before any core is open, so this
+    /// reads the live window and `EngineSessionCoordinator.openCore`
+    /// calls it once the core is in.
+    static func pushSafeAreaInsets() {
+        guard EmpoCoreIsOpen() != 0, let insets = instance?.safeAreaInsets else { return }
+        gamecore_setSafeAreaInsets(
             Float(insets.top), Float(insets.bottom),
             Float(insets.left), Float(insets.right)
         )
@@ -132,7 +140,7 @@ class AppWindow: UIWindow {
             // permissive.
             let gameRect = EngineState.shared.gameRect
             if gameRect.isEmpty || gameRect.contains(point) {
-                return GameViewEmbedder.embeddedView
+                return gameTouchTarget(at: point, with: event)
             }
             return hit
         }
@@ -148,6 +156,16 @@ class AppWindow: UIWindow {
             view = current.superview
         }
         return hit
+    }
+
+    /// The view Empo embedded is the engine's own top view, and the
+    /// view that reads the touch can sit inside it. SFML puts its touch
+    /// view in a container, and the container answers nothing, so a
+    /// touch sent straight to it is lost. SDL's top view reads the touch
+    /// itself and answers with itself here.
+    private func gameTouchTarget(at point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let gameView = GameViewEmbedder.embeddedView else { return nil }
+        return gameView.hitTest(convert(point, to: gameView), with: event) ?? gameView
     }
 
     /// Any tap during play wakes the toolbar via
@@ -270,11 +288,7 @@ class AppWindow: UIWindow {
         window.makeKeyAndVisible()
         instance = window
 
-        let insets = window.safeAreaInsets
-        mkxp_setSafeAreaInsets(
-            Float(insets.top), Float(insets.bottom),
-            Float(insets.left), Float(insets.right)
-        )
+        pushSafeAreaInsets()
 
         window.overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle
 

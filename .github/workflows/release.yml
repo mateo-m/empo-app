@@ -23,7 +23,8 @@
 # Secrets:
 #   EMPO_DEPS_READ_TOKEN         read empo-deps (dep tarballs)
 #   EMPO_RELEASE_TOKEN           fine-grained PAT, Contents: RW on
-#                                THIS repo + mkxp-z-apple-mobile.
+#                                THIS repo + mkxp-z-apple-mobile +
+#                                litergss2-apple-mobile.
 #                                Powers the cut and sync commits
 #   DISCORD_RELEASE_WEBHOOK_URL  release announcements
 
@@ -71,7 +72,7 @@ jobs:
   # ── Decision half (phone path) ────────────────────────────────────
   # Mirrors scripts/release.sh: resolve the version, bump project.yml,
   # regenerate the changelog, commit to main, tag v<version> here and
-  # empo-v<version> on the engine repo. The commit + tags are created
+  # empo-v<version> on each core's engine repo. The commit + tags are created
   # via the API with EMPO_RELEASE_TOKEN, so the commit is
   # GitHub-signed and the tag push triggers the build below.
   cut:
@@ -85,7 +86,7 @@ jobs:
           GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::EMPO_RELEASE_TOKEN is not set. Create a fine-grained PAT (Contents: Read+Write on this repo and mkxp-z-apple-mobile) and add it as a repo secret."
+            echo "::error::EMPO_RELEASE_TOKEN is not set. Create a fine-grained PAT (Contents: Read+Write on this repo, mkxp-z-apple-mobile and litergss2-apple-mobile) and add it as a repo secret."
             exit 1
           fi
 
@@ -149,27 +150,46 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Cutting v$VERSION"
 
-      - name: Guard engine tag + submodule pointer
+      - name: Guard engine tags + submodule pointers
         env:
           GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
         run: |
           set -e
           VERSION="${{ steps.version.outputs.version }}"
-          FORK=mateo-m/mkxp-z-apple-mobile
-          if gh api "repos/$FORK/git/ref/tags/empo-v$VERSION" >/dev/null 2>&1; then
-            echo "::error::engine tag empo-v$VERSION already exists"
-            exit 1
-          fi
-          GITLINK=$(git ls-tree HEAD mkxp-z-apple-mobile | awk '{print $3}')
-          STATUS=$(gh api "repos/$FORK/compare/dev...$GITLINK" --jq .status)
-          case "$STATUS" in
-            identical | behind) ;;
-            *)
-              echo "::error::pinned engine commit $GITLINK is not on $FORK dev (compare status: $STATUS)"
+          # One entry per core: the submodule path here, the fork that
+          # holds that engine source, and the name this job stores the
+          # gitlink under for the tag step below.
+          for ENTRY in \
+            "mkxp-z-apple-mobile:mateo-m/mkxp-z-apple-mobile:mkxp_gitlink" \
+            "ios/Dependencies/sources/litergss2:mateo-m/litergss2-apple-mobile:litergss2_gitlink"; do
+            SUBMODULE="${ENTRY%%:*}"
+            REST="${ENTRY#*:}"
+            FORK="${REST%%:*}"
+            VAR="${REST##*:}"
+            BRANCH=$(git config -f .gitmodules --get "submodule.$SUBMODULE.branch" || echo dev)
+            GITLINK=$(git ls-tree HEAD "$SUBMODULE" | awk '{print $3}')
+            if [ -z "$GITLINK" ]; then
+              echo "::error::no submodule commit for $SUBMODULE"
               exit 1
-              ;;
-          esac
-          echo "gitlink=$GITLINK" >> "$GITHUB_ENV"
+            fi
+            # A cut that failed after it tagged one fork leaves that tag
+            # behind. The same tag on the same commit is that cut again,
+            # so go on. Another commit is two releases under one version.
+            TAGGED=$(gh api "repos/$FORK/git/ref/tags/empo-v$VERSION" --jq .object.sha 2>/dev/null || true)
+            if [ -n "$TAGGED" ] && [ "$TAGGED" != "$GITLINK" ]; then
+              echo "::error::$FORK carries empo-v$VERSION on commit $TAGGED, not $GITLINK"
+              exit 1
+            fi
+            STATUS=$(gh api "repos/$FORK/compare/$BRANCH...$GITLINK" --jq .status)
+            case "$STATUS" in
+              identical | behind) ;;
+              *)
+                echo "::error::pinned commit $GITLINK is not on $FORK $BRANCH (compare status: $STATUS)"
+                exit 1
+                ;;
+            esac
+            echo "$VAR=$GITLINK" >> "$GITHUB_ENV"
+          done
 
       - name: Bump version + changelog
         run: |
@@ -208,9 +228,16 @@ jobs:
           echo "bump commit: $OID"
           gh api "repos/$GITHUB_REPOSITORY/git/refs" \
             -f ref="refs/tags/v$VERSION" -f sha="$OID"
+          # Each core's engine source gets the same tag, so a shipped
+          # binary names one commit in each fork. The mkxp-z tag push
+          # also runs that repo's artifact build.
           gh api "repos/mateo-m/mkxp-z-apple-mobile/git/refs" \
-            -f ref="refs/tags/empo-v$VERSION" -f sha="$gitlink"
-          echo "tagged v$VERSION (app) + empo-v$VERSION (engine); the tag push runs the build"
+            -f ref="refs/tags/empo-v$VERSION" -f sha="$mkxp_gitlink" ||
+            gh api "repos/mateo-m/mkxp-z-apple-mobile/git/ref/tags/empo-v$VERSION" >/dev/null
+          gh api "repos/mateo-m/litergss2-apple-mobile/git/refs" \
+            -f ref="refs/tags/empo-v$VERSION" -f sha="$litergss2_gitlink" ||
+            gh api "repos/mateo-m/litergss2-apple-mobile/git/ref/tags/empo-v$VERSION" >/dev/null
+          echo "tagged v$VERSION (app) + empo-v$VERSION (mkxp-z and litergss2); the tag push runs the build"
 
   # ── Mechanical half: build, audit, publish ───────────────────────
   build:
@@ -333,9 +360,6 @@ jobs:
             build 2>&1 | tail -n 40
           test -d build/Release-iphoneos/Empo.app
 
-      - name: Audit binary
-        run: scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
-
       # Ad-hoc signature with our entitlements blob embedded. The
       # template sideloaders (AltStore/Sideloadly/ESign) re-sign over.
       # See the detailed rationale in scripts/release.sh.
@@ -343,10 +367,20 @@ jobs:
         id: package
         run: |
           set -e
+          # Inside out. A nested framework carries its own signature,
+          # and signing the app root does not reach inside it. The
+          # build ran with CODE_SIGNING_ALLOWED=NO, so every core
+          # framework arrives unsigned. Sign what the bundle has:
+          # EMPO_CORES in ios/Empo/project.yml decides whether this
+          # build ships one core or both.
+          for FRAMEWORK in build/Release-iphoneos/Empo.app/Frameworks/*.framework; do
+            codesign --force --sign - --timestamp=none "$FRAMEWORK"
+          done
           codesign --force --sign - \
             --generate-entitlement-der \
             --entitlements ios/Empo/Empo.entitlements \
             build/Release-iphoneos/Empo.app
+          scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
           mkdir -p build/ipa/Payload
           cp -R build/Release-iphoneos/Empo.app build/ipa/Payload/Empo.app
           IPA_NAME="Empo-${{ steps.meta.outputs.version }}-unsigned.ipa"

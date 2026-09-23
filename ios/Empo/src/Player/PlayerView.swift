@@ -161,11 +161,6 @@ struct PlayerView: View {
                         onToggleEditMode: { toggleEditMode() },
                         onToggleHideControls: { toggleHideControls() },
                         onShowMore: { showMoreSheet = true },
-                        menuVisible: PlayerMoreSheet.hasContent(
-                            settings: settings,
-                            fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
-                            controllerRemapAvailable: input.hasSeenPhysicalInput
-                        ),
                         onResetIdleTimer: { resetToolbarIdleTimer() }
                     )
                     .opacity(editMode ? 0 : 1)
@@ -207,6 +202,14 @@ struct PlayerView: View {
                     )
                 )
                 .allowsHitTesting(showDebugOverlay)
+                .onChange(of: appState.selectedGame?.title, initial: true) { _, title in
+                    // The RPG Maker core reads the title from Game.ini
+                    // and wins once it lands. The PSDK core reports no
+                    // title, so the library name is all the overlay gets.
+                    if !debugOverlayState.metadataLoaded, let title {
+                        debugOverlayState.gameTitle = title
+                    }
+                }
 
                 // Stays mounted in both keyboard states. Removing the
                 // field while it is first responder kills the input
@@ -409,6 +412,7 @@ struct PlayerView: View {
                 ),
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: input.hasSeenPhysicalInput,
+                core: EngineSessionCoordinator.shared.openedCore,
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { appState.requestPause() },
@@ -617,9 +621,9 @@ struct PlayerView: View {
         // The shared preset calculator holds the ONE copy of the
         // fit-and-align math.
         let preset: ScreenPreset
-        switch mkxp_getVerticalAlignment() {
-        case MKXP_VALIGN_TOP: preset = .top
-        case MKXP_VALIGN_CENTER: preset = .center
+        switch gamecore_getVerticalAlignment() {
+        case GAMECORE_VALIGN_TOP: preset = .top
+        case GAMECORE_VALIGN_CENTER: preset = .center
         default: preset = .topCenter
         }
         let safeArea = AppWindow.currentSafeArea
@@ -759,8 +763,8 @@ struct PlayerView: View {
         var covered = Set<Int32>()
         if !controlsHidden {
             covered.formUnion([
-                Int32(MKXP_SCANCODE_UP), Int32(MKXP_SCANCODE_DOWN),
-                Int32(MKXP_SCANCODE_LEFT), Int32(MKXP_SCANCODE_RIGHT),
+                Int32(GAMECORE_SCANCODE_UP), Int32(GAMECORE_SCANCODE_DOWN),
+                Int32(GAMECORE_SCANCODE_LEFT), Int32(GAMECORE_SCANCODE_RIGHT),
             ])
             for button in layout.buttons {
                 covered.insert(button.scancode)

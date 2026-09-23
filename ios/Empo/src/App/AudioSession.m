@@ -27,7 +27,7 @@
 // Idempotent: calling it again before the first audio session
 // is activated is a no-op. Calling after activation only updates
 // the category. Safe to invoke multiple times.
-void mkxp_configureAudioSession(void) {
+void EmpoConfigureAudioSession(void) {
     AVAudioSession *session = [AVAudioSession sharedInstance];
 
     NSError *categoryError = nil;

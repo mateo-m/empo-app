@@ -8,5 +8,5 @@ __attribute__((constructor)) static void appLoaderInit(void) {
     // OpenAL framework used to do so implicitly). Without this
     // call audio would default to `SoloAmbient`: silenced on
     // device lock and on phone-mute. See AudioSession.m.
-    mkxp_configureAudioSession();
+    EmpoConfigureAudioSession();
 }

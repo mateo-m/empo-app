@@ -3,7 +3,7 @@
 # iphonesimulator). Xcode pre-build, fetch-native-deps.sh, and CI use it.
 #
 # Usage:
-#   PLATFORM_NAME=iphoneos scripts/verify-native-deps.sh
+#   scripts/verify-native-deps.sh [--sdk iphoneos|iphonesimulator]
 #   PLATFORM_NAME=iphonesimulator scripts/verify-native-deps.sh
 #
 # Exits 0 when mkxp merged objects and core Ruby/OpenSSL archives look
@@ -12,12 +12,29 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLATFORM="${PLATFORM_NAME:-iphoneos}"
-LIB="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/lib"
 
 fail() {
     echo "error: $*" >&2
     exit 1
 }
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --sdk)
+            [ "$#" -ge 2 ] || fail "--sdk needs a value"
+            PLATFORM="$2"
+            shift 2
+            ;;
+        *) fail "unknown argument $1" ;;
+    esac
+done
+
+case "$PLATFORM" in
+    iphoneos | iphonesimulator) ;;
+    *) fail "unknown sdk $PLATFORM" ;;
+esac
+
+LIB="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/lib"
 
 require_file_min() {
     local path="$1" min_bytes="$2" label="$3"
@@ -79,6 +96,45 @@ for ext in libruby18-ext.a libruby19-ext.a "libruby.3.1-ext.a"; do
 done
 nm "$LIB/libruby.3.1-ext.a" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_openssl" {found=1} END {exit !found}' ||
     fail "libruby.3.1-ext.a missing Init_openssl"
+# The PSDK core. Its merged object must export the core entry points
+# and the launcher interface, and nothing else, or a second core would
+# collide with it at link time. The support folder holds the pure-Ruby
+# half the core prepends to $LOAD_PATH.
+PSDK_MERGED="$LIB/litergss30-merged.o"
+require_file_min "$PSDK_MERGED" 1000000 "litergss30-merged.o"
+require_platform "$PSDK_MERGED" "$EXPECTED_PLATFORM" "litergss30-merged.o"
+PSDK_EXPORTS=$(nm -gUm "$PSDK_MERGED" 2>/dev/null |
+    grep -E '\(__TEXT,__text\) external ' | awk '{print $NF}' | sort -u)
+for name in _psdk_run _psdk_inject_scancode _psdk_run_app; do
+    grep -qx "$name" <<<"$PSDK_EXPORTS" ||
+        fail "litergss30-merged.o does not export $name"
+done
+PSDK_STRAY=$(grep -vE '^_psdk_' <<<"$PSDK_EXPORTS" || true)
+[ -z "$PSDK_STRAY" ] ||
+    fail "litergss30-merged.o exports names outside _psdk_*: $(tr '\n' ' ' <<<"$PSDK_STRAY")"
+for name in libLiteCGSS_engine.a libsfml-graphics-s.a libsfml-window-s.a \
+    libsfml-audio-s.a libsfml-system-s.a libruby.3.0-static.a libruby.3.0-ext.a; do
+    min=100000
+    case "$name" in
+        libsfml-system-s.a) min=50000 ;;
+        libruby.3.0-static.a | libruby.3.0-ext.a) min=1000000 ;;
+    esac
+    require_file_min "$LIB/$name" "$min" "$name"
+    require_platform "$LIB/$name" "$EXPECTED_PLATFORM" "$name"
+done
+nm "$LIB/libruby.3.0-ext.a" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_socket" {found=1} END {exit !found}' ||
+    fail "libruby.3.0-ext.a missing Init_socket"
+PSDK_SUPPORT="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/psdk-support"
+for f in ruby-dist/lib/LiteRGSS.rb ruby-dist/lib/SFMLAudio.rb uri.rb net/http.rb openssl.rb psych.rb; do
+    [ -f "$PSDK_SUPPORT/$f" ] ||
+        fail "psdk-support/$f missing (run: make -f ${PLATFORM}.make psdk-support)"
+done
+
+# PsdkCore.framework is the artifact a launcher embeds, and its export
+# list is what keeps the core's Ruby 3.0 and its LiteRGSS classes away
+# from the mkxp-z engine. litergss30-merged.o does not do that job.
+PLATFORM_NAME="$PLATFORM" "$REPO_ROOT/scripts/check-psdk-framework.sh" --sdk "$PLATFORM"
+
 for tree in 3.1.0/net/http.rb 3.1.0/openssl.rb 1.9.1/uri.rb 1.8/uri.rb; do
     [ -f "$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/ruby-stdlib/$tree" ] ||
         fail "ruby-stdlib/$tree missing (run: make -f ${PLATFORM}.make ruby-stdlib)"
@@ -204,5 +260,13 @@ else
 sources. Rebuild with: cd ios/Dependencies && make -f ${PLATFORM}.make mkxp-core. \
 Set EMPO_ALLOW_UNSTAMPED=1 to bypass."
 fi
+
+# MkxpCore.framework is the artifact a launcher embeds. Its export list
+# is what keeps the engine's three Ruby versions and its SDL away from
+# another core in the same process. libmkxpz-core.a does not do that job.
+PLATFORM_NAME="$PLATFORM" "$REPO_ROOT/scripts/check-mkxp-framework.sh" --sdk "$PLATFORM"
+
+# A core that drops a name Empo calls aborts in the forwarder at run time.
+"$REPO_ROOT/scripts/check-core-interface.sh"
 
 echo "OK: $PLATFORM native dependency artifacts look healthy"

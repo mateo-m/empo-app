@@ -38,6 +38,7 @@ struct GameLibraryView: View {
     /// Anyway / Keep Game choice, one alert after another.
     @State private var saveRescueFailures: [GameEntry] = []
     @State private var showInvalidAlert = false
+    @State private var gameWithNoCore: GameEntry?
     @State private var path = NavigationPath()
     @State private var searchText = ""
     /// Search text applied to the catalog. Trails
@@ -216,6 +217,9 @@ struct GameLibraryView: View {
             .task {
                 duplicateNoticeNames = GameContainerMigration.pendingDuplicateNoticeNames()
             }
+            .task(id: library.initialScanCompleted) {
+                autoStartGameFromEnvironment()
+            }
     }
 
     private var libraryPresentedContent: some View {
@@ -264,6 +268,7 @@ struct GameLibraryView: View {
                     showCancelValidationAlert: $showCancelValidationAlert,
                     showPausedGameAlert: $showPausedGameAlert,
                     showRTPRequiredAlert: $showRTPRequiredAlert,
+                    gameWithNoCore: $gameWithNoCore,
                     rtpWarnedGame: rtpWarnedGame,
                     rtpWarnedRequirement: rtpWarnedRequirement,
                     importPipelineAlert: importPipelineAlertBinding,
@@ -963,6 +968,74 @@ struct GameLibraryView: View {
         .buttonStyle(.primary(tint: .red))
     }
 
+    /// Opens the game that `EMPO_AUTOSTART_GAME` names.
+    ///
+    /// A test on a real iPhone cannot tap the screen, and
+    /// `devicectl device process launch --environment-variables` is the
+    /// only way a script reaches the app. The scan fills `games` off the
+    /// main thread, so this waits for `initialScanCompleted`.
+    private func autoStartGameFromEnvironment() {
+        #if DEBUG
+        guard library.initialScanCompleted,
+            let wanted = ProcessInfo.processInfo.environment["EMPO_AUTOSTART_GAME"],
+            let game = library.games.first(where: { $0.title == wanted })
+        else { return }
+        handleGameTap(game)
+        autoPressKeysFromEnvironment()
+        autoRotateFromEnvironment()
+        #endif
+    }
+
+    /// Turns the device as `EMPO_AUTOROTATE` names, as
+    /// `<second>:<portrait|landscape>` pairs separated by commas.
+    ///
+    /// simctl has no rotate command, and this machine holds no Simulator
+    /// application, so a script cannot turn a simulator from outside.
+    /// requestGeometryUpdate turns the scene, which runs the same path a
+    /// real turn runs: UIKit changes the interface orientation and
+    /// resizes every window in the scene.
+    private func autoRotateFromEnvironment() {
+        #if DEBUG
+        guard let plan = ProcessInfo.processInfo.environment["EMPO_AUTOROTATE"] else { return }
+        for pair in plan.split(separator: ",") {
+            let parts = pair.split(separator: ":")
+            guard parts.count == 2, let second = Double(parts[0]) else { continue }
+            let mask: UIInterfaceOrientationMask =
+                parts[1] == "landscape" ? .landscapeRight : .portrait
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(second))
+                guard
+                    let scene = UIApplication.shared.connectedScenes
+                        .compactMap({ $0 as? UIWindowScene }).first
+                else { return }
+                NSLog("[empo] rotate to %@ at %.1fs", String(parts[1]), second)
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+            }
+        }
+        #endif
+    }
+
+    /// Presses the keys that `EMPO_AUTOKEYS` names, as
+    /// `<second>:<scancode>` pairs separated by commas. The scancodes are
+    /// the GAMECORE_SCANCODE numbers.
+    ///
+    /// A test on a real iPhone cannot tap the screen, so this is the only
+    /// way a script reaches the on-screen controls.
+    private func autoPressKeysFromEnvironment() {
+        #if DEBUG
+        guard let plan = ProcessInfo.processInfo.environment["EMPO_AUTOKEYS"] else { return }
+        for pair in plan.split(separator: ",") {
+            let parts = pair.split(separator: ":")
+            guard parts.count == 2, let second = Double(parts[0]), let code = Int32(parts[1])
+            else { continue }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(second))
+                EngineSessionCoordinator.shared.injectKeyTap(scancode: code, holdMilliseconds: 200)
+            }
+        }
+        #endif
+    }
+
     private func handleGameTap(_ game: GameEntry, from source: GameTapSource = .item) {
         tappedSource[game.id] = source
         if pauseManager.pausedGame?.id == game.id {
@@ -971,6 +1044,10 @@ struct GameLibraryView: View {
         } else if pauseManager.pausedGame != nil {
             pendingGame = game
             showPausedGameAlert = true
+        } else if let container = game.container,
+            AppState.missingCore(for: container) != nil
+        {
+            gameWithNoCore = game
         } else if let container = game.container,
             AppState.needsRTPLaunchWarning(for: container),
             let requirement = GameRTPRequirement.detect(at: container.gameURL)
@@ -1283,6 +1360,7 @@ private struct LibraryAlertPresentation: ViewModifier {
     @Binding var showCancelValidationAlert: Bool
     @Binding var showPausedGameAlert: Bool
     @Binding var showRTPRequiredAlert: Bool
+    @Binding var gameWithNoCore: GameEntry?
     let rtpWarnedGame: GameEntry?
     let rtpWarnedRequirement: GameRTPRequirement?
     @Binding var importPipelineAlert: ImportPipelineAlert?
@@ -1354,6 +1432,24 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Text(
                     "Empo couldn't move the saves for \"\(game.title)\" to Rescued Saves. Free up space and delete again, or delete now and lose those saves. You can't undo this."
                 )
+            }
+            .alert(
+                "Empo can't run this game",
+                isPresented: Binding(
+                    get: { gameWithNoCore != nil },
+                    set: { presented in if !presented { gameWithNoCore = nil } }
+                ),
+                presenting: gameWithNoCore
+            ) { _ in
+                Button("Got it") { gameWithNoCore = nil }
+            } message: { game in
+                if let container = game.container,
+                    let core = AppState.missingCore(for: container)
+                {
+                    Text(
+                        "This build of Empo has no \(core.displayName), so it can't run \"\(game.title)\"."
+                    )
+                }
             }
             .alert("This game won't open", isPresented: $showInvalidAlert) {
                 Button("Got it") {}

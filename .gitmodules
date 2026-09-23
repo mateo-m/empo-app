@@ -1,36 +1,36 @@
 [submodule "ios/Dependencies/sources/sdl2"]
 	path = ios/Dependencies/sources/sdl2
-	url = https://github.com/mkxp-z/SDL
+	url = git@github.com:mkxp-z/SDL
 	branch = mkxp-z-2.28.1
 	ignore = dirty
 [submodule "ios/Dependencies/sources/sdl2_image"]
 	path = ios/Dependencies/sources/sdl2_image
-	url = https://github.com/mkxp-z/SDL_image
+	url = git@github.com:mkxp-z/SDL_image
 	branch = mkxp-z
 	ignore = dirty
 [submodule "ios/Dependencies/sources/sdl_sound"]
 	path = ios/Dependencies/sources/sdl_sound
-	url = https://github.com/mkxp-z/SDL_sound
+	url = git@github.com:mkxp-z/SDL_sound
 	branch = git
 	ignore = dirty
 [submodule "ios/Dependencies/sources/sdl2_ttf"]
 	path = ios/Dependencies/sources/sdl2_ttf
-	url = https://github.com/mkxp-z/SDL_ttf
+	url = git@github.com:mkxp-z/SDL_ttf
 	branch = mkxp-z
 	ignore = dirty
 [submodule "ios/Dependencies/sources/freetype"]
 	path = ios/Dependencies/sources/freetype
-	url = https://github.com/mkxp-z/freetype2
+	url = git@github.com:mkxp-z/freetype2
 	branch = master
 	ignore = dirty
 [submodule "ios/Dependencies/sources/ruby"]
 	path = ios/Dependencies/sources/ruby
-	url = https://github.com/mkxp-z/ruby
+	url = git@github.com:mkxp-z/ruby
 	branch = mkxp-z-3.1.3
 	ignore = dirty
 [submodule "ios/Dependencies/sources/ruby18"]
 	path = ios/Dependencies/sources/ruby18
-	url = https://github.com/joiplay/ruby
+	url = git@github.com:joiplay/ruby
 	branch = ruby_1_8
 	ignore = dirty
 [submodule "mkxp-z-apple-mobile"]
@@ -39,10 +39,27 @@
 	branch = dev
 [submodule "ios/Dependencies/sources/openal-soft"]
 	path = ios/Dependencies/sources/openal-soft
-	url = https://github.com/kcat/openal-soft.git
+	url = git@github.com:kcat/openal-soft.git
 	ignore = dirty
 [submodule "ios/Dependencies/sources/ruby19"]
 	path = ios/Dependencies/sources/ruby19
-	url = https://github.com/ruby/ruby.git
+	url = git@github.com:ruby/ruby.git
 	branch = ruby_1_9_3
+	ignore = dirty
+[submodule "ios/Dependencies/sources/sfml"]
+	path = ios/Dependencies/sources/sfml
+	url = git@github.com:mateo-m/sfml-apple-mobile
+	branch = main
+[submodule "ios/Dependencies/sources/litecgss"]
+	path = ios/Dependencies/sources/litecgss
+	url = https://gitlab.com/NuriYuri/litecgss.git
+	branch = development
+[submodule "ios/Dependencies/sources/litergss2"]
+	path = ios/Dependencies/sources/litergss2
+	url = git@github.com:mateo-m/litergss2-apple-mobile
+	branch = dev
+[submodule "ios/Dependencies/sources/ruby30"]
+	path = ios/Dependencies/sources/ruby30
+	url = git@github.com:ruby/ruby.git
+	branch = ruby_3_0
 	ignore = dirty

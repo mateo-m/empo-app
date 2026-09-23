@@ -83,7 +83,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // stays enabled), so we must translate the empty-replacement
             // case into a scancode injection explicitly.
             if string.isEmpty && range.length > 0 {
-                EngineSessionCoordinator.shared.injectKeyTap(scancode: Int32(MKXP_SCANCODE_BACKSPACE))
+                EngineSessionCoordinator.shared.injectKeyTap(scancode: Int32(GAMECORE_SCANCODE_BACKSPACE))
                 textField.text = " "
                 return false
             }
@@ -92,7 +92,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             //
             // When the engine has SDL_StartTextInput active (game
             // requested text via `Input.text_input = true`) we route
-            // the typed UTF-8 string through `mkxp_pushTextInput`
+            // the typed UTF-8 string through `gamecore_pushTextInput`
             // which fabricates an `SDL_TEXTINPUT` event. EventThread
             // appends it to `textInputBuffer`, which Ruby reads via
             // `Input.gets`. This is the path Pokemon Reborn /
@@ -108,12 +108,12 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // see the input.
             //
             // When text mode is OFF (user-toggled hardware-keyboard
-            // mode for a non-text scene), `mkxp_isTextInputActive`
+            // mode for a non-text scene), `gamecore_isTextInputActive`
             // returns 0 and we skip pushing text events to avoid
             // silently filling the engine's text buffer with bytes
             // nobody reads.
-            if mkxp_isTextInputActive() != 0 {
-                string.withCString { mkxp_pushTextInput($0) }
+            if gamecore_isTextInputActive() != 0 {
+                string.withCString { gamecore_pushTextInput($0) }
             }
 
             for char in string {
@@ -121,11 +121,11 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                 let isUpper =
                     (c >= UInt16(Character("A").asciiValue!) && c <= UInt16(Character("Z").asciiValue!))
                 let sc = scancodeForSwiftCharacter(c)
-                if sc == MKXP_SCANCODE_UNKNOWN { continue }
+                if sc == GAMECORE_SCANCODE_UNKNOWN { continue }
 
                 if isUpper {
                     EngineSessionCoordinator.shared.injectKey(
-                        scancode: Int32(MKXP_SCANCODE_LSHIFT), pressed: true)
+                        scancode: Int32(GAMECORE_SCANCODE_LSHIFT), pressed: true)
                 }
                 EngineSessionCoordinator.shared.injectKey(scancode: sc, pressed: true)
                 let scancode = sc
@@ -135,7 +135,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                     EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
                     if upper {
                         EngineSessionCoordinator.shared.injectKey(
-                            scancode: Int32(MKXP_SCANCODE_LSHIFT), pressed: false)
+                            scancode: Int32(GAMECORE_SCANCODE_LSHIFT), pressed: false)
                     }
                 }
             }
@@ -144,7 +144,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-            EngineSessionCoordinator.shared.injectKeyTap(scancode: Int32(MKXP_SCANCODE_RETURN))
+            EngineSessionCoordinator.shared.injectKeyTap(scancode: Int32(GAMECORE_SCANCODE_RETURN))
             return false
         }
 
@@ -155,32 +155,32 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // out with an "unknown" scancode is fine: the engine ignores
             // unrecognized scancodes rather than crashing the app.
             guard let scalar = UnicodeScalar(c) else {
-                return Int32(MKXP_SCANCODE_UNKNOWN)
+                return Int32(GAMECORE_SCANCODE_UNKNOWN)
             }
             let ch = Character(scalar)
             switch ch {
             case "a"..."z":
-                return Int32(MKXP_SCANCODE_A) + Int32(c) - Int32(Character("a").asciiValue!)
+                return Int32(GAMECORE_SCANCODE_A) + Int32(c) - Int32(Character("a").asciiValue!)
             case "A"..."Z":
-                return Int32(MKXP_SCANCODE_A) + Int32(c) - Int32(Character("A").asciiValue!)
+                return Int32(GAMECORE_SCANCODE_A) + Int32(c) - Int32(Character("A").asciiValue!)
             case "1"..."9":
-                return Int32(MKXP_SCANCODE_1) + Int32(c) - Int32(Character("1").asciiValue!)
-            case "0": return Int32(MKXP_SCANCODE_0)
-            case " ": return Int32(MKXP_SCANCODE_SPACE)
-            case "\n": return Int32(MKXP_SCANCODE_RETURN)
-            case "\t": return Int32(MKXP_SCANCODE_TAB)
-            case "-": return Int32(MKXP_SCANCODE_MINUS)
-            case "=": return Int32(MKXP_SCANCODE_EQUALS)
-            case "[": return Int32(MKXP_SCANCODE_LEFTBRACKET)
-            case "]": return Int32(MKXP_SCANCODE_RIGHTBRACKET)
-            case "\\": return Int32(MKXP_SCANCODE_BACKSLASH)
-            case ";": return Int32(MKXP_SCANCODE_SEMICOLON)
-            case "'": return Int32(MKXP_SCANCODE_APOSTROPHE)
-            case ",": return Int32(MKXP_SCANCODE_COMMA)
-            case ".": return Int32(MKXP_SCANCODE_PERIOD)
-            case "/": return Int32(MKXP_SCANCODE_SLASH)
-            case "`": return Int32(MKXP_SCANCODE_GRAVE)
-            default: return Int32(MKXP_SCANCODE_UNKNOWN)
+                return Int32(GAMECORE_SCANCODE_1) + Int32(c) - Int32(Character("1").asciiValue!)
+            case "0": return Int32(GAMECORE_SCANCODE_0)
+            case " ": return Int32(GAMECORE_SCANCODE_SPACE)
+            case "\n": return Int32(GAMECORE_SCANCODE_RETURN)
+            case "\t": return Int32(GAMECORE_SCANCODE_TAB)
+            case "-": return Int32(GAMECORE_SCANCODE_MINUS)
+            case "=": return Int32(GAMECORE_SCANCODE_EQUALS)
+            case "[": return Int32(GAMECORE_SCANCODE_LEFTBRACKET)
+            case "]": return Int32(GAMECORE_SCANCODE_RIGHTBRACKET)
+            case "\\": return Int32(GAMECORE_SCANCODE_BACKSLASH)
+            case ";": return Int32(GAMECORE_SCANCODE_SEMICOLON)
+            case "'": return Int32(GAMECORE_SCANCODE_APOSTROPHE)
+            case ",": return Int32(GAMECORE_SCANCODE_COMMA)
+            case ".": return Int32(GAMECORE_SCANCODE_PERIOD)
+            case "/": return Int32(GAMECORE_SCANCODE_SLASH)
+            case "`": return Int32(GAMECORE_SCANCODE_GRAVE)
+            default: return Int32(GAMECORE_SCANCODE_UNKNOWN)
             }
         }
     }

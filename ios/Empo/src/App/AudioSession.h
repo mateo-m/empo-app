@@ -1,5 +1,5 @@
-#ifndef MKXP_AUDIO_SESSION_H
-#define MKXP_AUDIO_SESSION_H
+#ifndef EMPO_AUDIO_SESSION_H
+#define EMPO_AUDIO_SESSION_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,7 +9,7 @@ extern "C" {
 /// process startup, before any code calls `alcOpenDevice` (so
 /// before `AppWindow.install` schedules the engine bootstrap).
 /// See AudioSession.m for rationale.
-void mkxp_configureAudioSession(void);
+void EmpoConfigureAudioSession(void);
 
 #ifdef __cplusplus
 }
