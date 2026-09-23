@@ -1,13 +1,13 @@
 ---
 title: Multi-Ruby
-description: Three Ruby interpreters live in one binary. How Empo detects the version that a game needs, and how the engine dispatches to it.
+description: The RPG Maker core holds three Ruby interpreters. How Empo detects the version that a game needs, and how the engine dispatches to it.
 ---
 
 ## Overview
 
-Empo ships three Ruby interpreters in one binary: 1.8.8, 1.9.3, and 3.1.3. At launch, it dispatches each game to the correct one. A vintage RPG Maker XP game runs on Ruby 1.8's actual parser and VM. A modern Pokemon Essentials fork built on the mkxp-z runtime routes to Ruby 3.1. Empo applies the syntax-transform compatibility mode for the legacy game-script idioms that PE uses. Modern forks that ship `x64-msvcrt-ruby300.dll` fold onto the same 3.1 dispatch. The syntax-transform parser patches only exist in the 3.1 source, so a separate 3.0 build was a silent no-op for legacy compatibility. Empo dropped it.
+The RPG Maker core (`MkxpCore.framework`) holds three Ruby interpreters: 1.8.8, 1.9.3, and 3.1.3. At launch, it dispatches each game to the correct one. A vintage RPG Maker XP game runs on Ruby 1.8's actual parser and VM. A modern Pokemon Essentials fork built on the mkxp-z runtime routes to Ruby 3.1. Empo applies the syntax-transform compatibility mode for the legacy game-script idioms that PE uses. Modern forks that ship `x64-msvcrt-ruby300.dll` fold onto the same 3.1 dispatch. The syntax-transform parser patches exist only in the 3.1 source, so the RPG Maker core has no 3.0 build.
 
-This replaces the older "everything on one Ruby" architecture (originally 1.8-only, briefly 3.1-only via the syntax-transform PR304 experiment).
+The PSDK core has its own Ruby 3.0 for PSDK games. This page does not cover it. See [`cores.md`](cores.md).
 
 ## Why
 
@@ -37,7 +37,7 @@ ios/Dependencies/build-${SDK}/lib/
   mkxp31-merged.o   exports: _mkxp_get_script_binding_31
 ```
 
-The `ld -r -unexported_symbols_list` step hides every Ruby internal symbol, so the three versions do not clash at link time. Each `.o` exports exactly one global: the entry point that returns its version's `ScriptBinding` vtable. `mkxp-z-apple-mobile/tools/generate-ruby-unexports.sh` generates the unexports from the per-version libruby + ext archives.
+The three objects link into `MkxpCore.framework`. The `ld -r -unexported_symbols_list` step hides every Ruby internal symbol, so the three versions do not clash at link time. Each `.o` exports exactly one global: the entry point that returns its version's `ScriptBinding` vtable. `mkxp-z-apple-mobile/tools/generate-ruby-unexports.sh` generates the unexports from the per-version libruby + ext archives.
 
 Build targets: `make mkxp18-merged`, `mkxp19-merged`, `mkxp31-merged`, or `mkxp-merged` for all three. See `ios/Dependencies/common.make` for the recipes.
 
@@ -54,7 +54,7 @@ gamecore_applySessionConfig(&(GameCoreSessionConfig){
 gamecore_setGamePath(...);  // session starts
 ```
 
-Individual setters (`gamecore_setActiveRubyVersion`, `gamecore_setSyntaxTransformMode`, …) remain for mid-session toggles. `GameSession.configureEngine()` prefers `gamecore_applySessionConfig()` at launch.
+Individual setters (`gamecore_setActiveRubyVersion`, `gamecore_setSyntaxTransformMode`, …) remain for mid-session toggles. `EngineSessionCoordinator.configureEngine(_:)` prefers `gamecore_applySessionConfig()` at launch.
 
 `mkxp-z-apple-mobile/src/binding.h`'s `getActiveScriptBinding()` reads the atomic and calls the matching `_mkxp_get_script_binding_NN()` entry point. If the requested version's merged.o is a build-time stub (returns nullptr), the dispatcher falls back to the next available version with a warning.
 
@@ -118,8 +118,6 @@ mkxp-z-apple-mobile/tools/build-binding-ios.sh --ruby 31 --sdk iphonesimulator .
 
 `ios/Dependencies/common.make` calls it three times and supplies only the SDK, the libruby archives, and the dependency header dirs.
 
-The launcher now runs scripts that live in the submodule. A gitlink that points at an engine commit older than this move breaks the build with `tools/binding-fingerprint.sh: No such file or directory`. Bump the submodule first, then build.
-
 The same `binding/*.cpp` source compiles three times. Version-conditional code lives in `binding-util.h` (`mkxpUsingRuby18Encoding`, RAPI shims) and `binding-mri.cpp` (legacy method shims gated on the RAPI version).
 
 The build isolates includes under `$(INCLUDEDIR)/ruby${VER}/`, so 1.8 and 1.9 do not see 3.1 headers.
@@ -148,7 +146,7 @@ Ruby 3.1 with the syntax-transform parser patches is the only path that runs the
 
 The 1.8 and 1.9 builds do not need the patches. Each of those interpreters runs games written in its own native grammar (via the multi-Ruby dispatcher), so there is no parser-mismatch problem to solve.
 
-The patches themselves target Ruby 3.1's parser internals (`parse.y`, `compile.c`, `vm_method.c`, etc.). A port to 1.9 requires a re-derivation of all 34 patches against a different parser tree, for no gain.
+The patches themselves target Ruby 3.1's parser internals (`parse.y`, `compile.c`, `vm_method.c`, etc.). A port to 1.9 requires a re-derivation of all 36 patches against a different parser tree, for no gain.
 
 ### When it activates
 
@@ -165,27 +163,9 @@ The host sets the mode per session, before `gamecore_setGamePath()`:
 
 When the build does not define `MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES`, the patches are no-ops at the engine level. The 1.8 and 1.9 builds do not define it. Only the Ruby 3.1 build does.
 
-### History
+## Quit handling and cross-session play
 
-A previous iteration tried to strip the syntax-transform patches, on the assumption that multi-Ruby native dispatch made them dead code. The assumption was wrong: mixed-grammar Pokemon Essentials forks need the patched parser. The strip experiment was reverted.
-
-## Quit handling
-
-Ruby's `Kernel.exit!` and `Process.exit!` skip `at_exit` handlers and bypass the engine's SystemExit catch entirely. They call C `_exit(status)` directly. This ends the iOS process before mkxp-z can save the engine log, fire the `mkxp_setEngineTerminated` callback, or do anything else.
-
-Pokemon Essentials' `pbExit` and various forks of it commonly use `exit!` to skip a "press any key to confirm" splash. On desktop, that is a fine UX choice. On iOS, it makes the app vanish silently: status 1, no signal, no crash report. Apple's App Store review guideline 2.5.1 also explicitly forbids programmatic process termination, so the `exit!` path needs interception in any case.
-
-`scripts/preload/platform_compat.rb` redirects `Kernel.exit!` and `Process.exit!` to `Kernel.exit`. The engine's SystemExit catch in `binding-mri.cpp`'s eval loop then runs and sets `mkxp_setEngineExitedCleanly()`. The iOS host's clean-exit alert ("close from app switcher") appears as designed.
-
-The same preload also restores `Thread.critical` / `Thread.critical=` as no-ops on Ruby 1.9+. Vintage RGSS code wraps Marshal.load and save-file I/O in `Thread.critical = true` blocks (a 1.8 cooperative-scheduling idiom). Without the shim, Ruby 1.9+ raises NoMethodError mid-quit, and the error escapes the script-eval loop. `SharedState::finiInstance()` then segfaults on iOS during graphics teardown with a pending Ruby exception.
-
-## Cross-session play
-
-Currently disabled. After a clean engine exit, the iOS host shows an alert ("The game ended." then "Close Empo from the app switcher, then reopen it.") instead of returning to the library. A Ruby VM does not survive a switch to a different game's scripts. Class definitions from the previous session leak into the next one. They then cause superclass-mismatch errors and other faults.
-
-A previous iteration shipped aggressive cross-session cleanup (constant-baseline diffing, singleton-method scrubbing, intrusive-list detachment for disposables, etc.). It worked for narrow game pairs but did not survive contact with a broader corpus, especially across different Ruby versions. Until that cleanup is reliable, the app asks the user to force-close and relaunch.
-
-Same-game re-entry is safe in principle (no class leak). But the iOS layer currently cannot tell it apart from a different-game pick. See `ios/Empo/docs/multi-session.md` for the engine-side teardown sequence.
+See [`multi-session.md`](multi-session.md). It covers the `exit!` and `Thread.critical` parts of `platform_compat.rb`, and why Empo plays one game for each process.
 
 ## Files
 
@@ -195,7 +175,7 @@ Same-game re-entry is safe in principle (no class leak). But the iOS layer curre
   - `mkxp-z-apple-mobile/src/binding.h` - `getActiveScriptBinding()` dispatcher.
   - `mkxp-z-apple-mobile/src/app_bridge.{h,cpp}` - `MKXPRubyVersion`, `mkxp_setActiveRubyVersion()` / `mkxp_setSyntaxTransformMode()`.
   - `mkxp-z-apple-mobile/src/main.cpp` - `EngineHost` lifecycle, RGSS thread.
-  - `mkxp-z-apple-mobile/syntax-transform/3.1/*.patch` - 34 Ruby 3.1 source patches (kept).
+  - `mkxp-z-apple-mobile/syntax-transform/3.1/*.patch` - 36 Ruby 3.1 source patches.
   - `mkxp-z-apple-mobile/scripts/preload/platform_compat.rb` - Thread.critical / exit! shims.
 - **Build**:
   - `mkxp-z-apple-mobile/tools/build-binding-ios.sh` - the per-version merged.o recipe.
@@ -207,6 +187,6 @@ Same-game re-entry is safe in principle (no class leak). But the iOS layer curre
 - **iOS**:
   - `ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` - unified per-game detection.
   - `ios/GameProbe/Sources/GameProbe/RubyScriptGrammarSniffer.swift` - Marshal + zlib decoder for Scripts.\* files.
-  - `ios/Empo/src/App/GameSession.swift` - `configureEngine()` before `gamecore_setGamePath`.
+  - `ios/Empo/src/App/EngineSessionCoordinator.swift` - `configureEngine(_:)` before `gamecore_setGamePath`.
   - `ios/Empo/src/Library/GameMetadata.swift` - persisted detection result + schema string.
   - `ios/Empo/src/Library/GameSettings.swift` - `rubyVersionOverride` + `useModernRuby` per-game settings.

@@ -6,7 +6,7 @@ description: How an import turns a folder or an archive into a game container, s
 ## Overview
 
 There is no database: a game is a directory at `Documents/Games/<title>/`, named after the title
-the game declares in its INI file and sanitized by `GameFolderName` (see `GameContainer.swift`).
+the game declares in its INI file and sanitized by `GameFolderName` (see `ios/GameProbe/Sources/GameProbe/GameFolderName.swift`).
 The library holds **one container per title** - some games derive their data locations from
 their INI title, so a suffixed duplicate would read the other copy's data. Before v0.5 the
 folder was `<uuid>-<slug>`. `GameContainerMigration` renames older trees at launch and, when
@@ -59,7 +59,7 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      candidate root and returns `ImportRootChoice` values (relativePath, title, subtitle, preview
      artwork). It also returns an `ArchiveExtractor.Inventory` (entry count + uncompressed byte
      totals) that later drives byte-accurate extraction progress. The probe rejects invalid
-     sources (not an RPG Maker game, unsupported RGSS version, corrupt archive) here, before any
+     sources (not an RPG Maker or PSDK game, unsupported RGSS version, corrupt archive) here, before any
      card exists.
    - When more than one valid root exists, the stepped root-picker sheet appears
      (`ImportRootPickerSheet`): step one, **Add Games**, lists roots not in the library
@@ -90,7 +90,7 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      survive a decline of the fallback alert. Suffixed names are never minted (one container per title): a
      second same-title selection in one batch is refused with an alert, as is an update that
      targets the currently open (playing/paused) game.
-2. **Batch import** (`GameLibrary.pipelineImportGames`, `ImportPipeline.swift` ~line 509): one
+2. **Batch import** (`GameLibrary.pipelineImportGames`, `ImportPipeline.swift`): one
    detached task per **source** fans out per-selection state (`BatchSelection`). The main actor
    registers pending entries and `inFlightImports` membership before the task starts.
    - **Archives**: for each selection, the task creates a `GameContainer`, writes the probe's
@@ -114,7 +114,7 @@ category `Import`). View the intervals in Instruments or with `log stream --sign
      back into the new `Game/` tree with the `LegacyDataDrain` rules
      (`DataDirectory.restoreRescuedSaves`). At progress 1.0, the
      selection leaves `inFlightImports`. Then `GameLibrary.mergeImportedGame(container:)`
-     (`GameLibrary.swift` ~line 184) merges the single finished entry into `games`, with no full
+     (`GameLibrary.swift`) merges the single finished entry into `games`, with no full
      library rescan.
    - Completion (main actor): the task cleans up the staged source, fires a haptic on any
      success, and shows one alert for the first non-cancelled failure.
