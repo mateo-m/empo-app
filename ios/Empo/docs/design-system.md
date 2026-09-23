@@ -217,6 +217,8 @@ From top to bottom. Each part is optional, except the action.
    rows starts after the thumbnail (`Spacing.lg + 44 + Spacing.lg`).
 4. **Footer.** `footnote` secondary, aligned to the leading edge.
 5. **Primary action.** One full-width button at the bottom (`SheetPrimaryButton`). A
+   secondary action, such as a link, goes under it as centered `subheadline` brand text
+   with a 44 pt tap target (`WhatsNewSheet`). A
    destructive action goes in its own card above it, never in a red primary button. A
    picker with steps can confirm from the toolbar (`ImportRootPickerSheet`).
 

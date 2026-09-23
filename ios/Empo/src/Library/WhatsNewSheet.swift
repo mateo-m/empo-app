@@ -23,7 +23,7 @@ enum WhatsNew {
                 WhatsNewItem(
                     symbol: "cpu",
                     title: "Game cores",
-                    detail: "See the engines built into Empo in Settings, under Game cores."
+                    detail: "See the game cores built into Empo in Settings."
                 ),
             ]
         )
@@ -106,25 +106,33 @@ struct WhatsNewSheet: View {
         StandardSheet(title: "What's new in \(AppInfo.name)", emblem: "sparkles") {
             VStack(alignment: .leading, spacing: Spacing._2xl) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    // Animate only the fade and the slide. An animation
+                    // on the whole row also catches the layout pass of
+                    // the opening sheet, and SwiftUI shows a moved Text
+                    // as glyphs that fade across the gap.
                     WhatsNewRow(item: item)
-                        .opacity(entered ? 1 : 0)
-                        .offset(y: entered || reduceMotion ? 0 : 8)
-                        .animation(
-                            Motion.standard.delay(0.1 + Double(index) * 0.06),
-                            value: entered
-                        )
+                        .animation(Motion.standard.delay(0.1 + Double(index) * 0.1)) {
+                            $0.opacity(entered ? 1 : 0)
+                                .offset(y: entered || reduceMotion ? 0 : 8)
+                        }
                 }
             }
             .padding(.vertical, Spacing.md)
 
-            Link(destination: WhatsNew.releasesURL) {
-                Text("See all changes\u{00A0}\(Image(systemName: "arrow.up.forward"))")
-                    .font(.subheadline)
-                    .multilineTextAlignment(.leading)
-                    .accessibilityLabel("See all changes")
-            }
+            VStack(spacing: 0) {
+                SheetPrimaryButton("Continue", action: onContinue)
 
-            SheetPrimaryButton("Continue", action: onContinue)
+                Link(destination: WhatsNew.releasesURL) {
+                    Text("See all changes on GitHub\u{00A0}\(Image(systemName: "arrow.up.forward"))")
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .accessibilityLabel("See all changes on GitHub")
+                        .padding(.horizontal, Spacing.lg)
+                        .frame(minHeight: AppSize.minTapTarget)
+                        .contentShape(.rect)
+                }
+                .padding(.top, Spacing.sm)
+            }
         }
         .onAppear { entered = true }
     }
