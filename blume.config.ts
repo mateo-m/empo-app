@@ -2,7 +2,7 @@ import { defineConfig } from "blume";
 
 export default defineConfig({
   title: "Empo",
-  description: "Run RPG Maker and Pokemon SDK games on iPhone and iPad.",
+  description: "Run RPG Maker and PSDK games on iPhone and iPad.",
   logo: "/icon.png",
   banner: "Empo is pre-release. It is not on the App Store.",
   github: {

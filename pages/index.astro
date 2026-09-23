@@ -5,7 +5,7 @@ import demo from "../landing/media/demo-cinematic.png";
 
 const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 const origin = new URL(base, Astro.site).href;
-const description = "Empo runs RPG Maker XP, VX, and VX Ace games, Pokemon Essentials games, and Pokemon SDK games on iPhone and iPad.";
+const description = "Empo runs RPG Maker XP, VX, and VX Ace games, Pokemon Essentials games, and PSDK games on iPhone and iPad.";
 ---
 
 <!doctype html>
@@ -13,13 +13,13 @@ const description = "Empo runs RPG Maker XP, VX, and VX Ace games, Pokemon Essen
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Empo. RPG Maker and Pokemon SDK games on your iPhone.</title>
+    <title>Empo. RPG Maker and PSDK games on your iPhone.</title>
     <meta name="description" content={description} />
     <meta name="theme-color" content="oklch(0.199 0.059 268.9)" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Empo" />
     <meta property="og:url" content={origin} />
-    <meta property="og:title" content="Empo. RPG Maker and Pokemon SDK games on your iPhone." />
+    <meta property="og:title" content="Empo. RPG Maker and PSDK games on your iPhone." />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={`${origin}share.png`} />
     <meta property="og:image:type" content="image/png" />
@@ -27,7 +27,7 @@ const description = "Empo runs RPG Maker XP, VX, and VX Ace games, Pokemon Essen
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="The Empo sailboat and name over a pixel sea, next to an iPhone that runs an RPG Maker game." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Empo. RPG Maker and Pokemon SDK games on your iPhone." />
+    <meta name="twitter:title" content="Empo. RPG Maker and PSDK games on your iPhone." />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={`${origin}share.png`} />
     <meta name="twitter:image:alt" content="The Empo sailboat and name over a pixel sea, next to an iPhone that runs an RPG Maker game." />
@@ -60,7 +60,7 @@ const description = "Empo runs RPG Maker XP, VX, and VX Ace games, Pokemon Essen
       </h1>
 
       <div class="relative z-20 flex flex-col items-center space-y-5 self-start pt-6 text-center row-start-3 md:col-start-1 md:row-start-2 md:items-start md:space-y-6 md:pt-10 md:text-left">
-        <p class="text-lg text-white/80 text-shadow-wii animate-rise [animation-delay:520ms] motion-reduce:animate-none md:text-xl" data-reveal>RPG Maker and Pokemon SDK games on your iPhone.</p>
+        <p class="text-lg text-white/80 text-shadow-wii animate-rise [animation-delay:520ms] motion-reduce:animate-none md:text-xl" data-reveal>RPG Maker and PSDK games on your iPhone.</p>
         <ul class="menu flex flex-col items-center md:pl-7 text-lg font-black text-shadow-wii md:items-start md:text-xl" aria-label="Menu">
           <li class="animate-rise [animation-delay:600ms] motion-reduce:animate-none" data-reveal><a class="py-0.5 text-brand md:py-1.5" href="https://github.com/mateo-m/empo-app/releases"><span class="cursor"><svg class="size-4 px fill-brand" viewBox="0 0 16 16" aria-hidden="true"><use href="#px-diamond" /></svg></span>Download the IPA</a></li>
           <li class="animate-rise [animation-delay:660ms] motion-reduce:animate-none" data-reveal><a class="py-0.5 text-white/80 md:py-1.5" href={`${base}install`}><span class="cursor"><svg class="size-4 px fill-brand" viewBox="0 0 16 16" aria-hidden="true"><use href="#px-diamond" /></svg></span>How to install</a></li>
