@@ -23,7 +23,7 @@ enum GameCoreKind: String, CaseIterable {
     var displayName: String {
         switch self {
         case .rpgMaker: return "RPG Maker core"
-        case .psdk: return "Pokemon SDK core"
+        case .psdk: return "PSDK core"
         }
     }
 

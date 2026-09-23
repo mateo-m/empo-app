@@ -62,7 +62,7 @@ struct BuiltInGameCore: Identifiable {
     private static func games(_ kind: GameCoreKind) -> String {
         switch kind {
         case .psdk:
-            return "Runs Pokemon SDK games"
+            return "Runs PSDK games"
         case .rpgMaker:
             return rgssVersionMask == 7
                 ? "Runs RPG Maker XP, VX and VX Ace games"
