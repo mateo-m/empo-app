@@ -300,6 +300,11 @@ cd "$REPO_ROOT"
 # CHANGELOG.md, re-read that section back out so every downstream
 # consumer (AltStore + GitHub release) uses the exact committed text.
 echo "==> generating release notes"
+# git-cliff reads the PR labels from the GitHub API. Without a token,
+# GitHub allows 60 requests an hour.
+if [[ -z "${GITHUB_TOKEN:-}" ]] && GH_AUTH_TOKEN=$(gh auth token 2>/dev/null); then
+    export GITHUB_TOKEN="$GH_AUTH_TOKEN"
+fi
 FULL_CHANGELOG_ENTRY=$(git-cliff --config "$REPO_ROOT/cliff.toml" --unreleased --tag "v$VERSION")
 
 if [[ -f "$CHANGELOG_PATH" ]]; then

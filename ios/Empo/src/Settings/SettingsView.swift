@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
     @State private var showBuildInfo = false
+    @State private var showWhatsNew = false
 
     // We deleted the ExperimentalFeature toggles and the
     // ConfirmSheet/InfoSheet when gamePause/cheats graduated. See
@@ -156,6 +157,13 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        showWhatsNew = true
+                    } label: {
+                        Label("What's new", systemImage: "sparkles")
+                    }
+                    .tint(.primary)
+
                     NavigationLink {
                         GameCoresView()
                     } label: {
@@ -260,6 +268,11 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showBuildInfo) {
                 BuildInfoSheet()
+            }
+            .sheet(isPresented: $showWhatsNew) {
+                WhatsNewSheet(items: WhatsNew.items(after: WhatsNew.version - 1)) {
+                    showWhatsNew = false
+                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

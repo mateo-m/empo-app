@@ -192,6 +192,8 @@ jobs:
           done
 
       - name: Bump version + changelog
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -e
           VERSION="${{ steps.version.outputs.version }}"

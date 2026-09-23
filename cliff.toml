@@ -7,7 +7,7 @@ body = """{% if version %}
 {% endif %}
 
 {% for group, commits in commits | group_by(attribute="group") %}
-### {{ group }}
+### {{ group | striptags | trim }}
 
 {% for commit in commits %}- {{ commit.message | upper_first }} ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/mateo-m/empo-app/commit/{{ commit.id }}))
 {% endfor %}
@@ -16,10 +16,37 @@ trim = true
 footer = ""
 
 [git]
+# A commit shows in the release notes only when it changes a file that
+# ships in the app. Tests, docs, CI, and the website stay out.
+include_paths = [
+  "ios/Empo/src/**",
+  "ios/Empo/Assets.xcassets/**",
+  "ios/Empo/Assets.bundle/**",
+  "ios/Empo/curated-splash-icons/**",
+  "ios/Empo/shims/**",
+  "ios/Empo/vendor/**",
+  "ios/Empo/Info.plist",
+  "ios/Empo/PrivacyInfo.xcprivacy",
+  "ios/Empo/Empo.entitlements",
+  "ios/Empo/project.yml",
+  "ios/Dependencies/**",
+  "ios/GameProbe/Package.swift",
+  "ios/GameProbe/Sources/**",
+  "ios/Json5/Package.swift",
+  "ios/Json5/Sources/**",
+  "mkxp-z-apple-mobile",
+  "tools/gamecore/**",
+  "tools/mkxp-core/**",
+  "tools/psdk-core/**",
+]
 conventional_commits = true
 filter_unconventional = true
 commit_parsers = [
   { message = "^chore\\(release\\): sync AltStore source", skip = true },
+  # For a site commit that also touches app files, for example a comment.
+  { message = "^[a-z]+\\(site\\)", skip = true },
+  # The HTML comment sorts the group first. The template strips it.
+  { field = "remote.pr_labels", pattern = "^highlight$", group = "<!-- 0 -->Highlights" },
   { message = "^feat\\(release\\):", group = "Release" },
   { message = "^feat", group = "Features" },
   { message = "^fix\\(release\\):", group = "Release" },
@@ -34,3 +61,8 @@ commit_parsers = [
 ]
 filter_commits = false
 tag_pattern = "v[0-9].*"
+
+# Supplies the PR labels. git-cliff reads GITHUB_TOKEN when it is set.
+[remote.github]
+owner = "mateo-m"
+repo = "empo-app"
