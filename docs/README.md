@@ -43,8 +43,8 @@ Explanations of the trickier architecture, in rough reading order:
 | [`how-it-works.mdx`](how-it-works.mdx)               | The architecture in one page, with links to each detailed note.                     |
 | [`sdl-ruby-workarounds.md`](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/sdl-ruby-workarounds.md) (engine repo) | Why SDL, the GL context, OpenAL, and the Ruby VM persist for the process lifetime. |
 
-The detailed notes (the three Ruby interpreters, one game per session, pause and resume, the
-import pipeline, and the visual rules) live next to the Swift, in
+The detailed notes (the two game cores, the Ruby interpreters, one game per session, pause and
+resume, the import pipeline, and the visual rules) live next to the Swift, in
 [`ios/Empo/docs/`](../ios/Empo/docs/).
 
 `media/` holds the README screenshots and demo assets. The site configuration lives in
