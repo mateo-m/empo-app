@@ -6,7 +6,7 @@ enum GameImportValidator {
     enum ImportError: LocalizedError {
         case unzipFailed
         case corruptZip(String)
-        case notAnRPGMakerGame
+        case notAGame
         case unsupportedRuntime(String)
         case missingScripts(String)
         case invalidScripts(String)
@@ -19,9 +19,9 @@ enum GameImportValidator {
                 return "Empo couldn't unpack this archive. Download the game again, then import it."
             case .corruptZip:
                 return "This archive is damaged. Download the game again, then import it."
-            case .notAnRPGMakerGame:
+            case .notAGame:
                 return
-                    "Empo found no RPG Maker game here. Pick the folder that contains Game.exe, then import again."
+                    "Empo found no game here. Pick the folder that contains Game.exe or Game.rb, then import again."
             case .unsupportedRuntime(let detail):
                 return detail
             case .missingScripts:
@@ -130,7 +130,7 @@ enum GameImportValidator {
     /// resolution probe before import starts.
     static func validate(_ url: URL) throws {
         guard let gameRoot = locateGameRoot(in: url) else {
-            throw ImportError.notAnRPGMakerGame
+            throw ImportError.notAGame
         }
         try validateResolvedGameRoot(at: gameRoot)
     }
@@ -174,17 +174,17 @@ enum GameImportValidator {
         let basePath = baseURL.standardizedFileURL.path
         let candidatePath = candidate.standardizedFileURL.path
         guard candidatePath == basePath || candidatePath.hasPrefix(basePath + "/") else {
-            throw ImportError.notAnRPGMakerGame
+            throw ImportError.notAGame
         }
         let components = normalized.split(separator: "/").map(String.init)
         guard !components.contains("..") else {
-            throw ImportError.notAnRPGMakerGame
+            throw ImportError.notAGame
         }
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory),
             isDirectory.boolValue
         else {
-            throw ImportError.notAnRPGMakerGame
+            throw ImportError.notAGame
         }
         return candidate
     }
@@ -242,7 +242,7 @@ enum GameImportValidator {
 
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(atPath: url.path) else {
-            throw ImportError.notAnRPGMakerGame
+            throw ImportError.notAGame
         }
 
         let lowercaseItems = items.map { $0.lowercased() }
@@ -275,7 +275,7 @@ enum GameImportValidator {
         if lowercaseItems.contains("mkxp.json") {
             customScriptPath = Self.customScriptPath(url)
             if scriptsPath == nil, customScriptPath == nil {
-                throw ImportError.notAnRPGMakerGame
+                throw ImportError.notAGame
             }
             if scriptsPath == nil {
                 detectedVersion = rgssVersionFromMkxpJson(url)
@@ -283,7 +283,7 @@ enum GameImportValidator {
         }
 
         guard scriptsPath != nil || customScriptPath != nil else {
-            throw ImportError.notAnRPGMakerGame
+            throw ImportError.notAGame
         }
 
         if let detectedVersion {
@@ -320,7 +320,7 @@ enum GameImportValidator {
             return
         }
 
-        throw ImportError.notAnRPGMakerGame
+        throw ImportError.notAGame
     }
 
     private static func isLikelyGameRoot(
@@ -447,7 +447,7 @@ enum GameImportValidator {
         }
 
         if choices.isEmpty {
-            throw firstMeaningfulArchiveError ?? firstArchiveError ?? ImportError.notAnRPGMakerGame
+            throw firstMeaningfulArchiveError ?? firstArchiveError ?? ImportError.notAGame
         }
         return ArchiveProbeResult(
             choices: sortImportRootChoices(
@@ -514,7 +514,7 @@ enum GameImportValidator {
         if choices.isEmpty {
             throw firstMeaningfulValidationError
                 ?? firstValidationError
-                ?? ImportError.notAnRPGMakerGame
+                ?? ImportError.notAGame
         }
         return sortImportRootChoices(choices)
     }
@@ -589,7 +589,7 @@ enum GameImportValidator {
 
     private static func isMeaningfulValidationError(_ error: Error) -> Bool {
         guard let importError = error as? ImportError else { return true }
-        if case .notAnRPGMakerGame = importError {
+        if case .notAGame = importError {
             return false
         }
         return true
