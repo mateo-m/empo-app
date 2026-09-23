@@ -12,7 +12,7 @@ sandbox, so the folder that you import from stays unchanged.
 
 | Input                       | Notes                                                          |
 | --------------------------- | -------------------------------------------------------------- |
-| A folder                    | A game that is already extracted, with `Game.exe` and `Data/`. |
+| A folder                    | A game that is already extracted, with `Game.exe` and `Data/`. A PSDK game has `Game.rb` and `Game.yarb` instead. |
 | `.zip`, `.7z`, or `.rar`    | An archive with the same content.                              |
 | `.jgp`                      | A JoiPlay Game Package. Empo reads its manifest and settings.  |
 | A self-extracting `.exe`    | A Windows extractor with the game inside it.                   |
@@ -33,7 +33,8 @@ sandbox, so the folder that you import from stays unchanged.
 </Steps>
 
 Empo then extracts the game, reads the title from its INI file, detects the RPG Maker version,
-and picks the Ruby interpreter for it. If the game has a `Game.exe` with an icon, Empo uses that
+and picks the Ruby interpreter for it. A PSDK game has no INI file, so Empo uses the name
+of the folder or the archive as the title. If the game has a `Game.exe` with an icon, Empo uses that
 icon as the artwork on the card. If it has no icon, Empo looks for a title screen in
 `Graphics/Titles/`.
 
@@ -85,7 +86,7 @@ first copy's data.
 
 Empo shows one alert with the reason. The frequent reasons are:
 
-- The source is not an RPG Maker game, or its RGSS version has no support.
+- The source is not an RPG Maker or PSDK game, or its RGSS version has no support.
 - The archive is corrupt.
 - The device has no free space left.
 

@@ -5,9 +5,14 @@ sidebar:
   icon: layers
 ---
 
-Empo is two programs in one process. The app is SwiftUI and UIKit. The engine is a C++ fork of
-mkxp-z that runs the game scripts in Ruby. The app owns the window and the user interface. The
-engine owns the game.
+Empo is an app and a game engine in one process. The app is SwiftUI and UIKit. The app owns
+the window and the user interface. The engine owns the game.
+
+Empo has two engines, and each one is a game core. `MkxpCore` is a C++ fork of mkxp-z that runs
+RPG Maker games in Ruby 1.8, 1.9, or 3.1. `PsdkCore` is LiteRGSS2 and LiteCGSS, and it runs
+PSDK games in Ruby 3.0. Read
+[`cores.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/cores.md) for the rules
+that keep the two cores apart.
 
 ## The repository
 
@@ -16,13 +21,13 @@ engine owns the game.
 - mkxp-z-apple-mobile/ The engine fork. A git submodule, pure C++.
 - ios/
   - Empo/ The app. SwiftUI, with UIKit for the touch controls.
-  - Dependencies/ Cross-compiled static libraries: SDL, three Ruby versions, OpenAL.
+  - Dependencies/ Cross-compiled static libraries: SDL, SFML, four Ruby versions, OpenAL, and the LiteRGSS2 fork.
   - GameProbe/ A Swift package that reads game metadata. It builds on Linux, so CI can test it.
 - docs/ This documentation.
 
 </FileTree>
 
-## Three Ruby interpreters in one binary
+## Three Ruby interpreters in the RPG Maker core
 
 Ruby 1.8, 1.9, and 3.1 compile separately. Each version merges with its binding code into one
 relocatable object file, and each object exports exactly one symbol. At import, Empo reads the
