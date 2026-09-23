@@ -14,19 +14,15 @@ public enum PsdkGame {
 
     /// True when the PSDK core can run `url`.
     ///
-    /// The check reads the directory listing and compares names without
-    /// case. The iOS container is case-sensitive and the Mac or the PC
-    /// the game was packed on is not, so a game that ships `game.rb` is
-    /// normal.
+    /// The check reads the directory listing and compares exact names.
+    /// A device volume is case-sensitive, so a `game.rb` there does not
+    /// load. The simulator uses the Mac's volume, which hides that.
     public static func isGameRoot(_ url: URL, fileManager: FileManager = .default) -> Bool {
-        guard let names = try? fileManager.contentsOfDirectory(atPath: url.path) else {
-            return false
-        }
-        guard names.contains(where: { $0.lowercased() == "game.rb" }),
-            let bytecode = names.first(where: { $0.lowercased() == "game.yarb" })
+        guard let names = try? fileManager.contentsOfDirectory(atPath: url.path),
+            names.contains("Game.rb"), names.contains("Game.yarb")
         else { return false }
 
-        return startsWithYARB(url.appendingPathComponent(bytecode))
+        return startsWithYARB(url.appendingPathComponent("Game.yarb"))
     }
 
     // ponytail: a PSDK game that ships plain Ruby instead of Game.yarb

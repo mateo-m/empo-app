@@ -33,10 +33,10 @@ final class PsdkGameTests: XCTestCase {
         XCTAssertTrue(PsdkGame.isGameRoot(root))
     }
 
-    func testLowercaseNamesStillMatch() throws {
+    func testLowercaseNamesDoNotMatch() throws {
         try write("game.rb", Array("RubyVM::InstructionSequence".utf8))
         try write("game.yarb", yarb)
-        XCTAssertTrue(PsdkGame.isGameRoot(root))
+        XCTAssertFalse(PsdkGame.isGameRoot(root))
     }
 
     func testGameRbAloneIsNotEnough() throws {
