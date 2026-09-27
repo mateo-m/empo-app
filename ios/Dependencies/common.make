@@ -111,9 +111,12 @@ $(DOWNLOADS)/theora/.configured-$(SDK_TAG): $(DOWNLOADS)/theora/configure
 
 $(DOWNLOADS)/theora/Makefile: $(DOWNLOADS)/theora/.configured-$(SDK_TAG)
 
+# Theora's autogen.sh runs `autoreconf -isf`, which links the helper
+# scripts into the Homebrew automake folder. A Homebrew automake update
+# breaks those links, so copy them.
 $(DOWNLOADS)/theora/configure: $(DOWNLOADS)/theora/autogen.sh
 	cd $(DOWNLOADS)/theora; \
-	./autogen.sh
+	autoreconf -if
 
 $(DOWNLOADS)/theora/autogen.sh:
 	$(CLONE) $(GITHUB)/xiph/theora $(DOWNLOADS)/theora
