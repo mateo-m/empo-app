@@ -608,6 +608,12 @@ PSDK_RUBY ?= 30
 PSDK_RUBY_VERSION := $(shell echo $(PSDK_RUBY) | sed 's/./&./')
 PSDK_RUBY_SRC := $(SOURCES)/ruby$(PSDK_RUBY)
 
+# Every Ruby's psych links the libyaml below. Ruby 2.5 and 3.0 embed their
+# own copy only when configure finds no yaml.h, so without this the
+# result depends on the build order.
+PSDK_RUBY_EXTRA_A := $(LIBDIR)/libyaml.a
+PSDK_RUBY_LIBYAML_ARGS := --with-libyaml-dir="$(BUILD_PREFIX)"
+
 ifneq ($(filter 25 30,$(PSDK_RUBY)),)
 PSDK_RUBY_CONFIGURE_DEPS := $(SOURCES)/ruby/ext/openssl/extconf.rb
 # On Darwin, Ruby 2.5 names its library after the full version
@@ -626,16 +632,11 @@ PSDK_RUBY_CONFIGURE_ARGS := $(if $(filter 25,$(PSDK_RUBY)),--with-soname=ruby.2.
 # across two macros, which clang warns about at every call.
 PSDK_RUBY_CXXFLAGS := $(if $(filter 25,$(PSDK_RUBY)),-Wno-register -Wno-compound-token-split-by-macro)
 PSDK_RUBY_MAKE_ARGS :=
-# Ruby 2.5's psych embeds its own libyaml only when it finds no yaml.h and
-# no -lyaml. It finds the ones the 3.2 and 3.3 builds put in this build
-# folder, so the archive must carry that libyaml.
-PSDK_RUBY_EXTRA_A := $(if $(filter 25,$(PSDK_RUBY)),$(LIBDIR)/libyaml.a)
 else
 # Ruby 3.2 and 3.3 no longer carry libyaml, and psych needs it. A PSDK
 # game requires yaml at boot.
 PSDK_RUBY_CONFIGURE_DEPS := $(LIBDIR)/libyaml.a
-PSDK_RUBY_CONFIGURE_ARGS := --disable-yjit --with-libyaml-dir="$(BUILD_PREFIX)"
-PSDK_RUBY_EXTRA_A := $(LIBDIR)/libyaml.a
+PSDK_RUBY_CONFIGURE_ARGS := --disable-yjit
 # The git source of Ruby 3.2 has no parse.c, and the bison in macOS
 # (2.3) is too old to make it. Homebrew's bison is keg-only, and the
 # Makefile names plain `bison`, so make gets the path. Ruby 3.3 makes
@@ -719,7 +720,7 @@ $(PSDK_RUBY_SRC)/.configured-$(SDK_TAG): $(PSDK_RUBY_SRC)/configure $(LIBDIR)/li
 	export $(CONFIGURE_ENV); \
 	export CFLAGS="-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__ -Wno-default-const-init-field-unsafe $$CFLAGS"; \
 	export LDFLAGS="$$LDFLAGS"; \
-	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) $(PSDK_RUBY_CONFIGURE_ARGS) \
+	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) $(PSDK_RUBY_CONFIGURE_ARGS) $(PSDK_RUBY_LIBYAML_ARGS) \
 	--with-baseruby=/usr/bin/ruby \
 	--with-openssl-dir="$(BUILD_PREFIX)" \
 	ac_cv_func_setpgrp_void=yes \
