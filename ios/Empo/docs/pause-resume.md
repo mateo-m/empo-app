@@ -44,10 +44,10 @@ So the engine **never touches the OpenAL context**. No `alcMakeContextCurrent(NU
 `psdk_app_bridge.cpp` holds the same flow:
 
 1. `psdk_requestPause()` sets an atomic flag.
-2. SFML calls `psdk_frame_rendered` one line before it swaps the buffers. When the flag is set, `captureSnapshot()` reads the game picture from the default framebuffer.
-3. A PSDK core cannot pause single sources, because SFMLAudio keeps no list of them. It pauses the whole OpenAL Soft device with `alcDevicePauseSOFT`.
+2. The core calls the frame callback one line before it swaps the buffers. When the flag is set, `captureSnapshot()` reads the game picture from the default framebuffer.
+3. `psdk_pause_audio` stops all game sound. SFMLAudio keeps no list of its sources, so the core pauses the whole OpenAL Soft device.
 4. It calls the paused callback and waits on the condition variable.
-5. `psdk_requestResume()` clears the flag, signals the condition variable, and clears the snapshot. The device resumes with `alcDeviceResumeSOFT`.
+5. `psdk_requestResume()` clears the flag, signals the condition variable, and clears the snapshot. `psdk_resume_audio` starts the sound again.
 
 ## Pause in the RPG Maker MV and MZ core
 

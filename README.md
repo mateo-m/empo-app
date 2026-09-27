@@ -12,7 +12,7 @@
 
 <p align="center"><a href="https://discord.gg/m3YnpXMxrB">Discord</a></p>
 
-Empo is a game launcher for iPhone and iPad. It runs RPG Maker XP, VX, VX Ace, MV, and MZ games, Pokemon Essentials games, and PSDK games. RPG Maker games run on [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), an iOS fork of the [mkxp-z](https://github.com/mkxp-z/mkxp-z) engine. PSDK games run on [litergss2-apple-mobile](https://github.com/mateo-m/litergss2-apple-mobile), an iOS fork of LiteRGSS2. RPG Maker MV and MZ games bring their own JavaScript engine, and run in a web view.
+Empo is a game launcher for iPhone and iPad. It runs RPG Maker XP, VX, VX Ace, MV, and MZ games, Pokemon Essentials games, and PSDK games. RPG Maker games run on [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), an iOS fork of the [mkxp-z](https://github.com/mkxp-z/mkxp-z) engine. PSDK games run on [psdk-apple-mobile](https://github.com/mateo-m/psdk-apple-mobile), an iOS build of LiteRGSS2 and SFML with one Ruby for each PSDK release type. RPG Maker MV and MZ games bring their own JavaScript engine, and run in a web view.
 
 The name's from _emporos_, ancient Greek for a traveler riding on someone else's ship.
 

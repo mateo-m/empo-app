@@ -80,12 +80,13 @@ release compiled with `--no-yarb` has plain Ruby and no `Game.yarb`, so it
 runs on the Ruby 3.0 core. Ruby
 3.0 also reads Ruby 3.0 bytecode compiled by hand on 64-bit Linux or a Mac.
 
-Each Ruby, with its extensions and its own build of LiteRGSS2, is one object,
-`litergss<NN>-merged.o`. The `ld -r` step that makes it makes every name local
-except `psdk_ruby_<NN>`, and the build fails when a second name stays out.
-`psdk_app_bridge.cpp` is compiled once for each Ruby, as `psdk-bridge<NN>.o`,
-and calls that entry. `Psdk<NN>Core.framework` links the two objects with
-LiteCGSS, SFML and OpenSSL.
+The PSDK core lives in its own repo, `psdk-apple-mobile`. Each release holds
+`libpsdk<NN>.a` for each Ruby: one object with the Ruby, its extensions,
+LiteRGSS2, LiteCGSS, SFML and OpenSSL, which defines only the names of
+`psdk_core.h`. `ios/Dependencies/psdk/.version` pins the release.
+`tools/psdk-core/build-framework-ios.sh` links each library with
+`psdk_app_bridge.cpp`, which answers the launcher interface with the core's
+calls, into `Psdk<NN>Core.framework`. Xcode runs it before each build.
 
 Each PSDK framework carries its own SFML, with the Objective-C classes
 `SFAppDelegate`, `SFView` and `SFViewController`. Objective-C keeps one class
@@ -98,7 +99,8 @@ closed-source Windows library. The 2.5 core claims only Ruby 2.5 bytecode, and
 its support folder adds two Ruby files. `litergss1.rb` puts the LiteRGSS 1
 `Graphics`, `Input`, `Mouse` and `Viewport` calls back on top of LiteRGSS2.
 `RubyFmod.rb` gives the FMOD calls of those games, and plays the sound through
-SFMLAudio.
+SFMLAudio. Each support folder also holds `compat.rb`, the fixes for things
+released games do, which the core loads before the game.
 
 The four PSDK cores export the same `psdk_*` names. Each forwarder looks the
 name up in the one core it opened, so the names do not meet.
@@ -116,8 +118,7 @@ A core exports its bridge and nothing else. `ios/Empo/src/App/GameCore.h`
 declares the 51 functions Empo calls. `MkxpCore` exports every `mkxp_*` name
 that `mkxp-z-apple-mobile/src/app_bridge.h` declares, which is those 51 plus
 the names its own engine calls. Each PSDK core exports the 51 under `psdk_*`, from
-`ios/Dependencies/psdk/psdk_app_bridge.h`, plus the two `psdk_*` entry points in
-`ios/Dependencies/psdk/psdk_core.h`. `MvmzCore` exports the 51 under
+`ios/Dependencies/psdk/psdk_app_bridge.h`. `MvmzCore` exports the 51 under
 `mvmz_`, from `ios/MvmzCore/mvmz_app_bridge.h`.
 
 No core exports a Ruby name, an SDL name or an SFML name, and no core imports
@@ -135,8 +136,8 @@ its own engine has. The PSDK cores answer four:
 | --- | --- |
 | Fixed aspect ratio | `placeOutputRegion` fits the picture in the launcher's region and centres it. |
 | Smooth scaling | The SFML fork reads the flag in the `sf::Texture` constructor, so every picture the game makes after that is smooth. The game's own resolution goes up to the screen with the GL viewport, so the filter of each texture decides how the whole picture looks. A texture reads the flag once, so a new value needs a restart. |
-| Touch acts as mouse | LiteRGSS2 keeps the touch events out of the game while it is off. |
-| Fast forward | `runtime_prelude.rb` multiplies the frame rate that `Graphics::FPSBalancer` reads. The balancer divides the real clock by that rate and runs that many game frames, so the game runs faster and still draws at the same rate. A new value applies while the game runs. |
+| Touch acts as mouse | LiteRGSS2 sends touches to a game that reads them. In a game that reads only the mouse, the first finger moves the mouse and holds the left button. While the switch is off, no touch reaches the game. |
+| Fast forward | The core's `compat.rb` multiplies the frame rate that `Graphics::FPSBalancer` reads. The balancer divides the real clock by that rate and runs that many game frames, so the game runs faster and still draws at the same rate. A new value applies while the game runs. |
 
 The MV and MZ core answers two:
 
@@ -158,23 +159,9 @@ settings page together in `settingsPage(_:)`, from the shared sections in
 
 ## What the engine asks the bridge
 
-`psdk_app_bridge.cpp` answers two sets of names. The launcher interface
-is the set in `psdk_app_bridge.h`. The other set is what the engine and
-the SFML fork call, and no header declares it:
-
-| Name | Who calls it |
-| --- | --- |
-| `psdk_game_resolution` | LiteRGSS2, with the resolution the game asked for |
-| `psdk_frame_rendered` | the SFML fork, on every frame it swaps |
-| `psdk_picture_rect_pixels` | LiteRGSS2, to put a touch inside the picture |
-| `psdk_touch_mouse_enabled` | LiteRGSS2, before it sends a touch to the game |
-| `psdk_smooth_scaling_enabled` | the SFML fork, in the `sf::Texture` constructor, and LiteRGSS2 for the window settings |
-| `psdk_fast_forward_multiplier` | LiteRGSS2, for `LiteRGSS.fast_forward_multiplier` |
-
-Each name is weak where the engine declares it, so both forks still build
-without a launcher behind them. `check-core-interface.sh` reads the
-header, so a name here never reaches the other two copies of the
-interface.
+Nothing. The core never calls the launcher. `psdk_app_bridge.cpp` sets each
+value and each callback through `psdk_core.h`, and the core's repo has a check
+that fails on a launcher name or a weak host function.
 
 ## One interface, one prefix for each side
 
@@ -283,30 +270,29 @@ because no two of them open in a process.
 
 ## Which source a release names
 
-Each core comes from its own engine repo: `MkxpCore` from
-`mkxp-z-apple-mobile`, the PSDK cores from `litergss2-apple-mobile`. A release
-tags the pinned commit in both repos with `empo-v<version>`, so anyone can
-check out the source that built the shipped binary. `scripts/release.sh` and
-the `cut` job in `.github/workflows/release.yml` create the two tags, and both
-refuse a commit that is not on that repo's `dev` branch.
+Each core comes from its own engine repo. `MkxpCore` comes from
+`mkxp-z-apple-mobile`. A release tags the pinned commit there with
+`empo-v<version>`, so anyone can check out the source that built the shipped
+binary. `scripts/release.sh` and the `cut` job in
+`.github/workflows/release.yml` create the tag, and both refuse a commit that
+is not on that repo's `dev` branch. The PSDK cores come from a
+`psdk-apple-mobile` release, and its tag in `ios/Dependencies/psdk/.version`
+names the source.
 
 `EmpoCoreVersion` holds `git describe` of that repo, so the rows of these cores
 on the Game cores screen carry the same tag name after a release. Before the first release
 that ships a core, `describe` has no tag to name and falls back to the short
 commit.
 
-The PSDK cores also link LiteCGSS, the SFML fork and a Ruby, and no tag names
-those. The dependency fingerprint ties each framework to every pinned
-commit, so the tagged commit is still the one that built it.
-
 ## How the framework stays fresh
 
 The native tree keeps the built framework between builds, and Xcode only
-copies it. `build-framework-ios.sh` writes its own sha256 into
-`.build-script-sha256` inside the framework, and `check-*-framework.sh` fails
-when that hash stops matching the script on disk. Rebuild MkxpCore with
-`scripts/rebuild-engine-halves.sh <sdk>`, and the PSDK cores with
-`make -f <sdk>.make psdk` in `ios/Dependencies`. Each takes minutes.
-`rebuild-engine-halves.sh` builds the mkxp half only. The dependency
-fingerprint does not list the packaging scripts, because they build an engine
+copies it. `tools/mkxp-core/build-framework-ios.sh` writes its own sha256 into
+`.build-script-sha256` inside the framework, and `check-mkxp-framework.sh`
+fails when that hash stops matching the script on disk. Rebuild MkxpCore with
+`scripts/rebuild-engine-halves.sh <sdk>`. It takes minutes. The dependency
+fingerprint does not list the packaging script, because it builds an engine
 output and a full dependency rebuild takes hours.
+
+The PSDK cores link again before a build when the pin, the script or the
+bridge changes. A stamp in the native tree records those three.
