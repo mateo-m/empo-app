@@ -6,8 +6,8 @@
 // resolves each name in the core it opened. Nothing here names another
 // engine, and nothing here comes from another engine's headers.
 //
-// psdk_core.h holds the other half of the core: psdk_run, which plays a
-// game folder, and psdk_inject_scancode.
+// psdk_app_bridge.cpp answers them with psdk_core.h, the interface of
+// the core library from mateo-m/psdk-apple-mobile.
 //
 // scripts/check-core-interface.sh compares this file with Empo's
 // GameCore.h and with mkxp-z's app_bridge.h, and fails when one of them

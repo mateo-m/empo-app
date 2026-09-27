@@ -1,21 +1,17 @@
 // The launcher interface for the PSDK core.
 //
 // A launcher opens one core and calls it through the psdk_* names
-// psdk_app_bridge.h declares. This core answers them on top of
-// LiteRGSS2, LiteCGSS, SFML and Ruby 3.0, and takes nothing from
-// another engine.
+// psdk_app_bridge.h declares. This file answers them with the calls of
+// psdk_core.h, the interface of one libpsdk<NN>.a from
+// mateo-m/psdk-apple-mobile.
 //
-// Six things here do real work: the game thread, the key translator,
-// the game window, the frame signal, the picture placement and the
-// pause. The rest
-// stores what the launcher pushes or gives a fixed answer. Every
-// function that gives less than a full answer says so where it is.
+// Four things here do real work: the game thread, the frame callback,
+// the picture placement and the pause. The rest stores what the
+// launcher pushes or gives a fixed answer. Every function that gives
+// less than a full answer says so where it is.
 
 #include "psdk_app_bridge.h"
 #include "psdk_core.h"
-
-#include <SFML/System/String.hpp>
-#include <SFML/Window/Keyboard.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -34,46 +30,9 @@
 #include <unistd.h>
 #include <vector>
 
-#define AL_ALEXT_PROTOTYPES
-#include <AL/alc.h>
-#include <AL/alext.h>
 #include <GLES2/gl2.h>
 
-// WindowImplUIKit.mm records the UIWindow it makes.
-extern "C" void *sfml_ios_game_window();
-
-// The three SFML names this core uses to place the picture.
-// sfml_set_output_region takes fractions of the window with the origin at
-// the top left, and 0, 0, 1, 1 gives the whole window back.
-// sfml_window_pixel_size gives pixels: it multiplies -[UIView frame],
-// which UIKit reports in points, by the backing scale.
-// sfml_ios_backing_scale is that number, and it is the screen scale.
-// The launcher speaks points, so every value it sends or reads crosses
-// this scale.
-extern "C" void sfml_set_output_region(float x, float y, float w, float h);
-extern "C" void sfml_window_pixel_size(unsigned int *width, unsigned int *height);
-extern "C" float sfml_ios_backing_scale();
-
-// The text road. A game asks for the keyboard through
-// sf::Keyboard::setVirtualKeyboardVisible, which SFML reports through
-// the callback below, and it reads what the player typed from
-// sf::Event::TextEntered, which sfml_ios_inject_character makes.
-extern "C" void sfml_ios_inject_character(unsigned int unicode);
-extern "C" void sfml_ios_set_virtual_keyboard_callback(void (*callback)(int, void *), void *userdata);
-
-// SFML's iOS input backend keeps a scancode bitset that polling engines
-// read, and a UIKit event queue that event-driven engines read. LiteRGSS
-// reads both, so the shim below fills both. It lives in
-// sources/sfml/src/SFML/Window/iOS/InputImpl.mm.
-extern "C" void sfml_ios_inject_key_event(int sfScan, int pressed);
-
 namespace {
-
-// The make recipe compiles this file once for each Ruby, with PSDK_RUBY
-// set to 25, 30, 32 or 33, and each framework links one of them.
-#define PSDK_RUBY_ENTRY_NAME(v) psdk_ruby_##v
-#define PSDK_RUBY_ENTRY(v) PSDK_RUBY_ENTRY_NAME(v)
-const PsdkRuby *ruby() { return PSDK_RUBY_ENTRY(PSDK_RUBY)(); }
 
 std::mutex gLock;
 std::string gGamePath;
@@ -101,7 +60,7 @@ Callback gPaused;
 Callback gResumed;
 Callback gTextInputMode;
 
-// SFML carries the game's keyboard request out through a plain C
+// The core carries the game's keyboard request out through a plain C
 // callback, and the launcher takes it through psdk_TextInputModeCallback.
 // This turns one into the other.
 void forwardTextInputMode(int active, void *) {
@@ -123,7 +82,6 @@ std::atomic<float> gHostRegionH{1.0f};
 std::atomic<int> gGameWidth{0};
 std::atomic<int> gGameHeight{0};
 std::atomic<bool> gFixedAspectRatio{true};
-std::atomic<bool> gSmoothScaling{false};
 // The safe area, in points, as the launcher last reported it. Automatic
 // placement keeps the picture clear of the notch and the home indicator.
 std::atomic<float> gSafeTop{0.0f};
@@ -134,8 +92,7 @@ std::atomic<int> gVerticalAlignment{PSDK_VALIGN_TOP_CENTER};
 // The window size the last placement used, width in the high half and
 // height in the low half.
 std::atomic<unsigned long long> gPlacedWindowSize{0};
-// Where the picture landed, in window pixels. The engine needs it to turn
-// a touch on the screen into a point inside the game.
+// Where the picture landed, in window pixels. The snapshot reads it.
 std::atomic<int> gPictureX{0};
 std::atomic<int> gPictureY{0};
 std::atomic<int> gPictureW{0};
@@ -155,7 +112,6 @@ std::vector<unsigned char> gSnapshotRGBA;
 int gSnapshotW = 0;
 int gSnapshotH = 0;
 std::atomic<bool> gCheatsEnabled{false};
-std::atomic<bool> gTouchMouseEnabled{false};
 std::atomic<bool> gShowViewportBounds{false};
 std::atomic<bool> gControllerCaptureEnabled{false};
 std::atomic<int> gFastForwardMultiplier{1};
@@ -188,94 +144,12 @@ std::string ownBundlePath() {
     return dirname(&copy[0]);
 }
 
-// SDL puts a scancode at its USB HID usage, SFML counts from zero in its
-// own order, so the two spaces share no number. Both sides are named
-// here, never a literal.
-int toSfmlScancode(int sdlScancode) {
-    switch (sdlScancode) {
-        case PSDK_SCANCODE_A: return sf::Keyboard::Scan::A;
-        case PSDK_SCANCODE_B: return sf::Keyboard::Scan::B;
-        case PSDK_SCANCODE_C: return sf::Keyboard::Scan::C;
-        case PSDK_SCANCODE_D: return sf::Keyboard::Scan::D;
-        case PSDK_SCANCODE_E: return sf::Keyboard::Scan::E;
-        case PSDK_SCANCODE_F: return sf::Keyboard::Scan::F;
-        case PSDK_SCANCODE_G: return sf::Keyboard::Scan::G;
-        case PSDK_SCANCODE_H: return sf::Keyboard::Scan::H;
-        case PSDK_SCANCODE_I: return sf::Keyboard::Scan::I;
-        case PSDK_SCANCODE_J: return sf::Keyboard::Scan::J;
-        case PSDK_SCANCODE_K: return sf::Keyboard::Scan::K;
-        case PSDK_SCANCODE_L: return sf::Keyboard::Scan::L;
-        case PSDK_SCANCODE_M: return sf::Keyboard::Scan::M;
-        case PSDK_SCANCODE_N: return sf::Keyboard::Scan::N;
-        case PSDK_SCANCODE_O: return sf::Keyboard::Scan::O;
-        case PSDK_SCANCODE_P: return sf::Keyboard::Scan::P;
-        case PSDK_SCANCODE_Q: return sf::Keyboard::Scan::Q;
-        case PSDK_SCANCODE_R: return sf::Keyboard::Scan::R;
-        case PSDK_SCANCODE_S: return sf::Keyboard::Scan::S;
-        case PSDK_SCANCODE_T: return sf::Keyboard::Scan::T;
-        case PSDK_SCANCODE_U: return sf::Keyboard::Scan::U;
-        case PSDK_SCANCODE_V: return sf::Keyboard::Scan::V;
-        case PSDK_SCANCODE_W: return sf::Keyboard::Scan::W;
-        case PSDK_SCANCODE_X: return sf::Keyboard::Scan::X;
-        case PSDK_SCANCODE_Y: return sf::Keyboard::Scan::Y;
-        case PSDK_SCANCODE_Z: return sf::Keyboard::Scan::Z;
-        case PSDK_SCANCODE_1: return sf::Keyboard::Scan::Num1;
-        case PSDK_SCANCODE_2: return sf::Keyboard::Scan::Num2;
-        case PSDK_SCANCODE_3: return sf::Keyboard::Scan::Num3;
-        case PSDK_SCANCODE_4: return sf::Keyboard::Scan::Num4;
-        case PSDK_SCANCODE_5: return sf::Keyboard::Scan::Num5;
-        case PSDK_SCANCODE_6: return sf::Keyboard::Scan::Num6;
-        case PSDK_SCANCODE_7: return sf::Keyboard::Scan::Num7;
-        case PSDK_SCANCODE_8: return sf::Keyboard::Scan::Num8;
-        case PSDK_SCANCODE_9: return sf::Keyboard::Scan::Num9;
-        case PSDK_SCANCODE_0: return sf::Keyboard::Scan::Num0;
-        case PSDK_SCANCODE_RETURN: return sf::Keyboard::Scan::Enter;
-        case PSDK_SCANCODE_ESCAPE: return sf::Keyboard::Scan::Escape;
-        case PSDK_SCANCODE_BACKSPACE: return sf::Keyboard::Scan::Backspace;
-        case PSDK_SCANCODE_TAB: return sf::Keyboard::Scan::Tab;
-        case PSDK_SCANCODE_SPACE: return sf::Keyboard::Scan::Space;
-        case PSDK_SCANCODE_MINUS: return sf::Keyboard::Scan::Hyphen;
-        case PSDK_SCANCODE_EQUALS: return sf::Keyboard::Scan::Equal;
-        case PSDK_SCANCODE_LEFTBRACKET: return sf::Keyboard::Scan::LBracket;
-        case PSDK_SCANCODE_RIGHTBRACKET: return sf::Keyboard::Scan::RBracket;
-        case PSDK_SCANCODE_BACKSLASH: return sf::Keyboard::Scan::Backslash;
-        case PSDK_SCANCODE_SEMICOLON: return sf::Keyboard::Scan::Semicolon;
-        case PSDK_SCANCODE_APOSTROPHE: return sf::Keyboard::Scan::Apostrophe;
-        case PSDK_SCANCODE_GRAVE: return sf::Keyboard::Scan::Grave;
-        case PSDK_SCANCODE_COMMA: return sf::Keyboard::Scan::Comma;
-        case PSDK_SCANCODE_PERIOD: return sf::Keyboard::Scan::Period;
-        case PSDK_SCANCODE_SLASH: return sf::Keyboard::Scan::Slash;
-        case PSDK_SCANCODE_F1: return sf::Keyboard::Scan::F1;
-        case PSDK_SCANCODE_F2: return sf::Keyboard::Scan::F2;
-        case PSDK_SCANCODE_F3: return sf::Keyboard::Scan::F3;
-        case PSDK_SCANCODE_F4: return sf::Keyboard::Scan::F4;
-        case PSDK_SCANCODE_F5: return sf::Keyboard::Scan::F5;
-        case PSDK_SCANCODE_F6: return sf::Keyboard::Scan::F6;
-        case PSDK_SCANCODE_F7: return sf::Keyboard::Scan::F7;
-        case PSDK_SCANCODE_F8: return sf::Keyboard::Scan::F8;
-        case PSDK_SCANCODE_F9: return sf::Keyboard::Scan::F9;
-        case PSDK_SCANCODE_F10: return sf::Keyboard::Scan::F10;
-        case PSDK_SCANCODE_F11: return sf::Keyboard::Scan::F11;
-        case PSDK_SCANCODE_F12: return sf::Keyboard::Scan::F12;
-        case PSDK_SCANCODE_RIGHT: return sf::Keyboard::Scan::Right;
-        case PSDK_SCANCODE_LEFT: return sf::Keyboard::Scan::Left;
-        case PSDK_SCANCODE_DOWN: return sf::Keyboard::Scan::Down;
-        case PSDK_SCANCODE_UP: return sf::Keyboard::Scan::Up;
-        case PSDK_SCANCODE_LCTRL: return sf::Keyboard::Scan::LControl;
-        case PSDK_SCANCODE_LSHIFT: return sf::Keyboard::Scan::LShift;
-        case PSDK_SCANCODE_LALT: return sf::Keyboard::Scan::LAlt;
-        case PSDK_SCANCODE_HOME: return sf::Keyboard::Scan::Home;
-        default: return sf::Keyboard::Scan::Unknown;
-    }
-}
-
 void *runGame(void *) {
     const std::string bundle = ownBundlePath();
     const std::string support = bundle + "/PsdkSupport";
-    const std::string prelude = bundle + "/runtime_prelude.rb";
     const char *path = psdk_waitForGamePath();
 
-    int result = ruby()->run(gArgc.load(), gArgv.load(), path, support.c_str(), prelude.c_str());
+    int result = psdk_run(gArgc.load(), gArgv.load(), path, support.c_str(), nullptr);
     fprintf(stderr, "[psdk-bridge] psdk_run returned %d\n", result);
 
     gExitedCleanly.store(result == PSDK_OK);
@@ -321,10 +195,10 @@ bool readFlagKey(const std::string &json, const std::string &key, bool fallback)
     return fallback;
 }
 
-// SFML answers 0 until it makes the window. A scale of 0 would divide
-// the game rect by zero, so the first placement reads 1.
+// The core answers 0 until the game makes its window. A scale of 0
+// would divide the game rect by zero, so the first placement reads 1.
 float backingScale() {
-    const float scale = sfml_ios_backing_scale();
+    const float scale = psdk_backing_scale();
     return scale > 0.0f ? scale : 1.0f;
 }
 
@@ -339,7 +213,7 @@ float backingScale() {
 void placeOutputRegion() {
     unsigned int windowW = 0;
     unsigned int windowH = 0;
-    sfml_window_pixel_size(&windowW, &windowH);
+    psdk_window_pixel_size(&windowW, &windowH);
     const int gameW = gGameWidth.load();
     const int gameH = gGameHeight.load();
     if (windowW == 0 || windowH == 0 || gameW <= 0 || gameH <= 0) {
@@ -445,7 +319,7 @@ void placeOutputRegion() {
         }
     }
 
-    sfml_set_output_region(x, y, w, h);
+    psdk_set_output_region(x, y, w, h);
 
     gPictureX.store(static_cast<int>(x * static_cast<float>(windowW)));
     gPictureY.store(static_cast<int>(y * static_cast<float>(windowH)));
@@ -464,7 +338,7 @@ void placeOutputRegion() {
 }
 
 // Reads the frame the game just drew, for the pause menu behind it.
-// SFML calls the frame hook one line before it swaps, so the default
+// The core calls the frame callback before the swap, so the default
 // framebuffer still holds the picture here.
 //
 // The launcher asks for the snapshot from the paused callback, which
@@ -477,7 +351,7 @@ void captureSnapshot() {
     const int h = gPictureH.load();
     unsigned int windowW = 0;
     unsigned int windowH = 0;
-    sfml_window_pixel_size(&windowW, &windowH);
+    psdk_window_pixel_size(&windowW, &windowH);
     if (w <= 0 || h <= 0 || windowH == 0) {
         return;
     }
@@ -497,43 +371,17 @@ void captureSnapshot() {
     gSnapshotH = h;
 }
 
-} // namespace
-
-// The four hooks below answer LiteRGSS2 and the SFML fork, which declare
-// them weak. They are not part of the launcher interface, so the
-// framework keeps them to itself and exports none of them.
-
-// Zero until the first placement, which needs both a window and the
-// game's resolution.
-extern "C" int psdk_picture_rect_pixels(int *x, int *y, int *width, int *height) {
-    const int w = gPictureW.load();
-    const int h = gPictureH.load();
-    if (w <= 0 || h <= 0) {
-        return 0;
-    }
-    *x = gPictureX.load();
-    *y = gPictureY.load();
-    *width = w;
-    *height = h;
-    return 1;
-}
-
-extern "C" int psdk_touch_mouse_enabled(void) { return gTouchMouseEnabled.load() ? 1 : 0; }
-
-extern "C" int psdk_smooth_scaling_enabled(void) { return gSmoothScaling.load() ? 1 : 0; }
-
-extern "C" int psdk_fast_forward_multiplier(void) { return gFastForwardMultiplier.load(); }
-
-// LiteRGSS2 calls this with the resolution the game asked for, from
-// DisplayWindow.new and from resize_screen.
-extern "C" void psdk_game_resolution(long width, long height) {
+// The core calls this with the resolution the game asked for, when the
+// game opens its window and when it changes the resolution.
+void onGameResolution(long width, long height, void *) {
     gGameWidth.store(static_cast<int>(width));
     gGameHeight.store(static_cast<int>(height));
     placeOutputRegion();
 }
 
-// SFML calls this from Window::display on every frame it swaps.
-extern "C" void psdk_frame_rendered() {
+// The core calls this on the game thread for every frame, before the
+// swap.
+void onFrame(void *) {
     // The game reports its resolution from DisplayWindow.new, which runs
     // before SFML makes the window, so that first placement has no
     // window to measure and does nothing. A drawn frame proves the
@@ -541,7 +389,7 @@ extern "C" void psdk_frame_rendered() {
     // check reads the size itself instead of a "first frame" flag.
     unsigned int windowW = 0;
     unsigned int windowH = 0;
-    sfml_window_pixel_size(&windowW, &windowH);
+    psdk_window_pixel_size(&windowW, &windowH);
     const unsigned long long size =
         (static_cast<unsigned long long>(windowW) << 32) | static_cast<unsigned long long>(windowH);
     if (size != 0 && gPlacedWindowSize.exchange(size) != size) {
@@ -557,7 +405,7 @@ extern "C" void psdk_frame_rendered() {
         // reports fewer pixels than its screen has drew a small picture
         // and let iOS stretch it, and every glyph loses pixels.
         fprintf(stderr, "[psdk-bridge] first frame, window %ux%u px, scale %.1f\n",
-                windowW, windowH, sfml_ios_backing_scale());
+                windowW, windowH, psdk_backing_scale());
     }
     if (gFrameRendered.fn) {
         reinterpret_cast<psdk_FrameRenderedCallback>(gFrameRendered.fn)(gFrameRendered.userdata);
@@ -571,13 +419,7 @@ extern "C" void psdk_frame_rendered() {
         return;
     }
     captureSnapshot();
-    // SFMLAudio hands sf::Music and sf::Sound to Ruby and keeps no list,
-    // so the pause stops the whole OpenAL Soft device. The context is
-    // null until the game plays its first sound.
-    ALCdevice *audio = alcGetContextsDevice(alcGetCurrentContext());
-    if (audio) {
-        alcDevicePauseSOFT(audio);
-    }
+    psdk_pause_audio();
     if (gPaused.fn) {
         reinterpret_cast<psdk_PausedCallback>(gPaused.fn)(gPaused.userdata);
     }
@@ -585,10 +427,10 @@ extern "C" void psdk_frame_rendered() {
     // clock. So after a pause of any length, the game catches up less
     // than one second of updates.
     gResumeSignal.wait(lock, [] { return !gPausedFlag.load(); });
-    if (audio) {
-        alcDeviceResumeSOFT(audio);
-    }
+    psdk_resume_audio();
 }
+
+} // namespace
 
 // MARK: - Starting the game
 
@@ -602,6 +444,8 @@ extern "C" void psdk_frame_rendered() {
 int psdk_run_app(int argc, char **argv) {
     gArgc.store(argc);
     gArgv.store(argv);
+    psdk_set_frame_callback(onFrame, nullptr);
+    psdk_set_resolution_callback(onGameResolution, nullptr);
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -638,40 +482,12 @@ const char *psdk_waitForGamePath(void) {
 
 // MARK: - Input
 
-int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
-             const char *preludePath) {
-    return ruby()->run(argc, argv, gameDir, supportDir, preludePath);
-}
-
-void psdk_inject_scancode(int scancode, int pressed) {
-    sfml_ios_inject_key_event(scancode, pressed);
-}
-
-void psdk_injectKeyEvent(int scancode, int pressed) {
-    int sfScan = toSfmlScancode(scancode);
-    if (sfScan == sf::Keyboard::Scan::Unknown) {
-        return;
-    }
-    psdk_inject_scancode(sfScan, pressed);
-
-    // PSDK's name screen reads Return and Backspace as text, not as
-    // keys: `update_name` confirms on code point 13 and deletes on 8.
-    // On a desktop, SFML sends a text event with those code points
-    // next to the key event. The iOS backend sends no text of its own,
-    // so the two keys get theirs here. Escape gets none, because the
-    // name screen would eat it and the player could not leave.
-    if (pressed) {
-        if (scancode == PSDK_SCANCODE_RETURN) {
-            sfml_ios_inject_character('\r');
-        } else if (scancode == PSDK_SCANCODE_BACKSPACE) {
-            sfml_ios_inject_character('\b');
-        }
-    }
-}
+// The launcher's scancodes are USB HID usages, which the core takes.
+void psdk_injectKeyEvent(int scancode, int pressed) { psdk_inject_key(scancode, pressed); }
 
 // MARK: - The window
 
-void *psdk_getGameWindow(void) { return sfml_ios_game_window(); }
+void *psdk_getGameWindow(void) { return psdk_game_window(); }
 
 // MARK: - Callbacks
 
@@ -705,7 +521,7 @@ void psdk_setResumedCallback(psdk_ResumedCallback cb, void *userdata) {
 
 void psdk_setTextInputModeCallback(psdk_TextInputModeCallback cb, void *userdata) {
     gTextInputMode = {reinterpret_cast<void *>(cb), userdata};
-    sfml_ios_set_virtual_keyboard_callback(cb ? forwardTextInputMode : nullptr, nullptr);
+    psdk_set_keyboard_callback(cb ? forwardTextInputMode : nullptr, nullptr);
 }
 
 // MARK: - Session state
@@ -749,7 +565,7 @@ void psdk_resetSessionState(void) {
 
 // MARK: - Pause
 
-// psdk_frame_rendered stops the game thread and the audio.
+// onFrame stops the game thread and the audio.
 void psdk_requestPause(void) { gPausedFlag.store(true); }
 
 void psdk_requestResume(void) {
@@ -811,16 +627,9 @@ bool psdk_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *h
 // toolbar.
 int psdk_isTextInputActive(void) { return 1; }
 
-// The launcher sends what the player typed as UTF-8, and an SFML text
-// event carries one code point, so the string goes out one code point
-// at a time.
 void psdk_pushTextInput(const char *utf8) {
-    if (!utf8 || !utf8[0]) {
-        return;
-    }
-    const sf::String text = sf::String::fromUtf8(utf8, utf8 + std::strlen(utf8));
-    for (const auto character : text) {
-        sfml_ios_inject_character(character);
+    if (utf8) {
+        psdk_inject_text(utf8);
     }
 }
 
@@ -894,13 +703,13 @@ void psdk_setConfigOverlayJSON(const char *jsonUTF8) {
     std::lock_guard<std::mutex> guard(gLock);
     gConfigOverlayJSON = jsonUTF8 ? jsonUTF8 : "";
     gFixedAspectRatio.store(readFlagKey(gConfigOverlayJSON, "fixedAspectRatio", true));
-    gSmoothScaling.store(readFlagKey(gConfigOverlayJSON, "smoothScaling", false));
+    psdk_set_smooth(readFlagKey(gConfigOverlayJSON, "smoothScaling", false) ? 1 : 0);
 }
 
 void psdk_setCheatsEnabled(bool enabled) { gCheatsEnabled.store(enabled); }
 bool psdk_getCheatsEnabled(void) { return gCheatsEnabled.load(); }
 
-void psdk_setTouchMouseEnabled(bool enabled) { gTouchMouseEnabled.store(enabled); }
+void psdk_setTouchMouseEnabled(bool enabled) { psdk_set_touch_enabled(enabled ? 1 : 0); }
 
 void psdk_setGameControllerCaptureEnabled(bool enabled) {
     gControllerCaptureEnabled.store(enabled);
@@ -911,6 +720,7 @@ void psdk_setViewportBoundsColor(float, float, float, float) {}
 
 void psdk_setFastForwardMultiplier(int multiplier) {
     gFastForwardMultiplier.store(multiplier);
+    psdk_set_speed(multiplier);
 }
 
 int psdk_getFastForwardMultiplier(void) { return gFastForwardMultiplier.load(); }
@@ -962,7 +772,7 @@ void psdk_setSetting(const char *key, const char *value) {
 // to the library name.
 const char *psdk_getGameTitle(void) { return ""; }
 const char *psdk_getDetails(void) {
-    static const std::string details = std::string("Ruby ") + ruby()->version;
+    static const std::string details = std::string("Ruby ") + psdk_ruby_version();
     return details.c_str();
 }
 double psdk_getAverageFPS(void) {

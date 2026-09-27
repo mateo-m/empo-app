@@ -61,9 +61,6 @@ make -f iphonesimulator.make mkxp-core
 echo "==> building MkxpCore.framework"
 make -f iphonesimulator.make mkxp-framework
 
-echo "==> building the PSDK core frameworks"
-make -f iphonesimulator.make psdk
-
 echo "==> simulator deps rebuild complete"
 PLATFORM_NAME=iphonesimulator "$REPO_ROOT/scripts/verify-native-deps.sh"
 "$REPO_ROOT/scripts/write-deps-manifest.sh" iphonesimulator full "$DEPS_BUILT_AT" none

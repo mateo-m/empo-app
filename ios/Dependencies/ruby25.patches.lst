@@ -1,4 +1,0 @@
-# Ruby 2.5 iOS cross-compile patches, plus the loader change that lets a
-# 64-bit Ruby read the 32-bit Windows bytecode of a PSDK game from 2020.
-ruby25/ios.patch
-ruby25/load-i386-bytecode.patch

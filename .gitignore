@@ -41,6 +41,10 @@ ios/Dependencies/native/.fetched-version
 # Version-pinned via ios/Dependencies/engine/.version (tracked).
 ios/Dependencies/engine/.fetched-version
 
+# The PSDK core release, fetched by tools/fetch-psdk-core.sh.
+# Version-pinned via ios/Dependencies/psdk/.version (tracked).
+ios/Dependencies/psdk-core/
+
 # MetalANGLE.xcframework - unreferenced by the build, kept untracked
 # in case anything ever needs it. Currently not in the working tree.
 ios/Dependencies/Frameworks/

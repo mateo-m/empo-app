@@ -96,42 +96,6 @@ for ext in libruby18-ext.a libruby19-ext.a "libruby.3.1-ext.a"; do
 done
 nm "$LIB/libruby.3.1-ext.a" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_openssl" {found=1} END {exit !found}' ||
     fail "libruby.3.1-ext.a missing Init_openssl"
-# The PSDK cores. Each Ruby's merged object must export only its own
-# entry, or its Ruby names would reach the rest of the framework link.
-for ruby in 25 30 32 33; do
-    merged="$LIB/litergss$ruby-merged.o"
-    require_file_min "$merged" 1000000 "litergss$ruby-merged.o"
-    require_platform "$merged" "$EXPECTED_PLATFORM" "litergss$ruby-merged.o"
-    exports=$(nm -gUm "$merged" 2>/dev/null | awk '{print $NF}' | sort -u)
-    [ "$exports" = "_psdk_ruby_$ruby" ] ||
-        fail "litergss$ruby-merged.o must export only _psdk_ruby_$ruby, and it exports: $(tr '\n' ' ' <<<"$exports")"
-    require_file_min "$LIB/psdk-bridge$ruby.o" 10000 "psdk-bridge$ruby.o"
-done
-for name in libLiteCGSS_engine.a libsfml-graphics-s.a libsfml-window-s.a \
-    libsfml-audio-s.a libsfml-system-s.a libruby.3.0-static.a libruby.3.0-ext.a; do
-    min=100000
-    case "$name" in
-        libsfml-system-s.a) min=50000 ;;
-        libruby.3.0-static.a | libruby.3.0-ext.a) min=1000000 ;;
-    esac
-    require_file_min "$LIB/$name" "$min" "$name"
-    require_platform "$LIB/$name" "$EXPECTED_PLATFORM" "$name"
-done
-nm "$LIB/libruby.3.0-ext.a" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_socket" {found=1} END {exit !found}' ||
-    fail "libruby.3.0-ext.a missing Init_socket"
-for ruby in 2.5 3.0 3.2 3.3; do
-    PSDK_SUPPORT="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/psdk-support/$ruby"
-    for f in ruby-dist/lib/LiteRGSS.rb ruby-dist/lib/SFMLAudio.rb uri.rb net/http.rb openssl.rb psych.rb; do
-        [ -f "$PSDK_SUPPORT/$f" ] ||
-            fail "psdk-support/$ruby/$f missing (run: make -f ${PLATFORM}.make psdk)"
-    done
-done
-
-# A PSDK core framework is the artifact a launcher embeds, and its
-# export list is what keeps the core's Ruby and its LiteRGSS classes
-# away from the mkxp-z engine.
-PLATFORM_NAME="$PLATFORM" "$REPO_ROOT/scripts/check-psdk-framework.sh" --sdk "$PLATFORM"
-
 for tree in 3.1.0/net/http.rb 3.1.0/openssl.rb 1.9.1/uri.rb 1.8/uri.rb; do
     [ -f "$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/ruby-stdlib/$tree" ] ||
         fail "ruby-stdlib/$tree missing (run: make -f ${PLATFORM}.make ruby-stdlib)"

@@ -332,19 +332,17 @@ git -C "$REPO_ROOT" tag -s "v$VERSION" -m "v$VERSION"
 
 # 8b. Tag the engine commit each core comes from. This proves the GPL
 # binary to source correspondence per release: anyone can check out
-# mkxp-z-apple-mobile or litergss2-apple-mobile at empo-v<version> and
-# get exactly the source compiled into the shipped .ipa. The script
+# mkxp-z-apple-mobile at empo-v<version> and get exactly the source
+# compiled into the shipped .ipa. The script
 # creates the tags locally here, before it pushes anything, so a
 # failure aborts the release cleanly. Step 11 pushes them alongside
 # the app tag.
 #
-# The PSDK core also links LiteCGSS, the SFML fork and Ruby 2.5, 3.0,
-# 3.2 and 3.3, and those repos carry no empo-v tag. The .deps-fingerprint
-# guard ties the shipped PSDK core framework to every pinned
-# gitlink, so the commit this tag names is the one that built it.
+# The PSDK cores wrap a psdk-apple-mobile release. The tag in
+# ios/Dependencies/psdk/.version names its source.
 ENGINE_TAG="empo-v$VERSION"
 # Where each core's engine source lives, as a submodule path here.
-CORE_SOURCES=("mkxp-z-apple-mobile" "ios/Dependencies/sources/litergss2")
+CORE_SOURCES=("mkxp-z-apple-mobile")
 
 tag_core_source() {
     local path="$1" dir="$REPO_ROOT/$1" branch commit tagged

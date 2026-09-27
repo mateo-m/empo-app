@@ -1,3 +1,0 @@
-# Ruby 3.3 iOS cross-compile patches. Ruby 3.3 bytecode names no
-# platform, so the Linux bytecode of a PSDK game loads as it is.
-ruby33/ios.patch

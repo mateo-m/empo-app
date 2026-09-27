@@ -396,7 +396,8 @@ jobs:
             ios/Dependencies/ANGLE/.fetched-version
             ios/Dependencies/native/.fetched-version
             ios/Dependencies/engine/.fetched-version
-          key: deps-${{ runner.os }}-${{ hashFiles('ios/Dependencies/native/.version', 'ios/Dependencies/ANGLE/.version', 'ios/Dependencies/engine/.version') }}
+            ios/Dependencies/psdk-core
+          key: deps-${{ runner.os }}-${{ hashFiles('ios/Dependencies/native/.version', 'ios/Dependencies/ANGLE/.version', 'ios/Dependencies/engine/.version', 'ios/Dependencies/psdk/.version') }}
 
       - name: Hydrate prebuilt dependencies
         env:

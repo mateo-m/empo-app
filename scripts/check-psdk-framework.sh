@@ -43,19 +43,10 @@ fail() {
     exit 1
 }
 
-# psdk_run and psdk_inject_scancode are what psdk_core.h declares, and
-# the test host calls them straight. Everything else is the launcher
-# interface from psdk_app_bridge.cpp. A launcher opens the core and
-# calls every name the header declares. A missing one aborts in the
-# forwarder, so fail here first.
+# A launcher opens the core and calls every name psdk_app_bridge.h
+# declares. A missing one aborts in the forwarder, so fail here first.
 WANT_NAMES=$(grep -oE '\bpsdk_[A-Za-z0-9_]+\(' "$REPO_ROOT/ios/Dependencies/psdk/psdk_app_bridge.h" |
     sed 's/(//' | sort -u | sed 's/^/_/')
-
-# The tree keeps the frameworks between builds, so a change to the build
-# script leaves a framework nothing rebuilt. Match the recorded hash
-# against the script on disk.
-SCRIPT="$REPO_ROOT/tools/psdk-core/build-framework-ios.sh"
-WANT_SCRIPT="$(shasum -a 256 "$SCRIPT" | awk '{print $1}')"
 
 if [ "$SDK" = iphonesimulator ]; then WANT_PLATFORM=7; else WANT_PLATFORM=2; fi
 
@@ -66,10 +57,6 @@ for FW in "${FRAMEWORKS[@]}"; do
         fail "missing $BIN (run: tools/psdk-core/build-framework-ios.sh --sdk $SDK)"
 
     EXPORTS=$(dyld_info -exports "$BIN" | awk '/^ *0x/ {print $2}' | sort -u)
-
-    for want in _psdk_run _psdk_inject_scancode; do
-        grep -qx "$want" <<<"$EXPORTS" || fail "$NAME does not export $want"
-    done
 
     STRAY=$(grep -vE '^_psdk_' <<<"$EXPORTS" || true)
     [ -z "$STRAY" ] ||
@@ -91,16 +78,12 @@ for FW in "${FRAMEWORKS[@]}"; do
     otool -l "$BIN" | grep -Eq "platform ${WANT_PLATFORM}([[:space:]]|$)" ||
         fail "$NAME is not built for $SDK (platform $WANT_PLATFORM)"
 
-    FILES="Headers/psdk_core.h runtime_prelude.rb Info.plist
+    FILES="Info.plist PsdkSupport/compat.rb
         PsdkSupport/ruby-dist/lib/LiteRGSS.rb PsdkSupport/ruby-dist/lib/SFMLAudio.rb PsdkSupport/uri.rb"
     [ "$NAME" = Psdk25Core ] && FILES="$FILES PsdkSupport/litergss1.rb PsdkSupport/RubyFmod.rb"
     for f in $FILES; do
         [ -e "$FW/$f" ] || fail "$NAME.framework/$f missing"
     done
-
-    GOT_SCRIPT="$(cat "$FW/.build-script-sha256" 2>/dev/null || true)"
-    [ "$WANT_SCRIPT" = "$GOT_SCRIPT" ] ||
-        fail "$NAME.framework was built by a different build-framework-ios.sh (run: tools/psdk-core/build-framework-ios.sh --sdk $SDK)"
 
     echo "OK: $NAME.framework is closed for $SDK"
 done

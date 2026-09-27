@@ -4,7 +4,7 @@
 #
 # There is no Xcode project. An iOS app bundle is a directory with a
 # Mach-O binary, an Info.plist and resources, so this script assembles
-# one by hand. The same shape as tools/psdk-core/build-test-host-ios.sh.
+# one by hand.
 #
 # Usage:
 #   tools/mkxp-core/build-test-host-ios.sh [--out <dir>]

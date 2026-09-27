@@ -36,9 +36,10 @@ struct PsdkCore: GameCore {
 
     // A PSDK game reads Enter as confirm, Escape as cancel, V as the main
     // menu and B as its Y button. Its key map answers nothing for Z.
-    // Measured with the probe in tools/psdk-core/prelude.rb on Edelweiss
-    // Chronicles version 1 and version 48. In a 2.5 game, B is Start and
-    // W is Y (the Input::Keys table in psdk/litergss1.rb).
+    // Measured with the probe in psdk-apple-mobile's
+    // tools/test-host/prelude.rb on Edelweiss Chronicles version 1 and
+    // version 48. In a 2.5 game, B is Start and W is Y (the Input::Keys
+    // table in the core's support/litergss1.rb).
     func defaultKeys(forGameAt root: URL) -> [GameKey] {
         let older = ruby == "2.5"
         return GameKey.standard.map {

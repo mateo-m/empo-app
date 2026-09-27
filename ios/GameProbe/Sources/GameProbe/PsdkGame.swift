@@ -3,7 +3,7 @@ import Foundation
 /// Tells whether the PSDK core can run a folder.
 ///
 /// The core changes directory into the folder and loads `Game.rb`
-/// (`ios/Dependencies/psdk/psdk_core.cpp`). In a released PSDK game
+/// (`src/psdk_core.cpp` in psdk-apple-mobile). In a released PSDK game
 /// that file is one line:
 ///
 ///     RubyVM::InstructionSequence.load_from_binary(File.binread('Game.yarb')).eval

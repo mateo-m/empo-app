@@ -37,13 +37,14 @@ DEPS=ios/Dependencies
 # tracked file under them. Add a path here when a new file starts to
 # feed a dependency build.
 #
-# tools/{mkxp,psdk}-core/build-framework-ios.sh are not here. They
-# build an engine output, which rebuild-engine-halves.sh redoes in
-# minutes. A change to one of them writes a new .build-script-sha256
-# into the framework, and scripts/check-*-framework.sh fails until the
-# engine half runs again. Listing them here would force the full
-# dependency rebuild instead, which takes hours and rebuilds nothing
-# the scripts touch.
+# tools/mkxp-core/build-framework-ios.sh is not here. It builds an
+# engine output, which rebuild-engine-halves.sh redoes in minutes. A
+# change to it writes a new .build-script-sha256 into the framework,
+# and scripts/check-mkxp-framework.sh fails until the engine half runs
+# again. Listing it here would force the full dependency rebuild
+# instead, which takes hours and rebuilds nothing the script touches.
+# The PSDK cores come from a psdk-apple-mobile release, not from this
+# tree.
 INPUTS="
 $DEPS/sources/sdl2
 $DEPS/sources/sdl2_image
@@ -54,23 +55,11 @@ $DEPS/sources/ruby
 $DEPS/sources/ruby18
 $DEPS/sources/ruby19
 $DEPS/sources/openal-soft
-$DEPS/sources/ruby25
-$DEPS/sources/ruby30
-$DEPS/sources/ruby32
-$DEPS/sources/ruby33
-$DEPS/sources/sfml
-$DEPS/sources/litecgss
-$DEPS/sources/litergss2
-$DEPS/psdk
 $DEPS/common.make
 $DEPS/iphoneos.make
 $DEPS/iphonesimulator.make
 $DEPS/ruby18.patches.lst
 $DEPS/ruby19.patches.lst
-$DEPS/ruby25.patches.lst
-$DEPS/ruby30.patches.lst
-$DEPS/ruby32.patches.lst
-$DEPS/ruby33.patches.lst
 $DEPS/ruby31.patches.lst
 $DEPS/sdl2.patches.lst
 $DEPS/apply-ruby-patches.sh
@@ -78,10 +67,6 @@ $DEPS/apply-sdl-patches.sh
 $DEPS/pixman
 $DEPS/ruby18
 $DEPS/ruby19
-$DEPS/ruby25
-$DEPS/ruby30
-$DEPS/ruby32
-$DEPS/ruby33
 $DEPS/ruby31
 $DEPS/sdl2
 $DEPS/sdl2_image

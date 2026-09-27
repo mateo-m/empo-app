@@ -23,8 +23,7 @@
 # Secrets:
 #   EMPO_DEPS_READ_TOKEN         read empo-deps (dep tarballs)
 #   EMPO_RELEASE_TOKEN           fine-grained PAT, Contents: RW on
-#                                THIS repo + mkxp-z-apple-mobile +
-#                                litergss2-apple-mobile.
+#                                THIS repo + mkxp-z-apple-mobile.
 #                                Powers the cut and sync commits
 #   DISCORD_RELEASE_WEBHOOK_URL  release announcements
 
@@ -86,7 +85,7 @@ jobs:
           GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::EMPO_RELEASE_TOKEN is not set. Create a fine-grained PAT (Contents: Read+Write on this repo, mkxp-z-apple-mobile and litergss2-apple-mobile) and add it as a repo secret."
+            echo "::error::EMPO_RELEASE_TOKEN is not set. Create a fine-grained PAT (Contents: Read+Write on this repo and mkxp-z-apple-mobile) and add it as a repo secret."
             exit 1
           fi
 
@@ -160,8 +159,7 @@ jobs:
           # holds that engine source, and the name this job stores the
           # gitlink under for the tag step below.
           for ENTRY in \
-            "mkxp-z-apple-mobile:mateo-m/mkxp-z-apple-mobile:mkxp_gitlink" \
-            "ios/Dependencies/sources/litergss2:mateo-m/litergss2-apple-mobile:litergss2_gitlink"; do
+            "mkxp-z-apple-mobile:mateo-m/mkxp-z-apple-mobile:mkxp_gitlink"; do
             SUBMODULE="${ENTRY%%:*}"
             REST="${ENTRY#*:}"
             FORK="${REST%%:*}"
@@ -232,16 +230,14 @@ jobs:
           echo "bump commit: $OID"
           gh api "repos/$GITHUB_REPOSITORY/git/refs" \
             -f ref="refs/tags/v$VERSION" -f sha="$OID"
-          # Each core's engine source gets the same tag, so a shipped
-          # binary names one commit in each fork. The mkxp-z tag push
-          # also runs that repo's artifact build.
+          # The engine source gets the same tag, so a shipped binary
+          # names one commit in the fork. The tag push also runs that
+          # repo's artifact build. The PSDK cores come from the
+          # psdk-apple-mobile release that psdk/.version names.
           gh api "repos/mateo-m/mkxp-z-apple-mobile/git/refs" \
             -f ref="refs/tags/empo-v$VERSION" -f sha="$mkxp_gitlink" ||
             gh api "repos/mateo-m/mkxp-z-apple-mobile/git/ref/tags/empo-v$VERSION" >/dev/null
-          gh api "repos/mateo-m/litergss2-apple-mobile/git/refs" \
-            -f ref="refs/tags/empo-v$VERSION" -f sha="$litergss2_gitlink" ||
-            gh api "repos/mateo-m/litergss2-apple-mobile/git/ref/tags/empo-v$VERSION" >/dev/null
-          echo "tagged v$VERSION (app) + empo-v$VERSION (mkxp-z and litergss2); the tag push runs the build"
+          echo "tagged v$VERSION (app) + empo-v$VERSION (mkxp-z); the tag push runs the build"
 
   # ── Mechanical half: build, audit, publish ───────────────────────
   build:
@@ -322,7 +318,8 @@ jobs:
             ios/Dependencies/ANGLE/.fetched-version
             ios/Dependencies/native/.fetched-version
             ios/Dependencies/engine/.fetched-version
-          key: deps-${{ runner.os }}-${{ hashFiles('ios/Dependencies/native/.version', 'ios/Dependencies/ANGLE/.version', 'ios/Dependencies/engine/.version') }}
+            ios/Dependencies/psdk-core
+          key: deps-${{ runner.os }}-${{ hashFiles('ios/Dependencies/native/.version', 'ios/Dependencies/ANGLE/.version', 'ios/Dependencies/engine/.version', 'ios/Dependencies/psdk/.version') }}
 
       - name: Hydrate prebuilt dependencies
         env:
