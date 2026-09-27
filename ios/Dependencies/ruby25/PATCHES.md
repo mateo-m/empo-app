@@ -1,7 +1,7 @@
 # Ruby 2.5: patches
 
-The PSDK core runs Pokémon SDK (PSDK) games from December 2019 to about March
-2021 on Ruby 2.5. This folder holds the patches of that Ruby.
+Psdk25Core, the core for Pokémon SDK (PSDK) games from December 2019 to about
+March 2021, uses Ruby 2.5. This folder holds the patches of that Ruby.
 
 ## `ios.patch`
 

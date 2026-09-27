@@ -387,7 +387,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     # 9. Build unsigned .ipa from the clean release commit.
     #
     # EMPO_CORES in the environment ships only the cores it names:
-    #   EMPO_CORES=PsdkCore scripts/release.sh --local-build patch
+    #   EMPO_CORES=Psdk30Core scripts/release.sh --local-build patch
     # Empty means the project default, which is every core.
     # macOS ships bash 3.2, where `set -u` plus "${EMPTY[@]}" aborts the
     # script. `${A[@]+"${A[@]}"}` expands to nothing when the array is

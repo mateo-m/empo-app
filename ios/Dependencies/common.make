@@ -456,7 +456,7 @@ $(SOURCES)/freetype/builds/unix/configure: $(SOURCES)/freetype/autogen.sh
 	cd $(SOURCES)/freetype; ./autogen.sh
 
 # ---------------------------------------------------------------------
-# PSDK core: SFML + LiteCGSS + LiteRGSS2 + Ruby 3.0
+# PSDK cores: SFML + LiteCGSS + LiteRGSS2 + one Ruby each
 # ---------------------------------------------------------------------
 
 # SFML (submodule: sources/sfml, fork mateo-m/sfml-apple-mobile).
@@ -589,18 +589,18 @@ $(SOURCES)/litecgss/external/skalog/CMakeLists.txt:
 	git submodule update --init --recursive external/skalog
 
 
-# The Rubies of the PSDK core (submodules: sources/ruby25, sources/ruby30,
+# The Rubies of the PSDK cores (submodules: sources/ruby25, sources/ruby30,
 # sources/ruby32, sources/ruby33)
 #
-# For the PSDK core only. A released PSDK game ships pre-compiled
+# For the PSDK cores only. A released PSDK game ships pre-compiled
 # YARV bytecode (`Game.yarb`, `Data/Scripts.dat`) that only a loader of
 # the same Ruby version reads. The engine's 1.8 / 1.9 / 3.1 Rubys
 # cannot load it. Pokemon Studio compiles a Windows release with Ruby
 # 3.0, a macOS release with Ruby 3.2 and a Linux release with Ruby 3.3,
-# so the PSDK core carries all three. PSDK games released from December
-# 2019 to about March 2021 ran on Ruby 2.5 and LiteRGSS 1, so it carries
-# that one too. PSDK_RUBY picks the Ruby that the per-Ruby recipes below
-# build, and `make psdk` builds all four and the framework.
+# so there is one PSDK core for each. PSDK games released from December
+# 2019 to about March 2021 ran on Ruby 2.5 and LiteRGSS 1, so that one
+# gets a core too. PSDK_RUBY picks the Ruby that the per-Ruby recipes
+# below build, and `make psdk` builds all four and their frameworks.
 #
 # The patch lists have no syntax-transform patches. Those exist only in
 # the 3.1 source, for Pokemon Essentials forks with old grammar.
@@ -770,15 +770,11 @@ $(PSDK_RUBY_SRC)/configure: $(PSDK_RUBY_SRC)/configure.ac $(PSDK_RUBY_CONFIGURE_
 #
 # `ld -r` with a list of the names to keep makes every other name local:
 # the Ruby, its extensions, and the LiteRGSS2 classes with their weak
-# functions and vtables. The four objects link into one framework, and
-# each Ruby compiles some of the same LiteRGSS2 functions to different
-# code. `rb::Dispose` returns nil, which is 8 in Ruby 2.5 and 4 in Ruby
-# 3.3, so a weak name that stayed out would let the linker keep one copy
-# for all four.
+# functions and vtables.
 #
 # LiteCGSS, skalog, the SFML archives, OpenSSL and the launcher bridge
-# stay out of the merge. They hold no Ruby, and the framework links one
-# copy of each (tools/psdk-core/build-framework-ios.sh).
+# stay out of the merge. They hold no Ruby, and the framework links them
+# next to it (tools/psdk-core/build-framework-ios.sh).
 PSDK_OBJDIR := $(BUILD_PREFIX)/binding-litergss$(PSDK_RUBY)
 
 PSDK_INCLUDES := \
@@ -857,8 +853,8 @@ $(LIBDIR)/litergss$(PSDK_RUBY)-merged.o: $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-
 	}; \
 	echo "  exports _psdk_ruby_$(PSDK_RUBY) and nothing else"
 
-# The Ruby support folder that one Ruby of the PSDK core needs at run
-# time. The framework holds one for each Ruby, as PsdkSupport/<version>.
+# The Ruby support folder that one PSDK core needs at run time. The
+# framework of that Ruby holds it as PsdkSupport.
 # The core prepends it to $LOAD_PATH and points the GAMEDEPS variable at
 # it (psdk_core.cpp).
 #
@@ -921,20 +917,21 @@ psdk$(PSDK_RUBY)-support: init_dirs
 	done; true
 	@echo "psdk$(PSDK_RUBY)-support installed under $(PSDK_SUPPORT_DIR)"
 
-# The Ruby-free half of the core: the launcher interface that
-# psdk_app_bridge.h declares, and the choice of Ruby.
-$(LIBDIR)/psdk-bridge.o: ${PWD}/psdk/psdk_app_bridge.cpp ${PWD}/psdk/psdk_app_bridge.h ${PWD}/psdk/psdk_core.h
+# The Ruby-free half of one core: the launcher interface that
+# psdk_app_bridge.h declares. It calls the entry of its own Ruby.
+$(LIBDIR)/psdk-bridge$(PSDK_RUBY).o: ${PWD}/psdk/psdk_app_bridge.cpp ${PWD}/psdk/psdk_app_bridge.h ${PWD}/psdk/psdk_core.h
 	$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
-	    -I$(INCLUDEDIR) -I${PWD}/ANGLE/$(SDK)/include \
+	    -I$(INCLUDEDIR) -I${PWD}/ANGLE/$(SDK)/include -DPSDK_RUBY=$(PSDK_RUBY) \
 	    -c ${PWD}/psdk/psdk_app_bridge.cpp -o $@
 
-# One Ruby of the core.
-psdk$(PSDK_RUBY)-parts: init_dirs ruby$(PSDK_RUBY) litergss$(PSDK_RUBY)-merged psdk$(PSDK_RUBY)-support
+# The parts of one PSDK core.
+psdk$(PSDK_RUBY)-parts: init_dirs ruby$(PSDK_RUBY) litergss$(PSDK_RUBY)-merged psdk$(PSDK_RUBY)-support \
+                        $(LIBDIR)/psdk-bridge$(PSDK_RUBY).o
 
 ifeq ($(PSDK_RUBY),30)
-# The whole PSDK core. The link line lives in the script, next to the
+# The four PSDK cores. The link line lives in the script, next to the
 # test host's, because the two must stay the same.
-psdk: init_dirs sfml litecgss openssl $(LIBDIR)/psdk-bridge.o
+psdk: init_dirs sfml litecgss openssl
 	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=25 psdk25-parts
 	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=30 psdk30-parts
 	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=32 psdk32-parts

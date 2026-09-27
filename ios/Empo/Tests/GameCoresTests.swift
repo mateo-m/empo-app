@@ -29,9 +29,8 @@ final class GameCoresTests: XCTestCase {
         }
     }
 
-    func testEveryCoreHasItsOwnFrameworkAndPrefix() {
+    func testEveryCoreHasItsOwnFramework() {
         XCTAssertEqual(Set(GameCores.all.map(\.framework)).count, GameCores.all.count)
-        XCTAssertEqual(Set(GameCores.all.map(\.symbolPrefix)).count, GameCores.all.count)
     }
 
     /// A zero mask makes the import skip the RGSS check, which is right
@@ -47,41 +46,40 @@ final class GameCoresTests: XCTestCase {
         }
     }
 
-    func testAPsdkFolderAsksForThePsdkCore() throws {
+    func testAPsdkFolderAsksForTheCoreOfItsRuby() throws {
         let psdk = try makeDirectory("psdk")
         try Data("RubyVM\n".utf8).write(to: psdk.appendingPathComponent("Game.rb"))
-        try Data("YARB".utf8).write(to: psdk.appendingPathComponent("Game.yarb"))
 
-        let core = try XCTUnwrap(GameCores.core(forGameAt: psdk))
-        XCTAssertEqual(core.framework, "PsdkCore")
-
-        // The version in each Game.yarb header picks the Ruby: 3.2 is a
+        // The version in each Game.yarb header picks the core: 3.2 is a
         // game compiled on a Mac, 3.3 on Linux, 2.5 a release of 2020.
-        for (major, minor, ruby) in [(3, 2, "3.2"), (3, 3, "3.3"), (2, 5, "2.5"), (3, 0, "3.0")]
-            as [(UInt8, UInt8, String)]
-        {
+        for (major, minor, framework) in [
+            (3, 2, "Psdk32Core"), (3, 3, "Psdk33Core"), (2, 5, "Psdk25Core"), (3, 0, "Psdk30Core"),
+        ] as [(UInt8, UInt8, String)] {
             try Data("YARB".utf8 + [major, 0, 0, 0, minor, 0, 0, 0]).write(
                 to: psdk.appendingPathComponent("Game.yarb"))
-            XCTAssertEqual(GameCores.core(forGameAt: psdk)?.framework, "PsdkCore", ruby)
-            XCTAssertEqual(PsdkCore.ruby(forGameAt: psdk), ruby)
-            XCTAssertNoThrow(try core.validateGameRoot(psdk) { _ in }, ruby)
+            let core = try XCTUnwrap(GameCores.core(forGameAt: psdk), framework)
+            XCTAssertEqual(core.framework, framework)
+            XCTAssertNoThrow(try core.validateGameRoot(psdk) { _ in }, framework)
+            // In a 2.5 game, W is the Y button.
+            XCTAssertEqual(
+                core.defaultKeys(forGameAt: psdk).map(\.label),
+                ["Enter", "Escape", "V", major == 2 ? "W" : "B"], framework)
         }
-        // In a 2.5 game, W is the Y button.
-        XCTAssertEqual(core.defaultKeys(forGameAt: psdk).map(\.label), ["Enter", "Escape", "V", "B"])
-        try Data("YARB".utf8 + [2, 0, 0, 0, 5, 0, 0, 0]).write(to: psdk.appendingPathComponent("Game.yarb"))
-        XCTAssertEqual(core.defaultKeys(forGameAt: psdk).map(\.label), ["Enter", "Escape", "V", "W"])
 
-        // No Ruby in the core loads bytecode of Ruby 3.1.
+        // No core loads bytecode of Ruby 3.1, so the 3.0 core takes the
+        // game and the import refuses it.
         try Data("YARB".utf8 + [3, 0, 0, 0, 1, 0, 0, 0]).write(to: psdk.appendingPathComponent("Game.yarb"))
-        XCTAssertThrowsError(try core.validateGameRoot(psdk) { _ in })
+        let refused = try XCTUnwrap(GameCores.core(forGameAt: psdk))
+        XCTAssertEqual(refused.framework, "Psdk30Core")
+        XCTAssertThrowsError(try refused.validateGameRoot(psdk) { _ in })
 
         // A release compiled with --no-yarb runs on any Ruby.
         try FileManager.default.removeItem(at: psdk.appendingPathComponent("Game.yarb"))
         try Data("PSDK_VERSION = 6716\nFile.binread('Data/Scripts.dat')\n".utf8)
             .write(to: psdk.appendingPathComponent("Game.rb"))
-        XCTAssertEqual(GameCores.core(forGameAt: psdk)?.framework, "PsdkCore")
-        XCTAssertEqual(PsdkCore.ruby(forGameAt: psdk), "3.0")
-        XCTAssertNoThrow(try core.validateGameRoot(psdk) { _ in })
+        let anyRuby = try XCTUnwrap(GameCores.core(forGameAt: psdk))
+        XCTAssertEqual(anyRuby.framework, "Psdk30Core")
+        XCTAssertNoThrow(try anyRuby.validateGameRoot(psdk) { _ in })
 
         let other = psdk.appendingPathComponent("Graphics", isDirectory: true)
         try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
@@ -122,9 +120,11 @@ final class GameCoresTests: XCTestCase {
     }
 
     func testTheRefusalNamesTheMissingCore() {
-        XCTAssertTrue(
-            PsdkCore().notInThisBuildMessage.contains("PSDK core"),
-            PsdkCore().notInThisBuildMessage)
+        for core in PsdkCore.all {
+            XCTAssertTrue(
+                core.notInThisBuildMessage.contains("PSDK core for Ruby \(core.ruby)"),
+                core.notInThisBuildMessage)
+        }
         XCTAssertTrue(
             MkxpCore().notInThisBuildMessage.contains("RPG Maker XP"),
             MkxpCore().notInThisBuildMessage)

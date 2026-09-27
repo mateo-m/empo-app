@@ -1,8 +1,8 @@
 # Per-game compatibility code for the PSDK core. psdk_run loads this
 # before Game.rb.
 #
-# It ships inside PsdkCore.framework, so a launcher embeds one artifact
-# and carries no PSDK file of its own. Nothing here belongs in the core:
+# It ships inside each PSDK core framework, so a launcher embeds one
+# artifact and carries no PSDK file of its own. Nothing here belongs in the core:
 # these are things released games do, not things PSDK does.
 $stdout.sync = true
 $stderr.sync = true

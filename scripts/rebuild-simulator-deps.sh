@@ -61,7 +61,7 @@ make -f iphonesimulator.make mkxp-core
 echo "==> building MkxpCore.framework"
 make -f iphonesimulator.make mkxp-framework
 
-echo "==> building PsdkCore.framework"
+echo "==> building the PSDK core frameworks"
 make -f iphonesimulator.make psdk
 
 echo "==> simulator deps rebuild complete"

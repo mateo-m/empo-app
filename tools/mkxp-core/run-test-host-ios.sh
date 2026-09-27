@@ -9,7 +9,7 @@
 #   tools/mkxp-core/run-test-host-ios.sh --game <dir> [--seconds 90]
 #                                        [--snap-every 5] [--device <udid>]
 #                                        [--keys 20:29,26:40] [--load-at 2]
-#                                        [--also-open PsdkCore.framework]
+#                                        [--also-open Psdk30Core.framework]
 #
 # --keys presses MKXP_SCANCODE_* values at the given second, to drive
 # the game without a person at the keyboard. host.m explains the format.

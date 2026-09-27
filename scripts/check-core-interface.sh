@@ -6,7 +6,7 @@
 #
 #   Empo      ios/Empo/src/App/GameCore.h          gamecore_ / GameCore
 #   MkxpCore  mkxp-z-apple-mobile/src/app_bridge.h mkxp_     / MKXP
-#   PsdkCore  ios/Dependencies/psdk/psdk_app_bridge.h  psdk_ / Psdk
+#   Psdk*Core ios/Dependencies/psdk/psdk_app_bridge.h  psdk_ / Psdk
 #   MvmzCore  ios/MvmzCore/mvmz_app_bridge.h         mvmz_ / Mvmz
 #
 # GameCore.h holds only what Empo calls. A core header can hold more,

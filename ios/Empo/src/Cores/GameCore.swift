@@ -125,9 +125,7 @@ extension GameCore {
 
 enum GameCores {
     /// The first core that accepts a folder runs it.
-    static let all: [any GameCore] = [
-        PsdkCore(), MvmzCore(), MkxpCore(),
-    ]
+    static let all: [any GameCore] = PsdkCore.all + [MvmzCore(), MkxpCore()]
 
     static var inThisBuild: [any GameCore] { all.filter(\.isInThisBuild) }
 

@@ -28,7 +28,7 @@
 //                  ends. Unset or 0 means no limit.
 //
 //   MKXP_ALSO_OPEN a second framework to open before the engine, named
-//                  the way it sits in Frameworks (PsdkCore.framework).
+//                  the way it sits in Frameworks (Psdk30Core.framework).
 //                  It proves two cores load in one process without one
 //                  binding to the other.
 

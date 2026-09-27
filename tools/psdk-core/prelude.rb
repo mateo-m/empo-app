@@ -14,7 +14,7 @@ $stderr.sync = true
 # core gives it runtime_prelude.rb, which holds the per-game fixes and
 # the fast forward patch. Load that file first, so a test run has what
 # the app runs.
-load File.join(__dir__, 'Frameworks/PsdkCore.framework/runtime_prelude.rb')
+load Dir[File.join(__dir__, 'Frameworks/Psdk*Core.framework/runtime_prelude.rb')].first
 
 # Report what LiteRGSS hands PSDK for an injected key, and which
 # virtual keys PSDK then holds down. Input.press? is the answer the game

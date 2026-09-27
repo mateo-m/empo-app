@@ -1,6 +1,6 @@
 # Ruby 3.0: patches
 
-PsdkCore, the core for Pokémon SDK (PSDK) games compiled on Windows, uses
+Psdk30Core, the core for Pokémon SDK (PSDK) games compiled on Windows, uses
 Ruby 3.0. This folder holds the patches of that Ruby.
 
 ## `load-i386-bytecode.patch`

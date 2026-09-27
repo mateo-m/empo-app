@@ -1,9 +1,9 @@
 // PSDK core: the boundary between a host app and a released Pokemon SDK
-// game running on LiteRGSS2, LiteCGSS, SFML and one of four Rubies.
+// game running on LiteRGSS2, LiteCGSS, SFML and one Ruby.
 //
-// Everything below is the whole interface. The core ships as
-// PsdkCore.framework, one dynamic image per SDK, and that image
-// boundary is what keeps its Rubies and its LiteRGSS classes away from
+// Everything below is the whole interface. The core ships as one
+// framework for each Ruby, Psdk25Core to Psdk33Core, and that image
+// boundary is what keeps its Ruby and its LiteRGSS classes away from
 // the mkxp-z engine.
 #ifndef PSDK_CORE_H
 #define PSDK_CORE_H
@@ -51,9 +51,8 @@ enum PsdkResult {
 int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
              const char *preludePath);
 
-// One Ruby of the core. Each Ruby's merged object exports its entry
-// below and no other name, so the four Rubies and their four copies of
-// LiteRGSS share nothing at the framework link.
+// The Ruby of the core. Each Ruby's merged object exports its entry
+// below and no other name.
 typedef struct PsdkRuby {
     // RUBY_VERSION of this Ruby, such as "2.5.9".
     const char *version;

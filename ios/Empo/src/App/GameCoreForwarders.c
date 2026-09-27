@@ -58,7 +58,7 @@ int EmpoCoreIsOpen(void) {
 }
 
 // Each core answers this interface under its own prefix: MkxpCore
-// answers mkxp_setGamePath, PsdkCore answers psdk_setGamePath. The
+// answers mkxp_setGamePath, a PSDK core answers psdk_setGamePath. The
 // caller of EmpoCoreOpen says which one it opened.
 static void *coreSymbol(const char *name) {
     char symbol[96];

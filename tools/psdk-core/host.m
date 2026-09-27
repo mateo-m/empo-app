@@ -12,9 +12,10 @@
 // and every eglSwapBuffers succeeds, but the display stays black.
 // Empo has a real window already, so this only matters for the test.
 //
-// The host does not link the core. It opens
-// Frameworks/PsdkCore.framework/PsdkCore with dlopen when the game
-// starts, and reads the Ruby support folder from the same bundle. Empo
+// The host does not link a core. It opens
+// Frameworks/Psdk30Core.framework/Psdk30Core, or the core that PSDK_RUBY
+// names, with dlopen when the game starts, and reads the Ruby support
+// folder from the same bundle. Empo
 // does the same on the game the user picks, so the test host and the
 // launcher take one path.
 //
@@ -211,21 +212,22 @@ static void scheduleRotation(const char *spec) {
     }
     gGamePath = strdup(game.fileSystemRepresentation);
 
-    NSString *core = [NSBundle.mainBundle.privateFrameworksPath
-        stringByAppendingPathComponent:@"PsdkCore.framework"];
-    // PSDK_RUBY picks one of the core's Rubies, as the app does from the
-    // version in Game.yarb.
+    // PSDK_RUBY picks the core, as the app does from the version in
+    // Game.yarb.
     const char *wantRuby = getenv("PSDK_RUBY");
-    const char *ruby = (wantRuby && *wantRuby) ? wantRuby : "3.0";
-    NSString *support = [[core stringByAppendingPathComponent:@"PsdkSupport"]
-        stringByAppendingPathComponent:@(ruby)];
+    NSString *name = [NSString stringWithFormat:@"Psdk%@Core",
+        [@((wantRuby && *wantRuby) ? wantRuby : "3.0") stringByReplacingOccurrencesOfString:@"."
+                                                                                withString:@""]];
+    NSString *core = [NSBundle.mainBundle.privateFrameworksPath
+        stringByAppendingPathComponent:[name stringByAppendingPathExtension:@"framework"]];
+    NSString *support = [core stringByAppendingPathComponent:@"PsdkSupport"];
     if (![NSFileManager.defaultManager fileExistsAtPath:support]) {
         fprintf(stderr, "[host] no support folder at %s\n", support.UTF8String);
         exit(4);
     }
     gSupportPath = strdup(support.fileSystemRepresentation);
 
-    void *image = dlopen([core stringByAppendingPathComponent:@"PsdkCore"]
+    void *image = dlopen([core stringByAppendingPathComponent:name]
                              .fileSystemRepresentation,
                          RTLD_NOW | RTLD_LOCAL);
     if (!image) {
@@ -234,12 +236,10 @@ static void scheduleRotation(const char *spec) {
     }
     gPsdkRun = dlsym(image, "psdk_run");
     gPsdkInjectKeyEvent = dlsym(image, "psdk_injectKeyEvent");
-    void (*setSetting)(const char *, const char *) = dlsym(image, "psdk_setSetting");
-    if (!gPsdkRun || !gPsdkInjectKeyEvent || !setSetting) {
-        fprintf(stderr, "[host] the core is missing psdk_run, psdk_injectKeyEvent or psdk_setSetting\n");
+    if (!gPsdkRun || !gPsdkInjectKeyEvent) {
+        fprintf(stderr, "[host] the core is missing psdk_run or psdk_injectKeyEvent\n");
         exit(6);
     }
-    setSetting("rubyVersion", ruby);
 
     // PSDK_FAST_FORWARD asks the core for that many game updates for each
     // drawn frame. The prelude reports the update rate, so a run at 1 and

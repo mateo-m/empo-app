@@ -15,7 +15,7 @@
 # --keys presses SFML scancodes at the given second, to drive the game
 # without a person at the keyboard. host.m explains the format.
 #
-# --ruby picks the Ruby of the core: 2.5, 3.0 (the default), 3.2 or 3.3.
+# --ruby picks the core by its Ruby: 2.5, 3.0 (the default), 3.2 or 3.3.
 # It must match the version in the game's Game.yarb.
 #
 # The snapshots come from `simctl io screenshot`, not from the game. A

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build PsdkTests.app, a minimal iOS host that runs one released Pokemon
-# SDK game on the PSDK core.
+# SDK game on a PSDK core.
 #
 # There is no Xcode project. An iOS app bundle is a directory with a
 # Mach-O binary, an Info.plist and resources, so this script assembles
@@ -39,8 +39,8 @@ done
 
 TREE="$DEPS/build-$SDK-$ARCH"
 
-if [ ! -d "$TREE/PsdkCore.framework" ]; then
-    echo "build-test-host-ios: PsdkCore.framework missing." >&2
+if [ ! -d "$TREE/Psdk30Core.framework" ]; then
+    echo "build-test-host-ios: Psdk30Core.framework missing." >&2
     echo "Run: cd ios/Dependencies && make -f $SDK.make psdk" >&2
     exit 1
 fi
@@ -62,7 +62,7 @@ echo "[psdk-host] Compiling the host..."
 
 echo "[psdk-host] Linking..."
 # The host does not link the core. It opens the framework with dlopen at
-# run time, so nothing here names PsdkCore.
+# run time, so nothing here names a core.
 "$CC" -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
     -mios-simulator-version-min="$MIN_OS" \
     -o "$APP/PsdkTests" \
@@ -74,7 +74,7 @@ cp "$HERE/Info.plist" "$APP/Info.plist"
 cp "$HERE/prelude.rb" "$APP/prelude.rb"
 rm -rf "$APP/Frameworks"
 mkdir -p "$APP/Frameworks"
-cp -R "$TREE/PsdkCore.framework" "$APP/Frameworks/"
+cp -R "$TREE"/Psdk*Core.framework "$APP/Frameworks/"
 
 # An unsigned bundle installs on some simulator runtimes and not on
 # others. An ad-hoc signature works everywhere and needs no identity.

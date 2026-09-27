@@ -5,14 +5,14 @@
 // GameCoreForwarders.c.
 //
 // A core answers the same interface under its own prefix: MkxpCore
-// answers mkxp_*, PsdkCore answers psdk_*, MvmzCore answers mvmz_*.
+// answers mkxp_*, the PSDK cores answer psdk_*, MvmzCore answers mvmz_*.
 // The forwarder puts the open core's prefix in front of the name, so
 // this header names no engine and no engine header names Empo.
 //
 // Each side keeps its own copy of this file:
 //   Empo        ios/Empo/src/App/GameCore.h              gamecore_ / GameCore
 //   MkxpCore    mkxp-z-apple-mobile/src/app_bridge.h     mkxp_ / MKXP
-//   PsdkCore    ios/Dependencies/psdk/psdk_app_bridge.h  psdk_ / Psdk
+//   Psdk*Core   ios/Dependencies/psdk/psdk_app_bridge.h  psdk_ / Psdk
 //   MvmzCore    ios/MvmzCore/mvmz_app_bridge.h           mvmz_ / Mvmz
 //
 // scripts/check-core-interface.sh compares them and fails when one of

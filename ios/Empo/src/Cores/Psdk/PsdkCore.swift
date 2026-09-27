@@ -2,25 +2,36 @@ import Foundation
 import GameProbe
 import SwiftUI
 
-/// The PSDK core carries one Ruby for each version that Pokémon Studio
-/// compiles a release with, and a Ruby can load only bytecode of its own
-/// version. `launch` picks the Ruby for the game.
+/// One PSDK core for each Ruby that Pokémon Studio compiles a release
+/// with, because a Ruby can load only bytecode of its own version.
+///
+/// Each framework carries SFML's SFView, SFViewController and
+/// SFAppDelegate, and Objective-C keeps one class for each name in a
+/// process. That holds only while a PSDK core can't kill its game
+/// (`canKillSession`), so that no second PSDK core opens after it.
 struct PsdkCore: GameCore {
-    let framework = "PsdkCore"
+    let ruby: String
+    let gamesLine: String
     let symbolPrefix = "psdk_"
-    let displayName = "PSDK core"
-    let gamesLine = "Runs PSDK games released since late 2019"
     let madeWith = "PSDK"
 
-    /// The Rubies in the framework: "3.0" for a game compiled on Windows,
-    /// "3.2" on a Mac, "3.3" on Linux, and "2.5" for one released from
-    /// December 2019 to about March 2021.
-    static let rubies: Set<String> = ["2.5", "3.0", "3.2", "3.3"]
+    var framework: String { "Psdk\(ruby.replacingOccurrences(of: ".", with: ""))Core" }
+    var displayName: String { "PSDK core for Ruby \(ruby)" }
 
-    /// A release without bytecode runs on any Ruby, so it gets the one
-    /// of most games.
+    static let all = [
+        PsdkCore(ruby: "2.5", gamesLine: "Runs PSDK games released from December 2019 to about March 2021"),
+        PsdkCore(ruby: "3.0", gamesLine: "Runs the Windows release of PSDK games since about March 2021"),
+        PsdkCore(ruby: "3.2", gamesLine: "Runs the Mac release of PSDK games"),
+        PsdkCore(ruby: "3.3", gamesLine: "Runs the Linux release of PSDK games"),
+    ]
+
+    /// Takes a release without bytecode, which runs on any Ruby, and every
+    /// PSDK folder that no core can run, so that the import can refuse it.
+    static let fallbackRuby = "3.0"
+    static let rubies = Set(all.map(\.ruby))
+
     static func ruby(forGameAt root: URL) -> String {
-        PsdkGame.bytecodeVersion(root) ?? "3.0"
+        PsdkGame.bytecodeVersion(root) ?? fallbackRuby
     }
 
     // A PSDK game reads Enter as confirm, Escape as cancel, V as the main
@@ -29,7 +40,7 @@ struct PsdkCore: GameCore {
     // Chronicles version 1 and version 48. In a 2.5 game, B is Start and
     // W is Y (the Input::Keys table in psdk/litergss1.rb).
     func defaultKeys(forGameAt root: URL) -> [GameKey] {
-        let older = Self.ruby(forGameAt: root) == "2.5"
+        let older = ruby == "2.5"
         return GameKey.standard.map {
             switch $0.scancode {
             case Int32(GAMECORE_SCANCODE_Z): GameKey(label: "V", scancode: Int32(GAMECORE_SCANCODE_V))
@@ -40,9 +51,12 @@ struct PsdkCore: GameCore {
         }
     }
 
-    /// The core takes every PSDK folder, and refuses the ones it can't run.
     func isGameRoot(_ url: URL, fileManager: FileManager) -> Bool {
-        PsdkGame.isGameRoot(url, fileManager: fileManager) || PsdkGame.isStudioProject(url)
+        guard PsdkGame.isGameRoot(url, fileManager: fileManager) || PsdkGame.isStudioProject(url) else {
+            return false
+        }
+        let version = Self.ruby(forGameAt: url)
+        return version == ruby || (ruby == Self.fallbackRuby && !Self.rubies.contains(version))
     }
 
     func validateGameRoot(_ root: URL, fetch: (String) throws -> Void) throws {
@@ -75,7 +89,6 @@ struct PsdkCore: GameCore {
     // a mark if a slow device shows the wait.
     func launch(_ container: GameContainer) {
         PsdkGame.matchFileNameCase(in: container.gameURL)
-        gamecore_setSetting("rubyVersion", Self.ruby(forGameAt: container.gameURL))
     }
 
     /// A PSDK game ships no Game.ini, and its app_data.json holds

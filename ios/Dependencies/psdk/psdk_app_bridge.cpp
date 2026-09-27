@@ -69,19 +69,11 @@ extern "C" void sfml_ios_inject_key_event(int sfScan, int pressed);
 
 namespace {
 
-// The name is the "rubyVersion" setting and the support folder of that
-// Ruby, PsdkSupport/<name>.
-struct RubyChoice {
-    const char *name;
-    const PsdkRuby *(*entry)(void);
-};
-constexpr RubyChoice kRubies[] = {
-    {"2.5", psdk_ruby_25},
-    {"3.0", psdk_ruby_30},
-    {"3.2", psdk_ruby_32},
-    {"3.3", psdk_ruby_33},
-};
-std::atomic<const RubyChoice *> gRuby{&kRubies[1]};
+// The make recipe compiles this file once for each Ruby, with PSDK_RUBY
+// set to 25, 30, 32 or 33, and each framework links one of them.
+#define PSDK_RUBY_ENTRY_NAME(v) psdk_ruby_##v
+#define PSDK_RUBY_ENTRY(v) PSDK_RUBY_ENTRY_NAME(v)
+const PsdkRuby *ruby() { return PSDK_RUBY_ENTRY(PSDK_RUBY)(); }
 
 std::mutex gLock;
 std::string gGamePath;
@@ -182,7 +174,7 @@ std::atomic<char **> gArgv{nullptr};
 constexpr size_t kGameStackBytes = 16 * 1024 * 1024;
 
 // The core reads its own files from its own bundle, so a launcher embeds
-// PsdkCore.framework and ships no PSDK file of its own. dladdr on a
+// the framework and ships no PSDK file of its own. dladdr on a
 // function in this image names the framework binary, and its folder is
 // the bundle. mkxp-z finds its assets the same way
 // (filesystemImplIOS.mm mkxpOwnBundle).
@@ -279,12 +271,11 @@ int toSfmlScancode(int sdlScancode) {
 
 void *runGame(void *) {
     const std::string bundle = ownBundlePath();
-    const RubyChoice *ruby = gRuby.load();
-    const std::string support = bundle + "/PsdkSupport/" + ruby->name;
+    const std::string support = bundle + "/PsdkSupport";
     const std::string prelude = bundle + "/runtime_prelude.rb";
     const char *path = psdk_waitForGamePath();
 
-    int result = ruby->entry()->run(gArgc.load(), gArgv.load(), path, support.c_str(), prelude.c_str());
+    int result = ruby()->run(gArgc.load(), gArgv.load(), path, support.c_str(), prelude.c_str());
     fprintf(stderr, "[psdk-bridge] psdk_run returned %d\n", result);
 
     gExitedCleanly.store(result == PSDK_OK);
@@ -649,7 +640,7 @@ const char *psdk_waitForGamePath(void) {
 
 int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
              const char *preludePath) {
-    return gRuby.load()->entry()->run(argc, argv, gameDir, supportDir, preludePath);
+    return ruby()->run(argc, argv, gameDir, supportDir, preludePath);
 }
 
 void psdk_inject_scancode(int scancode, int pressed) {
@@ -964,14 +955,6 @@ void psdk_applySessionConfig(const PsdkSessionConfig *config) {
 // MARK: - What the launcher reads
 
 void psdk_setSetting(const char *key, const char *value) {
-    if (key && value && strcmp(key, "rubyVersion") == 0) {
-        for (const RubyChoice &ruby : kRubies) {
-            if (strcmp(ruby.name, value) == 0) {
-                gRuby.store(&ruby);
-                return;
-            }
-        }
-    }
     fprintf(stderr, "[psdk] unknown setting %s=%s\n", key ? key : "(null)", value ? value : "(null)");
 }
 
@@ -979,9 +962,7 @@ void psdk_setSetting(const char *key, const char *value) {
 // to the library name.
 const char *psdk_getGameTitle(void) { return ""; }
 const char *psdk_getDetails(void) {
-    // The Ruby is set before the game starts and stays for the process.
-    static std::string details;
-    details = std::string("Ruby ") + gRuby.load()->entry()->version;
+    static const std::string details = std::string("Ruby ") + ruby()->version;
     return details.c_str();
 }
 double psdk_getAverageFPS(void) {
