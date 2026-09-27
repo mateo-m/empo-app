@@ -1,13 +1,13 @@
 ---
 title: Multi-Ruby
-description: The RPG Maker core holds three Ruby interpreters. How Empo detects the version that a game needs, and how the engine dispatches to it.
+description: The RPG Maker XP, VX and VX Ace core holds three Ruby interpreters. How Empo detects the version that a game needs, and how the engine dispatches to it.
 ---
 
 ## Overview
 
-The RPG Maker core (`MkxpCore.framework`) holds three Ruby interpreters: 1.8.8, 1.9.3, and 3.1.3. At launch, it dispatches each game to the correct one. A vintage RPG Maker XP game runs on Ruby 1.8's actual parser and VM. A modern Pokemon Essentials fork built on the mkxp-z runtime routes to Ruby 3.1. Empo applies the syntax-transform compatibility mode for the legacy game-script idioms that PE uses. Modern forks that ship `x64-msvcrt-ruby300.dll` fold onto the same 3.1 dispatch. The syntax-transform parser patches exist only in the 3.1 source, so the RPG Maker core has no 3.0 build.
+The RPG Maker XP, VX and VX Ace core (`MkxpCore.framework`) holds three Ruby interpreters: 1.8.8, 1.9.3, and 3.1.3. At launch, it dispatches each game to the correct one. A vintage RPG Maker XP game runs on Ruby 1.8's actual parser and VM. A modern Pokemon Essentials fork built on the mkxp-z runtime routes to Ruby 3.1. Empo applies the syntax-transform compatibility mode for the legacy game-script idioms that PE uses. Modern forks that ship `x64-msvcrt-ruby300.dll` fold onto the same 3.1 dispatch. The syntax-transform parser patches exist only in the 3.1 source, so the RPG Maker XP, VX and VX Ace core has no 3.0 build.
 
-The PSDK core has its own Ruby 3.0 for PSDK games. This page does not cover it. See [`cores.md`](cores.md).
+The four PSDK cores have Ruby 2.5, 3.0, 3.2 and 3.3 for PSDK games, one in each core. This page does not cover them. See [`cores.md`](cores.md).
 
 ## Why
 
@@ -43,18 +43,16 @@ Build targets: `make mkxp18-merged`, `mkxp19-merged`, `mkxp31-merged`, or `mkxp-
 
 ### Dispatcher
 
-The host (Empo iOS app) tells the engine which Ruby version to use before each session, via the `app_bridge.h` API:
+The host (Empo iOS app) tells the engine which Ruby version to use before each session. `MkxpCore.launch(_:)` sends plain string settings through `gamecore_setSetting`, before `gamecore_applySessionConfig`:
 
 ```c
-gamecore_applySessionConfig(&(GameCoreSessionConfig){
-    .rubyVersion = GAMECORE_RUBY_31,
-    .syntaxTransformMode = GAMECORE_SYNTAX_TRANSFORM_LEGACY,
-    /* managedConfigDir, userDataDirectory, alignment, ... */
-});
-gamecore_setGamePath(...);  // session starts
+gamecore_setSetting("rubyVersion", "31");         // "18", "19" or "31"
+gamecore_setSetting("syntaxTransform", "legacy"); // or "modern"
+gamecore_applySessionConfig(&config);             // directories, alignment
+gamecore_setGamePath(...);                        // session starts
 ```
 
-Individual setters (`gamecore_setActiveRubyVersion`, `gamecore_setSyntaxTransformMode`, …) remain for mid-session toggles. `EngineSessionCoordinator.configureEngine(_:)` prefers `gamecore_applySessionConfig()` at launch.
+The app does not know these keys. Only `MkxpCore` sends them, and `mkxp_setSetting` in `app_bridge.cpp` reads them. `mkxp_setSetting` calls the engine setters `mkxp_setActiveRubyVersion` and `mkxp_setSyntaxTransformMode`.
 
 `mkxp-z-apple-mobile/src/binding.h`'s `getActiveScriptBinding()` reads the atomic and calls the matching `_mkxp_get_script_binding_NN()` entry point. If the requested version's merged.o is a build-time stub (returns nullptr), the dispatcher falls back to the next available version with a warning.
 
@@ -81,7 +79,7 @@ Individual setters (`gamecore_setActiveRubyVersion`, `gamecore_setSyntaxTransfor
 
 5. **Default**: 31. The build's historical fallback for projects that do not match any signal.
 
-The user can override the result with the Ruby Version picker in `GameSettings`. The override wins over auto-detection at engine-launch time.
+The user can override the result with the Ruby version picker. `MkxpSettings.rubyVersionOverride` holds the choice, and it wins over the scan at launch.
 
 ### Detection schema versioning
 
@@ -102,9 +100,7 @@ enum Schema: String {
 static let currentSchema: Schema = .rgss2Ruby18
 ```
 
-`GameMetadata` persists the detected version and `modernRubyScriptsDetected` alongside the `*DetectedSchema` raw strings. Library load compares the stored schema with the current one. On a mismatch, it re-runs detection. `GameScriptProfile` is the only entry point.
-
-`GameMetadata.init(from:)` is a manual implementation with field-level `try?`. A single field's type change between builds thus does not erase unrelated fields (`dateAdded`, `totalPlayTime`, etc.) on the next save.
+`MkxpProfile` stores the scan result and its schema string in `Metadata/mkxp-profile.json`. `MkxpProfile.load(for:)` compares the stored schema with the current one. On a mismatch, it scans again. The core scans again at import, at launch when both Ruby pickers are on Auto-detect, and when the user resets the settings. `GameScriptProfile` is the only entry point.
 
 ## Per-version compile
 
@@ -159,7 +155,7 @@ The host sets the mode per session, before `gamecore_setGamePath()`:
 | `MKXP_SYNTAX_TRANSFORM_CUSTOM`   | Never set by the iOS host. Selected via mkxp.json's `syntaxTransformCustomVersion{Major,Minor,Teeny}` keys (desktop / test-harness path). | Patches active. They emulate the grammar of the configured Ruby version.                            |
 | `MKXP_SYNTAX_TRANSFORM_UNSET`    | Default at startup. The engine falls back to mkxp.json's value (legacy desktop path).                                                     | The iOS host always sets a real value, so UNSET stays as a guard for desktop / test-harness builds. |
 
-`GameSettings.useModernRuby` is the per-game switch. `GameScriptProfile` and JGP import paths set it at import time from the grammar sniff first, then from packaging (bundled Ruby 3 runtime, `.fpk` archive) when the sniff could not read the live source. The user can override it in the per-game settings sheet.
+`MkxpSettings.useModernRuby` is the per-game switch. `MkxpCore.didImport` sets it to true on a new import when the scan finds Ruby 3 scripts, and for a JoiPlay archive of type `mkxp-z`. The scan reads the grammar first, then the packaging (bundled Ruby 3 runtime, `.fpk` archive) when it cannot read the scripts. The user can change it in the per-game settings sheet.
 
 When the build does not define `MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES`, the patches are no-ops at the engine level. The 1.8 and 1.9 builds do not define it. Only the Ruby 3.1 build does.
 
@@ -173,7 +169,7 @@ See [`multi-session.md`](multi-session.md). It covers the `exit!` and `Thread.cr
   - `mkxp-z-apple-mobile/binding/binding-mri.cpp` - script eval loop, `mkxp_get_script_binding_NN` entry, syntax-transform-gated legacy method shims.
   - `mkxp-z-apple-mobile/binding/binding-util.{h,cpp}` - per-version RAPI shims, `mkxpUsingRuby18Encoding`.
   - `mkxp-z-apple-mobile/src/binding.h` - `getActiveScriptBinding()` dispatcher.
-  - `mkxp-z-apple-mobile/src/app_bridge.{h,cpp}` - `MKXPRubyVersion`, `mkxp_setActiveRubyVersion()` / `mkxp_setSyntaxTransformMode()`.
+  - `mkxp-z-apple-mobile/src/app_bridge.{h,cpp}` - `MKXPRubyVersion`, the `rubyVersion` and `syntaxTransform` keys of `mkxp_setSetting()`.
   - `mkxp-z-apple-mobile/src/main.cpp` - `EngineHost` lifecycle, RGSS thread.
   - `mkxp-z-apple-mobile/syntax-transform/3.1/*.patch` - 36 Ruby 3.1 source patches.
   - `mkxp-z-apple-mobile/scripts/preload/platform_compat.rb` - Thread.critical / exit! shims.
@@ -187,6 +183,6 @@ See [`multi-session.md`](multi-session.md). It covers the `exit!` and `Thread.cr
 - **iOS**:
   - `ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` - unified per-game detection.
   - `ios/GameProbe/Sources/GameProbe/RubyScriptGrammarSniffer.swift` - Marshal + zlib decoder for Scripts.\* files.
-  - `ios/Empo/src/App/EngineSessionCoordinator.swift` - `configureEngine(_:)` before `gamecore_setGamePath`.
-  - `ios/Empo/src/Library/GameMetadata.swift` - persisted detection result + schema string.
-  - `ios/Empo/src/Library/GameSettings.swift` - `rubyVersionOverride` + `useModernRuby` per-game settings.
+  - `ios/Empo/src/Cores/Mkxp/MkxpCore.swift` - `launch(_:)` sends the Ruby settings, `didImport` pins Modern.
+  - `ios/Empo/src/Cores/Mkxp/MkxpProfile.swift` - stored scan result + schema string.
+  - `ios/Empo/src/Cores/Mkxp/MkxpSettings.swift` - `rubyVersionOverride` + `useModernRuby` per-game settings.

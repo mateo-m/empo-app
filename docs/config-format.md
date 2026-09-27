@@ -36,8 +36,8 @@ Both parsers preserve `//` sequences **inside** quoted strings (for example URLs
 ## Session flags outside mkxp.json
 
 Network access is **not** an `mkxp.json` key. It is a per-boot host bridge
-flag (`MKXPSessionConfig.networkEnabled`, from the per-game "Network access"
-setting, default on). Game scripts and patches can branch on it via
+setting (the `networkEnabled` key of `mkxp_setSetting`, from the per-game
+"Network access" setting, default on). Game scripts and patches can branch on it via
 `System.network_enabled?`. When the flag is false, the game sees the
 equivalent of airplane mode. Network libraries load and their classes exist,
 but the native client refuses requests. Socket connects raise

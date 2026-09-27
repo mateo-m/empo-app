@@ -12,11 +12,11 @@ The app has two pause modes:
 
 Both modes use the same engine pause, a block on a condition variable. They differ in how the UI responds.
 
-The app calls the `gamecore_*` functions. `GameCoreForwarders.c` sends each call to the core of the game, so both cores use the same flow.
+The app calls the `gamecore_*` functions. `GameCoreForwarders.c` sends each call to the core of the game, so the app uses the same flow for every core.
 
 ---
 
-## Engine pause in the RPG Maker core
+## Engine pause in the RPG Maker XP, VX and VX Ace core
 
 ### Flow
 
@@ -39,13 +39,13 @@ So the engine **never touches the OpenAL context**. No `alcMakeContextCurrent(NU
 
 ---
 
-## Engine pause in the PSDK core
+## Engine pause in the PSDK cores
 
 `psdk_app_bridge.cpp` holds the same flow:
 
 1. `psdk_requestPause()` sets an atomic flag.
 2. SFML calls `psdk_frame_rendered` one line before it swaps the buffers. When the flag is set, `captureSnapshot()` reads the game picture from the default framebuffer.
-3. The PSDK core cannot pause single sources, because SFMLAudio keeps no list of them. It pauses the whole OpenAL Soft device with `alcDevicePauseSOFT`.
+3. A PSDK core cannot pause single sources, because SFMLAudio keeps no list of them. It pauses the whole OpenAL Soft device with `alcDevicePauseSOFT`.
 4. It calls the paused callback and waits on the condition variable.
 5. `psdk_requestResume()` clears the flag, signals the condition variable, and clears the snapshot. The device resumes with `alcDeviceResumeSOFT`.
 
@@ -63,7 +63,7 @@ Capture the last frame. Animate the still image. Show the live game when the ani
 
 ### Implementation
 
-**Capture in the RPG Maker core (`graphics.cpp`):**
+**Capture in the RPG Maker XP, VX and VX Ace core (`graphics.cpp`):**
 
 Before the engine blocks, `GraphicsPrivate::checkPause()` reads `lastPresentedFrame` with `glReadPixels` and stores it with `mkxp_setSnapshot()`. On the first frame of a session, it reads the front buffer.
 
@@ -118,9 +118,9 @@ The hero zoom from the game card to `GameLoadingView` needs a visible library. S
 
 | File                                           | Role                                                                          |
 | ---------------------------------------------- | ----------------------------------------------------------------------------- |
-| `mkxp-z-apple-mobile/src/display/graphics.cpp` | `GraphicsPrivate::checkPause()`: snapshot capture in the RPG Maker core        |
+| `mkxp-z-apple-mobile/src/display/graphics.cpp` | `GraphicsPrivate::checkPause()`: snapshot capture in the RPG Maker XP, VX and VX Ace core        |
 | `mkxp-z-apple-mobile/src/app_bridge.cpp`       | Condition variable, audio pause and resume, snapshot storage                  |
-| `ios/Dependencies/psdk/psdk_app_bridge.cpp`    | The same pause, audio, and snapshot code for the PSDK core                    |
+| `ios/Dependencies/psdk/psdk_app_bridge.cpp`    | The same pause, audio, and snapshot code for the PSDK cores                   |
 | `ios/Empo/src/App/GameCoreForwarders.c`        | Sends each `gamecore_*` call to the core of the game                          |
 | `ios/Empo/src/App/PauseManager.swift`          | `pausedGame`, `pauseSnapshot`, `snapshotCanFade`                              |
 | `ios/Empo/src/App/AppState.swift`              | `requestPause()`, `handlePause(snapshot:)`, `resumePausedGame()`             |

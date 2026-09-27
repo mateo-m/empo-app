@@ -19,11 +19,12 @@ Developer account extends the period to one year. Your games and saves survive a
 ## Which games does Empo run?
 
 Games made with RPG Maker XP, VX, and VX Ace, games built on modern mkxp-z forks, such as
-Pokemon Essentials fangames, and games made with PSDK. See [Requirements](/requirements) for the full list.
+Pokemon Essentials fangames, and games made with PSDK, RPG Maker MV, and RPG Maker MZ. See [Requirements](/requirements) for the full list.
 
 ## Does it run RPG Maker MV or MZ games?
 
-No. Those engines run on JavaScript, not on Ruby. Empo has no support for them.
+Yes. Import the game folder or an archive of it. For a desktop release, Empo finds the `www`
+folder inside it.
 
 ## Does it run RPG Maker 2000 or 2003 games?
 
@@ -56,9 +57,11 @@ layout, and each game can keep its own.
 
 ## Why can I play only one game per session?
 
-The engine keeps one Ruby interpreter for the lifetime of the process, and the interpreter
-cannot restart cleanly. After you quit a game, close Empo from the app switcher and open it
-again. [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) explains the constraint.
+This applies to RPG Maker XP, VX, VX Ace and PSDK games. The engine keeps one Ruby interpreter
+for the lifetime of the process, and the interpreter cannot restart cleanly. After you quit one
+of these games, close Empo from the app switcher and open it again.
+
+RPG Maker MV and MZ games do not have this limit. After one of them, you can play any game. [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) explains the constraint.
 
 ## Do my saves survive an app update?
 

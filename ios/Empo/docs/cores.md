@@ -7,10 +7,19 @@ description: What a game core is, what it must export, and the rules a launcher 
 
 A core is one dynamic framework that holds a whole game engine. It carries
 its own Ruby, its own classes, its own SDL or SFML, and its own assets. Empo
-has two:
+has six:
 
 - `MkxpCore.framework`: mkxp-z, with Ruby 1.8, 1.9 and 3.1, on SDL2.
-- `PsdkCore.framework`: LiteRGSS2 and LiteCGSS, with Ruby 3.0, on SFML.
+- `Psdk25Core.framework`, `Psdk30Core.framework`, `Psdk32Core.framework` and
+  `Psdk33Core.framework`: LiteRGSS2 and LiteCGSS on SFML, each with one Ruby.
+  Pokémon Studio compiles a game with Ruby 3.0 on Windows, 3.2 on a Mac and
+  3.3 on Linux. PSDK games from December 2019 to about March 2021 use Ruby
+  2.5. The app reads the version in `Game.yarb` and opens the core of that
+  Ruby.
+- `MvmzCore.framework`: a `WKWebView` for RPG Maker MV and MZ. Each of
+  these games ships its own JavaScript engine, so the core holds no engine.
+  It serves the game folder to the web view, and `runtime.js` gives the
+  game the NW.js names it reads, such as `require("fs")`.
 
 Both engines declare a class named `ViewportElement` at global scope, and both
 carry a full Ruby. Linking both into one binary makes them share those names.
@@ -19,36 +28,97 @@ framework and not a static library.
 
 ## What a build ships
 
-A build carries one core or both. `EMPO_CORES` in `ios/Empo/project.yml`
+A build carries one or more cores. `EMPO_CORES` in `ios/Empo/project.yml`
 names the cores, and the "Embed the cores" phase copies those frameworks into
 the app. Ship one core from the command line:
 
 ```sh
-xcodebuild ... EMPO_CORES=PsdkCore
+xcodebuild ... EMPO_CORES=Psdk30Core
 ```
 
-The app reads its own bundle to find what it got. `BuiltInGameCore` lists the
-core frameworks that are there, the Game cores screen shows that list, and
-`GameCoreKind.forGame` says which core a game folder needs. Empo refuses a game
-whose core is absent in two places. The import stops and names the missing core,
-and the library shows the same sentence when the player taps the card.
+The app reads its own bundle to find what it got. `GameCores.inThisBuild`
+lists the cores whose framework is there, and the Game cores screen shows that
+list. `GameCores.core(forGameAt:)` says which core a game folder needs. Empo
+refuses a game whose core is absent in two places. The import stops and names
+the missing core, and the library shows the same sentence when the player taps
+the card.
 
 `GameImportValidator` answers a different question: are these files a game.
 It must not ask which cores the build has. `GameCatalog` calls it on every scan
 and can delete a container it calls invalid, and a missing core is not a broken
 game.
 
+## What a core tells the app
+
+Each core has a Swift type in `ios/Empo/src/Cores/<Name>/` that conforms to
+`GameCore` (`ios/Empo/src/Cores/GameCore.swift`). The rest of the app asks
+that type and never names a core, a language or an engine. The type answers:
+
+- which folders are its games, and what an archive probe extracts to find them
+- how an import checks a game, and what it does after the files land
+- the title and the title picture of a game
+- the JoiPlay archive types it runs
+- its settings page, and the settings it sends when a game starts
+- a warning to show before a game starts
+- the four keys of the builtin button grid
+- the rows of the Runtime section in Game Info
+- whether it answers the cheat toggle, and whether a game can start in place
+  of a paused game
+- the tool the games were made with, `madeWith`, such as "RPG Maker" or
+  "PSDK". The Game cores screen shows one group for each tool, and the user
+  opens a group to read about its cores.
+
+The first core in `GameCores.all` that accepts a folder runs it. To add a core,
+add its framework, its prefix and its type, then add the type to that list.
+
+Ruby loads only bytecode of its own version, and Pokémon Studio compiles a
+release with Ruby 3.0 on Windows, 3.2 on a Mac and 3.3 on Linux. So there is
+one PSDK core for each Ruby. `PsdkCore.all` lists them, and each core accepts
+only a game whose `Game.yarb` has its version. The Ruby 3.0 core also takes
+each PSDK folder that no core can run, and the import refuses it there. A
+release compiled with `--no-yarb` has plain Ruby and no `Game.yarb`, so it
+runs on the Ruby 3.0 core. Ruby
+3.0 also reads Ruby 3.0 bytecode compiled by hand on 64-bit Linux or a Mac.
+
+Each Ruby, with its extensions and its own build of LiteRGSS2, is one object,
+`litergss<NN>-merged.o`. The `ld -r` step that makes it makes every name local
+except `psdk_ruby_<NN>`, and the build fails when a second name stays out.
+`psdk_app_bridge.cpp` is compiled once for each Ruby, as `psdk-bridge<NN>.o`,
+and calls that entry. `Psdk<NN>Core.framework` links the two objects with
+LiteCGSS, SFML and OpenSSL.
+
+Each PSDK framework carries its own SFML, with the Objective-C classes
+`SFAppDelegate`, `SFView` and `SFViewController`. Objective-C keeps one class
+for each name in a process, so a second PSDK core must not open in a process.
+It cannot, because a PSDK core cannot kill its game (`canKillSession`).
+
+PSDK releases from December 2019 to about March 2021 carry Ruby 2.5 bytecode.
+They were written for LiteRGSS 1 and play sound only through FMOD, a
+closed-source Windows library. The 2.5 core claims only Ruby 2.5 bytecode, and
+its support folder adds two Ruby files. `litergss1.rb` puts the LiteRGSS 1
+`Graphics`, `Input`, `Mouse` and `Viewport` calls back on top of LiteRGSS2.
+`RubyFmod.rb` gives the FMOD calls of those games, and plays the sound through
+SFMLAudio.
+
+The four PSDK cores export the same `psdk_*` names. Each forwarder looks the
+name up in the one core it opened, so the names do not meet.
+
+A setting that only one core knows goes through `gamecore_setSetting` as text.
+Each core's copy of the interface lists its keys. The debug overlay shows the
+lines of `gamecore_getDetails`, which the core writes.
+
 `scripts/audit-ipa.sh` audits the cores it finds in the bundle. Pass
-`--cores "MkxpCore PsdkCore"` to demand an exact set.
+`--cores "MkxpCore Psdk30Core"` to demand an exact set.
 
 ## What a core exports
 
 A core exports its bridge and nothing else. `ios/Empo/src/App/GameCore.h`
-declares the 58 functions Empo calls. `MkxpCore` exports every `mkxp_*` name
-that `mkxp-z-apple-mobile/src/app_bridge.h` declares, which is those 58 plus
-the names its own engine calls. `PsdkCore` exports the 58 under `psdk_*`, from
+declares the 51 functions Empo calls. `MkxpCore` exports every `mkxp_*` name
+that `mkxp-z-apple-mobile/src/app_bridge.h` declares, which is those 51 plus
+the names its own engine calls. Each PSDK core exports the 51 under `psdk_*`, from
 `ios/Dependencies/psdk/psdk_app_bridge.h`, plus the two `psdk_*` entry points in
-`ios/Dependencies/psdk/psdk_core.h`.
+`ios/Dependencies/psdk/psdk_core.h`. `MvmzCore` exports the 51 under
+`mvmz_`, from `ios/MvmzCore/mvmz_app_bridge.h`.
 
 No core exports a Ruby name, an SDL name or an SFML name, and no core imports
 one either. `scripts/check-mkxp-framework.sh` and
@@ -58,20 +128,33 @@ namespace would let a second core bind to the first core's names.
 
 ## What a launcher setting means for each core
 
-Empo sends both cores the same settings. Each core answers with what its
-own engine has. The PSDK core answers four:
+Empo sends every core the same shared settings. Each core answers with what
+its own engine has. The PSDK cores answer four:
 
-| Setting | What the PSDK core does |
+| Setting | What a PSDK core does |
 | --- | --- |
 | Fixed aspect ratio | `placeOutputRegion` fits the picture in the launcher's region and centres it. |
 | Smooth scaling | The SFML fork reads the flag in the `sf::Texture` constructor, so every picture the game makes after that is smooth. The game's own resolution goes up to the screen with the GL viewport, so the filter of each texture decides how the whole picture looks. A texture reads the flag once, so a new value needs a restart. |
 | Touch acts as mouse | LiteRGSS2 keeps the touch events out of the game while it is off. |
 | Fast forward | `runtime_prelude.rb` multiplies the frame rate that `Graphics::FPSBalancer` reads. The balancer divides the real clock by that rate and runs that many game frames, so the game runs faster and still draws at the same rate. A new value applies while the game runs. |
 
+The MV and MZ core answers two:
+
+| Setting | What the MV and MZ core does |
+| --- | --- |
+| Smooth scaling | Off, `runtime.js` draws the canvas with `image-rendering: pixelated`. A new value needs a restart. |
+| Fast forward | MV runs one update for each `SceneManager._deltaTime` seconds, so `runtime.js` divides it. MZ runs the count that `SceneManager.determineRepeatNumber` returns for each frame, so `runtime.js` multiplies it. A new value applies while the game runs. |
+
+The MV and MZ core always fits the picture in the region. The game keeps
+its own proportions inside the web view, and it maps touches through that
+fit, so the core has no fixed aspect ratio setting.
+
 The other rows belong to mkxp-z: render scale, frame skip, solid fonts,
 postload scripts, the path cache, the in-game keyboard, JoiPlay
-compatibility, the Ruby version and network access. `GameSettingsView`
-shows a PSDK game only the rows above and the layout profile.
+compatibility, the Ruby version and network access. Each core puts its own
+settings page together in `settingsPage(_:)`, from the shared sections in
+`GameSettingsSections.swift` and its own. The rows only mkxp-z reads live in
+`ios/Empo/src/Cores/Mkxp/MkxpSettings.swift`.
 
 ## What the engine asks the bridge
 
@@ -95,21 +178,22 @@ interface.
 
 ## One interface, one prefix for each side
 
-The same interface exists three times, once on each side, and each side owns
+The same interface exists four times, once on each side, and each side owns
 its prefix:
 
 | Side | File | Prefix |
 | --- | --- | --- |
 | Empo | `ios/Empo/src/App/GameCore.h` | `gamecore_` |
 | MkxpCore | `mkxp-z-apple-mobile/src/app_bridge.h` | `mkxp_` |
-| PsdkCore | `ios/Dependencies/psdk/psdk_app_bridge.h` | `psdk_` |
+| The PSDK cores | `ios/Dependencies/psdk/psdk_app_bridge.h` | `psdk_` |
+| MvmzCore | `ios/MvmzCore/mvmz_app_bridge.h` | `mvmz_` |
 
 Each core keeps the prefix its own project already used, so neither fork has to
 follow the other. Empo names no engine in its own header, and its forwarder puts
 the open core's prefix in front of the name at `dlsym` time.
 
-The price is three copies to keep in step.
-`scripts/check-core-interface.sh` strips the three prefixes and fails when a
+The price is four copies to keep in step.
+`scripts/check-core-interface.sh` strips the prefixes and fails when a
 core header lacks a statement of `GameCore.h`. Every Xcode build runs it. Read it as the rule: a core that drops
 a name or changes an argument makes Empo abort in the forwarder at run time.
 
@@ -133,7 +217,7 @@ mistake until a game misbehaved.
 
 ## Which thread runs the game
 
-The two cores differ, and neither choice is free.
+The cores differ, and no choice is free.
 
 `gamecore_run_app` runs on the main thread and returns when the game ends. Call it
 from a run loop callout, such as `RunLoop.main.perform`. Do not call it from a
@@ -143,11 +227,16 @@ first `gamecore_getScreenScale`, which `dispatch_sync`s to the main queue. SDL's
 nested `runMode:beforeDate:` inside `SDL_PumpEvents` drains a run loop
 normally, which is why the callout works.
 
-`psdk_run`, which is the PSDK core's own entry point and not part of the
+`psdk_run`, which is a PSDK core's own entry point and not part of the
 launcher interface, runs on a worker thread and needs a 16 MB stack. SFML marshals
 every UIKit call to the main thread with `dispatch_sync`, so the main thread
 has to stay in its run loop and answer them. Ruby's parser and the PSDK boot
 scripts also recurse past the default 512 KB worker stack.
+
+`mvmz_run_app` makes the web view and returns. WebKit runs the game in its
+own processes, and the main thread only answers WebKit. WebKit suspends the
+page of a web view that is in no visible window, so the core shows its
+window at once, under the Empo window.
 
 ## Where a core keeps its own files
 
@@ -167,35 +256,47 @@ Empo has to reject a game its core cannot run, and import runs off the main
 thread before any core is open. So the answer cannot come from a bridge call.
 `tools/mkxp-core/build-framework-ios.sh` writes `EmpoCoreRGSSVersionMask` into
 the framework's `Info.plist` from the same build flag the engine reads, and
-`BuiltInGameCore.rgssVersionMask` reads the key from the bundle.
+`MkxpCore.rgssVersionMask` reads the key from the bundle.
 
 Both `build-framework-ios.sh` scripts also write `EmpoCoreVersion`, which names
 the engine source the core was linked from. The Game cores screen shows it.
 
-## One core for each process
+## More than one core in a process
 
-Empo plays one game for each process (`multi-session.md`), so it opens one
-core and keeps it. Two cores in one process load without binding to each
-other, and `tools/mkxp-core/host.m` proves that with `MKXP_ALSO_OPEN`. Running
-two at once is a different question. Both want the working directory, the
-signal handlers, the audio device and the main thread.
+A core opens only after the open core killed its game with
+`gamecore_killSession` (`multi-session.md`). Only a core whose Swift type says
+`canKillSession` can do that, so an MV or MZ game can come before a Ruby game,
+but not after one. `EmpoCoreOpen` refuses any other change of core, and
+`EngineSessionCoordinator.openCore` then stops the app. Two cores in one
+process load without binding to each other, and `tools/mkxp-core/host.m`
+proves that with `MKXP_ALSO_OPEN`. Two cores cannot run at once. Both want the
+working directory, the signal handlers, the audio device and the main thread.
+
+The killed core stays loaded, because `dlclose` does not unload a framework
+with Objective-C classes. Each forwarder in `GameCoreForwarders.c` looks its
+symbol up again after a different core opens.
+
+Objective-C registers every class by name for the whole process, also when
+its symbol is hidden. `scripts/audit-ipa.sh` fails a release when the app or
+two cores declare the same class name. It counts the four PSDK cores as one,
+because no two of them open in a process.
 
 ## Which source a release names
 
 Each core comes from its own engine repo: `MkxpCore` from
-`mkxp-z-apple-mobile`, `PsdkCore` from `litergss2-apple-mobile`. A release
+`mkxp-z-apple-mobile`, the PSDK cores from `litergss2-apple-mobile`. A release
 tags the pinned commit in both repos with `empo-v<version>`, so anyone can
 check out the source that built the shipped binary. `scripts/release.sh` and
 the `cut` job in `.github/workflows/release.yml` create the two tags, and both
 refuse a commit that is not on that repo's `dev` branch.
 
-`EmpoCoreVersion` holds `git describe` of that repo, so both rows on the Game
-cores screen carry the same tag name after a release. Before the first release
+`EmpoCoreVersion` holds `git describe` of that repo, so the rows of these cores
+on the Game cores screen carry the same tag name after a release. Before the first release
 that ships a core, `describe` has no tag to name and falls back to the short
 commit.
 
-The PSDK core also links LiteCGSS, the SFML fork and Ruby 3.0, and no tag
-names those. The dependency fingerprint ties the framework to every pinned
+The PSDK cores also link LiteCGSS, the SFML fork and a Ruby, and no tag names
+those. The dependency fingerprint ties each framework to every pinned
 commit, so the tagged commit is still the one that built it.
 
 ## How the framework stays fresh
@@ -204,8 +305,8 @@ The native tree keeps the built framework between builds, and Xcode only
 copies it. `build-framework-ios.sh` writes its own sha256 into
 `.build-script-sha256` inside the framework, and `check-*-framework.sh` fails
 when that hash stops matching the script on disk. Rebuild MkxpCore with
-`scripts/rebuild-engine-halves.sh <sdk>`, and PsdkCore with
-`tools/psdk-core/build-framework-ios.sh --sdk <sdk>`. Both take minutes.
+`scripts/rebuild-engine-halves.sh <sdk>`, and the PSDK cores with
+`make -f <sdk>.make psdk` in `ios/Dependencies`. Each takes minutes.
 `rebuild-engine-halves.sh` builds the mkxp half only. The dependency
 fingerprint does not list the packaging scripts, because they build an engine
 output and a full dependency rebuild takes hours.

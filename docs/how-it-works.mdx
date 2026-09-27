@@ -8,11 +8,12 @@ sidebar:
 Empo is an app and a game engine in one process. The app is SwiftUI and UIKit. The app owns
 the window and the user interface. The engine owns the game.
 
-Empo has two engines, and each one is a game core. `MkxpCore` is a C++ fork of mkxp-z that runs
-RPG Maker games in Ruby 1.8, 1.9, or 3.1. `PsdkCore` is LiteRGSS2 and LiteCGSS, and it runs
-PSDK games in Ruby 3.0. Read
+Each engine is a game core. `MkxpCore` is a C++ fork of mkxp-z that runs RPG Maker XP, VX and
+VX Ace games in Ruby 1.8, 1.9, or 3.1. The four PSDK cores are LiteRGSS2 and LiteCGSS, each with
+one Ruby: 2.5, 3.0, 3.2, or 3.3. The version in the game's `Game.yarb` picks the core. `MvmzCore`
+runs RPG Maker MV and MZ games in a web view. Read
 [`cores.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/cores.md) for the rules
-that keep the two cores apart.
+that keep the cores apart.
 
 ## The repository
 
@@ -21,13 +22,13 @@ that keep the two cores apart.
 - mkxp-z-apple-mobile/ The engine fork. A git submodule, pure C++.
 - ios/
   - Empo/ The app. SwiftUI, with UIKit for the touch controls.
-  - Dependencies/ Cross-compiled static libraries: SDL, SFML, four Ruby versions, OpenAL, and the LiteRGSS2 fork.
+  - Dependencies/ Cross-compiled static libraries: SDL, SFML, seven Ruby versions, OpenAL, and the LiteRGSS2 fork.
   - GameProbe/ A Swift package that reads game metadata. It builds on Linux, so CI can test it.
 - docs/ This documentation.
 
 </FileTree>
 
-## Three Ruby interpreters in the RPG Maker core
+## Three Ruby interpreters in the RPG Maker XP, VX and VX Ace core
 
 Ruby 1.8, 1.9, and 3.1 compile separately. Each version merges with its binding code into one
 relocatable object file, and each object exports exactly one symbol. At import, Empo reads the
@@ -45,7 +46,8 @@ The app creates SDL, the GL context, OpenAL, and the Ruby interpreter one time, 
 them for the lifetime of the process. iOS does not let an app relaunch itself between games, and
 `ruby_init()` runs one time for each process.
 
-This is why Empo plays one game for each session. Read [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) for the
+This is why Empo plays one Ruby game for each session. An MV or MZ game runs in a web view,
+and the core removes the web view with all of its state, so any game can come after it. Read [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) for the
 quit paths and the state that stays behind.
 
 ## Touch controls are keyboard events
