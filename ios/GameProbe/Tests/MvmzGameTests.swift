@@ -39,6 +39,14 @@ final class MvmzGameTests: XCTestCase {
         XCTAssertEqual(MvmzGame.titlePicture(at: root)?.lastPathComponent, "Castle.png")
     }
 
+    func testATitlePictureNameCannotLeaveTheTitlesFolder() throws {
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("img/titles1"), withIntermediateDirectories: true)
+        try write("outside.png", "")
+        try write("data/System.json", #"{"title1Name":"../../outside"}"#)
+        XCTAssertNil(MvmzGame.titlePicture(at: root))
+    }
+
     func testAnEmptyTitleIsNoTitle() throws {
         try write("data/System.json", #"{"gameTitle":""}"#)
         XCTAssertNil(MvmzGame.title(at: root))

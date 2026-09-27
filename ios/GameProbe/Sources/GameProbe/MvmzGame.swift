@@ -14,8 +14,9 @@ public enum MvmzGame {
 
     /// The title the game shows in its window, from `data/System.json`.
     public static func title(at url: URL) -> String? {
-        guard let title = (system(at: url)?["gameTitle"] as? String)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
+        guard
+            let title = (system(at: url)?["gameTitle"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
             !title.isEmpty
         else { return nil }
         return title
@@ -24,13 +25,16 @@ public enum MvmzGame {
     /// The picture behind the title screen. An encrypted game has no
     /// PNG to show.
     public static func titlePicture(at url: URL, fileManager: FileManager = .default) -> URL? {
-        guard let name = system(at: url)?["title1Name"] as? String, !name.isEmpty else { return nil }
+        guard let name = system(at: url)?["title1Name"] as? String, !name.isEmpty, !name.contains("/")
+        else { return nil }
         let picture = url.appendingPathComponent("img/titles1/\(name).png")
         return fileManager.fileExists(atPath: picture.path) ? picture : nil
     }
 
     private static func system(at url: URL) -> [String: Any]? {
-        guard let data = try? Data(contentsOf: url.appendingPathComponent("data/System.json")) else { return nil }
+        guard let data = try? Data(contentsOf: url.appendingPathComponent("data/System.json")) else {
+            return nil
+        }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 }

@@ -10,13 +10,18 @@
     NSHashTable<id<WKURLSchemeTask>> *_stopped;
 }
 
+static NSString *_Nullable realPath(NSString *path) {
+    char resolved[PATH_MAX];
+    return realpath(path.fileSystemRepresentation, resolved) ? @(resolved) : nil;
+}
+
 + (NSString *)scheme {
     return @"mvmz";
 }
 
 - (instancetype)initWithRoot:(NSString *)root {
     if ((self = [super init])) {
-        _root = root.stringByStandardizingPath;
+        _root = realPath(root) ?: root.stringByStandardizingPath;
         _queue = dispatch_queue_create("mvmz.files", DISPATCH_QUEUE_SERIAL);
         _stopped = [NSHashTable weakObjectsHashTable];
     }
@@ -29,6 +34,9 @@
 // file on disk has, and the file system of an iPhone tells them apart.
 // So a part of the path that is not there is looked up again without
 // case.
+//
+// A game can hold a symbolic link, so each part that is there must
+// resolve to a path in the game folder.
 - (nullable NSString *)pathForURL:(NSURL *)url {
     NSFileManager *files = NSFileManager.defaultManager;
     NSString *path = _root;
@@ -46,6 +54,13 @@
                     next = [path stringByAppendingPathComponent:name];
                     break;
                 }
+            }
+        }
+        if ([files fileExistsAtPath:next]) {
+            NSString *real = realPath(next);
+            if (!real ||
+                !([real isEqualToString:_root] || [real hasPrefix:[_root stringByAppendingString:@"/"]])) {
+                return nil;
             }
         }
         path = next;
