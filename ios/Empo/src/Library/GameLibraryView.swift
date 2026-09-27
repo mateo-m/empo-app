@@ -1,4 +1,3 @@
-import GameProbe
 import SwiftUI
 
 private struct EmptyStateHeightKey: PreferenceKey {
@@ -37,7 +36,7 @@ struct GameLibraryView: View {
     /// fail several rescues, and each game gets its own Delete
     /// Anyway / Keep Game choice, one alert after another.
     @State private var saveRescueFailures: [GameEntry] = []
-    @State private var showInvalidAlert = false
+    @State private var invalidReason: String?
     @State private var gameWithNoCore: GameEntry?
     @State private var path = NavigationPath()
     @State private var searchText = ""
@@ -50,9 +49,7 @@ struct GameLibraryView: View {
     @State private var gameForInfo: GameEntry?
     @State private var pendingGame: GameEntry?
     @State private var showPausedGameAlert = false
-    @State private var rtpWarnedGame: GameEntry?
-    @State private var rtpWarnedRequirement: GameRTPRequirement?
-    @State private var showRTPRequiredAlert = false
+    @State private var warnedLaunch: WarnedLaunch?
     @State private var staggerTrigger = UUID()
     @State private var entranceDelay: TimeInterval = 0.15
     @State private var emptyStateHeight: CGFloat = 0
@@ -265,22 +262,23 @@ struct GameLibraryView: View {
                     showErrorAlert: $showErrorAlert,
                     gameToDelete: $gameToDelete,
                     showDeleteConfirm: $showDeleteConfirm,
-                    showInvalidAlert: $showInvalidAlert,
+                    invalidReason: $invalidReason,
                     showCancelValidationAlert: $showCancelValidationAlert,
                     showPausedGameAlert: $showPausedGameAlert,
-                    showRTPRequiredAlert: $showRTPRequiredAlert,
                     gameWithNoCore: $gameWithNoCore,
-                    rtpWarnedGame: rtpWarnedGame,
-                    rtpWarnedRequirement: rtpWarnedRequirement,
+                    warnedLaunch: $warnedLaunch,
                     importPipelineAlert: importPipelineAlertBinding,
                     saveRescueFailures: $saveRescueFailures,
                     pausedGame: pauseManager.pausedGame,
+                    pendingGame: pendingGame,
+                    canClosePausedGame: appState.canKillPausedGame,
                     onDeleteGame: deleteSelectedGame,
                     onDeleteGameDiscardingSaves: deleteGameDiscardingSaves,
                     onDismissImportPipelineAlert: importPipeline.dismissAlert,
                     onCancelValidation: importPipeline.cancelValidation,
                     onDismissPausedGameAlert: { pendingGame = nil },
-                    onContinueDespiteRTP: continueDespiteRTPWarning
+                    onReplacePausedGame: replacePausedGame,
+                    onContinueDespiteWarning: continueDespiteLaunchWarning
                 )
             )
             .toolbarVisibility(.hidden, for: .navigationBar)
@@ -870,9 +868,21 @@ struct GameLibraryView: View {
         }
         switch game.status {
         case .ready: handleGameTap(game, from: .item)
-        case .invalid: showInvalidAlert = true
+        case .invalid: invalidReason = Self.whyInvalid(game)
         case .importing, .deleting: break
         }
+    }
+
+    /// A core that refuses a game gives its own reason. A new import
+    /// meets the same refusal, so the usual advice to import again
+    /// would be wrong there.
+    private static func whyInvalid(_ game: GameEntry) -> String {
+        do {
+            if let container = game.container { try GameImportValidator.validate(container.gameURL) }
+        } catch GameImportValidator.ImportError.unsupportedRuntime(let reason) {
+            return reason
+        } catch {}
+        return "Empo can't read this game's files. Delete it, then import it again."
     }
 
     /// Enter selection mode. When `gameId` is non-nil the game is
@@ -1042,20 +1052,24 @@ struct GameLibraryView: View {
         if pauseManager.pausedGame?.id == game.id {
             appState.resumePausedGame()
             push(game)
-        } else if pauseManager.pausedGame != nil {
-            pendingGame = game
-            showPausedGameAlert = true
         } else if let container = game.container,
             AppState.missingCore(for: container) != nil
         {
             gameWithNoCore = game
-        } else if let container = game.container,
-            AppState.needsRTPLaunchWarning(for: container),
-            let requirement = GameRTPRequirement.detect(at: container.gameURL)
+        } else if pauseManager.pausedGame != nil {
+            pendingGame = game
+            showPausedGameAlert = true
+        } else {
+            startUnlessWarned(game)
+        }
+    }
+
+    private func startUnlessWarned(_ game: GameEntry) {
+        if let container = game.container,
+            let warning = GameCores.core(forGameAt: container.gameURL)?
+                .launchWarning(for: container, gameTitle: game.title)
         {
-            rtpWarnedGame = game
-            rtpWarnedRequirement = requirement
-            showRTPRequiredAlert = true
+            warnedLaunch = WarnedLaunch(game: game, warning: warning)
         } else {
             appState.selectGame(game)
             push(game)
@@ -1069,10 +1083,14 @@ struct GameLibraryView: View {
         path.append(game)
     }
 
-    private func continueDespiteRTPWarning() {
-        guard let game = rtpWarnedGame else { return }
-        rtpWarnedGame = nil
-        rtpWarnedRequirement = nil
+    private func replacePausedGame() {
+        guard let game = pendingGame else { return }
+        pendingGame = nil
+        appState.killPausedGame()
+        startUnlessWarned(game)
+    }
+
+    private func continueDespiteLaunchWarning(_ game: GameEntry) {
         appState.selectGame(game)
         push(game)
     }
@@ -1351,28 +1369,35 @@ private struct LibrarySheetPresentation: ViewModifier {
     }
 }
 
+/// A launch the game's core warned about. The user can play anyway.
+private struct WarnedLaunch {
+    let game: GameEntry
+    let warning: LaunchWarning
+}
+
 private struct LibraryAlertPresentation: ViewModifier {
     let title: String
     let errorMessage: String?
     @Binding var showErrorAlert: Bool
     @Binding var gameToDelete: GameEntry?
     @Binding var showDeleteConfirm: Bool
-    @Binding var showInvalidAlert: Bool
+    @Binding var invalidReason: String?
     @Binding var showCancelValidationAlert: Bool
     @Binding var showPausedGameAlert: Bool
-    @Binding var showRTPRequiredAlert: Bool
     @Binding var gameWithNoCore: GameEntry?
-    let rtpWarnedGame: GameEntry?
-    let rtpWarnedRequirement: GameRTPRequirement?
+    @Binding var warnedLaunch: WarnedLaunch?
     @Binding var importPipelineAlert: ImportPipelineAlert?
     @Binding var saveRescueFailures: [GameEntry]
     let pausedGame: GameEntry?
+    let pendingGame: GameEntry?
+    let canClosePausedGame: Bool
     let onDeleteGame: () -> Void
     let onDeleteGameDiscardingSaves: (GameEntry) -> Void
     let onDismissImportPipelineAlert: () -> Void
     let onCancelValidation: () -> Void
     let onDismissPausedGameAlert: () -> Void
-    let onContinueDespiteRTP: () -> Void
+    let onReplacePausedGame: () -> Void
+    let onContinueDespiteWarning: (GameEntry) -> Void
 
     func body(content: Content) -> some View {
         content
@@ -1452,26 +1477,32 @@ private struct LibraryAlertPresentation: ViewModifier {
                     )
                 }
             }
-            .alert("This game won't open", isPresented: $showInvalidAlert) {
-                Button("Got it") {}
-            } message: {
-                Text("Empo can't read this game's files. Delete it, then import it again.")
+            .alert(
+                "This game won't open",
+                isPresented: Binding(
+                    get: { invalidReason != nil },
+                    set: { presented in if !presented { invalidReason = nil } }
+                ),
+                presenting: invalidReason
+            ) { _ in
+                Button("Got it") { invalidReason = nil }
+            } message: { reason in
+                Text(reason)
             }
-            .alert("This game needs extra RPG Maker files", isPresented: $showRTPRequiredAlert) {
+            .alert(
+                warnedLaunch?.warning.title ?? "",
+                isPresented: Binding(
+                    get: { warnedLaunch != nil },
+                    set: { presented in if !presented { warnedLaunch = nil } }
+                ),
+                presenting: warnedLaunch
+            ) { launch in
                 Button("Cancel", role: .cancel) {}
-                Button("Play anyway") {
-                    onContinueDespiteRTP()
+                Button(launch.warning.confirm) {
+                    onContinueDespiteWarning(launch.game)
                 }
-            } message: {
-                if let game = rtpWarnedGame, let requirement = rtpWarnedRequirement {
-                    Text(
-                        """
-                        "\(game.title)" expects shared \(requirement.friendlySummary) \
-                        assets that don't ship with it. Empo can't add them yet, so \
-                        the game may not start or may be missing graphics and sound.
-                        """
-                    )
-                }
+            } message: { launch in
+                Text(launch.warning.message)
             }
             .alert("Stop import?", isPresented: $showCancelValidationAlert) {
                 Button("Keep importing", role: .cancel) {}
@@ -1479,13 +1510,23 @@ private struct LibraryAlertPresentation: ViewModifier {
             } message: {
                 Text("Empo is still checking this game. Stopping now discards it.")
             }
-            .alert("A game is paused", isPresented: $showPausedGameAlert) {
-                // The alert is informational. To play another game the
-                // user resumes the paused one from its card, or
-                // force-closes the app. See `ios/Empo/docs/multi-session.md`.
-                Button("Got it", role: .cancel, action: onDismissPausedGameAlert)
+            .alert(
+                canClosePausedGame ? "Play \"\(pendingGame?.title ?? "")\"?" : "A game is paused",
+                isPresented: $showPausedGameAlert
+            ) {
+                if canClosePausedGame {
+                    Button("Cancel", role: .cancel, action: onDismissPausedGameAlert)
+                    Button("Close and Play", role: .destructive, action: onReplacePausedGame)
+                } else {
+                    // To play another game the user resumes the paused
+                    // one from its card, or force-closes the app. See
+                    // `ios/Empo/docs/multi-session.md`.
+                    Button("Got it", role: .cancel, action: onDismissPausedGameAlert)
+                }
             } message: {
-                if let pausedGame {
+                if canClosePausedGame, let pausedGame {
+                    Text("\"\(pausedGame.title)\" will close. Progress you haven't saved will be lost.")
+                } else if let pausedGame {
                     Text(
                         "\"\(pausedGame.title)\" is still running. Resume it from its card, or force-close the app to play a different game."
                     )

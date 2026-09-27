@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct GameCoresView: View {
-    private let cores = BuiltInGameCore.all
+    private let cores = GameCores.inThisBuild
 
     var body: some View {
         List {
@@ -11,10 +11,10 @@ struct GameCoresView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                ForEach(cores) { core in
+                ForEach(cores, id: \.framework) { core in
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text(core.displayName)
-                        Text(core.games)
+                        Text(core.gamesLine)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         // `.font(.caption)` plus `.fontDesign(.monospaced)`

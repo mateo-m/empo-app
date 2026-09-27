@@ -48,6 +48,23 @@ final class ControlsLayoutDefaultsTests: XCTestCase {
             ])
     }
 
+    func testMvmzGameSwapsBForShift() throws {
+        let mvmz = GameContainer(folderName: "mvmz-\(UUID().uuidString)")
+        made.append(mvmz)
+        let data = mvmz.gameURL.appendingPathComponent("data", isDirectory: true)
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        try Data("<html>".utf8).write(to: mvmz.gameURL.appendingPathComponent("index.html"))
+        try Data("{}".utf8).write(to: data.appendingPathComponent("System.json"))
+
+        ControlsLayout.shared.switchGame(id: mvmz.id, container: mvmz)
+        XCTAssertEqual(
+            scancodes(),
+            [
+                Int32(GAMECORE_SCANCODE_RETURN), Int32(GAMECORE_SCANCODE_ESCAPE),
+                Int32(GAMECORE_SCANCODE_Z), Int32(GAMECORE_SCANCODE_LSHIFT),
+            ])
+    }
+
     private func scancodes() -> [Int32] {
         ControlsLayout.defaultButtonsPortrait.map(\.scancode)
     }

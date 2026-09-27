@@ -26,16 +26,18 @@ struct PlayerMoreSheet: View {
     /// The core running the game. Rows the core cannot answer stay
     /// hidden. Nil before a core opens, which the sheet never sees,
     /// because the toolbar that opens it only exists during a session.
-    let core: GameCoreKind?
+    let core: (any GameCore)?
     let onControllerRemap: () -> Void
     let onLayoutProfile: () -> Void
     let onPause: () -> Void
+    let onQuit: () -> Void
     let onCheats: () -> Void
 
     @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
 
     @State private var measuredHeight: CGFloat = 0
+    @State private var confirmQuit = false
 
     private var fastForwardEnabled: Bool {
         (fastForwardMultiplier ?? 0) >= 2
@@ -108,10 +110,24 @@ struct PlayerMoreSheet: View {
                                 onPause()
                                 dismiss()
                             }
+                            if core?.canKillSession == true {
+                                MenuRow(icon: "xmark", label: "Quit \(gameTitle)", role: .destructive) {
+                                    confirmQuit = true
+                                }
+                            }
                         }
                     )
                 }
                 .clipShape(.rect(cornerRadius: Radius.md))
+                .alert("Quit \"\(gameTitle)\"?", isPresented: $confirmQuit) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Quit", role: .destructive) {
+                        onQuit()
+                        dismiss()
+                    }
+                } message: {
+                    Text("Progress you haven't saved will be lost.")
+                }
             }
             .padding(Spacing.xl)
             .intrinsicSheetContent(measuredHeight: $measuredHeight)

@@ -14,7 +14,7 @@ EXPECTED_VERSION=""
 # Empty means "audit whatever cores the bundle has". A release passes the
 # EMPO_CORES value it built with, so a core that dropped out fails here.
 EXPECTED_CORES=""
-KNOWN_CORES="MkxpCore PsdkCore"
+KNOWN_CORES="MkxpCore PsdkCore MvmzCore"
 INPUT=""
 
 fail() {
@@ -99,7 +99,7 @@ fi
 # opens one with dlopen when the user picks a game, so nothing here names
 # them and nm on the app finds no engine symbol.
 #
-# A build ships one core or both (EMPO_CORES in ios/Empo/project.yml), so
+# A build ships one or more cores (EMPO_CORES in ios/Empo/project.yml), so
 # audit the cores the bundle has.
 PRESENT_CORES=""
 for core in $KNOWN_CORES; do
@@ -108,7 +108,7 @@ for core in $KNOWN_CORES; do
     fi
 done
 [[ -n "$PRESENT_CORES" ]] ||
-    fail "no game core in the app bundle (expected one or both of: $KNOWN_CORES)"
+    fail "no game core in the app bundle (expected one or more of: $KNOWN_CORES)"
 
 contains_word() {
     case " $1 " in
@@ -150,8 +150,29 @@ for core in $PRESENT_CORES; do
     case "$core" in
         MkxpCore) audit_core MkxpCore _mkxp_ ;;
         PsdkCore) audit_core PsdkCore _psdk_ ;;
+        MvmzCore) audit_core MvmzCore _mvmz_ ;;
     esac
 done
+
+# Objective-C registers every class by name for the whole process, hidden
+# symbol or not. Two binaries with one class name make the class that
+# loaded second a dead copy, so each name lives in one binary only.
+objc_classes() {
+    otool -ov "$1" 2>/dev/null |
+        awk '/^Contents of/ {inlist = ($0 ~ /__objc_classlist/)}
+            inlist && /^        name +0x[0-9a-f]+ / {print $3}' |
+        sort -u
+}
+CLASS_OWNERS=$(
+    objc_classes "$APP/Empo" | sed 's/$/ Empo/'
+    for core in $PRESENT_CORES; do
+        objc_classes "$APP/Frameworks/$core.framework/$core" | sed "s/\$/ $core/"
+    done | sort -u
+)
+SHARED_CLASSES=$(awk '{n[$1]++; owners[$1] = owners[$1] " " $2}
+    END {for (c in n) if (n[c] > 1) print c ":" owners[c]}' <<<"$CLASS_OWNERS")
+[[ -z "$SHARED_CLASSES" ]] ||
+    fail "Objective-C class in more than one binary: $(tr '\n' ';' <<<"$SHARED_CLASSES")"
 
 if contains_word "$PRESENT_CORES" MkxpCore; then
     MKXP="$APP/Frameworks/MkxpCore.framework/MkxpCore"
@@ -200,6 +221,8 @@ for core in $PRESENT_CORES; do
     case "$core" in
         MkxpCore) min=25000000 ;;
         PsdkCore) min=15000000 ;;
+        # A web view host with no engine inside.
+        MvmzCore) min=50000 ;;
     esac
     [[ "$core_size" -ge "$min" ]] || fail "$core suspiciously small (${core_size} bytes)"
     CORE_SIZES="${CORE_SIZES:+$CORE_SIZES, }$core ${core_size} bytes"

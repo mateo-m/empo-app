@@ -22,7 +22,7 @@ extension Notification.Name {
 /// pointer, and the materializer's builtin defaults.
 @MainActor
 enum LayoutProfilesManager {
-    static let profilesRootURL: URL = FileManager.default
+    nonisolated static let profilesRootURL: URL = FileManager.default
         .urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Profiles", isDirectory: true)
 

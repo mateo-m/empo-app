@@ -1,5 +1,4 @@
 import Foundation
-import GameProbe
 
 enum GameImportValidator {
 
@@ -47,76 +46,6 @@ enum GameImportValidator {
         let canTakeTheSourceName: Bool
 
         var id: String { relativePath }
-    }
-
-    private static let previewImageExtensions: Set<String> = ["png", "jpg", "jpeg", "bmp"]
-
-    private struct ArchiveEntryDescriptor {
-        let lowercaseName: String
-        let parentComponents: [String]
-        let parentPath: String
-
-        init?(_ rawPath: String) {
-
-            let components =
-                rawPath
-                .replacingOccurrences(of: "\\", with: "/")
-                .split(separator: "/", omittingEmptySubsequences: false)
-                .map(String.init)
-
-            guard let name = components.last, !name.isEmpty else { return nil }
-
-            lowercaseName = name.lowercased()
-            parentComponents = Array(components.dropLast())
-            parentPath = parentComponents.joined(separator: "/")
-        }
-
-        var isIni: Bool {
-            lowercaseName.hasSuffix(".ini")
-        }
-
-        var isMkxpJson: Bool {
-            lowercaseName == "mkxp.json"
-        }
-
-        var archiveMarkerVersion: RGSSVersion? {
-            GameImportValidator.rgssVersion(fromArchiveMarker: lowercaseName)
-        }
-
-        var defaultScriptsRoot: String? {
-            guard parentComponents.last?.lowercased() == "data" else { return nil }
-            guard lowercaseName.hasPrefix("scripts.") else { return nil }
-            guard
-                lowercaseName.hasSuffix(".rxdata") || lowercaseName.hasSuffix(".rvdata")
-                    || lowercaseName.hasSuffix(".rvdata2")
-            else { return nil }
-
-            return Array(parentComponents.dropLast()).joined(separator: "/")
-        }
-
-        var isExecutable: Bool {
-            lowercaseName.hasSuffix(".exe")
-        }
-
-        /// The pair a PSDK game is known by. Both files go into the
-        /// probe, because the check reads Game.yarb's first four bytes
-        /// (`PsdkGame.isGameRoot`).
-        var isPsdkMarker: Bool {
-            lowercaseName == "game.rb" || lowercaseName == "game.yarb"
-        }
-
-        var isPreviewTitleArtwork: Bool {
-            guard parentComponents.count >= 2 else { return false }
-            guard parentComponents[parentComponents.count - 2].lowercased() == "graphics" else {
-                return false
-            }
-            guard parentComponents[parentComponents.count - 1].lowercased() == "titles" else {
-                return false
-            }
-
-            let ext = (lowercaseName as NSString).pathExtension
-            return GameImportValidator.previewImageExtensions.contains(ext)
-        }
     }
 
     struct ArchiveProbeResult: Sendable {
@@ -224,132 +153,37 @@ enum GameImportValidator {
         return candidates
     }
 
+    /// Returns the core that runs the game at `url`.
+    @discardableResult
     private static func validateResolvedGameRoot(
         at url: URL,
         archiveURL: URL? = nil,
         scratchDir: URL? = nil,
         shouldCancel: (() -> Bool)? = nil
-    ) throws {
-        // Which core this build carries is not a property of these
+    ) throws -> any GameCore {
+        // Which cores this build carries is not a property of these
         // files. GameCatalog calls this on every scan and deletes a
         // container it calls invalid, so a missing core must not fail
         // here. ImportPipeline and GameLibraryView refuse instead.
-        //
-        // A PSDK game carries none of what the checks below read: no
-        // RGSS archive, no .ini with a Scripts entry, no Scripts file.
-        // The PSDK core runs it, so no RGSS version applies either.
-        if GameCoreKind.forGame(at: url) == .psdk { return }
-
-        let fm = FileManager.default
-        guard let items = try? fm.contentsOfDirectory(atPath: url.path) else {
-            throw ImportError.notAGame
+        guard let core = GameCores.core(forGameAt: url) else { throw ImportError.notAGame }
+        try core.validateGameRoot(url) { relativePath in
+            guard let archiveURL, let scratchDir else { return }
+            try ensureFileExtracted(
+                relativePath: relativePath,
+                gameRoot: url,
+                archiveURL: archiveURL,
+                scratchDir: scratchDir,
+                shouldCancel: shouldCancel
+            )
         }
-
-        let lowercaseItems = items.map { $0.lowercased() }
-
-        // 1. Check for an RGSS archive: definitive proof + version detection.
-        //    When an archive is present, the scripts are packed inside it and
-        //    can't be validated without decryption, so we check only the version.
-        if let version = rgssVersionFromArchive(lowercaseItems) {
-            try checkRuntimeSupport(version)
-            return
-        }
-
-        var scriptsPath: String?
-        var detectedVersion: RGSSVersion?
-
-        // 2. Check .ini files for [Game] section with Scripts= entry
-        for item in items where item.lowercased().hasSuffix(".ini") {
-            let iniURL = url.appendingPathComponent(item)
-            if let (version, iniScriptsPath) = parseIniScripts(iniURL) {
-                detectedVersion = version
-                scriptsPath = iniScriptsPath
-                break
-            }
-        }
-
-        // 3. Check for mkxp.json. Only valid if it has a customScript
-        //    (without customScript AND without a valid .ini, the engine
-        //    won't know where to find scripts and will fail at runtime)
-        var customScriptPath: String?
-        if lowercaseItems.contains("mkxp.json") {
-            customScriptPath = Self.customScriptPath(url)
-            if scriptsPath == nil, customScriptPath == nil {
-                throw ImportError.notAGame
-            }
-            if scriptsPath == nil {
-                detectedVersion = rgssVersionFromMkxpJson(url)
-            }
-        }
-
-        guard scriptsPath != nil || customScriptPath != nil else {
-            throw ImportError.notAGame
-        }
-
-        if let detectedVersion {
-            try checkRuntimeSupport(detectedVersion)
-        }
-
-        if let scriptsPath {
-            let normalized = scriptsPath.replacingOccurrences(of: "\\", with: "/")
-            if let archiveURL, let scratchDir {
-                try ensureFileExtracted(
-                    relativePath: normalized,
-                    gameRoot: url,
-                    archiveURL: archiveURL,
-                    scratchDir: scratchDir,
-                    shouldCancel: shouldCancel
-                )
-            }
-            try validateRGSSScripts(at: url, scriptsPath: normalized)
-            return
-        }
-
-        if let customScriptPath {
-            let normalized = customScriptPath.replacingOccurrences(of: "\\", with: "/")
-            if let archiveURL, let scratchDir {
-                try ensureFileExtracted(
-                    relativePath: normalized,
-                    gameRoot: url,
-                    archiveURL: archiveURL,
-                    scratchDir: scratchDir,
-                    shouldCancel: shouldCancel
-                )
-            }
-            try validateCustomScript(at: url, scriptPath: normalized)
-            return
-        }
-
-        throw ImportError.notAGame
+        return core
     }
 
     private static func isLikelyGameRoot(
         _ url: URL,
         fm: FileManager
     ) -> Bool {
-        if PsdkGame.isGameRoot(url, fileManager: fm) { return true }
-
-        guard let items = try? fm.contentsOfDirectory(atPath: url.path) else {
-            return false
-        }
-
-        let lowercaseItems = items.map { $0.lowercased() }
-        if rgssVersionFromArchive(lowercaseItems) != nil {
-            return true
-        }
-
-        if lowercaseItems.contains("mkxp.json"), customScriptPath(url) != nil {
-            return true
-        }
-
-        for item in items where item.lowercased().hasSuffix(".ini") {
-            let iniURL = url.appendingPathComponent(item)
-            if parseIniScripts(iniURL) != nil {
-                return true
-            }
-        }
-
-        return false
+        GameCores.core(forGameAt: url, fileManager: fm) != nil
     }
 
     private static func importRootChoices(inArchive archiveURL: URL) throws -> ArchiveProbeResult {
@@ -361,7 +195,9 @@ enum GameImportValidator {
         defer { try? fm.removeItem(at: scratchDir) }
 
         var inventory = ArchiveExtractor.Inventory()
-        var rgssArchiveRoots: [String: RGSSVersion] = [:]
+        // A core marks the folder of an entry that is too large to
+        // extract for the probe. The value is the core and the entry.
+        var markedRoots: [String: (core: any GameCore, marker: String)] = [:]
         try ArchiveExtractor.extractSelective(
             archive: archiveURL,
             to: scratchDir,
@@ -374,22 +210,19 @@ enum GameImportValidator {
                 }
             },
             include: { path in
-                guard let entry = ArchiveEntryDescriptor(path) else { return false }
-
-                if entry.isIni || entry.isMkxpJson || entry.isPsdkMarker {
-                    return true
+                guard let entry = ArchiveEntry(path) else { return false }
+                // The preview reads the icon of the game's .exe.
+                if entry.lowercaseName.hasSuffix(".exe") { return true }
+                for core in GameCores.all {
+                    switch core.archiveEntryUse(entry) {
+                    case .skip: continue
+                    case .extract: return true
+                    case .markRoot:
+                        markedRoots[entry.parentPath] = (core, entry.lowercaseName)
+                        return false
+                    }
                 }
-                if let version = entry.archiveMarkerVersion {
-                    rgssArchiveRoots[entry.parentPath] = version
-                    return false
-                }
-                if entry.defaultScriptsRoot != nil {
-                    return true
-                }
-                if entry.isExecutable {
-                    return true
-                }
-                return entry.isPreviewTitleArtwork
+                return false
             }
         )
         try EnigmaVirtualBoxImport.unpackProbeFiles(under: scratchDir)
@@ -414,10 +247,10 @@ enum GameImportValidator {
         }
 
         let existing = Set(choices.map(\.relativePath))
-        for (relativePath, version) in rgssArchiveRoots
+        for (relativePath, mark) in markedRoots
         where !existing.contains(normalizedRelativePath(relativePath)) {
             do {
-                try checkRuntimeSupport(version)
+                try mark.core.validateMarkedRoot(marker: mark.marker)
             } catch {
                 rememberValidationError(
                     error,
@@ -433,14 +266,13 @@ enum GameImportValidator {
                 ? archiveURL.deletingPathExtension().lastPathComponent
                 : (normalized as NSString).lastPathComponent
             let subtitle = normalized.isEmpty ? "/" : normalized
-            let artwork = previewArtwork(at: scratchDir, relativePath: normalized)
+            let artwork = previewArtwork(at: scratchDir, relativePath: normalized, core: mark.core)
             choices.append(
                 ImportRootChoice(
                     relativePath: normalized,
                     title: title,
                     subtitle: subtitle,
                     artwork: artwork,
-                    // An RGSS archive root, so the name stays as it was.
                     canTakeTheSourceName: false
                 )
             )
@@ -472,8 +304,9 @@ enum GameImportValidator {
         var firstMeaningfulValidationError: Error?
 
         for root in candidates {
+            let core: any GameCore
             do {
-                try validateResolvedGameRoot(
+                core = try validateResolvedGameRoot(
                     at: root,
                     archiveURL: archiveURL,
                     scratchDir: scratchDir
@@ -494,7 +327,7 @@ enum GameImportValidator {
             // adopt the container the migration named after the
             // manifest - an archive-name fallback here would mint
             // a second container for the same game.
-            let declaredTitle = GameINI.gameTitle(at: root) ?? jgpManifestName(at: root)
+            let declaredTitle = core.title(at: root) ?? jgpManifestName(at: root)
             let title =
                 declaredTitle
                 ?? (relativePath.isEmpty ? fallbackRootName : root.lastPathComponent)
@@ -504,9 +337,9 @@ enum GameImportValidator {
                     relativePath: relativePath,
                     title: title,
                     subtitle: subtitle,
-                    artwork: previewArtwork(at: directoryURL, relativePath: relativePath),
+                    artwork: previewArtwork(at: directoryURL, relativePath: relativePath, core: core),
                     canTakeTheSourceName: declaredTitle == nil && !relativePath.isEmpty
-                        && PsdkGame.isGameRoot(root)
+                        && core.usesFolderName
                 )
             )
         }
@@ -525,8 +358,8 @@ enum GameImportValidator {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    /// Renames a single nameless PSDK root after the source the user
-    /// picked.
+    /// Renames a single nameless root after the source the user picked,
+    /// for a core whose games have no title of their own.
     ///
     /// A release often nests the game in a wrapper folder, and the
     /// wrapper is named after the layout instead of the game: the
@@ -536,12 +369,13 @@ enum GameImportValidator {
     /// root it carries nothing, and the name of what the user picked is
     /// always closer to the truth.
     ///
-    /// PSDK games only. The title becomes the container folder name,
-    /// and the importer matches an installed game by that folder
+    /// The title becomes the container folder name, and the importer
+    /// matches an installed game by that folder
     /// (`ImportNameResolution.resolve`), so a title that changes
     /// between two Empo versions installs the same game twice. PSDK
-    /// support arrives with this naming, so no PSDK game can carry the
-    /// older name. An RPG Maker game can, and keeps it.
+    /// support arrived with this naming, so no PSDK game can carry the
+    /// older name. An RPG Maker game can, so its core keeps
+    /// `usesFolderName` off.
     private static func nameLoneRootAfterSource(
         _ choices: [ImportRootChoice],
         fallbackRootName: String
@@ -610,17 +444,10 @@ enum GameImportValidator {
         return String(targetPath.dropFirst(basePath.count + 1))
     }
 
-    private static func rgssVersion(fromArchiveMarker markerName: String) -> RGSSVersion? {
-        let lower = markerName.lowercased()
-        if lower.hasSuffix(".rgssad") { return .xp }
-        if lower.hasSuffix(".rgss2a") { return .vx }
-        if lower.hasSuffix(".rgss3a") { return .vxAce }
-        return nil
-    }
-
     private static func previewArtwork(
         at baseURL: URL,
-        relativePath: String
+        relativePath: String,
+        core: any GameCore
     ) -> ImportRootChoiceArtwork? {
         let rootURL =
             normalizedRelativePath(relativePath).isEmpty
@@ -630,7 +457,9 @@ enum GameImportValidator {
         if let exeArtwork = previewExecutableArtwork(in: rootURL) {
             return exeArtwork
         }
-        return previewTitlesArtwork(in: rootURL)
+        return core.titlePicture(at: rootURL)
+            .flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
+            .map(ImportRootChoiceArtwork.image)
     }
 
     private static func previewExecutableArtwork(in gameRoot: URL) -> ImportRootChoiceArtwork? {
@@ -663,24 +492,6 @@ enum GameImportValidator {
             }
         }
 
-        return nil
-    }
-
-    private static func previewTitlesArtwork(in gameRoot: URL) -> ImportRootChoiceArtwork? {
-        let titlesDir = gameRoot.appendingPathComponent("Graphics/Titles")
-        guard let items = try? FileManager.default.contentsOfDirectory(atPath: titlesDir.path) else {
-            return nil
-        }
-
-        for item in items.sorted() {
-            let ext = (item as NSString).pathExtension.lowercased()
-            if previewImageExtensions.contains(ext) {
-                let path = titlesDir.appendingPathComponent(item)
-                if let data = try? Data(contentsOf: path, options: .mappedIfSafe) {
-                    return .image(data)
-                }
-            }
-        }
         return nil
     }
 
@@ -734,122 +545,6 @@ enum GameImportValidator {
         let relative = String(gamePath.dropFirst(scratchPath.count + 1))
         guard !relative.isEmpty else { return nil }
         return relative + "/"
-    }
-
-    /// Detected RGSS version: 1 = XP, 2 = VX, 3 = VX Ace
-    private enum RGSSVersion: Int {
-        case xp = 1
-        case vx = 2
-        case vxAce = 3
-    }
-
-    private static func rgssVersionFromArchive(_ lowercaseItems: [String]) -> RGSSVersion? {
-        if lowercaseItems.contains(where: { $0.hasSuffix(".rgssad") }) { return .xp }
-        if lowercaseItems.contains(where: { $0.hasSuffix(".rgss2a") }) { return .vx }
-        if lowercaseItems.contains(where: { $0.hasSuffix(".rgss3a") }) { return .vxAce }
-        return nil
-    }
-
-    private static func rgssVersionFromMkxpJson(_ url: URL) -> RGSSVersion? {
-        let jsonURL = url.appendingPathComponent("mkxp.json")
-        guard let data = try? Data(contentsOf: jsonURL),
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let ver = json["rgssVersion"] as? Int
-        else {
-            return nil
-        }
-        return RGSSVersion(rawValue: ver)
-    }
-
-    /// Returns the detected RGSS version and the raw scripts path.
-    private static func parseIniScripts(_ iniURL: URL) -> (RGSSVersion, String)? {
-        guard let value = GameINI.parseINIValue(in: iniURL, section: "game", key: "scripts") else {
-            return nil
-        }
-        let lower = value.lowercased()
-        let version: RGSSVersion
-        if lower.hasSuffix(".rvdata2") {
-            version = .vxAce
-        } else if lower.hasSuffix(".rvdata") {
-            version = .vx
-        } else {
-            version = .xp
-        }
-        return (version, value)
-    }
-
-    /// Validates that an RGSS scripts file (Marshal-dumped Array) exists and is valid.
-    private static func validateRGSSScripts(at gameDir: URL, scriptsPath: String) throws {
-        // Game.ini uses backslashes (Windows paths). Convert them to forward slashes.
-        let normalized = scriptsPath.replacingOccurrences(of: "\\", with: "/")
-        let fileURL = gameDir.appendingPathComponent(normalized)
-
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw ImportError.missingScripts(normalized)
-        }
-
-        // Ruby Marshal format: the first 2 bytes are the version (0x04,
-        // 0x08), and the third byte is the type tag. 0x5B means Array.
-        guard let fh = FileHandle(forReadingAtPath: fileURL.path) else {
-            throw ImportError.invalidScripts(normalized)
-        }
-        defer { try? fh.close() }
-
-        guard let header = try? fh.read(upToCount: 3) else {
-            throw ImportError.invalidScripts(normalized)
-        }
-        guard header.count == 3,
-            header[0] == 0x04,
-            header[1] == 0x08,
-            header[2] == 0x5B
-        else {
-            throw ImportError.invalidScripts(normalized)
-        }
-    }
-
-    /// Validates that a customScript .rb file exists.
-    private static func validateCustomScript(at gameDir: URL, scriptPath: String) throws {
-        let normalized = scriptPath.replacingOccurrences(of: "\\", with: "/")
-        let fileURL = gameDir.appendingPathComponent(normalized)
-
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw ImportError.missingScripts(normalized)
-        }
-    }
-
-    private static func customScriptPath(_ url: URL) -> String? {
-        let jsonURL = url.appendingPathComponent("mkxp.json")
-        guard let data = try? Data(contentsOf: jsonURL),
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let script = json["customScript"] as? String,
-            !script.isEmpty
-        else {
-            return nil
-        }
-        return script
-    }
-
-    private static func checkRuntimeSupport(_ version: RGSSVersion) throws {
-        // The mask depends on the Ruby versions the core carries: Ruby
-        // 1.8 alone runs RGSS1 and RGSS2, and Ruby 3.x with the syntax
-        // transform runs all three.
-        let mask = BuiltInGameCore.rgssVersionMask
-        // Zero means this build carries no RPG Maker core. The files are
-        // still a game, so say nothing here and let ImportPipeline and
-        // GameLibraryView name the missing core.
-        guard mask != 0 else { return }
-        let bit = 1 << (version.rawValue - 1)
-        if mask & bit != 0 { return }
-
-        let label: String
-        switch version {
-        case .xp: label = "RPG Maker XP (RGSS1)"
-        case .vx: label = "RPG Maker VX (RGSS2)"
-        case .vxAce: label = "RPG Maker VX Ace (RGSS3)"
-        }
-        throw ImportError.unsupportedRuntime(
-            "This game requires \(label). Empo does not support it right now."
-        )
     }
 }
 

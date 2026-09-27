@@ -27,7 +27,7 @@ set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DEPS="$ROOT/ios/Dependencies"
-ENGINE="$ROOT/mkxp-z-apple-mobile"
+ENGINE="${ENGINE:-$ROOT/mkxp-z-apple-mobile}"
 
 SDK=iphoneos
 ARCH=arm64

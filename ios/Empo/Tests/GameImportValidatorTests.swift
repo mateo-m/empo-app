@@ -78,6 +78,23 @@ final class GameImportValidatorTests: XCTestCase {
         XCTAssertEqual(choices.map(\.title), ["Alpha Quest"])
     }
 
+    func testADesktopMVReleaseImportsItsWwwFolderWithTheGameTitle() throws {
+        let picked = scratch.appendingPathComponent("Sorcery of Truth 1.0", isDirectory: true)
+        let www = picked.appendingPathComponent("www", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: www.appendingPathComponent("data", isDirectory: true), withIntermediateDirectories: true)
+        try Data("MZ".utf8).write(to: picked.appendingPathComponent("Game.exe"))
+        try Data("<html>".utf8).write(to: www.appendingPathComponent("index.html"))
+        try Data(#"{"gameTitle":"Sorcery of Truth"}"#.utf8)
+            .write(to: www.appendingPathComponent("data/System.json"))
+
+        let choices = try GameImportValidator.importRootChoices(for: picked).choices
+
+        XCTAssertEqual(choices.map(\.title), ["Sorcery of Truth"])
+        XCTAssertEqual(choices.map(\.relativePath), ["www"])
+        XCTAssertNoThrow(try GameImportValidator.validate(picked))
+    }
+
     /// An RGSS archive is proof enough for `validate`, and RGSS1 runs on
     /// every core build, so the mask check passes either way.
     private func makeRPGMakerGame(at url: URL) throws {
@@ -85,11 +102,12 @@ final class GameImportValidatorTests: XCTestCase {
         try Data("RGSSAD".utf8).write(to: url.appendingPathComponent("Game.rgssad"))
     }
 
-    /// `PsdkGame.isGameRoot` needs a Game.rb next to a Game.yarb whose
-    /// first 4 bytes are YARB.
+    /// The PSDK core takes a Game.rb next to a Game.yarb that Ruby 3.0
+    /// compiled: YARB, then major version 3 and minor version 0.
     private func makePsdkGame(at url: URL) throws {
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         try Data("RubyVM\n".utf8).write(to: url.appendingPathComponent("Game.rb"))
-        try Data("YARB".utf8).write(to: url.appendingPathComponent("Game.yarb"))
+        try (Data("YARB".utf8) + Data([3, 0, 0, 0, 0, 0, 0, 0]))
+            .write(to: url.appendingPathComponent("Game.yarb"))
     }
 }

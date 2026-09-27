@@ -43,7 +43,7 @@ BIN="$FW/MkxpCore"
 
 # The header is the contract. Anything it declares must be out, and
 # nothing else may be.
-WANT=$(grep -oE '\bmkxp_[A-Za-z0-9_]+\(' "$REPO_ROOT/mkxp-z-apple-mobile/src/app_bridge.h" |
+WANT=$(grep -oE '\bmkxp_[A-Za-z0-9_]+\(' "${ENGINE:-$REPO_ROOT/mkxp-z-apple-mobile}/src/app_bridge.h" |
     sed 's/(//' | sort -u | sed 's/^/_/')
 GOT=$(dyld_info -exports "$BIN" | awk '/^ *0x/ {print $2}' | sort -u)
 if [ "$WANT" != "$GOT" ]; then

@@ -196,6 +196,10 @@ class AppWindow: UIWindow {
 
     static var hostView: UIView? { instance?.rootViewController?.view }
 
+    static var currentScreenBounds: CGRect {
+        instance?.windowScene?.screen.bounds ?? .zero
+    }
+
     static var currentSafeArea: EdgeInsets {
         guard let window = instance else { return .init() }
         let insets = window.safeAreaInsets

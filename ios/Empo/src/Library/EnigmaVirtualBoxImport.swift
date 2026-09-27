@@ -64,21 +64,10 @@ enum EnigmaVirtualBoxImport {
         return found
     }
 
+    /// The probe runs on disk after this, so an entry a core marks as a
+    /// game root has to be there too.
     private static func isProbeFile(_ path: String) -> Bool {
-        let lower = path.lowercased()
-        let components = lower.split(separator: "/")
-        guard let name = components.last else { return false }
-        if components.count == 1 {
-            return name.hasSuffix(".ini") || name == "mkxp.json"
-                || name.hasSuffix(".rgssad") || name.hasSuffix(".rgss2a") || name.hasSuffix(".rgss3a")
-        }
-        if components.count == 2, components[0] == "data" {
-            return name == "scripts.rxdata" || name == "scripts.rvdata" || name == "scripts.rvdata2"
-        }
-        if components.count == 3, components[0] == "graphics", components[1] == "titles" {
-            let ext = (name as NSString).pathExtension
-            return ["png", "jpg", "jpeg", "bmp"].contains(String(ext))
-        }
-        return false
+        guard let entry = ArchiveEntry(path) else { return false }
+        return GameCores.all.contains { $0.archiveEntryUse(entry) != .skip }
     }
 }

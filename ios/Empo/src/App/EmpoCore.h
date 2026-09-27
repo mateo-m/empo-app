@@ -1,9 +1,8 @@
 // Opening a game core.
 //
-// Empo links no engine. It opens one core when the user picks a game,
-// and the core decides which engine, which Ruby and which classes that
-// game runs on. A core that is never picked is never loaded, so two
-// cores never share a definition.
+// Empo links no engine. It opens a core when the user picks a game, and
+// the core decides which engine, which Ruby and which classes that game
+// runs on. A core that is never picked is never loaded.
 //
 // GameCoreForwarders.c implements this. Every gamecore_* call in the
 // app goes through a forwarder that reads its symbol from the open
@@ -18,15 +17,21 @@ extern "C" {
 
 // Opens the core at binaryPath, which is the Mach-O file inside the
 // framework bundle, not the bundle. Returns 1 on success and 0 when
-// dlopen fails, after it writes the reason to stderr. A second call
-// with the core already open succeeds and changes nothing.
+// dlopen fails, after it writes the reason to stderr. A second call for
+// the open core succeeds and changes nothing. A call for any other core
+// returns 0 until EmpoCoreKillSession ran, because two engines that both
+// hold a game share the working directory, the signal handlers, the
+// audio device and the main thread.
 //
-// symbolPrefix is what that core puts in front of every interface name
-// ("mkxp_" for MkxpCore, "psdk_" for PsdkCore). The forwarders build
-// each symbol from it.
+// symbolPrefix is what that core puts in front of every interface name.
+// The forwarders build each symbol from it.
 int EmpoCoreOpen(const char *binaryPath, const char *symbolPrefix);
 
 int EmpoCoreIsOpen(void);
+
+// Calls gamecore_killSession on the open core, then lets EmpoCoreOpen
+// open a different one.
+void EmpoCoreKillSession(void);
 
 // Runs the engine and returns when the game ends. main.m implements
 // this, because it holds argc and argv.

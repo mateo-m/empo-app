@@ -1,5 +1,4 @@
 import Foundation
-import GameProbe
 
 /// Render-resolution multiplier applied via mkxp-z's `enableHires`
 /// + `framebufferScalingFactor`. RGSS games render to a buffer with
@@ -138,11 +137,10 @@ extension Setting: AnySetting {
     }
 }
 
-/// Lets a `GameSettings` JSON file omit a wrapped optional field.
-/// Swift's auto-synthesized `init(from:)` only treats missing keys
-/// as nil for bare `Optional` properties, not wrapper-typed ones, so
-/// new fields would throw "key not found" on first upgrade without
-/// this.
+/// Lets a settings JSON file omit a wrapped optional field. Swift's
+/// synthesized `init(from:)` treats a missing key as nil only for a
+/// bare `Optional` property, not for a wrapped one, so a new field
+/// would throw "key not found" on the first upgrade without this.
 extension KeyedDecodingContainer {
     func decode<V, F>(_ type: Setting<V?, F>.Type, forKey key: Key) throws -> Setting<V?, F>
     where V: Codable & Equatable, F: SettingFlag {
@@ -153,19 +151,92 @@ extension KeyedDecodingContainer {
     }
 }
 
-/// Per-game settings stored as `game_settings.json` in each game
-/// directory. All fields are optional. nil means "use game/engine
-/// default".
+/// A group of per-game settings stored as keys of
+/// `EmpoState/game_settings.json`. The app and the core of the game
+/// each own one group, so each save writes only its own keys.
 ///
 /// Each field carries `@Setting<..., RestartFlag>` or
-/// `@Setting<..., RuntimeFlag>`. The dirty-check below uses the flag
-/// to surface a "restart required" hint when the user edits a
-/// launch-time field during an active session. When adding a field,
-/// pick the flag that matches how the value reaches the engine:
-/// `mkxp.json` at launch -> Restart. Host bridge or rendering ->
-/// Runtime.
-struct GameSettings: Codable, Equatable {
-    // Display
+/// `@Setting<..., RuntimeFlag>`. The settings sheet uses the flag to
+/// show a "restart required" hint when the user edits a launch-time
+/// field during an active session.
+protocol GameSettingsGroup: Codable, Equatable {
+    init()
+    /// The name of a restart-required field in the restart hint.
+    static func displayLabel(forKey key: String) -> String
+}
+
+extension GameSettingsGroup {
+    static func load(from stateDirectory: URL) -> Self {
+        let url = stateDirectory.appendingPathComponent(gameSettingsFilename)
+        guard let data = try? Data(contentsOf: url),
+            let settings = try? JSONDecoder().decode(Self.self, from: data)
+        else {
+            return Self()
+        }
+        return settings
+    }
+
+    func save(to stateDirectory: URL) {
+        // The settings sheet can open before anything created
+        // `EmpoState/`. An atomic write into a missing directory
+        // fails silently, so create it first.
+        try? FileManager.default.createDirectory(
+            at: stateDirectory, withIntermediateDirectories: true
+        )
+        let url = stateDirectory.appendingPathComponent(gameSettingsFilename)
+        guard let encoded = try? JSONEncoder().encode(self),
+            let mine = try? JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        else { return }
+        var all =
+            (try? Data(contentsOf: url))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
+        all.merge(mine) { $1 }
+        if let data = try? JSONSerialization.data(
+            withJSONObject: all, options: [.prettyPrinted, .sortedKeys])
+        {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    var hasCustomizations: Bool {
+        self != Self()
+    }
+
+    /// The labels of the restart-required fields that differ between
+    /// `self` and `other`, in declaration order.
+    func restartRequiredFieldsChanged(from other: Self) -> [String] {
+        var changed: [String] = []
+        for (lhs, rhs) in zip(Mirror(reflecting: self).children, Mirror(reflecting: other).children) {
+            guard let lhsSetting = lhs.value as? AnySetting,
+                let rhsSetting = rhs.value as? AnySetting
+            else {
+                assertionFailure(
+                    "\(Self.self).\(lhs.label ?? "<unknown>") missing @Setting wrapper - "
+                        + "restart-hint logic can't see this field"
+                )
+                continue
+            }
+            guard lhsSetting.requiresRestart,
+                !lhsSetting.anyEquals(rhsSetting),
+                let label = lhs.label
+            else { continue }
+            changed.append(Self.displayLabel(forKey: settingKey(label)))
+        }
+        return changed
+    }
+}
+
+private let gameSettingsFilename = "game_settings.json"
+
+/// Strips the leading underscore that the property-wrapper machinery
+/// puts on Mirror labels, so `_touchMouse` reads back as the declared
+/// name.
+private func settingKey(_ mirrorLabel: String) -> String {
+    mirrorLabel.hasPrefix("_") ? String(mirrorLabel.dropFirst()) : mirrorLabel
+}
+
+/// The per-game settings that every core shares.
+struct GameSettings: GameSettingsGroup {
     /// Where the game sits on a portrait screen before a layout
     /// profile places it. The sheet has no picker for this. Screen
     /// position belongs to the layout editor now, and a pinned
@@ -175,97 +246,15 @@ struct GameSettings: Codable, Equatable {
     /// reads it at launch.
     @Setting<VerticalAlignment?, RestartFlag> var verticalAlignment: VerticalAlignment?
 
-    // Performance
     /// fast-forward multiplier (2-9, nil = disabled). Runtime-only,
     /// applied via PlayerMoreSheet's Fast forward toggle through
     /// `gamecore_setFastForwardMultiplier`.
     @Setting<Int?, RuntimeFlag> var speedMultiplier: Int?
 
-    // Engine
-    /// execute postload scripts for common fixes
-    @Setting<Bool?, RestartFlag> var postloadScripts: Bool?
-    /// Override for the engine's syntax-transform mode. nil = auto
-    /// (the script scanner picks based on the source's grammar).
-    /// true = `GAMECORE_SYNTAX_TRANSFORM_DISABLED` (Ruby 3 strict, no
-    /// rewrites). false = `GAMECORE_SYNTAX_TRANSFORM_LEGACY` (rewrite
-    /// `when X:`, hash rockets, kwarg shorthand etc into Ruby-3
-    /// compatible forms). Only the patched Ruby 3.1 parser applies
-    /// the transforms. On the 1.8 / 1.9 / 3.0 builds the value is
-    /// a no-op. Surfaced as the "Compatibility mode" picker in
-    /// GameSettingsView.
-    @Setting<Bool?, RestartFlag> var useModernRuby: Bool?
-
-    /// Manual override for the per-game Ruby interpreter version.
-    /// nil = use auto-detection from import. 18 / 19 / 30 / 31 forces
-    /// that interpreter. Surfaced as the "Ruby version" picker in
-    /// GameSettingsView and read by `AppState.selectGame` (calls
-    /// `gamecore_setActiveRubyVersion()` before engine boot).
-    ///
-    /// Stored as Int so unknown values from a future Empo build don't
-    /// break decoding. Restart-required because the active Ruby
-    /// version is locked at app launch.
-    @Setting<Int?, RestartFlag> var rubyVersionOverride: Int?
-
-    /// Force the Pokemon Essentials in-game keyboard scene for text
-    /// entry instead of the iOS soft keyboard. Default false (the
-    /// soft keyboard works for IF / Reborn / Insurgence). Flip on
-    /// for games whose keyboard scene adds custom keys the soft
-    /// keyboard can't drive. Routes through `gamecore_setUseInGameKeyboard`
-    /// to `pokemon_input.rb`'s `USEKEYBOARDTEXTENTRY = false` override.
-    ///
-    /// A bridge setter carries this value, but a restart is still
-    /// necessary. `pokemon_input.rb` reads the bridge once at
-    /// postload time and writes the constant. The value is then
-    /// locked for the session.
-    @Setting<Bool?, RestartFlag> var useInGameKeyboard: Bool?
-
     /// The game receives taps and drags on the game area as
     /// left-mouse input. This is harmless for games that never read
     /// the mouse (mouse state sits unread), so the default is ON.
     @Setting<Bool?, RuntimeFlag> var touchMouse: Bool?
-
-    /// Make game scripts see `$joiplay = true` so they take their
-    /// JoiPlay-specific code paths (mobile-friendly API calls, but
-    /// also patches written against JoiPlay's old mkxp fork that can
-    /// misbehave on our engine). Default off. Routes through
-    /// `GameCoreSessionConfig.joiplayCompat` to `platform_compat.rb`,
-    /// which sets the global before game scripts load, so a
-    /// restart is required.
-    @Setting<Bool?, RestartFlag> var joiplayCompat: Bool?
-
-    /// Let the game reach the network. On (the default), the engine's
-    /// network stack works like desktop mkxp-z: `require 'net/http'`
-    /// resolves against the bundled stdlib, HTTPLite streams real
-    /// downloads, and game update systems function. Off simulates
-    /// airplane mode: libraries still load, but every connection
-    /// attempt fails the way it does with no connectivity, so games
-    /// take their own offline fallback paths. Routes through
-    /// `GameCoreSessionConfig.networkEnabled`. The preload layer reads it
-    /// via `System.network_enabled?` before game scripts load, so a
-    /// restart is required.
-    @Setting<Bool?, RestartFlag> var networkEnabled: Bool?
-
-    private static let settingsFilename = "game_settings.json"
-
-    /// Read the game's settings sidecar from `<container>/EmpoState/`
-    /// (NOT the imported `Game/` subdir. Settings live outside the
-    /// game files so the imported tree stays untouched).
-    static func load(from stateDirectory: URL) -> GameSettings {
-        let url = stateDirectory.appendingPathComponent(settingsFilename)
-        guard let data = try? Data(contentsOf: url),
-            let settings = try? JSONDecoder().decode(GameSettings.self, from: data)
-        else {
-            return GameSettings()
-        }
-        return settings
-    }
-
-    /// True when both Ruby-related controls are still on Auto, so
-    /// Empo is free to refresh the persisted auto-detected Ruby
-    /// version for this game on upgrade.
-    var allowsRubyAutoDetectRefresh: Bool {
-        rubyVersionOverride == nil && useModernRuby == nil
-    }
 
     /// `RuntimeFlag` fields that something re-pushes to the engine
     /// while a game runs. `PlayerRuntimeState.reconcile` owns those
@@ -288,7 +277,7 @@ struct GameSettings: Codable, Equatable {
                 let setting = child.value as? AnySetting,
                 !setting.requiresRestart
             else { continue }
-            let key = fieldKey(label)
+            let key = settingKey(label)
             guard !runtimeAppliedFields.contains(key) else { continue }
             assertionFailure(
                 "GameSettings.\(key) is RuntimeFlag but nothing re-applies it "
@@ -299,127 +288,13 @@ struct GameSettings: Codable, Equatable {
         #endif
     }
 
-    /// True if any `RestartFlag`-tagged field differs between `self`
-    /// and `other`. The engine reads its config once at RGSS thread
-    /// startup and never re-reads, so launch-time fields need the
-    /// app to close and open again. Runtime fields apply on resume.
-    func differsInRestartRequiredFields(from other: GameSettings) -> Bool {
-        !restartRequiredFieldsChanged(from: other).isEmpty
-    }
-
-    /// User-facing labels of restart-required fields whose values
-    /// differ between `self` and `other`. Feeds the restart-hint pill
-    /// (e.g. "Smooth scaling and Render scale") instead of a generic
-    /// "something changed". Order follows declaration order so the
-    /// rendered list stays stable as the user toggles fields.
-    func restartRequiredFieldsChanged(from other: GameSettings) -> [String] {
-        let lhsChildren = Mirror(reflecting: self).children
-        let rhsChildren = Mirror(reflecting: other).children
-        var changed: [String] = []
-        for (lhs, rhs) in zip(lhsChildren, rhsChildren) {
-            guard let lhsSetting = lhs.value as? AnySetting,
-                let rhsSetting = rhs.value as? AnySetting
-            else {
-                // Bare properties bypass the dirty-check in release.
-                // Crash debug builds so a new field author remembers
-                // to add `@Setting<..., Flag>`.
-                assertionFailure(
-                    "GameSettings.\(lhs.label ?? "<unknown>") missing @Setting wrapper - "
-                        + "restart-hint logic can't see this field"
-                )
-                continue
-            }
-            guard lhsSetting.requiresRestart,
-                !lhsSetting.anyEquals(rhsSetting),
-                let label = lhs.label
-            else { continue }
-            changed.append(Self.displayLabel(forFieldLabel: label))
-        }
-        return changed
-    }
-
-    /// Maps a Mirror property label (rendered with a leading
-    /// underscore by the property-wrapper machinery, e.g.
-    /// `_smoothScaling`) to a user-facing label for the restart-hint
-    /// pill. Hand-mapped switch instead of camelCase auto-formatting
-    /// because the UI copy needs real review (acronyms like "VSync",
-    /// multi-word phrases) and silent string drift on rename is worse
-    /// than one entry per restart-required field.
-    /// Strips the leading underscore the property-wrapper machinery
-    /// prefixes onto Mirror labels, so `_touchMouse` reads back as
-    /// the declared name.
-    private static func fieldKey(_ mirrorLabel: String) -> String {
-        mirrorLabel.hasPrefix("_") ? String(mirrorLabel.dropFirst()) : mirrorLabel
-    }
-
-    private static func displayLabel(forFieldLabel mirrorLabel: String) -> String {
-        let key = fieldKey(mirrorLabel)
+    static func displayLabel(forKey key: String) -> String {
         switch key {
-        case "useInGameKeyboard": return "In-game keyboard"
         case "verticalAlignment": return "Screen position"
-        case "postloadScripts": return "Postload scripts"
-        case "useModernRuby": return "Ruby compatibility mode"
-        case "rubyVersionOverride": return "Ruby version"
-        case "joiplayCompat": return "JoiPlay compatibility"
-        case "networkEnabled": return "Network access"
         default:
-            // Surface the raw camelCase name so the missing mapping
-            // is visible in the UI rather than silently dropped.
             assertionFailure("Missing displayLabel mapping for GameSettings.\(key)")
             return key
         }
-    }
-
-    /// Write the game's settings sidecar to
-    /// `<container>/EmpoState/`.
-    func save(to stateDirectory: URL) {
-        // The settings sheet can open before anything created
-        // `EmpoState/`. An atomic write into a missing directory
-        // fails silently, so create it first.
-        try? FileManager.default.createDirectory(
-            at: stateDirectory, withIntermediateDirectories: true
-        )
-        let url = stateDirectory.appendingPathComponent(Self.settingsFilename)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        if let data = try? encoder.encode(self) {
-            try? data.write(to: url, options: .atomic)
-        }
-    }
-
-    /// Resolve the engine's `syntaxTransform` mode for this game.
-    /// Honors an explicit `useModernRuby` setting. Runs the script
-    /// profile when the setting is nil ("auto").
-    ///
-    /// Most PE fangames are written in Ruby 1.8 syntax and need
-    /// the LEGACY transform so the engine rewrites old forms
-    /// (`when X:`, unparenthesized method chains, legacy hash
-    /// rockets, etc) before Ruby 3 parses them. Games that target
-    /// the modern mkxp-z runtime (Reborn 19.5+, PE v20+, anything
-    /// packaged as an mkxp-z JGP) ship actual Ruby 3 source
-    /// (keyword-arg shorthand `id: -1`, `foo: "bar"`) which the
-    /// 1.8 transform would mis-parse, so we DISABLE the transform
-    /// for those.
-    ///
-    /// Auto-detect reads `metadata.modernRubyScriptsDetected`
-    /// (refreshed at import, library load, launch, and Reset to
-    /// Defaults when `useModernRuby` is nil). Falls back to an
-    /// on-demand scan only when metadata has no cached value yet.
-    func resolveSyntaxTransformMode(
-        gameDirectory: URL,
-        autoDetectedModern: Bool? = nil
-    ) -> GameCoreSyntaxTransformMode {
-        let modern: Bool
-        if let m = useModernRuby {
-            modern = m
-        } else if let detected = autoDetectedModern {
-            modern = detected
-        } else {
-            modern = GameScriptProfile.analyze(gameDirectory: gameDirectory).modernRubyScripts
-        }
-        return modern
-            ? GAMECORE_SYNTAX_TRANSFORM_DISABLED
-            : GAMECORE_SYNTAX_TRANSFORM_LEGACY
     }
 
     /// Reads the game's mkxp.json defaults straight from the
@@ -442,10 +317,6 @@ struct GameSettings: Codable, Equatable {
             stateDirectory: stateDirectory,
             gameDirectory: gameDirectory
         )
-    }
-
-    var hasCustomizations: Bool {
-        self != GameSettings()
     }
 
     /// The value the engine bridge takes for `touchMouse`. Both the
@@ -473,7 +344,6 @@ struct GameConfigDefaults {
     static let enginePathCache = true
     static let engineFontScale = 1.0
     static let engineSolidFonts = false
-    static let enginePostloadScripts = true
     static let engineRenderScale = RenderScale.x1
     static let engineVerticalAlignment = VerticalAlignment.topCenter
     static let engineTouchMouse = true

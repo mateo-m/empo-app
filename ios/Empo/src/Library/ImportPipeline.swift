@@ -1183,7 +1183,7 @@ extension GameLibrary {
                             continue
                         }
 
-                        var artworkPath = GameCatalog.findFolderImportArtwork(at: root)
+                        var artworkPath = GameCores.core(forGameAt: root)?.titlePicture(at: root)?.path
                         if artworkPath == nil {
                             artworkPath = writeProbeIconSidecar(sel.iconPNG, to: container)
                         }
@@ -1250,12 +1250,15 @@ extension GameLibrary {
                         continue
                     }
 
-                    // This build can carry one core instead of both
-                    // (EMPO_CORES). Refuse the game here, where the
-                    // message reaches the user, instead of importing a
-                    // game no core can open.
-                    let core = GameCoreKind.forGame(at: gameRoot)
-                    guard BuiltInGameCore.isInThisBuild(core) else {
+                    // A build can leave cores out (EMPO_CORES). Refuse
+                    // the game here, where the message reaches the
+                    // user, instead of importing a game no core can
+                    // open.
+                    guard let core = GameCores.core(forGameAt: gameRoot) else {
+                        failSelection(sel, GameImportValidator.ImportError.notAGame)
+                        continue
+                    }
+                    guard core.isInThisBuild else {
                         failSelection(
                             sel,
                             GameImportValidator.ImportError.unsupportedRuntime(
@@ -1329,14 +1332,16 @@ extension GameLibrary {
                     self.updateCardProgress(sel.importID, 0.97)
 
                     ImportSignpost.interval("finalize", id: sel.importID) {
+                        let source: ImportSource
                         if let bundle = jgpBundle {
                             GameImporter.finalizeJgpImport(
                                 container: container,
                                 bundle: bundle,
                                 preservingExistingState: preserveExistingState
                             )
-                        } else if isArchive {
-                            if !fm.fileExists(atPath: container.exeIconSidecarURL.path) {
+                            source = .joiPlay(type: bundle.manifest.type)
+                        } else {
+                            if !isArchive || !fm.fileExists(atPath: container.exeIconSidecarURL.path) {
                                 _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
                             }
                             if preserveExistingState {
@@ -1344,14 +1349,9 @@ extension GameLibrary {
                             } else {
                                 GameImporter.createMetadata(in: container)
                             }
-                        } else {
-                            _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
-                            if preserveExistingState {
-                                GameImporter.refreshMetadataAfterReplacement(in: container)
-                            } else {
-                                GameImporter.seedFolderImport(in: container)
-                            }
+                            source = isArchive ? .archive : .folder
                         }
+                        core.didImport(container, from: source, replacing: preserveExistingState)
                     }
 
                     if !isReplacement {

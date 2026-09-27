@@ -94,7 +94,7 @@ struct SettingsView: View {
                         title: "Diagnostics overlay",
                         isOn: $settings.diagnosticsOverlay,
                         description:
-                            "Adds a toolbar button that shows frame rate, Ruby version, and graphics driver while you play."
+                            "Adds a toolbar button that shows frame rate, memory use, and details about the game engine while you play."
                     )
 
                     SettingsToggle(
@@ -470,7 +470,7 @@ private struct RefreshSpinIcon: View {
         let generation = coastGeneration
 
         let current: Double
-        if let spinStart {
+        if spinStart != nil {
             current = spinRotation(at: Date())
             self.spinStart = nil
         } else if let coastRotation {

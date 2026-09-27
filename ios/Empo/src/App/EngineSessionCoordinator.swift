@@ -1,5 +1,4 @@
 import Foundation
-import GameProbe
 import UIKit
 
 /// Bridge seam: registers mkxp callbacks, owns session-scoped services,
@@ -32,7 +31,7 @@ final class EngineSessionCoordinator {
     private var inputBridgesInstalled = false
     /// The core `openCore` opened, or nil before it runs. The player
     /// UI reads this to hide a row the running core does not answer.
-    private(set) var openedCore: GameCoreKind?
+    private(set) var openedCore: (any GameCore)?
     /// Per-scancode press start times. Light taps release before the
     /// RGSS thread observes a pressed-edge. We defer KEYUP until the
     /// key has been down for at least one frame (~16ms @ 60fps, with
@@ -61,34 +60,29 @@ final class EngineSessionCoordinator {
         }
     }
 
-    /// Opens the core that can run `gameDirectory`, then pushes the
-    /// launcher state into it.
+    /// Opens `core`, then pushes the launcher state into it.
     ///
-    /// The folder picks the core. A PSDK game runs on PsdkCore, every
-    /// other game on MkxpCore. Nothing is stored in the library entry,
-    /// so a game imported before PSDK support still picks the right
-    /// core.
+    /// The folder picks the core (`GameCores.core(forGameAt:)`). Nothing
+    /// is stored in the library entry, so a game imported before a core
+    /// existed still picks the right one.
     ///
     /// Nothing calls the engine before this. The app links no engine,
     /// and every `gamecore_*` name resolves through a forwarder that reads
     /// the open core (`GameCoreForwarders.c`). A call before the core
     /// opens aborts, on purpose, because a silent no-op would hide it.
     ///
-    /// One core runs for each process. Empo plays one game for each
-    /// process (`ios/Empo/docs/multi-session.md`), so a second open is
-    /// the same core and changes nothing.
-    func openCore(for gameDirectory: URL) {
-        guard openedCore == nil else { return }
-        let kind = GameCoreKind.forGame(at: gameDirectory)
+    /// A different core opens only after `killSession` killed the
+    /// game of the open one (`AppState.killPausedGame`).
+    func openCore(_ core: any GameCore) {
         // AppState.selectGame refuses a game whose core this build does
-        // not carry, so a missing framework here is a broken bundle.
-        guard let binary = BuiltInGameCore.binaryURL(for: kind),
-            EmpoCoreOpen(binary.path, kind.symbolPrefix) != 0
-        else {
-            fatalError("\(kind.rawValue).framework is missing from the app bundle")
+        // not carry, so a failed open is a broken bundle or a game that
+        // was not killed.
+        guard let binary = core.binaryURL, EmpoCoreOpen(binary.path, core.symbolPrefix) != 0 else {
+            fatalError("\(core.framework) cannot open. The log says why.")
         }
-        openedCore = kind
-        NSLog("[empo] core opened: %@", kind.rawValue)
+        if let openedCore, openedCore.isSame(as: core) { return }
+        openedCore = core
+        NSLog("[empo] core opened: %@", core.framework)
 
         // Game scripts see `$userAgent = "empo"` and `$empo = true`,
         // alongside the engine's JoiPlay-compat `$joiplay`.
@@ -117,6 +111,16 @@ final class EngineSessionCoordinator {
         }
     }
 
+    /// Kills a paused or ended game, so that the next one can start.
+    /// The pause or the end already recorded its play time.
+    func killSession(of game: GameEntry?) {
+        if let container = game?.container {
+            crashTracker.removeMarker(for: container)
+        }
+        clearPendingKeyHolds()
+        EmpoCoreKillSession()
+    }
+
     func consumeCrashRecovery() -> String? {
         guard crashTracker.pendingCrashRecovery else { return nil }
         crashTracker.consumeRecovery()
@@ -124,7 +128,7 @@ final class EngineSessionCoordinator {
     }
 
     func configureEngine(_ input: GameSession.LaunchInput) {
-        openCore(for: input.gameDir)
+        openCore(input.core)
         GameSession.configureEngine(
             input,
             crashTracker: crashTracker,

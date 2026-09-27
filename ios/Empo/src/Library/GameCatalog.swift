@@ -1,5 +1,4 @@
 import Foundation
-import GameProbe
 
 /// Read model for the game library: scan containers on disk and
 /// build `GameSnapshot` values that the main actor merges into the
@@ -129,32 +128,22 @@ enum GameCatalog {
         return entries
     }
 
-    /// `quick: true` builds an entry from cheap reads only (INI
-    /// title, metadata.json, artwork that already exists on disk),
-    /// skipping PE icon extraction and script-profile detection.
-    /// Used by `quickScanGames` for the launch fast path.
+    /// `quick: true` builds an entry from cheap reads only (the
+    /// game's title, metadata.json, artwork that already exists on
+    /// disk), skipping PE icon extraction. Used by `quickScanGames` for
+    /// the launch fast path.
     nonisolated static func buildSnapshot(
         from container: GameContainer,
         fm: FileManager = .default,
         quick: Bool = false
     ) -> GameSnapshot? {
-        // A PSDK game ships no Game.ini, and its app_data.json holds
-        // installer state, not a title. The folder the import made is
-        // the only name on disk.
-        let iniTitle =
-            GameINI.gameTitle(at: container.gameURL)
-            ?? (PsdkGame.isGameRoot(container.gameURL) ? container.folderName : nil)
-            ?? "Unknown Game"
-        let defaultArtwork = quick ? quickFindArtwork(in: container) : findArtwork(in: container)
+        let core = GameCores.core(forGameAt: container.gameURL, fileManager: fm)
+        let iniTitle = core?.defaultTitle(of: container) ?? "Unknown Game"
+        let defaultArtwork =
+            quick
+            ? quickFindArtwork(in: container, core: core) : findArtwork(in: container, core: core)
 
-        var metadata = GameMetadata.load(from: container)
-        if !quick {
-            let settings = GameSettings.load(from: container.empoStateURL)
-            if settings.allowsRubyAutoDetectRefresh {
-                metadata.refreshDetectedProfile(in: container)
-            }
-        }
-
+        let metadata = GameMetadata.load(from: container)
         let baseTitle = metadata.baseTitle ?? iniTitle
         let title = metadata.customTitle ?? baseTitle
         let artworkPath = metadata.customArtworkPath(in: container) ?? defaultArtwork
@@ -185,7 +174,7 @@ enum GameCatalog {
         return folded(a) != folded(b)
     }
 
-    nonisolated static func findArtwork(in container: GameContainer) -> String? {
+    nonisolated static func findArtwork(in container: GameContainer, core: (any GameCore)?) -> String? {
         let fm = FileManager.default
         let sidecar = container.exeIconSidecarURL
         if fm.fileExists(atPath: sidecar.path) {
@@ -194,39 +183,18 @@ enum GameCatalog {
         if let sidecarPath = ExecutableIconExtractor.writeSidecarIfPossible(in: container) {
             return sidecarPath
         }
-        return findTitlesArtwork(in: container.gameURL)
+        return core?.titlePicture(at: container.gameURL)?.path
     }
 
     /// Artwork resolution minus the expensive fallback: checks the
-    /// exe-icon sidecar and Graphics/Titles, but never runs the PE
-    /// resource extraction `findArtwork` may perform for games
+    /// exe-icon sidecar and the core's title picture, but never runs the
+    /// PE resource extraction `findArtwork` may perform for games
     /// imported before sidecars existed.
-    nonisolated static func quickFindArtwork(in container: GameContainer) -> String? {
+    nonisolated static func quickFindArtwork(in container: GameContainer, core: (any GameCore)?) -> String? {
         let sidecar = container.exeIconSidecarURL
         if FileManager.default.fileExists(atPath: sidecar.path) {
             return sidecar.path
         }
-        return findTitlesArtwork(in: container.gameURL)
-    }
-
-    nonisolated static func findFolderImportArtwork(at url: URL) -> String? {
-        findTitlesArtwork(in: url)
-    }
-
-    nonisolated private static func findTitlesArtwork(in gameURL: URL) -> String? {
-        let titlesDir = gameURL.appendingPathComponent("Graphics/Titles")
-        guard
-            let items = try? FileManager.default
-                .contentsOfDirectory(atPath: titlesDir.path)
-        else { return nil }
-
-        let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "bmp"]
-        for item in items.sorted() {
-            let ext = (item as NSString).pathExtension.lowercased()
-            if imageExtensions.contains(ext) {
-                return titlesDir.appendingPathComponent(item).path
-            }
-        }
-        return nil
+        return core?.titlePicture(at: container.gameURL)?.path
     }
 }

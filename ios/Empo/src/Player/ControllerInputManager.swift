@@ -287,7 +287,7 @@ final class ControllerInputManager {
 
     /// `handlerQueue` is the main queue for every pad this manager
     /// owns, so the hop is for a queue that other code moved.
-    private static func onMain(_ body: @escaping @MainActor () -> Void) {
+    private static func onMain(_ body: @escaping @MainActor @Sendable () -> Void) {
         if Thread.isMainThread {
             MainActor.assumeIsolated(body)
         } else {

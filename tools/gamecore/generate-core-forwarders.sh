@@ -1,13 +1,14 @@
 #!/bin/sh
 # Generate the C file that lets Empo call the open core without linking
-# it. The same file serves MkxpCore and PsdkCore. Each core answers this
+# it. The same file serves every core. Each core answers this
 # interface under its own prefix, and the forwarder puts the open core's
 # prefix in front of the name.
 #
 # Empo opens the core with dlopen and RTLD_LOCAL, so the linker cannot
 # resolve a single core name at build time. This writes one forwarder
 # for every function GameCore.h declares. Each forwarder looks its
-# symbol up in the open core on first use, so every Swift and ObjC call
+# symbol up in the open core on first use, and again after a different
+# core opens, so every Swift and ObjC call
 # site stays as it is.
 #
 # Usage:
@@ -53,22 +54,46 @@ cat >"$TMP" <<'HEAD'
 #include "GameCore.h"
 
 static void *gCore;
+static char gCorePath[1024];
 static char gSymbolPrefix[16];
+// Goes up each time a different core opens. A forwarder looks its
+// symbol up again when this changed.
+static unsigned gCoreGeneration;
+static int gSessionKilled;
 
 int EmpoCoreOpen(const char *binaryPath, const char *symbolPrefix) {
-    if (gCore != NULL) {
+    if (gCore != NULL && strcmp(gCorePath, binaryPath) == 0) {
+        gSessionKilled = 0;
         return 1;
     }
-    // RTLD_LOCAL keeps the core's names out of the global namespace, so
-    // a second core opened later cannot bind to them. Every name below
-    // reaches this image through its own handle.
-    gCore = dlopen(binaryPath, RTLD_NOW | RTLD_LOCAL);
-    if (gCore == NULL) {
+    if (gCore != NULL && !gSessionKilled) {
+        // The open core still holds a game, and its threads, globals
+        // and working directory would run next to the new engine.
+        fprintf(stderr, "EmpoCore: %s holds a game, refusing %s\n", gCorePath, binaryPath);
+        return 0;
+    }
+    // RTLD_LOCAL keeps the core's names out of the global namespace.
+    // Every name below reaches this image through its own handle.
+    //
+    // A killed core stays loaded: dlclose does not unload an image that
+    // ran static initializers or registered ObjC classes. It holds no
+    // game, and scripts/audit-ipa.sh keeps its class names its own.
+    void *core = dlopen(binaryPath, RTLD_NOW | RTLD_LOCAL);
+    if (core == NULL) {
         fprintf(stderr, "EmpoCore: cannot open %s: %s\n", binaryPath, dlerror());
         return 0;
     }
+    gCore = core;
+    gCoreGeneration++;
+    gSessionKilled = 0;
+    snprintf(gCorePath, sizeof(gCorePath), "%s", binaryPath);
     snprintf(gSymbolPrefix, sizeof(gSymbolPrefix), "%s", symbolPrefix);
     return 1;
+}
+
+void EmpoCoreKillSession(void) {
+    gamecore_killSession();
+    gSessionKilled = 1;
 }
 
 int EmpoCoreIsOpen(void) { return gCore != NULL; }
@@ -96,7 +121,7 @@ HEAD
 
 awk -f "$ROOT/tools/gamecore/forwarders.awk" "$HEADER" >>"$TMP"
 
-COUNT="$(grep -c '^    if (fn == NULL) {' "$TMP")"
+COUNT="$(grep -c '^    if (fn == NULL || generation != gCoreGeneration) {' "$TMP")"
 if [ "$COUNT" -lt 50 ]; then
     echo "generate-core-forwarders: only $COUNT forwarders parsed, refusing" >&2
     exit 1

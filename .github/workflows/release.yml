@@ -375,8 +375,8 @@ jobs:
           # and signing the app root does not reach inside it. The
           # build ran with CODE_SIGNING_ALLOWED=NO, so every core
           # framework arrives unsigned. Sign what the bundle has:
-          # EMPO_CORES in ios/Empo/project.yml decides whether this
-          # build ships one core or both.
+          # EMPO_CORES in ios/Empo/project.yml decides which cores
+          # this build ships.
           for FRAMEWORK in build/Release-iphoneos/Empo.app/Frameworks/*.framework; do
             codesign --force --sign - --timestamp=none "$FRAMEWORK"
           done

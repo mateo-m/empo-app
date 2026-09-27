@@ -338,10 +338,10 @@ git -C "$REPO_ROOT" tag -s "v$VERSION" -m "v$VERSION"
 # failure aborts the release cleanly. Step 11 pushes them alongside
 # the app tag.
 #
-# The PSDK core also links LiteCGSS, the SFML fork and Ruby 3.0, and
-# those repos carry no empo-v tag. The .deps-fingerprint guard ties the
-# shipped PsdkCore.framework to every pinned gitlink, so the commit
-# this tag names is the one that built the framework.
+# The PSDK core also links LiteCGSS, the SFML fork and Ruby 2.5, 3.0,
+# 3.2 and 3.3, and those repos carry no empo-v tag. The .deps-fingerprint
+# guard ties the shipped PSDK core framework to every pinned
+# gitlink, so the commit this tag names is the one that built it.
 ENGINE_TAG="empo-v$VERSION"
 # Where each core's engine source lives, as a submodule path here.
 CORE_SOURCES=("mkxp-z-apple-mobile" "ios/Dependencies/sources/litergss2")
@@ -386,9 +386,9 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
 
     # 9. Build unsigned .ipa from the clean release commit.
     #
-    # EMPO_CORES in the environment ships one core instead of both:
+    # EMPO_CORES in the environment ships only the cores it names:
     #   EMPO_CORES=PsdkCore scripts/release.sh --local-build patch
-    # Empty means the project default, which is both cores.
+    # Empty means the project default, which is every core.
     # macOS ships bash 3.2, where `set -u` plus "${EMPTY[@]}" aborts the
     # script. `${A[@]+"${A[@]}"}` expands to nothing when the array is
     # empty, and keeps the quoting when it is not.
@@ -403,11 +403,12 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     echo "==> building unsigned ipa"
     BUILD_DIR="$PROJECT_DIR/build/Release-iphoneos"
     rm -rf "$BUILD_DIR"
+    # A -target build cannot find the module map of the json5cpp package
+    # target on Xcode 27, so build the scheme, as release.yml does.
     xcodebuild \
         -project "$PROJECT_DIR/Empo.xcodeproj" \
-        -target Empo \
-        -sdk iphoneos \
-        -arch arm64 \
+        -scheme Empo \
+        -destination 'generic/platform=iOS' \
         -configuration Release \
         CODE_SIGNING_ALLOWED=NO \
         PRODUCT_BUNDLE_IDENTIFIER=sh.mateo.empo \
@@ -425,7 +426,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     # Inside out. A nested framework carries its own signature, and
     # signing the app root does not reach inside it. The build ran with
     # CODE_SIGNING_ALLOWED=NO, so every core framework arrives unsigned.
-    # Sign what the bundle has: a build ships one core or both.
+    # Sign every core that the bundle has.
     for FRAMEWORK in "$APP_PATH"/Frameworks/*.framework; do
         [[ -d "$FRAMEWORK" ]] || continue
         codesign --force --sign - --timestamp=none "$FRAMEWORK"

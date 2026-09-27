@@ -40,7 +40,7 @@ settings:
     # it, and the Game cores screen lists what it finds in the bundle.
     # Build one core only by passing it on the command line:
     #   xcodebuild ... EMPO_CORES=PsdkCore
-    EMPO_CORES: MkxpCore PsdkCore
+    EMPO_CORES: MkxpCore PsdkCore MvmzCore
     HEADER_SEARCH_PATHS:
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile
       - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src
@@ -188,7 +188,9 @@ targets:
       - name: Embed the cores
         # One framework for each engine. MkxpCore holds mkxp-z, its
         # three Ruby versions and its SDL. PsdkCore holds LiteRGSS2,
-        # LiteCGSS, SFML and Ruby 3.0. The app links neither and opens
+        # LiteCGSS, SFML and Ruby 2.5, 3.0, 3.2 and 3.3. MvmzCore shows
+        # RPG Maker MV and MZ games in a web view, and the MvmzCore target below builds
+        # it with the app. The app links none of them and opens
         # one of them with dlopen when the user picks a game
         # (EngineSessionCoordinator.openCore).
         #
@@ -197,8 +199,8 @@ targets:
         # to the first core's definitions.
         #
         # EMPO_CORES says which cores to embed, so a release can ship
-        # one core or both. The app reads the bundle to find out what it
-        # got (BuiltInGameCore), and refuses a game it cannot run.
+        # some of them. The app reads the bundle to find out what it got
+        # (GameCores.inThisBuild), and refuses a game it cannot run.
         #
         # Force every build: content follows the fetched deps version,
         # not any file Xcode tracks.
@@ -215,13 +217,15 @@ targets:
           for CORE in ${EMPO_CORES}; do
             case "$CORE" in
               MkxpCore) HOW="cd ios/Dependencies && make -f ${PLATFORM_NAME}.make mkxp-framework" ;;
-              PsdkCore) HOW="tools/psdk-core/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
+              PsdkCore) HOW="cd ios/Dependencies && make -f ${PLATFORM_NAME}.make psdk" ;;
+              MvmzCore) HOW="build the MvmzCore target" ;;
               *)
                 echo "error: EMPO_CORES names an unknown core: $CORE" >&2
                 exit 1
                 ;;
             esac
             CORE_SRC="$TREE/$CORE.framework"
+            [ "$CORE" = MvmzCore ] && CORE_SRC="${BUILT_PRODUCTS_DIR}/$CORE.framework"
             if [ ! -d "$CORE_SRC" ]; then
               echo "error: $CORE_SRC missing - run: $HOW (or refetch native deps)" >&2
               exit 1
@@ -237,8 +241,10 @@ targets:
             fi
           done
           # An incremental build keeps the framework folder from the last
-          # build, so remove a core this build does not ship.
-          for CORE in MkxpCore PsdkCore; do
+          # build, so remove a core this build does not ship. Psdk25Core,
+          # Psdk32Core and Psdk33Core are in the list because older builds
+          # shipped them.
+          for CORE in MkxpCore PsdkCore MvmzCore Psdk25Core Psdk32Core Psdk33Core; do
             case " ${EMPO_CORES} " in
               *" $CORE "*) continue ;;
             esac
@@ -327,7 +333,8 @@ targets:
       # its own framework, which the "Embed the cores" phase copies
       # into the app. MkxpCore holds the mkxp-z core, the three
       # per-Ruby binding objects, every Ruby, SDL and the Ruby stdlib.
-      # PsdkCore holds LiteRGSS2, LiteCGSS, SFML and Ruby 3.0.
+      # PsdkCore holds LiteRGSS2, LiteCGSS, SFML and Ruby 2.5, 3.0, 3.2
+      # and 3.3.
       #
       # `make -f <platform>.make mkxp-framework` builds it in
       # ios/Dependencies, or it arrives with the published artifact
@@ -400,6 +407,30 @@ targets:
           - -weak_framework CoreHaptics
     dependencies:
       - package: GameProbe
+      # Built first, then copied by "Embed the cores".
+      - target: MvmzCore
+        link: false
+        embed: false
+  MvmzCore:
+    type: framework
+    platform: iOS
+    sources:
+      - path: ../MvmzCore
+        excludes:
+          - Info.plist
+    settings:
+      base:
+        PRODUCT_NAME: MvmzCore
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.mvmzcore
+        INFOPLIST_FILE: $(PROJECT_DIR)/../MvmzCore/Info.plist
+        CLANG_ENABLE_MODULES: YES # yamllint disable-line rule:truthy
+        # Only the mvmz_ names in mvmz_app_bridge.h leave the framework.
+        GCC_SYMBOLS_PRIVATE_EXTERN: YES # yamllint disable-line rule:truthy
+        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
+        DEFINES_MODULE: NO # yamllint disable-line rule:truthy
+        VERSIONING_SYSTEM: ""
+        # "Embed the cores" signs the copy inside the app.
+        CODE_SIGNING_ALLOWED: NO
   EmpoTests:
     type: bundle.unit-test
     platform: iOS

@@ -203,8 +203,8 @@ struct PlayerView: View {
                 )
                 .allowsHitTesting(showDebugOverlay)
                 .onChange(of: appState.selectedGame?.title, initial: true) { _, title in
-                    // The RPG Maker core reads the title from Game.ini
-                    // and wins once it lands. The PSDK core reports no
+                    // The RPG Maker XP, VX and VX Ace core reads the title
+                    // from Game.ini and wins once it lands. The PSDK core reports no
                     // title, so the library name is all the overlay gets.
                     if !debugOverlayState.metadataLoaded, let title {
                         debugOverlayState.gameTitle = title
@@ -416,6 +416,7 @@ struct PlayerView: View {
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { appState.requestPause() },
+                onQuit: { appState.quitGame() },
                 onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) }
             )
         }

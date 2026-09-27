@@ -429,9 +429,9 @@ class ControlsLayout {
         applyDefaultsForCurrentOrientation()
     }
 
-    // nonisolated(unsafe): written once on the main actor at init,
-    // read in deinit (which is nonisolated by definition).
-    private nonisolated(unsafe) var notificationTokens: [NSObjectProtocol] = []
+    // Written once on the main actor at init, read in deinit (which is
+    // nonisolated by definition).
+    @ObservationIgnored private nonisolated(unsafe) var notificationTokens: [NSObjectProtocol] = []
 
     private func observeProfileNotifications() {
         notificationTokens.append(
@@ -810,8 +810,9 @@ class ControlsLayout {
         separationLogSignature = nil
         activeManifestSource = nil
         resolutionInvolvesDerivation = false
-        Self.activeGameUsesPsdkCore =
-            container.map { PsdkGame.isGameRoot($0.gameURL) } ?? false
+        Self.activeKeys =
+            container.flatMap { GameCores.core(forGameAt: $0.gameURL)?.defaultKeys(forGameAt: $0.gameURL) }
+            ?? GameKey.standard
         loadManifest(from: container?.gameURL)
         if let container, newGameID != nil {
             migrateLegacyPersistenceIfNeeded(container: container)
@@ -918,101 +919,35 @@ class ControlsLayout {
     /// the more common case.
     nonisolated static let defaultDPadCenter = defaultDPadCenterPortrait
 
-    /// True while the active game runs on the PSDK core, which reads
-    /// its own key map. `switchGame` sets it before the layout
-    /// resolves, and the builtin button sets read it.
-    nonisolated(unsafe) private static var activeGameUsesPsdkCore = false
+    /// The keys of the core that runs the active game. `switchGame` sets
+    /// them before the layout resolves, and the builtin button sets read
+    /// them.
+    nonisolated(unsafe) private static var activeKeys = GameKey.standard
 
     /// 2x2 button grid in the bottom-right of a portrait viewport.
     nonisolated static var defaultButtonsPortrait: [ButtonModel] {
-        activeGameUsesPsdkCore ? psdkButtonsPortrait : rpgMakerButtonsPortrait
+        buttons(at: [
+            CGPoint(x: 0.70, y: 0.67), CGPoint(x: 0.88, y: 0.67),
+            CGPoint(x: 0.70, y: 0.76), CGPoint(x: 0.88, y: 0.76),
+        ])
     }
 
     /// 2x2 button grid in the bottom-right of a landscape viewport.
-    nonisolated static var defaultButtonsLandscape: [ButtonModel] {
-        activeGameUsesPsdkCore ? psdkButtonsLandscape : rpgMakerButtonsLandscape
-    }
-
-    private nonisolated static let rpgMakerButtonsPortrait: [ButtonModel] = [
-        ButtonModel(
-            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
-            relativeCenter: CGPoint(x: 0.70, y: 0.67),
-            size: 56),
-        ButtonModel(
-            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
-            relativeCenter: CGPoint(x: 0.88, y: 0.67),
-            size: 56),
-        ButtonModel(
-            label: "Z", scancode: Int32(GAMECORE_SCANCODE_Z), relativeCenter: CGPoint(x: 0.70, y: 0.76),
-            size: 56),
-        ButtonModel(
-            label: "B", scancode: Int32(GAMECORE_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.76),
-            size: 56),
-    ]
-
     /// Landscape holds a shorter screen and a wider one, so the grid
     /// sits higher and further apart without covering the middle of
     /// the game viewport.
-    private nonisolated static let rpgMakerButtonsLandscape: [ButtonModel] = [
-        ButtonModel(
-            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
-            relativeCenter: CGPoint(x: 0.80, y: 0.59),
-            size: 56),
-        ButtonModel(
-            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
-            relativeCenter: CGPoint(x: 0.88, y: 0.59),
-            size: 56),
-        ButtonModel(
-            label: "Z", scancode: Int32(GAMECORE_SCANCODE_Z), relativeCenter: CGPoint(x: 0.80, y: 0.75),
-            size: 56),
-        ButtonModel(
-            label: "B", scancode: Int32(GAMECORE_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.75),
-            size: 56),
-    ]
+    nonisolated static var defaultButtonsLandscape: [ButtonModel] {
+        buttons(at: [
+            CGPoint(x: 0.80, y: 0.59), CGPoint(x: 0.88, y: 0.59),
+            CGPoint(x: 0.80, y: 0.75), CGPoint(x: 0.88, y: 0.75),
+        ])
+    }
 
-    // The PSDK sets keep the grid of the RPG Maker sets and change one
-    // key. A PSDK game reads Enter as confirm, Escape as cancel, V as
-    // the main menu and B as its Y button. Its key map answers nothing
-    // for Z. Measured with the probe in tools/psdk-core/prelude.rb on
-    // Edelweiss Chronicles version 1 and version 48.
-
-    private nonisolated static let psdkButtonsPortrait: [ButtonModel] = [
-        ButtonModel(
-            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
-            relativeCenter: CGPoint(x: 0.70, y: 0.67),
-            size: 56),
-        ButtonModel(
-            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
-            relativeCenter: CGPoint(x: 0.88, y: 0.67),
-            size: 56),
-        ButtonModel(
-            label: "V", scancode: Int32(GAMECORE_SCANCODE_V),
-            relativeCenter: CGPoint(x: 0.70, y: 0.76),
-            size: 56),
-        ButtonModel(
-            label: "B", scancode: Int32(GAMECORE_SCANCODE_B),
-            relativeCenter: CGPoint(x: 0.88, y: 0.76),
-            size: 56),
-    ]
-
-    private nonisolated static let psdkButtonsLandscape: [ButtonModel] = [
-        ButtonModel(
-            label: "Enter", scancode: Int32(GAMECORE_SCANCODE_RETURN),
-            relativeCenter: CGPoint(x: 0.80, y: 0.59),
-            size: 56),
-        ButtonModel(
-            label: "Escape", scancode: Int32(GAMECORE_SCANCODE_ESCAPE),
-            relativeCenter: CGPoint(x: 0.88, y: 0.59),
-            size: 56),
-        ButtonModel(
-            label: "V", scancode: Int32(GAMECORE_SCANCODE_V),
-            relativeCenter: CGPoint(x: 0.80, y: 0.75),
-            size: 56),
-        ButtonModel(
-            label: "B", scancode: Int32(GAMECORE_SCANCODE_B),
-            relativeCenter: CGPoint(x: 0.88, y: 0.75),
-            size: 56),
-    ]
+    private nonisolated static func buttons(at centers: [CGPoint]) -> [ButtonModel] {
+        zip(activeKeys, centers).map {
+            ButtonModel(label: $0.label, scancode: $0.scancode, relativeCenter: $1, size: 56)
+        }
+    }
 
     /// Legacy alias for callers that grab "the" defaults without
     /// orientation. Returns the portrait set.
@@ -2115,7 +2050,7 @@ class ControlsLayout {
     /// top falls back to a 4:3 game-bottom estimate when the engine has
     /// not published `gameRect` yet (typical at game select).
     private static func touchZoneMetricsForManifestLoad() -> TouchZoneMetrics {
-        let bounds = UIScreen.main.bounds
+        let bounds = AppWindow.currentScreenBounds
         let safeArea = AppWindow.currentSafeArea
         let portraitWidth = min(bounds.width, bounds.height)
         let portraitHeight = max(bounds.width, bounds.height)

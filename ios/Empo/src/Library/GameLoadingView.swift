@@ -67,6 +67,11 @@ struct GameLoadingView: View {
     /// the SDL window inside AppWindow (device compositing).
     private var isPlayingPhase: Bool { appState.phase == .playing }
 
+    private var isEnded: Bool {
+        if case .ended = appState.phase { return true }
+        return false
+    }
+
     var body: some View {
         ZStack {
             // A full-size clear layer, so the pushed view keeps its
@@ -113,8 +118,8 @@ struct GameLoadingView: View {
             bannerBackground
 
             VStack(spacing: Spacing.xl) {
-                if showErrorContent {
-                    errorContent
+                if case .ended(let clean, let started) = appState.phase {
+                    endedContent(clean: clean, started: started)
                 } else {
                     Text(game.title)
                         .font(.title)
@@ -176,55 +181,65 @@ struct GameLoadingView: View {
         }
     }
 
-    /// True when an error fired during this loading session and the
-    /// user has dismissed the alert. Switches the loading view's
-    /// inner content from `<title> + spinner` to a stable error
-    /// message so the user does not face an endless spinner after
-    /// tapping "Got it".
-    private var showErrorContent: Bool {
-        appState.sessionHadError && appState.errorMessage == nil
-    }
-
-    private var errorContent: some View {
+    private func endedContent(clean: Bool, started: Bool) -> some View {
         VStack(spacing: Spacing.md) {
-            Text("\(game.title) didn't start")
-                .font(.title)
-                .fontWeight(.bold)
-                .foregroundStyle(.white)
+            Text(
+                clean
+                    ? "\(game.title) closed"
+                    : started ? "\(game.title) stopped" : "\(game.title) didn't start"
+            )
+            .font(.title)
+            .fontWeight(.bold)
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
 
-            Text("Empo hit a problem while loading this game.")
-                .font(.system(size: 15))
-                .foregroundStyle(.white.opacity(0.85))
-                .multilineTextAlignment(.center)
-
-            Text("Close Empo from the app switcher, then open it again.")
-                .font(.system(size: 15))
-                .foregroundStyle(.white.opacity(0.85))
-                .multilineTextAlignment(.center)
-
-            // The GitHub link routes to the issues page since that is
-            // where the user can act on "this keeps happening":
-            // filing a bug report, not browsing the repo.
-            (Text("If this keeps happening, ")
-                + Text("[report it on GitHub](\(GitInfo.issuesURL))")
-                .foregroundColor(.brand)
-                + Text("."))
-                .font(.system(size: 15))
-                .foregroundStyle(.white.opacity(0.85))
-                .multilineTextAlignment(.center)
-                .tint(.brand)
+            if !clean {
+                messageLine(
+                    started
+                        ? "Empo hit a problem while running this game."
+                        : "Empo hit a problem while loading this game.")
+            }
+            if appState.canLeaveEndedGame {
+                Button("Back to Library") { appState.leaveEndedGame() }
+                    .buttonStyle(.primary)
+                    .padding(.top, Spacing.md)
+            } else {
+                messageLine("To play again, close Empo from the app switcher, then open it again.")
+            }
+            if !clean {
+                reportLine
+            }
         }
         .padding(.horizontal, Spacing.xl)
         .transition(.opacity)
     }
 
+    private func messageLine(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 15))
+            .foregroundStyle(.white.opacity(0.85))
+            .multilineTextAlignment(.center)
+    }
+
+    // The GitHub link routes to the issues page since that is
+    // where the user can act on "this keeps happening":
+    // filing a bug report, not browsing the repo.
+    private var reportLine: some View {
+        Text(
+            "If this keeps happening, \(Text("[report it on GitHub](\(GitInfo.issuesURL))").foregroundColor(.brand))."
+        )
+        .font(.system(size: 15))
+        .foregroundStyle(.white.opacity(0.85))
+        .multilineTextAlignment(.center)
+        .tint(.brand)
+    }
+
     @ViewBuilder
     private var cancelButton: some View {
         // Suppress the hint once an error alert is presenting or the
-        // error content has taken over: RootView is showing the user
-        // what to do, so the "if loading is stuck..." line only
-        // clutters the screen.
-        if cancelVisible && appState.errorMessage == nil && !showErrorContent {
+        // game ended: the screen already tells the user what to do, so
+        // the "if loading is stuck..." line only clutters it.
+        if cancelVisible && appState.errorMessage == nil && !isEnded {
             // A static label, not a button. Empo has no quit path,
             // and an app may not close itself: App Store guideline
             // 2.5.1 forbids it. So the label tells the user to close
