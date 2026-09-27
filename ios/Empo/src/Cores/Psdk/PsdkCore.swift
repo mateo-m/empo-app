@@ -10,6 +10,7 @@ struct PsdkCore: GameCore {
     let symbolPrefix = "psdk_"
     let displayName = "PSDK core"
     let gamesLine = "Runs PSDK games released since late 2019"
+    let madeWith = "PSDK"
 
     /// The Rubies in the framework: "3.0" for a game compiled on Windows,
     /// "3.2" on a Mac, "3.3" on Linux, and "2.5" for one released from

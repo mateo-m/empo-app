@@ -3,6 +3,10 @@ import SwiftUI
 struct GameCoresView: View {
     private let cores = GameCores.inThisBuild
 
+    private var tools: [(key: String, value: [any GameCore])] {
+        Dictionary(grouping: cores, by: \.madeWith).sorted { $0.key < $1.key }
+    }
+
     var body: some View {
         List {
             Section {
@@ -11,21 +15,25 @@ struct GameCoresView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                ForEach(cores, id: \.framework) { core in
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text(core.displayName)
-                        Text(core.gamesLine)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        // `.font(.caption)` plus `.fontDesign(.monospaced)`
-                        // renders rounded under RootView's app-wide
-                        // `.fontDesign(.rounded)`. A point size keeps it.
-                        Text("Built from \(core.version)")
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
+                ForEach(tools, id: \.key) { tool, cores in
+                    DisclosureGroup(tool) {
+                        ForEach(cores, id: \.framework) { core in
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text(core.displayName)
+                                Text(core.gamesLine)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                // `.font(.caption)` plus `.fontDesign(.monospaced)`
+                                // renders rounded under RootView's app-wide
+                                // `.fontDesign(.rounded)`. A point size keeps it.
+                                Text("Built from \(core.version)")
+                                    .font(.system(size: 13, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                            }
+                            .padding(.vertical, Spacing.xxs)
+                        }
                     }
-                    .padding(.vertical, Spacing.xxs)
                 }
             } footer: {
                 Text(

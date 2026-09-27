@@ -6,6 +6,7 @@ import SwiftUI
 struct MkxpCore: GameCore {
     let framework = "MkxpCore"
     let symbolPrefix = "mkxp_"
+    let madeWith = "RPG Maker"
 
     /// Import refuses a game the mask does not cover, so the name and the
     /// line follow the mask. check-mkxp-framework.sh allows 3, which is

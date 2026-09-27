@@ -16,6 +16,9 @@ protocol GameCore {
     var displayName: String { get }
     /// The line under the name on the Game cores screen.
     var gamesLine: String { get }
+    /// The tool the games were made with. The Game cores screen groups
+    /// the cores by it.
+    var madeWith: String { get }
     var supportsCheats: Bool { get }
     /// True when `gamecore_killSession` kills the running game and frees
     /// all of its state. Then any number of games, on any core, can run
