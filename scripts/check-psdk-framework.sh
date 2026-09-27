@@ -75,9 +75,14 @@ if [ "$SDK" = iphonesimulator ]; then WANT=7; else WANT=2; fi
 otool -l "$BIN" | grep -Eq "platform ${WANT}([[:space:]]|$)" ||
     fail "PsdkCore is not built for $SDK (platform $WANT)"
 
-for f in PsdkSupport/ruby-dist/lib/LiteRGSS.rb PsdkSupport/ruby-dist/lib/SFMLAudio.rb \
-    PsdkSupport/uri.rb Headers/psdk_core.h runtime_prelude.rb Info.plist; do
+for f in Headers/psdk_core.h runtime_prelude.rb Info.plist \
+    PsdkSupport/2.5/litergss1.rb PsdkSupport/2.5/RubyFmod.rb; do
     [ -e "$FW/$f" ] || fail "PsdkCore.framework/$f missing"
+done
+for version in 2.5 3.0 3.2 3.3; do
+    for f in ruby-dist/lib/LiteRGSS.rb ruby-dist/lib/SFMLAudio.rb uri.rb; do
+        [ -e "$FW/PsdkSupport/$version/$f" ] || fail "PsdkCore.framework/PsdkSupport/$version/$f missing"
+    done
 done
 
 # The tree keeps the framework between builds, so a change to the build

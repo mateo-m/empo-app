@@ -61,7 +61,27 @@ extern "C" float sfml_ios_backing_scale();
 extern "C" void sfml_ios_inject_character(unsigned int unicode);
 extern "C" void sfml_ios_set_virtual_keyboard_callback(void (*callback)(int, void *), void *userdata);
 
+// SFML's iOS input backend keeps a scancode bitset that polling engines
+// read, and a UIKit event queue that event-driven engines read. LiteRGSS
+// reads both, so the shim below fills both. It lives in
+// sources/sfml/src/SFML/Window/iOS/InputImpl.mm.
+extern "C" void sfml_ios_inject_key_event(int sfScan, int pressed);
+
 namespace {
+
+// The name is the "rubyVersion" setting and the support folder of that
+// Ruby, PsdkSupport/<name>.
+struct RubyChoice {
+    const char *name;
+    const PsdkRuby *(*entry)(void);
+};
+constexpr RubyChoice kRubies[] = {
+    {"2.5", psdk_ruby_25},
+    {"3.0", psdk_ruby_30},
+    {"3.2", psdk_ruby_32},
+    {"3.3", psdk_ruby_33},
+};
+std::atomic<const RubyChoice *> gRuby{&kRubies[1]};
 
 std::mutex gLock;
 std::string gGamePath;
@@ -146,7 +166,6 @@ std::atomic<bool> gCheatsEnabled{false};
 std::atomic<bool> gTouchMouseEnabled{false};
 std::atomic<bool> gShowViewportBounds{false};
 std::atomic<bool> gControllerCaptureEnabled{false};
-std::atomic<bool> gUseInGameKeyboard{false};
 std::atomic<int> gFastForwardMultiplier{1};
 // Drawn frames, and the clock and the count the last read took. The
 // average covers the time between two reads, so a reader that asks once
@@ -260,11 +279,12 @@ int toSfmlScancode(int sdlScancode) {
 
 void *runGame(void *) {
     const std::string bundle = ownBundlePath();
-    const std::string support = bundle + "/PsdkSupport";
+    const RubyChoice *ruby = gRuby.load();
+    const std::string support = bundle + "/PsdkSupport/" + ruby->name;
     const std::string prelude = bundle + "/runtime_prelude.rb";
     const char *path = psdk_waitForGamePath();
 
-    int result = psdk_run(gArgc.load(), gArgv.load(), path, support.c_str(), prelude.c_str());
+    int result = ruby->entry()->run(gArgc.load(), gArgv.load(), path, support.c_str(), prelude.c_str());
     fprintf(stderr, "[psdk-bridge] psdk_run returned %d\n", result);
 
     gExitedCleanly.store(result == PSDK_OK);
@@ -627,6 +647,15 @@ const char *psdk_waitForGamePath(void) {
 
 // MARK: - Input
 
+int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
+             const char *preludePath) {
+    return gRuby.load()->entry()->run(argc, argv, gameDir, supportDir, preludePath);
+}
+
+void psdk_inject_scancode(int scancode, int pressed) {
+    sfml_ios_inject_key_event(scancode, pressed);
+}
+
 void psdk_injectKeyEvent(int scancode, int pressed) {
     int sfScan = toSfmlScancode(scancode);
     if (sfScan == sf::Keyboard::Scan::Unknown) {
@@ -651,7 +680,7 @@ void psdk_injectKeyEvent(int scancode, int pressed) {
 
 // MARK: - The window
 
-void *psdk_getSDLUIKitWindow(void) { return sfml_ios_game_window(); }
+void *psdk_getGameWindow(void) { return sfml_ios_game_window(); }
 
 // MARK: - Callbacks
 
@@ -700,6 +729,13 @@ int psdk_didEngineExitCleanly(void) { return gExitedCleanly.load() ? 1 : 0; }
 // ponytail: the signal would be the frame counter above going quiet for
 // a few seconds. Add it when a real hang shows up.
 int psdk_isEngineHung(void) { return 0; }
+
+// A Ruby VM cannot be torn down and started again in one process, so
+// this core cannot kill a game. Empo never calls this for it.
+void psdk_killSession(void) {
+    fprintf(stderr, "[psdk] killSession: this core cannot kill a game\n");
+    abort();
+}
 
 void psdk_resetSessionState(void) {
     // One core runs for each process and Empo plays one game for each
@@ -879,8 +915,6 @@ void psdk_setGameControllerCaptureEnabled(bool enabled) {
     gControllerCaptureEnabled.store(enabled);
 }
 
-void psdk_setUseInGameKeyboard(bool enabled) { gUseInGameKeyboard.store(enabled); }
-
 void psdk_setShowViewportBounds(bool enabled) { gShowViewportBounds.store(enabled); }
 void psdk_setViewportBoundsColor(float, float, float, float) {}
 
@@ -913,43 +947,43 @@ void psdk_setSafeAreaInsets(float top, float bottom, float left, float right) {
     placeOutputRegion();
 }
 
-// RGSS is RPG Maker's runtime. A PSDK game runs on LiteRGSS, so these
-// answer "no RGSS version" and the mask says this core runs none. The
-// launcher reads the mask from the framework's Info.plist before it
-// opens any core, so an RPG Maker import never lands here.
-void psdk_setActiveRubyVersion(PsdkRubyVersion) {}
-void psdk_setSyntaxTransformMode(PsdkSyntaxTransformMode) {}
-PsdkSyntaxTransformMode psdk_getSyntaxTransformMode(void) { return PSDK_SYNTAX_TRANSFORM_UNSET; }
-int psdk_getRGSSVersion(void) { return 0; }
-int psdk_getSupportedRGSSVersionMask(void) { return 0; }
 PsdkVerticalAlignment psdk_getVerticalAlignment(void) {
     return static_cast<PsdkVerticalAlignment>(gVerticalAlignment.load());
 }
 
-// Two fields reach this core. A PSDK game keeps its saves in its own
-// folder and loads its own fonts, so managedConfigDir, userDataDirectory
-// and sharedFontsDirectory name nothing here. rubyVersion,
-// syntaxTransformMode, postloadEnabled and joiplayCompat are all mkxp-z
-// settings.
+// A PSDK game keeps its saves in its own folder and loads its own
+// fonts, so only the alignment reaches this core.
 void psdk_applySessionConfig(const PsdkSessionConfig *config) {
     if (!config) {
         return;
     }
-    psdk_setUseInGameKeyboard(config->useInGameKeyboard);
     gVerticalAlignment.store(config->verticalAlignment);
     placeOutputRegion();
 }
 
 // MARK: - What the launcher reads
 
-// The launcher shows these on its debug overlay. PSDK gives no title
-// through any interface, so the launcher falls back to the library name.
-// "unknown" is what the interface says a core returns for a renderer
-// string it cannot read, and the overlay hides a row that says it.
+void psdk_setSetting(const char *key, const char *value) {
+    if (key && value && strcmp(key, "rubyVersion") == 0) {
+        for (const RubyChoice &ruby : kRubies) {
+            if (strcmp(ruby.name, value) == 0) {
+                gRuby.store(&ruby);
+                return;
+            }
+        }
+    }
+    fprintf(stderr, "[psdk] unknown setting %s=%s\n", key ? key : "(null)", value ? value : "(null)");
+}
+
+// PSDK gives no title through any interface, so the launcher falls back
+// to the library name.
 const char *psdk_getGameTitle(void) { return ""; }
-const char *psdk_getRubyVersion(void) { return "3.0"; }
-const char *psdk_getANGLEVersion(void) { return "unknown"; }
-const char *psdk_getMetalDeviceName(void) { return "unknown"; }
+const char *psdk_getDetails(void) {
+    // The Ruby is set before the game starts and stays for the process.
+    static std::string details;
+    details = std::string("Ruby ") + gRuby.load()->entry()->version;
+    return details.c_str();
+}
 double psdk_getAverageFPS(void) {
     const unsigned long long frames = gDrawnFrames.load();
     const double now = static_cast<double>(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9;

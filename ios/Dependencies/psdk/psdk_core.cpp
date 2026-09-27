@@ -1,18 +1,13 @@
 #include "psdk_core.h"
 
 #include "ruby.h"
+#include "ruby/version.h"
 
 #include <string>
 #include <unistd.h>
 
 extern "C" void Init_LiteRGSS();
 extern "C" void Init_SFMLAudio();
-
-// SFML's iOS input backend keeps a scancode bitset that polling engines
-// read, and a UIKit event queue that event-driven engines read. LiteRGSS
-// reads both, so the shim below fills both. It lives in
-// sources/sfml/src/SFML/Window/iOS/InputImpl.mm.
-extern "C" void sfml_ios_inject_key_event(int sfScan, int pressed);
 
 namespace {
 
@@ -42,10 +37,8 @@ int loadRubyFile(const std::string &path) {
     return -1;
 }
 
-} // namespace
-
-int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
-             const char *preludePath) {
+int run(int argc, char **argv, const char *gameDir, const char *supportDir,
+        const char *preludePath) {
     if (!supportDir || !supportDir[0]) {
         fprintf(stderr, "[psdk] no support folder\n");
         return PSDK_SUPPORT_MISSING;
@@ -120,7 +113,9 @@ int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
     // PSDK asks for RubyFmod first, gets a LoadError because that one is
     // a closed-source Windows DLL, and falls back to SFMLAudio. Without
     // this the game prints "Could not load Audio" and plays nothing.
-    // GameLoader/3_load_extensions.rb holds that chain.
+    // GameLoader/3_load_extensions.rb holds that chain. Games from 2020
+    // play sound only through FMOD, so the Ruby 2.5 support folder has a
+    // RubyFmod.rb that the require finds first, built on SFMLAudio.
     Init_SFMLAudio();
     rb_provide("SFMLAudio");
 
@@ -143,8 +138,10 @@ int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
     // these lines are the only record of where it stopped.
     fprintf(stderr, "[psdk] boot Game.rb starts\n");
 
-    // Game.rb is one line in every released PSDK game:
+    // In a released PSDK game, Game.rb is one line:
     // `RubyVM::InstructionSequence.load_from_binary(File.binread('Game.yarb')).eval`
+    // A release compiled with `--no-yarb` has the boot scripts in Game.rb
+    // as plain Ruby instead.
     //
     // The full path, not "Game.rb". rb_load searches $LOAD_PATH for a
     // bare name, and the current folder has not been on $LOAD_PATH since
@@ -156,6 +153,14 @@ int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
     return PSDK_OK;
 }
 
-void psdk_inject_scancode(int scancode, int pressed) {
-    sfml_ios_inject_key_event(scancode, pressed);
+} // namespace
+
+// The make recipe compiles this file once for each Ruby, with PSDK_RUBY
+// set to 25, 30, 32 or 33.
+#define PSDK_RUBY_ENTRY_NAME(v) psdk_ruby_##v
+#define PSDK_RUBY_ENTRY(v) PSDK_RUBY_ENTRY_NAME(v)
+
+const PsdkRuby *PSDK_RUBY_ENTRY(PSDK_RUBY)(void) {
+    static const PsdkRuby entry = {ruby_version, run};
+    return &entry;
 }

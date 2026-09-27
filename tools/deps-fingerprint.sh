@@ -54,7 +54,10 @@ $DEPS/sources/ruby
 $DEPS/sources/ruby18
 $DEPS/sources/ruby19
 $DEPS/sources/openal-soft
+$DEPS/sources/ruby25
 $DEPS/sources/ruby30
+$DEPS/sources/ruby32
+$DEPS/sources/ruby33
 $DEPS/sources/sfml
 $DEPS/sources/litecgss
 $DEPS/sources/litergss2
@@ -64,7 +67,10 @@ $DEPS/iphoneos.make
 $DEPS/iphonesimulator.make
 $DEPS/ruby18.patches.lst
 $DEPS/ruby19.patches.lst
+$DEPS/ruby25.patches.lst
 $DEPS/ruby30.patches.lst
+$DEPS/ruby32.patches.lst
+$DEPS/ruby33.patches.lst
 $DEPS/ruby31.patches.lst
 $DEPS/sdl2.patches.lst
 $DEPS/apply-ruby-patches.sh
@@ -72,7 +78,10 @@ $DEPS/apply-sdl-patches.sh
 $DEPS/pixman
 $DEPS/ruby18
 $DEPS/ruby19
+$DEPS/ruby25
 $DEPS/ruby30
+$DEPS/ruby32
+$DEPS/ruby33
 $DEPS/ruby31
 $DEPS/sdl2
 $DEPS/sdl2_image

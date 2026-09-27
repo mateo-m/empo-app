@@ -63,3 +63,18 @@
 	url = git@github.com:ruby/ruby.git
 	branch = ruby_3_0
 	ignore = dirty
+[submodule "ios/Dependencies/sources/ruby32"]
+	path = ios/Dependencies/sources/ruby32
+	url = git@github.com:ruby/ruby.git
+	branch = ruby_3_2
+	ignore = dirty
+[submodule "ios/Dependencies/sources/ruby33"]
+	path = ios/Dependencies/sources/ruby33
+	url = git@github.com:ruby/ruby.git
+	branch = ruby_3_3
+	ignore = dirty
+[submodule "ios/Dependencies/sources/ruby25"]
+	ignore = dirty
+	path = ios/Dependencies/sources/ruby25
+	url = git@github.com:ruby/ruby.git
+	branch = ruby_2_5

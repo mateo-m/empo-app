@@ -119,60 +119,11 @@ typedef enum {
     PSDK_VALIGN_CENTER     = 2,
 } PsdkVerticalAlignment;
 
-// Per-game `syntaxTransform` override.
-//
-// The host calls the setter on every game selection so the
-// developer's mkxp.json stays free of host-managed keys. Default is
-// `UNSET` so desktop / test-harness builds that never call the
-// setter keep the legacy mkxp.json-driven path. Numeric values match
-// Config::syntaxTransform (0/1/2). The typed enum exists so callers
-// don't sprinkle magic numbers.
-typedef enum {
-    PSDK_SYNTAX_TRANSFORM_UNSET     = -1,
-    PSDK_SYNTAX_TRANSFORM_DISABLED  = 0,  // Ruby 3 strict
-    PSDK_SYNTAX_TRANSFORM_CUSTOM    = 1,  // syntaxTransformCustomVersion* from mkxp.json
-    PSDK_SYNTAX_TRANSFORM_LEGACY    = 2,  // Ruby 1.9 for RGSS3, Ruby 1.8 for RGSS<3
-} PsdkSyntaxTransformMode;
-
-// Per-game Ruby interpreter version selection.
-//
-// Each Ruby version's libruby + binding is compiled separately and
-// merged into a relocatable .o with hidden symbols. At engine boot
-// the host calls the setter to pick which version to dispatch to.
-// main.cpp looks up `_mkxp_get_script_binding_<NN>()` from the
-// matching merged .o.
-//
-// Lets a vintage PE game run on actual Ruby 1.8's parser + VM
-// instead of a Ruby 3 parser with syntax-transform patches.
-//
-// `PSDK_RUBY_UNSET` falls back to the build's default. Numeric values
-// are MMmm (3.0 -> 30, 1.8 -> 18), matching JoiPlay's libmkxpNN.so
-// filename convention.
-//
-// `PSDK_RUBY_30` is retained for back-compat with metadata.json
-// values written by older builds (when a native 3.0 binding shipped
-// in the merged.o set). New builds route 30 to the 3.1 binding +
-// Legacy syntax-transform mode at dispatch time. Keeping the enum
-// value here keeps old `rubyVersion: 30` JSON decoding correctly.
-typedef enum {
-    PSDK_RUBY_UNSET = -1,
-    PSDK_RUBY_18    = 18,
-    PSDK_RUBY_19    = 19,
-    PSDK_RUBY_30    = 30,
-    PSDK_RUBY_31    = 31,
-} PsdkRubyVersion;
-
 typedef struct {
     const char *managedConfigDir;
     const char *userDataDirectory;
     const char *sharedFontsDirectory;
-    PsdkRubyVersion rubyVersion;
-    PsdkSyntaxTransformMode syntaxTransformMode;
     PsdkVerticalAlignment verticalAlignment;
-    bool postloadEnabled;
-    bool useInGameKeyboard;
-    bool joiplayCompat;
-    bool networkEnabled;
 } PsdkSessionConfig;
 
 // ---------------------------------------------------------------------------
@@ -341,32 +292,7 @@ double      psdk_getAverageFPS(void);
 // game runs.
 int         psdk_getTargetFPS(void);
 
-int         psdk_getRGSSVersion(void);
 const char *psdk_getGameTitle(void);
-
-// Bitmask of supported RGSS versions for this build.
-// Bit 0 = RGSS1 (XP), bit 1 = RGSS2 (VX), bit 2 = RGSS3 (VX Ace).
-// Determined at compile time by which Ruby runtime is linked.
-int         psdk_getSupportedRGSSVersionMask(void);
-
-// Ruby runtime version the engine was built against.
-// Example: "3.1" for Ruby 3.1, "1.8" for Ruby 1.8.
-// The returned pointer is a static string literal, do not free.
-const char *psdk_getRubyVersion(void);
-
-// ANGLE version string, extracted from GL_VERSION at engine init.
-// Example: "2.1.0.abcdef1234". Returns "unknown" before the engine
-// has initialized GL, or if the GL_VERSION string didn't match the
-// expected ANGLE format. The returned pointer is a process-lifetime
-// buffer, do not free.
-const char *psdk_getANGLEVersion(void);
-
-// Metal device name, extracted from GL_RENDERER at engine init.
-// Example: "Apple A15 GPU" or "Apple A17 Pro GPU". Returns "unknown"
-// before the engine has initialized GL, or if the GL_RENDERER string
-// didn't match the expected ANGLE format. The returned pointer is a
-// process-lifetime buffer, do not free.
-const char *psdk_getMetalDeviceName(void);
 
 // Game viewport rect (logical points)
 
@@ -394,10 +320,10 @@ void        psdk_setHostViewportRegion(float x, float y, float w, float h,
 // Back to automatic placement, as if no region was ever set.
 void        psdk_clearHostViewportRegion(void);
 
-// SDL's UIKit UIWindow*, or NULL before the engine creates its window.
-// Owned by SDL. Do not retain. For embedding host controls in the
+// The UIWindow* the game draws in, or NULL before the core creates it.
+// Owned by the core. Do not retain. For embedding host controls in the
 // same window stack as the game view on iOS.
-void       *psdk_getSDLUIKitWindow(void);
+void       *psdk_getGameWindow(void);
 
 // Per-game settings (UI -> Engine), set by the host before engine
 // boot and read by the engine during the run.
@@ -408,40 +334,17 @@ void       *psdk_getSDLUIKitWindow(void);
 
 PsdkVerticalAlignment psdk_getVerticalAlignment(void);
 
-void                    psdk_setSyntaxTransformMode(PsdkSyntaxTransformMode mode);
-PsdkSyntaxTransformMode psdk_getSyntaxTransformMode(void);
-
-void             psdk_setActiveRubyVersion(PsdkRubyVersion version);
-
 void        psdk_applySessionConfig(const PsdkSessionConfig *config);
 
-// Adding a new per-boot setting:
-//   1. Add a field to PsdkSessionConfig here and in each core's own
-//      copy of this interface
-//   2. Apply it where each core reads the config
-//   3. Set it on Empo's session configuration path
+// A per-game setting (UI -> Engine). The one key is "rubyVersion", with
+// "2.5", "3.0", "3.2" or "3.3": the Ruby that psdk_run starts, 3.0 when
+// the host sends none. Send it before psdk_run. Any other key or value
+// writes a warning to the log and changes nothing.
+void        psdk_setSetting(const char *key, const char *value);
 
-// Force the Pokemon Essentials in-game keyboard scene, overriding
-// the iOS soft keyboard. Default false (soft keyboard). Flip on for
-// games whose keyboard scene adds custom keys the soft keyboard
-// can't drive. `pokemon_input.rb` re-applies the historical
-// `USEKEYBOARDTEXTENTRY = false` overrides when this is set.
-void psdk_setUseInGameKeyboard(bool enabled);
-
-// JoiPlay-compat signal (`$joiplay = true` in the game's Ruby VM).
-// Several games ship JoiPlay-specific patches that branch on the
-// global. Whether those help or hurt depends on the game, so the
-// host decides per boot. Default false. `platform_compat.rb` reads
-// this via `System.joiplay_compat?` before game scripts load.
-
-// Network access (UI -> Engine). When disabled, the game sees the
-// equivalent of airplane mode: network libraries load and their
-// classes exist, but every connection attempt fails the way it
-// would with no connectivity (native client refuses, socket
-// connects raise ENETDOWN via the preload layer, downloads report
-// failure). Games then take the same offline fallback paths they
-// ship for desktop players without internet. Ruby reads this via
-// `System.network_enabled?`. Default false (host must opt in).
+// Lines about the running engine for the host's debug overlay, one per
+// line. The text is static.
+const char *psdk_getDetails(void);
 
 void        psdk_setShowViewportBounds(bool enabled);
 
@@ -537,6 +440,9 @@ int         psdk_getFastForwardMultiplier(void);
 // bounds debug overlay etc., owned by app-level Settings UI) is NOT
 // touched.
 void        psdk_resetSessionState(void);
+
+// Stops the process. A Ruby VM cannot be torn down in place.
+void        psdk_killSession(void);
 
 // Debug logging
 

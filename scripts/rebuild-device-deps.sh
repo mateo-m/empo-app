@@ -64,7 +64,7 @@ make -f iphoneos.make mkxp-core
 echo "==> building MkxpCore.framework"
 make -f iphoneos.make mkxp-framework
 
-echo "==> building the PSDK core"
+echo "==> building PsdkCore.framework"
 make -f iphoneos.make psdk
 
 echo "==> device deps rebuild complete"

@@ -1,0 +1,4 @@
+# Ruby 3.2 iOS cross-compile patches, plus the loader change that lets
+# the iOS Ruby read the bytecode of a PSDK game released for macOS.
+ruby32/ios.patch
+ruby32/load-macos-bytecode.patch

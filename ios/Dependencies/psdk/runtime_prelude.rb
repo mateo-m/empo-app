@@ -7,6 +7,12 @@
 $stdout.sync = true
 $stderr.sync = true
 
+# Only the Ruby 2.5 support folder has this file. It must load before the
+# Graphics and Input patches below, so that they open the LiteRGSS 1
+# modules.
+litergss1 = File.join(ENV['GAMEDEPS'], 'litergss1.rb')
+require litergss1 if File.exist?(litergss1)
+
 # A released PSDK game runs `STDERR.reopen(IO::NULL)` when
 # Data/Scripts.dat is present. The public GameLoader source guards that
 # with `!ARGV.include?('verbose')`, but the bytecode in Edelweiss

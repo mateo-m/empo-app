@@ -1,0 +1,141 @@
+diff --git a/configure.ac b/configure.ac
+index 8a7cee55..53e3ef65 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -312,6 +312,9 @@ AS_IF([test ${target_archs+set}], [
+ #ifdef __ppc64__
+ "processor-name=powerpc64"
+ #endif
++#ifdef __arm64__
++"processor-name=arm64"
++#endif
+ EOF
+ 	    sed -n 's/^"processor-name=\(.*\)"/\1/p'`
+ 	    target="$target_cpu${target}"
+@@ -365,13 +368,14 @@ AS_CASE(["$host_os:$build_os"],
+     # clang version 1.0 (http://llvm.org/svn/llvm-project/cfe/tags/Apple/clang-23 exported)
+     # Apple clang version 2.0 (tags/Apple/clang-137) (based on LLVM 2.9svn)
+     # Apple clang version 2.1 (tags/Apple/clang-163.7.1) (based on LLVM 3.0svn)
+-    AS_IF([! $CC -E -xc - <<SRC >/dev/null], [
+-	@%:@if defined __APPLE_CC__ && defined __clang_major__ && __clang_major__ < 3
+-	@%:@error premature clang
+-	@%:@endif
+-SRC
+-	AC_MSG_ERROR([clang version 3.0 or later is required])
+-    ])
++    AC_PREPROC_IFELSE(
++	[AC_LANG_PROGRAM([
++	    @%:@if defined __APPLE_CC__ && defined __clang_major__ && __clang_major__ < 3
++	    @%:@error premature clang
++	    @%:@endif
++	])],
++	[],
++	[AC_MSG_ERROR([clang version 3.0 or later is required])])
+ ])
+ AS_IF([test x"${build}" != x"${host}"], [
+   AC_CHECK_TOOL(CC, gcc)
+@@ -465,13 +469,6 @@ AS_CASE(["$target_cpu-$target_os"], [[i[3-6]86*]], [
+ 		 CFLAGS="$save_CFLAGS"
+ 	 ])])
+ 
+-AS_CASE(["$target_os"], [darwin*], [
+-if libtool 2>&1 | grep no_warning_for_no_symbols > /dev/null; then
+-  ac_cv_prog_ac_ct_RANLIB=:
+-  ac_cv_prog_ac_ct_AR='libtool -static'
+-  rb_cv_arflags='-no_warning_for_no_symbols -o'
+-fi
+-])
+ AC_CHECK_TOOL(RANLIB, ranlib, :)
+ AC_CHECK_TOOL(AR, ar)
+ AS_IF([test -z "$AR"], [
+@@ -3259,7 +3256,7 @@ AS_IF([test "$with_dln_a_out" != yes], [
+ 	[darwin*], [	: ${LDSHARED='$(CC) -dynamic -bundle'}
+ 			: ${LDFLAGS=""}
+ 			: ${LIBPATHENV=DYLD_LIBRARY_PATH}
+-			: ${PRELOADENV=DYLD_INSERT_LIBRARIES}
++
+ 			rb_cv_dlopen=yes],
+         [aix*], [	: ${LDSHARED='$(CC)'}
+ 			LDSHARED="$LDSHARED ${linker_flag}-G"
+diff --git a/dir.c b/dir.c
+index 40bd4eb1..c3d09fdd 100644
+--- a/dir.c
++++ b/dir.c
+@@ -128,7 +128,27 @@ char *strchr(char*,char);
+ #if NORMALIZE_UTF8PATH
+ #include <sys/param.h>
+ #include <sys/mount.h>
+-#include <sys/vnode.h>
++#include <TargetConditionals.h>
++#if TARGET_OS_IPHONE
++/* sys/vnode.h is not available in the iOS SDK; define the needed constants */
++# ifndef VREG
++#  define VREG 1
++# endif
++# ifndef VDIR
++#  define VDIR 2
++# endif
++# ifndef VLNK
++#  define VLNK 5
++# endif
++# ifndef VT_HFS
++#  define VT_HFS 17
++# endif
++# ifndef VT_CIFS
++#  define VT_CIFS 23
++# endif
++#else
++# include <sys/vnode.h>
++#endif
+ 
+ # if defined HAVE_FGETATTRLIST || !defined HAVE_GETATTRLIST
+ #   define need_normalization(dirp, path) need_normalization(dirp)
+diff --git a/process.c b/process.c
+index 6c7a117c..db346149 100644
+--- a/process.c
++++ b/process.c
+@@ -11,6 +11,10 @@
+ 
+ **********************************************************************/
+ 
++#ifdef __APPLE__
++# include <TargetConditionals.h>
++#endif
++
+ #include "internal.h"
+ #include "ruby/io.h"
+ #include "ruby/thread.h"
+@@ -1246,7 +1250,7 @@ exec_with_sh(const char *prog, char **argv, char **envp)
+ }
+ 
+ #else
+-#define try_with_sh(prog, argv, envp) (void)0
++#define try_with_sh(err, prog, argv, envp) (void)0
+ #endif
+ 
+ /* This function should be async-signal-safe.  Actually it is. */
+@@ -3946,7 +3950,11 @@ rb_spawn_process(struct rb_execarg *eargp, char *errmsg, size_t errmsg_buflen)
+     if (pid == -1)
+ 	rb_last_status_set(0x7f << 8, 0);
+ # else
++#if TARGET_OS_IPHONE
++    status = -1; /* system() is unavailable on iOS */
++#else
+     status = system(rb_execarg_commandline(eargp, &prog));
++#endif
+     rb_last_status_set((status & 0xff) << 8, 0);
+     pid = 1;			/* dummy */
+ # endif
+diff --git a/template/configure-ext.mk.tmpl b/template/configure-ext.mk.tmpl
+index 4f0d31d7..438e109e 100644
+--- a/template/configure-ext.mk.tmpl
++++ b/template/configure-ext.mk.tmpl
+@@ -24,7 +24,7 @@ end
+ MINIRUBY = <%=miniruby%>
+ SCRIPT_ARGS = <%=script_args%>
+ EXTMK_ARGS = $(SCRIPT_ARGS) --gnumake=$(gnumake) --extflags="$(EXTLDFLAGS)" \
+-	   --make-flags='MINIRUBY=$(MINIRUBY)'
++	   --make-flags="MINIRUBY='$(MINIRUBY)'"
+ 
+ all: exts gems
+ exts:

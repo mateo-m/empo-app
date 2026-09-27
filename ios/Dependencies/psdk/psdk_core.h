@@ -1,13 +1,10 @@
 // PSDK core: the boundary between a host app and a released Pokemon SDK
-// game running on LiteRGSS2, LiteCGSS, SFML and Ruby 3.0.
+// game running on LiteRGSS2, LiteCGSS, SFML and one of four Rubies.
 //
 // Everything below is the whole interface. The core ships as
 // PsdkCore.framework, one dynamic image per SDK, and that image
-// boundary is what keeps its Ruby 3.0 and its LiteRGSS classes away
-// from the mkxp-z engine. Do not link litergss30-merged.o into a binary
-// that holds mkxp-z: `ld -r` cannot demote a common symbol or a
-// coalesced weak definition, so the merged object still shares 212 Ruby
-// and openssl slots and its ViewportElement vtable with that engine.
+// boundary is what keeps its Rubies and its LiteRGSS classes away from
+// the mkxp-z engine.
 #ifndef PSDK_CORE_H
 #define PSDK_CORE_H
 
@@ -36,8 +33,8 @@ enum PsdkResult {
 // argv[0] later for its own paths, so a caller that passes 0 and null
 // leaves Ruby to fall back on whatever it can find.
 //
-// supportDir names the core's Ruby support folder, which the
-// `psdk-support` make target builds. The core prepends it to $LOAD_PATH
+// supportDir names the Ruby support folder of that Ruby, which the
+// `psdk<NN>-support` make target builds. The core prepends it to $LOAD_PATH
 // and points the GAMEDEPS variable at it. PSDK reads GAMEDEPS to find
 // its native extensions.
 //
@@ -45,10 +42,29 @@ enum PsdkResult {
 // LiteRGSS registers its classes and before Game.rb. Per-game
 // compatibility code belongs there, not in this core.
 //
+// The game runs on the Ruby that the "rubyVersion" setting names
+// (psdk_setSetting): "2.5", "3.0", "3.2" or "3.3". Without the setting,
+// it runs on 3.0.
+//
 // Returns PSDK_OK when the game stopped on its own, or a negative
 // PsdkResult.
 int psdk_run(int argc, char **argv, const char *gameDir, const char *supportDir,
              const char *preludePath);
+
+// One Ruby of the core. Each Ruby's merged object exports its entry
+// below and no other name, so the four Rubies and their four copies of
+// LiteRGSS share nothing at the framework link.
+typedef struct PsdkRuby {
+    // RUBY_VERSION of this Ruby, such as "2.5.9".
+    const char *version;
+    int (*run)(int argc, char **argv, const char *gameDir, const char *supportDir,
+               const char *preludePath);
+} PsdkRuby;
+
+const PsdkRuby *psdk_ruby_25(void);
+const PsdkRuby *psdk_ruby_30(void);
+const PsdkRuby *psdk_ruby_32(void);
+const PsdkRuby *psdk_ruby_33(void);
 
 // Presses or releases one SFML scancode. Call from any thread.
 void psdk_inject_scancode(int scancode, int pressed);

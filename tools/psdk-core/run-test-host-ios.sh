@@ -10,10 +10,13 @@
 #   tools/psdk-core/run-test-host-ios.sh --game <dir> [--seconds 90]
 #                                       [--snap-every 5] [--device <udid>]
 #                                       [--keys 50:36,56:2] [--rotate 60:4]
-#                                       [--fast-forward 4]
+#                                       [--fast-forward 4] [--ruby 2.5]
 #
 # --keys presses SFML scancodes at the given second, to drive the game
 # without a person at the keyboard. host.m explains the format.
+#
+# --ruby picks the Ruby of the core: 2.5, 3.0 (the default), 3.2 or 3.3.
+# It must match the version in the game's Game.yarb.
 #
 # The snapshots come from `simctl io screenshot`, not from the game. A
 # picture of the display proves the frame was presented. A picture the
@@ -33,6 +36,7 @@ DEVICE=
 KEYS=
 ROTATE=
 FAST_FORWARD=
+RUBY=
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -62,6 +66,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --fast-forward)
             FAST_FORWARD="$2"
+            shift 2
+            ;;
+        --ruby)
+            RUBY="$2"
             shift 2
             ;;
         *)
@@ -125,6 +133,7 @@ SIMCTL_CHILD_PSDK_RUN_FOR="$SECONDS_TO_RUN" \
     SIMCTL_CHILD_PSDK_NAME_SCREEN="${PSDK_NAME_SCREEN:-}" \
     SIMCTL_CHILD_PSDK_ROTATE="$ROTATE" \
     SIMCTL_CHILD_PSDK_FAST_FORWARD="$FAST_FORWARD" \
+    SIMCTL_CHILD_PSDK_RUBY="$RUBY" \
     xcrun simctl launch --console-pty "$DEVICE" "$BUNDLE_ID" &
 LAUNCH_PID=$!
 

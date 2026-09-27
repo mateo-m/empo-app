@@ -213,7 +213,12 @@ static void scheduleRotation(const char *spec) {
 
     NSString *core = [NSBundle.mainBundle.privateFrameworksPath
         stringByAppendingPathComponent:@"PsdkCore.framework"];
-    NSString *support = [core stringByAppendingPathComponent:@"PsdkSupport"];
+    // PSDK_RUBY picks one of the core's Rubies, as the app does from the
+    // version in Game.yarb.
+    const char *wantRuby = getenv("PSDK_RUBY");
+    const char *ruby = (wantRuby && *wantRuby) ? wantRuby : "3.0";
+    NSString *support = [[core stringByAppendingPathComponent:@"PsdkSupport"]
+        stringByAppendingPathComponent:@(ruby)];
     if (![NSFileManager.defaultManager fileExistsAtPath:support]) {
         fprintf(stderr, "[host] no support folder at %s\n", support.UTF8String);
         exit(4);
@@ -229,10 +234,12 @@ static void scheduleRotation(const char *spec) {
     }
     gPsdkRun = dlsym(image, "psdk_run");
     gPsdkInjectKeyEvent = dlsym(image, "psdk_injectKeyEvent");
-    if (!gPsdkRun || !gPsdkInjectKeyEvent) {
-        fprintf(stderr, "[host] the core is missing psdk_run or psdk_injectKeyEvent\n");
+    void (*setSetting)(const char *, const char *) = dlsym(image, "psdk_setSetting");
+    if (!gPsdkRun || !gPsdkInjectKeyEvent || !setSetting) {
+        fprintf(stderr, "[host] the core is missing psdk_run, psdk_injectKeyEvent or psdk_setSetting\n");
         exit(6);
     }
+    setSetting("rubyVersion", ruby);
 
     // PSDK_FAST_FORWARD asks the core for that many game updates for each
     // drawn frame. The prelude reports the update rate, so a run at 1 and

@@ -586,74 +586,137 @@ $(SOURCES)/litecgss/external/skalog/CMakeLists.txt:
 	git submodule update --init --recursive external/skalog
 
 
-# Ruby 3.0 (submodule: sources/ruby30)
+# The Rubies of the PSDK core (submodules: sources/ruby25, sources/ruby30,
+# sources/ruby32, sources/ruby33)
 #
 # For the PSDK core only. A released PSDK game ships pre-compiled
-# YARV bytecode (`Game.yarb`, `Data/Scripts.dat`) that only a Ruby
-# 3.0 loader reads, so the PSDK core needs its own 3.0 interpreter.
-# The engine's 1.8 / 1.9 / 3.1 Rubys cannot load it.
+# YARV bytecode (`Game.yarb`, `Data/Scripts.dat`) that only a loader of
+# the same Ruby version reads. The engine's 1.8 / 1.9 / 3.1 Rubys
+# cannot load it. Pokemon Studio compiles a Windows release with Ruby
+# 3.0, a macOS release with Ruby 3.2 and a Linux release with Ruby 3.3,
+# so the PSDK core carries all three. PSDK games released from December
+# 2019 to about March 2021 ran on Ruby 2.5 and LiteRGSS 1, so it carries
+# that one too. PSDK_RUBY picks the Ruby that the per-Ruby recipes below
+# build, and `make psdk` builds all four and the framework.
 #
-# The patch list has no syntax-transform patches. Those exist only in
+# The patch lists have no syntax-transform patches. Those exist only in
 # the 3.1 source, for Pokemon Essentials forks with old grammar.
-ruby30: init_dirs openssl $(LIBDIR)/libruby.3.0-static.a $(LIBDIR)/libruby.3.0-ext.a
+PSDK_RUBY ?= 30
+PSDK_RUBY_VERSION := $(shell echo $(PSDK_RUBY) | sed 's/./&./')
+PSDK_RUBY_SRC := $(SOURCES)/ruby$(PSDK_RUBY)
 
-$(LIBDIR)/libruby.3.0-static.a: $(SOURCES)/ruby30/.configured-$(SDK_TAG)
-	cd $(SOURCES)/ruby30; \
-	$(CONFIGURE_ENV) make -j$(NPROC) libruby.3.0-static.a; \
-	cp libruby.3.0-static.a $(LIBDIR)/; \
-	mkdir -p $(INCLUDEDIR)/ruby30; \
-	cp -R include/* $(INCLUDEDIR)/ruby30/; \
-	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby30/ruby/config.h 2>/dev/null || true
+ifneq ($(filter 25 30,$(PSDK_RUBY)),)
+PSDK_RUBY_CONFIGURE_DEPS := $(SOURCES)/ruby/ext/openssl/extconf.rb
+# On Darwin, Ruby 2.5 names its library after the full version
+# (libruby.2.5.9-static.a). The recipes below expect major.minor.
+# Ruby 2.5's digest links OpenSSL's digests through a helper file that
+# the copied openssl 3.0.1 no longer has. The bundled digests are the
+# ones Ruby 3.0 uses.
+# iOS has isfinite only as a macro, so Ruby 2.5's link test misses it.
+# Then ruby/missing.h defines isfinite as finite, and that macro breaks
+# the libc++ <cmath> that LiteRGSS includes after ruby.h.
+PSDK_RUBY_CONFIGURE_ARGS := $(if $(filter 25,$(PSDK_RUBY)),--with-soname=ruby.2.5 \
+	--with-bundled-md5 --with-bundled-sha1 --with-bundled-sha2 --with-bundled-rmd160 \
+	ac_cv_func_isfinite=yes)
+# Ruby 2.5's headers declare `register` parameters, and C++17 rejects
+# that keyword. Their rb_intern macro also opens a statement expression
+# across two macros, which clang warns about at every call.
+PSDK_RUBY_CXXFLAGS := $(if $(filter 25,$(PSDK_RUBY)),-Wno-register -Wno-compound-token-split-by-macro)
+PSDK_RUBY_MAKE_ARGS :=
+# Ruby 2.5's psych embeds its own libyaml only when it finds no yaml.h and
+# no -lyaml. It finds the ones the 3.2 and 3.3 builds put in this build
+# folder, so the archive must carry that libyaml.
+PSDK_RUBY_EXTRA_A := $(if $(filter 25,$(PSDK_RUBY)),$(LIBDIR)/libyaml.a)
+else
+# Ruby 3.2 and 3.3 no longer carry libyaml, and psych needs it. A PSDK
+# game requires yaml at boot.
+PSDK_RUBY_CONFIGURE_DEPS := $(LIBDIR)/libyaml.a
+PSDK_RUBY_CONFIGURE_ARGS := --disable-yjit --with-libyaml-dir="$(BUILD_PREFIX)"
+PSDK_RUBY_EXTRA_A := $(LIBDIR)/libyaml.a
+# The git source of Ruby 3.2 has no parse.c, and the bison in macOS
+# (2.3) is too old to make it. Homebrew's bison is keg-only, and the
+# Makefile names plain `bison`, so make gets the path. Ruby 3.3 makes
+# parse.c with its own tool/lrama.
+PSDK_RUBY_MAKE_ARGS := $(if $(filter 32,$(PSDK_RUBY)),YACC="$(shell brew --prefix bison)/bin/bison")
+endif
 
-# Same ext recipe as 3.1's, on the 3.0 source tree. A released PSDK
+# libyaml 0.2.5, from the copy that Ruby 3.0's psych carries.
+LIBYAML_SRC := $(SOURCES)/ruby30/ext/psych/yaml
+
+$(LIBDIR)/libyaml.a: $(wildcard $(LIBYAML_SRC)/*.c) $(LIBYAML_SRC)/yaml.h
+	rm -rf $(BUILD_PREFIX)/libyaml
+	mkdir -p $(BUILD_PREFIX)/libyaml
+	for src in $(LIBYAML_SRC)/*.c; do \
+	    $(CC) $(CFLAGS) -O2 -DHAVE_CONFIG_H -I$(LIBYAML_SRC) \
+	        -c $$src -o $(BUILD_PREFIX)/libyaml/$$(basename $$src .c).o || exit 1; \
+	done
+	rm -f $@
+	$(AR) rcs $@ $(BUILD_PREFIX)/libyaml/*.o
+	$(RANLIB) $@
+	cp $(LIBYAML_SRC)/yaml.h $(INCLUDEDIR)/yaml.h
+
+# The patch folders ruby25/, ruby30/, ruby32/ and ruby33/ have the names of
+# these targets, so make would call them up to date.
+.PHONY: ruby25 ruby30 ruby32 ruby33
+
+ruby$(PSDK_RUBY): init_dirs openssl $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-static.a $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-ext.a
+
+$(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-static.a: $(PSDK_RUBY_SRC)/.configured-$(SDK_TAG)
+	set -e; cd $(PSDK_RUBY_SRC); \
+	$(CONFIGURE_ENV) make -j$(NPROC) $(PSDK_RUBY_MAKE_ARGS) libruby.$(PSDK_RUBY_VERSION)-static.a; \
+	cp libruby.$(PSDK_RUBY_VERSION)-static.a $(LIBDIR)/; \
+	mkdir -p $(INCLUDEDIR)/ruby$(PSDK_RUBY); \
+	cp -R include/* $(INCLUDEDIR)/ruby$(PSDK_RUBY)/; \
+	cp .ext/include/*/ruby/config.h $(INCLUDEDIR)/ruby$(PSDK_RUBY)/ruby/config.h 2>/dev/null || true
+
+# Same ext recipe as 3.1's, on the PSDK Ruby source tree. A released PSDK
 # game requires socket, openssl, net/http, csv, json and zlib at
 # boot, so a lost extension stops the game at its first `require`.
-$(LIBDIR)/libruby.3.0-ext.a: $(LIBDIR)/libruby.3.0-static.a
-	cd $(SOURCES)/ruby30; \
-	$(CONFIGURE_ENV) make -j1 miniruby exts.mk encs; \
+$(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-ext.a: $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-static.a
+	cd $(PSDK_RUBY_SRC); \
+	$(CONFIGURE_ENV) make -j1 $(PSDK_RUBY_MAKE_ARGS) miniruby exts.mk libencs; \
 	EXT_TARGETS=$$(awk '/^extensions =/,/[^\\]$$/' exts.mk | tr '\\' ' ' | grep -oE 'ext/[^ ]+' | sed 's|/\.$$|/static|'); \
 	$(CONFIGURE_ENV) make -j1 -f exts.mk ext/extinit.o $$EXT_TARGETS; \
 	$(CONFIGURE_ENV) make -j1 enc/encinit.o
 	@TMPDIR=$$(mktemp -d); \
 	cd $$TMPDIR; \
-	for a in $$(find $(SOURCES)/ruby30/ext -name "*.a" -not -path "*/test/*") \
-	         $(SOURCES)/ruby30/enc/libenc.a $(SOURCES)/ruby30/enc/libtrans.a; do \
+	for a in $$(find $(PSDK_RUBY_SRC)/ext -name "*.a" -not -path "*/test/*") \
+	         $(PSDK_RUBY_SRC)/enc/libenc.a $(PSDK_RUBY_SRC)/enc/libtrans.a $(PSDK_RUBY_EXTRA_A); do \
 		[ -f "$$a" ] || continue; \
 		sub=$$(basename $$a .a); \
 		mkdir -p "$$sub"; \
 		(cd "$$sub" && $(AR) x "$$a"); \
 	done; \
-	cp $(SOURCES)/ruby30/ext/extinit.o .; \
-	cp $(SOURCES)/ruby30/enc/encinit.o .; \
-	$(AR) rcs $(LIBDIR)/libruby.3.0-ext.a extinit.o encinit.o */*.o; \
-	$(RANLIB) $(LIBDIR)/libruby.3.0-ext.a; \
+	cp $(PSDK_RUBY_SRC)/ext/extinit.o .; \
+	cp $(PSDK_RUBY_SRC)/enc/encinit.o .; \
+	$(AR) rcs $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-ext.a extinit.o encinit.o */*.o; \
+	$(RANLIB) $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-ext.a; \
 	rm -rf $$TMPDIR
-	$(AR) d $(LIBDIR)/libruby.3.0-static.a dmyext.o dmyenc.o || true
-	$(RANLIB) $(LIBDIR)/libruby.3.0-static.a
-	@for sym in _Init_socket _Init_openssl _Init_zlib _Init_parser _Init_generator; do \
-	    nm $(LIBDIR)/libruby.3.0-ext.a 2>/dev/null | grep -q "T $$sym" || { \
-	        echo "ERROR: $$sym missing from libruby.3.0-ext.a (extconf failure? check $(SOURCES)/ruby30/ext/*/mkmf.log)"; \
-	        rm -f $(LIBDIR)/libruby.3.0-ext.a; \
+	$(AR) d $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-static.a dmyext.o dmyenc.o || true
+	$(RANLIB) $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-static.a
+	@for sym in _Init_socket _Init_openssl _Init_zlib _Init_parser _Init_generator _Init_psych; do \
+	    nm $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-ext.a 2>/dev/null | grep -q "T $$sym" || { \
+	        echo "ERROR: $$sym missing from libruby.$(PSDK_RUBY_VERSION)-ext.a (extconf failure? check $(PSDK_RUBY_SRC)/ext/*/mkmf.log)"; \
+	        rm -f $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-ext.a; \
 	        exit 1; \
 	    }; \
 	done
 
 # `-Wno-default-const-init-field-unsafe` is load-bearing, not cosmetic.
-# Ruby 3.0's own `include/ruby/internal/core/rstring.h` declares an
-# uninitialised `struct RString` whose first member is const. Clang 26
-# reports that, and mkmf runs its probes with `-Werror`. So
-# `ext/socket/extconf.rb` sees its IN6_IS_ADDR_UNSPECIFIED probe fail,
-# takes an old-Apple-header path, and tries to read
+# The `include/ruby/internal/core/rstring.h` of Ruby 3.0 and 3.2
+# declares an uninitialised `struct RString` whose first member is
+# const. Clang 26 reports that, and mkmf runs its probes with `-Werror`.
+# So `ext/socket/extconf.rb` sees its IN6_IS_ADDR_UNSPECIFIED probe
+# fail, takes an old-Apple-header path, and tries to read
 # `/usr/include/netinet6/in6.h`. That file does not exist in a current
 # SDK, so extconf raises and the whole socket extension disappears.
-# Ruby 3.1 rewrote that header, so only the 3.0 build needs the flag.
-$(SOURCES)/ruby30/.configured-$(SDK_TAG): $(SOURCES)/ruby30/configure $(LIBDIR)/libcrypto.a
-	cd $(SOURCES)/ruby30; $(MAKE) distclean 2>/dev/null || true
-	cd $(SOURCES)/ruby30; \
+$(PSDK_RUBY_SRC)/.configured-$(SDK_TAG): $(PSDK_RUBY_SRC)/configure $(LIBDIR)/libcrypto.a $(PSDK_RUBY_EXTRA_A)
+	cd $(PSDK_RUBY_SRC); $(MAKE) distclean 2>/dev/null || true
+	cd $(PSDK_RUBY_SRC); \
 	export $(CONFIGURE_ENV); \
 	export CFLAGS="-std=gnu99 -DRUBY_FUNCTION_NAME_STRING=__func__ -Wno-default-const-init-field-unsafe $$CFLAGS"; \
 	export LDFLAGS="$$LDFLAGS"; \
-	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) \
+	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) $(PSDK_RUBY_CONFIGURE_ARGS) \
 	--with-baseruby=/usr/bin/ruby \
 	--with-openssl-dir="$(BUILD_PREFIX)" \
 	ac_cv_func_setpgrp_void=yes \
@@ -678,39 +741,44 @@ $(SOURCES)/ruby30/.configured-$(SDK_TAG): $(SOURCES)/ruby30/configure $(LIBDIR)/
 # 3.5.7. Ruby 3.1 bundles the openssl gem 3.0.1, which main already
 # builds against that same OpenSSL, so the 3.1 copy of ext/openssl
 # goes into the 3.0 tree. A released PSDK game requires openssl at
-# boot, so the extension cannot be dropped.
+# boot, so the extension cannot be dropped. Ruby 3.2 and 3.3 bundle the
+# openssl gems 3.1.0 and 3.2.0, which build as they are.
 #
 # The copy makes the ruby30 build depend on the ruby submodule. Both
 # are submodules of this repo, so a clone has one when it has the
 # other. The `git checkout` above restores the tracked 2.2.2 files
 # first, so the copy always starts from a clean tree.
-$(SOURCES)/ruby30/configure: $(SOURCES)/ruby30/configure.ac $(SOURCES)/ruby/ext/openssl/extconf.rb
-	cd $(SOURCES)/ruby30; \
+$(PSDK_RUBY_SRC)/configure: $(PSDK_RUBY_SRC)/configure.ac $(PSDK_RUBY_CONFIGURE_DEPS)
+	cd $(PSDK_RUBY_SRC); \
 	git checkout -- . 2>/dev/null; \
-	$(PATCHES)/apply-ruby-patches.sh 30 $(SOURCES)/ruby30 \
+	$(PATCHES)/apply-ruby-patches.sh $(PSDK_RUBY) $(PSDK_RUBY_SRC) \
 		--patches-root $(PATCHES) --engine $(ENGINE); \
-	rm -rf ext/openssl; \
-	cp -R $(SOURCES)/ruby/ext/openssl ext/openssl; \
-	rm -f ext/openssl/depend; \
+	if [ $(PSDK_RUBY) = 25 ] || [ $(PSDK_RUBY) = 30 ]; then \
+		rm -rf ext/openssl; \
+		cp -R $(SOURCES)/ruby/ext/openssl ext/openssl; \
+		rm -f ext/openssl/depend; \
+	fi; \
 	autoreconf -i
 
 
-# LiteRGSS2 binding plus Ruby 3.0, merged into one relocatable object
+# LiteRGSS2 binding plus one PSDK Ruby, merged into one relocatable object
 # (submodule: sources/litergss2).
 #
-# Same pattern as the mkxp{18,19,31}-merged objects: `ld -r` with an
-# unexport list demotes the Ruby text and data symbols to local. It
-# leaves 212 Ruby and openssl commons external and every LiteRGSS vtable
-# weak, so this object is an input to the PsdkCore.framework link
-# (tools/psdk-core/build-framework-ios.sh), not a boundary of its own.
+# `ld -r` with a list of the names to keep makes every other name local:
+# the Ruby, its extensions, and the LiteRGSS2 classes with their weak
+# functions and vtables. The four objects link into one framework, and
+# each Ruby compiles some of the same LiteRGSS2 functions to different
+# code. `rb::Dispose` returns nil, which is 8 in Ruby 2.5 and 4 in Ruby
+# 3.3, so a weak name that stayed out would let the linker keep one copy
+# for all four.
 #
-# LiteCGSS, skalog and the SFML archives stay out of the merge. They
-# link separately, the same way SDL2 and libpng do not merge into
-# mkxp31-merged.o.
-PSDK_OBJDIR := $(BUILD_PREFIX)/binding-litergss30
+# LiteCGSS, skalog, the SFML archives, OpenSSL and the launcher bridge
+# stay out of the merge. They hold no Ruby, and the framework links one
+# copy of each (tools/psdk-core/build-framework-ios.sh).
+PSDK_OBJDIR := $(BUILD_PREFIX)/binding-litergss$(PSDK_RUBY)
 
 PSDK_INCLUDES := \
-    -I$(INCLUDEDIR)/ruby30 \
+    -I$(INCLUDEDIR)/ruby$(PSDK_RUBY) \
     -I$(INCLUDEDIR) \
     -I$(SOURCES)/litergss2/ext/LiteRGSS \
     -I$(SOURCES)/litecgss/src/src \
@@ -718,106 +786,85 @@ PSDK_INCLUDES := \
     -I$(SOURCES)/litecgss/external/lodepng \
     -I$(SOURCES)/litecgss/external/libnsgif
 
-litergss30-merged: init_dirs ruby30 litecgss openssl $(LIBDIR)/litergss30-merged.o
+litergss$(PSDK_RUBY)-merged: init_dirs ruby$(PSDK_RUBY) litecgss openssl $(LIBDIR)/litergss$(PSDK_RUBY)-merged.o
 
-$(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
-                               $(LIBDIR)/libruby.3.0-ext.a \
+$(LIBDIR)/litergss$(PSDK_RUBY)-merged.o: $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-static.a \
+                               $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-ext.a \
                                $(LIBDIR)/libLiteCGSS_engine.a \
-                               $(LIBDIR)/libssl.a \
-                               $(LIBDIR)/libcrypto.a \
                                ${PWD}/psdk/psdk_core.cpp \
                                ${PWD}/psdk/psdk_core.h \
-                               ${PWD}/psdk/psdk_app_bridge.cpp \
-                               ${PWD}/psdk/sfml_audio.cpp
-	@echo "[psdk] Compiling ext/LiteRGSS against Ruby 3.0..."
+                               ${PWD}/psdk/sfml_audio.cpp \
+                               $(wildcard $(SOURCES)/litergss2/ext/LiteRGSS/*.cpp $(SOURCES)/litergss2/ext/LiteRGSS/*.h)
+	@echo "[psdk] Compiling ext/LiteRGSS against Ruby $(PSDK_RUBY_VERSION)..."
+	@rm -rf $(PSDK_OBJDIR)
 	@mkdir -p $(PSDK_OBJDIR)
 	@for src in $(SOURCES)/litergss2/ext/LiteRGSS/*.cpp; do \
 	    obj=$(PSDK_OBJDIR)/$$(basename $$src .cpp).o; \
 	    echo "  -> $$(basename $$obj)"; \
-	    $(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
+	    $(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 $(PSDK_RUBY_CXXFLAGS) \
 	        $(PSDK_INCLUDES) -DHAVE_CONFIG_H \
 	        -c $$src -o $$obj || exit 1; \
 	done
 	@echo "[psdk] Compiling the core..."
-	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
-	    -I$(INCLUDEDIR)/ruby30 \
+	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 $(PSDK_RUBY_CXXFLAGS) \
+	    -I$(INCLUDEDIR)/ruby$(PSDK_RUBY) -DPSDK_RUBY=$(PSDK_RUBY) \
 	    -c ${PWD}/psdk/psdk_core.cpp -o $(PSDK_OBJDIR)/_psdk_core.o
-	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
-	    -I$(INCLUDEDIR)/ruby30 -I$(INCLUDEDIR) \
+	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 $(PSDK_RUBY_CXXFLAGS) \
+	    -I$(INCLUDEDIR)/ruby$(PSDK_RUBY) -I$(INCLUDEDIR) \
 	    -c ${PWD}/psdk/sfml_audio.cpp -o $(PSDK_OBJDIR)/_psdk_sfml_audio.o
-	@# The launcher interface, psdk_app_bridge.h.
-	@$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
-	    -I$(INCLUDEDIR) -I${PWD}/ANGLE/$(SDK)/include \
-	    -c ${PWD}/psdk/psdk_app_bridge.cpp -o $(PSDK_OBJDIR)/_psdk_app_bridge.o
-	@echo "[psdk] Generating the unexport list..."
-	@# libssl and libcrypto go in the list as well. The Ruby openssl
-	@# extension is their only caller and it sits inside this same
-	@# merged object, so internal linkage keeps it working while the
-	@# symbols stay invisible to the rest of the binary.
-	$(ENGINE)/tools/generate-ruby-unexports.sh \
-	    $(LIBDIR)/libruby.3.0-static.a $(LIBDIR)/libruby.3.0-ext.a \
-	    $(LIBDIR)/libssl.a $(LIBDIR)/libcrypto.a \
-	    > $(BUILD_PREFIX)/litergss30-unexports.txt.raw
-	@# LiteRGSS and mkxp-z both declare a `ViewportElement` and a
-	@# `RectangleElement` at global scope, and the two mangle to the
-	@# same vtable symbols. Naming them here only marks them "weak
-	@# external automatically hidden", which still loses to mkxp-z's
-	@# strong definition at a final link. The framework's export list
-	@# is what makes them local. The `__cxa_*` helpers stay exported so
-	@# libc++ resolves them once.
-	@nm -gU $(PSDK_OBJDIR)/*.o 2>/dev/null \
-	    | awk '/^[0-9a-f]+ [TDSR] /{print $$3}' \
-	    | sort -u \
-	    | grep -vE '^_psdk_' \
-	    | grep -vE '^___cxa_' \
-	    >> $(BUILD_PREFIX)/litergss30-unexports.txt.raw
-	@sort -u $(BUILD_PREFIX)/litergss30-unexports.txt.raw \
-	    > $(BUILD_PREFIX)/litergss30-unexports.txt
-	@rm -f $(BUILD_PREFIX)/litergss30-unexports.txt.raw
 	@echo "[psdk] Merging via ld -r..."
+	@echo _psdk_ruby_$(PSDK_RUBY) > $(BUILD_PREFIX)/litergss$(PSDK_RUBY)-keep.txt
 	@LD=$$(xcrun --sdk $(SDK) -f ld); \
 	"$$LD" -r -arch $(ARCH) \
 	    $(LD_PLATFORM_VERSION) \
 	    -syslibroot $(SYSROOT) \
-	    -unexported_symbols_list $(BUILD_PREFIX)/litergss30-unexports.txt \
-	    $(LIBDIR)/libruby.3.0-static.a \
-	    $(LIBDIR)/libruby.3.0-ext.a \
-	    $(LIBDIR)/libssl.a \
-	    $(LIBDIR)/libcrypto.a \
+	    -exported_symbols_list $(BUILD_PREFIX)/litergss$(PSDK_RUBY)-keep.txt \
+	    $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-static.a \
+	    $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-ext.a \
 	    $(PSDK_OBJDIR)/*.o \
-	    -o $(LIBDIR)/litergss30-merged.o
+	    -o $(PSDK_OBJDIR)/merged-pass1.o
+	@# `ld -r` keeps a common (a C global with no value, such as
+	@# rb_cObject) external even when the keep list leaves it out, and it
+	@# has no -d option to turn it into data. So a second pass gives each
+	@# common a zero-filled definition of its own size and alignment, and
+	@# the keep list then makes that definition local.
+	@nm -m $(PSDK_OBJDIR)/merged-pass1.o | awk '$$2 == "(common)" && / external / { \
+	    a = 0; if ($$3 == "(alignment") { a = $$4; sub(/.*\^/, "", a); sub(/\)/, "", a) } \
+	    printf ".globl %s\n.zerofill __DATA,__common,%s,0x%s,%s\n", $$NF, $$NF, $$1, a }' \
+	    > $(PSDK_OBJDIR)/commons.s
+	@$(CC) $(TARGETFLAGS) -c $(PSDK_OBJDIR)/commons.s -o $(PSDK_OBJDIR)/commons.o
+	@LD=$$(xcrun --sdk $(SDK) -f ld); \
+	"$$LD" -r -arch $(ARCH) \
+	    $(LD_PLATFORM_VERSION) \
+	    -syslibroot $(SYSROOT) \
+	    -exported_symbols_list $(BUILD_PREFIX)/litergss$(PSDK_RUBY)-keep.txt \
+	    $(PSDK_OBJDIR)/merged-pass1.o $(PSDK_OBJDIR)/commons.o \
+	    -o $(LIBDIR)/litergss$(PSDK_RUBY)-merged.o
 	@echo "[psdk] Verifying the merged object..."
-	@# The check reads plain external text symbols only, the same rule
-	@# as $(ENGINE)/tools/build-binding-ios.sh. It sees neither the 212
-	@# external commons nor the weak definitions, so it does not prove
-	@# this object is safe to link next to mkxp-z. Nothing does.
-	@# Only a psdk_ name may be out: psdk_core.h declares psdk_run and
-	@# psdk_inject_scancode, and psdk_app_bridge.h declares the rest for
-	@# a launcher. A Ruby, an openssl or a LiteRGSS name here would
-	@# reach a second core at the final link.
-	@EXPORTED=$$(nm -gUm $(LIBDIR)/litergss30-merged.o \
-	    | grep -E '\(__TEXT,__text\) external ' \
+	@# Every defined name that is still external, with commons and weak
+	@# functions too. Only the entry of this Ruby may be out.
+	@EXPORTED=$$(nm -gm $(LIBDIR)/litergss$(PSDK_RUBY)-merged.o | grep -v '(undefined)' \
 	    | awk '{print $$NF}' | sort -u); \
-	LEAK=$$(echo "$$EXPORTED" | grep -vE '^_psdk_' || true); \
-	[ -z "$$LEAK" ] || { \
-	    echo "ERROR: litergss30-merged.o exports names that are not _psdk_*:"; \
-	    echo "$$LEAK" | sed 's/^/  /'; \
-	    rm -f $(LIBDIR)/litergss30-merged.o; \
+	[ "$$EXPORTED" = "_psdk_ruby_$(PSDK_RUBY)" ] || { \
+	    echo "ERROR: litergss$(PSDK_RUBY)-merged.o must export only _psdk_ruby_$(PSDK_RUBY), and it exports:"; \
+	    echo "$$EXPORTED" | sed 's/^/  /'; \
+	    rm -f $(LIBDIR)/litergss$(PSDK_RUBY)-merged.o; \
 	    exit 1; \
 	}; \
-	echo "  $$(echo "$$EXPORTED" | wc -l | tr -d ' ') exported names, all _psdk_*"
+	echo "  exports _psdk_ruby_$(PSDK_RUBY) and nothing else"
 
-# The Ruby support folder the PSDK core needs at run time. The host
-# copies it into the app, and the core both prepends it to $LOAD_PATH and
-# points the GAMEDEPS variable at it (psdk_core.cpp).
+# The Ruby support folder that one Ruby of the PSDK core needs at run
+# time. The framework holds one for each Ruby, as PsdkSupport/<version>.
+# The core prepends it to $LOAD_PATH and points the GAMEDEPS variable at
+# it (psdk_core.cpp).
 #
 # Two things live in it.
 #
-# 1. The pure-Ruby half of the stdlib a released PSDK game requires. A
-#    Windows release ships the same files under lib/ruby/3.0.0, but the
-#    core carries its own copy for two reasons. A macOS release ships
-#    none of them, and the openssl half has to come from the same gem as
-#    the C half. The ruby30 recipe replaces ext/openssl with Ruby 3.1's
+# 1. The pure-Ruby half of the stdlib. A Windows release ships all of it
+#    under lib/ruby/3.0.0, and a game can require any file in it:
+#    Lethalmon stops at boot without base64.rb. The core carries its own
+#    copy for two reasons. A macOS release ships none of it, and the
+#    openssl half has to come from the same gem as the C half. The ruby30 recipe replaces ext/openssl with Ruby 3.1's
 #    openssl 3.0.1, because openssl 2.2.2 refuses to build against
 #    OpenSSL 3. GameLoader/3_load_extensions.rb names the top of the
 #    list, and the rest is its transitive closure.
@@ -831,30 +878,28 @@ $(LIBDIR)/litergss30-merged.o: $(LIBDIR)/libruby.3.0-static.a \
 #    owns GAMEDEPS, so the path PSDK builds always lands here. RubyFmod
 #    gets no file on purpose. PSDK tries it first, and the LoadError is
 #    what sends it to SFMLAudio.
-PSDK_SUPPORT_DIR := $(BUILD_PREFIX)/psdk-support
+#
+# The Ruby 2.5 folder adds litergss1.rb and RubyFmod.rb at the top.
+# Games from that time call LiteRGSS 1 and play sound only through FMOD,
+# and each file explains how it stands in.
+PSDK_SUPPORT_DIR := $(BUILD_PREFIX)/psdk-support/$(PSDK_RUBY_VERSION)
 
-# A live run of Edelweiss Chronicles loaded the first two lines. The
-# third line is what files in the folder require but that run never
-# reached, mostly through net/http and tempfile. The run covered boot,
-# the intro and the title menu, so it did not exercise saving or
-# networking.
-PSDK_SUPPORT_LIB := uri.rb uri net csv.rb csv yaml.rb \
-	ostruct.rb forwardable.rb forwardable English.rb timeout.rb ipaddr.rb \
-	securerandom.rb set.rb tsort.rb singleton.rb time.rb delegate.rb \
-	tmpdir.rb tempfile.rb fileutils.rb
+# Bundler and RDoc only run from a command line. They are 4.1 MB of the
+# 8.7 MB.
+PSDK_SUPPORT_SKIP := bundler bundler.rb rdoc rdoc.rb
 
 PSDK_SUPPORT_EXT := socket digest openssl date json psych
 
-psdk-support: init_dirs
+psdk$(PSDK_RUBY)-support: init_dirs
 	rm -rf $(PSDK_SUPPORT_DIR)
 	mkdir -p $(PSDK_SUPPORT_DIR)/ruby-dist/lib
 	touch $(PSDK_SUPPORT_DIR)/ruby-dist/lib/LiteRGSS.rb
 	cp ${PWD}/psdk/SFMLAudio.rb $(PSDK_SUPPORT_DIR)/ruby-dist/lib/SFMLAudio.rb
-	@for item in $(PSDK_SUPPORT_LIB); do \
-		cp -R $(SOURCES)/ruby30/lib/$$item $(PSDK_SUPPORT_DIR)/ || exit 1; \
-	done
+	$(if $(filter 25,$(PSDK_RUBY)),cp ${PWD}/psdk/litergss1.rb ${PWD}/psdk/RubyFmod.rb $(PSDK_SUPPORT_DIR)/)
+	cp -R $(PSDK_RUBY_SRC)/lib/ $(PSDK_SUPPORT_DIR)/
+	cd $(PSDK_SUPPORT_DIR) && rm -rf $(PSDK_SUPPORT_SKIP)
 	@for ext in $(PSDK_SUPPORT_EXT); do \
-		cp -R $(SOURCES)/ruby30/ext/$$ext/lib/ $(PSDK_SUPPORT_DIR)/ || exit 1; \
+		cp -R $(PSDK_RUBY_SRC)/ext/$$ext/lib/ $(PSDK_SUPPORT_DIR)/ || exit 1; \
 	done
 	@find $(PSDK_SUPPORT_DIR) -name "*.gemspec" -delete
 	@# Same warning-only audit as the mkxp ruby-stdlib target. A require
@@ -866,19 +911,41 @@ psdk-support: init_dirs
 		base=$${feat%.rb}; \
 		[ -f "$(PSDK_SUPPORT_DIR)/$$base.rb" ] && continue; \
 		[ -d "$(PSDK_SUPPORT_DIR)/$$base" ] && continue; \
-		nm -gU $(LIBDIR)/libruby.3.0-ext.a $(LIBDIR)/libruby.3.0-static.a 2>/dev/null \
+		nm -gU $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-ext.a $(LIBDIR)/libruby.$(PSDK_RUBY_VERSION)-static.a 2>/dev/null \
 		  | grep -q " T _Init_$$(basename $${base%.so})$$" && continue; \
-		echo "  [psdk-support audit] unresolved require: $$feat"; \
+		echo "  [psdk$(PSDK_RUBY)-support audit] unresolved require: $$feat"; \
 	done; true
-	@echo "psdk-support installed under $(PSDK_SUPPORT_DIR)"
+	@echo "psdk$(PSDK_RUBY)-support installed under $(PSDK_SUPPORT_DIR)"
 
-# The whole PSDK core.
-psdk: init_dirs sfml litecgss ruby30 litergss30-merged psdk-support psdk-framework
+# The Ruby-free half of the core: the launcher interface that
+# psdk_app_bridge.h declares, and the choice of Ruby.
+$(LIBDIR)/psdk-bridge.o: ${PWD}/psdk/psdk_app_bridge.cpp ${PWD}/psdk/psdk_app_bridge.h ${PWD}/psdk/psdk_core.h
+	$(CXX) $(TARGETFLAGS) -std=c++17 -fdeclspec -O3 \
+	    -I$(INCLUDEDIR) -I${PWD}/ANGLE/$(SDK)/include \
+	    -c ${PWD}/psdk/psdk_app_bridge.cpp -o $@
 
-# The artifact a launcher embeds. The link line lives in the script,
-# next to the test host's, because the two must stay the same.
-psdk-framework: litergss30-merged psdk-support
+# One Ruby of the core.
+psdk$(PSDK_RUBY)-parts: init_dirs ruby$(PSDK_RUBY) litergss$(PSDK_RUBY)-merged psdk$(PSDK_RUBY)-support
+
+ifeq ($(PSDK_RUBY),30)
+# The whole PSDK core. The link line lives in the script, next to the
+# test host's, because the two must stay the same.
+psdk: init_dirs sfml litecgss openssl $(LIBDIR)/psdk-bridge.o
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=25 psdk25-parts
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=30 psdk30-parts
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=32 psdk32-parts
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=33 psdk33-parts
 	${PWD}/../../tools/psdk-core/build-framework-ios.sh --sdk $(SDK)
+
+ruby25 litergss25-merged psdk25-support psdk25-parts:
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=25 $@
+
+ruby32 litergss32-merged psdk32-support psdk32-parts:
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=32 $@
+
+ruby33 litergss33-merged psdk33-support psdk33-parts:
+	$(MAKE) -f $(firstword $(MAKEFILE_LIST)) PSDK_RUBY=33 $@
+endif
 
 
 # Ruby 3.1 (submodule: sources/ruby)
@@ -1027,7 +1094,7 @@ engine-halves: init_dirs $(LIBDIR)/.mkxp-binding-fingerprint $(LIBDIR)/libmkxpz-
 # The artifact a launcher embeds. The link line lives in the script,
 # next to the test host's, because the two must stay the same.
 mkxp-framework: engine-halves ruby-stdlib
-	${PWD}/../../tools/mkxp-core/build-framework-ios.sh --sdk $(SDK)
+	ENGINE=$(ENGINE) ${PWD}/../../tools/mkxp-core/build-framework-ios.sh --sdk $(SDK)
 
 # ---- Engine core static library --------------------------------------
 # Everything under $(ENGINE)/src compiled into libmkxpz-core.a. The

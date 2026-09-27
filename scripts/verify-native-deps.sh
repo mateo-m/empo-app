@@ -96,22 +96,17 @@ for ext in libruby18-ext.a libruby19-ext.a "libruby.3.1-ext.a"; do
 done
 nm "$LIB/libruby.3.1-ext.a" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_openssl" {found=1} END {exit !found}' ||
     fail "libruby.3.1-ext.a missing Init_openssl"
-# The PSDK core. Its merged object must export the core entry points
-# and the launcher interface, and nothing else, or a second core would
-# collide with it at link time. The support folder holds the pure-Ruby
-# half the core prepends to $LOAD_PATH.
-PSDK_MERGED="$LIB/litergss30-merged.o"
-require_file_min "$PSDK_MERGED" 1000000 "litergss30-merged.o"
-require_platform "$PSDK_MERGED" "$EXPECTED_PLATFORM" "litergss30-merged.o"
-PSDK_EXPORTS=$(nm -gUm "$PSDK_MERGED" 2>/dev/null |
-    grep -E '\(__TEXT,__text\) external ' | awk '{print $NF}' | sort -u)
-for name in _psdk_run _psdk_inject_scancode _psdk_run_app; do
-    grep -qx "$name" <<<"$PSDK_EXPORTS" ||
-        fail "litergss30-merged.o does not export $name"
+# The PSDK core. Each Ruby's merged object must export only its own
+# entry, or the four Rubies would share names in the framework.
+for ruby in 25 30 32 33; do
+    merged="$LIB/litergss$ruby-merged.o"
+    require_file_min "$merged" 1000000 "litergss$ruby-merged.o"
+    require_platform "$merged" "$EXPECTED_PLATFORM" "litergss$ruby-merged.o"
+    exports=$(nm -gUm "$merged" 2>/dev/null | awk '{print $NF}' | sort -u)
+    [ "$exports" = "_psdk_ruby_$ruby" ] ||
+        fail "litergss$ruby-merged.o must export only _psdk_ruby_$ruby, and it exports: $(tr '\n' ' ' <<<"$exports")"
 done
-PSDK_STRAY=$(grep -vE '^_psdk_' <<<"$PSDK_EXPORTS" || true)
-[ -z "$PSDK_STRAY" ] ||
-    fail "litergss30-merged.o exports names outside _psdk_*: $(tr '\n' ' ' <<<"$PSDK_STRAY")"
+require_file_min "$LIB/psdk-bridge.o" 10000 "psdk-bridge.o"
 for name in libLiteCGSS_engine.a libsfml-graphics-s.a libsfml-window-s.a \
     libsfml-audio-s.a libsfml-system-s.a libruby.3.0-static.a libruby.3.0-ext.a; do
     min=100000
@@ -124,16 +119,19 @@ for name in libLiteCGSS_engine.a libsfml-graphics-s.a libsfml-window-s.a \
 done
 nm "$LIB/libruby.3.0-ext.a" 2>/dev/null | awk '$2 == "T" && $3 == "_Init_socket" {found=1} END {exit !found}' ||
     fail "libruby.3.0-ext.a missing Init_socket"
-PSDK_SUPPORT="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/psdk-support"
-for f in ruby-dist/lib/LiteRGSS.rb ruby-dist/lib/SFMLAudio.rb uri.rb net/http.rb openssl.rb psych.rb; do
-    [ -f "$PSDK_SUPPORT/$f" ] ||
-        fail "psdk-support/$f missing (run: make -f ${PLATFORM}.make psdk-support)"
+for ruby in 2.5 3.0 3.2 3.3; do
+    PSDK_SUPPORT="$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/psdk-support/$ruby"
+    for f in ruby-dist/lib/LiteRGSS.rb ruby-dist/lib/SFMLAudio.rb uri.rb net/http.rb openssl.rb psych.rb; do
+        [ -f "$PSDK_SUPPORT/$f" ] ||
+            fail "psdk-support/$ruby/$f missing (run: make -f ${PLATFORM}.make psdk)"
+    done
 done
 
 # PsdkCore.framework is the artifact a launcher embeds, and its export
-# list is what keeps the core's Ruby 3.0 and its LiteRGSS classes away
-# from the mkxp-z engine. litergss30-merged.o does not do that job.
-PLATFORM_NAME="$PLATFORM" "$REPO_ROOT/scripts/check-psdk-framework.sh" --sdk "$PLATFORM"
+# list is what keeps the core's Rubies and its LiteRGSS classes away
+# from the mkxp-z engine.
+PLATFORM_NAME="$PLATFORM" "$REPO_ROOT/scripts/check-psdk-framework.sh" --sdk "$PLATFORM" \
+    --framework "$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/PsdkCore.framework"
 
 for tree in 3.1.0/net/http.rb 3.1.0/openssl.rb 1.9.1/uri.rb 1.8/uri.rb; do
     [ -f "$REPO_ROOT/ios/Dependencies/build-${PLATFORM}-arm64/ruby-stdlib/$tree" ] ||

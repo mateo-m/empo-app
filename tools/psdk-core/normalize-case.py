@@ -16,8 +16,8 @@ the compiled scripts, and every path literal survives in the bytecode as
 a plain string. This reads those literals and renames the file on disk
 when a literal points to it through a different spelling.
 
-This belongs in Empo's import pipeline. The test harness calls it from
-run-test-host-ios.sh.
+Empo does the same at each launch, in PsdkGame.matchFileNameCase. The
+test host runs no Empo code, so run-test-host-ios.sh calls this copy.
 
 Usage: normalize-case.py <game-dir>
 """

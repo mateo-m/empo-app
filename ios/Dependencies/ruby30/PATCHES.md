@@ -1,7 +1,7 @@
 # Ruby 3.0: patches
 
-Ruby 3.0 is not in the build yet. This folder holds the patch that a Ruby 3.0
-build for Pokémon SDK (PSDK) games needs.
+PsdkCore, the core for Pokémon SDK (PSDK) games compiled on Windows, uses
+Ruby 3.0. This folder holds the patches of that Ruby.
 
 ## `load-i386-bytecode.patch`
 
@@ -11,7 +11,12 @@ build for Pokémon SDK (PSDK) games needs.
   (`i386-mingw32`). `RubyVM::InstructionSequence.load_from_binary` raises
   `unmatched platform` on any other platform.
 - **Change**: when the platform string in the file starts with `i386-` or
-  `i686-`, the loader reads the 32-bit layout.
+  `i686-`, the loader reads the 32-bit layout. When it names 64-bit Linux or
+  macOS (`x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `arm64-darwin`), the
+  loader reads the file as it is, because that layout is the layout of iOS.
+  Before Pokémon Studio, a developer could compile a game by hand on Linux or
+  a Mac with Ruby 3.0. 64-bit Windows (`x64-mingw`) stays refused: its `long`
+  has 32 bits.
 
 The 32-bit layout differs from the 64-bit layout in these places:
 
