@@ -244,7 +244,7 @@ require_file_min "$CORE_LIB" 1000000 "libmkxpz-core.a"
 require_platform "$CORE_LIB" "$EXPECTED_PLATFORM" "libmkxpz-core.a"
 
 CORE_FP_FILE="$LIB/.mkxp-core-fingerprint"
-CORE_FP_SCRIPT="$REPO_ROOT/mkxp-z-apple-mobile/tools/core-fingerprint.sh"
+CORE_FP_SCRIPT="${ENGINE:-$REPO_ROOT/mkxp-z-apple-mobile}/tools/core-fingerprint.sh"
 if [[ -f "$CORE_FP_FILE" ]]; then
     recorded="$(cat "$CORE_FP_FILE")"
     current="$("$CORE_FP_SCRIPT")"
