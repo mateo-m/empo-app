@@ -126,6 +126,12 @@ static NSString *mimeType(NSString *path) {
     const BOOL exists = [files fileExistsAtPath:path isDirectory:&directory];
     NSError *error = nil;
 
+    // "/" is the game folder. Only read it, or a game can delete itself.
+    const BOOL reads = [method isEqualToString:@"GET"] || [method isEqualToString:@"HEAD"];
+    if (!reads && ([path isEqualToString:_root] || [destination isEqualToString:_root])) {
+        return 403;
+    }
+
     if ([method isEqualToString:@"PUT"]) {
         [files createDirectoryAtPath:path.stringByDeletingLastPathComponent
             withIntermediateDirectories:YES
