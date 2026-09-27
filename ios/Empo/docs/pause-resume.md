@@ -10,7 +10,7 @@ The app has two pause modes:
 1. **Manual pause.** The user taps the pause button in the toolbar. The engine stops, the UI goes back to the library, and the game card shows a pause indicator. A tap on the card resumes the game with a hero zoom animation.
 2. **Background pause.** The app moves to the background. The engine stops with no UI change, and the player view stays mounted. The game resumes when the app comes back to the foreground.
 
-Both modes use the same engine pause, a block on a condition variable. They differ in how the UI responds.
+Both modes use the same engine pause. They differ in how the UI responds. The Ruby cores block the game thread on a condition variable. The MV/MZ core stops the game in its web page.
 
 The app calls the `gamecore_*` functions. `GameCoreForwarders.c` sends each call to the core of the game, so the app uses the same flow for every core.
 
@@ -48,6 +48,15 @@ So the engine **never touches the OpenAL context**. No `alcMakeContextCurrent(NU
 3. A PSDK core cannot pause single sources, because SFMLAudio keeps no list of them. It pauses the whole OpenAL Soft device with `alcDevicePauseSOFT`.
 4. It calls the paused callback and waits on the condition variable.
 5. `psdk_requestResume()` clears the flag, signals the condition variable, and clears the snapshot. The device resumes with `alcDeviceResumeSOFT`.
+
+## Pause in the RPG Maker MV and MZ core
+
+The game runs in a `WKWebView`, so there is no engine thread to block. `mvmz_app_bridge.m` asks `runtime.js` to stop the game:
+
+1. `mvmz_requestPause()` calls `__mvmz.pause()` in the page.
+2. `runtime.js` keeps the `requestAnimationFrame` callbacks and does not run them. It suspends the Web Audio context and pauses each playing `<video>` and `<audio>` element.
+3. When the call returns, `WKWebView takeSnapshotWithConfiguration:` captures the frame the game stopped on. The paused callback fires with that snapshot.
+4. `mvmz_requestResume()` calls `__mvmz.resume()`. It runs the kept callbacks on the next frame, resumes the audio and the media, and sets `SceneManager._currentTime` to now. Without this, MV runs up to 15 updates at once to catch up with the pause.
 
 ---
 
@@ -121,6 +130,8 @@ The hero zoom from the game card to `GameLoadingView` needs a visible library. S
 | `mkxp-z-apple-mobile/src/display/graphics.cpp` | `GraphicsPrivate::checkPause()`: snapshot capture in the RPG Maker XP, VX and VX Ace core        |
 | `mkxp-z-apple-mobile/src/app_bridge.cpp`       | Condition variable, audio pause and resume, snapshot storage                  |
 | `ios/Dependencies/psdk/psdk_app_bridge.cpp`    | The same pause, audio, and snapshot code for the PSDK cores                   |
+| `ios/MvmzCore/mvmz_app_bridge.m`              | Pause, resume, and snapshot for the MV/MZ core                                |
+| `ios/MvmzCore/runtime.js`                      | Keeps the frames and pauses the audio in the page                             |
 | `ios/Empo/src/App/GameCoreForwarders.c`        | Sends each `gamecore_*` call to the core of the game                          |
 | `ios/Empo/src/App/PauseManager.swift`          | `pausedGame`, `pauseSnapshot`, `snapshotCanFade`                              |
 | `ios/Empo/src/App/AppState.swift`              | `requestPause()`, `handlePause(snapshot:)`, `resumePausedGame()`             |

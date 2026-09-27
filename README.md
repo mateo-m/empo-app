@@ -76,7 +76,7 @@ https://raw.githubusercontent.com/mateo-m/empo-app/main/altstore-source.json
 ```text
 mkxp-z-apple-mobile/   Engine fork (git submodule, pure C++)
 ios/Empo/              The app (SwiftUI + UIKit for touch controls)
-ios/Dependencies/      Cross-compiled static libs (SDL, three Ruby versions, OpenAL, etc.)
+ios/Dependencies/      Cross-compiled static libs (SDL, seven Ruby versions, OpenAL, etc.)
 docs/                  Notes on the harder parts
 ```
 
