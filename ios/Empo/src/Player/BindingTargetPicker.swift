@@ -88,32 +88,34 @@ struct BindingTargetPicker: View {
         target: BindingMap.Target,
         enabled: Bool = true
     ) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                if let blurb {
-                    Text(blurb)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let note {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            if targetsMatch(current, target) {
-                Image(systemName: "checkmark")
-                    .foregroundStyle(.brand)
-            }
-        }
-        .contentShape(Rectangle())
-        .opacity(enabled ? 1 : 0.4)
-        .onTapGesture {
+        Button {
             onSelect(target)
             dismiss()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                    if let blurb {
+                        Text(blurb)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let note {
+                        Text(note)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if targetsMatch(current, target) {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.brand)
+                }
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .opacity(enabled ? 1 : 0.4)
         .disabled(!enabled)
     }
 
@@ -122,26 +124,28 @@ struct BindingTargetPicker: View {
         let title = KeyCodeTable.displayName(for: code) ?? code
         let annotation = group == .common ? BindingsCatalog.commonKeyAnnotations[code] : nil
 
-        return HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                if let annotation {
-                    Text(annotation)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            if targetsMatch(current, target) {
-                Image(systemName: "checkmark")
-                    .foregroundStyle(.brand)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
+        return Button {
             onSelect(target)
             dismiss()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    if let annotation {
+                        Text(annotation)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if targetsMatch(current, target) {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.brand)
+                }
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     private func targetsMatch(_ lhs: BindingMap.Target?, _ rhs: BindingMap.Target) -> Bool {
