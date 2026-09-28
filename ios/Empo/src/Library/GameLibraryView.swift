@@ -50,6 +50,7 @@ struct GameLibraryView: View {
     @State private var pendingGame: GameEntry?
     @State private var showPausedGameAlert = false
     @State private var warnedLaunch: WarnedLaunch?
+    @State private var autoStartDone = false
     @State private var staggerTrigger = UUID()
     @State private var entranceDelay: TimeInterval = 0.15
     @State private var emptyStateHeight: CGFloat = 0
@@ -214,7 +215,7 @@ struct GameLibraryView: View {
             .task {
                 duplicateNoticeNames = GameContainerMigration.pendingDuplicateNoticeNames()
             }
-            .task(id: library.initialScanCompleted) {
+            .task(id: library.initialScanCompleted && appState.errorMessage == nil) {
                 autoStartGameFromEnvironment()
             }
     }
@@ -987,10 +988,13 @@ struct GameLibraryView: View {
     /// main thread, so this waits for `initialScanCompleted`.
     private func autoStartGameFromEnvironment() {
         #if DEBUG
-        guard library.initialScanCompleted,
+        // UIKit refuses a second alert while the "Last session ended
+        // early" alert is up, and SwiftUI drops the launch warning.
+        guard !autoStartDone, library.initialScanCompleted, appState.errorMessage == nil,
             let wanted = ProcessInfo.processInfo.environment["EMPO_AUTOSTART_GAME"],
             let game = library.games.first(where: { $0.title == wanted })
         else { return }
+        autoStartDone = true
         handleGameTap(game)
         autoPressKeysFromEnvironment()
         autoRotateFromEnvironment()
