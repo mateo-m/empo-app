@@ -241,32 +241,4 @@ final class Json5Tests: XCTestCase {
         XCTAssertEqual(
             (obj["a"] as? NSNumber)?.doubleValue, 9_007_199_254_740_992.0)
     }
-
-    // MARK: - Vendored copy identity
-
-    /// The vendored json5pp.hpp must stay byte-identical to the
-    /// engine's copy. When the engine updates the parser, re-copy
-    /// the header into Sources/json5cpp/.
-    func testVendoredHeaderMatchesEngineCopy() throws {
-        let packageRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let vendored = packageRoot
-            .appendingPathComponent("Sources/json5cpp/json5pp.hpp")
-        let engine = packageRoot
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("mkxp-z-apple-mobile/src/util/json5pp.hpp")
-        guard FileManager.default.fileExists(atPath: engine.path) else {
-            try skipOrFail(
-                "Engine submodule is not checked out at \(engine.path)")
-        }
-        let vendoredBytes = try Data(contentsOf: vendored)
-        let engineBytes = try Data(contentsOf: engine)
-        XCTAssertEqual(
-            vendoredBytes, engineBytes,
-            "Vendored json5pp.hpp differs from the engine copy"
-        )
-    }
 }

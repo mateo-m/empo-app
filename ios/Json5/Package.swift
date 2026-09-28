@@ -1,11 +1,9 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// The Json5 package wraps the engine's JSON5 parser (json5pp) for
-// Swift callers. The json5cpp target holds a byte-identical copy of
-// mkxp-z-apple-mobile/src/util/json5pp.hpp behind a C shim. The
-// Json5 target gives it a Swift API. A test compares the vendored
-// header against the engine submodule copy.
+// The json5cpp target holds a copy of json5pp.hpp from
+// mkxp-z-apple-mobile/src/util, so the app reads mkxp.json the way the
+// engine does. Copy it again when the engine's parser changes.
 let package = Package(
     name: "Json5",
     platforms: [

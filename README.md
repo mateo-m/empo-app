@@ -74,9 +74,8 @@ https://raw.githubusercontent.com/mateo-m/empo-app/main/altstore-source.json
 ## How it works
 
 ```text
-mkxp-z-apple-mobile/   Engine fork (git submodule, pure C++)
 ios/Empo/              The app (SwiftUI + UIKit for touch controls)
-ios/Dependencies/      Cross-compiled static libs (SDL, seven Ruby versions, OpenAL, etc.)
+ios/Dependencies/      The pinned core releases and ANGLE
 docs/                  Notes on the harder parts
 ```
 
@@ -116,5 +115,5 @@ For build requirements, build steps, and PR guidelines, see [`CONTRIBUTING.md`](
 - The [mkxp-z contributors](https://github.com/mkxp-z/mkxp-z/graphs/contributors) for keeping it alive on desktop.
 - [JoiPlay](https://github.com/joiplay) for the [Ruby 1.8 cross-compilation work](https://github.com/joiplay/ruby) and the multi-Ruby dispatch model their RPG Maker plugin uses.
 - [white-axe](https://github.com/white-axe) for [PR #304](https://github.com/mkxp-z/mkxp-z/pull/304), the Ruby 3.1 syntax-transform patches that mkxp-z-apple-mobile applies to its 3.1 build.
-- [MGC](https://www.save-point.org/thread-3151.html) for the original H-Mode7 RPG Maker XP plugin. The [native port](mkxp-z-apple-mobile/hmode7) re-implements it on mkxp-z's `Bitmap` and `Table` APIs.
+- [MGC](https://www.save-point.org/thread-3151.html) for the original H-Mode7 RPG Maker XP plugin. The [native port](https://github.com/mateo-m/hmode7-apple-mobile) re-implements it on mkxp-z's `Bitmap` and `Table` APIs.
 - [Splendide Imaginarius](https://github.com/Splendide-Imaginarius) for the `win32_wrap.rb` extensions that keep Windows-only RPG Maker games loading on non-Windows targets.

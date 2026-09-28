@@ -17,22 +17,19 @@ usage() {
     echo "Default flow (cut locally, CI finishes everything):"
     echo "  1. verifies empo-deps pins"
     echo "  2. bumps version, generates the changelog, commits, tags"
-    echo "     (v<version> here + empo-v<version> on each core source)"
     echo "  3. pushes and exits. The Release workflow builds, audits,"
-    echo "     and publishes the IPA. It syncs the AltStore manifest +"
-    echo "     engine pin straight to main and announces on Discord."
+    echo "     and publishes the IPA. It syncs the AltStore manifest"
+    echo "     straight to main and announces on Discord."
     echo ""
     echo "You can cut the same release without this script at all:"
     echo "GitHub > Actions > Release > Run workflow (mode=cut)."
     echo ""
-    echo "--sync-only <version>   run the AltStore/engine-pin sync"
+    echo "--sync-only <version>   run the AltStore sync"
     echo "                        locally for an already-cut tag"
     echo "                        (fallback if CI's sync job failed)"
     echo ""
     echo "RELEASE_LOCAL_BUILD=1   build/audit/sign/publish locally instead"
     echo "                        (fallback when CI is unavailable)"
-    echo "RELEASE_REBUILD_DEPS=1  rebuild native deps from source first"
-    echo "                        (implies RELEASE_LOCAL_BUILD=1)"
     exit 1
 }
 
@@ -68,15 +65,13 @@ repo_slug() {
 # normally does this sync (direct commit to main via
 # EMPO_RELEASE_TOKEN). When that job fails, or when the token is not
 # configured, this function reproduces the sync locally. It waits for
-# the published IPA and the fork's engine artifact. It then updates
-# the AltStore manifest + engine pin and pushes both straight to main
+# the published IPA. It then updates the AltStore manifest and pushes
+# it straight to main
 # under the operator's credentials (signed commit + admin ruleset
 # bypass).
 run_ci_sync() {
     local version="$1"
     local ipa_name="Empo-${version}-unsigned.ipa"
-    local engine_tag="empo-v$version"
-    local engine_repo="mateo-m/mkxp-z-apple-mobile"
     local i
 
     echo "==> waiting for the Release workflow to publish $ipa_name"
@@ -102,40 +97,6 @@ run_ci_sync() {
     done
     echo "    ipa published ($ipa_size bytes)"
 
-    echo "==> waiting for engine artifact $engine_tag"
-    local engine_status
-    for i in $(seq 1 60); do
-        engine_status=$(gh run list --repo "$engine_repo" --branch "$engine_tag" \
-            --workflow engine-artifacts --limit 1 \
-            --json status,conclusion \
-            --jq '.[0] | .status + ":" + (.conclusion // "")' 2>/dev/null || true)
-        case "$engine_status" in
-            completed:success) break ;;
-            completed:*)
-                echo "error: engine artifact build failed ($engine_status)"
-                echo "       fix and re-run it, then resume with: $0 --sync-only $version"
-                exit 1
-                ;;
-        esac
-        if [[ "$i" -eq 60 ]]; then
-            echo "error: timed out waiting for the engine artifact"
-            echo "       resume with: $0 --sync-only $version"
-            exit 1
-        fi
-        sleep 30
-    done
-
-    echo "==> re-pinning engine prebuilt to $engine_tag"
-    local engine_tarball sha256
-    engine_tarball=$(mktemp)
-    curl -fsSL --retry 3 -o "$engine_tarball" \
-        "https://github.com/$engine_repo/releases/download/$engine_tag/engine-ios-prebuilt.tar.gz"
-    sha256=$(shasum -a 256 "$engine_tarball" | awk '{print $1}')
-    rm -f "$engine_tarball"
-    local pin="$REPO_ROOT/ios/Dependencies/engine/.version"
-    sed -i '' "s/^ENGINE_VERSION=.*/ENGINE_VERSION=$engine_tag/" "$pin"
-    sed -i '' "s/^ENGINE_SHA256=.*/ENGINE_SHA256=$sha256/" "$pin"
-
     echo "==> syncing altstore source"
     local slug changelog build release_date
     slug=$(repo_slug)
@@ -153,21 +114,16 @@ run_ci_sync() {
     # generated manifest formatted so the gate stays green.
     bunx oxfmt "$ALTSTORE_SOURCE"
 
-    git -C "$REPO_ROOT" add "$ALTSTORE_SOURCE" "$pin"
+    git -C "$REPO_ROOT" add "$ALTSTORE_SOURCE"
     if git -C "$REPO_ROOT" diff --cached --quiet; then
-        echo "    manifest and pin already in sync"
+        echo "    manifest already in sync"
         return 0
     fi
-    git -C "$REPO_ROOT" commit -S -m "chore(release): sync AltStore source and engine pin for v$version"
+    git -C "$REPO_ROOT" commit -S -m "chore(release): sync AltStore source for v$version"
     git -C "$REPO_ROOT" push origin main
     echo "==> done - v$version fully released"
 }
 
-# A deps rebuild from source only makes sense when this script also
-# builds the IPA. CI always hydrates from published pins.
-if [[ "${RELEASE_REBUILD_DEPS:-0}" == "1" ]]; then
-    RELEASE_LOCAL_BUILD=1
-fi
 LOCAL_BUILD="${RELEASE_LOCAL_BUILD:-0}"
 
 # Resolve the new version. An explicit semver (`0.1.0`) covers rare
@@ -240,28 +196,9 @@ fi
 
 # 2. Verify dependency pins resolve to published releases,
 # even for CI builds, so an unpublished pin aborts before the script
-# tags anything. Hydration/rebuild only happens for local builds. The
-# Release workflow hydrates its own runner.
-echo "==> verifying empo-deps pins"
-if [ "${RELEASE_REBUILD_DEPS:-0}" = "1" ]; then
-    REQUIRE_PUBLISHED=0 "$REPO_ROOT/scripts/verify-empo-deps-pins.sh"
-else
-    REQUIRE_PUBLISHED=1 "$REPO_ROOT/scripts/verify-empo-deps-pins.sh"
-fi
-
-if [[ "$LOCAL_BUILD" == "1" ]]; then
-    if [ "${RELEASE_REBUILD_DEPS:-0}" = "1" ]; then
-        echo "==> rebuilding device native deps from source (RELEASE_REBUILD_DEPS=1)"
-        "$REPO_ROOT/scripts/rebuild-device-deps.sh"
-    else
-        echo "==> hydrating native deps from empo-deps"
-        rm -rf "$REPO_ROOT/ios/Dependencies/build-iphoneos-arm64" \
-            "$REPO_ROOT/ios/Dependencies/native/.fetched-version"
-        sh "$REPO_ROOT/tools/fetch-native-deps.sh"
-        sh "$REPO_ROOT/tools/fetch-engine-prebuilt.sh"
-    fi
-    "$REPO_ROOT/scripts/verify-device-deps.sh"
-fi
+# tags anything.
+echo "==> verifying dependency pins"
+REQUIRE_PUBLISHED=1 "$REPO_ROOT/scripts/verify-empo-deps-pins.sh"
 
 # 3. Bump MARKETING_VERSION in project.yml
 sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: $VERSION/" "$PROJECT_YML"
@@ -330,56 +267,10 @@ git -C "$REPO_ROOT" add "$PROJECT_YML" \
 git -C "$REPO_ROOT" commit -S -m "chore: bump version to $VERSION (build $BUILD)"
 git -C "$REPO_ROOT" tag -s "v$VERSION" -m "v$VERSION"
 
-# 8b. Tag the engine commit each core comes from. This proves the GPL
-# binary to source correspondence per release: anyone can check out
-# mkxp-z-apple-mobile at empo-v<version> and get exactly the source
-# compiled into the shipped .ipa. The script
-# creates the tags locally here, before it pushes anything, so a
-# failure aborts the release cleanly. Step 11 pushes them alongside
-# the app tag.
-#
-# The PSDK cores wrap a psdk-apple-mobile release. The tag in
-# ios/Dependencies/psdk/.version names its source.
-ENGINE_TAG="empo-v$VERSION"
-# Where each core's engine source lives, as a submodule path here.
-CORE_SOURCES=("mkxp-z-apple-mobile")
-
-tag_core_source() {
-    local path="$1" dir="$REPO_ROOT/$1" branch commit tagged
-    # .gitmodules names the branch each submodule tracks, so a branch
-    # rename there reaches this check too.
-    branch="$(git config -f "$REPO_ROOT/.gitmodules" --get "submodule.$path.branch" || printf 'dev')"
-    commit="$(git -C "$REPO_ROOT" rev-parse "HEAD:$path")"
-    # A release that fails between the two tags leaves the first one
-    # behind. The same tag on the same commit is that release again, so
-    # keep it. The same tag on another commit is two releases under one
-    # version, which the tag cannot say.
-    tagged="$(git -C "$dir" rev-parse -q --verify "refs/tags/$ENGINE_TAG^{commit}" || true)"
-    if [[ -n "$tagged" ]]; then
-        if [[ "$tagged" == "$commit" ]]; then
-            echo "    $path already carries $ENGINE_TAG"
-            return 0
-        fi
-        echo "error: $path carries $ENGINE_TAG on commit $tagged, not $commit"
-        exit 1
-    fi
-    git -C "$dir" fetch -q origin "$branch"
-    if ! git -C "$dir" merge-base --is-ancestor "$commit" "origin/$branch"; then
-        echo "error: pinned commit $commit is not on $path origin/$branch"
-        echo "       push the submodule first (policy: gitlink must be an ancestor of origin/$branch)"
-        exit 1
-    fi
-    git -C "$dir" tag -s "$ENGINE_TAG" "$commit" -m "Engine pinned by Empo v$VERSION"
-}
-
-for CORE_SOURCE in "${CORE_SOURCES[@]}"; do
-    tag_core_source "$CORE_SOURCE"
-done
-
 # 9-10. Local build + AltStore sync, fallback path only. On the
 # default flow the Release workflow builds, audits, and publishes the
 # IPA, and run_ci_sync (called after the push below) finishes the
-# release when it syncs the manifest + engine pin from here.
+# release when it syncs the manifest from here.
 if [[ "$LOCAL_BUILD" == "1" ]]; then
 
     # 9. Build unsigned .ipa from the clean release commit.
@@ -484,14 +375,10 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
 fi # LOCAL_BUILD
 
 # 11. Push. On the default flow this is the handoff: the v tag
-# triggers the Release workflow, and the empo-v tag on
-# mkxp-z-apple-mobile triggers that repo's artifact workflow.
+# triggers the Release workflow.
 echo "==> pushing to origin"
 git -C "$REPO_ROOT" push origin main
 git -C "$REPO_ROOT" push origin "v$VERSION"
-for CORE_SOURCE in "${CORE_SOURCES[@]}"; do
-    git -C "$REPO_ROOT/$CORE_SOURCE" push origin "$ENGINE_TAG"
-done
 
 if [[ "$LOCAL_BUILD" == "1" ]]; then
     # 12. Create GitHub release from the locally-built artifact.
@@ -503,7 +390,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     echo "==> done - v$VERSION released (local build)"
 else
     echo "==> done - v$VERSION handed off to CI, which finishes the release"
-    echo "    (build + audit + publish + AltStore/engine-pin sync + Discord)"
+    echo "    (build + audit + publish + AltStore sync + Discord)"
     echo "    watch:    gh run watch \$(gh run list --workflow=release.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
     echo "    fallback: $0 --sync-only $VERSION  # if CI's sync job fails"
 fi

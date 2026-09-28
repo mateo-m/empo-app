@@ -5,7 +5,7 @@
 # name in it, each core under its own prefix:
 #
 #   Empo      ios/Empo/src/App/GameCore.h          gamecore_ / GameCore
-#   MkxpCore  mkxp-z-apple-mobile/src/app_bridge.h mkxp_     / MKXP
+#   MkxpCore  ios/Dependencies/mkxp-core/include/app_bridge.h  mkxp_ / MKXP
 #   Psdk*Core ios/Dependencies/psdk/psdk_app_bridge.h  psdk_ / Psdk
 #   MvmzCore  ios/MvmzCore/mvmz_app_bridge.h         mvmz_ / Mvmz
 #
@@ -19,6 +19,10 @@
 # app_bridge.h holds a second half for the desktop build of mkxp-z, with
 # inline no-op stubs behind #else. The read stops at that line.
 #
+# The mkxp header comes from the engine release that
+# tools/fetch-mkxp-core.sh downloads. The script fetches it when it is
+# missing.
+#
 # Usage:
 #   scripts/check-core-interface.sh
 #   ENGINE=/path/to/mkxp-z-apple-mobile scripts/check-core-interface.sh
@@ -26,7 +30,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 EMPO="$ROOT/ios/Empo/src/App/GameCore.h"
-MKXP="${ENGINE:-$ROOT/mkxp-z-apple-mobile}/src/app_bridge.h"
+if [ -n "${ENGINE:-}" ]; then
+    MKXP="$ENGINE/src/app_bridge.h"
+else
+    MKXP="$ROOT/ios/Dependencies/mkxp-core/include/app_bridge.h"
+    [ -f "$MKXP" ] || "$ROOT/tools/fetch-mkxp-core.sh" >&2
+fi
 PSDK="$ROOT/ios/Dependencies/psdk/psdk_app_bridge.h"
 MVMZ="$ROOT/ios/MvmzCore/mvmz_app_bridge.h"
 

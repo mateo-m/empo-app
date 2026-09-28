@@ -43,7 +43,7 @@ BIN="$FW/MkxpCore"
 
 # The header is the contract. Anything it declares must be out, and
 # nothing else may be.
-WANT=$(grep -oE '\bmkxp_[A-Za-z0-9_]+\(' "${ENGINE:-$REPO_ROOT/mkxp-z-apple-mobile}/src/app_bridge.h" |
+WANT=$(grep -oE '\bmkxp_[A-Za-z0-9_]+\(' "$FW/Headers/app_bridge.h" |
     sed 's/(//' | sort -u | sed 's/^/_/')
 GOT=$(dyld_info -exports "$BIN" | awk '/^ *0x/ {print $2}' | sort -u)
 if [ "$WANT" != "$GOT" ]; then
@@ -93,14 +93,5 @@ else
 fi
 [ "$MASK" = "$WANT_MASK" ] ||
     fail "Info.plist EmpoCoreRGSSVersionMask is ${MASK:-missing}, but the image says $WANT_MASK"
-
-# The tree keeps the framework between builds, so a change to the build
-# script leaves a framework nothing rebuilt. Match the recorded hash
-# against the script on disk.
-SCRIPT="$REPO_ROOT/tools/mkxp-core/build-framework-ios.sh"
-WANT_SCRIPT="$(shasum -a 256 "$SCRIPT" | awk '{print $1}')"
-GOT_SCRIPT="$(cat "$FW/.build-script-sha256" 2>/dev/null || true)"
-[ "$WANT_SCRIPT" = "$GOT_SCRIPT" ] ||
-    fail "MkxpCore.framework was built by a different build-framework-ios.sh (run: scripts/rebuild-engine-halves.sh $SDK)"
 
 echo "OK: MkxpCore.framework is closed for $SDK"

@@ -19,10 +19,9 @@ that keep the cores apart.
 
 <FileTree>
 
-- mkxp-z-apple-mobile/ The engine fork. A git submodule, pure C++.
 - ios/
   - Empo/ The app. SwiftUI, with UIKit for the touch controls.
-  - Dependencies/ Cross-compiled static libraries: SDL, SFML, seven Ruby versions, OpenAL, and the LiteRGSS2 fork.
+  - Dependencies/ The pinned release of each core, and ANGLE. The Xcode build downloads them.
   - GameProbe/ A Swift package that reads game metadata. It builds on Linux, so CI can test it.
 - docs/ This documentation.
 

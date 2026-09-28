@@ -11,12 +11,11 @@
   "sortPackageJson": false,
   "ignorePatterns": [
     "*.md",
-    "mkxp-z-apple-mobile/",
+    ".engine-history/",
     "ios/Empo/build/",
     "ios/Empo/Empo.xcodeproj/",
     "ios/Dependencies/build-*/",
     "ios/Dependencies/downloads/",
-    "ios/Dependencies/sources/",
     "ios/Dependencies/ANGLE/",
     "ios/Dependencies/Frameworks/",
     "ios/Empo/Assets.bundle/",

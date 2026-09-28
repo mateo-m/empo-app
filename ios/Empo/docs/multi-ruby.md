@@ -176,10 +176,10 @@ See [`multi-session.md`](multi-session.md). It covers the `exit!` and `Thread.cr
 - **Build**:
   - `mkxp-z-apple-mobile/tools/build-binding-ios.sh` - the per-version merged.o recipe.
   - `mkxp-z-apple-mobile/multiruby/wrapper.cpp` - the one exported entry point per version.
-  - `ios/Dependencies/common.make` - per-version Ruby builds, and the calls into the engine recipe.
-  - `ios/Dependencies/apply-ruby-patches.sh` - manifest-driven patch application.
+  - `mkxp-z-apple-mobile/deps/common.make` - per-version Ruby builds, and the calls into the engine recipe.
+  - `mkxp-z-apple-mobile/deps/apply-ruby-patches.sh` - manifest-driven patch application.
   - `mkxp-z-apple-mobile/tools/generate-ruby-unexports.sh` - symbol-islanding helper.
-  - `ios/Dependencies/sources/ruby{,18,19}/` - Ruby submodules. `sources/ruby` is 3.1.
+  - `mkxp-z-apple-mobile/deps/sources/ruby{,18,19}/` - Ruby submodules. `sources/ruby` is 3.1.
 - **iOS**:
   - `ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` - unified per-game detection.
   - `ios/GameProbe/Sources/GameProbe/RubyScriptGrammarSniffer.swift` - Marshal + zlib decoder for Scripts.\* files.

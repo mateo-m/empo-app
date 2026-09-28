@@ -1,7 +1,7 @@
 #!/bin/sh
-# Verify ios dependency pins resolve to published releases: ANGLE and
-# the native deps in empo-deps, the PSDK core in psdk-apple-mobile, the
-# MV/MZ core in mvmz-apple-mobile.
+# Verify ios dependency pins resolve to published releases: ANGLE in
+# empo-deps, the mkxp-z core in mkxp-z-apple-mobile, the PSDK core in
+# psdk-apple-mobile, the MV/MZ core in mvmz-apple-mobile.
 #
 # Usage:
 #   scripts/verify-empo-deps-pins.sh
@@ -17,7 +17,7 @@ cd "$REPO_ROOT"
 
 DEPS_REPO="${EMPO_DEPS_REPO:-mateo-m/empo-deps}"
 ANGLE_VERSION_FILE="$REPO_ROOT/ios/Dependencies/ANGLE/.version"
-NATIVE_VERSION_FILE="$REPO_ROOT/ios/Dependencies/native/.version"
+MKXP_VERSION_FILE="$REPO_ROOT/ios/Dependencies/mkxp/.version"
 PSDK_VERSION_FILE="$REPO_ROOT/ios/Dependencies/psdk/.version"
 MVMZ_VERSION_FILE="$REPO_ROOT/ios/Dependencies/mvmz/.version"
 
@@ -98,7 +98,7 @@ verify_pin_file() {
 }
 
 verify_pin_file "ANGLE" "$ANGLE_VERSION_FILE" ANGLE_VERSION ANGLE_SHA256 "angle-ios-prebuilt.tar.gz" "$DEPS_REPO"
-verify_pin_file "native" "$NATIVE_VERSION_FILE" NATIVE_DEPS_VERSION NATIVE_DEPS_SHA256 "native-ios-prebuilt.tar.gz" "$DEPS_REPO"
+verify_pin_file "mkxp-z core" "$MKXP_VERSION_FILE" MKXP_CORE_VERSION MKXP_CORE_SHA256 "mkxp-z-ios.tar.gz" mateo-m/mkxp-z-apple-mobile
 verify_pin_file "PSDK core" "$PSDK_VERSION_FILE" PSDK_CORE_VERSION PSDK_CORE_SHA256 "psdk-ios.tar.gz" mateo-m/psdk-apple-mobile
 verify_pin_file "MV/MZ core" "$MVMZ_VERSION_FILE" MVMZ_CORE_VERSION MVMZ_CORE_SHA256 "mvmz-ios.tar.gz" mateo-m/mvmz-apple-mobile
 

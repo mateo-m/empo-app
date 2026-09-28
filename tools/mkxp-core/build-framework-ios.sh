@@ -1,33 +1,27 @@
 #!/bin/sh
-# Link the mkxp-z core as one dynamic framework for one SDK.
+# Links MkxpCore.framework for one SDK from the engine release that
+# ios/Dependencies/mkxp/.version pins.
 #
-# The framework is the artifact a launcher embeds, and its export list
-# is what keeps the engine's three Ruby VMs and its SDL classes to
-# itself. The app binary Empo ships today exports 154 _rb_ and _ruby_
-# names. This dylib exports none.
+# The release gives the libraries and a LINK file with the linker
+# flags. The export list keeps the three Ruby VMs and SDL inside the
+# framework: only the mkxp_ names in app_bridge.h leave it.
 #
-# The link line is the app's OTHER_LDFLAGS in ios/Empo/project.yml,
-# minus four entries and plus one:
-#   -lSDL2main   drops. A dynamic image holds no process entry point.
-#                mkxp_run_app takes its place (src/run_app.mm).
-#   -larchive    drops. Only the launcher's own extractor calls it.
-#   -lpng16      drops. Nothing on the line names a _png_ symbol.
-#   -ldl -lpthread drop. Both live in libSystem.
-#   -framework IOSurface adds. ANGLE's IOSurfaceSurfaceMtl needs it, and
-#                the app link gets it from somewhere this script cannot
-#                read, so it names it.
+# The script does nothing when the framework matches the engine pin, the
+# ANGLE pin and this script. Xcode runs it before each build.
 #
 # Usage:
 #   tools/mkxp-core/build-framework-ios.sh [--sdk iphoneos|iphonesimulator]
-#
-# Prerequisites:
-#   cd ios/Dependencies && make -f <sdk>.make engine-halves ruby-stdlib
-#   tools/fetch-angle.sh
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DEPS="$ROOT/ios/Dependencies"
-ENGINE="${ENGINE:-$ROOT/mkxp-z-apple-mobile}"
+CORE="$DEPS/mkxp-core"
+
+# Xcode and a script can link at the same time. lockf runs one at a time,
+# and the second then finds the framework in place.
+if [ -z "${MKXP_FRAMEWORK_LOCKED:-}" ]; then
+    MKXP_FRAMEWORK_LOCKED=1 exec lockf -k "$CORE.framework.lock" "$0" "$@"
+fi
 
 SDK=iphoneos
 ARCH=arm64
@@ -61,140 +55,58 @@ case "$SDK" in
         ;;
 esac
 
+"$ROOT/tools/fetch-angle.sh"
+"$ROOT/tools/fetch-mkxp-core.sh"
+"$ROOT/scripts/check-core-interface.sh"
+
 TREE="$DEPS/build-$SDK-$ARCH"
 ANGLE="$DEPS/ANGLE/$SDK"
 FW="$TREE/MkxpCore.framework"
 SYSROOT="$(xcrun --sdk "$SDK" --show-sdk-path)"
 CXX="$(xcrun --sdk "$SDK" -f clang++)"
+CORE_VERSION="$(cut -d" " -f1 "$CORE/.fetched-pin")"
+RGSS_MASK="$(sed -n 's/^rgss_mask=//p' "$CORE/MANIFEST")"
 
-for f in lib/libmkxpz-core.a lib/mkxp18-merged.o lib/mkxp19-merged.o lib/mkxp31-merged.o; do
-    if [ ! -f "$TREE/$f" ]; then
-        echo "build-framework-ios: $f missing." >&2
-        echo "Run: cd ios/Dependencies && make -f $SDK.make engine-halves" >&2
-        exit 1
-    fi
-done
-
-if [ ! -d "$TREE/ruby-stdlib" ]; then
-    echo "build-framework-ios: ruby-stdlib missing." >&2
-    echo "Run: cd ios/Dependencies && make -f $SDK.make ruby-stdlib" >&2
+# The engine compiles against the ANGLE headers of its own release, so
+# the app must link the same one.
+CORE_ANGLE="$(sed -n 's/^angle=//p' "$CORE/MANIFEST")"
+APP_ANGLE="$(sed -n 's/^ANGLE_VERSION=//p' "$DEPS/ANGLE/.version")"
+if [ "$CORE_ANGLE" != "$APP_ANGLE" ]; then
+    echo "error: the engine $CORE_VERSION needs ANGLE $CORE_ANGLE, but ios/Dependencies/ANGLE/.version pins $APP_ANGLE" >&2
     exit 1
 fi
 
-if [ ! -f "$ANGLE/lib/libANGLE_static.a" ]; then
-    echo "build-framework-ios: ANGLE missing. Run: tools/fetch-angle.sh" >&2
-    exit 1
+STAMP="$TREE/.mkxp-framework"
+WANT_STAMP="$(cat "$CORE/.fetched-pin" "$DEPS/ANGLE/.version" "$0" | shasum -a 256 | awk '{print $1}')"
+if [ -f "$FW/MkxpCore" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT_STAMP" ]; then
+    exit 0
 fi
 
 rm -rf "$FW"
-mkdir -p "$FW/Headers"
+mkdir -p "$FW/Headers" "$TREE"
 
-# The export list comes from the header, so the two cannot drift. Every
-# mkxp_ name followed by an open bracket is a function the bridge
-# declares. A callback typedef is not, because its name is followed by a
-# closing bracket.
-grep -oE '\bmkxp_[A-Za-z0-9_]+\(' "$ENGINE/src/app_bridge.h" |
+grep -oE '\bmkxp_[A-Za-z0-9_]+\(' "$CORE/include/app_bridge.h" |
     sed 's/(//' | sort -u | sed 's/^/_/' >"$TREE/mkxp-core.exports"
 
-echo "[mkxp-framework] Linking..."
-"$CXX" -dynamiclib -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
+echo "[mkxp-framework] Linking $CORE_VERSION..."
+# LINK names its files relative to <sdk>/.
+# shellcheck disable=SC2046
+(cd "$CORE/$SDK" && "$CXX" -dynamiclib -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
     -install_name "@rpath/MkxpCore.framework/MkxpCore" \
     -Wl,-exported_symbols_list,"$TREE/mkxp-core.exports" \
-    -L"$TREE/lib" -L"$ANGLE/lib" \
+    -L"$ANGLE/lib" \
     -o "$FW/MkxpCore" \
-    -Wl,-force_load,"$TREE/lib/libmkxpz-core.a" \
-    "$TREE/lib/mkxp18-merged.o" \
-    "$TREE/lib/mkxp19-merged.o" \
-    "$TREE/lib/mkxp31-merged.o" \
-    -lSDL2 -lSDL2_image -lSDL2_sound -lSDL2_ttf \
-    -lfreetype -lpixman-1 -logg -lvorbis -lvorbisfile \
-    -ltheora -ltheoradec -lphysfs -luchardet \
-    -lz -lbz2 -liconv -lopenal -lssl -lcrypto \
-    -lANGLE_static -lEGL_static -lGLESv2_static \
-    -framework Foundation -framework UIKit -framework CoreFoundation \
-    -framework CoreGraphics -framework CoreVideo -framework CoreAudio \
-    -framework AudioToolbox -framework AVFoundation -framework Metal \
-    -framework QuartzCore -framework GameController -framework CoreMotion \
-    -framework IOSurface \
-    -weak_framework CoreBluetooth -weak_framework CoreHaptics
+    $(cat "$CORE/LINK"))
 
-echo "[mkxp-framework] Assembling the bundle..."
-cp "$ENGINE/src/app_bridge.h" "$FW/Headers/"
+# The engine reads its assets and the Ruby stdlib through its own
+# bundle, which dladdr resolves to this framework (filesystemImplIOS.mm).
+cp "$CORE/include/app_bridge.h" "$FW/Headers/"
+cp -R "$CORE/assets" "$FW/Assets.bundle"
+cp -R "$CORE/$SDK/ruby-stdlib" "$FW/Ruby"
 
-# The engine reads these through its own bundle, which dladdr resolves
-# to this framework (filesystemImplIOS.mm). A launcher embeds one
-# artifact and ships no engine file of its own.
-rm -rf "$FW/Assets.bundle" "$FW/Ruby"
-mkdir -p "$FW/Assets.bundle/Shaders" "$FW/Assets.bundle/Fonts" \
-    "$FW/Assets.bundle/Preload" "$FW/Assets.bundle/Postload"
-cp "$ENGINE"/shader/*.frag "$ENGINE"/shader/*.vert "$ENGINE"/shader/*.h \
-    "$FW/Assets.bundle/Shaders/"
-cp "$ENGINE"/assets/liberation.ttf "$ENGINE"/assets/wqymicrohei.ttf \
-    "$FW/Assets.bundle/Fonts/"
-cp "$ENGINE"/assets/gamecontrollerdb.txt "$ENGINE"/assets/icon.png \
-    "$ENGINE"/assets/cacert.pem "$FW/Assets.bundle/"
-cp "$ENGINE"/scripts/preload/*.rb "$FW/Assets.bundle/Preload/"
-cp "$ENGINE"/scripts/postload/*.rb "$FW/Assets.bundle/Postload/"
-rsync -a "$TREE/ruby-stdlib/" "$FW/Ruby/"
-
-# Which RGSS versions this core runs. The launcher reads it before it
-# opens the core: a game that needs RGSS3 has to fail at import, and
-# import runs off the main thread where no core is open.
-#
-# RGSS1 and RGSS2 run on any Ruby. RGSS3 needs the patched Ruby 3.1,
-# which is what mkxp_getSupportedRGSSVersionMask answers from
-# MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES (src/app_bridge.cpp). Two reads of
-# that one fact, so the plist cannot drift from the core:
-#
-#   the binary   the patched Ruby defines
-#                mkxp_syntax_transform_target_ruby_version_major, which
-#                binding-util.cpp reads behind that same #ifdef. The
-#                name is in the linked image or it is not.
-#   the define   what the compiler saw, which is what the core answers
-#                at run time.
-#
-# nm -a, because the merged objects hide every Ruby name, so the symbol
-# is local. This script never strips the image. grep -c and not grep -q,
-# so that a shell with pipefail cannot read the SIGPIPE from nm as no
-# match.
-PATCHED_RUBY_COUNT="$(nm -a "$FW/MkxpCore" |
-    grep -c '_mkxp_syntax_transform_target_ruby_version_major$' || true)"
-if [ "$PATCHED_RUBY_COUNT" -gt 0 ]; then
-    PATCHED_RUBY_LINKED=yes
-else
-    PATCHED_RUBY_LINKED=no
-fi
-if grep -q 'DMKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES' "$ENGINE/tools/build-core-ios.sh"; then
-    PATCHES_COMPILED_IN=yes
-else
-    PATCHES_COMPILED_IN=no
-fi
-if [ "$PATCHED_RUBY_LINKED" != "$PATCHES_COMPILED_IN" ]; then
-    echo "error: the framework and the core disagree about the syntax-transform patches" >&2
-    echo "       patched Ruby in $FW/MkxpCore: $PATCHED_RUBY_LINKED" >&2
-    echo "       MKXPZ_HAVE_SYNTAX_TRANSFORM_PATCHES in build-core-ios.sh: $PATCHES_COMPILED_IN" >&2
-    echo "       EmpoCoreRGSSVersionMask would not match what the core answers." >&2
-    exit 1
-fi
-if [ "$PATCHED_RUBY_LINKED" = yes ]; then
-    RGSS_MASK=7
-else
-    RGSS_MASK=3
-fi
-
-# The engine source this core was linked from. Empo's Game cores
-# screen shows it.
-#
-# A copy of the engine without .git makes git walk up to the top repo
-# and answer with Empo's own tag, so ask for the gitlink in that case.
-if [ -e "$ENGINE/.git" ]; then
-    CORE_VERSION="$(git -C "$ENGINE" describe --tags --always --dirty 2>/dev/null || true)"
-else
-    CORE_VERSION="$(git -C "$ROOT" rev-parse --short HEAD:mkxp-z-apple-mobile 2>/dev/null || true)"
-fi
-[ -n "$CORE_VERSION" ] || CORE_VERSION=unknown
-
-cat >"$FW/Info.plist" <<EOF
+# GameImportValidator reads EmpoCoreRGSSVersionMask at import, before
+# any core is open.
+cat >"$FW/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -213,13 +125,8 @@ cat >"$FW/Info.plist" <<EOF
 	<key>EmpoCoreVersion</key><string>$CORE_VERSION</string>
 </dict>
 </plist>
-EOF
-
-# The tree keeps the framework, and Xcode only copies it. Record which
-# script wrote it, so check-mkxp-framework.sh can fail when this file
-# changed and nobody rebuilt the engine half.
-shasum -a 256 "$ROOT/tools/mkxp-core/build-framework-ios.sh" |
-    awk '{print $1}' >"$FW/.build-script-sha256"
+PLIST
 
 "$ROOT/scripts/check-mkxp-framework.sh" --framework "$FW" --sdk "$SDK"
+printf '%s\n' "$WANT_STAMP" >"$STAMP"
 echo "[mkxp-framework] Done: $FW"

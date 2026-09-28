@@ -124,7 +124,7 @@ lines of `gamecore_getDetails`, which the core writes.
 
 A core exports its bridge and nothing else. `ios/Empo/src/App/GameCore.h`
 declares the 51 functions Empo calls. `MkxpCore` exports every `mkxp_*` name
-that `mkxp-z-apple-mobile/src/app_bridge.h` declares, which is those 51 plus
+that `app_bridge.h` of the engine release declares, which is those 51 plus
 the names its own engine calls. Each PSDK core exports the 51 under `psdk_*`, from
 `ios/Dependencies/psdk/psdk_app_bridge.h`. `MvmzCore` exports the 51 under
 `mvmz_`, from `ios/MvmzCore/mvmz_app_bridge.h`.
@@ -180,7 +180,7 @@ its prefix:
 | Side | File | Prefix |
 | --- | --- | --- |
 | Empo | `ios/Empo/src/App/GameCore.h` | `gamecore_` |
-| MkxpCore | `mkxp-z-apple-mobile/src/app_bridge.h` | `mkxp_` |
+| MkxpCore | `ios/Dependencies/mkxp-core/include/app_bridge.h`, from the engine release | `mkxp_` |
 | The PSDK cores | `ios/Dependencies/psdk/psdk_app_bridge.h` | `psdk_` |
 | MvmzCore | `ios/MvmzCore/mvmz_app_bridge.h` | `mvmz_` |
 
@@ -190,7 +190,7 @@ the open core's prefix in front of the name at `dlsym` time.
 
 The price is four copies to keep in step.
 `scripts/check-core-interface.sh` strips the prefixes and fails when a
-core header lacks a statement of `GameCore.h`. Every Xcode build runs it. Read it as the rule: a core that drops
+core header lacks a statement of `GameCore.h`. The MkxpCore build step runs it before each Xcode build. Read it as the rule: a core that drops
 a name or changes an argument makes Empo abort in the forwarder at run time.
 
 ## How a launcher opens a core
@@ -279,31 +279,20 @@ because no two of them open in a process.
 
 ## Which source a release names
 
-Each core comes from its own engine repo. `MkxpCore` comes from
-`mkxp-z-apple-mobile`. A release tags the pinned commit there with
-`empo-v<version>`, so anyone can check out the source that built the shipped
-binary. `scripts/release.sh` and the `cut` job in
-`.github/workflows/release.yml` create the tag, and both refuse a commit that
-is not on that repo's `dev` branch. The PSDK cores come from a
-`psdk-apple-mobile` release, and its tag in `ios/Dependencies/psdk/.version`
-names the source. `MvmzCore` comes from a `mvmz-apple-mobile` release, and its
-tag in `ios/Dependencies/mvmz/.version` names the source.
+Each core comes from a release of its own engine repo, and the tag in its
+`.version` file names the source. `MkxpCore` comes from `mkxp-z-apple-mobile`
+(`ios/Dependencies/mkxp/.version`). The PSDK cores come from
+`psdk-apple-mobile` (`ios/Dependencies/psdk/.version`). `MvmzCore` comes from
+`mvmz-apple-mobile` (`ios/Dependencies/mvmz/.version`). Each release workflow
+builds from the tagged commit, so anyone can check out the source that built
+the shipped binary.
 
-In `MkxpCore`, `EmpoCoreVersion` holds `git describe` of that repo, so its row
-on the Game cores screen carries the same tag name after a release. Before the
-first release that ships the core, `describe` has no tag to name and falls back
-to the short commit. In each PSDK core and in `MvmzCore`, `EmpoCoreVersion`
-holds the release tag that the core's `.version` file pins, for example `v1`.
+In each core, `EmpoCoreVersion` holds the release tag that the core's
+`.version` file pins, for example `v1`. The Game cores screen shows it.
 
 ## How the framework stays fresh
 
-The native tree keeps the built framework between builds, and Xcode only
-copies it. `tools/mkxp-core/build-framework-ios.sh` writes its own sha256 into
-`.build-script-sha256` inside the framework, and `check-mkxp-framework.sh`
-fails when that hash stops matching the script on disk. Rebuild MkxpCore with
-`scripts/rebuild-engine-halves.sh <sdk>`. It takes minutes. The dependency
-fingerprint does not list the packaging script, because it builds an engine
-output and a full dependency rebuild takes hours.
-
-The PSDK cores link again before a build when the core pin, the ANGLE pin,
-the script or the bridge changes. A stamp in the native tree records them.
+MkxpCore links again before a build when the engine pin, the ANGLE pin or
+the script changes. The PSDK cores link again when the core pin, the ANGLE
+pin, the script or the bridge changes. A stamp next to each framework records
+them.

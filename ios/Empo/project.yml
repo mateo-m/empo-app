@@ -35,64 +35,16 @@ settings:
       -Wno-unused-const-variable
       -Wno-deprecated-literal-operator
       -Wno-unused-function
-    DEPENDENCY_SEARCH_PATH: $(PROJECT_DIR)/../Dependencies/build-$(PLATFORM_NAME)-arm64
     # Which game cores the app ships. The "Embed the cores" phase reads
     # it, and the Game cores screen lists what it finds in the bundle.
     # Build one core only by passing it on the command line:
     #   xcodebuild ... EMPO_CORES=Psdk30Core
     EMPO_CORES: MkxpCore Psdk25Core Psdk30Core Psdk32Core Psdk33Core MvmzCore
     HEADER_SEARCH_PATHS:
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/audio
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/crypto
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/display
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/display/gl
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/display/libnsgif
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/etc
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/filesystem
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/input
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/net
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/system
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/theoraplay
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/util
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/binding
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/shader
-      # H-Mode7 port (//hmode7-apple-mobile submodule). Headers live
-      # next to the .cpp sources. The binding layer includes them via
-      # short names (hm7_apply_opacity.h etc.).
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/hmode7/src
-      - $(PROJECT_DIR)/shims
       - $(PROJECT_DIR)/shims/libarchive
       # Vendored libmspack (CAB reader for self-extracting .exe game
       # installers). Its sources use angled includes (<mspack.h>).
       - $(PROJECT_DIR)/vendor/libmspack
-      # Ruby 3.1 headers live under /include/ruby31/ now (Phase D
-      # header isolation, MULTI_RUBY_PLAN.md). Keep this AHEAD of
-      # the global $(DEPENDENCY_SEARCH_PATH)/include in
-      # SYSTEM_HEADER_SEARCH_PATHS below so Ruby resolves to 3.1
-      # for the legacy direct-link path. Once the legacy path is
-      # dropped (Phase F), this line and the SYSTEM_HEADER_SEARCH_PATHS
-      # entry both go away. Only the per-Ruby merged.o targets
-      # need Ruby headers.
-      - $(DEPENDENCY_SEARCH_PATH)/include/ruby31
-      - $(DEPENDENCY_SEARCH_PATH)/include/SDL2
-      - $(DEPENDENCY_SEARCH_PATH)/include/pixman-1
-      - $(DEPENDENCY_SEARCH_PATH)/include/uchardet
-      - $(DEPENDENCY_SEARCH_PATH)/include/freetype2
-      - $(PROJECT_DIR)/../Dependencies/ANGLE/$(PLATFORM_NAME)/include
-    SYSTEM_HEADER_SEARCH_PATHS:
-      - $(DEPENDENCY_SEARCH_PATH)/include
-    FRAMEWORK_SEARCH_PATHS: []
-    LIBRARY_SEARCH_PATHS:
-      - $(DEPENDENCY_SEARCH_PATH)/lib
-      - $(PROJECT_DIR)/../Dependencies/ANGLE/$(PLATFORM_NAME)/lib
-    # No engine preprocessor defines here. The engine no longer
-    # compiles in this target: the core is a prebuilt library, and
-    # the binding objects come from common.make. Shared engine
-    # feature flags live in one place, the submodule's
-    # src/mkxpz-buildconfig.h. App sources use no engine macros
-    # (app_bridge.h is self-contained).
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: YES # yamllint disable-line rule:truthy
   configs:
@@ -119,45 +71,24 @@ targets:
         script: |
           "${PROJECT_DIR}/../../tools/fetch-angle.sh"
 
-      - name: Hydrate native dependency trees
-        # OpenSSL/SDL/Ruby/mkxp-merged trees (~hundreds of MB) are not
-        # built during normal Xcode iteration. They are prebuilt per SDK
-        # on empo-deps (or built locally once via
-        # scripts/rebuild-all-native-deps.sh). See tools/fetch-native-deps.sh.
+      - name: Wrap the mkxp-z core
+        # Fetches the mkxp-z-apple-mobile release that
+        # ios/Dependencies/mkxp/.version pins, and links it into
+        # MkxpCore.framework. A stamp skips the link when nothing
+        # changed. See tools/mkxp-core/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
-          "${PROJECT_DIR}/../../tools/fetch-native-deps.sh"
-
-      - name: Hydrate engine core prebuilt
-        # libmkxpz-core.a per SDK, published from the public
-        # mkxp-z-apple-mobile repo's CI and pinned in
-        # ios/Dependencies/engine/.version. No-op when the pin is
-        # `unpublished` (local `make mkxp-core` builds) or
-        # EMPO_ENGINE_FROM_SOURCE=1. See tools/fetch-engine-prebuilt.sh.
-        basedOnDependencyAnalysis: false
-        script: |
-          "${PROJECT_DIR}/../../tools/fetch-engine-prebuilt.sh"
+          "${PROJECT_DIR}/../../tools/mkxp-core/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
 
       - name: Wrap the PSDK cores
         # Fetches the psdk-apple-mobile release that
         # ios/Dependencies/psdk/.version pins, and links each Ruby's
         # library with psdk_app_bridge.cpp into Psdk<NN>Core.framework.
-        # It runs after the native tree hydrates, because a new tree
-        # replaces the frameworks. A stamp skips the link when nothing
+        # A stamp skips the link when nothing
         # changed. See tools/psdk-core/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
           "${PROJECT_DIR}/../../tools/psdk-core/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
-
-      - name: Verify native deps for active SDK
-        # Fail fast when the tree for the current destination (device or
-        # simulator) is missing or platform-contaminated. See
-        # scripts/verify-native-deps.sh.
-        basedOnDependencyAnalysis: false
-        script: |
-          set -e
-          PLATFORM_NAME="${PLATFORM_NAME}" \
-            "${PROJECT_DIR}/../../scripts/verify-native-deps.sh"
 
       - name: Assemble Assets.bundle
         # Force every build. The script copies whatever is in the
@@ -172,14 +103,13 @@ targets:
         # app is dead weight, and nothing in the app reads one.
         basedOnDependencyAnalysis: false
         script: |
-          ENGINE="${PROJECT_DIR}/../../mkxp-z-apple-mobile"
           BUNDLE="${PROJECT_DIR}/Assets.bundle"
 
           # Mozilla CA root bundle. CABundleStore reads this copy from
           # the main bundle and pushes the path into the engine, so
           # the app needs its own.
           mkdir -p "$BUNDLE"
-          cp "$ENGINE"/assets/cacert.pem "$BUNDLE/"
+          cp "${PROJECT_DIR}/../Dependencies/mkxp-core/assets/cacert.pem" "$BUNDLE/"
 
           # Assets that moved into the framework. Drop a stale copy
           # from a tree built before that move.
@@ -229,7 +159,7 @@ targets:
           fi
           for CORE in ${EMPO_CORES}; do
             case "$CORE" in
-              MkxpCore) HOW="cd ios/Dependencies && make -f ${PLATFORM_NAME}.make mkxp-framework" ;;
+              MkxpCore) HOW="tools/mkxp-core/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
               Psdk25Core|Psdk30Core|Psdk32Core|Psdk33Core) HOW="tools/psdk-core/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
               MvmzCore) HOW="build the MvmzCore target" ;;
               *)
@@ -240,7 +170,7 @@ targets:
             CORE_SRC="$TREE/$CORE.framework"
             [ "$CORE" = MvmzCore ] && CORE_SRC="${BUILT_PRODUCTS_DIR}/$CORE.framework"
             if [ ! -d "$CORE_SRC" ]; then
-              echo "error: $CORE_SRC missing - run: $HOW (or refetch native deps)" >&2
+              echo "error: $CORE_SRC missing - run: $HOW" >&2
               exit 1
             fi
             rsync -a --delete "$CORE_SRC" "$DEST/"
@@ -277,11 +207,7 @@ targets:
         script: |
           REPO="${PROJECT_DIR}/../.."
           COMMIT=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "unknown")
-          # --ignore-submodules=dirty: a build leaves object files inside
-          # ios/Dependencies/sources and mkxp-z-apple-mobile, and that is
-          # not a change to Empo. A submodule pointer that moved still
-          # counts. tools/deps-fingerprint.sh reads the tree the same way.
-          if git -C "$REPO" diff --quiet --ignore-submodules=dirty HEAD 2>/dev/null; then DIRTY="false"; else DIRTY="true"; fi
+          if git -C "$REPO" diff --quiet HEAD 2>/dev/null; then DIRTY="false"; else DIRTY="true"; fi
           BRANCH=$(git -C "$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
           DEFAULT_BRANCH=$(git -C "$REPO" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || echo "main")
           [ -z "$DEFAULT_BRANCH" ] && DEFAULT_BRANCH="main"
@@ -303,23 +229,6 @@ targets:
           [ -z "$ORIGIN_URL" ] && ORIGIN_URL="https://github.com/mateo-m/empo-app"
           ISSUES_URL="$ORIGIN_URL/issues"
 
-          # Engine fingerprints for the active SDK. The debug log
-          # prints them next to the commit so stale engine code is
-          # visible in bug reports: the app can be built from HEAD while
-          # the prebuilt engine inside it is weeks older (the July 2026
-          # stale-msgbox bug). The engine ships in two halves with
-          # separate stamps: the merged bindings (mkxp*-merged.o) and
-          # the core (libmkxpz-core.a). A core-only change moves only
-          # the core stamp, so the log must show both. 12 hex chars is
-          # enough to compare against the stamp files under
-          # ios/Dependencies/build-<sdk>-arm64/lib/.
-          FP_FILE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib/.mkxp-binding-fingerprint"
-          ENGINE_FP=$(head -c 12 "$FP_FILE" 2>/dev/null || true)
-          [ -z "$ENGINE_FP" ] && ENGINE_FP="unstamped"
-          CORE_FP_FILE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib/.mkxp-core-fingerprint"
-          ENGINE_CORE_FP=$(head -c 12 "$CORE_FP_FILE" 2>/dev/null || true)
-          [ -z "$ENGINE_CORE_FP" ] && ENGINE_CORE_FP="unstamped"
-
           OUT="${PROJECT_DIR}/src/App/GitInfo.generated.swift"
           NEW=$(
             echo "// Auto-generated by build script — do not edit"
@@ -330,8 +239,6 @@ targets:
             echo "    static let defaultBranch = \"$DEFAULT_BRANCH\""
             echo "    static let originURL = \"$ORIGIN_URL\""
             echo "    static let issuesURL = \"$ISSUES_URL\""
-            echo "    static let engineFingerprint = \"$ENGINE_FP\""
-            echo "    static let engineCoreFingerprint = \"$ENGINE_CORE_FP\""
             echo "}"
           )
           # Only touch the file when the content changed so
@@ -348,10 +255,8 @@ targets:
       # Psdk25Core, Psdk30Core, Psdk32Core and Psdk33Core each hold
       # LiteRGSS2, LiteCGSS, SFML and the Ruby of their name.
       #
-      # `make -f <platform>.make mkxp-framework` builds it in
-      # ios/Dependencies, or it arrives with the published artifact
-      # (ios/Dependencies/engine/.version). scripts/verify-native-deps.sh
-      # catches a stale one per build, and scripts/check-mkxp-framework.sh
+      # tools/mkxp-core/build-framework-ios.sh links MkxpCore from the
+      # mkxp-z-apple-mobile release, and scripts/check-mkxp-framework.sh
       # proves it exports nothing but mkxp_*.
       # Vendored libmspack CAB reader (see vendor/libmspack/README.md).
       - path: vendor/libmspack

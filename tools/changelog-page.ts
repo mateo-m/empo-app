@@ -1,5 +1,5 @@
 // Writes docs/changelog.mdx from CHANGELOG.md and from the engine commits
-// between the submodule pins of two releases. The docs scripts run it before
+// between the engine pins of two releases. The docs scripts run it before
 // Blume, and the output is git-ignored, so the site page can never drift
 // from the changelog.
 
@@ -15,11 +15,19 @@ const git = (...args: string[]) => {
   return run.exitCode === 0 ? run.stdout.toString().trim() : undefined;
 };
 
-// The engine commit a release shipped. Missing when the tag is not fetched.
-const enginePin = (version: string) => git("rev-parse", `v${version}:mkxp-z-apple-mobile`);
+// A clone of mkxp-z-apple-mobile with its history. The engine entries are
+// left out when it is missing.
+const engineHistory = process.env.ENGINE_HISTORY ?? ".engine-history";
+
+// The engine a release shipped: the submodule commit up to 0.7, then the
+// release tag that ios/Dependencies/mkxp/.version pins. Missing when the
+// app tag is not fetched.
+const enginePin = (version: string) =>
+  git("rev-parse", `v${version}:mkxp-z-apple-mobile`) ??
+  git("show", `v${version}:ios/Dependencies/mkxp/.version`)?.match(/^MKXP_CORE_VERSION=(\S+)$/m)?.[1];
 
 const engineEntries = (from: string, to: string) => {
-  const log = git("-C", "mkxp-z-apple-mobile", "log", "--format=%s", `${from}..${to}`) ?? "";
+  const log = git("-C", engineHistory, "log", "--format=%s", `${from}..${to}`) ?? "";
   const entries = new Map<string, string[]>();
   for (const subject of log.split("\n")) {
     const commit = subject.match(/^(feat|fix|perf)(?:\(([^)]*)\))?!?: (.+?)(?: \(#\d+\))?$/);

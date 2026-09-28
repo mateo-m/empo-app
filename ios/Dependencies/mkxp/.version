@@ -1,0 +1,4 @@
+# The engine release from github.com/mateo-m/mkxp-z-apple-mobile that
+# tools/fetch-mkxp-core.sh downloads. The release notes give the sha256.
+MKXP_CORE_VERSION=v1
+MKXP_CORE_SHA256=unpublished

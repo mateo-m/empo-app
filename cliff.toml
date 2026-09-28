@@ -34,7 +34,6 @@ include_paths = [
   "ios/GameProbe/Sources/**",
   "ios/Json5/Package.swift",
   "ios/Json5/Sources/**",
-  "mkxp-z-apple-mobile",
   "tools/gamecore/**",
   "tools/mkxp-core/**",
   "tools/psdk-core/**",

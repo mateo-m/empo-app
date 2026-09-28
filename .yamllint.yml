@@ -23,9 +23,8 @@ rules:
     max: 2
 
 ignore: |
-  mkxp-z-apple-mobile/
+  .engine-history/
   ios/Empo/build/
   ios/Empo/Empo.xcodeproj/
-  ios/Dependencies/sources/
   ios/Dependencies/build-*/
   ios/Dependencies/ANGLE/
