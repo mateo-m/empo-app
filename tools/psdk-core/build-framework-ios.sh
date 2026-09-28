@@ -63,7 +63,11 @@ CORE_VERSION="$(cut -d" " -f1 "$CORE/.fetched-pin")"
 STAMP="$TREE/.psdk-frameworks"
 WANT_STAMP="$(cat "$CORE/.fetched-pin" "$DEPS/ANGLE/.version" "$0" \
     "$DEPS/psdk/psdk_app_bridge.cpp" "$DEPS/psdk/psdk_app_bridge.h" | shasum -a 256 | awk '{print $1}')"
-if [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT_STAMP" ]; then
+BUILT=yes
+for ruby in $RUBIES; do
+    [ -f "$TREE/Psdk${ruby}Core.framework/Psdk${ruby}Core" ] || BUILT=no
+done
+if [ "$BUILT" = yes ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT_STAMP" ]; then
     exit 0
 fi
 
