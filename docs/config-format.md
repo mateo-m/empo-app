@@ -79,4 +79,4 @@ it with the game.
 ## Related
 
 - [Ship custom controls](/controls-format): the `empo/controls.json` manifest
-- [patches-format.md](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/patches-format.md) in the engine repo: the `patches.json` script-patching format
+- [patches-format.md](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/dev/docs/patches-format.md) in the engine repo: the `patches.json` script-patching format
