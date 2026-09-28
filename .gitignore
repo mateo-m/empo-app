@@ -46,6 +46,11 @@ ios/Dependencies/engine/.fetched-version
 ios/Dependencies/psdk-core/
 ios/Dependencies/psdk-core.*
 
+# The MV/MZ core release, fetched by tools/fetch-mvmz-core.sh.
+# Version-pinned via ios/Dependencies/mvmz/.version (tracked).
+ios/Dependencies/mvmz-core/
+ios/Dependencies/mvmz-core.*
+
 # MetalANGLE.xcframework - unreferenced by the build, kept untracked
 # in case anything ever needs it. Currently not in the working tree.
 ios/Dependencies/Frameworks/

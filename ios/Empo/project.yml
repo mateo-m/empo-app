@@ -200,9 +200,10 @@ targets:
         # One framework for each core. MkxpCore holds mkxp-z, its
         # three Ruby versions and its SDL. Psdk25Core, Psdk30Core,
         # Psdk32Core and Psdk33Core each wrap the psdk-apple-mobile
-        # library of the Ruby of their name. MvmzCore shows
-        # RPG Maker MV and MZ games in a web view, and the MvmzCore target below builds
-        # it with the app. The app links none of them and opens
+        # library of the Ruby of their name. MvmzCore wraps the
+        # mvmz-apple-mobile library, which shows RPG Maker MV and MZ
+        # games in a web view. The MvmzCore target below builds it with
+        # the app. The app links none of them and opens
         # one of them with dlopen when the user picks a game
         # (EngineSessionCoordinator.openCore).
         #
@@ -429,11 +430,34 @@ targets:
       - path: ../MvmzCore
         excludes:
           - Info.plist
+    preBuildScripts:
+      - name: Fetch the MV/MZ core
+        # The mvmz-apple-mobile release that ios/Dependencies/mvmz/.version
+        # pins. See tools/fetch-mvmz-core.sh.
+        basedOnDependencyAnalysis: false
+        script: |
+          "${PROJECT_DIR}/../../tools/fetch-mvmz-core.sh"
+    postBuildScripts:
+      - name: Name the MV/MZ core release
+        # The Game cores screen shows EmpoCoreVersion, the release tag
+        # that ios/Dependencies/mvmz/.version pins.
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          VERSION="$(cut -d" " -f1 "${PROJECT_DIR}/../Dependencies/mvmz-core/.fetched-pin")"
+          /usr/libexec/PlistBuddy -c "Set :EmpoCoreVersion $VERSION" "${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
     settings:
       base:
         PRODUCT_NAME: MvmzCore
         PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.mvmzcore
         INFOPLIST_FILE: $(PROJECT_DIR)/../MvmzCore/Info.plist
+        HEADER_SEARCH_PATHS: $(PROJECT_DIR)/../Dependencies/mvmz-core/include
+        OTHER_LDFLAGS:
+          - $(PROJECT_DIR)/../Dependencies/mvmz-core/$(PLATFORM_NAME)/libmvmz.a
+          - -framework WebKit
+          - -framework UIKit
+          - -framework Metal
+          - -framework UniformTypeIdentifiers
         CLANG_ENABLE_MODULES: YES # yamllint disable-line rule:truthy
         # Only the mvmz_ names in mvmz_app_bridge.h leave the framework.
         GCC_SYMBOLS_PRIVATE_EXTERN: YES # yamllint disable-line rule:truthy

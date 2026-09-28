@@ -10,6 +10,6 @@
 	<key>CFBundlePackageType</key><string>FMWK</string>
 	<key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>EmpoCoreVersion</key><string>$(MARKETING_VERSION)</string>
+	<key>EmpoCoreVersion</key><string>unknown</string>
 </dict>
 </plist>

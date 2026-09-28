@@ -18,7 +18,7 @@ has six:
   Ruby.
 - `MvmzCore.framework`: a `WKWebView` for RPG Maker MV and MZ. Each of
   these games ships its own JavaScript engine, so the core holds no engine.
-  It serves the game folder to the web view, and `runtime.js` gives the
+  It serves the game folder to the web view, and its `runtime.js` gives the
   game the NW.js names it reads, such as `require("fs")`.
 
 Both engines declare a class named `ViewportElement` at global scope, and both
@@ -102,6 +102,14 @@ its support folder adds two Ruby files. `litergss1.rb` puts the LiteRGSS 1
 SFMLAudio. Each support folder also holds `compat.rb`, the fixes for things
 released games do, which the core loads before the game.
 
+The MV and MZ core lives in its own repo, `mvmz-apple-mobile`. Each release
+holds `libmvmz.a`, which defines only the names of `mvmz_core.h`.
+`ios/Dependencies/mvmz/.version` pins the release, and
+`tools/fetch-mvmz-core.sh` downloads it before the MvmzCore target builds.
+The target links the library with `mvmz_app_bridge.m`, which puts the web view
+in its own window and in the launcher's region, and answers the launcher
+interface with the core's calls.
+
 The four PSDK cores export the same `psdk_*` names. Each forwarder looks the
 name up in the one core it opened, so the names do not meet.
 
@@ -143,7 +151,7 @@ The MV and MZ core answers two:
 
 | Setting | What the MV and MZ core does |
 | --- | --- |
-| Smooth scaling | Off, `runtime.js` draws the canvas with `image-rendering: pixelated`. A new value needs a restart. |
+| Smooth scaling | Off, the core's `runtime.js` draws the canvas with `image-rendering: pixelated`. A new value needs a restart. |
 | Fast forward | MV runs one update for each `SceneManager._deltaTime` seconds, so `runtime.js` divides it. MZ runs the count that `SceneManager.determineRepeatNumber` returns for each frame, so `runtime.js` multiplies it. A new value applies while the game runs. |
 
 The MV and MZ core always fits the picture in the region. The game keeps
@@ -159,9 +167,10 @@ settings page together in `settingsPage(_:)`, from the shared sections in
 
 ## What the engine asks the bridge
 
-Nothing. The core never calls the launcher. `psdk_app_bridge.cpp` sets each
-value and each callback through `psdk_core.h`, and the core's repo has a check
-that fails on a launcher name or a weak host function.
+Nothing. A core never calls the launcher. `psdk_app_bridge.cpp` sets each
+value and each callback through `psdk_core.h`, and `mvmz_app_bridge.m` through
+`mvmz_core.h`. Each core's repo has a check that fails on a launcher name or a
+weak host function.
 
 ## One interface, one prefix for each side
 
@@ -220,10 +229,10 @@ every UIKit call to the main thread with `dispatch_sync`, so the main thread
 has to stay in its run loop and answer them. Ruby's parser and the PSDK boot
 scripts also recurse past the default 512 KB worker stack.
 
-`mvmz_run_app` makes the web view and returns. WebKit runs the game in its
-own processes, and the main thread only answers WebKit. WebKit suspends the
-page of a web view that is in no visible window, so the core shows its
-window at once, under the Empo window.
+`mvmz_run_app` gets the web view from `mvmz_start` and returns. WebKit runs
+the game in its own processes, and the main thread only answers WebKit. WebKit
+suspends the page of a web view that is in no visible window, so the bridge
+shows its window at once, under the Empo window.
 
 ## Where a core keeps its own files
 
@@ -277,13 +286,14 @@ binary. `scripts/release.sh` and the `cut` job in
 `.github/workflows/release.yml` create the tag, and both refuse a commit that
 is not on that repo's `dev` branch. The PSDK cores come from a
 `psdk-apple-mobile` release, and its tag in `ios/Dependencies/psdk/.version`
-names the source.
+names the source. `MvmzCore` comes from a `mvmz-apple-mobile` release, and its
+tag in `ios/Dependencies/mvmz/.version` names the source.
 
 In `MkxpCore`, `EmpoCoreVersion` holds `git describe` of that repo, so its row
 on the Game cores screen carries the same tag name after a release. Before the
 first release that ships the core, `describe` has no tag to name and falls back
-to the short commit. In each PSDK core, `EmpoCoreVersion` holds the release tag
-that `ios/Dependencies/psdk/.version` pins, for example `v1`.
+to the short commit. In each PSDK core and in `MvmzCore`, `EmpoCoreVersion`
+holds the release tag that the core's `.version` file pins, for example `v1`.
 
 ## How the framework stays fresh
 

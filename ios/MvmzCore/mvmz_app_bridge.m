@@ -1,23 +1,16 @@
-// The launcher interface for the RPG Maker MV and MZ core.
-//
-// An MV or MZ game is a web page: the game folder carries its own
-// engine as JavaScript. So this core runs no engine of its own. It
-// shows the game's index.html in a WKWebView, serves the game folder
-// through MvmzFileServer, and loads runtime.js before the game's
-// scripts. runtime.js makes the page look like the NW.js desktop
-// runtime the game shipped for, and answers the launcher calls that
-// reach the game (keys, pause, fast forward).
+// The launcher interface for the RPG Maker MV and MZ core. The core,
+// mvmz_core.h from mvmz-apple-mobile, runs the game in a web view. This
+// file puts the web view in its own window and in the launcher's
+// region, and answers the launcher calls with the core's calls.
 //
 // Every function here runs on the main thread. The launcher calls them
-// from the main actor, and WebKit calls back on the main thread.
+// from the main actor, and the core calls back on the main thread.
 
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
-#import <Metal/Metal.h>
-#import <CommonCrypto/CommonDigest.h>
 
 #include "mvmz_app_bridge.h"
-#import "MvmzFileServer.h"
+#include "mvmz_core.h"
 
 typedef struct {
     void *fn;
@@ -42,7 +35,6 @@ static BOOL gGameReady;
 static BOOL gTerminated;
 static BOOL gExitedCleanly;
 static BOOL gPausedFlag;
-static BOOL gSmoothScaling;
 static BOOL gCheatsEnabled;
 static int gFastForward = 1;
 static MvmzVerticalAlignment gVerticalAlignment = MVMZ_VALIGN_TOP_CENTER;
@@ -57,16 +49,9 @@ static NSData *gSnapshotRGBA;
 static int gSnapshotW;
 static int gSnapshotH;
 
-static double gFps;
-static char *gDetails;
-
 static void logLine(NSString *line) {
     NSLog(@"[mvmz] %@", line);
     [gLog writeData:[[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
-}
-
-static void runJS(NSString *script) {
-    [gWebView evaluateJavaScript:script completionHandler:nil];
 }
 
 // Puts the picture in the launcher's region and tells the launcher
@@ -202,112 +187,43 @@ static void storeSnapshotAndReportPause(UIImage *image, NSError *error) {
     fire(gPaused);
 }
 
-__attribute__((visibility("hidden")))
-@interface MvmzMessages : NSObject <WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate>
-@end
-
-@implementation MvmzMessages
-
-// runtime.js posts one dictionary for each event, keyed by "type".
-- (void)userContentController:(WKUserContentController *)controller
-      didReceiveScriptMessage:(WKScriptMessage *)message {
-    NSDictionary *body = message.body;
-    if (![body isKindOfClass:NSDictionary.class]) {
-        return;
+static void frameRendered(void *userdata) {
+    if (!gGameReady) {
+        gGameReady = YES;
+        logLine(@"first frame");
     }
-    NSString *type = body[@"type"];
-    if ([type isEqualToString:@"frame"]) {
-        if (!gGameReady) {
-            gGameReady = YES;
-            logLine(@"first frame");
-        }
-        fire(gFrameRendered);
-    } else if ([type isEqualToString:@"fps"]) {
-        gFps = [body[@"fps"] doubleValue];
-    } else if ([type isEqualToString:@"details"]) {
-        NSMutableArray<NSString *> *lines = [body[@"lines"] mutableCopy];
-        NSString *device = MTLCreateSystemDefaultDevice().name;
-        if (device) [lines addObject:device];
-        free(gDetails);
-        gDetails = strdup([lines componentsJoinedByString:@"\n"].UTF8String);
-    } else if ([type isEqualToString:@"size"]) {
-        gGameSize = CGSizeMake([body[@"width"] doubleValue], [body[@"height"] doubleValue]);
-        logLine([NSString stringWithFormat:@"game size %.0fx%.0f", gGameSize.width, gGameSize.height]);
-        placeWebView();
-    } else if ([type isEqualToString:@"log"]) {
-        logLine([NSString stringWithFormat:@"%@", body[@"text"]]);
-    } else if ([type isEqualToString:@"exit"]) {
-        logLine(@"the game closed itself");
-        terminate(YES);
-    }
+    fire(gFrameRendered);
 }
 
-- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation
-      withError:(NSError *)error {
-    logLine([NSString stringWithFormat:@"index.html did not load: %@", error]);
-    terminate(NO);
+static void gameSizeChanged(int width, int height, void *userdata) {
+    gGameSize = CGSizeMake(width, height);
+    placeWebView();
 }
 
-// The web content process ran out of memory or crashed. The page is
-// gone with it, and a reload would start the game from its title
-// screen, so the session ends the way a crash of the other cores does.
-- (void)webViewWebContentProcessDidTerminate:(WKWebView *)webView {
-    logLine(@"the web content process stopped");
-    terminate(NO);
+static void gameExited(int clean, void *userdata) {
+    terminate(clean);
 }
 
-// The game's own window.alert, for example a plugin that reports a
-// missing file. WebKit shows nothing without a UI delegate.
-- (void)webView:(WKWebView *)webView runJavaScriptAlertPanelWithMessage:(NSString *)message
-    initiatedByFrame:(WKFrameInfo *)frame
-    completionHandler:(void (^)(void))completionHandler {
-    logLine([NSString stringWithFormat:@"alert: %@", message]);
-    mvmz_presentInfoAndWait(message.UTF8String);
-    completionHandler();
+static void gameAlert(const char *message, void *userdata) {
+    mvmz_presentInfoAndWait(message);
 }
 
-- (void)webView:(WKWebView *)webView runJavaScriptConfirmPanelWithMessage:(NSString *)message
-    initiatedByFrame:(WKFrameInfo *)frame
-    completionHandler:(void (^)(BOOL))completionHandler {
-    logLine([NSString stringWithFormat:@"confirm, answered yes: %@", message]);
-    completionHandler(YES);
+static void coreLog(const char *line, void *userdata) {
+    logLine(@(line));
 }
 
-@end
-
-static MvmzMessages *gMessages;
-static MvmzFileServer *gFileServer;
-
-// Each game gets its own origin, so localStorage and IndexedDB of one
-// game are not visible to the next one. Empo passes
-// Games/<name>/Game, and <name> is the game's identity.
-static NSString *originHost(NSString *gameRoot) {
-    NSData *name = [gameRoot.stringByDeletingLastPathComponent.lastPathComponent
-        dataUsingEncoding:NSUTF8StringEncoding];
-    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
-    CC_SHA256(name.bytes, (CC_LONG)name.length, digest);
-    NSMutableString *host = [NSMutableString stringWithString:@"game-"];
-    for (int i = 0; i < 16; i++) {
-        [host appendFormat:@"%02x", digest[i]];
-    }
-    return host;
-}
-
-static NSString *ownResource(NSString *name) {
-    NSBundle *bundle = [NSBundle bundleForClass:MvmzMessages.class];
-    NSString *path = [bundle pathForResource:name ofType:nil];
-    return path ? [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] : nil;
-}
-
-static NSString *jsonString(id object) {
-    NSData *data = [NSJSONSerialization dataWithJSONObject:object options:0 error:nil];
-    return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+static void takeSnapshot(void *userdata) {
+    [gWebView takeSnapshotWithConfiguration:nil
+                          completionHandler:^(UIImage *image, NSError *error) {
+                              storeSnapshotAndReportPause(image, error);
+                          }];
 }
 
 // MARK: - Starting the game
 
-// Builds the web view and loads the game, then returns. The launcher
-// keeps the main thread in its run loop, and WebKit needs it there.
+// Makes the window, starts the game in the core's web view, then
+// returns. The launcher keeps the main thread in its run loop, and
+// WebKit needs it there.
 int mvmz_run_app(int argc, char **argv) {
     NSString *root = gGamePath;
     if (root.length == 0) {
@@ -327,74 +243,30 @@ int mvmz_run_app(int argc, char **argv) {
     gWindow = [[UIWindow alloc] initWithWindowScene:scene];
     gWindow.rootViewController = [[MvmzViewController alloc] init];
 
-    NSString *host = originHost(root);
-    gFileServer = [[MvmzFileServer alloc] initWithRoot:root];
-    gMessages = [[MvmzMessages alloc] init];
-
-    WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
-    [config setURLSchemeHandler:gFileServer forURLScheme:MvmzFileServer.scheme];
-    // The game starts its music before the first touch, as it does on a
-    // desktop.
-    config.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
-    config.allowsInlineMediaPlayback = YES;
-
-    NSDictionary *settings = @{
-        @"speed" : @(gFastForward),
-        @"smooth" : @(gSmoothScaling),
-        @"simulator" : @(TARGET_OS_SIMULATOR),
-    };
-    NSString *runtime = ownResource(@"runtime.js");
-    NSString *source = [NSString stringWithFormat:@"window.__mvmzSettings = %@;\n%@", jsonString(settings),
-                                                  runtime ?: @""];
-    WKUserScript *script = [[WKUserScript alloc] initWithSource:source
-                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                                               forMainFrameOnly:YES];
-    [config.userContentController addUserScript:script];
-    [config.userContentController addScriptMessageHandler:gMessages name:@"mvmz"];
-
-    gWebView = [[WKWebView alloc] initWithFrame:gWindow.rootViewController.view.bounds
-                                  configuration:config];
-    // With the user agent of a phone, MV asks for .m4a audio that many
-    // desktop games do not ship, MV drops its fixed update rate, and MZ
-    // uses only 90% of the screen height.
-    gWebView.customUserAgent =
-        @"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
-    gWebView.navigationDelegate = gMessages;
-    gWebView.UIDelegate = gMessages;
-    gWebView.opaque = NO;
-    gWebView.backgroundColor = UIColor.blackColor;
-    gWebView.scrollView.scrollEnabled = NO;
-    gWebView.scrollView.bounces = NO;
-    gWebView.scrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    mvmz_set_frame_callback(frameRendered, NULL);
+    mvmz_set_size_callback(gameSizeChanged, NULL);
+    mvmz_set_exit_callback(gameExited, NULL);
+    mvmz_set_alert_callback(gameAlert, NULL);
+    mvmz_set_log_callback(coreLog, NULL);
+    // Empo passes Games/<name>/Game, and <name> is the game's identity.
+    NSString *gameId = root.stringByDeletingLastPathComponent.lastPathComponent;
+    gWebView = (__bridge WKWebView *)mvmz_start(root.UTF8String, gameId.UTF8String);
 #if DEBUG
     gWebView.inspectable = YES;
 #endif
+    gWebView.frame = gWindow.rootViewController.view.bounds;
     [gWindow.rootViewController.view addSubview:gWebView];
     // WebKit suspends the page of a web view that is in no visible
     // window. The app window stays above this one until the first frame.
     gWindow.hidden = NO;
-
-    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@://%@/index.html", MvmzFileServer.scheme,
-                                                                  host]];
-    logLine([NSString stringWithFormat:@"boot %@ from %@", url, root]);
-    [gWebView loadRequest:[NSURLRequest requestWithURL:url]];
     return 0;
 }
 
-// WebKit ends the page, with all of its JavaScript, when its web view
-// goes. The message handler holds the web view until it is removed.
 void mvmz_killSession(void) {
-    [gWebView.configuration.userContentController removeAllScriptMessageHandlers];
-    [gWebView stopLoading];
-    [gWebView removeFromSuperview];
+    mvmz_stop();
     gWebView = nil;
     gWindow.hidden = YES;
     gWindow = nil;
-    gMessages = nil;
-    gFileServer = nil;
-    gFps = 0;
-    free(gDetails);
-    gDetails = NULL;
     mvmz_resetSessionState();
 }
 
@@ -408,9 +280,8 @@ const char *mvmz_waitForGamePath(void) {
 
 // MARK: - Input
 
-// runtime.js turns the scancode into the keyCode the game reads.
 void mvmz_injectKeyEvent(int scancode, int pressed) {
-    runJS([NSString stringWithFormat:@"__mvmz.key(%d,%d)", scancode, pressed]);
+    mvmz_inject_key(scancode, pressed);
 }
 
 // MARK: - The window
@@ -480,26 +351,17 @@ void mvmz_resetSessionState(void) {
 
 // MARK: - Pause
 
-// runtime.js holds the game's frames and suspends its audio. The
-// snapshot is taken after that, so it shows the frame the game stopped
-// on.
 void mvmz_requestPause(void) {
     if (gPausedFlag) {
         return;
     }
     gPausedFlag = YES;
-    [gWebView evaluateJavaScript:@"__mvmz.pause()"
-               completionHandler:^(id result, NSError *error) {
-                   [gWebView takeSnapshotWithConfiguration:nil
-                                         completionHandler:^(UIImage *image, NSError *snapError) {
-                                             storeSnapshotAndReportPause(image, snapError);
-                                         }];
-               }];
+    mvmz_pause(takeSnapshot, NULL);
 }
 
 void mvmz_requestResume(void) {
     gPausedFlag = NO;
-    runJS(@"__mvmz.resume()");
+    mvmz_resume();
     [gSnapshotLock lock];
     gSnapshotRGBA = nil;
     [gSnapshotLock unlock];
@@ -580,12 +442,12 @@ void mvmz_setConfigOverlayJSON(const char *jsonUTF8) {
         overlay = @{};
     }
     id smooth = overlay[@"smoothScaling"];
-    gSmoothScaling = [smooth isKindOfClass:NSNumber.class] ? [smooth boolValue] : NO;
+    mvmz_set_smooth([smooth isKindOfClass:NSNumber.class] && [smooth boolValue]);
 }
 
 void mvmz_setFastForwardMultiplier(int multiplier) {
     gFastForward = multiplier;
-    runJS([NSString stringWithFormat:@"window.__mvmz && __mvmz.setSpeed(%d)", multiplier]);
+    mvmz_set_speed(multiplier);
 }
 
 int mvmz_getFastForwardMultiplier(void) { return gFastForward; }
@@ -635,9 +497,7 @@ void mvmz_setTouchMouseEnabled(bool enabled) {}
 // MARK: - What the launcher reads
 
 const char *mvmz_getGameTitle(void) { return ""; }
-const char *mvmz_getDetails(void) { return gDetails ? gDetails : ""; }
+const char *mvmz_getDetails(void) { return mvmz_details(); }
 int mvmz_getTargetFPS(void) { return 60; }
 
-// runtime.js measures the rate once a second. The overlay reads it ten
-// times a second, so a count per read would come out 0 nine times.
-double mvmz_getAverageFPS(void) { return gFps; }
+double mvmz_getAverageFPS(void) { return mvmz_fps(); }
