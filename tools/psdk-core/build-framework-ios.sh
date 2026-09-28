@@ -18,6 +18,12 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DEPS="$ROOT/ios/Dependencies"
 CORE="$DEPS/psdk-core"
 
+# Xcode and a script can link at the same time. lockf runs one at a time,
+# and the second then finds the frameworks in place.
+if [ -z "${PSDK_FRAMEWORKS_LOCKED:-}" ]; then
+    PSDK_FRAMEWORKS_LOCKED=1 exec lockf -k "$CORE.frameworks.lock" "$0" "$@"
+fi
+
 SDK=iphoneos
 ARCH=arm64
 MIN_OS=26.0
