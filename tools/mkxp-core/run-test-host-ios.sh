@@ -81,6 +81,12 @@ done
     echo "run-test-host-ios: build the host first" >&2
     exit 1
 }
+[ -z "$ALSO_OPEN" ] || [ -d "$APP/Frameworks/$ALSO_OPEN" ] || {
+    echo "run-test-host-ios: the host holds no $ALSO_OPEN. Run" >&2
+    echo "  tools/psdk-core/build-framework-ios.sh --sdk iphonesimulator," >&2
+    echo "  then build the host again." >&2
+    exit 1
+}
 
 if [ -z "$DEVICE" ]; then
     DEVICE=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)
