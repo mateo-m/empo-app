@@ -3,7 +3,7 @@
 # Psdk32Core and Psdk33Core.
 #
 # Each one is libpsdk<NN>.a from the PSDK core release that
-# ios/Dependencies/psdk/.version pins, and psdk_app_bridge.cpp, which
+# cores/psdk/.version pins, and psdk_app_bridge.cpp, which
 # answers the launcher interface with the core's calls. The export list
 # keeps the Ruby and every library of the core inside the framework.
 #
@@ -11,7 +11,7 @@
 # ANGLE pin and the bridge files. Xcode runs it before each build.
 #
 # Usage:
-#   tools/psdk-core/build-framework-ios.sh [--sdk iphoneos|iphonesimulator]
+#   cores/psdk/build-framework-ios.sh [--sdk iphoneos|iphonesimulator]
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -58,7 +58,7 @@ case "$SDK" in
 esac
 
 "$ROOT/tools/fetch-angle.sh"
-"$ROOT/tools/fetch-psdk-core.sh"
+"$ROOT/cores/psdk/fetch.sh"
 
 TREE="$DEPS/build-$SDK-arm64"
 ANGLE="$DEPS/ANGLE/$SDK"
@@ -68,7 +68,7 @@ CORE_VERSION="$(cut -d" " -f1 "$CORE/.fetched-pin")"
 
 STAMP="$TREE/.psdk-frameworks"
 WANT_STAMP="$(cat "$CORE/.fetched-pin" "$DEPS/ANGLE/.version" "$0" \
-    "$DEPS/psdk/psdk_app_bridge.cpp" "$DEPS/psdk/psdk_app_bridge.h" | shasum -a 256 | awk '{print $1}')"
+    "$ROOT/cores/psdk/psdk_app_bridge.cpp" "$ROOT/cores/psdk/psdk_app_bridge.h" | shasum -a 256 | awk '{print $1}')"
 BUILT=yes
 for ruby in $RUBIES; do
     [ -f "$TREE/Psdk${ruby}Core.framework/Psdk${ruby}Core" ] || BUILT=no
@@ -82,9 +82,9 @@ BRIDGE="$TREE/lib/psdk-bridge.o"
 echo "[psdk-framework] Compiling the bridge..."
 "$CXX" -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" -std=c++17 -O2 \
     -I"$CORE/include" -I"$ANGLE/include" \
-    -c "$DEPS/psdk/psdk_app_bridge.cpp" -o "$BRIDGE"
+    -c "$ROOT/cores/psdk/psdk_app_bridge.cpp" -o "$BRIDGE"
 
-grep -oE '\bpsdk_[A-Za-z0-9_]+\(' "$DEPS/psdk/psdk_app_bridge.h" |
+grep -oE '\bpsdk_[A-Za-z0-9_]+\(' "$ROOT/cores/psdk/psdk_app_bridge.h" |
     sed 's/(//' | sed 's/^/_/' | sort -u >"$TREE/psdk-core.exports"
 
 for ruby in $RUBIES; do
@@ -133,7 +133,7 @@ for ruby in $RUBIES; do
 </plist>
 PLIST
 
-    "$ROOT/scripts/check-psdk-framework.sh" --framework "$FW" --sdk "$SDK"
+    "$ROOT/cores/psdk/check-framework.sh" --framework "$FW" --sdk "$SDK"
 done
 printf '%s\n' "$WANT_STAMP" >"$STAMP"
 echo "[psdk-framework] Done"

@@ -7,14 +7,14 @@
 # one by hand.
 #
 # Usage:
-#   tools/mkxp-core/build-test-host-ios.sh [--out <dir>]
+#   cores/mkxp/test-host/build-test-host-ios.sh [--out <dir>]
 #
 # Prerequisite:
-#   tools/mkxp-core/build-framework-ios.sh --sdk iphonesimulator
+#   cores/mkxp/build-framework-ios.sh --sdk iphonesimulator
 set -eu
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-HERE="$ROOT/tools/mkxp-core"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+HERE="$ROOT/cores/mkxp/test-host"
 DEPS="$ROOT/ios/Dependencies"
 
 SDK=iphonesimulator
@@ -39,7 +39,7 @@ TREE="$DEPS/build-$SDK-$ARCH"
 
 if [ ! -d "$TREE/MkxpCore.framework" ]; then
     echo "build-test-host-ios: MkxpCore.framework missing." >&2
-    echo "Run: tools/mkxp-core/build-framework-ios.sh --sdk $SDK" >&2
+    echo "Run: cores/mkxp/build-framework-ios.sh --sdk $SDK" >&2
     exit 1
 fi
 
@@ -74,7 +74,7 @@ cp -R "$TREE/MkxpCore.framework" "$APP/Frameworks/"
 
 # Psdk30Core rides along when it is built, so MKXP_ALSO_OPEN can prove two
 # cores load in one process. The host never links it.
-# tools/psdk-core/build-framework-ios.sh builds it.
+# cores/psdk/build-framework-ios.sh builds it.
 if [ -d "$TREE/Psdk30Core.framework" ]; then
     cp -R "$TREE/Psdk30Core.framework" "$APP/Frameworks/"
 fi

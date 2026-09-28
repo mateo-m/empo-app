@@ -31,21 +31,21 @@ ios/Dependencies/ANGLE/iphonesimulator/include/
 ios/Dependencies/ANGLE/iphonesimulator/lib/
 ios/Dependencies/ANGLE/.fetched-version
 
-# The mkxp-z core release, fetched by tools/fetch-mkxp-core.sh.
-# Version-pinned via ios/Dependencies/mkxp/.version (tracked).
+# The mkxp-z core release, fetched by cores/mkxp/fetch.sh.
+# Version-pinned via cores/mkxp/.version (tracked).
 ios/Dependencies/mkxp-core/
 ios/Dependencies/mkxp-core.*
 
 # The engine history that tools/changelog-page.ts reads.
 .engine-history/
 
-# The PSDK core release, fetched by tools/fetch-psdk-core.sh.
-# Version-pinned via ios/Dependencies/psdk/.version (tracked).
+# The PSDK core release, fetched by cores/psdk/fetch.sh.
+# Version-pinned via cores/psdk/.version (tracked).
 ios/Dependencies/psdk-core/
 ios/Dependencies/psdk-core.*
 
-# The MV/MZ core release, fetched by tools/fetch-mvmz-core.sh.
-# Version-pinned via ios/Dependencies/mvmz/.version (tracked).
+# The MV/MZ core release, fetched by cores/mvmz/fetch.sh.
+# Version-pinned via cores/mvmz/.version (tracked).
 ios/Dependencies/mvmz-core/
 ios/Dependencies/mvmz-core.*
 

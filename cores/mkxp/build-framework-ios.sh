@@ -1,6 +1,6 @@
 #!/bin/sh
 # Links MkxpCore.framework for one SDK from the engine release that
-# ios/Dependencies/mkxp/.version pins.
+# cores/mkxp/.version pins.
 #
 # The release gives the libraries and a LINK file with the linker
 # flags. The export list keeps the three Ruby VMs and SDL inside the
@@ -10,7 +10,7 @@
 # ANGLE pin and this script. Xcode runs it before each build.
 #
 # Usage:
-#   tools/mkxp-core/build-framework-ios.sh [--sdk iphoneos|iphonesimulator]
+#   cores/mkxp/build-framework-ios.sh [--sdk iphoneos|iphonesimulator]
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -56,7 +56,7 @@ case "$SDK" in
 esac
 
 "$ROOT/tools/fetch-angle.sh"
-"$ROOT/tools/fetch-mkxp-core.sh"
+"$ROOT/cores/mkxp/fetch.sh"
 "$ROOT/scripts/check-core-interface.sh"
 
 TREE="$DEPS/build-$SDK-$ARCH"
@@ -127,6 +127,6 @@ cat >"$FW/Info.plist" <<PLIST
 </plist>
 PLIST
 
-"$ROOT/scripts/check-mkxp-framework.sh" --framework "$FW" --sdk "$SDK"
+"$ROOT/cores/mkxp/check-framework.sh" --framework "$FW" --sdk "$SDK"
 printf '%s\n' "$WANT_STAMP" >"$STAMP"
 echo "[mkxp-framework] Done: $FW"

@@ -83,8 +83,8 @@ runs on the Ruby 3.0 core. Ruby
 The PSDK core lives in its own repo, `psdk-apple-mobile`. Each release holds
 `libpsdk<NN>.a` for each Ruby: one object with the Ruby, its extensions,
 LiteRGSS2, LiteCGSS, SFML, OpenAL Soft and OpenSSL, which defines only the
-names of `psdk_core.h`. `ios/Dependencies/psdk/.version` pins the release.
-`tools/psdk-core/build-framework-ios.sh` links each library with
+names of `psdk_core.h`. `cores/psdk/.version` pins the release.
+`cores/psdk/build-framework-ios.sh` links each library with
 `psdk_app_bridge.cpp`, which answers the launcher interface with the core's
 calls, into `Psdk<NN>Core.framework`. Xcode runs it before each build.
 
@@ -104,8 +104,8 @@ released games do, which the core loads before the game.
 
 The MV and MZ core lives in its own repo, `mvmz-apple-mobile`. Each release
 holds `libmvmz.a`, which defines only the names of `mvmz_core.h`.
-`ios/Dependencies/mvmz/.version` pins the release, and
-`tools/fetch-mvmz-core.sh` downloads it before the MvmzCore target builds.
+`cores/mvmz/.version` pins the release, and
+`cores/mvmz/fetch.sh` downloads it before the MvmzCore target builds.
 The target links the library with `mvmz_app_bridge.m`, which puts the web view
 in its own window and in the launcher's region, and answers the launcher
 interface with the core's calls.
@@ -126,12 +126,12 @@ A core exports its bridge and nothing else. `ios/Empo/src/App/GameCore.h`
 declares the 51 functions Empo calls. `MkxpCore` exports every `mkxp_*` name
 that `app_bridge.h` of the engine release declares, which is those 51 plus
 the names its own engine calls. Each PSDK core exports the 51 under `psdk_*`, from
-`ios/Dependencies/psdk/psdk_app_bridge.h`. `MvmzCore` exports the 51 under
-`mvmz_`, from `ios/MvmzCore/mvmz_app_bridge.h`.
+`cores/psdk/psdk_app_bridge.h`. `MvmzCore` exports the 51 under
+`mvmz_`, from `cores/mvmz/mvmz_app_bridge.h`.
 
 No core exports a Ruby name, an SDL name or an SFML name, and no core imports
-one either. `scripts/check-mkxp-framework.sh` and
-`scripts/check-psdk-framework.sh` fail the build when that stops being true.
+one either. `cores/mkxp/check-framework.sh` and
+`cores/psdk/check-framework.sh` fail the build when that stops being true.
 They also fail when a core leaves the two-level namespace, because a flat
 namespace would let a second core bind to the first core's names.
 
@@ -181,8 +181,8 @@ its prefix:
 | --- | --- | --- |
 | Empo | `ios/Empo/src/App/GameCore.h` | `gamecore_` |
 | MkxpCore | `ios/Dependencies/mkxp-core/include/app_bridge.h`, from the engine release | `mkxp_` |
-| The PSDK cores | `ios/Dependencies/psdk/psdk_app_bridge.h` | `psdk_` |
-| MvmzCore | `ios/MvmzCore/mvmz_app_bridge.h` | `mvmz_` |
+| The PSDK cores | `cores/psdk/psdk_app_bridge.h` | `psdk_` |
+| MvmzCore | `cores/mvmz/mvmz_app_bridge.h` | `mvmz_` |
 
 Each core keeps the prefix its own project already used, so neither fork has to
 follow the other. Empo names no engine in its own header, and its forwarder puts
@@ -250,7 +250,7 @@ main bundle, and Empo hands the path in with `gamecore_setGamePath`.
 
 Empo has to reject a game its core cannot run, and import runs off the main
 thread before any core is open. So the answer cannot come from a bridge call.
-`tools/mkxp-core/build-framework-ios.sh` writes `EmpoCoreRGSSVersionMask` into
+`cores/mkxp/build-framework-ios.sh` writes `EmpoCoreRGSSVersionMask` into
 the framework's `Info.plist` from the same build flag the engine reads, and
 `MkxpCore.rgssVersionMask` reads the key from the bundle.
 
@@ -264,7 +264,7 @@ A core opens only after the open core killed its game with
 `canKillSession` can do that, so an MV or MZ game can come before a Ruby game,
 but not after one. `EmpoCoreOpen` refuses any other change of core, and
 `EngineSessionCoordinator.openCore` then stops the app. Two cores in one
-process load without binding to each other, and `tools/mkxp-core/host.m`
+process load without binding to each other, and `cores/mkxp/test-host/host.m`
 proves that with `MKXP_ALSO_OPEN`. Two cores cannot run at once. Both want the
 working directory, the signal handlers, the audio device and the main thread.
 
@@ -280,10 +280,12 @@ because no two of them open in a process.
 ## Which source a release names
 
 Each core comes from a release of its own engine repo, and the tag in its
-`.version` file names the source. `MkxpCore` comes from `mkxp-z-apple-mobile`
-(`ios/Dependencies/mkxp/.version`). The PSDK cores come from
-`psdk-apple-mobile` (`ios/Dependencies/psdk/.version`). `MvmzCore` comes from
-`mvmz-apple-mobile` (`ios/Dependencies/mvmz/.version`). Each release workflow
+`.version` file names the source. The engine repos hold no launcher code.
+Everything that wraps a core for Empo is in `cores/<core>/`: the pin, the
+fetch script, the bridge, and the framework build. `MkxpCore` comes from `mkxp-z-apple-mobile`
+(`cores/mkxp/.version`). The PSDK cores come from
+`psdk-apple-mobile` (`cores/psdk/.version`). `MvmzCore` comes from
+`mvmz-apple-mobile` (`cores/mvmz/.version`). Each release workflow
 builds from the tagged commit, so anyone can check out the source that built
 the shipped binary.
 

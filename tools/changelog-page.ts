@@ -20,11 +20,11 @@ const git = (...args: string[]) => {
 const engineHistory = process.env.ENGINE_HISTORY ?? ".engine-history";
 
 // The engine a release shipped: the submodule commit up to 0.7, then the
-// release tag that ios/Dependencies/mkxp/.version pins. Missing when the
+// release tag that cores/mkxp/.version pins. Missing when the
 // app tag is not fetched.
 const enginePin = (version: string) =>
   git("rev-parse", `v${version}:mkxp-z-apple-mobile`) ??
-  git("show", `v${version}:ios/Dependencies/mkxp/.version`)?.match(/^MKXP_CORE_VERSION=(\S+)$/m)?.[1];
+  git("show", `v${version}:cores/mkxp/.version`)?.match(/^MKXP_CORE_VERSION=(\S+)$/m)?.[1];
 
 const engineEntries = (from: string, to: string) => {
   const log = git("-C", engineHistory, "log", "--format=%s", `${from}..${to}`) ?? "";

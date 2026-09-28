@@ -5,13 +5,13 @@
 # check. Only psdk_ names out, no Ruby and no LiteRGSS name in.
 #
 # Usage:
-#   scripts/check-psdk-framework.sh [--sdk iphoneos|iphonesimulator]
-#   scripts/check-psdk-framework.sh --framework <path> --sdk <sdk>
+#   cores/psdk/check-framework.sh [--sdk iphoneos|iphonesimulator]
+#   cores/psdk/check-framework.sh --framework <path> --sdk <sdk>
 #
 # Without --framework, it checks the four PSDK cores in the build tree.
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SDK="${PLATFORM_NAME:-iphoneos}"
 FRAMEWORKS=()
 
@@ -26,7 +26,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         *)
-            echo "check-psdk-framework: unknown argument $1" >&2
+            echo "check-framework: unknown argument $1" >&2
             exit 2
             ;;
     esac
@@ -45,7 +45,7 @@ fail() {
 
 # A launcher opens the core and calls every name psdk_app_bridge.h
 # declares. A missing one aborts in the forwarder, so fail here first.
-WANT_NAMES=$(grep -oE '\bpsdk_[A-Za-z0-9_]+\(' "$REPO_ROOT/ios/Dependencies/psdk/psdk_app_bridge.h" |
+WANT_NAMES=$(grep -oE '\bpsdk_[A-Za-z0-9_]+\(' "$REPO_ROOT/cores/psdk/psdk_app_bridge.h" |
     sed 's/(//' | sort -u | sed 's/^/_/')
 
 if [ "$SDK" = iphonesimulator ]; then WANT_PLATFORM=7; else WANT_PLATFORM=2; fi
@@ -54,7 +54,7 @@ for FW in "${FRAMEWORKS[@]}"; do
     NAME="$(basename "$FW" .framework)"
     BIN="$FW/$NAME"
     [ -f "$BIN" ] ||
-        fail "missing $BIN (run: tools/psdk-core/build-framework-ios.sh --sdk $SDK)"
+        fail "missing $BIN (run: cores/psdk/build-framework-ios.sh --sdk $SDK)"
 
     EXPORTS=$(dyld_info -exports "$BIN" | awk '/^ *0x/ {print $2}' | sort -u)
 

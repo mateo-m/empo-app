@@ -129,8 +129,8 @@ The hero zoom from the game card to `GameLoadingView` needs a visible library. S
 | ---------------------------------------------- | ----------------------------------------------------------------------------- |
 | `mkxp-z-apple-mobile/src/display/graphics.cpp` | `GraphicsPrivate::checkPause()`: snapshot capture in the RPG Maker XP, VX and VX Ace core        |
 | `mkxp-z-apple-mobile/src/app_bridge.cpp`       | Condition variable, audio pause and resume, snapshot storage                  |
-| `ios/Dependencies/psdk/psdk_app_bridge.cpp`    | The same pause, audio, and snapshot code for the PSDK cores                   |
-| `ios/MvmzCore/mvmz_app_bridge.m`              | Pause, resume, and snapshot for the MV/MZ core                                |
+| `cores/psdk/psdk_app_bridge.cpp`    | The same pause, audio, and snapshot code for the PSDK cores                   |
+| `cores/mvmz/mvmz_app_bridge.m`              | Pause, resume, and snapshot for the MV/MZ core                                |
 | `mvmz-apple-mobile/src/runtime.js`             | Keeps the frames and pauses the audio in the page                             |
 | `ios/Empo/src/App/GameCoreForwarders.c`        | Sends each `gamecore_*` call to the core of the game                          |
 | `ios/Empo/src/App/PauseManager.swift`          | `pausedGame`, `pauseSnapshot`, `snapshotCanFade`                              |

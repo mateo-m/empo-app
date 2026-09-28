@@ -12,8 +12,8 @@
 // Each side keeps its own copy of this file:
 //   Empo        ios/Empo/src/App/GameCore.h              gamecore_ / GameCore
 //   MkxpCore    ios/Dependencies/mkxp-core/include/app_bridge.h  mkxp_ / MKXP
-//   Psdk*Core   ios/Dependencies/psdk/psdk_app_bridge.h  psdk_ / Psdk
-//   MvmzCore    ios/MvmzCore/mvmz_app_bridge.h           mvmz_ / Mvmz
+//   Psdk*Core   cores/psdk/psdk_app_bridge.h  psdk_ / Psdk
+//   MvmzCore    cores/mvmz/mvmz_app_bridge.h           mvmz_ / Mvmz
 //
 // scripts/check-core-interface.sh compares them and fails when one of
 // them drifts.

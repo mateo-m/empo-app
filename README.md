@@ -74,8 +74,9 @@ https://raw.githubusercontent.com/mateo-m/empo-app/main/altstore-source.json
 ## How it works
 
 ```text
+cores/                 One folder per core: its release pin, bridge, and framework build
 ios/Empo/              The app (SwiftUI + UIKit for touch controls)
-ios/Dependencies/      The pinned core releases and ANGLE
+ios/Dependencies/      The downloaded core releases and ANGLE
 docs/                  Notes on the harder parts
 ```
 

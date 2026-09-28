@@ -1,16 +1,16 @@
 #!/bin/sh
-# Downloads the PSDK core that ios/Dependencies/psdk/.version pins, from
+# Downloads the PSDK core that cores/psdk/.version pins, from
 # the releases of mateo-m/psdk-apple-mobile, into
 # ios/Dependencies/psdk-core. That repo's CI builds the release from a
 # tagged public commit.
 #
 # The folder holds include/psdk_core.h, <sdk>/libpsdk<NN>.a and
-# support/<version>. tools/psdk-core/build-framework-ios.sh links them
+# support/<version>. cores/psdk/build-framework-ios.sh links them
 # with psdk_app_bridge.cpp.
 set -eu
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PIN="$REPO_ROOT/ios/Dependencies/psdk/.version"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+PIN="$REPO_ROOT/cores/psdk/.version"
 DEST="$REPO_ROOT/ios/Dependencies/psdk-core"
 CORE_REPO=mateo-m/psdk-apple-mobile
 

@@ -1,4 +1,4 @@
 # The MV/MZ core release from github.com/mateo-m/mvmz-apple-mobile that
-# tools/fetch-mvmz-core.sh downloads. The release notes give the sha256.
+# cores/mvmz/fetch.sh downloads. The release notes give the sha256.
 MVMZ_CORE_VERSION=v1
 MVMZ_CORE_SHA256=b0735dd066ec8944a9bb66dc91decdc4ac7a965a117decd709a8200ddfad31c3

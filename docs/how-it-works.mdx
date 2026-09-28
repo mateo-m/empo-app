@@ -19,9 +19,10 @@ that keep the cores apart.
 
 <FileTree>
 
+- cores/ One folder for each core: the release pin, the bridge to the launcher interface, and the framework build.
 - ios/
   - Empo/ The app. SwiftUI, with UIKit for the touch controls.
-  - Dependencies/ The pinned release of each core, and ANGLE. The Xcode build downloads them.
+  - Dependencies/ The downloaded release of each core, and ANGLE.
   - GameProbe/ A Swift package that reads game metadata. It builds on Linux, so CI can test it.
 - docs/ This documentation.
 

@@ -5,11 +5,11 @@
 # to check. The mkxp_ bridge out, no Ruby and no SDL name in or out.
 #
 # Usage:
-#   scripts/check-mkxp-framework.sh [--sdk iphoneos|iphonesimulator]
-#   scripts/check-mkxp-framework.sh --framework <path> --sdk <sdk>
+#   cores/mkxp/check-framework.sh [--sdk iphoneos|iphonesimulator]
+#   cores/mkxp/check-framework.sh --framework <path> --sdk <sdk>
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SDK="${PLATFORM_NAME:-iphoneos}"
 FW=""
 
@@ -24,7 +24,7 @@ while [ "$#" -gt 0 ]; do
             shift 2
             ;;
         *)
-            echo "check-mkxp-framework: unknown argument $1" >&2
+            echo "check-framework: unknown argument $1" >&2
             exit 2
             ;;
     esac
@@ -39,7 +39,7 @@ fail() {
 
 BIN="$FW/MkxpCore"
 [ -f "$BIN" ] ||
-    fail "missing $BIN (run: tools/mkxp-core/build-framework-ios.sh --sdk $SDK)"
+    fail "missing $BIN (run: cores/mkxp/build-framework-ios.sh --sdk $SDK)"
 
 # The header is the contract. Anything it declares must be out, and
 # nothing else may be.

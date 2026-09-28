@@ -9,7 +9,7 @@ struct MkxpCore: GameCore {
     let madeWith = "RPG Maker"
 
     /// Import refuses a game the mask does not cover, so the name and the
-    /// line follow the mask. check-mkxp-framework.sh allows 3, which is
+    /// line follow the mask. cores/mkxp/check-framework.sh allows 3, which is
     /// RGSS1 and RGSS2, and 7, which adds RGSS3. A build without the core
     /// has 0, and its refusal names the full core.
     var displayName: String {
@@ -27,7 +27,7 @@ struct MkxpCore: GameCore {
     var supportsCheats: Bool { true }
 
     /// Which RGSS versions the core runs, as the bitmask that
-    /// tools/mkxp-core/build-framework-ios.sh writes. It depends on the
+    /// cores/mkxp/build-framework-ios.sh writes. It depends on the
     /// Ruby versions the core carries: Ruby 1.8 alone runs RGSS1 and
     /// RGSS2, and Ruby 3 with the syntax rewrite runs all three. Zero
     /// when this build has no RPG Maker core.

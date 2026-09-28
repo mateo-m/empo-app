@@ -6,8 +6,8 @@
 #
 #   Empo      ios/Empo/src/App/GameCore.h          gamecore_ / GameCore
 #   MkxpCore  ios/Dependencies/mkxp-core/include/app_bridge.h  mkxp_ / MKXP
-#   Psdk*Core ios/Dependencies/psdk/psdk_app_bridge.h  psdk_ / Psdk
-#   MvmzCore  ios/MvmzCore/mvmz_app_bridge.h         mvmz_ / Mvmz
+#   Psdk*Core cores/psdk/psdk_app_bridge.h  psdk_ / Psdk
+#   MvmzCore  cores/mvmz/mvmz_app_bridge.h         mvmz_ / Mvmz
 #
 # GameCore.h holds only what Empo calls. A core header can hold more,
 # for example the half of app_bridge.h that the mkxp engine calls. So
@@ -20,7 +20,7 @@
 # inline no-op stubs behind #else. The read stops at that line.
 #
 # The mkxp header comes from the engine release that
-# tools/fetch-mkxp-core.sh downloads. The script fetches it when it is
+# cores/mkxp/fetch.sh downloads. The script fetches it when it is
 # missing.
 #
 # Usage:
@@ -34,10 +34,10 @@ if [ -n "${ENGINE:-}" ]; then
     MKXP="$ENGINE/src/app_bridge.h"
 else
     MKXP="$ROOT/ios/Dependencies/mkxp-core/include/app_bridge.h"
-    [ -f "$MKXP" ] || "$ROOT/tools/fetch-mkxp-core.sh" >&2
+    [ -f "$MKXP" ] || "$ROOT/cores/mkxp/fetch.sh" >&2
 fi
-PSDK="$ROOT/ios/Dependencies/psdk/psdk_app_bridge.h"
-MVMZ="$ROOT/ios/MvmzCore/mvmz_app_bridge.h"
+PSDK="$ROOT/cores/psdk/psdk_app_bridge.h"
+MVMZ="$ROOT/cores/mvmz/mvmz_app_bridge.h"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

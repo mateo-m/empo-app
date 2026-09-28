@@ -6,7 +6,7 @@
 # its own files, so it goes into Documents, which is writable.
 #
 # Usage:
-#   tools/mkxp-core/run-test-host-ios.sh --game <dir> [--seconds 90]
+#   cores/mkxp/test-host/run-test-host-ios.sh --game <dir> [--seconds 90]
 #                                        [--snap-every 5] [--device <udid>]
 #                                        [--keys 20:29,26:40] [--load-at 2]
 #                                        [--also-open Psdk30Core.framework]
@@ -17,10 +17,10 @@
 # The snapshots come from `simctl io screenshot`, not from the game. A
 # picture of the display proves the frame was presented.
 #
-# Prerequisite: tools/mkxp-core/build-test-host-ios.sh
+# Prerequisite: cores/mkxp/test-host/build-test-host-ios.sh
 set -eu
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 APP="$ROOT/build/mkxp-core/MkxpTests.app"
 BUNDLE_ID=sh.mateo.empo.mkxptests
 
@@ -83,7 +83,7 @@ done
 }
 [ -z "$ALSO_OPEN" ] || [ -d "$APP/Frameworks/$ALSO_OPEN" ] || {
     echo "run-test-host-ios: the host holds no $ALSO_OPEN. Run" >&2
-    echo "  tools/psdk-core/build-framework-ios.sh --sdk iphonesimulator," >&2
+    echo "  cores/psdk/build-framework-ios.sh --sdk iphonesimulator," >&2
     echo "  then build the host again." >&2
     exit 1
 }

@@ -16,7 +16,7 @@ Issues, ideas, and PRs are welcome.
 
 ## Build
 
-Each core comes from the release of its own repo: [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), [psdk-apple-mobile](https://github.com/mateo-m/psdk-apple-mobile), and [mvmz-apple-mobile](https://github.com/mateo-m/mvmz-apple-mobile). The Xcode build downloads the release that `ios/Dependencies/<core>/.version` pins, and wraps it in a framework. After you clone:
+Each core comes from the release of its own repo: [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), [psdk-apple-mobile](https://github.com/mateo-m/psdk-apple-mobile), and [mvmz-apple-mobile](https://github.com/mateo-m/mvmz-apple-mobile). The Xcode build downloads the release that `cores/<core>/.version` pins, and wraps it in a framework. After you clone:
 
 ```sh
 brew install bun xcodegen gh
@@ -36,9 +36,9 @@ generated module map for the `json5cpp` C package and fails with
 
 ### Change an engine
 
-Make the change in the engine repo, and follow the build steps of its README. When its release workflow publishes a new version, set the version and the sha256 from the release notes in `ios/Dependencies/<core>/.version`.
+Make the change in the engine repo, and follow the build steps of its README. When its release workflow publishes a new version, set the version and the sha256 from the release notes in `cores/<core>/.version`.
 
-To test an engine build before its release, put the tarball of `tools/package-ios.sh` in `ios/Dependencies/mkxp-core.tar.gz`, and set `MKXP_CORE_SHA256` in `ios/Dependencies/mkxp/.version` to its sha256.
+To test an engine build before its release, put the tarball of `tools/package-ios.sh` in `ios/Dependencies/mkxp-core.tar.gz`, and set `MKXP_CORE_SHA256` in `cores/mkxp/.version` to its sha256.
 
 ### Simulator install
 

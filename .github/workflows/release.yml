@@ -262,7 +262,7 @@ jobs:
             ios/Dependencies/mkxp-core
             ios/Dependencies/psdk-core
             ios/Dependencies/mvmz-core
-          key: cores-${{ runner.os }}-${{ hashFiles('ios/Dependencies/ANGLE/.version', 'ios/Dependencies/mkxp/.version', 'ios/Dependencies/psdk/.version', 'ios/Dependencies/mvmz/.version') }}
+          key: cores-${{ runner.os }}-${{ hashFiles('ios/Dependencies/ANGLE/.version', 'cores/mkxp/.version', 'cores/psdk/.version', 'cores/mvmz/.version') }}
 
       - name: Fetch ANGLE
         env:

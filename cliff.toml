@@ -35,8 +35,7 @@ include_paths = [
   "ios/Json5/Package.swift",
   "ios/Json5/Sources/**",
   "tools/gamecore/**",
-  "tools/mkxp-core/**",
-  "tools/psdk-core/**",
+  "cores/**",
 ]
 conventional_commits = true
 filter_unconventional = true

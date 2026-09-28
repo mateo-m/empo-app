@@ -1,5 +1,5 @@
 #!/bin/sh
-# Downloads the MV/MZ core that ios/Dependencies/mvmz/.version pins, from
+# Downloads the MV/MZ core that cores/mvmz/.version pins, from
 # the releases of mateo-m/mvmz-apple-mobile, into
 # ios/Dependencies/mvmz-core. That repo's CI builds the release from a
 # tagged public commit.
@@ -8,8 +8,8 @@
 # target links them with mvmz_app_bridge.m.
 set -eu
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PIN="$REPO_ROOT/ios/Dependencies/mvmz/.version"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+PIN="$REPO_ROOT/cores/mvmz/.version"
 DEST="$REPO_ROOT/ios/Dependencies/mvmz-core"
 CORE_REPO=mateo-m/mvmz-apple-mobile
 

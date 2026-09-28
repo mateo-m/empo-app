@@ -17,9 +17,9 @@ cd "$REPO_ROOT"
 
 DEPS_REPO="${EMPO_DEPS_REPO:-mateo-m/empo-deps}"
 ANGLE_VERSION_FILE="$REPO_ROOT/ios/Dependencies/ANGLE/.version"
-MKXP_VERSION_FILE="$REPO_ROOT/ios/Dependencies/mkxp/.version"
-PSDK_VERSION_FILE="$REPO_ROOT/ios/Dependencies/psdk/.version"
-MVMZ_VERSION_FILE="$REPO_ROOT/ios/Dependencies/mvmz/.version"
+MKXP_VERSION_FILE="$REPO_ROOT/cores/mkxp/.version"
+PSDK_VERSION_FILE="$REPO_ROOT/cores/psdk/.version"
+MVMZ_VERSION_FILE="$REPO_ROOT/cores/mvmz/.version"
 
 die() {
     printf 'verify-empo-deps-pins: %s\n' "$1" >&2

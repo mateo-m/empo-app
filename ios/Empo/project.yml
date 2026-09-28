@@ -73,22 +73,22 @@ targets:
 
       - name: Wrap the mkxp-z core
         # Fetches the mkxp-z-apple-mobile release that
-        # ios/Dependencies/mkxp/.version pins, and links it into
+        # cores/mkxp/.version pins, and links it into
         # MkxpCore.framework. A stamp skips the link when nothing
-        # changed. See tools/mkxp-core/build-framework-ios.sh.
+        # changed. See cores/mkxp/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
-          "${PROJECT_DIR}/../../tools/mkxp-core/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
+          "${PROJECT_DIR}/../../cores/mkxp/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
 
       - name: Wrap the PSDK cores
         # Fetches the psdk-apple-mobile release that
-        # ios/Dependencies/psdk/.version pins, and links each Ruby's
+        # cores/psdk/.version pins, and links each Ruby's
         # library with psdk_app_bridge.cpp into Psdk<NN>Core.framework.
         # A stamp skips the link when nothing
-        # changed. See tools/psdk-core/build-framework-ios.sh.
+        # changed. See cores/psdk/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
-          "${PROJECT_DIR}/../../tools/psdk-core/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
+          "${PROJECT_DIR}/../../cores/psdk/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
 
       - name: Assemble Assets.bundle
         # Force every build. The script copies whatever is in the
@@ -159,8 +159,8 @@ targets:
           fi
           for CORE in ${EMPO_CORES}; do
             case "$CORE" in
-              MkxpCore) HOW="tools/mkxp-core/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
-              Psdk25Core|Psdk30Core|Psdk32Core|Psdk33Core) HOW="tools/psdk-core/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
+              MkxpCore) HOW="cores/mkxp/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
+              Psdk25Core|Psdk30Core|Psdk32Core|Psdk33Core) HOW="cores/psdk/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
               MvmzCore) HOW="build the MvmzCore target" ;;
               *)
                 echo "error: EMPO_CORES names an unknown core: $CORE" >&2
@@ -255,8 +255,8 @@ targets:
       # Psdk25Core, Psdk30Core, Psdk32Core and Psdk33Core each hold
       # LiteRGSS2, LiteCGSS, SFML and the Ruby of their name.
       #
-      # tools/mkxp-core/build-framework-ios.sh links MkxpCore from the
-      # mkxp-z-apple-mobile release, and scripts/check-mkxp-framework.sh
+      # cores/mkxp/build-framework-ios.sh links MkxpCore from the
+      # mkxp-z-apple-mobile release, and cores/mkxp/check-framework.sh
       # proves it exports nothing but mkxp_*.
       # Vendored libmspack CAB reader (see vendor/libmspack/README.md).
       - path: vendor/libmspack
@@ -332,22 +332,24 @@ targets:
     type: framework
     platform: iOS
     sources:
-      - path: ../MvmzCore
+      - path: ../../cores/mvmz
         excludes:
           - Info.plist
+          - fetch.sh
+          - .version
     preBuildScripts:
       - name: Fetch the MV/MZ core
-        # The mvmz-apple-mobile release that ios/Dependencies/mvmz/.version
-        # pins. See tools/fetch-mvmz-core.sh.
+        # The mvmz-apple-mobile release that cores/mvmz/.version
+        # pins. See cores/mvmz/fetch.sh.
         basedOnDependencyAnalysis: false
         script: |
-          "${PROJECT_DIR}/../../tools/fetch-mvmz-core.sh"
+          "${PROJECT_DIR}/../../cores/mvmz/fetch.sh"
     postBuildScripts:
       - name: Name the MV/MZ core release
         # The Game cores screen shows EmpoCoreVersion, the release tag
-        # that ios/Dependencies/mvmz/.version pins. The input orders it
-        # after Xcode writes the Info.plist. Without one, the two can run
-        # in either order.
+        # that cores/mvmz/.version pins. The input orders it after Xcode
+        # writes the Info.plist. Without one, the two can run in either
+        # order.
         basedOnDependencyAnalysis: false
         inputFiles:
           - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
@@ -359,7 +361,7 @@ targets:
       base:
         PRODUCT_NAME: MvmzCore
         PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.mvmzcore
-        INFOPLIST_FILE: $(PROJECT_DIR)/../MvmzCore/Info.plist
+        INFOPLIST_FILE: $(PROJECT_DIR)/../../cores/mvmz/Info.plist
         HEADER_SEARCH_PATHS: $(PROJECT_DIR)/../Dependencies/mvmz-core/include
         OTHER_LDFLAGS:
           - $(PROJECT_DIR)/../Dependencies/mvmz-core/$(PLATFORM_NAME)/libmvmz.a

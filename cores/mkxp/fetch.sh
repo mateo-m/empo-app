@@ -1,17 +1,17 @@
 #!/bin/sh
-# Downloads the engine that ios/Dependencies/mkxp/.version pins, from
+# Downloads the engine that cores/mkxp/.version pins, from
 # the releases of mateo-m/mkxp-z-apple-mobile, into
 # ios/Dependencies/mkxp-core. That repo's CI builds the release from a
 # tagged public commit.
 #
 # The folder holds include/app_bridge.h, the engine assets, and the
 # libraries of each SDK with a LINK file that lists them.
-# tools/mkxp-core/build-framework-ios.sh links them into
+# cores/mkxp/build-framework-ios.sh links them into
 # MkxpCore.framework.
 set -eu
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PIN="$REPO_ROOT/ios/Dependencies/mkxp/.version"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+PIN="$REPO_ROOT/cores/mkxp/.version"
 DEST="$REPO_ROOT/ios/Dependencies/mkxp-core"
 CORE_REPO=mateo-m/mkxp-z-apple-mobile
 
