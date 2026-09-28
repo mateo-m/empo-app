@@ -82,8 +82,8 @@ runs on the Ruby 3.0 core. Ruby
 
 The PSDK core lives in its own repo, `psdk-apple-mobile`. Each release holds
 `libpsdk<NN>.a` for each Ruby: one object with the Ruby, its extensions,
-LiteRGSS2, LiteCGSS, SFML and OpenSSL, which defines only the names of
-`psdk_core.h`. `ios/Dependencies/psdk/.version` pins the release.
+LiteRGSS2, LiteCGSS, SFML, OpenAL Soft and OpenSSL, which defines only the
+names of `psdk_core.h`. `ios/Dependencies/psdk/.version` pins the release.
 `tools/psdk-core/build-framework-ios.sh` links each library with
 `psdk_app_bridge.cpp`, which answers the launcher interface with the core's
 calls, into `Psdk<NN>Core.framework`. Xcode runs it before each build.
@@ -294,5 +294,5 @@ fails when that hash stops matching the script on disk. Rebuild MkxpCore with
 fingerprint does not list the packaging script, because it builds an engine
 output and a full dependency rebuild takes hours.
 
-The PSDK cores link again before a build when the pin, the script or the
-bridge changes. A stamp in the native tree records those three.
+The PSDK cores link again before a build when the core pin, the ANGLE pin,
+the script or the bridge changes. A stamp in the native tree records them.
