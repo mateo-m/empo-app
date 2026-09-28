@@ -279,10 +279,11 @@ is not on that repo's `dev` branch. The PSDK cores come from a
 `psdk-apple-mobile` release, and its tag in `ios/Dependencies/psdk/.version`
 names the source.
 
-`EmpoCoreVersion` holds `git describe` of that repo, so the rows of these cores
-on the Game cores screen carry the same tag name after a release. Before the first release
-that ships a core, `describe` has no tag to name and falls back to the short
-commit.
+In `MkxpCore`, `EmpoCoreVersion` holds `git describe` of that repo, so its row
+on the Game cores screen carries the same tag name after a release. Before the
+first release that ships the core, `describe` has no tag to name and falls back
+to the short commit. In each PSDK core, `EmpoCoreVersion` holds the release tag
+that `ios/Dependencies/psdk/.version` pins, for example `v1`.
 
 ## How the framework stays fresh
 
