@@ -341,6 +341,8 @@ void mvmz_resetSessionState(void) {
     gPausedFlag = NO;
     gHasHostRegion = NO;
     gGameSize = CGSizeZero;
+    gFastForward = 1;
+    gCheatsEnabled = NO;
     if (!gSnapshotLock) {
         gSnapshotLock = [[NSLock alloc] init];
     }

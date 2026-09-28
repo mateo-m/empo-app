@@ -557,6 +557,8 @@ void psdk_resetSessionState(void) {
     gPlacedWindowSize.store(0);
     gPictureW.store(0);
     gPictureH.store(0);
+    gFastForwardMultiplier.store(1);
+    gCheatsEnabled.store(false);
     std::lock_guard<std::mutex> lock(gSnapshotLock);
     gSnapshotRGBA.clear();
     gSnapshotW = 0;
