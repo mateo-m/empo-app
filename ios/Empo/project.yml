@@ -345,8 +345,12 @@ targets:
     postBuildScripts:
       - name: Name the MV/MZ core release
         # The Game cores screen shows EmpoCoreVersion, the release tag
-        # that ios/Dependencies/mvmz/.version pins.
+        # that ios/Dependencies/mvmz/.version pins. The input orders it
+        # after Xcode writes the Info.plist. Without one, the two can run
+        # in either order.
         basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
         script: |
           set -e
           VERSION="$(cut -d" " -f1 "${PROJECT_DIR}/../Dependencies/mvmz-core/.fetched-pin")"
