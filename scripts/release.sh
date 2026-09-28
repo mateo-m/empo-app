@@ -238,7 +238,7 @@ if ! git -C "$REPO_ROOT" diff --quiet HEAD; then
     exit 1
 fi
 
-# 2. Verify dependency pins resolve to published empo-deps releases,
+# 2. Verify dependency pins resolve to published releases,
 # even for CI builds, so an unpublished pin aborts before the script
 # tags anything. Hydration/rebuild only happens for local builds. The
 # Release workflow hydrates its own runner.
