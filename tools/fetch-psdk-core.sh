@@ -21,7 +21,8 @@ if [ -z "${PSDK_CORE_VERSION:-}" ] || [ -z "${PSDK_CORE_SHA256:-}" ]; then
     exit 1
 fi
 
-if [ "$(cat "$DEST/.fetched-version" 2>/dev/null)" = "$PSDK_CORE_VERSION" ]; then
+FETCHED="$PSDK_CORE_VERSION $PSDK_CORE_SHA256"
+if [ "$(cat "$DEST/.fetched-pin" 2>/dev/null)" = "$FETCHED" ]; then
     exit 0
 fi
 
@@ -39,4 +40,4 @@ rm -rf "$DEST"
 mkdir -p "$DEST"
 tar -xzf "$TAR" -C "$DEST"
 rm -f "$TAR"
-printf '%s\n' "$PSDK_CORE_VERSION" >"$DEST/.fetched-version"
+printf '%s\n' "$FETCHED" >"$DEST/.fetched-pin"

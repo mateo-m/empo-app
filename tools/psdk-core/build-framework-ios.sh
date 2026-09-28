@@ -7,8 +7,8 @@
 # answers the launcher interface with the core's calls. The export list
 # keeps the Ruby and every library of the core inside the framework.
 #
-# The script does nothing when the frameworks match the pin and the
-# bridge files. Xcode runs it before each build.
+# The script does nothing when the frameworks match the core pin, the
+# ANGLE pin and the bridge files. Xcode runs it before each build.
 #
 # Usage:
 #   tools/psdk-core/build-framework-ios.sh [--sdk iphoneos|iphonesimulator]
@@ -58,11 +58,11 @@ TREE="$DEPS/build-$SDK-arm64"
 ANGLE="$DEPS/ANGLE/$SDK"
 SYSROOT="$(xcrun --sdk "$SDK" --show-sdk-path)"
 CXX="$(xcrun --sdk "$SDK" -f clang++)"
-CORE_VERSION="$(cat "$CORE/.fetched-version")"
+CORE_VERSION="$(cut -d" " -f1 "$CORE/.fetched-pin")"
 
 STAMP="$TREE/.psdk-frameworks"
-WANT_STAMP="$(cat "$CORE/.fetched-version" "$0" "$DEPS/psdk/psdk_app_bridge.cpp" \
-    "$DEPS/psdk/psdk_app_bridge.h" | shasum -a 256 | awk '{print $1}')"
+WANT_STAMP="$(cat "$CORE/.fetched-pin" "$DEPS/ANGLE/.version" "$0" \
+    "$DEPS/psdk/psdk_app_bridge.cpp" "$DEPS/psdk/psdk_app_bridge.h" | shasum -a 256 | awk '{print $1}')"
 if [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT_STAMP" ]; then
     exit 0
 fi
