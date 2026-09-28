@@ -72,11 +72,10 @@ rm -rf "$APP/Frameworks"
 mkdir -p "$APP/Frameworks"
 cp -R "$TREE/MkxpCore.framework" "$APP/Frameworks/"
 
-# Psdk30Core rides along when it is built, so MKXP_ALSO_OPEN can prove two
-# cores load in one process. The host never links it.
-if [ -d "$TREE/Psdk30Core.framework" ]; then
-    cp -R "$TREE/Psdk30Core.framework" "$APP/Frameworks/"
-fi
+# Psdk30Core rides along so MKXP_ALSO_OPEN can prove two cores load in
+# one process. The host never links it.
+"$ROOT/tools/psdk-core/build-framework-ios.sh" --sdk "$SDK"
+cp -R "$TREE/Psdk30Core.framework" "$APP/Frameworks/"
 
 # An unsigned bundle installs on some simulator runtimes and not on
 # others. An ad-hoc signature works everywhere and needs no identity.
