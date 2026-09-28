@@ -1041,6 +1041,8 @@ struct GameLibraryView: View {
             else { continue }
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(second))
+                // A launch warning can hold the game back past the plan.
+                guard EmpoCoreIsOpen() != 0 else { return }
                 EngineSessionCoordinator.shared.injectKeyTap(scancode: code, holdMilliseconds: 200)
             }
         }
