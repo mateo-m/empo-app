@@ -267,7 +267,8 @@ struct GameSettings: GameSettingsGroup {
     ) {
         // The legacy engine migration rebuilds `mkxp.json`, so the
         // display values must move out of it first.
-        ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory)
+        guard ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory)
+        else { return }
         ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
             stateDirectory: stateDirectory,
             gameDirectory: gameDirectory
