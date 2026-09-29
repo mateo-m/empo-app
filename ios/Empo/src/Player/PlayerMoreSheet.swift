@@ -204,6 +204,7 @@ private struct MenuRow: View {
                     .frame(width: 24)
                 Text(label)
                     .foregroundStyle(role == .destructive ? .red : .primary)
+                    .multilineTextAlignment(.leading)
                 Spacer()
             }
             .padding(.horizontal, Spacing.lg)
