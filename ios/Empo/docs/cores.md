@@ -173,10 +173,16 @@ The shared settings, smooth scaling and fixed aspect ratio included, live in
 values gives them in `displayDefaults(for:)`, and the settings page shows
 them until the user changes a row. The mkxp core reads them from
 `Game/mkxp.json`. `EmpoState/mkxp.json` holds only the settings that only
-mkxp-z has. `DataDirectory` also reads `dataPathOrg` and `dataPathApp` from
-it for every game, to place the game's save folder. Older builds kept smooth scaling and fixed
-aspect ratio there for every game. `GameSettings.migrateLegacyEngineSettingsIfNeeded`
-moves them to `game_settings.json` when the game starts or its settings open.
+mkxp-z has. Older builds kept smooth scaling and fixed aspect ratio there for
+every game. `ManagedMkxpConfig.migrateDisplaySettingsIfNeeded` moves them to
+`game_settings.json` when the game starts or its settings open.
+
+A core that wants a save folder that games share names it in
+`sharedDataFolder(for:)`, as a path under `Documents/Data/`. The app makes the
+folder and sends it as `userDataDirectory`. The mkxp core names the folder
+that desktop mkxp-z uses, from `dataPathOrg`, `dataPathApp` and the
+`Game.ini` title. The other cores name no folder, because their games keep
+their saves in their own folder. They get `NULL`.
 
 ## What the engine asks the bridge
 

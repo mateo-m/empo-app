@@ -152,6 +152,7 @@ struct MkxpCore: GameCore {
     // MARK: - Launch
 
     func launch(_ container: GameContainer) {
+        Self.migrateOldSettings(in: container)
         let settings = MkxpSettings.load(from: container.empoStateURL)
         let profile = MkxpProfile.load(for: container, rescan: settings.followsScriptScan)
         let ruby = settings.rubyVersionOverride ?? profile.rubyVersion
@@ -229,7 +230,34 @@ struct MkxpCore: GameCore {
     // MARK: - Settings and info
 
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)? {
-        MkxpSettingsState(container: container)
+        Self.migrateOldSettings(in: container)
+        return MkxpSettingsState(container: container)
+    }
+
+    /// Older builds kept the engine settings in `game_settings.json`.
+    /// Moving them rebuilds `mkxp.json`, so the display settings must
+    /// leave that file first.
+    private static func migrateOldSettings(in container: GameContainer) {
+        let stateDirectory = container.empoStateURL
+        guard ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory)
+        else { return }
+        ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
+            stateDirectory: stateDirectory,
+            gameDirectory: container.gameURL
+        )
+        ManagedMkxpConfig.removeLegacyEngineConfigDirectory(in: stateDirectory)
+    }
+
+    /// Desktop mkxp-z keeps saves in `SDL_GetPrefPath(dataPathOrg,
+    /// dataPathApp)`, so fan games share saves across versions.
+    func sharedDataFolder(for container: GameContainer) -> [String]? {
+        ManagedMkxpConfig.readDataPath(
+            stateDirectory: container.empoStateURL,
+            gameDirectory: container.gameURL
+        ).sharedDirectoryComponents(
+            iniTitleFallback: GameINI.gameTitle(at: container.gameURL),
+            folderNameFallback: container.folderName
+        )
     }
 
     func displayDefaults(for container: GameContainer) -> GameDisplayDefaults {

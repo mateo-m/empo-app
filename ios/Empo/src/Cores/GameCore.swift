@@ -59,6 +59,11 @@ protocol GameCore {
 
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)?
     func displayDefaults(for container: GameContainer) -> GameDisplayDefaults
+    /// The folder under `Documents/Data/` that the app gives the game for
+    /// its saves, as path components. Two games with the same folder
+    /// share their saves. Nil when the game keeps its files in its own
+    /// folder.
+    func sharedDataFolder(for container: GameContainer) -> [String]?
     @MainActor func settingsPage(_ model: GameSettingsModel) -> AnyView
 
     /// Rows for the Runtime section of Game Info. Empty hides the section.
@@ -88,6 +93,7 @@ extension GameCore {
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning? { nil }
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)? { nil }
     func displayDefaults(for container: GameContainer) -> GameDisplayDefaults { GameDisplayDefaults() }
+    func sharedDataFolder(for container: GameContainer) -> [String]? { nil }
     func infoRows(for container: GameContainer) async -> [InfoRow] { [] }
 
     var notInThisBuildMessage: String {

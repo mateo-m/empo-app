@@ -9,12 +9,10 @@ enum GameSession {
     struct LaunchInput {
         let game: GameEntry
         let container: GameContainer
-        let gameDir: URL
-        let stateDir: URL
         /// Engine-writable data directory (`System.data_directory`),
         /// resolved by `DataDirectory` into the shared
         /// `Documents/Data/<org>/<app>/` tree.
-        let userDataDir: URL
+        let userDataDir: URL?
         let core: any GameCore
         let settings: GameSettings
         let debugLogsEnabled: Bool
@@ -30,29 +28,26 @@ enum GameSession {
     ) {
         let container = input.container
         let game = input.game
-        let gameDir = input.gameDir
-        let stateDir = input.stateDir
         let settings = input.settings
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
-
-        GameSettings.migrateLegacyEngineSettingsIfNeeded(
-            stateDirectory: stateDir,
-            gameDirectory: gameDir
-        )
-        ManagedMkxpConfig.removeLegacyEngineConfigDirectory(in: stateDir)
 
         // The core reads its settings in gamecore_applySessionConfig.
         input.core.launch(container)
 
         DataDirectory.ensureFontsRoot()
-        input.userDataDir.path.withCString { userDataPtr in
+        func applySessionConfig(userDataDirectory: UnsafePointer<CChar>?) {
             DataDirectory.fontsRootURL.path.withCString { fontsPtr in
                 var config = GameCoreSessionConfig()
-                config.userDataDirectory = userDataPtr
+                config.userDataDirectory = userDataDirectory
                 config.sharedFontsDirectory = fontsPtr
                 config.verticalAlignment = alignment.bridgeValue
                 gamecore_applySessionConfig(&config)
             }
+        }
+        if let userDataDir = input.userDataDir {
+            userDataDir.path.withCString(applySessionConfig(userDataDirectory:))
+        } else {
+            applySessionConfig(userDataDirectory: nil)
         }
 
         crashTracker.writeMarker(for: container)

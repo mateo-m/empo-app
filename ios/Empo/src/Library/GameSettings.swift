@@ -1,5 +1,4 @@
 import Foundation
-import GameProbe
 
 enum VerticalAlignment: String, Codable, CaseIterable {
     case top
@@ -257,22 +256,6 @@ struct GameSettings: GameSettingsGroup {
             assertionFailure("Missing displayLabel mapping for GameSettings.\(key)")
             return key
         }
-    }
-
-    /// Moves settings that older builds stored in the wrong file. Safe
-    /// to call on every launch and settings open.
-    static func migrateLegacyEngineSettingsIfNeeded(
-        stateDirectory: URL,
-        gameDirectory: URL
-    ) {
-        // The legacy engine migration rebuilds `mkxp.json`, so the
-        // display values must move out of it first.
-        guard ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory)
-        else { return }
-        ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
-            stateDirectory: stateDirectory,
-            gameDirectory: gameDirectory
-        )
     }
 
     /// The value the engine bridge takes for `touchMouse`. Both the

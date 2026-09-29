@@ -36,10 +36,7 @@ final class GameSettingsModel {
         // The sheet opens only for an entry with a container on disk.
         let container = game.container!
         self.container = container
-        GameSettings.migrateLegacyEngineSettingsIfNeeded(
-            stateDirectory: container.empoStateURL,
-            gameDirectory: container.gameURL
-        )
+        ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: container.empoStateURL)
         let settings = GameSettings.load(from: container.empoStateURL)
         self.settings = settings
         self.initialSettings = settings

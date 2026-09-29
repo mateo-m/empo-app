@@ -66,6 +66,7 @@ class AppState {
         GameContainerMigration.migrateLegacyContainersIfNeeded()
         SaveMigration.migrateAllDiscoveredGamesIfNeeded()
         DataDirectory.healPreLiteralChainsAtLaunch()
+        DataDirectory.removeEmptyFolders()
         session = EngineSessionCoordinator.shared
         session.delegate = self
     }
@@ -96,23 +97,14 @@ class AppState {
         // .session-active, etc.). `Logs/` and `Metadata/` complete
         // the per-game tree.
         try? container.ensureSubdirs()
-        let gameDir = container.gameURL
-        // Every game gets a shared Documents/Data/<org>/<app>/ data
-        // directory. This mirrors how desktop mkxp-z resolves
-        // dataPathOrg/dataPathApp through SDL_GetPrefPath for every
-        // game, declared or not.
         // The engine compares this path against getcwd output, so
         // it must receive the symlink-resolved spelling (see
         // `engineSpelling` for the /var vs /private/var trap).
-        let userDataDir = DataDirectory.engineSpelling(
-            of: DataDirectory.resolveAndPrepare(for: container))
+        let userDataDir = DataDirectory.resolveAndPrepare(for: container, core: core)
+            .map(DataDirectory.engineSpelling(of:))
         let stateDir = container.empoStateURL
 
-        GameSettings.migrateLegacyEngineSettingsIfNeeded(
-            stateDirectory: stateDir,
-            gameDirectory: gameDir
-        )
-        ManagedMkxpConfig.removeLegacyEngineConfigDirectory(in: stateDir)
+        ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDir)
 
         let settings = GameSettings.load(from: stateDir)
 
@@ -120,8 +112,6 @@ class AppState {
             GameSession.LaunchInput(
                 game: game,
                 container: container,
-                gameDir: gameDir,
-                stateDir: stateDir,
                 userDataDir: userDataDir,
                 core: core,
                 settings: settings,

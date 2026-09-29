@@ -6,26 +6,18 @@ import Synchronization
 /// (`GameCoreSessionConfig.userDataDirectory`, surfaced to games as
 /// `System.data_directory`).
 ///
-/// Every game resolves to
+/// A game whose core names a folder (`GameCore.sharedDataFolder`)
+/// resolves to
 ///
-///     Documents/Data/<org>/<app>/
+///     Documents/Data/<components>/
 ///
 /// shared across containers and visible in the Files app next to
-/// `Games/`. This mirrors desktop mkxp-z, where `dataPathOrg` and
-/// `dataPathApp` from the effective mkxp config (`Game/mkxp.json`
-/// merged with the `EmpoState/mkxp.json` overlay) feed
-/// `SDL_GetPrefPath(org, app)`. Two releases that resolve to the
-/// same pair share one directory, which is how fan games carry
-/// saves across versions. That matters more now that re-importing
-/// replaces the old container.
-///
-/// Defaults mirror mkxp-z's: an org of `"."` or blank adds no path
-/// component, and a missing `dataPathApp` falls back to the INI
-/// title, then the container folder name. See
-/// `MkxpDataPath.sharedDirectoryComponents` for why the engine's
-/// `"mkxp-z"` last resort is skipped. Children of `Data/` are
-/// reused case-insensitively, so a case-only title change keeps
-/// its saves the way desktop Windows would.
+/// `Games/`. Two releases that resolve to the same folder share
+/// it, which is how fan games carry saves across versions. That
+/// matters more now that re-importing replaces the old container.
+/// Children of `Data/` are reused case-insensitively, so a
+/// case-only title change keeps its saves the way desktop Windows
+/// would.
 ///
 /// The per-game `<container>/UserData/` directory is now a legacy
 /// staging area only. `SaveMigration` funnels old save locations
@@ -98,21 +90,9 @@ enum DataDirectory {
     /// directory and fail spuriously.
     private static let drainLock = Mutex<Void>(())
 
-    /// The component derivation (org/app normalization, INI-title
-    /// fallback) lives on `MkxpDataPath.sharedDirectoryComponents`
-    /// in GameProbe so the Linux CI tests exercise it. This wrapper
-    /// adds the on-disk part: case-insensitive reuse of existing
-    /// directories.
-    static func resolve(for container: GameContainer) -> URL {
-        let dataPath = ManagedMkxpConfig.readDataPath(
-            stateDirectory: container.empoStateURL,
-            gameDirectory: container.gameURL
-        )
-        let iniTitle = GameINI.gameTitle(at: container.gameURL)
-        let components = dataPath.sharedDirectoryComponents(
-            iniTitleFallback: iniTitle,
-            folderNameFallback: container.folderName
-        )
+    /// Nil when the core of the game names no folder.
+    static func resolve(for container: GameContainer, core: (any GameCore)?) -> URL? {
+        guard let components = core?.sharedDataFolder(for: container) else { return nil }
 
         let fm = FileManager.default
         var url = sharedRootURL
@@ -154,8 +134,8 @@ enum DataDirectory {
     /// falls back to the per-game `UserData/` directory rather
     /// than handing the engine an uncreatable path - which would
     /// silently break every in-game save.
-    static func resolveAndPrepare(for container: GameContainer) -> URL {
-        let resolved = resolve(for: container)
+    static func resolveAndPrepare(for container: GameContainer, core: (any GameCore)?) -> URL? {
+        guard let resolved = resolve(for: container, core: core) else { return nil }
         let fm = FileManager.default
         try? fm.createDirectory(at: resolved, withIntermediateDirectories: true)
 
@@ -181,6 +161,26 @@ enum DataDirectory {
         // must heal at the destination.
         healChains(in: resolved, noticeName: resolved.lastPathComponent, fm: fm)
         return resolved
+    }
+
+    /// Older builds made a folder here for every game, also for a game
+    /// that keeps its files in its own folder. A game with a shared
+    /// folder makes it again at launch.
+    static func removeEmptyFolders() {
+        let fm = FileManager.default
+        func removeIfEmpty(_ url: URL) {
+            for name in fm.subdirectoryNames(at: url) {
+                removeIfEmpty(url.appendingPathComponent(name, isDirectory: true))
+            }
+            if (try? fm.contentsOfDirectory(atPath: url.path))?.isEmpty == true {
+                try? fm.removeItem(at: url)
+            }
+        }
+        drainLock.withLock { _ in
+            for name in fm.subdirectoryNames(at: sharedRootURL) {
+                removeIfEmpty(sharedRootURL.appendingPathComponent(name, isDirectory: true))
+            }
+        }
     }
 
     // MARK: - Pre-literal save heal
@@ -362,7 +362,10 @@ enum DataDirectory {
         if hasLeftoverContent(container.userDataURL) {
             // Verify the shared destination before draining. The
             // fallback path means the destination could not exist.
-            let resolved = resolveAndPrepare(for: container)
+            let core = GameCores.core(forGameAt: container.gameURL)
+            guard let resolved = resolveAndPrepare(for: container, core: core) else {
+                return false
+            }
             if resolved.path == container.userDataURL.path {
                 rescued = false
             } else {
@@ -447,9 +450,9 @@ enum DataDirectory {
     /// `Data/` components.
     private static func rescueBucket(for container: GameContainer, fm: FileManager) -> URL {
         let metadata = GameMetadata.load(from: container)
-        let iniTitle = GameINI.gameTitle(at: container.gameURL)
+        let gameTitle = GameCores.core(forGameAt: container.gameURL)?.title(at: container.gameURL)
         let title =
-            metadata.customTitle ?? metadata.baseTitle ?? iniTitle ?? container.folderName
+            metadata.customTitle ?? metadata.baseTitle ?? gameTitle ?? container.folderName
         let name = GameFolderName.sanitize(title)
 
         let chosen = DirectoryNameMatch.preferringExisting(

@@ -226,7 +226,9 @@ enum GameContainerMigration {
                 // fine - the resolve at game launch retries, and
                 // the alias matcher keeps the old name reachable
                 // meanwhile.
-                _ = DataDirectory.resolve(for: GameContainer(url: destination))
+                let moved = GameContainer(url: destination)
+                _ = DataDirectory.resolve(
+                    for: moved, core: GameCores.core(forGameAt: moved.gameURL))
                 NSLog(
                     "[GameContainerMigration] Renamed %@ -> %@",
                     candidate.id,

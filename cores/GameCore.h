@@ -193,7 +193,8 @@ void gamecore_injectKeyEvent(int scancode, int pressed);
 // GameCoreSessionConfig.userDataDirectory is a folder that the launcher
 // gives the game for its saves and other files. A core that has no
 // place of its own for these files writes them to this folder. A core
-// whose game keeps its files in its own folder ignores it.
+// whose game keeps its files in its own folder ignores it. NULL means
+// that the launcher gives the game no such folder.
 //
 // GameCoreSessionConfig.sharedFontsDirectory is a font folder that all
 // games share, like the system font folder of a desktop. A core that
