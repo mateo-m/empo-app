@@ -265,11 +265,13 @@ struct GameSettings: GameSettingsGroup {
         stateDirectory: URL,
         gameDirectory: URL
     ) {
+        // The legacy engine migration rebuilds `mkxp.json`, so the
+        // display values must move out of it first.
+        ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory)
         ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
             stateDirectory: stateDirectory,
             gameDirectory: gameDirectory
         )
-        ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory)
     }
 
     /// The value the engine bridge takes for `touchMouse`. Both the

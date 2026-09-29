@@ -725,6 +725,34 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(try readSettings(stateDir) as NSDictionary, settings as NSDictionary)
     }
 
+    func testDisplayMigrationBeforeLegacyMigrationKeepsDisplayValues() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try """
+            { "fixedAspectRatio": false }
+            """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try """
+            { "renderScale": "x2" }
+            """.write(
+            to: stateDir.appendingPathComponent("game_settings.json"),
+            atomically: true, encoding: .utf8)
+
+        XCTAssertTrue(ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDir))
+        XCTAssertTrue(
+            ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
+                stateDirectory: stateDir,
+                gameDirectory: gameDir
+            )
+        )
+
+        let settings = try readSettings(stateDir)
+        XCTAssertEqual(settings["fixedAspectRatio"] as? Bool, false)
+        XCTAssertNil(settings["renderScale"])
+        XCTAssertEqual(try readOverlayConfig(stateDir)["enableHires"] as? Bool, true)
+    }
+
     func testDisplayMigrationRemovesEmptyOverlayAndKeepsSettingsValue() throws {
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
