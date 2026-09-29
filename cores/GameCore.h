@@ -234,9 +234,10 @@ int gamecore_isTextInputActive(void);
 
 double gamecore_getAverageFPS(void);
 
-// The frame rate that the game asks for. Games set their own rate,
-// often 40 or 60. The UI compares the average FPS with this number to
-// tell "full speed" from "slow". Returns 0 when no game runs.
+// The frame rate that the core aims for. A core that reads the game's
+// own rate returns it, often 40 or 60, and 0 when no game runs. A core
+// with a fixed rate always returns that rate. The UI compares the
+// average FPS with this number to tell "full speed" from "slow".
 int gamecore_getTargetFPS(void);
 
 const char *gamecore_getGameTitle(void);
