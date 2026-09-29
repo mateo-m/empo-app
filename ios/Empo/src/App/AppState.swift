@@ -126,29 +126,32 @@ class AppState {
         }
     }
 
-    /// True when the core of the paused game can kill it, so another
-    /// game can start in its place, on any core
-    /// (`ios/Empo/docs/multi-session.md`).
-    var canKillPausedGame: Bool {
-        PauseManager.shared.pausedGame != nil && session.openedCore?.canKillSession == true
-    }
-
     func killPausedGame() {
-        guard canKillPausedGame, let paused = PauseManager.shared.pausedGame else { return }
+        guard let paused = PauseManager.shared.pausedGame else { return }
         session.killSession(of: paused)
         PauseManager.shared.reset()
         engineReady = false
     }
 
-    /// True when the game ended and its core can kill it, so the user
-    /// can go back to the library and start another game.
-    var canLeaveEndedGame: Bool {
-        guard case .ended = phase else { return false }
-        return session.openedCore?.canKillSession == true
+    func cancelLoading() {
+        guard phase == .loading else { return }
+        session.killSession(of: selectedGame)
+        engineReady = false
+        phase = nil
+    }
+
+    /// A hung core cannot pause, so its process ends at once.
+    func endStuckGame() {
+        session.recordSessionPlayTime(for: activeSessionGame)
+        session.killSession(of: activeSessionGame)
+        PauseManager.shared.reset()
+        quitOnPause = false
+        engineReady = false
+        phase = nil
     }
 
     func leaveEndedGame() {
-        guard canLeaveEndedGame else { return }
+        guard case .ended = phase else { return }
         session.killSession(of: nil)
         phase = nil
     }
@@ -160,7 +163,7 @@ class AppState {
     /// paused: the library draws that mark at once, and a mark cleared
     /// in the same turn stayed on the Continue playing card.
     func quitGame() {
-        guard phase == .playing, session.openedCore?.canKillSession == true else { return }
+        guard phase == .playing else { return }
         quitOnPause = true
         requestPause()
     }
@@ -250,7 +253,6 @@ class AppState {
             try? await Task.sleep(for: .milliseconds(350))
             guard let self, pm.pausedGame == nil else { return }
             self.phase = .playing
-            AppWindow.resignKeyToSDL()
             // The frame-rendered callback in EngineSessionCoordinator
             // also flips `snapshotCanFade` once the engine has drawn
             // a real frame. This timed fallback guarantees the
@@ -334,6 +336,10 @@ extension AppState: EngineSessionCoordinatorDelegate {
         ScreenRegionApplier.endSession()
         engineReady = false
         PauseManager.shared.reset()
+    }
+
+    func coordinatorPausedGameStopped() {
+        killPausedGame()
     }
 
     func coordinatorGameRectDidChange(_ rect: CGRect) {

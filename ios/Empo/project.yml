@@ -265,6 +265,8 @@ targets:
         type: group
       - path: src
         type: group
+      # The messages between the app and its game process.
+      - path: GameProcess/EmpoGameProcessProtocol.m
       # Gitignored generated file. Listed explicitly so xcodegen keeps
       # it in Compile Sources after `src` group scans skip ignored paths.
       - path: src/App/GitInfo.generated.swift
@@ -301,13 +303,16 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Empo.entitlements
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/Empo-Bridging-Header.h
+        # Writes the game-process extension point that
+        # GameProcessHost.swift declares into the app.
+        EX_ENABLE_EXTENSION_POINT_GENERATION: YES # yamllint disable-line rule:truthy
+        HEADER_SEARCH_PATHS:
+          - $(inherited)
+          - $(PROJECT_DIR)/GameProcess
         OTHER_LDFLAGS:
-          # The engine is not here. It lives in MkxpCore.framework or a
-          # PSDK core framework, which the "Embed the cores" phase
-          # copies into the app and EngineSessionCoordinator.openCore
-          # opens with dlopen.
-          # Every gamecore_* name the app calls resolves through
-          # GameCoreForwarders.c, so the linker sees none of them.
+          # The engine is not here. It runs in the GameProcess
+          # extension, and GameProcessClient.m sends each gamecore_*
+          # call to it.
           #
           # What stays is what Empo itself uses: libarchive and its
           # compressors for the importer, and the frameworks its own
@@ -326,10 +331,41 @@ targets:
           - -weak_framework CoreHaptics
     dependencies:
       - package: GameProbe
+      - target: GameProcess
       # Built first, then copied by "Embed the cores".
       - target: MvmzCore
         link: false
         embed: false
+  GameProcess:
+    # One process for each game. The app starts it with ExtensionKit,
+    # and it opens the core of the game from the app's Frameworks.
+    type: extensionkit-extension
+    platform: iOS
+    sources:
+      - path: GameProcess
+        excludes:
+          - Info.plist
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: GameProcess
+        PRODUCT_BUNDLE_IDENTIFIER: $(inherited).GameProcess
+        # The app's bundle identifier. The extension point is
+        # <app bundle identifier>.game-process.
+        EMPO_HOST_BUNDLE_IDENTIFIER: $(PRODUCT_BUNDLE_IDENTIFIER:base)
+        INFOPLIST_FILE: $(PROJECT_DIR)/GameProcess/Info.plist
+        SWIFT_VERSION: "6.0"
+        SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/GameProcess/GameProcess-Bridging-Header.h
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: ""
+        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
+        OTHER_LDFLAGS:
+          - -framework Foundation
+          - -framework UIKit
+          - -framework AVFoundation
   MvmzCore:
     type: framework
     platform: iOS

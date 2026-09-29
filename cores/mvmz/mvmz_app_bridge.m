@@ -57,7 +57,7 @@ static void logLine(NSString *line) {
 // Puts the picture in the launcher's region and tells the launcher
 // where it landed. The same rules as placeOutputRegion in
 // psdk_app_bridge.cpp, in points: the host view is the size of the
-// launcher's window once GameViewEmbedder moves it there.
+// game process's window.
 //
 // The game scales its canvas to the page and centres it, so the web
 // view gets the picture rect itself and the page has no margin.

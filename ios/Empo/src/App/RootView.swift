@@ -157,12 +157,13 @@ struct RootView: View {
             }
         }
         .alert(
-            (engineHung || appState.phase != nil) ? "Restart Empo" : "Last session ended early",
+            (engineHung || appState.phase != nil) ? "The game stopped" : "Last session ended early",
             isPresented: showErrorAlert
         ) {
             Button("Got it") {
                 dismissErrorAlert()
                 if engineHung {
+                    appState.endStuckGame()
                     return
                 }
                 if appState.phase != nil {
@@ -172,11 +173,9 @@ struct RootView: View {
             }
         } message: {
             if engineHung {
-                Text("The game stopped responding. Close Empo and reopen it.")
+                Text("It stopped responding and will close. Progress you haven't saved will be lost.")
             } else if appState.phase != nil {
-                Text(
-                    "\(appState.errorMessage ?? "The game stopped.")\n\nClose Empo from the app switcher, then reopen it."
-                )
+                Text(appState.errorMessage ?? "Something went wrong while it was running.")
             } else {
                 Text(appState.errorMessage ?? "")
             }

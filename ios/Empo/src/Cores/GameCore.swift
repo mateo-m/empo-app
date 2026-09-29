@@ -18,10 +18,6 @@ protocol GameCore {
     /// the cores by it.
     var madeWith: String { get }
     var supportsCheats: Bool { get }
-    /// True when `gamecore_killSession` kills the running game and frees
-    /// all of its state. Then any number of games, on any core, can run
-    /// after it in the same process, with nothing left from this one.
-    var canKillSession: Bool { get }
     /// The four keys of the builtin button grid, in grid order.
     func defaultKeys(forGameAt root: URL) -> [GameKey]
 
@@ -72,7 +68,6 @@ protocol GameCore {
 
 extension GameCore {
     var supportsCheats: Bool { false }
-    var canKillSession: Bool { false }
     func defaultKeys(forGameAt root: URL) -> [GameKey] { GameKey.standard }
     func archiveEntryUse(_ entry: ArchiveEntry) -> ArchiveEntryUse { .skip }
     func validateMarkedRoot(marker: String) throws {}
@@ -122,10 +117,6 @@ extension GameCore {
     /// The build-framework-ios.sh scripts write EmpoCoreVersion.
     var version: String {
         bundle?.object(forInfoDictionaryKey: "EmpoCoreVersion") as? String ?? "unknown"
-    }
-
-    func isSame(as other: any GameCore) -> Bool {
-        framework == other.framework
     }
 }
 

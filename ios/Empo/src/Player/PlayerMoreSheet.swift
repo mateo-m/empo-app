@@ -110,10 +110,8 @@ struct PlayerMoreSheet: View {
                                 onPause()
                                 dismiss()
                             }
-                            if core?.canKillSession == true {
-                                MenuRow(icon: "xmark", label: "Quit \(gameTitle)", role: .destructive) {
-                                    confirmQuit = true
-                                }
+                            MenuRow(icon: "xmark", label: "Quit \(gameTitle)", role: .destructive) {
+                                confirmQuit = true
                             }
                         }
                     )

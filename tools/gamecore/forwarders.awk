@@ -92,10 +92,8 @@
 
     printf "%s %s(%s) {\n", ret, name, params
     printf "    static %s (*fn)(%s);\n", ret, params
-    printf "    static unsigned generation;\n"
-    printf "    if (fn == NULL || generation != gCoreGeneration) {\n"
+    printf "    if (fn == NULL) {\n"
     printf "        fn = coreSymbol(\"%s\");\n", name
-    printf "        generation = gCoreGeneration;\n"
     printf "    }\n"
     if (ret == "void") {
         printf "    fn(%s);\n", args

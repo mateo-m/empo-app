@@ -272,7 +272,6 @@ struct GameLibraryView: View {
                     saveRescueFailures: $saveRescueFailures,
                     pausedGame: pauseManager.pausedGame,
                     pendingGame: pendingGame,
-                    canClosePausedGame: appState.canKillPausedGame,
                     onDeleteGame: deleteSelectedGame,
                     onDeleteGameDiscardingSaves: deleteGameDiscardingSaves,
                     onDismissImportPipelineAlert: importPipeline.dismissAlert,
@@ -1396,7 +1395,6 @@ private struct LibraryAlertPresentation: ViewModifier {
     @Binding var saveRescueFailures: [GameEntry]
     let pausedGame: GameEntry?
     let pendingGame: GameEntry?
-    let canClosePausedGame: Bool
     let onDeleteGame: () -> Void
     let onDeleteGameDiscardingSaves: (GameEntry) -> Void
     let onDismissImportPipelineAlert: () -> Void
@@ -1517,25 +1515,14 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Text("Empo is still checking this game. Stopping now discards it.")
             }
             .alert(
-                canClosePausedGame ? "Play \"\(pendingGame?.title ?? "")\"?" : "A game is paused",
+                "Play \"\(pendingGame?.title ?? "")\"?",
                 isPresented: $showPausedGameAlert
             ) {
-                if canClosePausedGame {
-                    Button("Cancel", role: .cancel, action: onDismissPausedGameAlert)
-                    Button("Close and Play", role: .destructive, action: onReplacePausedGame)
-                } else {
-                    // To play another game the user resumes the paused
-                    // one from its card, or force-closes the app. See
-                    // `ios/Empo/docs/multi-session.md`.
-                    Button("Got it", role: .cancel, action: onDismissPausedGameAlert)
-                }
+                Button("Cancel", role: .cancel, action: onDismissPausedGameAlert)
+                Button("Close and Play", role: .destructive, action: onReplacePausedGame)
             } message: {
-                if canClosePausedGame, let pausedGame {
+                if let pausedGame {
                     Text("\"\(pausedGame.title)\" will close. Progress you haven't saved will be lost.")
-                } else if let pausedGame {
-                    Text(
-                        "\"\(pausedGame.title)\" is still running. Resume it from its card, or force-close the app to play a different game."
-                    )
                 }
             }
     }

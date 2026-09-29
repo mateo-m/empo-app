@@ -158,13 +158,8 @@ class AppWindow: UIWindow {
         return hit
     }
 
-    /// The view Empo embedded is the engine's own top view, and the
-    /// view that reads the touch can sit inside it. SFML puts its touch
-    /// view in a container, and the container answers nothing, so a
-    /// touch sent straight to it is lost. SDL's top view reads the touch
-    /// itself and answers with itself here.
     private func gameTouchTarget(at point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard let gameView = GameViewEmbedder.embeddedView else { return nil }
+        guard let gameView = GameProcessHost.gameView else { return nil }
         return gameView.hitTest(convert(point, to: gameView), with: event) ?? gameView
     }
 
@@ -184,8 +179,8 @@ class AppWindow: UIWindow {
     // Controls handle their own key injection via the bridge.
 
     /// In library/loading: this window must be key for SwiftUI.
-    /// In player: SDL needs key, unless keyboard mode is active or
-    /// an error alert presents (SDL would steal OK taps).
+    /// In player: key only while keyboard mode is active or an alert
+    /// shows, so a hardware key does not move SwiftUI focus.
     override var canBecomeKey: Bool {
         let state = AppState.shared
         if state.errorMessage != nil { return true }
@@ -193,6 +188,8 @@ class AppWindow: UIWindow {
         if state.phase != .playing { return true }
         return allowKeyWindow
     }
+
+    static var rootViewController: UIViewController? { instance?.rootViewController }
 
     static var hostView: UIView? { instance?.rootViewController?.view }
 
@@ -213,27 +210,8 @@ class AppWindow: UIWindow {
         if allow {
             window.makeKey()
         } else {
-            resignKeyToSDL()
+            window.endEditing(true)
         }
-    }
-
-    /// Returns UIKit key-window status to SDL after the overlay
-    /// gives up `canBecomeKey` (e.g. loading -> playing).
-    ///
-    /// Never hand key status to a keyboard window. Once the system
-    /// keyboard has shown, its `UITextEffectsWindow` joins
-    /// `scene.windows`, and making it key while the keyboard
-    /// dismisses briefly wakes the keyboard's own UI (the Memoji
-    /// stickers splash with its "Continue" button).
-    @objc static func resignKeyToSDL() {
-        guard let overlay = instance, let scene = overlay.windowScene else { return }
-        let candidates = scene.windows.filter { window in
-            guard window !== overlay else { return false }
-            let className = String(describing: type(of: window))
-            return !className.contains("TextEffects") && !className.contains("Keyboard")
-        }
-        let sdl = candidates.first { String(describing: type(of: $0)).contains("SDL") }
-        (sdl ?? candidates.first)?.makeKey()
     }
 
     /// `EmpoSceneDelegate` calls this once at app startup when UIKit
@@ -318,8 +296,6 @@ class AppWindow: UIWindow {
         }
     }
 
-    /// Keep AppWindow visible. Reparent SDL's game view here while
-    /// the game plays, so one UIWindow owns the compositing stack.
     private static func applyOverlayPresentationMode(window: AppWindow) {
         let playing = AppState.shared.phase == .playing
 
@@ -331,9 +307,7 @@ class AppWindow: UIWindow {
             if let root = window.rootViewController?.view {
                 clearPassThroughBackdrop(in: root)
             }
-            GameViewEmbedder.embedWithRetry()
         } else {
-            GameViewEmbedder.detach()
             window.isHidden = false
             window.isOpaque = false
             window.backgroundColor = .clear

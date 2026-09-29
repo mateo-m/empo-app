@@ -92,7 +92,7 @@ calls, into `Psdk<NN>Core.framework`. Xcode runs it before each build.
 Each PSDK framework carries its own SFML, with the Objective-C classes
 `SFAppDelegate`, `SFView` and `SFViewController`. Objective-C keeps one class
 for each name in a process, so a second PSDK core must not open in a process.
-It cannot, because a PSDK core cannot kill its game (`canKillSession`).
+It cannot, because each game process opens one core (`multi-session.md`).
 
 PSDK releases from December 2019 to about March 2021 carry Ruby 2.5 bytecode.
 They were written for LiteRGSS 1 and play sound only through FMOD, a
@@ -266,20 +266,13 @@ the framework's `Info.plist` from the same build flag the engine reads, and
 Both `build-framework-ios.sh` scripts also write `EmpoCoreVersion`, which names
 the engine source the core was linked from. The Game cores screen shows it.
 
-## More than one core in a process
+## One core in each process
 
-A core opens only after the open core killed its game with
-`gamecore_killSession` (`multi-session.md`). Only a core whose Swift type says
-`canKillSession` can do that, so an MV or MZ game can come before a Ruby game,
-but not after one. `EmpoCoreOpen` refuses any other change of core, and
-`EngineSessionCoordinator.openCore` then stops the app. Two cores in one
-process load without binding to each other, and `cores/mkxp/test-host/host.m`
-proves that with `MKXP_ALSO_OPEN`. Two cores cannot run at once. Both want the
-working directory, the signal handlers, the audio device and the main thread.
-
-The killed core stays loaded, because `dlclose` does not unload a framework
-with Objective-C classes. Each forwarder in `GameCoreForwarders.c` looks its
-symbol up again after a different core opens.
+Each game process opens one core (`multi-session.md`). `EmpoCoreOpen` in
+`GameCoreForwarders.c` refuses a second core. Two cores in one process load
+without binding to each other, and `cores/mkxp/test-host/host.m` proves that
+with `MKXP_ALSO_OPEN`. Two cores cannot run at once. Both want the working
+directory, the signal handlers, the audio device and the main thread.
 
 Objective-C registers every class by name for the whole process, also when
 its symbol is hidden. `scripts/audit-ipa.sh` fails a release when the app or

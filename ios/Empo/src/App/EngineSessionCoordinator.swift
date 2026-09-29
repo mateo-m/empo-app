@@ -17,6 +17,7 @@ protocol EngineSessionCoordinatorDelegate: AnyObject {
     func coordinatorDidReportEngineError(_ message: String)
     func coordinatorDidReportEngineInfo(_ message: String)
     func coordinatorEngineDidPause(snapshot: UIImage?)
+    func coordinatorPausedGameStopped()
 }
 
 @MainActor
@@ -28,7 +29,6 @@ final class EngineSessionCoordinator {
     private let crashTracker = CrashTracker()
     private let sessionLogger = SessionLogger()
     private var textInputModeHandler: ((Bool) -> Void)?
-    private var inputBridgesInstalled = false
     /// The core `openCore` opened, or nil before it runs. The player
     /// UI reads this to hide a row the running core does not answer.
     private(set) var openedCore: (any GameCore)?
@@ -66,21 +66,12 @@ final class EngineSessionCoordinator {
     /// is stored in the library entry, so a game imported before a core
     /// existed still picks the right one.
     ///
-    /// Nothing calls the engine before this. The app links no engine,
-    /// and every `gamecore_*` name resolves through a forwarder that reads
-    /// the open core (`GameCoreForwarders.c`). A call before the core
-    /// opens aborts, on purpose, because a silent no-op would hide it.
-    ///
-    /// A different core opens only after `killSession` killed the
-    /// game of the open one (`AppState.killPausedGame`).
+    /// Each game runs in a new game process (`GameProcessHost`), and
+    /// the app sends each `gamecore_*` call to it
+    /// (`GameProcessClient.m`). A game starts only after `killSession`
+    /// ended the process of the one before it.
     func openCore(_ core: any GameCore) {
-        // AppState.selectGame refuses a game whose core this build does
-        // not carry, so a failed open is a broken bundle or a game that
-        // was not killed.
-        guard let binary = core.binaryURL, EmpoCoreOpen(binary.path) != 0 else {
-            fatalError("\(core.framework) cannot open. The log says why.")
-        }
-        if let openedCore, openedCore.isSame(as: core) { return }
+        GameProcessHost.start(framework: core.framework)
         openedCore = core
         NSLog("[empo] core opened: %@", core.framework)
 
@@ -91,7 +82,6 @@ final class EngineSessionCoordinator {
         AppSettings.shared.pushToCore()
         AppWindow.pushSafeAreaInsets()
         registerBridgeCallbacks()
-        installInputBridgesIfNeeded()
     }
 
     /// TLS trust store for the engine's networking (native HTTP client
@@ -118,7 +108,7 @@ final class EngineSessionCoordinator {
             crashTracker.removeMarker(for: container)
         }
         clearPendingKeyHolds()
-        EmpoCoreKillSession()
+        GameProcessHost.end()
     }
 
     func consumeCrashRecovery() -> String? {
@@ -136,21 +126,11 @@ final class EngineSessionCoordinator {
         )
     }
 
-    /// Hands the engine its game path and starts it.
-    ///
-    /// The path goes in first. The core reads it as the first step of
-    /// `gamecore_run_app`, so a path that is already set lets it run
-    /// straight through.
-    ///
-    /// `RunLoop.main.perform`, not a main queue block. `EmpoCoreRunEngine`
-    /// holds the main thread until the game ends, and a main queue
-    /// block would stop that queue from draining for the whole
-    /// session. The header on `EmpoCoreRunEngine` says what breaks.
+    /// Hands the engine its game path and starts it. The core reads
+    /// the path as the first step of `gamecore_run_app`.
     func launchGamePath(_ path: String) {
         gamecore_setGamePath(path)
-        RunLoop.main.perform {
-            _ = EmpoCoreRunEngine()
-        }
+        _ = gamecore_run_app(0, nil)
     }
 
     func requestPause() {
@@ -277,10 +257,7 @@ final class EngineSessionCoordinator {
         keyHolders.removeAll()
     }
 
-    private func installInputBridgesIfNeeded() {
-        guard !inputBridgesInstalled else { return }
-        inputBridgesInstalled = true
-
+    private func registerBridgeCallbacks() {
         gamecore_setTextInputModeCallback(
             { active, _ in
                 let on = active != 0
@@ -288,9 +265,7 @@ final class EngineSessionCoordinator {
                     EngineSessionCoordinator.shared.textInputModeHandler?(on)
                 }
             }, nil)
-    }
 
-    private func registerBridgeCallbacks() {
         gamecore_setFrameRenderedCallback(
             { _ in
                 Task { @MainActor in
@@ -356,13 +331,15 @@ final class EngineSessionCoordinator {
         }
         GameLibrary.shared.reload()
 
-        // The app never asks the engine to terminate: Empo plays one
-        // game for each process, per `ios/Empo/docs/multi-session.md`. So
-        // every termination comes from the game itself or from a
-        // crash, and both surface the alert.
+        // `killSession` does not report here. So every termination
+        // comes from the game itself or from a crash of its process,
+        // and both surface the alert. The system can also stop the
+        // process of a paused game while Empo is in the background.
         if delegate?.coordinatorPhase != nil {
             let cleanExit = gamecore_didEngineExitCleanly() != 0
             delegate?.coordinatorEngineTerminatedUnexpectedly(cleanExit: cleanExit)
+        } else {
+            delegate?.coordinatorPausedGameStopped()
         }
     }
 

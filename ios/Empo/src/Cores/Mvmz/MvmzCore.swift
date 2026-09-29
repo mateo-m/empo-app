@@ -8,10 +8,6 @@ struct MvmzCore: GameCore {
     let gamesLine = "Runs RPG Maker MV and MZ games"
     let madeWith = "RPG Maker"
 
-    /// WebKit ends the page and all of its JavaScript when the core
-    /// removes its web view.
-    var canKillSession: Bool { true }
-
     // MV and MZ read B as nothing, and Shift as dash (Input.keyMapper in
     // rpg_core.js and rmmz_core.js).
     func defaultKeys(forGameAt root: URL) -> [GameKey] {

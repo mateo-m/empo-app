@@ -491,7 +491,7 @@ final class ImportPipeline {
                 presentError(
                     name: selection.displayName,
                     message:
-                        "This game is currently open. Close it from the app switcher and import again."
+                        "This game is open. Quit it, then import again."
                 )
             }
         }

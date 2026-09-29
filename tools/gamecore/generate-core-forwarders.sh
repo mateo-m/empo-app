@@ -1,14 +1,12 @@
 #!/bin/sh
-# Generate the C file that lets Empo call the open core without linking
-# it. The same file serves every core, because every core exports each
-# name of GameCore.h as it is.
+# Generate the C file that lets the game process call its core without
+# linking it. The same file serves every core, because every core
+# exports each name of GameCore.h as it is.
 #
-# Empo opens the core with dlopen and RTLD_LOCAL, so the linker cannot
-# resolve a single core name at build time. This writes one forwarder
-# for every function GameCore.h declares. Each forwarder looks its
-# symbol up in the open core on first use, and again after a different
-# core opens, so every Swift and ObjC call
-# site stays as it is.
+# The game process opens the core with dlopen and RTLD_LOCAL, so the
+# linker cannot resolve a single core name at build time. This writes
+# one forwarder for every function GameCore.h declares. Each forwarder
+# looks its symbol up in the open core on first use.
 #
 # Usage:
 #   tools/gamecore/generate-core-forwarders.sh [--out <file>]
@@ -16,7 +14,7 @@ set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 HEADER="$ROOT/cores/GameCore.h"
-OUT="$ROOT/ios/Empo/src/App/GameCoreForwarders.c"
+OUT="$ROOT/ios/Empo/GameProcess/GameCoreForwarders.c"
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -48,60 +46,33 @@ cat >"$TMP" <<'HEAD'
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "GameCore.h"
 
 static void *gCore;
-static char gCorePath[1024];
-// Goes up each time a different core opens. A forwarder looks its
-// symbol up again when this changed.
-static unsigned gCoreGeneration;
-static int gSessionKilled;
 
 int EmpoCoreOpen(const char *binaryPath) {
-    if (gCore != NULL && strcmp(gCorePath, binaryPath) == 0) {
-        gSessionKilled = 0;
-        return 1;
-    }
-    if (gCore != NULL && !gSessionKilled) {
-        // The open core still holds a game, and its threads, globals
-        // and working directory would run next to the new engine.
-        fprintf(stderr, "EmpoCore: %s holds a game, refusing %s\n", gCorePath, binaryPath);
+    if (gCore != NULL) {
+        fprintf(stderr, "EmpoCore: a core is open, refusing %s\n", binaryPath);
         return 0;
     }
     // RTLD_LOCAL keeps the core's names out of the global namespace.
     // Every name below reaches this image through its own handle.
-    //
-    // A killed core stays loaded: dlclose does not unload an image that
-    // ran static initializers or registered ObjC classes. It holds no
-    // game, and scripts/audit-ipa.sh keeps its class names its own.
     void *core = dlopen(binaryPath, RTLD_NOW | RTLD_LOCAL);
     if (core == NULL) {
         fprintf(stderr, "EmpoCore: cannot open %s: %s\n", binaryPath, dlerror());
         return 0;
     }
     gCore = core;
-    gCoreGeneration++;
-    gSessionKilled = 0;
-    snprintf(gCorePath, sizeof(gCorePath), "%s", binaryPath);
     return 1;
 }
 
-void EmpoCoreKillSession(void) {
-    gamecore_killSession();
-    gSessionKilled = 1;
-}
-
-int EmpoCoreIsOpen(void) { return gCore != NULL; }
-
-// dlsym with the core's handle searches that image only, so each core
-// answers under the same name without a clash with the forwarder below
-// or with another core that stays loaded after a kill.
+// dlsym with the core's handle searches that image only, so the core
+// answers under the same name without a clash with the forwarder below.
 static void *coreSymbol(const char *symbol) {
     void *address = gCore != NULL ? dlsym(gCore, symbol) : NULL;
     if (address == NULL) {
-        // Either the app called the core before it picked a game, or
+        // Either the process called the core before it opened one, or
         // the framework and this file were built from different
         // headers. Both are build errors, and a silent no-op would hide
         // them until a game misbehaved.
@@ -116,7 +87,7 @@ HEAD
 
 awk -f "$ROOT/tools/gamecore/forwarders.awk" "$HEADER" >>"$TMP"
 
-COUNT="$(grep -c '^    if (fn == NULL || generation != gCoreGeneration) {' "$TMP")"
+COUNT="$(grep -c '^    if (fn == NULL) {' "$TMP")"
 if [ "$COUNT" -lt 40 ]; then
     echo "generate-core-forwarders: only $COUNT forwarders parsed, refusing" >&2
     exit 1
