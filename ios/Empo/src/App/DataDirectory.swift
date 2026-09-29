@@ -169,6 +169,9 @@ enum DataDirectory {
     static func removeEmptyFolders() {
         let fm = FileManager.default
         func removeIfEmpty(_ url: URL) {
+            // A game can link back to a parent folder.
+            guard (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == false
+            else { return }
             for name in fm.subdirectoryNames(at: url) {
                 removeIfEmpty(url.appendingPathComponent(name, isDirectory: true))
             }

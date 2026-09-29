@@ -251,7 +251,10 @@ struct MkxpCore: GameCore {
     /// Desktop mkxp-z keeps saves in `SDL_GetPrefPath(dataPathOrg,
     /// dataPathApp)`, so fan games share saves across versions.
     func sharedDataFolder(for container: GameContainer) -> [String]? {
-        ManagedMkxpConfig.readDataPath(
+        // The migration can rewrite `EmpoState/mkxp.json`, which holds
+        // `dataPathOrg` and `dataPathApp`.
+        Self.migrateOldSettings(in: container)
+        return ManagedMkxpConfig.readDataPath(
             stateDirectory: container.empoStateURL,
             gameDirectory: container.gameURL
         ).sharedDirectoryComponents(
