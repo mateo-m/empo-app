@@ -161,12 +161,21 @@ The MV and MZ core always fits the picture in the region. The game keeps
 its own proportions inside the web view, and it maps touches through that
 fit, so the core has no fixed aspect ratio setting.
 
-The other rows belong to mkxp-z: render scale, frame skip, solid fonts,
-postload scripts, the path cache, the in-game keyboard, JoiPlay
+The other rows belong to mkxp-z: render scale, font scale, frame skip, solid
+fonts, postload scripts, the path cache, the in-game keyboard, JoiPlay
 compatibility, the Ruby version and network access. Each core puts its own
 settings page together in `settingsPage(_:)`, from the shared sections in
 `GameSettingsSections.swift` and its own. The rows only mkxp-z reads live in
-`ios/Empo/src/Cores/Mkxp/MkxpSettings.swift`.
+`ios/Empo/src/Cores/Mkxp`.
+
+The shared settings, smooth scaling and fixed aspect ratio included, live in
+`EmpoState/game_settings.json`. A core that reads the game's own display
+values gives them in `displayDefaults(for:)`, and the settings page shows
+them until the user changes a row. The mkxp core reads them from
+`Game/mkxp.json`. Only the mkxp core uses `EmpoState/mkxp.json`, for the
+settings that only mkxp-z has. Older builds kept smooth scaling and fixed
+aspect ratio there for every game. `GameSettings.migrateLegacyEngineSettingsIfNeeded`
+moves them to `game_settings.json` when the game starts or its settings open.
 
 ## What the engine asks the bridge
 

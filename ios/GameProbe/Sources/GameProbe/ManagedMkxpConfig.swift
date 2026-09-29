@@ -1,7 +1,7 @@
 import Foundation
 
-/// The eight engine settings Empo surfaces in Game Settings and stores
-/// in `EmpoState/mkxp.json`. Keys match mkxp-z's config surface.
+/// The mkxp-z config values that Empo reads and writes. Keys match
+/// mkxp-z's config surface.
 public struct MkxpEngineValues: Equatable, Sendable {
     public var smoothScaling: Bool?
     public var fixedAspectRatio: Bool?
@@ -73,8 +73,6 @@ public struct MkxpGameDefaults: Equatable, Sendable {
 
     public func defines(_ field: MkxpEngineField) -> Bool {
         switch field {
-        case .smoothScaling: smoothScaling != nil
-        case .fixedAspectRatio: fixedAspectRatio != nil
         case .renderScale: renderScaleEnableHires != nil
         case .frameSkip: frameSkip != nil
         case .vsync: vsync != nil
@@ -158,8 +156,6 @@ extension MkxpDataPath {
 }
 
 public enum MkxpEngineField: String, CaseIterable, Sendable {
-    case smoothScaling
-    case fixedAspectRatio
     case renderScale
     case frameSkip
     case vsync
@@ -181,8 +177,6 @@ public enum MkxpValueProvenance: Equatable, Sendable {
 /// safe to repeat.
 public enum ManagedMkxpConfig {
     public static let legacyGameSettingsKeys: [String] = [
-        "smoothScaling",
-        "fixedAspectRatio",
         "renderScale",
         "frameSkip",
         "vsync",
@@ -264,10 +258,6 @@ public enum ManagedMkxpConfig {
     public static func overlayDefines(_ field: MkxpEngineField, in stateDirectory: URL) -> Bool {
         guard let overlay = loadOverlayDict(from: stateDirectory) else { return false }
         switch field {
-        case .smoothScaling:
-            return overlay["smoothScaling"] != nil
-        case .fixedAspectRatio:
-            return overlay["fixedAspectRatio"] != nil
         case .renderScale:
             return overlay["enableHires"] != nil || overlay["framebufferScalingFactor"] != nil
         case .frameSkip:
@@ -339,6 +329,7 @@ public enum ManagedMkxpConfig {
     public static func overlayJSONString(
         gameDirectory: URL,
         stateDirectory: URL,
+        overrides: MkxpEngineValues = MkxpEngineValues(),
         onUnparseableOverlay: ((String) -> Void)? = nil
     ) -> String? {
         let overlayURL = overlayConfigURL(in: stateDirectory)
@@ -354,6 +345,7 @@ public enum ManagedMkxpConfig {
                 }
             }
         }
+        applyOverrides(overrides, to: &overlay)
 
         let baseExists = FileManager.default.fileExists(
             atPath: devConfigURL(in: gameDirectory).path)
@@ -510,6 +502,41 @@ public enum ManagedMkxpConfig {
         }
     }
 
+    /// Older builds kept the display settings of every core in this
+    /// overlay. Moves them to `game_settings.json`. A value that is
+    /// already there wins. Safe to repeat.
+    @discardableResult
+    public static func migrateDisplaySettingsIfNeeded(stateDirectory: URL) -> Bool {
+        let displayKeys = ["smoothScaling", "fixedAspectRatio"]
+        guard var overlay = loadOverlayDict(from: stateDirectory),
+            displayKeys.contains(where: { overlay[$0] != nil })
+        else { return true }
+
+        let settingsURL = stateDirectory.appendingPathComponent(settingsFilename)
+        var settings: [String: Any] = [:]
+        if FileManager.default.fileExists(atPath: settingsURL.path) {
+            guard let data = try? Data(contentsOf: settingsURL),
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return false }
+            settings = json
+        }
+        // `GameSettingsGroup.save` writes an unset value as null.
+        func isUnset(_ key: String) -> Bool { settings[key] == nil || settings[key] is NSNull }
+        let display = values(from: overlay)
+        if isUnset("smoothScaling"), let on = display.smoothScaling {
+            settings["smoothScaling"] = on
+        }
+        if isUnset("fixedAspectRatio"), let on = display.fixedAspectRatio {
+            settings["fixedAspectRatio"] = on
+        }
+        guard writeConfig(settings, to: settingsURL) else { return false }
+
+        for key in displayKeys {
+            overlay.removeValue(forKey: key)
+        }
+        return persistOverlay(overlay, to: stateDirectory)
+    }
+
     // MARK: - Internals
 
     private static func parseJSONWithComments(_ raw: String) -> [String: Any]? {
@@ -565,57 +592,45 @@ public enum ManagedMkxpConfig {
 
     private static func applyOverrides(
         _ overrides: MkxpEngineValues,
-        to config: inout [String: Any],
-        only fields: Set<MkxpEngineField>? = nil
+        to config: inout [String: Any]
     ) {
-        let applyAll = fields == nil
-        func shouldApply(_ field: MkxpEngineField) -> Bool {
-            applyAll || fields?.contains(field) == true
-        }
-
-        if shouldApply(.smoothScaling), let v = overrides.smoothScaling {
+        if let v = overrides.smoothScaling {
             config["smoothScaling"] = v ? 1 : 0
         }
-        if shouldApply(.fixedAspectRatio), let v = overrides.fixedAspectRatio {
+        if let v = overrides.fixedAspectRatio {
             config["fixedAspectRatio"] = v
         }
-        if shouldApply(.frameSkip), let v = overrides.frameSkip {
+        if let v = overrides.frameSkip {
             config["frameSkip"] = v
         }
-        if shouldApply(.fontScale), let v = overrides.fontScale {
+        if let v = overrides.fontScale {
             config["fontScale"] = v
         }
-        if shouldApply(.vsync), let v = overrides.vsync {
+        if let v = overrides.vsync {
             config.removeValue(forKey: "vsync")
             config["syncToRefreshrate"] = v
         }
-        if shouldApply(.pathCache), let v = overrides.pathCache {
+        if let v = overrides.pathCache {
             config["pathCache"] = v
         }
-        if shouldApply(.solidFonts), let v = overrides.solidFonts {
+        if let v = overrides.solidFonts {
             config["solidFonts"] = v ? ["*"] : [] as [String]
         }
-        if shouldApply(.renderScale) {
-            if let enableHires = overrides.renderScaleEnableHires {
-                if enableHires {
-                    config["enableHires"] = true
-                    if let factor = overrides.renderScaleFramebufferFactor {
-                        config["framebufferScalingFactor"] = factor
-                    }
-                } else {
-                    config["enableHires"] = false
-                    config.removeValue(forKey: "framebufferScalingFactor")
+        if let enableHires = overrides.renderScaleEnableHires {
+            if enableHires {
+                config["enableHires"] = true
+                if let factor = overrides.renderScaleFramebufferFactor {
+                    config["framebufferScalingFactor"] = factor
                 }
+            } else {
+                config["enableHires"] = false
+                config.removeValue(forKey: "framebufferScalingFactor")
             }
         }
     }
 
     private static func clearField(_ field: MkxpEngineField, in config: inout [String: Any]) {
         switch field {
-        case .smoothScaling:
-            config.removeValue(forKey: "smoothScaling")
-        case .fixedAspectRatio:
-            config.removeValue(forKey: "fixedAspectRatio")
         case .renderScale:
             config.removeValue(forKey: "enableHires")
             config.removeValue(forKey: "framebufferScalingFactor")
@@ -643,7 +658,7 @@ public enum ManagedMkxpConfig {
         let solidFontsEnabled: Bool? = solidFontsArray.map { !$0.isEmpty }
 
         return MkxpEngineValues(
-            smoothScaling: (config["smoothScaling"] as? Int).map { $0 != 0 },
+            smoothScaling: flag(config["smoothScaling"]),
             fixedAspectRatio: config["fixedAspectRatio"] as? Bool,
             renderScaleEnableHires: enableHires,
             renderScaleFramebufferFactor: scalingFactor,
@@ -654,6 +669,13 @@ public enum ManagedMkxpConfig {
             fontScale: config["fontScale"] as? Double,
             solidFonts: solidFontsEnabled
         )
+    }
+
+    /// mkxp-z writes `smoothScaling` as 0 or 1, and a hand-edited
+    /// file can hold true or false.
+    private static func flag(_ value: Any?) -> Bool? {
+        if let on = value as? Bool { return on }
+        return (value as? Int).map { $0 != 0 }
     }
 
     private static func legacyValues(from json: [String: Any]) -> MkxpEngineValues {
@@ -675,8 +697,6 @@ public enum ManagedMkxpConfig {
         }
 
         return MkxpEngineValues(
-            smoothScaling: json["smoothScaling"] as? Bool,
-            fixedAspectRatio: json["fixedAspectRatio"] as? Bool,
             renderScaleEnableHires: renderEnableHires,
             renderScaleFramebufferFactor: renderFactor,
             frameSkip: json["frameSkip"] as? Bool,

@@ -104,11 +104,7 @@ enum GameImporter {
             let settings = bundle.configuration?.toGameSettings() ?? GameSettings()
             let stateDir = container.ensureEmpoStateDirectory()
             if let engineValues = bundle.configuration?.toMkxpEngineValues() {
-                EngineConfigProjector.applyEngineValues(
-                    engineValues,
-                    stateDirectory: stateDir,
-                    gameDirectory: container.gameURL
-                )
+                ManagedMkxpConfig.writeOverlay(overrides: engineValues, stateDirectory: stateDir)
             }
             settings.save(to: stateDir)
         }

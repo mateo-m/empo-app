@@ -41,9 +41,8 @@ struct MvmzCore: GameCore {
     }
 
     func launch(_ container: GameContainer) {
-        let display = ManagedMkxpConfig.readEffective(
-            stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
-        let smooth = display.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
+        let settings = GameSettings.load(from: container.empoStateURL)
+        let smooth = settings.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
         gamecore_setSetting("smoothScaling", smooth ? "1" : "0")
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import GameProbe
 import SwiftUI
 
 /// The per-game settings only the RPG Maker core reads. They share
@@ -58,36 +59,71 @@ struct MkxpSettings: GameSettingsGroup {
 @MainActor @Observable
 final class MkxpSettingsState: CoreSettings {
     var settings: MkxpSettings
+    var engine: MkxpEngineSettings
+    private(set) var gameDefaults: MkxpEngineSettings
     /// What the script scan found. It labels the Auto-detect rows.
     private(set) var profile: MkxpProfile
     let isPokemonEssentials: Bool
 
     @ObservationIgnored private let container: GameContainer
     @ObservationIgnored private let initial: MkxpSettings
+    @ObservationIgnored private let initialEngine: MkxpEngineSettings
 
     init(container: GameContainer) {
         self.container = container
         let settings = MkxpSettings.load(from: container.empoStateURL)
         self.settings = settings
         self.initial = settings
+        let engine = MkxpEngineSettings.load(from: container.empoStateURL)
+        self.engine = engine
+        self.initialEngine = engine
+        self.gameDefaults = MkxpEngineSettings.gameDefaults(in: container.gameURL)
         self.profile = MkxpProfile.load(for: container)
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
             in: container.gameURL, stateDirectory: container.empoStateURL)
     }
 
-    var hasCustomizations: Bool { settings.hasCustomizations }
+    var hasCustomizations: Bool { settings.hasCustomizations || engine.hasOverrides }
 
     var restartRequiredChanges: [String] {
         settings.restartRequiredFieldsChanged(from: initial)
+            + engine.restartRequiredFieldsChanged(from: initialEngine)
     }
 
     func save() {
         settings.save(to: container.empoStateURL)
+        engine.save(to: container.empoStateURL)
     }
 
     func reset() {
         settings = MkxpSettings()
         profile = MkxpProfile.load(for: container, rescan: true)
+        ManagedMkxpConfig.resetAllEngineFields(
+            stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
+        engine = MkxpEngineSettings.load(from: container.empoStateURL)
+        gameDefaults = MkxpEngineSettings.gameDefaults(in: container.gameURL)
+    }
+
+    func resetField(_ field: MkxpEngineField) {
+        ManagedMkxpConfig.resetField(
+            field, stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
+        engine = MkxpEngineSettings.load(from: container.empoStateURL)
+    }
+
+    var effectiveRenderScale: RenderScale {
+        engine.renderScale ?? gameDefaults.renderScale ?? MkxpEngineSettings.engineRenderScale
+    }
+    var effectiveFrameSkip: Bool {
+        engine.frameSkip ?? gameDefaults.frameSkip ?? MkxpEngineSettings.engineFrameSkip
+    }
+    var effectivePathCache: Bool {
+        engine.pathCache ?? gameDefaults.pathCache ?? MkxpEngineSettings.enginePathCache
+    }
+    var effectiveFontScale: Double {
+        engine.fontScale ?? gameDefaults.fontScale ?? MkxpEngineSettings.engineFontScale
+    }
+    var effectiveSolidFonts: Bool {
+        engine.solidFonts ?? gameDefaults.solidFonts ?? MkxpEngineSettings.engineSolidFonts
     }
 
     /// The Ruby version the core boots for this game: 18, 19, 30 or 31.
@@ -180,7 +216,17 @@ struct MkxpEngineSection: View {
                     "Run Empo's fix-up scripts after the game loads. They add the cheat menu and patch common RPG Maker and Pokemon Essentials problems."
             )
 
-            PathCacheToggle(model: model)
+            MkxpEngineRow(state: state, field: .pathCache) {
+                SettingsToggle(
+                    title: "Path cache",
+                    isOn: Binding(
+                        get: { state.effectivePathCache },
+                        set: { state.engine.pathCache = $0 }
+                    ),
+                    description:
+                        "Keep a lowercase index of every game file so lookups are faster. Turn it off if the game can't find its images or sounds."
+                )
+            }
 
             SettingsToggle(
                 title: "In-game keyboard",
@@ -267,7 +313,6 @@ struct MkxpEngineSection: View {
         } footer: {
             Text("How games load and how well they run.")
         }
-        .onChange(of: state.settings) { state.save() }
     }
 
     private var autoDetectLabel: String {

@@ -23,18 +23,13 @@ final class GameSettingsModel {
     let coreSettings: (any CoreSettings)?
 
     var settings: GameSettings
-    var engineSettings: EngineMkxpSettings
-    private(set) var defaults: GameConfigDefaults
+    let displayDefaults: GameDisplayDefaults
     /// The screen placement of the layout profile for each orientation.
     /// A form body renders again on every control change, and the
     /// resolve reads two files.
     var resolvedScreen: ScreenResolution.Result?
 
     @ObservationIgnored private let initialSettings: GameSettings
-    @ObservationIgnored private let initialEngineSettings: EngineMkxpSettings
-
-    var gameDirectory: URL { container.gameURL }
-    var stateDirectory: URL { container.empoStateURL }
 
     init(game: GameEntry) {
         self.game = game
@@ -46,44 +41,31 @@ final class GameSettingsModel {
             gameDirectory: container.gameURL
         )
         let settings = GameSettings.load(from: container.empoStateURL)
-        let engine = EngineMkxpSettings.load(
-            from: container.empoStateURL, gameDirectory: container.gameURL)
         self.settings = settings
-        self.engineSettings = engine
-        self.defaults = GameSettings.readGameDefaults(from: container.gameURL)
         self.initialSettings = settings
-        self.initialEngineSettings = engine
         let core = GameCores.core(forGameAt: container.gameURL)
         self.core = core
         self.coreSettings = core?.makeSettings(for: container)
+        self.displayDefaults = core?.displayDefaults(for: container) ?? GameDisplayDefaults()
     }
 
     var hasAnyCustomizations: Bool {
-        settings.hasCustomizations || engineSettings.hasOverrides(devDefaults: defaults)
-            || coreSettings?.hasCustomizations == true
+        settings.hasCustomizations || coreSettings?.hasCustomizations == true
     }
 
     var restartRequiredChanges: [String] {
         settings.restartRequiredFieldsChanged(from: initialSettings)
-            + engineSettings.restartRequiredFieldsChanged(from: initialEngineSettings)
             + (coreSettings?.restartRequiredChanges ?? [])
     }
 
     func save() {
-        settings.save(to: stateDirectory)
-        engineSettings.save(to: stateDirectory, gameDirectory: gameDirectory)
+        settings.save(to: container.empoStateURL)
         coreSettings?.save()
     }
 
     func resetToDefaults() {
         settings = GameSettings()
-        defaults = GameSettings.readGameDefaults(from: gameDirectory)
-        engineSettings.resetToDefaults(gameDirectory: gameDirectory, stateDirectory: stateDirectory)
         coreSettings?.reset()
-    }
-
-    func resetEngineField(_ field: MkxpEngineField) {
-        engineSettings.resetField(field, gameDirectory: gameDirectory, stateDirectory: stateDirectory)
     }
 
     func reloadResolvedScreen() {
@@ -98,26 +80,11 @@ final class GameSettingsModel {
     // MARK: - Effective values
 
     var effectiveSmoothScaling: Bool {
-        engineSettings.smoothScaling ?? defaults.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
+        settings.smoothScaling ?? displayDefaults.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
     }
     var effectiveFixedAspectRatio: Bool {
-        engineSettings.fixedAspectRatio ?? defaults.fixedAspectRatio
+        settings.fixedAspectRatio ?? displayDefaults.fixedAspectRatio
             ?? GameConfigDefaults.engineFixedAspectRatio
-    }
-    var effectiveFrameSkip: Bool {
-        engineSettings.frameSkip ?? defaults.frameSkip ?? GameConfigDefaults.engineFrameSkip
-    }
-    var effectiveFontScale: Double {
-        engineSettings.fontScale ?? defaults.fontScale ?? GameConfigDefaults.engineFontScale
-    }
-    var effectivePathCache: Bool {
-        engineSettings.pathCache ?? defaults.pathCache ?? GameConfigDefaults.enginePathCache
-    }
-    var effectiveSolidFonts: Bool {
-        engineSettings.solidFonts ?? defaults.solidFonts ?? GameConfigDefaults.engineSolidFonts
-    }
-    var effectiveRenderScale: RenderScale {
-        engineSettings.renderScale ?? defaults.renderScale ?? GameConfigDefaults.engineRenderScale
     }
     /// Fast forward is on when the user set a multiplier of 2 or more.
     var fastForwardEnabled: Bool {

@@ -94,7 +94,6 @@ extension JgpConfiguration {
     /// Engine keys that belong in `EmpoState/mkxp.json`.
     func toMkxpEngineValues() -> MkxpEngineValues {
         MkxpEngineValues(
-            smoothScaling: smoothScaling,
             frameSkip: frameSkip,
             vsync: vsync,
             pathCache: pathCache,
@@ -108,6 +107,7 @@ extension JgpConfiguration {
     /// Engine keys route through `toMkxpEngineValues()` into mkxp.json.
     func toGameSettings() -> GameSettings {
         var s = GameSettings()
+        s.smoothScaling = smoothScaling
         // Intentionally NOT mapping `enablePostloadScripts` onto our
         // `postloadScripts` setting. JoiPlay's flag controls its own
         // JoiPlay-specific postload hooks. Ours controls the engine's

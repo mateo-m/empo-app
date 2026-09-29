@@ -1,48 +1,5 @@
 import Foundation
-
-/// Render-resolution multiplier applied via mkxp-z's `enableHires`
-/// + `framebufferScalingFactor`. RGSS games render to a buffer with
-/// a fixed aspect ratio (544x416 for RGSS3, 640x480 for RGSS1) that
-/// can't change without breaking the game's UI layout. What we can
-/// do is render that buffer at a higher pixel count before
-/// downscaling to the screen, which sharpens lines and text.
-enum RenderScale: String, Codable, CaseIterable, Hashable {
-    case x1
-    case x2
-    case x4
-
-    var label: String {
-        switch self {
-        case .x1: "Default"
-        case .x2: "High (2x)"
-        case .x4: "Very high (4x)"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .x1: "Native game resolution."
-        case .x2: "Draw the game at 2x its normal size. Sharper on high-resolution screens."
-        case .x4: "Draw the game at 4x its normal size. Sharpest, but harder on the battery."
-        }
-    }
-
-    /// Multiplier written to mkxp.json as `framebufferScalingFactor`.
-    /// `x1` returns 1.0 but the host strips both `enableHires` and
-    /// `framebufferScalingFactor` for that case so the engine falls
-    /// back to its native-resolution path.
-    var framebufferScalingFactor: Double {
-        switch self {
-        case .x1: 1.0
-        case .x2: 2.0
-        case .x4: 4.0
-        }
-    }
-
-    var enableHires: Bool {
-        self != .x1
-    }
-}
+import GameProbe
 
 enum VerticalAlignment: String, Codable, CaseIterable {
     case top
@@ -246,6 +203,9 @@ struct GameSettings: GameSettingsGroup {
     /// reads it at launch.
     @Setting<VerticalAlignment?, RestartFlag> var verticalAlignment: VerticalAlignment?
 
+    @Setting<Bool?, RestartFlag> var smoothScaling: Bool?
+    @Setting<Bool?, RestartFlag> var fixedAspectRatio: Bool?
+
     /// fast-forward multiplier (2-9, nil = disabled). Runtime-only,
     /// applied via PlayerMoreSheet's Fast forward toggle through
     /// `gamecore_setFastForwardMultiplier`.
@@ -291,32 +251,25 @@ struct GameSettings: GameSettingsGroup {
     static func displayLabel(forKey key: String) -> String {
         switch key {
         case "verticalAlignment": return "Screen position"
+        case "smoothScaling": return "Smooth scaling"
+        case "fixedAspectRatio": return "Fixed aspect ratio"
         default:
             assertionFailure("Missing displayLabel mapping for GameSettings.\(key)")
             return key
         }
     }
 
-    /// Reads the game's mkxp.json defaults straight from the
-    /// imported game folder. `gameDirectory` is the per-game
-    /// `<container>/Game/` directory. Empo never writes this file.
-    /// The sparse overlay at `EmpoState/mkxp.json` holds only
-    /// Game Settings overrides.
-    static func readGameDefaults(from gameDirectory: URL) -> GameConfigDefaults {
-        EngineConfigProjector.readGameDefaults(from: gameDirectory)
-    }
-
-    /// One-time migration for installs that still carry engine keys in
-    /// `game_settings.json`. Safe to call on every launch and settings
-    /// open. No-ops once the keys are gone.
+    /// Moves settings that older builds stored in the wrong file. Safe
+    /// to call on every launch and settings open.
     static func migrateLegacyEngineSettingsIfNeeded(
         stateDirectory: URL,
         gameDirectory: URL
     ) {
-        EngineConfigProjector.migrateLegacyEngineSettingsIfNeeded(
+        ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
             stateDirectory: stateDirectory,
             gameDirectory: gameDirectory
         )
+        ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory)
     }
 
     /// The value the engine bridge takes for `touchMouse`. Both the
@@ -327,24 +280,19 @@ struct GameSettings: GameSettingsGroup {
     }
 }
 
-/// Values from the game's mkxp.json. These are the developer's intended defaults.
-struct GameConfigDefaults {
-    var smoothScaling: Bool?
-    var fixedAspectRatio: Bool?
-    var renderScale: RenderScale?
-    var frameSkip: Bool?
-    var vsync: Bool?
-    var pathCache: Bool?
-    var fontScale: Double?
-    var solidFonts: Bool?
-
+/// The values a setting has when neither the user nor the game sets it.
+enum GameConfigDefaults {
     static let engineSmoothScaling = false
     static let engineFixedAspectRatio = true
-    static let engineFrameSkip = false
-    static let enginePathCache = true
-    static let engineFontScale = 1.0
-    static let engineSolidFonts = false
-    static let engineRenderScale = RenderScale.x1
     static let engineVerticalAlignment = VerticalAlignment.topCenter
     static let engineTouchMouse = true
+}
+
+/// The display values that a game itself asks for. A core that reads
+/// no such values from the game leaves both nil.
+struct GameDisplayDefaults {
+    var smoothScaling: Bool?
+    var fixedAspectRatio: Bool?
+    /// The game has a settings file that the core cannot read.
+    var unreadable = false
 }

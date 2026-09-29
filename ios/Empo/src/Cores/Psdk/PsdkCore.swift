@@ -89,10 +89,9 @@ struct PsdkCore: GameCore {
     // a mark if a slow device shows the wait.
     func launch(_ container: GameContainer) {
         PsdkGame.matchFileNameCase(in: container.gameURL)
-        let display = ManagedMkxpConfig.readEffective(
-            stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
-        let smooth = display.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
-        let fixed = display.fixedAspectRatio ?? GameConfigDefaults.engineFixedAspectRatio
+        let settings = GameSettings.load(from: container.empoStateURL)
+        let smooth = settings.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
+        let fixed = settings.fixedAspectRatio ?? GameConfigDefaults.engineFixedAspectRatio
         gamecore_setSetting("smoothScaling", smooth ? "1" : "0")
         gamecore_setSetting("fixedAspectRatio", fixed ? "1" : "0")
     }

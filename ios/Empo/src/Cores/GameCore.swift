@@ -58,6 +58,7 @@ protocol GameCore {
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning?
 
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)?
+    func displayDefaults(for container: GameContainer) -> GameDisplayDefaults
     @MainActor func settingsPage(_ model: GameSettingsModel) -> AnyView
 
     /// Rows for the Runtime section of Game Info. Empty hides the section.
@@ -86,6 +87,7 @@ extension GameCore {
     func launch(_ container: GameContainer) {}
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning? { nil }
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)? { nil }
+    func displayDefaults(for container: GameContainer) -> GameDisplayDefaults { GameDisplayDefaults() }
     func infoRows(for container: GameContainer) async -> [InfoRow] { [] }
 
     var notInThisBuildMessage: String {

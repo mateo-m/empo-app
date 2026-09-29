@@ -169,9 +169,14 @@ struct MkxpCore: GameCore {
         set("joiplayCompat", settings.joiplayCompatEnabled)
         set("networkEnabled", settings.networkAccessEnabled)
 
+        let shared = GameSettings.load(from: container.empoStateURL)
         let overlay = ManagedMkxpConfig.overlayJSONString(
             gameDirectory: container.gameURL,
             stateDirectory: container.empoStateURL,
+            overrides: MkxpEngineValues(
+                smoothScaling: shared.smoothScaling,
+                fixedAspectRatio: shared.fixedAspectRatio
+            ),
             onUnparseableOverlay: { NSLog($0) }
         )
         set("configOverlay", overlay ?? "")
@@ -227,19 +232,19 @@ struct MkxpCore: GameCore {
         MkxpSettingsState(container: container)
     }
 
+    func displayDefaults(for container: GameContainer) -> GameDisplayDefaults {
+        let defaults = ManagedMkxpConfig.readGameDefaults(from: container.gameURL)
+        return GameDisplayDefaults(
+            smoothScaling: defaults.smoothScaling,
+            fixedAspectRatio: defaults.fixedAspectRatio,
+            unreadable: ManagedMkxpConfig.isDevConfigUnparseable(gameDirectory: container.gameURL)
+        )
+    }
+
     @MainActor func settingsPage(_ model: GameSettingsModel) -> AnyView {
-        AnyView(
-            Group {
-                GameplaySettingsSection(model: model)
-                DisplaySettingsSection(
-                    model: model,
-                    fields: [.smoothScaling, .fixedAspectRatio, .renderScale, .fontScale, .solidFonts])
-                LayoutSettingsSection(model: model)
-                PerformanceSettingsSection(model: model)
-                if let state = model.coreSettings as? MkxpSettingsState {
-                    MkxpEngineSection(model: model, state: state)
-                }
-            })
+        // `makeSettings(for:)` always makes this type.
+        guard let state = model.coreSettings as? MkxpSettingsState else { return AnyView(EmptyView()) }
+        return AnyView(MkxpSettingsPage(model: model, state: state))
     }
 
     /// "Ruby (bundled)" is the Ruby that the game's own DLL carries.
