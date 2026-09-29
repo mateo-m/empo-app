@@ -17,6 +17,11 @@ import GameProbe
 enum SaveMigration {
 
     static func migrateLegacySavesIfNeeded(for container: GameContainer) {
+        // Old builds ran only mkxp-z games. Without a title, the old
+        // folder is `Application Support/mkxp-z`, so a game that keeps
+        // its saves in its own folder would take another game's saves.
+        guard GameCores.core(forGameAt: container.gameURL)?.sharedDataFolder(for: container) != nil
+        else { return }
         let fm = FileManager.default
         let userDataDir = container.userDataURL
         recoverConcatenatedSaves(for: container, userDataDir: userDataDir, fm: fm)
