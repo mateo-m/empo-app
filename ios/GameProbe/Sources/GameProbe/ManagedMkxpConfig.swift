@@ -355,8 +355,11 @@ public enum ManagedMkxpConfig {
         if let base {
             // Neutralize desktop window sizing only when the base
             // defines it. A plain game then sends no overlay at all.
-            if base["defScreenW"] != nil { patches["defScreenW"] = NSNull() }
-            if base["defScreenH"] != nil { patches["defScreenH"] = NSNull() }
+            // The engine turns 0 into its default size. It cannot read
+            // null as a number and then keeps an uninitialized size,
+            // and SDL refuses the window as too large.
+            if base["defScreenW"] != nil { patches["defScreenW"] = 0 }
+            if base["defScreenH"] != nil { patches["defScreenH"] = 0 }
 
             if base["vsync"] != nil,
                 base["syncToRefreshrate"] == nil,
@@ -368,10 +371,9 @@ public enum ManagedMkxpConfig {
             }
         } else if baseExists {
             // The engine can parse a base that the host cannot. In
-            // that case, neutralize both keys as a safe default. A
-            // null on an absent key is harmless.
-            patches["defScreenW"] = NSNull()
-            patches["defScreenH"] = NSNull()
+            // that case, neutralize both keys as a safe default.
+            patches["defScreenW"] = 0
+            patches["defScreenH"] = 0
         }
 
         guard !overlay.isEmpty || !patches.isEmpty else {
