@@ -175,9 +175,9 @@ enum DataDirectory {
             for name in fm.subdirectoryNames(at: url) {
                 removeIfEmpty(url.appendingPathComponent(name, isDirectory: true))
             }
-            if (try? fm.contentsOfDirectory(atPath: url.path))?.isEmpty == true {
-                try? fm.removeItem(at: url)
-            }
+            // Unlike `removeItem`, `rmdir` fails when a file appeared
+            // after the check.
+            rmdir(url.path)
         }
         drainLock.withLock { _ in
             for name in fm.subdirectoryNames(at: sharedRootURL) {
@@ -493,9 +493,8 @@ enum DataDirectory {
         }
         // An emptied root is clutter in the Files app. Remove it
         // only when the LAST bucket is gone.
-        if ((try? fm.contentsOfDirectory(atPath: rescuedSavesRootURL.path)) ?? []).isEmpty {
-            try? fm.removeItem(at: rescuedSavesRootURL)
-        }
+        // `rmdir` fails unless the folder is empty.
+        rmdir(rescuedSavesRootURL.path)
     }
 
     private static func logDrain(
