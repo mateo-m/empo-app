@@ -41,13 +41,12 @@ BIN="$FW/MkxpCore"
 [ -f "$BIN" ] ||
     fail "missing $BIN (run: cores/mkxp/build-framework-ios.sh --sdk $SDK)"
 
-# The header is the contract. Anything it declares must be out, and
+# GameCore.h is the contract. Anything it declares must be out, and
 # nothing else may be.
-WANT=$(grep -oE '\bmkxp_[A-Za-z0-9_]+\(' "$FW/Headers/app_bridge.h" |
-    sed 's/(//' | sort -u | sed 's/^/_/')
+WANT=$("$(dirname "$0")/../gamecore-exports.sh" /dev/stdout)
 GOT=$(dyld_info -exports "$BIN" | awk '/^ *0x/ {print $2}' | sort -u)
 if [ "$WANT" != "$GOT" ]; then
-    echo "error: MkxpCore exports do not match app_bridge.h" >&2
+    echo "error: MkxpCore exports do not match GameCore.h" >&2
     diff <(echo "$WANT") <(echo "$GOT") >&2 || true
     exit 1
 fi
@@ -68,7 +67,7 @@ otool -l "$BIN" | grep -Eq "platform ${WANT_PLATFORM}([[:space:]]|$)" ||
 
 for f in Assets.bundle/Shaders/common.h Assets.bundle/Fonts/liberation.ttf \
     Assets.bundle/gamecontrollerdb.txt Assets.bundle/Preload Assets.bundle/Postload \
-    Ruby/3.1.0 Headers/app_bridge.h Info.plist; do
+    Ruby/3.1.0 Info.plist; do
     [ -e "$FW/$f" ] || fail "MkxpCore.framework/$f missing"
 done
 

@@ -4,7 +4,6 @@ import SwiftUI
 
 struct MvmzCore: GameCore {
     let framework = "MvmzCore"
-    let symbolPrefix = "mvmz_"
     let displayName = "RPG Maker MV and MZ core"
     let gamesLine = "Runs RPG Maker MV and MZ games"
     let madeWith = "RPG Maker"

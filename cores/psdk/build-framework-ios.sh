@@ -68,7 +68,7 @@ CORE_VERSION="$(cut -d" " -f1 "$CORE/.fetched-pin")"
 
 STAMP="$TREE/.psdk-frameworks"
 WANT_STAMP="$(cat "$CORE/.fetched-pin" "$DEPS/ANGLE/.version" "$0" \
-    "$ROOT/cores/psdk/psdk_app_bridge.cpp" "$ROOT/cores/psdk/psdk_app_bridge.h" | shasum -a 256 | awk '{print $1}')"
+    "$ROOT/cores/psdk/psdk_app_bridge.cpp" "$ROOT/cores/GameCore.h" | shasum -a 256 | awk '{print $1}')"
 BUILT=yes
 for ruby in $RUBIES; do
     [ -f "$TREE/Psdk${ruby}Core.framework/Psdk${ruby}Core" ] || BUILT=no
@@ -81,11 +81,10 @@ mkdir -p "$TREE/lib"
 BRIDGE="$TREE/lib/psdk-bridge.o"
 echo "[psdk-framework] Compiling the bridge..."
 "$CXX" -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" -std=c++17 -O2 \
-    -I"$CORE/include" -I"$ANGLE/include" \
+    -I"$ROOT/cores" -I"$CORE/include" -I"$ANGLE/include" \
     -c "$ROOT/cores/psdk/psdk_app_bridge.cpp" -o "$BRIDGE"
 
-grep -oE '\bpsdk_[A-Za-z0-9_]+\(' "$ROOT/cores/psdk/psdk_app_bridge.h" |
-    sed 's/(//' | sed 's/^/_/' | sort -u >"$TREE/psdk-core.exports"
+"$ROOT/cores/gamecore-exports.sh" "$TREE/gamecore.exports"
 
 for ruby in $RUBIES; do
     NAME="Psdk${ruby}Core"
@@ -96,7 +95,7 @@ for ruby in $RUBIES; do
     echo "[psdk-framework] Linking $NAME..."
     "$CXX" -dynamiclib -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
         -install_name "@rpath/$NAME.framework/$NAME" \
-        -Wl,-exported_symbols_list,"$TREE/psdk-core.exports" \
+        -Wl,-exported_symbols_list,"$TREE/gamecore.exports" \
         -o "$FW/$NAME" \
         "$BRIDGE" "$CORE/$SDK/libpsdk$ruby.a" \
         -L"$ANGLE/lib" -lANGLE_static -lEGL_static -lGLESv2_static \

@@ -9,7 +9,7 @@
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 
-#include "mvmz_app_bridge.h"
+#include "GameCore.h"
 #include "mvmz_core.h"
 
 typedef struct {
@@ -37,7 +37,7 @@ static BOOL gExitedCleanly;
 static BOOL gPausedFlag;
 static BOOL gCheatsEnabled;
 static int gFastForward = 1;
-static MvmzVerticalAlignment gVerticalAlignment = MVMZ_VALIGN_TOP_CENTER;
+static GameCoreVerticalAlignment gVerticalAlignment = GAMECORE_VALIGN_TOP_CENTER;
 static UIEdgeInsets gSafeArea;
 static BOOL gHasHostRegion;
 static BOOL gHostRegionPortrait;
@@ -93,8 +93,7 @@ static void placeWebView(void) {
     // ponytail: always fits. A stretched picture also needs MV and MZ
     // to map touches through the stretch.
     if (gGameSize.width > 0 && gGameSize.height > 0) {
-        const CGFloat scale =
-            MIN(box.size.width / gGameSize.width, box.size.height / gGameSize.height);
+        const CGFloat scale = MIN(box.size.width / gGameSize.width, box.size.height / gGameSize.height);
         picture.size = CGSizeMake(gGameSize.width * scale, gGameSize.height * scale);
         picture.origin.x = CGRectGetMidX(box) - picture.size.width / 2;
         picture.origin.y = CGRectGetMidY(box) - picture.size.height / 2;
@@ -103,10 +102,10 @@ static void placeWebView(void) {
         const CGFloat top = box.origin.y;
         const CGFloat centre = picture.origin.y;
         switch (gVerticalAlignment) {
-        case MVMZ_VALIGN_TOP:
+        case GAMECORE_VALIGN_TOP:
             picture.origin.y = top;
             break;
-        case MVMZ_VALIGN_CENTER:
+        case GAMECORE_VALIGN_CENTER:
             break;
         default:
             picture.origin.y = (top + centre) / 2;
@@ -119,9 +118,9 @@ static void placeWebView(void) {
     }
     gWebView.frame = picture;
     if (gGameRectChanged.fn) {
-        ((mvmz_GameRectChangedCallback)gGameRectChanged.fn)(
-            picture.origin.x, picture.origin.y, picture.size.width, picture.size.height,
-            gGameRectChanged.userdata);
+        ((gamecore_GameRectChangedCallback)gGameRectChanged.fn)(picture.origin.x, picture.origin.y,
+                                                                picture.size.width, picture.size.height,
+                                                                gGameRectChanged.userdata);
     }
 }
 
@@ -205,7 +204,9 @@ static void gameExited(int clean, void *userdata) {
 }
 
 static void gameAlert(const char *message, void *userdata) {
-    mvmz_presentInfoAndWait(message);
+    if (gInfoMessage.fn) {
+        ((gamecore_InfoMessageCallback)gInfoMessage.fn)(message, gInfoMessage.userdata);
+    }
 }
 
 static void coreLog(const char *line, void *userdata) {
@@ -224,14 +225,14 @@ static void takeSnapshot(void *userdata) {
 // Makes the window, starts the game in the core's web view, then
 // returns. The launcher keeps the main thread in its run loop, and
 // WebKit needs it there.
-int mvmz_run_app(int argc, char **argv) {
+int gamecore_run_app(int argc, char **argv) {
     NSString *root = gGamePath;
     if (root.length == 0) {
         logLine(@"no game path");
         return -1;
     }
 
-    mvmz_killSession();
+    gamecore_killSession();
 
     UIWindowScene *scene = nil;
     for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
@@ -248,7 +249,7 @@ int mvmz_run_app(int argc, char **argv) {
     mvmz_set_exit_callback(gameExited, NULL);
     mvmz_set_alert_callback(gameAlert, NULL);
     mvmz_set_log_callback(coreLog, NULL);
-    // Empo passes Games/<name>/Game, and <name> is the game's identity.
+    // The launcher passes Games/<name>/Game, and <name> is the game's identity.
     NSString *gameId = root.stringByDeletingLastPathComponent.lastPathComponent;
     gWebView = (__bridge WKWebView *)mvmz_start(root.UTF8String, gameId.UTF8String);
 #if DEBUG
@@ -262,79 +263,83 @@ int mvmz_run_app(int argc, char **argv) {
     return 0;
 }
 
-void mvmz_killSession(void) {
+void gamecore_killSession(void) {
     mvmz_stop();
     gWebView = nil;
     gWindow.hidden = YES;
     gWindow = nil;
-    mvmz_resetSessionState();
+    gamecore_resetSessionState();
 }
 
-void mvmz_setGamePath(const char *path) {
+void gamecore_setGamePath(const char *path) {
     gGamePath = path ? @(path) : nil;
-}
-
-const char *mvmz_waitForGamePath(void) {
-    return gGamePath.UTF8String;
 }
 
 // MARK: - Input
 
-void mvmz_injectKeyEvent(int scancode, int pressed) {
+void gamecore_injectKeyEvent(int scancode, int pressed) {
     mvmz_inject_key(scancode, pressed);
 }
 
 // MARK: - The window
 
-void *mvmz_getGameWindow(void) {
+void *gamecore_getGameWindow(void) {
     return (__bridge void *)gWindow;
 }
 
 // MARK: - Callbacks
 
-void mvmz_setFrameRenderedCallback(mvmz_FrameRenderedCallback cb, void *userdata) {
+void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata) {
     gFrameRendered = (Callback){(void *)cb, userdata};
 }
 
-void mvmz_setEngineTerminatedCallback(mvmz_EngineTerminatedCallback cb, void *userdata) {
+void gamecore_setEngineTerminatedCallback(gamecore_EngineTerminatedCallback cb, void *userdata) {
     gEngineTerminated = (Callback){(void *)cb, userdata};
 }
 
-void mvmz_setGameRectChangedCallback(mvmz_GameRectChangedCallback cb, void *userdata) {
+void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, void *userdata) {
     gGameRectChanged = (Callback){(void *)cb, userdata};
 }
 
-void mvmz_setErrorMessageCallback(mvmz_ErrorMessageCallback cb, void *userdata) {
+void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata) {
     gErrorMessage = (Callback){(void *)cb, userdata};
 }
 
-void mvmz_setInfoMessageCallback(mvmz_InfoMessageCallback cb, void *userdata) {
+void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata) {
     gInfoMessage = (Callback){(void *)cb, userdata};
 }
 
-void mvmz_setPausedCallback(mvmz_PausedCallback cb, void *userdata) {
+void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata) {
     gPaused = (Callback){(void *)cb, userdata};
 }
 
-void mvmz_setResumedCallback(mvmz_ResumedCallback cb, void *userdata) {
+void gamecore_setResumedCallback(gamecore_ResumedCallback cb, void *userdata) {
     gResumed = (Callback){(void *)cb, userdata};
 }
 
-void mvmz_setTextInputModeCallback(mvmz_TextInputModeCallback cb, void *userdata) {
+void gamecore_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *userdata) {
     gTextInputMode = (Callback){(void *)cb, userdata};
 }
 
 // MARK: - Session state
 
-int mvmz_isGameReady(void) { return gGameReady; }
-int mvmz_isEngineTerminated(void) { return gTerminated; }
-int mvmz_didEngineExitCleanly(void) { return gExitedCleanly; }
+int gamecore_isGameReady(void) {
+    return gGameReady;
+}
+int gamecore_isEngineTerminated(void) {
+    return gTerminated;
+}
+int gamecore_didEngineExitCleanly(void) {
+    return gExitedCleanly;
+}
 
 // A hung game still leaves WebKit's main thread free, and the launcher
 // alert for a hang says to close the app, which a web page never needs.
-int mvmz_isEngineHung(void) { return 0; }
+int gamecore_isEngineHung(void) {
+    return 0;
+}
 
-void mvmz_resetSessionState(void) {
+void gamecore_resetSessionState(void) {
     gGameReady = NO;
     gTerminated = NO;
     gExitedCleanly = NO;
@@ -353,7 +358,7 @@ void mvmz_resetSessionState(void) {
 
 // MARK: - Pause
 
-void mvmz_requestPause(void) {
+void gamecore_requestPause(void) {
     if (gPausedFlag) {
         return;
     }
@@ -361,7 +366,7 @@ void mvmz_requestPause(void) {
     mvmz_pause(takeSnapshot, NULL);
 }
 
-void mvmz_requestResume(void) {
+void gamecore_requestResume(void) {
     gPausedFlag = NO;
     mvmz_resume();
     [gSnapshotLock lock];
@@ -370,24 +375,30 @@ void mvmz_requestResume(void) {
     fire(gResumed);
 }
 
-bool mvmz_isPaused(void) { return gPausedFlag; }
+bool gamecore_isPaused(void) {
+    return gPausedFlag;
+}
 
-bool mvmz_getSnapshotSize(int *width, int *height) {
+bool gamecore_getSnapshotSize(int *width, int *height) {
     [gSnapshotLock lock];
     const bool has = gSnapshotRGBA != nil;
-    if (has && width) *width = gSnapshotW;
-    if (has && height) *height = gSnapshotH;
+    if (has && width)
+        *width = gSnapshotW;
+    if (has && height)
+        *height = gSnapshotH;
     [gSnapshotLock unlock];
     return has;
 }
 
-bool mvmz_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
+bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
     [gSnapshotLock lock];
     const bool fits = dest && gSnapshotRGBA && destSize >= 0 && (NSUInteger)destSize >= gSnapshotRGBA.length;
     if (fits) {
         memcpy(dest, gSnapshotRGBA.bytes, gSnapshotRGBA.length);
-        if (width) *width = gSnapshotW;
-        if (height) *height = gSnapshotH;
+        if (width)
+            *width = gSnapshotW;
+        if (height)
+            *height = gSnapshotH;
     }
     [gSnapshotLock unlock];
     return fits;
@@ -398,29 +409,22 @@ bool mvmz_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *h
 // An MV or MZ game reads no typed text through the launcher. A plugin
 // that wants text puts a text field in the page, and WebKit brings up
 // the keyboard for it.
-int mvmz_isTextInputActive(void) { return 0; }
-void mvmz_pushTextInput(const char *utf8) {}
+int gamecore_isTextInputActive(void) {
+    return 0;
+}
+void gamecore_pushTextInput(const char *utf8) {
+}
 
 // MARK: - Alerts
 
-void mvmz_presentErrorAndWait(const char *message) {
-    if (gErrorMessage.fn) {
-        ((mvmz_ErrorMessageCallback)gErrorMessage.fn)(message, gErrorMessage.userdata);
-    }
+void gamecore_signalErrorDismissed(void) {
 }
-
-void mvmz_presentInfoAndWait(const char *message) {
-    if (gInfoMessage.fn) {
-        ((mvmz_InfoMessageCallback)gInfoMessage.fn)(message, gInfoMessage.userdata);
-    }
+void gamecore_signalInfoDismissed(void) {
 }
-
-void mvmz_signalErrorDismissed(void) {}
-void mvmz_signalInfoDismissed(void) {}
 
 // MARK: - What the launcher pushes
 
-void mvmz_setDebugLogPath(const char *path) {
+void gamecore_setDebugLogPath(const char *path) {
     [gLog closeFile];
     gLog = nil;
     if (!path || !path[0]) {
@@ -431,12 +435,13 @@ void mvmz_setDebugLogPath(const char *path) {
     logLine(@"log is attached");
 }
 
-// The launcher sends the same overlay it gives mkxp-z. Empo writes
+// The launcher sends the same overlay it gives mkxp-z. It writes
 // "smoothScaling" as a number or a boolean.
-void mvmz_setConfigOverlayJSON(const char *jsonUTF8) {
+void gamecore_setConfigOverlayJSON(const char *jsonUTF8) {
     NSDictionary *overlay = nil;
     if (jsonUTF8) {
-        overlay = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:jsonUTF8 length:strlen(jsonUTF8)]
+        overlay = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:jsonUTF8
+                                                                         length:strlen(jsonUTF8)]
                                                   options:0
                                                     error:nil];
     }
@@ -447,31 +452,33 @@ void mvmz_setConfigOverlayJSON(const char *jsonUTF8) {
     mvmz_set_smooth([smooth isKindOfClass:NSNumber.class] && [smooth boolValue]);
 }
 
-void mvmz_setFastForwardMultiplier(int multiplier) {
+void gamecore_setFastForwardMultiplier(int multiplier) {
     gFastForward = multiplier;
     mvmz_set_speed(multiplier);
 }
 
-int mvmz_getFastForwardMultiplier(void) { return gFastForward; }
+int gamecore_getFastForwardMultiplier(void) {
+    return gFastForward;
+}
 
-void mvmz_setHostViewportRegion(float x, float y, float w, float h, bool isPortrait) {
+void gamecore_setHostViewportRegion(float x, float y, float w, float h, bool isPortrait) {
     gHostRegion = CGRectMake(x, y, w, h);
     gHostRegionPortrait = isPortrait;
     gHasHostRegion = YES;
     placeWebView();
 }
 
-void mvmz_clearHostViewportRegion(void) {
+void gamecore_clearHostViewportRegion(void) {
     gHasHostRegion = NO;
     placeWebView();
 }
 
-void mvmz_setSafeAreaInsets(float top, float bottom, float left, float right) {
+void gamecore_setSafeAreaInsets(float top, float bottom, float left, float right) {
     gSafeArea = UIEdgeInsetsMake(top, left, bottom, right);
     placeWebView();
 }
 
-void mvmz_applySessionConfig(const MvmzSessionConfig *config) {
+void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
     if (!config) {
         return;
     }
@@ -479,27 +486,48 @@ void mvmz_applySessionConfig(const MvmzSessionConfig *config) {
     placeWebView();
 }
 
-MvmzVerticalAlignment mvmz_getVerticalAlignment(void) { return gVerticalAlignment; }
+GameCoreVerticalAlignment gamecore_getVerticalAlignment(void) {
+    return gVerticalAlignment;
+}
 
-void mvmz_setCheatsEnabled(bool enabled) { gCheatsEnabled = enabled; }
-bool mvmz_getCheatsEnabled(void) { return gCheatsEnabled; }
+void gamecore_setCheatsEnabled(bool enabled) {
+    gCheatsEnabled = enabled;
+}
+bool gamecore_getCheatsEnabled(void) {
+    return gCheatsEnabled;
+}
 
-void mvmz_setSetting(const char *key, const char *value) {
+// This core has no keys. Every key writes a warning to the log.
+void gamecore_setSetting(const char *key, const char *value) {
     NSLog(@"[mvmz] unknown setting %s", key ?: "(null)");
 }
 
 // An MV or MZ game has nothing these could reach.
-void mvmz_setLauncherIdentity(const char *name) {}
-void mvmz_setCABundlePath(const char *path) {}
-void mvmz_setShowViewportBounds(bool enabled) {}
-void mvmz_setViewportBoundsColor(float r, float g, float b, float a) {}
-void mvmz_setGameControllerCaptureEnabled(bool enabled) {}
-void mvmz_setTouchMouseEnabled(bool enabled) {}
+void gamecore_setLauncherIdentity(const char *name) {
+}
+void gamecore_setCABundlePath(const char *path) {
+}
+void gamecore_setShowViewportBounds(bool enabled) {
+}
+void gamecore_setViewportBoundsColor(float r, float g, float b, float a) {
+}
+void gamecore_setGameControllerCaptureEnabled(bool enabled) {
+}
+void gamecore_setTouchMouseEnabled(bool enabled) {
+}
 
 // MARK: - What the launcher reads
 
-const char *mvmz_getGameTitle(void) { return ""; }
-const char *mvmz_getDetails(void) { return mvmz_details(); }
-int mvmz_getTargetFPS(void) { return 60; }
+const char *gamecore_getGameTitle(void) {
+    return "";
+}
+const char *gamecore_getDetails(void) {
+    return mvmz_details();
+}
+int gamecore_getTargetFPS(void) {
+    return 60;
+}
 
-double mvmz_getAverageFPS(void) { return mvmz_fps(); }
+double gamecore_getAverageFPS(void) {
+    return mvmz_fps();
+}

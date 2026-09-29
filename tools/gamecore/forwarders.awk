@@ -1,4 +1,4 @@
-# Read ios/Empo/src/App/GameCore.h and print one dlsym forwarder for
+# Read cores/GameCore.h and print one dlsym forwarder for
 # every gamecore_* function it declares.
 # tools/gamecore/generate-core-forwarders.sh runs this.
 
@@ -90,15 +90,11 @@
         args = (args == "") ? arg : args ", " arg
     }
 
-    # The core answers under its own prefix, so the forwarder asks for
-    # the name without one. coreSymbol puts the open core's prefix back.
-    suffix = substr(name, length("gamecore_") + 1)
-
     printf "%s %s(%s) {\n", ret, name, params
     printf "    static %s (*fn)(%s);\n", ret, params
     printf "    static unsigned generation;\n"
     printf "    if (fn == NULL || generation != gCoreGeneration) {\n"
-    printf "        fn = coreSymbol(\"%s\");\n", suffix
+    printf "        fn = coreSymbol(\"%s\");\n", name
     printf "        generation = gCoreGeneration;\n"
     printf "    }\n"
     if (ret == "void") {

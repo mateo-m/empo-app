@@ -1,25 +1,17 @@
-// GameCore.h - the interface Empo calls a game core through.
+// GameCore.h - the interface a launcher calls a game core through.
 //
-// Empo links no engine. It opens one core for the game the person
-// picked, and every name here reaches that core through a forwarder in
-// GameCoreForwarders.c.
+// Every core implements each function here under this exact name, in
+// its own bridge: cores/<core>/<core>_app_bridge.*. The bridge includes
+// this file, so the compiler checks every signature. Each core links
+// with the export list that cores/gamecore-exports.sh writes from this
+// file, so the linker fails when a bridge leaves a function out, and
+// the core exports nothing else.
 //
-// A core answers the same interface under its own prefix: MkxpCore
-// answers mkxp_*, the PSDK cores answer psdk_*, MvmzCore answers mvmz_*.
-// The forwarder puts the open core's prefix in front of the name, so
-// this header names no engine and no engine header names Empo.
-//
-// Each side keeps its own copy of this file:
-//   Empo        ios/Empo/src/App/GameCore.h              gamecore_ / GameCore
-//   MkxpCore    ios/Dependencies/mkxp-core/include/app_bridge.h  mkxp_ / MKXP
-//   Psdk*Core   cores/psdk/psdk_app_bridge.h  psdk_ / Psdk
-//   MvmzCore    cores/mvmz/mvmz_app_bridge.h           mvmz_ / Mvmz
-//
-// scripts/check-core-interface.sh compares them and fails when one of
-// them drifts.
+// The launcher links no core. It opens the core of the game that the
+// person picked with dlopen, and calls these names in that image.
 
-#ifndef EMPO_GAME_CORE_H
-#define EMPO_GAME_CORE_H
+#ifndef GAME_CORE_H
+#define GAME_CORE_H
 
 #include <stdbool.h>
 
@@ -119,11 +111,6 @@ enum {
     GAMECORE_SCANCODE_HOME = 74,
 };
 
-// ---------------------------------------------------------------------------
-// Shared types - visible on every platform (both the live bridge and
-// the no-op stubs use them).
-// ---------------------------------------------------------------------------
-
 // Lifecycle callbacks (Engine -> UI). Fire on the engine thread. UI
 // must dispatch to main for any UI updates.
 typedef void (*gamecore_EngineTerminatedCallback)(void *userdata);
@@ -154,16 +141,10 @@ typedef enum {
 } GameCoreVerticalAlignment;
 
 typedef struct {
-    const char *managedConfigDir;
     const char *userDataDirectory;
     const char *sharedFontsDirectory;
     GameCoreVerticalAlignment verticalAlignment;
 } GameCoreSessionConfig;
-
-// ---------------------------------------------------------------------------
-// Live bridge (mobile). Implemented in app_bridge.cpp and the
-// platform .mm files.
-// ---------------------------------------------------------------------------
 
 #ifdef __cplusplus
 extern "C" {
@@ -174,20 +155,10 @@ extern "C" {
 // Runs the engine on the calling thread, which must be the main
 // thread. It returns when the game ends.
 //
-// Do not call it from a block on the main dispatch queue. It holds the
-// thread for the whole session, so the queue would never drain, and the
-// RGSS thread deadlocks on the first gamecore_getScreenScale, which
-// dispatch_syncs to that queue. Use a run loop timer, the way
-// SDLUIKitDelegate reaches SDL_main (SDL_uikitappdelegate.m:467).
-//
-// A launcher that links the engine statically does not need this:
-// libSDL2main.a supplies main(), and SDLUIKitDelegate calls the
-// engine's SDL_main after UIApplicationMain. A launcher that opens
-// the engine with dlopen can use neither. A dynamic image holds no
-// process entry point, and the ObjC runtime cannot find the class
-// named SDLUIKitDelegate before that image loads. This runs what the
-// delegate runs, without the launch screen and the idle-timer hint,
-// which stay with the launcher.
+// Call it from a run loop callout, never from a block on the main
+// dispatch queue. The engine holds the thread for the whole session,
+// so the queue would never drain, and a core that dispatch_syncs to
+// it deadlocks.
 int gamecore_run_app(int argc, char **argv);
 
 // Game lifecycle
@@ -197,7 +168,6 @@ int gamecore_isGameReady(void);
 // Game selection (Library -> Engine)
 
 void gamecore_setGamePath(const char *path);
-const char *gamecore_waitForGamePath(void);
 
 // Engine termination
 
@@ -221,23 +191,11 @@ void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, vo
 // scancode: GAMECORE_SCANCODE_* value. pressed: 1=down, 0=up.
 void gamecore_injectKeyEvent(int scancode, int pressed);
 
-// Managed-config directory (UI -> Engine).
-//
-// The host may keep generated per-game state (mkxp.json,
-// patches.json, save metadata) outside the imported game folder so
-// the game directory stays a faithful mirror of what the user
-// imported. The host calls `gamecore_setManagedConfigDir` with the
-// per-game state path before each session. Engine modules that used
-// to load from cwd (Config::read, Patcher auto-discovery) check this
-// directory first and fall back to cwd only if the file isn't found.
-//
-// Pass NULL/"" to clear the override (cwd-only behavior, matches
-// desktop builds).
-
 // In-memory config overlay (UI -> Engine).
 //
-// A JSON object the host merges over the base mkxp.json at config-
-// read time. Overlay keys win per TOP-LEVEL key (shallow merge: an
+// A JSON object of mkxp.json keys. A core that reads mkxp.json merges
+// it over the game's own file at config-read time. Another core reads
+// the display keys it knows and ignores the rest. Overlay keys win per TOP-LEVEL key (shallow merge: an
 // overlay `bindingNames` replaces the whole object). JSON null
 // values neutralize a key so the engine's guarded reads fall back to
 // defaults. Lets hosts override config keys per session without
@@ -326,8 +284,6 @@ int gamecore_getTargetFPS(void);
 
 const char *gamecore_getGameTitle(void);
 
-// Game viewport rect (logical points)
-
 // Safe area insets (logical points, cached atomics)
 
 // Push from UIKit main thread. Sets a "needs relayout" flag.
@@ -368,9 +324,9 @@ GameCoreVerticalAlignment gamecore_getVerticalAlignment(void);
 void gamecore_applySessionConfig(const GameCoreSessionConfig *config);
 
 // A per-game setting that only the open core knows (UI -> Engine).
-// Empo sends each one as text before it calls
-// gamecore_applySessionConfig. The core's own copy of this interface
-// lists its keys and values. An unknown key writes a warning to the
+// The launcher sends each one as text before it calls
+// gamecore_applySessionConfig. The core's bridge lists its keys and
+// values. An unknown key writes a warning to the
 // log and changes nothing.
 void gamecore_setSetting(const char *key, const char *value);
 
@@ -406,33 +362,18 @@ void gamecore_setTouchMouseEnabled(bool enabled);
 
 void gamecore_setViewportBoundsColor(float r, float g, float b, float a);
 
-// Error routing (Engine -> UI). `SDL_ShowSimpleMessageBox` is a no-op
-// on iOS, so errors come through here for the UI to present.
-
-/* Present an error in the host UI and block the calling thread until
- * the user dismisses the alert. iOS only. No-op elsewhere. */
-void gamecore_presentErrorAndWait(const char *message);
-
-/* Called by the host UI when the user dismisses an error alert that
- * may be blocking an engine thread in gamecore_presentErrorAndWait(). */
+// Error routing (Engine -> UI). The core calls the error callback and
+// blocks its engine thread until the UI calls
+// gamecore_signalErrorDismissed.
 void gamecore_signalErrorDismissed(void);
 
 void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata);
 
-// Info-message routing (Engine -> UI). Games call `msgbox` / `p`
-// deliberately to show a notice (PE 20+ version banners, plugin
-// dialogs) and then keep running. This is NOT an error: the UI
-// should present a plain dismissible alert without "restart the app"
-// framing. Blocks the engine thread until the user dismisses,
-// mirroring gamecore_presentErrorAndWait.
-
-/* Present an informational message in the host UI and block the
- * calling thread until the user dismisses it. iOS only. Fires the
- * info callback without blocking elsewhere. */
-void gamecore_presentInfoAndWait(const char *message);
-
-/* Called by the host UI when the user dismisses an info alert that
- * may be blocking an engine thread in gamecore_presentInfoAndWait(). */
+// Info-message routing (Engine -> UI). Games show a notice (PE 20+
+// version banners, plugin dialogs) and then keep running. This is not
+// an error: the UI shows a plain alert. The core calls the info
+// callback and blocks its engine thread until the UI calls
+// gamecore_signalInfoDismissed.
 void gamecore_signalInfoDismissed(void);
 
 void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata);
@@ -460,8 +401,6 @@ void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata);
 void gamecore_setResumedCallback(gamecore_ResumedCallback cb, void *userdata);
 void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata);
 
-// GL context crash detection (set by SDL layer on caught SIGSEGV/SIGBUS).
-
 // Runtime fast-forward multiplier. When > 1 the FPS limiter scales
 // target ticks-per-frame down so the game paces N times faster.
 // Toggleable live without restart. Range: 1 (off) or 2-9 (active).
@@ -472,17 +411,16 @@ int gamecore_getFastForwardMultiplier(void);
 // once before each new game launch so values from the previous
 // session (fast-forward multiplier, cheats flag) don't leak.
 //
-// Per-session = bridge fields that vary per game, stored in
-// process-static atomics here. Globally-persistent state (viewport
+// Per-session = bridge fields that vary per game. Globally-persistent state (viewport
 // bounds debug overlay etc., owned by app-level Settings UI) is NOT
 // touched.
 void gamecore_resetSessionState(void);
 
 // Kills the running game and frees everything it made. After this call
 // the core holds nothing of that game, so the launcher may start any
-// game next, on this core or on another one. Empo calls it only for a
-// core whose Swift type says `canKillSession`. A core that cannot do
-// this stops the process instead.
+// game next, on this core or on another one. The launcher calls it only
+// for a core that can do this. A core that cannot stops the process
+// instead.
 void gamecore_killSession(void);
 
 // Debug logging
@@ -494,4 +432,4 @@ void gamecore_setDebugLogPath(const char *path);
 }
 #endif
 
-#endif  // EMPO_GAME_CORE_H
+#endif  // GAME_CORE_H

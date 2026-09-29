@@ -1,7 +1,7 @@
 // The launcher interface for the PSDK core.
 //
-// A launcher opens one core and calls it through the psdk_* names
-// psdk_app_bridge.h declares. This file answers them with the calls of
+// A launcher opens one core and calls it through the gamecore_* names
+// GameCore.h declares. This file answers them with the calls of
 // psdk_core.h, the interface of one libpsdk<NN>.a from
 // mateo-m/psdk-apple-mobile.
 //
@@ -10,7 +10,7 @@
 // launcher pushes or gives a fixed answer. Every function that gives
 // less than a full answer says so where it is.
 
-#include "psdk_app_bridge.h"
+#include "GameCore.h"
 #include "psdk_core.h"
 
 #include <algorithm>
@@ -32,6 +32,8 @@
 
 #include <GLES2/gl2.h>
 
+static const char *waitForGamePath(void);
+
 namespace {
 
 std::mutex gLock;
@@ -41,7 +43,7 @@ std::string gCABundlePath;
 std::string gDebugLogPath;
 std::string gConfigOverlayJSON;
 
-// pthread_cond, not a dispatch semaphore. psdk_waitForGamePath runs on
+// pthread_cond, not a dispatch semaphore. waitForGamePath runs on
 // the game thread and the launcher sets the path from the main thread.
 pthread_mutex_t gPathMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t gPathReady = PTHREAD_COND_INITIALIZER;
@@ -61,11 +63,11 @@ Callback gResumed;
 Callback gTextInputMode;
 
 // The core carries the game's keyboard request out through a plain C
-// callback, and the launcher takes it through psdk_TextInputModeCallback.
+// callback, and the launcher takes it through gamecore_TextInputModeCallback.
 // This turns one into the other.
 void forwardTextInputMode(int active, void *) {
     if (gTextInputMode.fn) {
-        reinterpret_cast<psdk_TextInputModeCallback>(gTextInputMode.fn)(active, gTextInputMode.userdata);
+        reinterpret_cast<gamecore_TextInputModeCallback>(gTextInputMode.fn)(active, gTextInputMode.userdata);
     }
 }
 
@@ -88,7 +90,7 @@ std::atomic<float> gSafeTop{0.0f};
 std::atomic<float> gSafeBottom{0.0f};
 std::atomic<float> gSafeLeft{0.0f};
 std::atomic<float> gSafeRight{0.0f};
-std::atomic<int> gVerticalAlignment{PSDK_VALIGN_TOP_CENTER};
+std::atomic<int> gVerticalAlignment{GAMECORE_VALIGN_TOP_CENTER};
 // The window size the last placement used, width in the high half and
 // height in the low half.
 std::atomic<unsigned long long> gPlacedWindowSize{0};
@@ -147,7 +149,7 @@ std::string ownBundlePath() {
 void *runGame(void *) {
     const std::string bundle = ownBundlePath();
     const std::string support = bundle + "/PsdkSupport";
-    const char *path = psdk_waitForGamePath();
+    const char *path = waitForGamePath();
 
     int result = psdk_run(gArgc.load(), gArgv.load(), path, support.c_str(), nullptr);
     fprintf(stderr, "[psdk-bridge] psdk_run returned %d\n", result);
@@ -155,20 +157,19 @@ void *runGame(void *) {
     gExitedCleanly.store(result == PSDK_OK);
     gEngineTerminatedFlag.store(true);
     if (gEngineTerminated.fn) {
-        reinterpret_cast<psdk_EngineTerminatedCallback>(gEngineTerminated.fn)(
-            gEngineTerminated.userdata);
+        reinterpret_cast<gamecore_EngineTerminatedCallback>(gEngineTerminated.fn)(gEngineTerminated.userdata);
     }
     return nullptr;
 }
 
-} // namespace
+}  // namespace
 
 namespace {
 
 // A launcher switch out of the same overlay it gives mkxp-z. A missing
 // key means the default. This reads one key instead of parsing the whole
 // document. mkxp-z reads some of these keys as a number and some as a
-// boolean, so Empo writes `"smoothScaling": 1` but `"fixedAspectRatio":
+// boolean, so the launcher writes `"smoothScaling": 1` but `"fixedAspectRatio":
 // true`. Both forms mean on here.
 bool readFlagKey(const std::string &json, const std::string &key, bool fallback) {
     const size_t keyAt = json.find("\"" + key + "\"");
@@ -307,10 +308,10 @@ void placeOutputRegion() {
         const float topY = boxY;
         const float centerY = boxY + (boxH - h) / 2.0f;
         switch (gVerticalAlignment.load()) {
-        case PSDK_VALIGN_TOP:
+        case GAMECORE_VALIGN_TOP:
             y = topY;
             break;
-        case PSDK_VALIGN_CENTER:
+        case GAMECORE_VALIGN_CENTER:
             y = centerY;
             break;
         default:
@@ -330,7 +331,7 @@ void placeOutputRegion() {
         // The launcher draws its touch controls in points, so the rect
         // leaves in points.
         const float scale = backingScale();
-        reinterpret_cast<psdk_GameRectChangedCallback>(gGameRectChanged.fn)(
+        reinterpret_cast<gamecore_GameRectChangedCallback>(gGameRectChanged.fn)(
             x * static_cast<float>(windowW) / scale, y * static_cast<float>(windowH) / scale,
             w * static_cast<float>(windowW) / scale, h * static_cast<float>(windowH) / scale,
             gGameRectChanged.userdata);
@@ -359,8 +360,7 @@ void captureSnapshot() {
     std::vector<unsigned char> rows(stride * static_cast<size_t>(h));
     // glReadPixels counts rows from the bottom of the window.
     // placeOutputRegion measures the picture from the top.
-    glReadPixels(x, static_cast<int>(windowH) - y - h, w, h, GL_RGBA, GL_UNSIGNED_BYTE,
-                 rows.data());
+    glReadPixels(x, static_cast<int>(windowH) - y - h, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rows.data());
     std::lock_guard<std::mutex> lock(gSnapshotLock);
     gSnapshotRGBA.resize(stride * static_cast<size_t>(h));
     for (int row = 0; row < h; ++row) {
@@ -404,11 +404,11 @@ void onFrame(void *) {
         // The window size says which picture the screen got. A phone that
         // reports fewer pixels than its screen has drew a small picture
         // and let iOS stretch it, and every glyph loses pixels.
-        fprintf(stderr, "[psdk-bridge] first frame, window %ux%u px, scale %.1f\n",
-                windowW, windowH, psdk_backing_scale());
+        fprintf(stderr, "[psdk-bridge] first frame, window %ux%u px, scale %.1f\n", windowW, windowH,
+                psdk_backing_scale());
     }
     if (gFrameRendered.fn) {
-        reinterpret_cast<psdk_FrameRenderedCallback>(gFrameRendered.fn)(gFrameRendered.userdata);
+        reinterpret_cast<gamecore_FrameRenderedCallback>(gFrameRendered.fn)(gFrameRendered.userdata);
     }
 
     // The pause menu opens on this callback, so it opens one frame after
@@ -421,7 +421,7 @@ void onFrame(void *) {
     captureSnapshot();
     psdk_pause_audio();
     if (gPaused.fn) {
-        reinterpret_cast<psdk_PausedCallback>(gPaused.fn)(gPaused.userdata);
+        reinterpret_cast<gamecore_PausedCallback>(gPaused.fn)(gPaused.userdata);
     }
     // PSDK's FPSBalancer counts frames from the microsecond part of the
     // clock. So after a pause of any length, the game catches up less
@@ -430,7 +430,7 @@ void onFrame(void *) {
     psdk_resume_audio();
 }
 
-} // namespace
+}  // namespace
 
 // MARK: - Starting the game
 
@@ -439,9 +439,9 @@ void onFrame(void *) {
 // MkxpCore holds the calling thread here until the game ends. This core
 // cannot: SFML marshals every UIKit call to the main thread with
 // dispatch_sync, so the main thread has to stay in its run loop and
-// answer them. A launcher reads psdk_isEngineTerminated or takes the
+// answer them. A launcher reads gamecore_isEngineTerminated or takes the
 // terminated callback either way.
-int psdk_run_app(int argc, char **argv) {
+int gamecore_run_app(int argc, char **argv) {
     gArgc.store(argc);
     gArgv.store(argv);
     psdk_set_frame_callback(onFrame, nullptr);
@@ -461,14 +461,14 @@ int psdk_run_app(int argc, char **argv) {
     return 0;
 }
 
-void psdk_setGamePath(const char *path) {
+void gamecore_setGamePath(const char *path) {
     pthread_mutex_lock(&gPathMutex);
     gGamePath = path ? path : "";
     pthread_cond_broadcast(&gPathReady);
     pthread_mutex_unlock(&gPathMutex);
 }
 
-const char *psdk_waitForGamePath(void) {
+static const char *waitForGamePath(void) {
     pthread_mutex_lock(&gPathMutex);
     while (gGamePath.empty()) {
         pthread_cond_wait(&gPathReady, &gPathMutex);
@@ -483,70 +483,82 @@ const char *psdk_waitForGamePath(void) {
 // MARK: - Input
 
 // The launcher's scancodes are USB HID usages, which the core takes.
-void psdk_injectKeyEvent(int scancode, int pressed) { psdk_inject_key(scancode, pressed); }
+void gamecore_injectKeyEvent(int scancode, int pressed) {
+    psdk_inject_key(scancode, pressed);
+}
 
 // MARK: - The window
 
-void *psdk_getGameWindow(void) { return psdk_game_window(); }
+void *gamecore_getGameWindow(void) {
+    return psdk_game_window();
+}
 
 // MARK: - Callbacks
 
-void psdk_setFrameRenderedCallback(psdk_FrameRenderedCallback cb, void *userdata) {
+void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata) {
     gFrameRendered = {reinterpret_cast<void *>(cb), userdata};
 }
 
-void psdk_setEngineTerminatedCallback(psdk_EngineTerminatedCallback cb, void *userdata) {
+void gamecore_setEngineTerminatedCallback(gamecore_EngineTerminatedCallback cb, void *userdata) {
     gEngineTerminated = {reinterpret_cast<void *>(cb), userdata};
 }
 
-void psdk_setGameRectChangedCallback(psdk_GameRectChangedCallback cb, void *userdata) {
+void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, void *userdata) {
     gGameRectChanged = {reinterpret_cast<void *>(cb), userdata};
 }
 
-void psdk_setErrorMessageCallback(psdk_ErrorMessageCallback cb, void *userdata) {
+void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata) {
     gErrorMessage = {reinterpret_cast<void *>(cb), userdata};
 }
 
-void psdk_setInfoMessageCallback(psdk_InfoMessageCallback cb, void *userdata) {
+void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata) {
     gInfoMessage = {reinterpret_cast<void *>(cb), userdata};
 }
 
-void psdk_setPausedCallback(psdk_PausedCallback cb, void *userdata) {
+void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata) {
     gPaused = {reinterpret_cast<void *>(cb), userdata};
 }
 
-void psdk_setResumedCallback(psdk_ResumedCallback cb, void *userdata) {
+void gamecore_setResumedCallback(gamecore_ResumedCallback cb, void *userdata) {
     gResumed = {reinterpret_cast<void *>(cb), userdata};
 }
 
-void psdk_setTextInputModeCallback(psdk_TextInputModeCallback cb, void *userdata) {
+void gamecore_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *userdata) {
     gTextInputMode = {reinterpret_cast<void *>(cb), userdata};
     psdk_set_keyboard_callback(cb ? forwardTextInputMode : nullptr, nullptr);
 }
 
 // MARK: - Session state
 
-int psdk_isGameReady(void) { return gGameReady.load() ? 1 : 0; }
-int psdk_isEngineTerminated(void) { return gEngineTerminatedFlag.load() ? 1 : 0; }
-int psdk_didEngineExitCleanly(void) { return gExitedCleanly.load() ? 1 : 0; }
+int gamecore_isGameReady(void) {
+    return gGameReady.load() ? 1 : 0;
+}
+int gamecore_isEngineTerminated(void) {
+    return gEngineTerminatedFlag.load() ? 1 : 0;
+}
+int gamecore_didEngineExitCleanly(void) {
+    return gExitedCleanly.load() ? 1 : 0;
+}
 
 // MkxpCore watches its own RGSS thread for a stall. Nothing here does,
 // so a hung PSDK game reads as running.
 //
 // ponytail: the signal would be the frame counter above going quiet for
 // a few seconds. Add it when a real hang shows up.
-int psdk_isEngineHung(void) { return 0; }
+int gamecore_isEngineHung(void) {
+    return 0;
+}
 
 // A Ruby VM cannot be torn down and started again in one process, so
-// this core cannot kill a game. Empo never calls this for it.
-void psdk_killSession(void) {
+// this core cannot kill a game. The launcher never calls this for it.
+void gamecore_killSession(void) {
     fprintf(stderr, "[psdk] killSession: this core cannot kill a game\n");
     abort();
 }
 
-void psdk_resetSessionState(void) {
-    // One core runs for each process and Empo plays one game for each
-    // process, so this never runs twice with a game behind it.
+void gamecore_resetSessionState(void) {
+    // One core runs for each process and the launcher plays one game for
+    // each process, so this never runs twice with a game behind it.
     gGameReady.store(false);
     gEngineTerminatedFlag.store(false);
     gExitedCleanly.store(false);
@@ -568,9 +580,11 @@ void psdk_resetSessionState(void) {
 // MARK: - Pause
 
 // onFrame stops the game thread and the audio.
-void psdk_requestPause(void) { gPausedFlag.store(true); }
+void gamecore_requestPause(void) {
+    gPausedFlag.store(true);
+}
 
-void psdk_requestResume(void) {
+void gamecore_requestResume(void) {
     {
         std::lock_guard<std::mutex> lock(gPauseLock);
         gPausedFlag.store(false);
@@ -583,25 +597,29 @@ void psdk_requestResume(void) {
         gSnapshotH = 0;
     }
     if (gResumed.fn) {
-        reinterpret_cast<psdk_ResumedCallback>(gResumed.fn)(gResumed.userdata);
+        reinterpret_cast<gamecore_ResumedCallback>(gResumed.fn)(gResumed.userdata);
     }
 }
 
-bool psdk_isPaused(void) { return gPausedFlag.load(); }
+bool gamecore_isPaused(void) {
+    return gPausedFlag.load();
+}
 
 // MARK: - Snapshots
 
-bool psdk_getSnapshotSize(int *width, int *height) {
+bool gamecore_getSnapshotSize(int *width, int *height) {
     std::lock_guard<std::mutex> lock(gSnapshotLock);
     if (gSnapshotRGBA.empty()) {
         return false;
     }
-    if (width) *width = gSnapshotW;
-    if (height) *height = gSnapshotH;
+    if (width)
+        *width = gSnapshotW;
+    if (height)
+        *height = gSnapshotH;
     return true;
 }
 
-bool psdk_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
+bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
     std::lock_guard<std::mutex> lock(gSnapshotLock);
     if (dest == nullptr || gSnapshotRGBA.empty()) {
         return false;
@@ -610,8 +628,10 @@ bool psdk_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *h
         return false;
     }
     memcpy(dest, gSnapshotRGBA.data(), gSnapshotRGBA.size());
-    if (width) *width = gSnapshotW;
-    if (height) *height = gSnapshotH;
+    if (width)
+        *width = gSnapshotW;
+    if (height)
+        *height = gSnapshotH;
     return true;
 }
 
@@ -627,9 +647,11 @@ bool psdk_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *h
 // with `Input.open_virtual_keyboard` makes that request. An older
 // build makes none, and the player opens the keyboard from the
 // toolbar.
-int psdk_isTextInputActive(void) { return 1; }
+int gamecore_isTextInputActive(void) {
+    return 1;
+}
 
-void psdk_pushTextInput(const char *utf8) {
+void gamecore_pushTextInput(const char *utf8) {
     if (utf8) {
         psdk_inject_text(utf8);
     }
@@ -639,30 +661,19 @@ void psdk_pushTextInput(const char *utf8) {
 
 // The launcher shows the alert and calls the signal when the person
 // closes it. Nothing on this side waits, so the signals do nothing.
-void psdk_presentErrorAndWait(const char *message) {
-    if (gErrorMessage.fn) {
-        reinterpret_cast<psdk_ErrorMessageCallback>(gErrorMessage.fn)(message,
-                                                                     gErrorMessage.userdata);
-    }
+void gamecore_signalErrorDismissed(void) {
 }
-
-void psdk_presentInfoAndWait(const char *message) {
-    if (gInfoMessage.fn) {
-        reinterpret_cast<psdk_InfoMessageCallback>(gInfoMessage.fn)(message, gInfoMessage.userdata);
-    }
+void gamecore_signalInfoDismissed(void) {
 }
-
-void psdk_signalErrorDismissed(void) {}
-void psdk_signalInfoDismissed(void) {}
 
 // MARK: - What the launcher pushes
 
-void psdk_setLauncherIdentity(const char *name) {
+void gamecore_setLauncherIdentity(const char *name) {
     std::lock_guard<std::mutex> guard(gLock);
     gLauncherIdentity = name ? name : "";
 }
 
-void psdk_setCABundlePath(const char *path) {
+void gamecore_setCABundlePath(const char *path) {
     std::lock_guard<std::mutex> guard(gLock);
     gCABundlePath = path ? path : "";
     // PSDK's Ruby reads this on its own openssl require.
@@ -671,7 +682,7 @@ void psdk_setCABundlePath(const char *path) {
     }
 }
 
-void psdk_setDebugLogPath(const char *path) {
+void gamecore_setDebugLogPath(const char *path) {
     std::lock_guard<std::mutex> guard(gLock);
     gDebugLogPath = path ? path : "";
     if (gDebugLogPath.empty()) {
@@ -701,33 +712,44 @@ void psdk_setDebugLogPath(const char *path) {
     fprintf(stderr, "[psdk] log is attached\n");
 }
 
-void psdk_setConfigOverlayJSON(const char *jsonUTF8) {
+void gamecore_setConfigOverlayJSON(const char *jsonUTF8) {
     std::lock_guard<std::mutex> guard(gLock);
     gConfigOverlayJSON = jsonUTF8 ? jsonUTF8 : "";
     gFixedAspectRatio.store(readFlagKey(gConfigOverlayJSON, "fixedAspectRatio", true));
     psdk_set_smooth(readFlagKey(gConfigOverlayJSON, "smoothScaling", false) ? 1 : 0);
 }
 
-void psdk_setCheatsEnabled(bool enabled) { gCheatsEnabled.store(enabled); }
-bool psdk_getCheatsEnabled(void) { return gCheatsEnabled.load(); }
+void gamecore_setCheatsEnabled(bool enabled) {
+    gCheatsEnabled.store(enabled);
+}
+bool gamecore_getCheatsEnabled(void) {
+    return gCheatsEnabled.load();
+}
 
-void psdk_setTouchMouseEnabled(bool enabled) { psdk_set_touch_enabled(enabled ? 1 : 0); }
+void gamecore_setTouchMouseEnabled(bool enabled) {
+    psdk_set_touch_enabled(enabled ? 1 : 0);
+}
 
-void psdk_setGameControllerCaptureEnabled(bool enabled) {
+void gamecore_setGameControllerCaptureEnabled(bool enabled) {
     gControllerCaptureEnabled.store(enabled);
 }
 
-void psdk_setShowViewportBounds(bool enabled) { gShowViewportBounds.store(enabled); }
-void psdk_setViewportBoundsColor(float, float, float, float) {}
+void gamecore_setShowViewportBounds(bool enabled) {
+    gShowViewportBounds.store(enabled);
+}
+void gamecore_setViewportBoundsColor(float, float, float, float) {
+}
 
-void psdk_setFastForwardMultiplier(int multiplier) {
+void gamecore_setFastForwardMultiplier(int multiplier) {
     gFastForwardMultiplier.store(multiplier);
     psdk_set_speed(multiplier);
 }
 
-int psdk_getFastForwardMultiplier(void) { return gFastForwardMultiplier.load(); }
+int gamecore_getFastForwardMultiplier(void) {
+    return gFastForwardMultiplier.load();
+}
 
-void psdk_setHostViewportRegion(float x, float y, float w, float h, bool isPortrait) {
+void gamecore_setHostViewportRegion(float x, float y, float w, float h, bool isPortrait) {
     gHostRegionX.store(x);
     gHostRegionY.store(y);
     gHostRegionW.store(w);
@@ -737,12 +759,12 @@ void psdk_setHostViewportRegion(float x, float y, float w, float h, bool isPortr
     placeOutputRegion();
 }
 
-void psdk_clearHostViewportRegion(void) {
+void gamecore_clearHostViewportRegion(void) {
     gHasHostRegion.store(false);
     placeOutputRegion();
 }
 
-void psdk_setSafeAreaInsets(float top, float bottom, float left, float right) {
+void gamecore_setSafeAreaInsets(float top, float bottom, float left, float right) {
     gSafeTop.store(top);
     gSafeBottom.store(bottom);
     gSafeLeft.store(left);
@@ -750,13 +772,13 @@ void psdk_setSafeAreaInsets(float top, float bottom, float left, float right) {
     placeOutputRegion();
 }
 
-PsdkVerticalAlignment psdk_getVerticalAlignment(void) {
-    return static_cast<PsdkVerticalAlignment>(gVerticalAlignment.load());
+GameCoreVerticalAlignment gamecore_getVerticalAlignment(void) {
+    return static_cast<GameCoreVerticalAlignment>(gVerticalAlignment.load());
 }
 
 // A PSDK game keeps its saves in its own folder and loads its own
 // fonts, so only the alignment reaches this core.
-void psdk_applySessionConfig(const PsdkSessionConfig *config) {
+void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
     if (!config) {
         return;
     }
@@ -766,18 +788,22 @@ void psdk_applySessionConfig(const PsdkSessionConfig *config) {
 
 // MARK: - What the launcher reads
 
-void psdk_setSetting(const char *key, const char *value) {
+// The one key is "rubyVersion", with "2.5", "3.0", "3.2" or "3.3": the
+// Ruby that psdk_run starts, 3.0 when the launcher sends none.
+void gamecore_setSetting(const char *key, const char *value) {
     fprintf(stderr, "[psdk] unknown setting %s=%s\n", key ? key : "(null)", value ? value : "(null)");
 }
 
 // PSDK gives no title through any interface, so the launcher falls back
 // to the library name.
-const char *psdk_getGameTitle(void) { return ""; }
-const char *psdk_getDetails(void) {
+const char *gamecore_getGameTitle(void) {
+    return "";
+}
+const char *gamecore_getDetails(void) {
     static const std::string details = std::string("Ruby ") + psdk_ruby_version();
     return details.c_str();
 }
-double psdk_getAverageFPS(void) {
+double gamecore_getAverageFPS(void) {
     const unsigned long long frames = gDrawnFrames.load();
     const double now = static_cast<double>(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9;
     const double then = gFpsMarkSeconds.exchange(now);
@@ -788,4 +814,6 @@ double psdk_getAverageFPS(void) {
     }
     return static_cast<double>(frames - before) / span;
 }
-int psdk_getTargetFPS(void) { return 60; }
+int gamecore_getTargetFPS(void) {
+    return 60;
+}

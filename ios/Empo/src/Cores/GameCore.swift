@@ -11,8 +11,6 @@ import SwiftUI
 protocol GameCore {
     /// The framework folder in the app bundle, and the binary inside it.
     var framework: String { get }
-    /// The prefix of the launcher functions the framework exports.
-    var symbolPrefix: String { get }
     var displayName: String { get }
     /// The line under the name on the Game cores screen.
     var gamesLine: String { get }

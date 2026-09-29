@@ -12,7 +12,6 @@ import SwiftUI
 struct PsdkCore: GameCore {
     let ruby: String
     let gamesLine: String
-    let symbolPrefix = "psdk_"
     let madeWith = "PSDK"
 
     var framework: String { "Psdk\(ruby.replacingOccurrences(of: ".", with: ""))Core" }

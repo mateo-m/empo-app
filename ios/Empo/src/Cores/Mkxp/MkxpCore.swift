@@ -5,7 +5,6 @@ import SwiftUI
 /// The RPG Maker XP, VX and VX Ace core (mkxp-z).
 struct MkxpCore: GameCore {
     let framework = "MkxpCore"
-    let symbolPrefix = "mkxp_"
     let madeWith = "RPG Maker"
 
     /// Import refuses a game the mask does not cover, so the name and the

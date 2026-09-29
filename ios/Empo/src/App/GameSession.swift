@@ -52,24 +52,17 @@ enum GameSession {
             gamecore_setConfigOverlayJSON(nil)
         }
 
-        // Never point managedConfigDir at EmpoState. The sparse
-        // overlay mkxp.json there is not a complete config. If the
-        // engine read it as base, it would drop every dev key from
-        // Game/mkxp.json.
         // The core reads its settings in gamecore_applySessionConfig.
         input.core.launch(container)
 
         DataDirectory.ensureFontsRoot()
-        "".withCString { managedPtr in
-            input.userDataDir.path.withCString { userDataPtr in
-                DataDirectory.fontsRootURL.path.withCString { fontsPtr in
-                    var config = GameCoreSessionConfig()
-                    config.managedConfigDir = managedPtr
-                    config.userDataDirectory = userDataPtr
-                    config.sharedFontsDirectory = fontsPtr
-                    config.verticalAlignment = alignment.bridgeValue
-                    gamecore_applySessionConfig(&config)
-                }
+        input.userDataDir.path.withCString { userDataPtr in
+            DataDirectory.fontsRootURL.path.withCString { fontsPtr in
+                var config = GameCoreSessionConfig()
+                config.userDataDirectory = userDataPtr
+                config.sharedFontsDirectory = fontsPtr
+                config.verticalAlignment = alignment.bridgeValue
+                gamecore_applySessionConfig(&config)
             }
         }
 

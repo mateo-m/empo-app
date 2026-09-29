@@ -41,6 +41,8 @@ settings:
     #   xcodebuild ... EMPO_CORES=Psdk30Core
     EMPO_CORES: MkxpCore Psdk25Core Psdk30Core Psdk32Core Psdk33Core MvmzCore
     HEADER_SEARCH_PATHS:
+      # GameCore.h, the interface between Empo and every core.
+      - $(PROJECT_DIR)/../../cores
       - $(PROJECT_DIR)/shims/libarchive
       # Vendored libmspack (CAB reader for self-extracting .exe game
       # installers). Its sources use angled includes (<mspack.h>).
@@ -344,6 +346,13 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           "${PROJECT_DIR}/../../cores/mvmz/fetch.sh"
+      - name: Write the core export list
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(TARGET_TEMP_DIR)/gamecore.exports
+        script: |
+          mkdir -p "${TARGET_TEMP_DIR}"
+          "${PROJECT_DIR}/../../cores/gamecore-exports.sh" "${TARGET_TEMP_DIR}/gamecore.exports"
     postBuildScripts:
       - name: Name the MV/MZ core release
         # The Game cores screen shows EmpoCoreVersion, the release tag
@@ -362,16 +371,17 @@ targets:
         PRODUCT_NAME: MvmzCore
         PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.mvmzcore
         INFOPLIST_FILE: $(PROJECT_DIR)/../../cores/mvmz/Info.plist
-        HEADER_SEARCH_PATHS: $(PROJECT_DIR)/../Dependencies/mvmz-core/include
+        HEADER_SEARCH_PATHS:
+          - $(PROJECT_DIR)/../../cores
+          - $(PROJECT_DIR)/../Dependencies/mvmz-core/include
         OTHER_LDFLAGS:
+          - -Wl,-exported_symbols_list,$(TARGET_TEMP_DIR)/gamecore.exports
           - $(PROJECT_DIR)/../Dependencies/mvmz-core/$(PLATFORM_NAME)/libmvmz.a
           - -framework WebKit
           - -framework UIKit
           - -framework Metal
           - -framework UniformTypeIdentifiers
         CLANG_ENABLE_MODULES: YES # yamllint disable-line rule:truthy
-        # Only the mvmz_ names in mvmz_app_bridge.h leave the framework.
-        GCC_SYMBOLS_PRIVATE_EXTERN: YES # yamllint disable-line rule:truthy
         SKIP_INSTALL: YES # yamllint disable-line rule:truthy
         DEFINES_MODULE: NO # yamllint disable-line rule:truthy
         VERSIONING_SYSTEM: ""

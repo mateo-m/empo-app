@@ -77,7 +77,7 @@ final class EngineSessionCoordinator {
         // AppState.selectGame refuses a game whose core this build does
         // not carry, so a failed open is a broken bundle or a game that
         // was not killed.
-        guard let binary = core.binaryURL, EmpoCoreOpen(binary.path, core.symbolPrefix) != 0 else {
+        guard let binary = core.binaryURL, EmpoCoreOpen(binary.path) != 0 else {
             fatalError("\(core.framework) cannot open. The log says why.")
         }
         if let openedCore, openedCore.isSame(as: core) { return }
@@ -138,9 +138,9 @@ final class EngineSessionCoordinator {
 
     /// Hands the engine its game path and starts it.
     ///
-    /// The path goes in first. The engine reads it in
-    /// `gamecore_waitForGamePath` as its first step, so a path that is
-    /// already set lets it run straight through.
+    /// The path goes in first. The core reads it as the first step of
+    /// `gamecore_run_app`, so a path that is already set lets it run
+    /// straight through.
     ///
     /// `RunLoop.main.perform`, not a main queue block. `EmpoCoreRunEngine`
     /// holds the main thread until the game ends, and a main queue

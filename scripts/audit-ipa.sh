@@ -130,28 +130,24 @@ if [[ -n "$EXPECTED_CORES" ]]; then
 fi
 
 audit_core() {
-    local core="$1" prefix="$2"
+    local core="$1"
     local bin="$APP/Frameworks/$core.framework/$core"
     has_platform "$bin" 2 || fail "$core is not device (platform 2)"
     ! has_platform "$bin" 7 || fail "$core contains simulator objects"
 
-    # The whole point of the framework: no Ruby and no SDL name escapes
-    # it, so a second core cannot bind to this one's definitions.
+    # A core exports the GameCore.h names only, so no Ruby and no SDL
+    # name escapes it, and a second core cannot bind to its definitions.
     local stray
-    stray=$(nm -gU "$bin" | awk -v p="^$prefix" '$3 !~ p {print $3}')
+    stray=$(nm -gU "$bin" | awk '$3 !~ /^_gamecore_/ {print $3}')
     [[ -z "$stray" ]] ||
-        fail "$core exports a name that is not ${prefix}*: $(tr '\n' ' ' <<<"$stray")"
+        fail "$core exports a name that is not _gamecore_*: $(tr '\n' ' ' <<<"$stray")"
 
     codesign --verify --strict "$bin" 2>/dev/null ||
         fail "$core.framework is not signed (the app's own signature does not reach inside it)"
 }
 
 for core in $PRESENT_CORES; do
-    case "$core" in
-        MkxpCore) audit_core MkxpCore _mkxp_ ;;
-        Psdk*Core) audit_core "$core" _psdk_ ;;
-        MvmzCore) audit_core MvmzCore _mvmz_ ;;
-    esac
+    audit_core "$core"
 done
 
 # Objective-C registers every class by name for the whole process, hidden

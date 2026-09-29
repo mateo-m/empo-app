@@ -5,8 +5,8 @@
 // runs on. A core that is never picked is never loaded.
 //
 // GameCoreForwarders.c implements this. Every gamecore_* call in the
-// app goes through a forwarder that reads its symbol from the open
-// core, under that core's own prefix.
+// app goes through a forwarder that reads the same name from the open
+// core.
 
 #ifndef EMPO_CORE_H
 #define EMPO_CORE_H
@@ -22,10 +22,7 @@ extern "C" {
 // returns 0 until EmpoCoreKillSession ran, because two engines that both
 // hold a game share the working directory, the signal handlers, the
 // audio device and the main thread.
-//
-// symbolPrefix is what that core puts in front of every interface name.
-// The forwarders build each symbol from it.
-int EmpoCoreOpen(const char *binaryPath, const char *symbolPrefix);
+int EmpoCoreOpen(const char *binaryPath);
 
 int EmpoCoreIsOpen(void);
 
@@ -39,8 +36,7 @@ void EmpoCoreKillSession(void);
 // Call it from a run loop callout on the main thread, and never from a
 // block on the main dispatch queue. The engine holds the thread for the
 // whole session, so a main queue block would stop that queue from
-// draining, and the engine's RGSS thread deadlocks on the first
-// gamecore_getScreenScale, which dispatch_syncs to that queue.
+// draining, and a core that dispatch_syncs to it deadlocks.
 int EmpoCoreRunEngine(void);
 
 #ifdef __cplusplus

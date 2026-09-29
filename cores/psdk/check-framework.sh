@@ -43,10 +43,9 @@ fail() {
     exit 1
 }
 
-# A launcher opens the core and calls every name psdk_app_bridge.h
-# declares. A missing one aborts in the forwarder, so fail here first.
-WANT_NAMES=$(grep -oE '\bpsdk_[A-Za-z0-9_]+\(' "$REPO_ROOT/cores/psdk/psdk_app_bridge.h" |
-    sed 's/(//' | sort -u | sed 's/^/_/')
+# A launcher opens the core and calls every name GameCore.h declares.
+# A missing one aborts in the forwarder, so fail here first.
+WANT_NAMES=$("$REPO_ROOT/cores/gamecore-exports.sh" /dev/stdout)
 
 if [ "$SDK" = iphonesimulator ]; then WANT_PLATFORM=7; else WANT_PLATFORM=2; fi
 
@@ -58,9 +57,9 @@ for FW in "${FRAMEWORKS[@]}"; do
 
     EXPORTS=$(dyld_info -exports "$BIN" | awk '/^ *0x/ {print $2}' | sort -u)
 
-    STRAY=$(grep -vE '^_psdk_' <<<"$EXPORTS" || true)
+    STRAY=$(grep -vE '^_gamecore_' <<<"$EXPORTS" || true)
     [ -z "$STRAY" ] ||
-        fail "$NAME exports names that are not psdk_*: $(tr '\n' ' ' <<<"$STRAY")"
+        fail "$NAME exports names that are not gamecore_*: $(tr '\n' ' ' <<<"$STRAY")"
 
     MISSING=$(comm -23 <(echo "$WANT_NAMES") <(echo "$EXPORTS"))
     [ -z "$MISSING" ] || fail "$NAME does not export: $(tr '\n' ' ' <<<"$MISSING")"

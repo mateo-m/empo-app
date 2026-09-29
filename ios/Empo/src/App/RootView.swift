@@ -248,7 +248,7 @@ struct RootView: View {
         )
     }
 
-    /// Unblocks any engine thread waiting in `gamecore_presentErrorAndWait()`.
+    /// Unblocks a core that waits for the error alert to close.
     private func dismissErrorAlert() {
         if EmpoCoreIsOpen() != 0 { gamecore_signalErrorDismissed() }
         appState.errorMessage = nil
@@ -269,7 +269,7 @@ struct RootView: View {
             ?? "Game message"
     }
 
-    /// Unblocks the engine thread that waits in `gamecore_presentInfoAndWait()`.
+    /// Unblocks the core that waits for the info alert to close.
     /// The game resumes right where it called `msgbox`.
     private func dismissInfoAlert() {
         if EmpoCoreIsOpen() != 0 { gamecore_signalInfoDismissed() }

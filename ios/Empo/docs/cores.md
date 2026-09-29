@@ -69,7 +69,8 @@ that type and never names a core, a language or an engine. The type answers:
   opens a group to read about its cores.
 
 The first core in `GameCores.all` that accepts a folder runs it. To add a core,
-add its framework, its prefix and its type, then add the type to that list.
+add its bridge in `cores/<core>/`, its framework and its type, then add the
+type to that list.
 
 Ruby loads only bytecode of its own version, and Pokémon Studio compiles a
 release with Ruby 3.0 on Windows, 3.2 on a Mac and 3.3 on Linux. So there is
@@ -114,7 +115,7 @@ The four PSDK cores export the same `psdk_*` names. Each forwarder looks the
 name up in the one core it opened, so the names do not meet.
 
 A setting that only one core knows goes through `gamecore_setSetting` as text.
-Each core's copy of the interface lists its keys. The debug overlay shows the
+Each core's bridge lists its keys. The debug overlay shows the
 lines of `gamecore_getDetails`, which the core writes.
 
 `scripts/audit-ipa.sh` audits the cores it finds in the bundle. Pass
@@ -122,12 +123,9 @@ lines of `gamecore_getDetails`, which the core writes.
 
 ## What a core exports
 
-A core exports its bridge and nothing else. `ios/Empo/src/App/GameCore.h`
-declares the 51 functions Empo calls. `MkxpCore` exports every `mkxp_*` name
-that `app_bridge.h` of the engine release declares, which is those 51 plus
-the names its own engine calls. Each PSDK core exports the 51 under `psdk_*`, from
-`cores/psdk/psdk_app_bridge.h`. `MvmzCore` exports the 51 under
-`mvmz_`, from `cores/mvmz/mvmz_app_bridge.h`.
+A core exports the functions of `cores/GameCore.h` and nothing else. Each
+core links with the list that `cores/gamecore-exports.sh` writes from that
+header, so the link fails when the bridge leaves a function out.
 
 No core exports a Ruby name, an SDL name or an SFML name, and no core imports
 one either. `cores/mkxp/check-framework.sh` and
@@ -167,31 +165,22 @@ settings page together in `settingsPage(_:)`, from the shared sections in
 
 ## What the engine asks the bridge
 
-Nothing. A core never calls the launcher. `psdk_app_bridge.cpp` sets each
-value and each callback through `psdk_core.h`, and `mvmz_app_bridge.m` through
-`mvmz_core.h`. Each core's repo has a check that fails on a launcher name or a
-weak host function.
+Nothing. A core never calls the launcher, and no core repo names Empo. Each
+core's repo has a check that fails on a launcher name or a weak host function.
+The bridge sets each value and each callback through the engine's own
+interface:
 
-## One interface, one prefix for each side
-
-The same interface exists four times, once on each side, and each side owns
-its prefix:
-
-| Side | File | Prefix |
+| Core | Bridge in this repo | Engine interface, from the core's release |
 | --- | --- | --- |
-| Empo | `ios/Empo/src/App/GameCore.h` | `gamecore_` |
-| MkxpCore | `ios/Dependencies/mkxp-core/include/app_bridge.h`, from the engine release | `mkxp_` |
-| The PSDK cores | `cores/psdk/psdk_app_bridge.h` | `psdk_` |
-| MvmzCore | `cores/mvmz/mvmz_app_bridge.h` | `mvmz_` |
+| MkxpCore | `cores/mkxp/mkxp_app_bridge.c` | `include/app_bridge.h` |
+| The PSDK cores | `cores/psdk/psdk_app_bridge.cpp` | `psdk_core.h` |
+| MvmzCore | `cores/mvmz/mvmz_app_bridge.m` | `mvmz_core.h` |
 
-Each core keeps the prefix its own project already used, so neither fork has to
-follow the other. Empo names no engine in its own header, and its forwarder puts
-the open core's prefix in front of the name at `dlsym` time.
+## One interface for every core
 
-The price is four copies to keep in step.
-`scripts/check-core-interface.sh` strips the prefixes and fails when a
-core header lacks a statement of `GameCore.h`. The MkxpCore build step runs it before each Xcode build. Read it as the rule: a core that drops
-a name or changes an argument makes Empo abort in the forwarder at run time.
+`cores/GameCore.h` is the one interface between a launcher and a core. It
+names no engine. Every bridge includes it and defines each function under the
+same `gamecore_` name, so the compiler checks each signature against it.
 
 ## How a launcher opens a core
 
@@ -206,8 +195,7 @@ a name or changes an argument makes Empo abort in the forwarder at run time.
 Empo does step 2 through `ios/Empo/src/App/GameCoreForwarders.c`, which
 `tools/gamecore/generate-core-forwarders.sh` writes from `GameCore.h`. Every
 `gamecore_*` call in the app lands in a forwarder that asks the open core for the
-same name under that core's prefix. `EngineSessionCoordinator` passes the prefix
-to `EmpoCoreOpen` next to the framework path. A call made before the core opens
+same name. A call made before the core opens
 aborts with the name it wanted, because a silent no-op would hide a build
 mistake until a game misbehaved.
 
@@ -218,8 +206,8 @@ The cores differ, and no choice is free.
 `gamecore_run_app` runs on the main thread and returns when the game ends. Call it
 from a run loop callout, such as `RunLoop.main.perform`. Do not call it from a
 block on the main dispatch queue. It holds the thread for the whole session,
-so that queue would never drain, and the engine's RGSS thread deadlocks on its
-first `gamecore_getScreenScale`, which `dispatch_sync`s to the main queue. SDL's
+so that queue would never drain, and the engine's RGSS thread deadlocks the
+first time it reads the screen scale, which `dispatch_sync`s to the main queue. SDL's
 nested `runMode:beforeDate:` inside `SDL_PumpEvents` drains a run loop
 normally, which is why the callout works.
 
@@ -229,7 +217,7 @@ every UIKit call to the main thread with `dispatch_sync`, so the main thread
 has to stay in its run loop and answer them. Ruby's parser and the PSDK boot
 scripts also recurse past the default 512 KB worker stack.
 
-`mvmz_run_app` gets the web view from `mvmz_start` and returns. WebKit runs
+The MV and MZ `gamecore_run_app` gets the web view from `mvmz_start` and returns. WebKit runs
 the game in its own processes, and the main thread only answers WebKit. WebKit
 suspends the page of a web view that is in no visible window, so the bridge
 shows its window at once, under the Empo window.
