@@ -190,15 +190,15 @@ void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, vo
 // scancode: GAMECORE_SCANCODE_* value. pressed: 1=down, 0=up.
 void gamecore_injectKeyEvent(int scancode, int pressed);
 
-// GameCoreSessionConfig.userDataDirectory is the folder where the game
-// writes its saves and other files. The launcher keeps it in the game's
-// own container, so the files show in the Files app. A core sends every
-// write of the game that has no other place to this folder.
+// GameCoreSessionConfig.userDataDirectory is a folder that the launcher
+// gives the game for its saves and other files. A core that has no
+// place of its own for these files writes them to this folder. A core
+// whose game keeps its files in its own folder ignores it.
 //
 // GameCoreSessionConfig.sharedFontsDirectory is a font folder that all
-// games share, like the system font folder of a desktop. A core loads
-// the fonts in it after the game's own fonts. NULL means no shared
-// folder.
+// games share, like the system font folder of a desktop. A core that
+// loads fonts from files loads these after the game's own fonts. NULL
+// means no shared folder.
 
 // The launcher's name (UI -> Engine). A core that lets a game ask which
 // launcher runs it gives the game this name. Set it once before the
@@ -208,11 +208,12 @@ void gamecore_setLauncherIdentity(const char *name);
 // CA certificate bundle (UI -> Engine).
 //
 // The absolute path to a PEM CA bundle, for example the Mozilla root
-// store. The core checks the TLS server certificates of all game
-// network access with it. Set it once before the game starts.
+// store. A core that makes its own TLS connections checks the server
+// certificates with it. A core that uses the system network stack
+// ignores it. Set it once before the game starts.
 //
-// When it is not set, TLS connections fail, because no root can
-// verify a certificate. Plain http still works.
+// When it is not set, the core's own TLS connections fail, because no
+// root can verify a certificate. Plain http still works.
 void gamecore_setCABundlePath(const char *path);
 
 // Text input (UI <-> Engine).
