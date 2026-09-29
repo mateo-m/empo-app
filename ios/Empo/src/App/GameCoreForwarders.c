@@ -161,16 +161,6 @@ void gamecore_injectKeyEvent(int scancode, int pressed) {
     fn(scancode, pressed);
 }
 
-void gamecore_setConfigOverlayJSON(const char *jsonUTF8) {
-    static void (*fn)(const char *jsonUTF8);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
-        fn = coreSymbol("gamecore_setConfigOverlayJSON");
-        generation = gCoreGeneration;
-    }
-    fn(jsonUTF8);
-}
-
 void gamecore_setLauncherIdentity(const char *name) {
     static void (*fn)(const char *name);
     static unsigned generation;

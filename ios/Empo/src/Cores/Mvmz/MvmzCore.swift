@@ -40,6 +40,13 @@ struct MvmzCore: GameCore {
         MvmzGame.titlePicture(at: root)
     }
 
+    func launch(_ container: GameContainer) {
+        let display = ManagedMkxpConfig.readEffective(
+            stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
+        let smooth = display.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
+        gamecore_setSetting("smoothScaling", smooth ? "1" : "0")
+    }
+
     /// The game reads touches itself, so it needs no "Touch acts as
     /// mouse" row, and it keeps its own proportions in the web view.
     @MainActor func settingsPage(_ model: GameSettingsModel) -> AnyView {

@@ -15,9 +15,8 @@
 
 #include <stdbool.h>
 
-// Scancode constants. Values match SDL_Scancode (USB HID usage page
-// 0x07) so the engine passes them through without translation. UI
-// code uses these instead of importing SDL headers.
+// Key codes. Each value is the USB HID usage ID of the key on the
+// keyboard page (0x07).
 
 enum {
     GAMECORE_SCANCODE_UNKNOWN = 0,
@@ -111,7 +110,7 @@ enum {
     GAMECORE_SCANCODE_HOME = 74,
 };
 
-// Lifecycle callbacks (Engine -> UI). Fire on the engine thread. UI
+// Lifecycle callbacks (Engine -> UI). They fire on a core thread. The UI
 // must dispatch to main for any UI updates.
 typedef void (*gamecore_EngineTerminatedCallback)(void *userdata);
 typedef void (*gamecore_GameRectChangedCallback)(float x, float y, float w, float h, void *userdata);
@@ -119,8 +118,8 @@ typedef void (*gamecore_GameRectChangedCallback)(float x, float y, float w, floa
 // Key event callback (Engine -> UI, fires on background thread)
 typedef void (*gamecore_KeyEventCallback)(int scancode, int pressed, void *userdata);
 
-// Text-input mode callback (Engine -> UI). See the text-input bridge
-// section below.
+// Text-input mode callback (Engine -> UI). See the text input section
+// below.
 typedef void (*gamecore_TextInputModeCallback)(int active, void *userdata);
 
 typedef void (*gamecore_ErrorMessageCallback)(const char *message, void *userdata);
@@ -152,13 +151,13 @@ extern "C" {
 
 // Process entry (Launcher -> Engine)
 
-// Runs the engine on the calling thread, which must be the main
-// thread. It returns when the game ends.
+// Runs the core with the process arguments, on the calling thread,
+// which must be the main thread. A core may hold the thread until the
+// game ends, or return at once and run the game on its own threads.
 //
 // Call it from a run loop callout, never from a block on the main
-// dispatch queue. The engine holds the thread for the whole session,
-// so the queue would never drain, and a core that dispatch_syncs to
-// it deadlocks.
+// dispatch queue. A core that holds the thread would stop the queue,
+// and a core that dispatch_syncs to it would deadlock.
 int gamecore_run_app(int argc, char **argv);
 
 // Game lifecycle
@@ -173,14 +172,14 @@ void gamecore_setGamePath(const char *path);
 
 int gamecore_isEngineTerminated(void);
 
-// Set when the session ends because Ruby raised SystemExit (e.g. the
-// game's "Exit to desktop" menu). The UI checks this in its
-// engine-terminated callback to skip the "didn't exit cleanly" alert.
+// True when the game ended itself, for example from its own "Exit"
+// menu item. The UI checks this in its engine-terminated callback to
+// skip the "didn't exit cleanly" alert.
 int gamecore_didEngineExitCleanly(void);
 
-// Set when the RGSS thread failed to respond to a termination
-// request. Engine is unrecoverable. The UI surfaces a "close from
-// app switcher" alert because we can't recover in-process.
+// True when the game thread did not stop after a stop request. The
+// core cannot recover, so the UI tells the person to close the app
+// from the app switcher.
 int gamecore_isEngineHung(void);
 
 void gamecore_setEngineTerminatedCallback(gamecore_EngineTerminatedCallback cb, void *userdata);
@@ -191,82 +190,41 @@ void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, vo
 // scancode: GAMECORE_SCANCODE_* value. pressed: 1=down, 0=up.
 void gamecore_injectKeyEvent(int scancode, int pressed);
 
-// In-memory config overlay (UI -> Engine).
+// GameCoreSessionConfig.userDataDirectory is the folder where the game
+// writes its saves and other files. The launcher keeps it in the game's
+// own container, so the files show in the Files app. A core sends every
+// write of the game that has no other place to this folder.
 //
-// A JSON object of mkxp.json keys. A core that reads mkxp.json merges
-// it over the game's own file at config-read time. Another core reads
-// the display keys it knows and ignores the rest. Overlay keys win per TOP-LEVEL key (shallow merge: an
-// overlay `bindingNames` replaces the whole object). JSON null
-// values neutralize a key so the engine's guarded reads fall back to
-// defaults. Lets hosts override config keys per session without
-// mutating the developer's on-disk file. Same idea as the existing
-// per-session bridge setters, generalized.
-//
-// Set before each session start. NULL or "" clears any previous
-// overlay. Reject inputs over 1 MiB (warn log, keep previous state).
-void gamecore_setConfigOverlayJSON(const char *jsonUTF8);
+// GameCoreSessionConfig.sharedFontsDirectory is a font folder that all
+// games share, like the system font folder of a desktop. A core loads
+// the fonts in it after the game's own fonts. NULL means no shared
+// folder.
 
-// Per-game UserData directory (UI -> Engine).
-//
-// On iOS, hosts store game writable payload in a per-game container
-// (e.g. `Documents/Games/<id>/UserData/`) so saves and companion
-// files are visible in the Files app and travel with the rest of the
-// imported container. Games that use app-data helpers
-// (`System.data_directory`, `MKXP.data_directory`, fake APPDATA env)
-// and games that use relative RGSS save filenames are both routed
-// here by the engine + preload compatibility layer.
-
-// Shared fonts directory (UI -> Engine).
-//
-// A host-wide font pool, shared by every game the way the Windows
-// system font folder is. The engine mounts it under the virtual
-// "Fonts" mountpoint (game-own files keep priority) so its fonts
-// load for every game, and the preload compatibility layer routes
-// Windows-style "<SystemRoot>\Fonts\<file>" writes (Essentials'
-// FontInstaller) into it. Unset = no shared pool. Per-game fonts
-// only.
-
-// Launcher identity (UI -> Engine).
-//
-// Name of the host launcher embedding the engine, exposed to game
-// scripts before any preload/game code runs:
-//
-//   $userAgent = "<name>"
-//   $<name>    = true     (only when the name is a valid Ruby
-//                          identifier: [A-Za-z_][A-Za-z0-9_]*)
-//
-// This is the same detection contract JoiPlay established with its
-// `$joiplay` global. Each host declares its own name so games and
-// patches can branch on the specific launcher. Set once before the
-// engine boots. Pass NULL/"" to clear (no globals are defined).
+// The launcher's name (UI -> Engine). A core that lets a game ask which
+// launcher runs it gives the game this name. Set it once before the
+// game starts. NULL or "" clears it.
 void gamecore_setLauncherIdentity(const char *name);
 
 // CA certificate bundle (UI -> Engine).
 //
-// Absolute path to a PEM CA bundle (e.g. the Mozilla root store)
-// used to verify TLS server certificates for all engine-side
-// networking: the native HTTPLite client, and Ruby's openssl ext
-// (exported as SSL_CERT_FILE before the VM boots). Set once before
-// the engine starts, like the launcher identity.
+// The absolute path to a PEM CA bundle, for example the Mozilla root
+// store. The core checks the TLS server certificates of all game
+// network access with it. Set it once before the game starts.
 //
-// When unset, TLS connections fail closed (certificate verification
-// has no roots to succeed against). Plain http still works.
+// When it is not set, TLS connections fail, because no root can
+// verify a certificate. Plain http still works.
 void gamecore_setCABundlePath(const char *path);
 
-// Text-input bridge (UI <-> Engine).
+// Text input (UI <-> Engine).
 //
-// Games request text input via `Input.text_input = true`, which calls
-// `SDL_StartTextInput()` inside EventThread. The mode callback fires
-// from the main thread on state changes. iOS uses it to auto-show
-// the system keyboard.
+// The mode callback fires on the main thread when the game starts or
+// stops to ask for text. The UI shows or hides the system keyboard.
 //
-// `gamecore_pushTextInput` is the inverse: the soft keyboard's
-// UITextField delegate forwards typed UTF-8 strings here, wrapped as
-// SDL_TEXTINPUT events and read by Ruby `Input.gets`. Strings longer
-// than SDL's 32-byte per-event limit are chunked at UTF-8 boundaries.
+// `gamecore_pushTextInput` sends the typed text to the game as UTF-8,
+// in strings of any length.
 //
-// `gamecore_isTextInputActive()` lets the UI skip pushing events when SDL
-// text mode is off (otherwise the buffer fills with input nobody reads).
+// `gamecore_isTextInputActive()` tells the UI if the game reads text
+// now, so the UI sends no text that nobody reads.
 void gamecore_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *userdata);
 void gamecore_pushTextInput(const char *utf8);
 int gamecore_isTextInputActive(void);
@@ -275,18 +233,17 @@ int gamecore_isTextInputActive(void);
 
 double gamecore_getAverageFPS(void);
 
-// The frame rate the game asks for (`Graphics.frame_rate`). Games
-// set their own cap: RPG Maker XP games usually run at 40, VX and
-// VX Ace games at 60. The host compares the average FPS against
-// this number to tell "full speed" from "slow". Returns 0 when no
-// game runs.
+// The frame rate that the game asks for. Games set their own rate,
+// often 40 or 60. The UI compares the average FPS with this number to
+// tell "full speed" from "slow". Returns 0 when no game runs.
 int gamecore_getTargetFPS(void);
 
 const char *gamecore_getGameTitle(void);
 
 // Safe area insets (logical points, cached atomics)
 
-// Push from UIKit main thread. Sets a "needs relayout" flag.
+// Call it on the main thread. The core applies the insets at its next
+// layout pass.
 void gamecore_setSafeAreaInsets(float top, float bottom, float left, float right);
 
 // Host viewport region (dimensionless window fractions)
@@ -300,8 +257,7 @@ void gamecore_setSafeAreaInsets(float top, float bottom, float left, float right
 // the region. With it off, the picture stretches to fill the
 // region, mirroring the no-region path. The vertical-alignment
 // preset and the safe-area insets apply only on the no-region path.
-// Sets the relayout flag. The engine applies the region at its next
-// relayout poll.
+// The core applies the region at its next layout pass.
 void gamecore_setHostViewportRegion(float x, float y, float w, float h, bool isPortrait);
 
 // Back to automatic placement, as if no region was ever set.
@@ -312,22 +268,19 @@ void gamecore_clearHostViewportRegion(void);
 // same window stack as the game view on iOS.
 void *gamecore_getGameWindow(void);
 
-// Per-game settings (UI -> Engine), set by the host before engine
-// boot and read by the engine during the run.
-//
-// Prefer `gamecore_applySessionConfig()` for pre-boot settings. It
-// groups the fields the host sets together on every launch. Individual
-// setters remain for mid-session toggles and legacy call sites.
+// Per-game settings (UI -> Engine). The launcher sets them before the
+// game starts, and the core reads them during the run.
 
 GameCoreVerticalAlignment gamecore_getVerticalAlignment(void);
 
 void gamecore_applySessionConfig(const GameCoreSessionConfig *config);
 
-// A per-game setting that only the open core knows (UI -> Engine).
-// The launcher sends each one as text before it calls
+// A per-game setting that only some cores know (UI -> Engine). The
+// launcher sends each one as text before it calls
 // gamecore_applySessionConfig. The core's bridge lists its keys and
-// values. An unknown key writes a warning to the
-// log and changes nothing.
+// values. An unknown key writes a warning to the log and changes
+// nothing. Add a field to GameCoreSessionConfig only when every core
+// needs it.
 void gamecore_setSetting(const char *key, const char *value);
 
 // Lines about the running engine for the debug overlay, one per line.
@@ -335,29 +288,20 @@ void gamecore_setSetting(const char *key, const char *value);
 // Empty when the core has nothing to add.
 const char *gamecore_getDetails(void);
 
-// Adding a new per-boot setting: give it a key in the core's
-// setSetting. Add a field to GameCoreSessionConfig only when every
-// core needs it.
-
 void gamecore_setShowViewportBounds(bool enabled);
 
-// Cheat menu toggle (UI -> Engine). The postload layer reads the
-// current value each update. Ruby reassigns $CHEATS from the bridge
-// so the toggle takes effect mid-game without re-entering scripts.
+// Cheat menu toggle (UI -> Engine). The change applies while the game
+// runs.
 void gamecore_setCheatsEnabled(bool enabled);
 bool gamecore_getCheatsEnabled(void);
 
-/* Controls whether the engine consumes SDL game-controller events
- * for its built-in input bindings. Hosts that implement their own
- * physical-controller handling disable this to avoid double input.
- * Default: enabled. Must be set before or during session start.
- * Takes effect immediately. */
+// True lets the core read game controllers with its own key bindings.
+// A launcher that reads the controllers itself sets false, so that no
+// press arrives twice. The default is true. The change applies at once.
 void gamecore_setGameControllerCaptureEnabled(bool enabled);
 
-/* Controls whether touch-synthesized SDL mouse events
- * (which == SDL_TOUCH_MOUSEID) are delivered to the engine input
- * layer. Default: false = upstream behavior (touch never synthesizes
- * mouse input). Hosts that want touch-as-mouse set it true. */
+// True makes a touch act as the mouse for the game. The default is
+// false.
 void gamecore_setTouchMouseEnabled(bool enabled);
 
 void gamecore_setViewportBoundsColor(float r, float g, float b, float a);
@@ -371,8 +315,8 @@ void gamecore_signalErrorDismissed(void);
 
 void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata);
 
-// Info-message routing (Engine -> UI). Games show a notice (PE 20+
-// version banners, plugin dialogs) and then keep running. This is not
+// Info-message routing (Engine -> UI). Games show a notice, for example
+// a version banner, and then keep running. This is not
 // an error: the UI shows a plain alert and calls
 // gamecore_signalInfoDismissed when the person closes it. The same
 // rules as for errors apply.
@@ -382,8 +326,8 @@ void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *user
 
 // Pause / Resume (UI <-> Engine).
 //   1. UI calls `gamecore_requestPause()`
-//   2. The engine, at a Graphics blocking point, pauses audio, fires the paused callback, and blocks
-//      on a condvar
+//   2. At its next frame, the core pauses audio, fires the paused
+//      callback, and waits
 //   3. UI calls `gamecore_requestResume()` to unblock
 
 void gamecore_requestPause(void);
@@ -403,19 +347,15 @@ void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata);
 void gamecore_setResumedCallback(gamecore_ResumedCallback cb, void *userdata);
 void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata);
 
-// Runtime fast-forward multiplier. When > 1 the FPS limiter scales
-// target ticks-per-frame down so the game paces N times faster.
-// Toggleable live without restart. Range: 1 (off) or 2-9 (active).
+// Fast-forward multiplier. At N > 1 the game runs N times faster. The
+// change applies while the game runs. Range: 1 (off) or 2-9 (on).
 void gamecore_setFastForwardMultiplier(int multiplier);
 int gamecore_getFastForwardMultiplier(void);
 
-// Reset all per-session host-bridge state to engine defaults. Called
-// once before each new game launch so values from the previous
-// session (fast-forward multiplier, cheats flag) don't leak.
-//
-// Per-session = bridge fields that vary per game. Globally-persistent state (viewport
-// bounds debug overlay etc., owned by app-level Settings UI) is NOT
-// touched.
+// Resets the per-game state to the core defaults, for example the
+// fast-forward multiplier and the cheats flag. The launcher calls it
+// before each game starts. App-wide state, such as the viewport bounds
+// overlay, stays.
 void gamecore_resetSessionState(void);
 
 // Kills the running game and frees everything it made. After this call

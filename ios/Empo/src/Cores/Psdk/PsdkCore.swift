@@ -89,6 +89,12 @@ struct PsdkCore: GameCore {
     // a mark if a slow device shows the wait.
     func launch(_ container: GameContainer) {
         PsdkGame.matchFileNameCase(in: container.gameURL)
+        let display = ManagedMkxpConfig.readEffective(
+            stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
+        let smooth = display.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
+        let fixed = display.fixedAspectRatio ?? GameConfigDefaults.engineFixedAspectRatio
+        gamecore_setSetting("smoothScaling", smooth ? "1" : "0")
+        gamecore_setSetting("fixedAspectRatio", fixed ? "1" : "0")
     }
 
     /// A PSDK game ships no Game.ini, and its app_data.json holds

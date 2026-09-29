@@ -333,7 +333,7 @@ public enum ManagedMkxpConfig {
 
     // MARK: - Overlay string for engine bridge
 
-    /// The JSON object string that goes to `gamecore_setConfigOverlayJSON`,
+    /// The JSON object string that the mkxp core takes as its `configOverlay` setting,
     /// or nil when there is nothing to send (no overlay keys, and no
     /// host normalization patches apply).
     public static func overlayJSONString(

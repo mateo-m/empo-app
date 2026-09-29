@@ -41,17 +41,6 @@ enum GameSession {
         )
         ManagedMkxpConfig.removeLegacyEngineConfigDirectory(in: stateDir)
 
-        let overlayJSON = EngineConfigProjector.overlayJSONString(
-            stateDirectory: stateDir,
-            gameDirectory: gameDir
-        )
-        if let overlayJSON {
-            overlayJSON.withCString { gamecore_setConfigOverlayJSON($0) }
-            logEngineConfigOverlay(overlayJSON, container: container)
-        } else {
-            gamecore_setConfigOverlayJSON(nil)
-        }
-
         // The core reads its settings in gamecore_applySessionConfig.
         input.core.launch(container)
 
@@ -85,24 +74,5 @@ enum GameSession {
         // `PlayerRuntimeState.reconcile` runs. That call owns every
         // later push, including the one on resume.
         gamecore_setTouchMouseEnabled(settings.touchMouseEnabled)
-    }
-
-    private static func logEngineConfigOverlay(
-        _ overlayJSON: String,
-        container: GameContainer
-    ) {
-        let logsDir = container.ensureLogsDirectory()
-        let path = logsDir.appendingPathComponent("engine-config.log").path
-        let line = "engine-config: \(overlayJSON)\n"
-        if FileManager.default.fileExists(atPath: path),
-            let data = line.data(using: .utf8),
-            let handle = FileHandle(forWritingAtPath: path)
-        {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            _ = try? handle.write(contentsOf: data)
-        } else {
-            try? line.write(toFile: path, atomically: true, encoding: .utf8)
-        }
     }
 }

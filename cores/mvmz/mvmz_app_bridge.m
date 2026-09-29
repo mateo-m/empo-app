@@ -435,23 +435,6 @@ void gamecore_setDebugLogPath(const char *path) {
     logLine(@"log is attached");
 }
 
-// The launcher sends the same overlay it gives mkxp-z. It writes
-// "smoothScaling" as a number or a boolean.
-void gamecore_setConfigOverlayJSON(const char *jsonUTF8) {
-    NSDictionary *overlay = nil;
-    if (jsonUTF8) {
-        overlay = [NSJSONSerialization JSONObjectWithData:[NSData dataWithBytes:jsonUTF8
-                                                                         length:strlen(jsonUTF8)]
-                                                  options:0
-                                                    error:nil];
-    }
-    if (![overlay isKindOfClass:NSDictionary.class]) {
-        overlay = @{};
-    }
-    id smooth = overlay[@"smoothScaling"];
-    mvmz_set_smooth([smooth isKindOfClass:NSNumber.class] && [smooth boolValue]);
-}
-
 void gamecore_setFastForwardMultiplier(int multiplier) {
     gFastForward = multiplier;
     mvmz_set_speed(multiplier);
@@ -497,8 +480,12 @@ bool gamecore_getCheatsEnabled(void) {
     return gCheatsEnabled;
 }
 
-// This core has no keys. Every key writes a warning to the log.
+// The one key is "smoothScaling", "1" or "0".
 void gamecore_setSetting(const char *key, const char *value) {
+    if (key && strcmp(key, "smoothScaling") == 0) {
+        mvmz_set_smooth(value && strcmp(value, "1") == 0);
+        return;
+    }
     NSLog(@"[mvmz] unknown setting %s", key ?: "(null)");
 }
 

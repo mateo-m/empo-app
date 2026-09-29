@@ -41,7 +41,6 @@ std::string gGamePath;
 std::string gLauncherIdentity;
 std::string gCABundlePath;
 std::string gDebugLogPath;
-std::string gConfigOverlayJSON;
 
 // pthread_cond, not a dispatch semaphore. waitForGamePath runs on
 // the game thread and the launcher sets the path from the main thread.
@@ -163,36 +162,6 @@ void *runGame(void *) {
 }  // namespace
 
 namespace {
-
-// A launcher switch out of the same overlay it gives mkxp-z. A missing
-// key means the default. This reads one key instead of parsing the whole
-// document. mkxp-z reads some of these keys as a number and some as a
-// boolean, so the launcher writes `"smoothScaling": 1` but `"fixedAspectRatio":
-// true`. Both forms mean on here.
-bool readFlagKey(const std::string &json, const std::string &key, bool fallback) {
-    const size_t keyAt = json.find("\"" + key + "\"");
-    if (keyAt == std::string::npos) {
-        return fallback;
-    }
-    const size_t colonAt = json.find(':', keyAt);
-    if (colonAt == std::string::npos) {
-        return fallback;
-    }
-    const size_t at = json.find_first_not_of(" \t\r\n", colonAt + 1);
-    if (at == std::string::npos) {
-        return fallback;
-    }
-    if (json.compare(at, 4, "true") == 0) {
-        return true;
-    }
-    if (json.compare(at, 5, "false") == 0) {
-        return false;
-    }
-    if (json[at] == '-' || (json[at] >= '0' && json[at] <= '9')) {
-        return std::strtod(json.c_str() + at, nullptr) != 0.0;
-    }
-    return fallback;
-}
 
 // The core answers 0 until the game makes its window. A scale of 0
 // would divide the game rect by zero, so the first placement reads 1.
@@ -710,13 +679,6 @@ void gamecore_setDebugLogPath(const char *path) {
     fprintf(stderr, "[psdk] log is attached\n");
 }
 
-void gamecore_setConfigOverlayJSON(const char *jsonUTF8) {
-    std::lock_guard<std::mutex> guard(gLock);
-    gConfigOverlayJSON = jsonUTF8 ? jsonUTF8 : "";
-    gFixedAspectRatio.store(readFlagKey(gConfigOverlayJSON, "fixedAspectRatio", true));
-    psdk_set_smooth(readFlagKey(gConfigOverlayJSON, "smoothScaling", false) ? 1 : 0);
-}
-
 void gamecore_setCheatsEnabled(bool enabled) {
     gCheatsEnabled.store(enabled);
 }
@@ -786,10 +748,17 @@ void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
 
 // MARK: - What the launcher reads
 
-// The one key is "rubyVersion", with "2.5", "3.0", "3.2" or "3.3": the
-// Ruby that psdk_run starts, 3.0 when the launcher sends none.
+// The keys are "smoothScaling" and "fixedAspectRatio", each "1" or "0".
 void gamecore_setSetting(const char *key, const char *value) {
-    fprintf(stderr, "[psdk] unknown setting %s=%s\n", key ? key : "(null)", value ? value : "(null)");
+    const bool on = value && std::strcmp(value, "1") == 0;
+    if (key && std::strcmp(key, "smoothScaling") == 0) {
+        psdk_set_smooth(on ? 1 : 0);
+    } else if (key && std::strcmp(key, "fixedAspectRatio") == 0) {
+        gFixedAspectRatio.store(on);
+        placeOutputRegion();
+    } else {
+        fprintf(stderr, "[psdk] unknown setting %s=%s\n", key ? key : "(null)", value ? value : "(null)");
+    }
 }
 
 // PSDK gives no title through any interface, so the launcher falls back

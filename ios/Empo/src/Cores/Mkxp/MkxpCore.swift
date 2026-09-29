@@ -168,6 +168,35 @@ struct MkxpCore: GameCore {
         set("inGameKeyboard", inGameKeyboard)
         set("joiplayCompat", settings.joiplayCompatEnabled)
         set("networkEnabled", settings.networkAccessEnabled)
+
+        let overlay = ManagedMkxpConfig.overlayJSONString(
+            gameDirectory: container.gameURL,
+            stateDirectory: container.empoStateURL,
+            onUnparseableOverlay: { NSLog($0) }
+        )
+        set("configOverlay", overlay ?? "")
+        if let overlay {
+            logConfigOverlay(overlay, container: container)
+        }
+    }
+
+    private func logConfigOverlay(
+        _ overlayJSON: String,
+        container: GameContainer
+    ) {
+        let logsDir = container.ensureLogsDirectory()
+        let path = logsDir.appendingPathComponent("engine-config.log").path
+        let line = "engine-config: \(overlayJSON)\n"
+        if FileManager.default.fileExists(atPath: path),
+            let data = line.data(using: .utf8),
+            let handle = FileHandle(forWritingAtPath: path)
+        {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            _ = try? handle.write(contentsOf: data)
+        } else {
+            try? line.write(toFile: path, atomically: true, encoding: .utf8)
+        }
     }
 
     private func set(_ key: String, _ value: String) {

@@ -3,6 +3,8 @@
 // mkxp_ and passes scancodes as SDL_Scancode, which GAMECORE_SCANCODE_*
 // matches.
 
+#include <string.h>
+
 #include "GameCore.h"
 #include "app_bridge.h"
 
@@ -40,10 +42,6 @@ void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, vo
 
 void gamecore_injectKeyEvent(int scancode, int pressed) {
     mkxp_injectKeyEvent(scancode, pressed);
-}
-
-void gamecore_setConfigOverlayJSON(const char *jsonUTF8) {
-    mkxp_setConfigOverlayJSON(jsonUTF8);
 }
 
 void gamecore_setLauncherIdentity(const char *name) {
@@ -108,8 +106,14 @@ void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
     mkxp_applySessionConfig(&mkxp);
 }
 
-// The keys are the ones app_bridge.h lists for mkxp_setSetting.
+// The key "configOverlay" takes a JSON object of mkxp.json keys, which
+// the engine merges over the game's own mkxp.json. "" clears it. The
+// other keys are the ones app_bridge.h lists for mkxp_setSetting.
 void gamecore_setSetting(const char *key, const char *value) {
+    if (key && strcmp(key, "configOverlay") == 0) {
+        mkxp_setConfigOverlayJSON(value);
+        return;
+    }
     mkxp_setSetting(key, value);
 }
 

@@ -114,9 +114,14 @@ interface with the core's calls.
 Every core exports the same `gamecore_*` names. Each forwarder looks the name
 up in the one core it opened, so the names do not meet.
 
-A setting that only one core knows goes through `gamecore_setSetting` as text.
-Each core's bridge lists its keys. The debug overlay shows the
-lines of `gamecore_getDetails`, which the core writes.
+`cores/GameCore.h` uses no engine's names, file formats or terms. A
+setting that only some cores know goes through `gamecore_setSetting` as text.
+Each core's app type in `ios/Empo/src/Cores` sends it in `launch(_:)`, and
+each core's bridge lists its keys and turns them into its engine's own calls.
+For example, the PSDK and MV and MZ bridges take `smoothScaling` as `1` or
+`0`. The mkxp bridge takes the whole display overlay as `configOverlay`, a
+JSON object of `mkxp.json` keys. The debug overlay shows the lines of
+`gamecore_getDetails`, which the core writes.
 
 `scripts/audit-ipa.sh` audits the cores it finds in the bundle. Pass
 `--cores "MkxpCore Psdk30Core"` to demand an exact set.
