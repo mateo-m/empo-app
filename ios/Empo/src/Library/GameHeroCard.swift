@@ -89,18 +89,31 @@ struct GameHeroCard: View {
                 // artwork which is a direct ImageView resizing in
                 // lockstep with the card frame.
                 .compositingGroup()
-                .overlay(alignment: .bottomLeading) {
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("Continue playing")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.white.opacity(Alpha.textMuted))
-                        Text(game.title)
-                            .font(.title3)
-                            .fontWeight(.bold)
+                .overlay(alignment: .bottom) {
+                    HStack(alignment: .bottom, spacing: Spacing.md) {
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text("Continue playing")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.white.opacity(Alpha.textMuted))
+                            Text(game.title)
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white)
+                                .textShadow()
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: isPaused ? "pause.fill" : "play.fill")
+                            .font(.title2)
                             .foregroundStyle(.white)
-                            .textShadow()
-                            .lineLimit(1)
+                            .iconShadow()
+                            // The icon is decorative. The whole card is
+                            // already a tappable "resume game" target
+                            // announced by the enclosing Button, so
+                            // reading the glyph separately would only
+                            // repeat context for VoiceOver users.
+                            .accessibilityHidden(true)
                     }
                     .padding(Spacing.xl)
                     .onGeometryChange(for: CGFloat.self) { proxy in
@@ -108,19 +121,6 @@ struct GameHeroCard: View {
                     } action: { newHeight in
                         labelHeight = newHeight
                     }
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: isPaused ? "pause.fill" : "play.fill")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .iconShadow()
-                        .padding(Spacing.xl)
-                        // The icon is decorative. The whole card is
-                        // already a tappable "resume game" target
-                        // announced by the enclosing Button, so
-                        // reading the glyph separately would only
-                        // repeat context for VoiceOver users.
-                        .accessibilityHidden(true)
                 }
                 .clipShape(.rect(cornerRadius: Radius.lg))
                 .matchedTransitionSource(
