@@ -747,7 +747,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
                 atPath: ManagedMkxpConfig.overlayConfigURL(in: stateDir).path))
     }
 
-    func testDisplayMigrationKeepsOverlayWhenSettingsFileIsUnreadable() throws {
+    func testDisplayMigrationReplacesUnreadableSettingsFile() throws {
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
         try """
@@ -757,8 +757,11 @@ final class ManagedMkxpConfigTests: XCTestCase {
             to: stateDir.appendingPathComponent("game_settings.json"),
             atomically: true, encoding: .utf8)
 
-        XCTAssertFalse(ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDir))
-        XCTAssertEqual(try readOverlayConfig(stateDir)["smoothScaling"] as? Int, 1)
+        XCTAssertTrue(ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDir))
+        XCTAssertEqual(try readSettings(stateDir)["smoothScaling"] as? Bool, true)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: ManagedMkxpConfig.overlayConfigURL(in: stateDir).path))
     }
 
     func testOverlayStringAppliesOverrides() throws {

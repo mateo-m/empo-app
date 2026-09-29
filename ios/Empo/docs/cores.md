@@ -172,8 +172,9 @@ The shared settings, smooth scaling and fixed aspect ratio included, live in
 `EmpoState/game_settings.json`. A core that reads the game's own display
 values gives them in `displayDefaults(for:)`, and the settings page shows
 them until the user changes a row. The mkxp core reads them from
-`Game/mkxp.json`. Only the mkxp core uses `EmpoState/mkxp.json`, for the
-settings that only mkxp-z has. Older builds kept smooth scaling and fixed
+`Game/mkxp.json`. `EmpoState/mkxp.json` holds only the settings that only
+mkxp-z has. `DataDirectory` also reads `dataPathOrg` and `dataPathApp` from
+it for every game, to place the game's save folder. Older builds kept smooth scaling and fixed
 aspect ratio there for every game. `GameSettings.migrateLegacyEngineSettingsIfNeeded`
 moves them to `game_settings.json` when the game starts or its settings open.
 

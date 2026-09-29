@@ -504,7 +504,8 @@ public enum ManagedMkxpConfig {
 
     /// Older builds kept the display settings of every core in this
     /// overlay. Moves them to `game_settings.json`. A value that is
-    /// already there wins. Safe to repeat.
+    /// already there wins. An unreadable `game_settings.json` counts as
+    /// empty, as it does for `GameSettingsGroup`. Safe to repeat.
     @discardableResult
     public static func migrateDisplaySettingsIfNeeded(stateDirectory: URL) -> Bool {
         let displayKeys = ["smoothScaling", "fixedAspectRatio"]
@@ -513,13 +514,9 @@ public enum ManagedMkxpConfig {
         else { return true }
 
         let settingsURL = stateDirectory.appendingPathComponent(settingsFilename)
-        var settings: [String: Any] = [:]
-        if FileManager.default.fileExists(atPath: settingsURL.path) {
-            guard let data = try? Data(contentsOf: settingsURL),
-                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else { return false }
-            settings = json
-        }
+        var settings =
+            (try? Data(contentsOf: settingsURL))
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
         // `GameSettingsGroup.save` writes an unset value as null.
         func isUnset(_ key: String) -> Bool { settings[key] == nil || settings[key] is NSNull }
         let display = values(from: overlay)
