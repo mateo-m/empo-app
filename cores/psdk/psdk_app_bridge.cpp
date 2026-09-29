@@ -56,8 +56,6 @@ struct Callback {
 Callback gFrameRendered;
 Callback gEngineTerminated;
 Callback gGameRectChanged;
-Callback gErrorMessage;
-Callback gInfoMessage;
 Callback gPaused;
 Callback gResumed;
 Callback gTextInputMode;
@@ -507,12 +505,12 @@ void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, vo
     gGameRectChanged = {reinterpret_cast<void *>(cb), userdata};
 }
 
-void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata) {
-    gErrorMessage = {reinterpret_cast<void *>(cb), userdata};
+// psdk_core.h gives no way to show a message, so this core never calls
+// these two.
+void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback, void *) {
 }
 
-void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata) {
-    gInfoMessage = {reinterpret_cast<void *>(cb), userdata};
+void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback, void *) {
 }
 
 void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata) {

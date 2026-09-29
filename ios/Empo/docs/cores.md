@@ -111,8 +111,8 @@ The target links the library with `mvmz_app_bridge.m`, which puts the web view
 in its own window and in the launcher's region, and answers the launcher
 interface with the core's calls.
 
-The four PSDK cores export the same `psdk_*` names. Each forwarder looks the
-name up in the one core it opened, so the names do not meet.
+Every core exports the same `gamecore_*` names. Each forwarder looks the name
+up in the one core it opened, so the names do not meet.
 
 A setting that only one core knows goes through `gamecore_setSetting` as text.
 Each core's bridge lists its keys. The debug overlay shows the

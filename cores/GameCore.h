@@ -362,18 +362,20 @@ void gamecore_setTouchMouseEnabled(bool enabled);
 
 void gamecore_setViewportBoundsColor(float r, float g, float b, float a);
 
-// Error routing (Engine -> UI). The core calls the error callback and
-// blocks its engine thread until the UI calls
-// gamecore_signalErrorDismissed.
+// Error routing (Engine -> UI). The UI shows the message in an alert
+// and calls gamecore_signalErrorDismissed when the person closes it. A
+// core that waits for that blocks its engine thread until the call. A
+// core that does not wait ignores it, and a core with no messages never
+// calls the callback.
 void gamecore_signalErrorDismissed(void);
 
 void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata);
 
 // Info-message routing (Engine -> UI). Games show a notice (PE 20+
 // version banners, plugin dialogs) and then keep running. This is not
-// an error: the UI shows a plain alert. The core calls the info
-// callback and blocks its engine thread until the UI calls
-// gamecore_signalInfoDismissed.
+// an error: the UI shows a plain alert and calls
+// gamecore_signalInfoDismissed when the person closes it. The same
+// rules as for errors apply.
 void gamecore_signalInfoDismissed(void);
 
 void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata);
