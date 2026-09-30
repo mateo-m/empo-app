@@ -306,14 +306,10 @@ public enum RubyScriptGrammarSniffer {
     /// on the same line or the line above, so those calls do not count.
     private static func callsRuby19Methods(_ source: String) -> Bool {
         guard let ruby19Call, let ruby19Guard else { return false }
-        func matches(_ regex: NSRegularExpression, _ line: String) -> NSTextCheckingResult? {
-            regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line))
-        }
-        func isGuard(_ line: String) -> Bool {
-            guard let match = matches(ruby19Guard, line),
-                let start = Range(match.range, in: line)?.lowerBound
-            else { return false }
-            return isCode(line[..<start])
+        func matchesInCode(_ regex: NSRegularExpression, _ line: String) -> Bool {
+            regex.matches(in: line, range: NSRange(line.startIndex..., in: line)).contains { match in
+                Range(match.range, in: line).map { isCode(line[..<$0.lowerBound]) } ?? false
+            }
         }
         var inBlockComment = false
         var previous = ""
@@ -321,12 +317,10 @@ public enum RubyScriptGrammarSniffer {
             defer { previous = line }
             if line.hasPrefix("=begin") { inBlockComment = true }
             if line.hasPrefix("=end") { inBlockComment = false }
-            if inBlockComment || isGuard(line) || isGuard(previous) { continue }
-            guard
-                let match = matches(ruby19Call, line),
-                let start = Range(match.range, in: line)?.lowerBound
-            else { continue }
-            if isCode(line[..<start]) { return true }
+            if inBlockComment || matchesInCode(ruby19Guard, line) || matchesInCode(ruby19Guard, previous) {
+                continue
+            }
+            if matchesInCode(ruby19Call, line) { return true }
         }
         return false
     }
