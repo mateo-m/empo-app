@@ -24,9 +24,12 @@ public enum GameScriptProfile {
         /// RGSS2 games run on Ruby 1.8, and the endless-def token
         /// skips the RGSS2/3 `def` stat method.
         case rgss2Ruby18 = "rgss2-ruby18"
+        /// Legacy scripts that call Ruby 1.9+ methods run on Ruby
+        /// 3.1 with the legacy transform, not on Ruby 1.8.
+        case mixedRuby31 = "mixed-ruby31"
     }
 
-    public static let currentSchema: Schema = .rgss2Ruby18
+    public static let currentSchema: Schema = .mixedRuby31
 
     public struct Result {
         public let rubyVersion: Int
@@ -80,6 +83,9 @@ public enum GameScriptProfile {
             ) {
                 return scriptVer
             }
+        case .mixed:
+            let scriptVer = rubyVersionFromScriptExtension(at: gameDirectory, fm: fm)
+            return scriptVer == 19 ? 19 : 31
         case .inconclusive:
             break
         }
@@ -121,7 +127,7 @@ public enum GameScriptProfile {
         switch grammar {
         case .modern:
             return true
-        case .legacy:
+        case .legacy, .mixed:
             return false
         case .inconclusive:
             return runtime.embedsRuby3 || packedScripts

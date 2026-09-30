@@ -33,6 +33,12 @@ public enum RubyScriptGrammarSniffer {
         /// (`.rvdata2`).
         case legacy
 
+        /// Legacy grammar that also calls Ruby 1.9+ methods, such as
+        /// `force_encoding`. Ruby 1.8 lacks the methods, and plain
+        /// Ruby 3.1 rejects the grammar, so only Ruby 3.1 with the
+        /// legacy syntax transform runs it (Vinemon Sauce Edition).
+        case mixed
+
         /// The sniffer could not read the live source. Causes: an
         /// encrypted archive with no unpack, a missing file, a
         /// parse error, an unknown Marshal tag, or scripts packed
@@ -287,6 +293,8 @@ public enum RubyScriptGrammarSniffer {
             hits += regex.numberOfMatches(in: source, options: [], range: range)
             if hits >= modernThreshold { return .modern }
         }
+        let ruby19 = try? NSRegularExpression(pattern: #"\.force_encoding\b|\bEncoding::[A-Z]"#)
+        if ruby19?.firstMatch(in: source, options: [], range: range) != nil { return .mixed }
         return .legacy
     }
 }

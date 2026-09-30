@@ -72,6 +72,39 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.rubyVersion, 18)
     }
 
+    func testRuby19MethodsInXPScriptsRouteToRuby31Legacy() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "case x\nwhen 1: y\nend\nname = buf.force_encoding('UTF-8')\n".write(
+            to: scripts.appendingPathComponent("Scene_Movie3.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .mixed)
+        XCTAssertEqual(profile.rubyVersion, 31)
+        XCTAssertFalse(profile.modernRubyScripts)
+    }
+
+    func testRuby19MethodsInVXAceScriptsStayOnRuby19() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Scripts.rvdata2"))
+        try "text = text.force_encoding('UTF-8')\n".write(
+            to: scripts.appendingPathComponent("Window_Base.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 19)
+    }
+
     func testBundledRuby300DLLFoldsTo31() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
