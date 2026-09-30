@@ -115,7 +115,7 @@ final class GameScriptProfileTests: XCTestCase {
         try FileManager.default.createDirectory(
             at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
         try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
-        try "# use respond_to?(:force_encoding)\ntext = \"#{value.force_encoding(\"UTF-8\")}\"\n".write(
+        try "# use respond_to?(:force_encoding)\nx = 1 if defined?(Encoding)\n\ntext = \"#{value.force_encoding(\"UTF-8\")}\"\n".write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
 
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
