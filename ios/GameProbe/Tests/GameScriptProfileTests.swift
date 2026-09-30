@@ -82,7 +82,7 @@ final class GameScriptProfileTests: XCTestCase {
         try FileManager.default.createDirectory(
             at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
         try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
-        try "case x\nwhen 1: y\nend\nname = buf.force_encoding('UTF-8')\n".write(
+        try "case x\nwhen 1: y\nend\nname = \"#{buf}\".force_encoding('UTF-8')\n".write(
             to: scripts.appendingPathComponent("Scene_Movie3.rb"), atomically: true, encoding: .utf8)
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)

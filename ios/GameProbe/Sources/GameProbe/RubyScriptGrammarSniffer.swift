@@ -318,13 +318,28 @@ public enum RubyScriptGrammarSniffer {
                     in: line, range: NSRange(line.startIndex..., in: line)),
                 let start = Range(match.range, in: line)?.lowerBound
             else { continue }
-            let before = line[..<start]
-            let inString = [Character("\""), "'"].contains { quote in
-                before.filter { $0 == quote }.count % 2 == 1
-            }
-            if !before.contains("#") && !inString { return true }
+            if isCode(line[..<start]) { return true }
         }
         return false
+    }
+
+    /// True when the text ends outside a comment and outside a quoted
+    /// string. `#{` inside a string starts an insert, not a comment.
+    private static func isCode(_ before: Substring) -> Bool {
+        var quote: Character?
+        var previous: Character?
+        for (char, next) in zip(before, before.dropFirst().map(Optional.some) + [nil]) {
+            defer { previous = char }
+            if previous == "\\" { continue }
+            if let open = quote {
+                if char == open { quote = nil }
+            } else if char == "\"" || char == "'" {
+                quote = char
+            } else if char == "#" && next != "{" {
+                return false
+            }
+        }
+        return quote == nil
     }
 }
 
