@@ -302,60 +302,132 @@ public enum RubyScriptGrammarSniffer {
     private static let ruby19Guard = try? NSRegularExpression(
         pattern: #"respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b"#)
 
+    private static let heredocStart = try? NSRegularExpression(
+        pattern: #"<<[-~]?(["'`]?)([A-Za-z_]\w*)\1"#)
+
     /// Scripts written for both 1.8 and 1.9 check for the method first,
-    /// on the same line or the line above, so those calls do not count.
+    /// in a postfix `if` on the same line or in an `if` block, so those
+    /// calls do not count.
     private static func callsRuby19Methods(_ source: String) -> Bool {
-        guard let ruby19Call, let ruby19Guard else { return false }
-        func matchesInCode(_ regex: NSRegularExpression, _ line: String) -> Bool {
-            regex.matches(in: line, range: NSRange(line.startIndex..., in: line)).contains { match in
+        guard let ruby19Call, let ruby19Guard, let heredocStart else { return false }
+        func codeMatches(_ regex: NSRegularExpression, _ line: String) -> [NSTextCheckingResult] {
+            regex.matches(in: line, range: NSRange(line.startIndex..., in: line)).filter { match in
                 Range(match.range, in: line).map { isCode(line[..<$0.lowerBound]) } ?? false
             }
         }
         var inBlockComment = false
-        var previous = ""
+        var heredocEnd: String?
+        var guardIndent: Int?
         for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
-            defer { previous = line }
-            if line.hasPrefix("=begin") { inBlockComment = true }
-            if line.hasPrefix("=end") { inBlockComment = false }
-            if inBlockComment || matchesInCode(ruby19Guard, line) || matchesInCode(ruby19Guard, previous) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let indent = line.prefix { $0 == " " || $0 == "\t" }.count
+            if let end = heredocEnd {
+                if trimmed == end { heredocEnd = nil }
                 continue
             }
-            if matchesInCode(ruby19Call, line) { return true }
+            if line.hasPrefix("=begin") { inBlockComment = true }
+            if line.hasPrefix("=end") { inBlockComment = false }
+            if inBlockComment { continue }
+            defer {
+                heredocEnd = codeMatches(heredocStart, line).first
+                    .flatMap { Range($0.range(at: 2), in: line) }
+                    .map { String(line[$0]) }
+            }
+            if let open = guardIndent {
+                let closes = ["end", "else", "elsif"].contains { trimmed.hasPrefix($0) }
+                if indent == open && closes { guardIndent = nil }
+                continue
+            }
+            if !codeMatches(ruby19Guard, line).isEmpty {
+                let opensBlock = trimmed.hasPrefix("if ") || trimmed.hasPrefix("unless ")
+                if opensBlock && !trimmed.hasSuffix("end") { guardIndent = indent }
+                continue
+            }
+            if !codeMatches(ruby19Call, line).isEmpty { return true }
         }
         return false
     }
 
+    private enum Scope {
+        case literal(open: Character?, close: Character, interpolates: Bool, depth: Int)
+        case insert(braces: Int)
+    }
+
     /// True when the text ends outside a comment and outside the plain
-    /// part of a quoted string. Code inside a `#{...}` insert counts.
+    /// part of a string literal. Code inside a `#{...}` insert counts.
     private static func isCode(_ before: Substring) -> Bool {
-        // Open quotes, `#{` inserts ("{"), and braces inside inserts ("b").
-        var stack: [Character] = []
+        var stack: [Scope] = []
         let chars = Array(before)
         var index = 0
         while index < chars.count {
             let char = chars[index]
             let next = index + 1 < chars.count ? chars[index + 1] : nil
             index += 1
-            if let top = stack.last, top == "\"" || top == "'" {
+            if case .literal(let open, let close, let interpolates, let depth)? = stack.last {
                 if char == "\\" {
                     index += 1
-                } else if char == top {
+                } else if char == open {
+                    stack[stack.count - 1] = .literal(
+                        open: open, close: close, interpolates: interpolates, depth: depth + 1)
+                } else if char == close && depth > 0 {
+                    stack[stack.count - 1] = .literal(
+                        open: open, close: close, interpolates: interpolates, depth: depth - 1)
+                } else if char == close {
                     stack.removeLast()
-                } else if top == "\"" && char == "#" && next == "{" {
-                    stack.append("{")
+                } else if interpolates && char == "#" && next == "{" {
+                    stack.append(.insert(braces: 0))
                     index += 1
                 }
-            } else if char == "\"" || char == "'" {
-                stack.append(char)
-            } else if char == "#" {
+                continue
+            }
+            switch char {
+            case "\"":
+                stack.append(.literal(open: nil, close: "\"", interpolates: true, depth: 0))
+            case "'":
+                stack.append(.literal(open: nil, close: "'", interpolates: false, depth: 0))
+            case "%":
+                if let literal = percentLiteral(chars, at: &index) { stack.append(literal) }
+            case "#":
                 return false
-            } else if char == "{" && !stack.isEmpty {
-                stack.append("b")
-            } else if char == "}" && !stack.isEmpty {
-                stack.removeLast()
+            case "{":
+                if case .insert(let braces)? = stack.last {
+                    stack[stack.count - 1] = .insert(braces: braces + 1)
+                }
+            case "}":
+                if case .insert(let braces)? = stack.last {
+                    if braces == 0 {
+                        stack.removeLast()
+                    } else {
+                        stack[stack.count - 1] = .insert(braces: braces - 1)
+                    }
+                }
+            default:
+                break
             }
         }
-        return stack.last.map { $0 == "{" || $0 == "b" } ?? true
+        if case .literal? = stack.last { return false }
+        return true
+    }
+
+    /// Reads a `%q(...)`-style literal start after the `%`. A `%` with
+    /// a space or a letter after it is the modulo operator.
+    private static func percentLiteral(_ chars: [Character], at index: inout Int) -> Scope? {
+        var cursor = index
+        var kind: Character?
+        if cursor < chars.count, "qQwWiIrsx".contains(chars[cursor]) {
+            kind = chars[cursor]
+            cursor += 1
+        }
+        guard cursor < chars.count else { return nil }
+        let delimiter = chars[cursor]
+        guard !delimiter.isLetter, !delimiter.isNumber, !delimiter.isWhitespace else { return nil }
+        let pairs: [Character: Character] = ["(": ")", "[": "]", "{": "}", "<": ">"]
+        index = cursor + 1
+        return .literal(
+            open: pairs[delimiter] == nil ? nil : delimiter,
+            close: pairs[delimiter] ?? delimiter,
+            interpolates: !"qwis".contains(kind ?? "Q"),
+            depth: 0)
     }
 }
 
