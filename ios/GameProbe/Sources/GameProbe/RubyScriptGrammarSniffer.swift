@@ -299,23 +299,27 @@ public enum RubyScriptGrammarSniffer {
     private static let ruby19Call = try? NSRegularExpression(
         pattern: #"\.force_encoding\b|\bEncoding::[A-Z]"#)
 
+    private static let ruby19Guard = try? NSRegularExpression(
+        pattern: #"respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b"#)
+
     /// Scripts written for both 1.8 and 1.9 check for the method first,
     /// on the same line or the line above, so those calls do not count.
     private static func callsRuby19Methods(_ source: String) -> Bool {
-        guard let ruby19Call else { return false }
-        let guards = ["respond_to?(:force_encoding)", "defined?(Encoding)"]
+        guard let ruby19Call, let ruby19Guard else { return false }
+        func matches(_ regex: NSRegularExpression, _ line: String) -> NSTextCheckingResult? {
+            regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line))
+        }
         var inBlockComment = false
         var previous = ""
         for line in source.split(separator: "\n").map(String.init) {
             defer { previous = line }
             if line.hasPrefix("=begin") { inBlockComment = true }
             if line.hasPrefix("=end") { inBlockComment = false }
-            if inBlockComment || guards.contains(where: { line.contains($0) || previous.contains($0) }) {
+            if inBlockComment || matches(ruby19Guard, line) != nil || matches(ruby19Guard, previous) != nil {
                 continue
             }
             guard
-                let match = ruby19Call.firstMatch(
-                    in: line, range: NSRange(line.startIndex..., in: line)),
+                let match = matches(ruby19Call, line),
                 let start = Range(match.range, in: line)?.lowerBound
             else { continue }
             if isCode(line[..<start]) { return true }
@@ -323,23 +327,37 @@ public enum RubyScriptGrammarSniffer {
         return false
     }
 
-    /// True when the text ends outside a comment and outside a quoted
-    /// string. `#{` inside a string starts an insert, not a comment.
+    /// True when the text ends outside a comment and outside the plain
+    /// part of a quoted string. Code inside a `#{...}` insert counts.
     private static func isCode(_ before: Substring) -> Bool {
-        var quote: Character?
-        var previous: Character?
-        for (char, next) in zip(before, before.dropFirst().map(Optional.some) + [nil]) {
-            defer { previous = char }
-            if previous == "\\" { continue }
-            if let open = quote {
-                if char == open { quote = nil }
+        // Open quotes, `#{` inserts ("{"), and braces inside inserts ("b").
+        var stack: [Character] = []
+        let chars = Array(before)
+        var index = 0
+        while index < chars.count {
+            let char = chars[index]
+            let next = index + 1 < chars.count ? chars[index + 1] : nil
+            index += 1
+            if let top = stack.last, top == "\"" || top == "'" {
+                if char == "\\" {
+                    index += 1
+                } else if char == top {
+                    stack.removeLast()
+                } else if top == "\"" && char == "#" && next == "{" {
+                    stack.append("{")
+                    index += 1
+                }
             } else if char == "\"" || char == "'" {
-                quote = char
-            } else if char == "#" && next != "{" {
+                stack.append(char)
+            } else if char == "#" {
                 return false
+            } else if char == "{" && !stack.isEmpty {
+                stack.append("b")
+            } else if char == "}" && !stack.isEmpty {
+                stack.removeLast()
             }
         }
-        return quote == nil
+        return stack.last.map { $0 == "{" || $0 == "b" } ?? true
     }
 }
 

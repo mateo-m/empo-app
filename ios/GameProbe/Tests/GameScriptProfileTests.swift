@@ -105,6 +105,22 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 19)
     }
 
+    func testRuby19CallInsideStringInsertRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "text = \"#{value.force_encoding(\"UTF-8\")}\"\n".write(
+            to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
     func testRuby19MethodsInCommentsStringsOrGuardsStayOnRuby18() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -122,6 +138,8 @@ final class GameScriptProfileTests: XCTestCase {
         =end
         print "use .force_encoding"
         s = s.force_encoding('UTF-8') if s.respond_to?(:force_encoding)
+        t = t.force_encoding('UTF-8') if t.respond_to? :force_encoding
+        u = u.encode(Encoding::UTF_8) if defined? Encoding
         if defined?(Encoding)
           s = s.encode(Encoding::UTF_8)
         end
