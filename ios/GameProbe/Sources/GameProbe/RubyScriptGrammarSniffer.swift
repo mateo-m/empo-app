@@ -293,9 +293,38 @@ public enum RubyScriptGrammarSniffer {
             hits += regex.numberOfMatches(in: source, options: [], range: range)
             if hits >= modernThreshold { return .modern }
         }
-        let ruby19 = try? NSRegularExpression(pattern: #"\.force_encoding\b|\bEncoding::[A-Z]"#)
-        if ruby19?.firstMatch(in: source, options: [], range: range) != nil { return .mixed }
-        return .legacy
+        return callsRuby19Methods(source) ? .mixed : .legacy
+    }
+
+    private static let ruby19Call = try? NSRegularExpression(
+        pattern: #"\.force_encoding\b|\bEncoding::[A-Z]"#)
+
+    /// Scripts written for both 1.8 and 1.9 check for the method first,
+    /// on the same line or the line above, so those calls do not count.
+    private static func callsRuby19Methods(_ source: String) -> Bool {
+        guard let ruby19Call else { return false }
+        let guards = ["respond_to?(:force_encoding)", "defined?(Encoding)"]
+        var inBlockComment = false
+        var previous = ""
+        for line in source.split(separator: "\n").map(String.init) {
+            defer { previous = line }
+            if line.hasPrefix("=begin") { inBlockComment = true }
+            if line.hasPrefix("=end") { inBlockComment = false }
+            if inBlockComment || guards.contains(where: { line.contains($0) || previous.contains($0) }) {
+                continue
+            }
+            guard
+                let match = ruby19Call.firstMatch(
+                    in: line, range: NSRange(line.startIndex..., in: line)),
+                let start = Range(match.range, in: line)?.lowerBound
+            else { continue }
+            let before = line[..<start]
+            let inString = [Character("\""), "'"].contains { quote in
+                before.filter { $0 == quote }.count % 2 == 1
+            }
+            if !before.contains("#") && !inString { return true }
+        }
+        return false
     }
 }
 

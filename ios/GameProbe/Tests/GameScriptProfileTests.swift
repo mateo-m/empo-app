@@ -105,6 +105,35 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 19)
     }
 
+    func testRuby19MethodsInCommentsStringsOrGuardsStayOnRuby18() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        # call s.force_encoding on Ruby 1.9
+        =begin
+        Encoding::UTF_8 is not in Ruby 1.8
+        =end
+        print "use .force_encoding"
+        s = s.force_encoding('UTF-8') if s.respond_to?(:force_encoding)
+        if defined?(Encoding)
+          s = s.encode(Encoding::UTF_8)
+        end
+
+        """.write(
+            to: scripts.appendingPathComponent("Util.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .legacy)
+        XCTAssertEqual(profile.rubyVersion, 18)
+    }
+
     func testBundledRuby300DLLFoldsTo31() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
