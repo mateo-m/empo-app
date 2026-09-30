@@ -309,15 +309,19 @@ public enum RubyScriptGrammarSniffer {
         func matches(_ regex: NSRegularExpression, _ line: String) -> NSTextCheckingResult? {
             regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line))
         }
+        func isGuard(_ line: String) -> Bool {
+            guard let match = matches(ruby19Guard, line),
+                let start = Range(match.range, in: line)?.lowerBound
+            else { return false }
+            return isCode(line[..<start])
+        }
         var inBlockComment = false
         var previous = ""
         for line in source.split(separator: "\n").map(String.init) {
             defer { previous = line }
             if line.hasPrefix("=begin") { inBlockComment = true }
             if line.hasPrefix("=end") { inBlockComment = false }
-            if inBlockComment || matches(ruby19Guard, line) != nil || matches(ruby19Guard, previous) != nil {
-                continue
-            }
+            if inBlockComment || isGuard(line) || isGuard(previous) { continue }
             guard
                 let match = matches(ruby19Call, line),
                 let start = Range(match.range, in: line)?.lowerBound
