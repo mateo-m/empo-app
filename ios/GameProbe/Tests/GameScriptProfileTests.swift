@@ -239,6 +239,27 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
     }
 
+    func testRuby19CallOnAnotherReceiverThanTheGuardRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        if helper.respond_to?(:force_encoding)
+          text = text.force_encoding("UTF-8")
+        end
+
+        """.write(
+            to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
     func testRuby19MethodsInCommentsStringsOrGuardsStayOnRuby18() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -277,6 +298,9 @@ final class GameScriptProfileTests: XCTestCase {
           EOS
         call .force_encoding on Ruby 1.9
         EOS
+        if @text.respond_to?(:force_encoding)
+          @text = @text.force_encoding("UTF-8")
+        end
         raw = <<-'EOS'
         #{value.force_encoding("UTF-8")}
         EOS

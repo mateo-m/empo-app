@@ -301,91 +301,101 @@ public enum RubyScriptGrammarSniffer {
 
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
     /// check, `unless`, `else`, or an `||` / `or` in the condition runs
-    /// its body on 1.8.
+    /// its body on 1.8. Group 1 is the receiver of `respond_to?`.
     private static let ruby19Guard = try? NSRegularExpression(
-        pattern: #"\b(?:if|elsif)\s+\(?\s*(?:[@$]?[\w.]+\.)?(?:respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)(?![^#]*(?:\|\||\bor\b))"#)
+        pattern: #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)(?![^#;]*(?:\|\||\bor\b))"#)
 
     private static let heredocStart = try? NSRegularExpression(
         pattern: #"<<([-~]?)(["'`]?)([A-Za-z_]\w*)\2"#)
 
+    /// What a guard makes safe: every 1.9 call after `defined?(Encoding)`,
+    /// or only `force_encoding` on the receiver that `respond_to?` checked.
+    private enum Cover: Equatable {
+        case all
+        case receiver(String)
+    }
+
     /// Scripts written for both 1.8 and 1.9 check for the method first,
-    /// in a postfix `if` on the same line or in an `if` block, so those
-    /// calls do not count.
+    /// in a postfix `if` on the same statement or in an `if` block, so
+    /// those calls do not count.
     private static func callsRuby19Methods(_ source: String) -> Bool {
         guard let ruby19Call, let ruby19Guard, let heredocStart else { return false }
-        func codeMatches(
-            _ regex: NSRegularExpression, _ line: String, inString: Bool = false
-        ) -> [NSTextCheckingResult] {
-            regex.matches(in: line, range: NSRange(line.startIndex..., in: line)).filter { match in
-                Range(match.range, in: line).map {
-                    isCode(line[..<$0.lowerBound], inString: inString)
-                } ?? false
+        func covered(_ call: NSRange, in units: [Character], by covers: [Cover]) -> Bool {
+            if covers.contains(.all) { return true }
+            guard units[call.location] == "." else { return false }
+            var start = call.location
+            while start > 0, units[start - 1].isLetter || units[start - 1].isNumber
+                || "_.@$".contains(units[start - 1]) {
+                start -= 1
             }
+            let receiver = String(units[start..<call.location])
+            return covers.contains(.receiver(receiver.isEmpty ? "self" : receiver))
         }
         var inBlockComment = false
         var heredoc: (end: String, indented: Bool, interpolates: Bool)?
-        var guardIndent: Int?
+        var blocks: [(indent: Int, cover: Cover)] = []
         for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let indent = line.prefix { $0 == " " || $0 == "\t" }.count
+            let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
+            let range = NSRange(line.startIndex..., in: line)
             if let open = heredoc {
                 if (open.indented ? trimmed : line) == open.end {
                     heredoc = nil
-                } else if open.interpolates && guardIndent == nil
-                    && !codeMatches(ruby19Call, line, inString: true).isEmpty {
-                    return true
+                } else if open.interpolates {
+                    let code = codeMask(units, inString: true)
+                    let calls = ruby19Call.matches(in: line, range: range).filter { code[$0.range.location] }
+                    if calls.contains(where: { !covered($0.range, in: units, by: blocks.map(\.cover)) }) {
+                        return true
+                    }
                 }
                 continue
             }
             if line.hasPrefix("=begin") { inBlockComment = true }
             if line.hasPrefix("=end") { inBlockComment = false }
             if inBlockComment { continue }
-            defer {
-                heredoc = codeMatches(heredocStart, line).first.flatMap { match in
-                    func group(_ number: Int) -> Substring {
-                        Range(match.range(at: number), in: line).map { line[$0] } ?? ""
-                    }
-                    return (String(group(3)), !group(1).isEmpty, group(2) != "'")
+            let code = codeMask(units)
+            func codeMatches(_ regex: NSRegularExpression) -> [NSTextCheckingResult] {
+                regex.matches(in: line, range: range).filter { code[$0.range.location] }
+            }
+            if let match = codeMatches(heredocStart).first {
+                func group(_ number: Int) -> Substring {
+                    Range(match.range(at: number), in: line).map { line[$0] } ?? ""
                 }
+                heredoc = (String(group(3)), !group(1).isEmpty, group(2) != "'")
             }
             func closes(_ text: String) -> Bool {
                 ["end", "else", "elsif"].contains { text.hasPrefix($0) }
             }
-            if let open = guardIndent {
-                if !(indent == open && closes(trimmed)) { continue }
-                guardIndent = nil
+            if let last = blocks.last, indent == last.indent && closes(trimmed) {
+                blocks.removeLast()
             }
-            let parts = statements(line)
-            var inlineGuard = false
-            for (number, part) in parts.enumerated() {
-                let text = part.trimmingCharacters(in: .whitespaces)
-                if inlineGuard {
-                    if !closes(text) { continue }
-                    inlineGuard = false
+            let guards = codeMatches(ruby19Guard)
+            let calls = codeMatches(ruby19Call)
+            var inline: [Cover] = []
+            var start = 0
+            let ends = units.indices.filter { units[$0] == ";" && code[$0] } + [units.count]
+            for (number, end) in ends.enumerated() {
+                defer { start = end + 1 }
+                let text = String(units[start..<end]).trimmingCharacters(in: .whitespaces)
+                if !inline.isEmpty && closes(text) { inline.removeAll() }
+                let own = guards.filter { (start..<end).contains($0.range.location) }.map { match in
+                    Range(match.range(at: 1), in: line).map { Cover.receiver(String(line[$0])) }
+                        ?? (line[Range(match.range, in: line)!].contains("respond_to") ? .receiver("self") : .all)
                 }
-                if !codeMatches(ruby19Guard, part).isEmpty {
-                    let opensBlock = text.hasPrefix("if ") || text.hasPrefix("elsif ")
-                    if opensBlock && !text.hasSuffix("end") {
-                        if number == parts.count - 1 { guardIndent = indent } else { inlineGuard = true }
-                    }
-                    continue
+                let covers = blocks.map(\.cover) + inline + own
+                let open = calls.filter { (start..<end).contains($0.range.location) }
+                if open.contains(where: { !covered($0.range, in: units, by: covers) }) { return true }
+                let opensBlock = text.hasPrefix("if ") || text.hasPrefix("elsif ")
+                guard opensBlock && !text.hasSuffix("end"), !own.isEmpty else { continue }
+                if number == ends.count - 1 {
+                    blocks += own.map { (indent, $0) }
+                } else {
+                    inline += own
                 }
-                if !codeMatches(ruby19Call, part).isEmpty { return true }
             }
         }
         return false
-    }
-
-    /// Splits a line at each `;` in code, so a guard covers only its own statement.
-    private static func statements(_ line: String) -> [String] {
-        var parts: [String] = []
-        var start = line.startIndex
-        for index in line.indices where line[index] == ";" && isCode(line[start..<index]) {
-            parts.append(String(line[start..<index]))
-            start = line.index(after: index)
-        }
-        parts.append(String(line[start...]))
-        return parts
     }
 
     private enum Scope {
@@ -393,15 +403,20 @@ public enum RubyScriptGrammarSniffer {
         case insert(braces: Int)
     }
 
-    /// True when the text ends outside a comment and outside the plain
-    /// part of a string literal. Code inside a `#{...}` insert counts.
-    /// `inString` starts the text inside an interpolating heredoc body.
-    private static func isCode(_ before: Substring, inString: Bool = false) -> Bool {
+    /// For each UTF-16 unit of a line, true when it sits outside a comment
+    /// and outside the plain part of a string literal. Code inside a
+    /// `#{...}` insert counts. `inString` starts inside a heredoc body.
+    private static func codeMask(_ chars: [Character], inString: Bool = false) -> [Bool] {
         var stack: [Scope] = inString
             ? [.literal(open: nil, close: "\n", interpolates: true, depth: 0)] : []
-        let chars = Array(before)
+        var mask = [Bool](repeating: false, count: chars.count + 1)
         var index = 0
+        func isCode() -> Bool {
+            if case .literal? = stack.last { return false }
+            return true
+        }
         while index < chars.count {
+            mask[index] = isCode()
             let char = chars[index]
             let next = index + 1 < chars.count ? chars[index + 1] : nil
             index += 1
@@ -430,7 +445,7 @@ public enum RubyScriptGrammarSniffer {
             case "%":
                 if let literal = percentLiteral(chars, at: &index) { stack.append(literal) }
             case "#":
-                return false
+                return mask
             case "{":
                 if case .insert(let braces)? = stack.last {
                     stack[stack.count - 1] = .insert(braces: braces + 1)
@@ -447,8 +462,8 @@ public enum RubyScriptGrammarSniffer {
                 break
             }
         }
-        if case .literal? = stack.last { return false }
-        return true
+        mask[chars.count] = isCode()
+        return mask
     }
 
     /// Reads a `%q(...)`-style literal start after the `%`. A `%` with
