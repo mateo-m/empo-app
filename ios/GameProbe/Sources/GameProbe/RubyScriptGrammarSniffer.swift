@@ -300,12 +300,13 @@ public enum RubyScriptGrammarSniffer {
         pattern: #"\.force_encoding\b|\bEncoding::[A-Z]"#)
 
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
-    /// check, `unless`, or `else` runs its body on 1.8.
+    /// check, `unless`, `else`, or an `||` / `or` in the condition runs
+    /// its body on 1.8.
     private static let ruby19Guard = try? NSRegularExpression(
-        pattern: #"\b(?:if|elsif)\s+\(?\s*(?:[@$]?[\w.]+\.)?(?:respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)"#)
+        pattern: #"\b(?:if|elsif)\s+\(?\s*(?:[@$]?[\w.]+\.)?(?:respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)(?![^#]*(?:\|\||\bor\b))"#)
 
     private static let heredocStart = try? NSRegularExpression(
-        pattern: #"<<[-~]?(["'`]?)([A-Za-z_]\w*)\1"#)
+        pattern: #"<<([-~]?)(["'`]?)([A-Za-z_]\w*)\2"#)
 
     /// Scripts written for both 1.8 and 1.9 check for the method first,
     /// in a postfix `if` on the same line or in an `if` block, so those
@@ -322,13 +323,13 @@ public enum RubyScriptGrammarSniffer {
             }
         }
         var inBlockComment = false
-        var heredoc: (end: String, interpolates: Bool)?
+        var heredoc: (end: String, indented: Bool, interpolates: Bool)?
         var guardIndent: Int?
         for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let indent = line.prefix { $0 == " " || $0 == "\t" }.count
             if let open = heredoc {
-                if trimmed == open.end {
+                if (open.indented ? trimmed : line) == open.end {
                     heredoc = nil
                 } else if open.interpolates && guardIndent == nil
                     && !codeMatches(ruby19Call, line, inString: true).isEmpty {
@@ -341,9 +342,10 @@ public enum RubyScriptGrammarSniffer {
             if inBlockComment { continue }
             defer {
                 heredoc = codeMatches(heredocStart, line).first.flatMap { match in
-                    Range(match.range(at: 2), in: line).map {
-                        (String(line[$0]), !line[Range(match.range(at: 1), in: line)!].hasPrefix("'"))
+                    func group(_ number: Int) -> Substring {
+                        Range(match.range(at: number), in: line).map { line[$0] } ?? ""
                     }
+                    return (String(group(3)), !group(1).isEmpty, group(2) != "'")
                 }
             }
             func closes(_ text: String) -> Bool {
