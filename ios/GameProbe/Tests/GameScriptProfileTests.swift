@@ -157,6 +157,48 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
     }
 
+    func testRuby19CallUnderANegatedGuardRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        unless defined?(Encoding)
+          value = value.force_encoding("UTF-8")
+        end
+
+        """.write(
+            to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
+    func testRuby19CallInAHeredocInsertRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        message = <<~TEXT
+          Name: #{value.force_encoding("UTF-8")}
+        TEXT
+
+        """.write(
+            to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
     func testRuby19MethodsInCommentsStringsOrGuardsStayOnRuby18() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -180,8 +222,17 @@ final class GameScriptProfileTests: XCTestCase {
           s = s.encode(Encoding::UTF_8)
           t = t.force_encoding('UTF-8')
         end
+        if x
+          y = 1
+        elsif defined?(Encoding)
+          y = y.encode(Encoding::UTF_8)
+          z = z.force_encoding('UTF-8')
+        end
         help = <<-EOS
         call .force_encoding on Ruby 1.9
+        EOS
+        raw = <<-'EOS'
+        #{value.force_encoding("UTF-8")}
         EOS
         note = %q(use .force_encoding)
         rate = total % (Encoding::UTF_8 rescue 1) if defined? Encoding

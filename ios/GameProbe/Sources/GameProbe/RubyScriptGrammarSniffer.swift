@@ -299,8 +299,10 @@ public enum RubyScriptGrammarSniffer {
     private static let ruby19Call = try? NSRegularExpression(
         pattern: #"\.force_encoding\b|\bEncoding::[A-Z]"#)
 
+    /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
+    /// check, `unless`, or `else` runs its body on 1.8.
     private static let ruby19Guard = try? NSRegularExpression(
-        pattern: #"respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b"#)
+        pattern: #"\b(?:if|elsif)\s+\(?\s*(?:[@$]?[\w.]+\.)?(?:respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)"#)
 
     private static let heredocStart = try? NSRegularExpression(
         pattern: #"<<[-~]?(["'`]?)([A-Za-z_]\w*)\1"#)
@@ -310,36 +312,47 @@ public enum RubyScriptGrammarSniffer {
     /// calls do not count.
     private static func callsRuby19Methods(_ source: String) -> Bool {
         guard let ruby19Call, let ruby19Guard, let heredocStart else { return false }
-        func codeMatches(_ regex: NSRegularExpression, _ line: String) -> [NSTextCheckingResult] {
+        func codeMatches(
+            _ regex: NSRegularExpression, _ line: String, inString: Bool = false
+        ) -> [NSTextCheckingResult] {
             regex.matches(in: line, range: NSRange(line.startIndex..., in: line)).filter { match in
-                Range(match.range, in: line).map { isCode(line[..<$0.lowerBound]) } ?? false
+                Range(match.range, in: line).map {
+                    isCode(line[..<$0.lowerBound], inString: inString)
+                } ?? false
             }
         }
         var inBlockComment = false
-        var heredocEnd: String?
+        var heredoc: (end: String, interpolates: Bool)?
         var guardIndent: Int?
         for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let indent = line.prefix { $0 == " " || $0 == "\t" }.count
-            if let end = heredocEnd {
-                if trimmed == end { heredocEnd = nil }
+            if let open = heredoc {
+                if trimmed == open.end {
+                    heredoc = nil
+                } else if open.interpolates && guardIndent == nil
+                    && !codeMatches(ruby19Call, line, inString: true).isEmpty {
+                    return true
+                }
                 continue
             }
             if line.hasPrefix("=begin") { inBlockComment = true }
             if line.hasPrefix("=end") { inBlockComment = false }
             if inBlockComment { continue }
             defer {
-                heredocEnd = codeMatches(heredocStart, line).first
-                    .flatMap { Range($0.range(at: 2), in: line) }
-                    .map { String(line[$0]) }
+                heredoc = codeMatches(heredocStart, line).first.flatMap { match in
+                    Range(match.range(at: 2), in: line).map {
+                        (String(line[$0]), !line[Range(match.range(at: 1), in: line)!].hasPrefix("'"))
+                    }
+                }
             }
             if let open = guardIndent {
                 let closes = ["end", "else", "elsif"].contains { trimmed.hasPrefix($0) }
-                if indent == open && closes { guardIndent = nil }
-                continue
+                if !(indent == open && closes) { continue }
+                guardIndent = nil
             }
             if !codeMatches(ruby19Guard, line).isEmpty {
-                let opensBlock = trimmed.hasPrefix("if ") || trimmed.hasPrefix("unless ")
+                let opensBlock = trimmed.hasPrefix("if ") || trimmed.hasPrefix("elsif ")
                 if opensBlock && !trimmed.hasSuffix("end") { guardIndent = indent }
                 continue
             }
@@ -355,8 +368,10 @@ public enum RubyScriptGrammarSniffer {
 
     /// True when the text ends outside a comment and outside the plain
     /// part of a string literal. Code inside a `#{...}` insert counts.
-    private static func isCode(_ before: Substring) -> Bool {
-        var stack: [Scope] = []
+    /// `inString` starts the text inside an interpolating heredoc body.
+    private static func isCode(_ before: Substring, inString: Bool = false) -> Bool {
+        var stack: [Scope] = inString
+            ? [.literal(open: nil, close: "\n", interpolates: true, depth: 0)] : []
         let chars = Array(before)
         var index = 0
         while index < chars.count {
