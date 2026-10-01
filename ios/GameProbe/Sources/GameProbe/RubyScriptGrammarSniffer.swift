@@ -346,19 +346,44 @@ public enum RubyScriptGrammarSniffer {
                     }
                 }
             }
+            func closes(_ text: String) -> Bool {
+                ["end", "else", "elsif"].contains { text.hasPrefix($0) }
+            }
             if let open = guardIndent {
-                let closes = ["end", "else", "elsif"].contains { trimmed.hasPrefix($0) }
-                if !(indent == open && closes) { continue }
+                if !(indent == open && closes(trimmed)) { continue }
                 guardIndent = nil
             }
-            if !codeMatches(ruby19Guard, line).isEmpty {
-                let opensBlock = trimmed.hasPrefix("if ") || trimmed.hasPrefix("elsif ")
-                if opensBlock && !trimmed.hasSuffix("end") { guardIndent = indent }
-                continue
+            let parts = statements(line)
+            var inlineGuard = false
+            for (number, part) in parts.enumerated() {
+                let text = part.trimmingCharacters(in: .whitespaces)
+                if inlineGuard {
+                    if !closes(text) { continue }
+                    inlineGuard = false
+                }
+                if !codeMatches(ruby19Guard, part).isEmpty {
+                    let opensBlock = text.hasPrefix("if ") || text.hasPrefix("elsif ")
+                    if opensBlock && !text.hasSuffix("end") {
+                        if number == parts.count - 1 { guardIndent = indent } else { inlineGuard = true }
+                    }
+                    continue
+                }
+                if !codeMatches(ruby19Call, part).isEmpty { return true }
             }
-            if !codeMatches(ruby19Call, line).isEmpty { return true }
         }
         return false
+    }
+
+    /// Splits a line at each `;` in code, so a guard covers only its own statement.
+    private static func statements(_ line: String) -> [String] {
+        var parts: [String] = []
+        var start = line.startIndex
+        for index in line.indices where line[index] == ";" && isCode(line[start..<index]) {
+            parts.append(String(line[start..<index]))
+            start = line.index(after: index)
+        }
+        parts.append(String(line[start...]))
+        return parts
     }
 
     private enum Scope {
