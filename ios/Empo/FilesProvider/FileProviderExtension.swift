@@ -268,11 +268,13 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
                 ? .rootContainer
                 : Self.identifier(of: url.deletingLastPathComponent(), root: root) ?? .rootContainer
         filename = url.lastPathComponent
+        // The system refuses .contentTypeKey (error -54) for a file that
+        // Files pasted here, and one refused key fails the whole request.
         let values = try? url.resourceValues(forKeys: [
-            .isDirectoryKey, .contentTypeKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey,
+            .isDirectoryKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey,
         ])
         let isFolder = values?.isDirectory ?? false
-        contentType = isFolder ? .folder : values?.contentType ?? .data
+        contentType = isFolder ? .folder : UTType(filenameExtension: url.pathExtension) ?? .data
         documentSize = isFolder ? nil : values?.fileSize.map { NSNumber(value: $0) }
         childItemCount =
             isFolder
