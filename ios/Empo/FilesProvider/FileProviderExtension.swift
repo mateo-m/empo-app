@@ -262,7 +262,7 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
         itemIdentifier = Self.identifier(of: url, root: root) ?? .rootContainer
         isTrashed = itemIdentifier.rawValue.hasPrefix(Self.trashFolderName + "/")
         parentItemIdentifier =
-            isTrashed
+            isTrashed && itemIdentifier.rawValue.split(separator: "/").count == 3
             ? .trashContainer
             : itemIdentifier == .rootContainer
                 ? .rootContainer
