@@ -51,15 +51,17 @@ enum DataDirectory {
 
     static let appGroupURL: URL? = {
         guard let configured = Bundle.main.object(forInfoDictionaryKey: "EmpoAppGroup") as? String,
-            !configured.isEmpty
+            !configured.isEmpty,
+            let task = SecTaskCreateFromSelf(nil),
+            let signed = SecTaskCopyValueForEntitlement(
+                task, "com.apple.security.application-groups" as CFString, nil) as? [String]
         else { return nil }
-        // AltStore and SideStore add to the group name when they sign
-        // the app again, and list the new names in ALTAppGroups
-        // (AltStore's ResignAppOperation.swift).
-        let renamed = (Bundle.main.object(forInfoDictionaryKey: "ALTAppGroups") as? [String] ?? [])
-            .filter { $0.contains(configured) }
-            .sorted { $0.count < $1.count }
-        return ([configured] + renamed).lazy
+        // AltStore and SideStore add "." and the team ID to the group
+        // name when they sign the app. LiveContainer runs the app with
+        // its own signature, which has only LiveContainer's groups, and
+        // gives the app a hidden folder for any other group name.
+        return signed.lazy
+            .filter { $0 == configured || $0.hasPrefix(configured + ".") }
             .compactMap(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:))
             .first
     }()
@@ -78,8 +80,12 @@ enum DataDirectory {
                 NSLog("[DataDirectory] %@ is in Documents and in the app group, so it stays", name)
                 continue
             }
+            // An item can be a link into the app group.
+            let item = documents.appendingPathComponent(name)
+            let target = try? fm.destinationOfSymbolicLink(atPath: item.path)
             do {
-                try fm.moveItem(at: documents.appendingPathComponent(name), to: destination)
+                try fm.moveItem(at: target.map { URL(fileURLWithPath: $0) } ?? item, to: destination)
+                if target != nil { try fm.removeItem(at: item) }
             } catch {
                 NSLog("[DataDirectory] Cannot move %@ to the app group: %@", name, "\(error)")
             }
