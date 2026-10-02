@@ -66,7 +66,7 @@ When Ruby raises `SystemExit` or `Reset` in the RPG Maker XP, VX and VX Ace core
 2. `EngineHost::runSession` in `main.cpp` waits for `rqTermAck` (`waitForRGSSAck`), then stops the event thread and clears the framebuffer.
 3. `mkxp_setEngineTerminated()` calls the iOS callback.
 4. The `AppState` callback sets `phase` to `.ended`. `GameLoadingView` takes the place of the game and says that the game closed. For an error, it says that the game stopped.
-5. The screen shows "Back to Library". It ends the game process.
+5. When the game can end, the screen shows "Back to Library", which ends the game. A Ruby game that runs in the app cannot end, so the screen tells the person to close Empo from the app switcher.
 6. On the next launch, `CrashTracker.consumeRecovery()` deletes the `.session-active` markers on disk. Without this step, each launch would say that the last game did not exit cleanly.
 
 The app sets the callback with `gamecore_setEngineTerminatedCallback`, which goes to the core of the game. The PSDK and MV/MZ cores call it too. A game that ends before its first frame gets the same screen. For an error, the screen says that the game did not start.
