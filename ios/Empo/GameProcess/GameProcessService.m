@@ -1,5 +1,7 @@
 #import "GameProcessService.h"
 
+#import <UIKit/UIKit.h>
+
 #include <crt_externs.h>
 #include <execinfo.h>
 #include <fcntl.h>
@@ -132,10 +134,45 @@ static void onFrameRendered(void *userdata) {
     [host() frameRendered];
 }
 
+static BOOL gSceneActive;
+static BOOL gRunPending;
+
+// A core may hold the main thread until the game ends, so it runs from
+// a run loop callout and not from a block on the main queue
+// (GameCore.h). Its caller runs on the main queue, after every call
+// that came before runApp.
+static void runCore(void) {
+    gRunPending = NO;
+    CFRunLoopRef mainLoop = CFRunLoopGetMain();
+    CFRunLoopPerformBlock(mainLoop, kCFRunLoopCommonModes, ^{
+      gamecore_run_app(*_NSGetArgc(), *_NSGetArgv());
+    });
+    CFRunLoopWakeUp(mainLoop);
+}
+
 @interface EmpoGameProcessService : NSObject <EmpoGameProcess>
 @end
 
 @implementation EmpoGameProcessService
+
+// The app can send runApp before ExtensionKit connects the scene of this
+// process. A window that the core makes before that has no scene, and
+// UIKit never shows it, so the core waits for the scene.
++ (void)load {
+    [NSNotificationCenter.defaultCenter
+        addObserverForName:UISceneDidActivateNotification
+                    object:nil
+                     queue:NSOperationQueue.mainQueue
+                usingBlock:^(NSNotification *note) {
+                  if (gSceneActive || ![note.object isKindOfClass:UIWindowScene.class]) {
+                      return;
+                  }
+                  gSceneActive = YES;
+                  if (gRunPending) {
+                      runCore();
+                  }
+                }];
+}
 
 - (void)openCore:(NSString *)framework reply:(void (^)(NSString *_Nullable))reply {
     // The extension sits in Empo.app/Extensions, and the cores in
@@ -169,16 +206,13 @@ static void onFrameRendered(void *userdata) {
     });
 }
 
-// A core may hold the main thread until the game ends, so it runs from
-// a run loop callout and not from a block on the main queue
-// (GameCore.h). The main queue block puts it after every call before it.
 - (void)runApp {
     onMain(^{
-      CFRunLoopRef mainLoop = CFRunLoopGetMain();
-      CFRunLoopPerformBlock(mainLoop, kCFRunLoopCommonModes, ^{
-        gamecore_run_app(*_NSGetArgc(), *_NSGetArgv());
-      });
-      CFRunLoopWakeUp(mainLoop);
+      if (gSceneActive) {
+          runCore();
+      } else {
+          gRunPending = YES;
+      }
     });
 }
 
