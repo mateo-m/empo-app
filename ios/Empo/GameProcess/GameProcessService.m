@@ -1,6 +1,12 @@
 #import "GameProcessService.h"
 
 #include <crt_externs.h>
+#include <execinfo.h>
+#include <fcntl.h>
+#include <mach/mach.h>
+#include <signal.h>
+#include <string.h>
+#include <unistd.h>
 
 #import "AudioSession.h"
 #import "EmpoCore.h"
@@ -18,6 +24,15 @@ static NSString *text(const char *utf8) {
     return (utf8 != NULL ? [NSString stringWithUTF8String:utf8] : nil) ?: @"";
 }
 
+static uint64_t memoryFootprint(void) {
+    task_vm_info_data_t info;
+    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) {
+        return 0;
+    }
+    return info.phys_footprint;
+}
+
 // The app called every gamecore_* function on its main thread when the
 // core ran in the app. The process keeps that, in the order the calls
 // came. A call that comes after a core failed to open does nothing.
@@ -27,6 +42,51 @@ static void onMain(dispatch_block_t call) {
             call();
         }
     });
+}
+
+// Writes the signal and the stack of a crash to stderr, which is the
+// session log by then, and lets the crash go on. Ruby puts its own
+// handler on SIGSEGV and SIGBUS when it starts, and its report is
+// better.
+static void onCrashSignal(int signal) {
+    static const char prefix[] = "[game-process] crashed with signal ";
+    write(STDERR_FILENO, prefix, sizeof(prefix) - 1);
+    const char *name = "?";
+    switch (signal) {
+    case SIGABRT: name = "SIGABRT"; break;
+    case SIGBUS: name = "SIGBUS"; break;
+    case SIGFPE: name = "SIGFPE"; break;
+    case SIGILL: name = "SIGILL"; break;
+    case SIGSEGV: name = "SIGSEGV"; break;
+    case SIGTRAP: name = "SIGTRAP"; break;
+    }
+    write(STDERR_FILENO, name, strlen(name));
+    write(STDERR_FILENO, "\n", 1);
+    void *frames[128];
+    backtrace_symbols_fd(frames, backtrace(frames, 128), STDERR_FILENO);
+    struct sigaction fallback = {.sa_handler = SIG_DFL};
+    sigaction(signal, &fallback, NULL);
+    raise(signal);
+}
+
+// Sends stdout and stderr to the session log, which the engine writes
+// too, so a report holds what the core printed before a crash.
+static void captureOutput(const char *logPath) {
+    int log = open(logPath, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    if (log < 0) {
+        NSLog(@"[game-process] cannot open %s: %s", logPath, strerror(errno));
+        return;
+    }
+    dup2(log, STDOUT_FILENO);
+    dup2(log, STDERR_FILENO);
+    close(log);
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
+    static const int crashSignals[] = {SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSEGV, SIGTRAP};
+    for (size_t i = 0; i < sizeof(crashSignals) / sizeof(crashSignals[0]); i++) {
+        struct sigaction action = {.sa_handler = onCrashSignal};
+        sigaction(crashSignals[i], &action, NULL);
+    }
 }
 
 static void onEngineTerminated(void *userdata) {
@@ -77,26 +137,7 @@ static void onFrameRendered(void *userdata) {
 
 @implementation EmpoGameProcessService
 
-- (void)openCore:(NSString *)framework
-       bookmarks:(NSArray<NSData *> *)bookmarks
-           reply:(void (^)(NSString *_Nullable))reply {
-    for (NSData *bookmark in bookmarks) {
-        BOOL stale = NO;
-        NSError *error = nil;
-        NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark
-                                               options:0
-                                         relativeToURL:nil
-                                   bookmarkDataIsStale:&stale
-                                                 error:&error];
-        if (url == nil) {
-            reply([NSString stringWithFormat:@"cannot open a folder of the app: %@", error]);
-            return;
-        }
-        // The access stays for the life of the process.
-        if (![url startAccessingSecurityScopedResource]) {
-            NSLog(@"[game-process] no scoped access to %@", url.path);
-        }
-    }
+- (void)openCore:(NSString *)framework reply:(void (^)(NSString *_Nullable))reply {
     // The extension sits in Empo.app/Extensions, and the cores in
     // Empo.app/Frameworks.
     NSURL *app = NSBundle.mainBundle.bundleURL.URLByDeletingLastPathComponent.URLByDeletingLastPathComponent;
@@ -271,6 +312,9 @@ static void onFrameRendered(void *userdata) {
 - (void)setDebugLogPath:(NSString *)path {
     onMain(^{
       gamecore_setDebugLogPath(path.fileSystemRepresentation);
+      if (path != nil) {
+          captureOutput(path.fileSystemRepresentation);
+      }
     });
 }
 
@@ -288,6 +332,7 @@ static void onFrameRendered(void *userdata) {
           EmpoGameProcessStatusDetails : text(gamecore_getDetails()),
           EmpoGameProcessStatusCheats : @(gamecore_getCheatsEnabled()),
           EmpoGameProcessStatusFastForward : @(gamecore_getFastForwardMultiplier()),
+          EmpoGameProcessStatusMemoryFootprint : @(memoryFootprint()),
       });
     });
 }

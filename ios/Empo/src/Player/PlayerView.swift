@@ -416,7 +416,7 @@ struct PlayerView: View {
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { appState.requestPause() },
-                onQuit: { appState.quitGame() },
+                onQuit: appState.canQuitGame ? { appState.quitGame() } : nil,
                 onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) }
             )
         }

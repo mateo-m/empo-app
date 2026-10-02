@@ -2,6 +2,7 @@
 // Exposes C bridge functions and ObjC touch control classes to Swift
 
 #import "GameCore.h"
+#import "EmpoAppCore.h"
 #import "GameProcessClient.h"
 #import "TouchControls.h"
 

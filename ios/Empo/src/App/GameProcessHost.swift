@@ -24,13 +24,7 @@ enum GameProcessHost {
     static var gameView: UIView? { controller?.viewIfLoaded }
 
     static func start(framework: String) {
-        let bookmark: Data
-        do {
-            bookmark = try URL(fileURLWithPath: NSHomeDirectory()).bookmarkData()
-        } catch {
-            fatalError("No bookmark for the app container: \(error)")
-        }
-        EmpoGameProcessClient.begin(withFramework: framework, bookmarks: [bookmark])
+        EmpoGameProcessClient.begin(withFramework: framework)
         session += 1
         let current = session
         let previousExit = lastExit
@@ -40,7 +34,7 @@ enum GameProcessHost {
             await previousExit?.value
             guard current == session else { return }
             guard let identity = await identity() else {
-                NSLog("[game-process] the GameProcess extension is not in the app")
+                EngineSessionCoordinator.shared.note("The GameProcess extension is not in the app.")
                 EmpoGameProcessClient.processLost()
                 return
             }
@@ -75,7 +69,7 @@ enum GameProcessHost {
             self.monitor = monitor
             return monitor.identities.first
         } catch {
-            NSLog("[game-process] no extension monitor: %@", String(describing: error))
+            EngineSessionCoordinator.shared.note("No extension monitor: \(error)")
             return nil
         }
     }
@@ -106,7 +100,7 @@ enum GameProcessHost {
                 do {
                     EmpoGameProcessClient.attach(try viewController.makeXPCConnection())
                 } catch {
-                    NSLog("[game-process] no connection: %@", String(describing: error))
+                    EngineSessionCoordinator.shared.note("No connection to the game process: \(error)")
                     EmpoGameProcessClient.processLost()
                 }
             }
@@ -115,7 +109,7 @@ enum GameProcessHost {
         func hostViewControllerWillDeactivate(_ viewController: EXHostViewController, error: (any Error)?) {
             MainActor.assumeIsolated {
                 guard viewController === GameProcessHost.controller, let error else { return }
-                NSLog("[game-process] the game process stopped: %@", String(describing: error))
+                EngineSessionCoordinator.shared.note("The game process stopped: \(error)")
                 EmpoGameProcessClient.processLost()
             }
         }

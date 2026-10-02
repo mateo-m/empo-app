@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#import "EmpoAppCore.h"
 #import "EmpoGameProcessProtocol.h"
 #include "GameCore.h"
 
@@ -52,6 +53,18 @@ static gamecore_ResumedCallback gResumedCallback;
 static void *gResumedUserdata;
 static gamecore_FrameRenderedCallback gFrameCallback;
 static void *gFrameUserdata;
+
+static void (^gEventHandler)(NSString *);
+
+// Logs what happened to the game process, and gives it to the app for
+// the session log.
+static void noteEvent(NSString *text) {
+    NSLog(@"[game-process] %@", text);
+    void (^handler)(NSString *) = gEventHandler;
+    if (handler != nil) {
+        handler(text);
+    }
+}
 
 static id<EmpoGameProcess> proxyOf(NSXPCConnection *connection) {
     return [connection remoteObjectProxyWithErrorHandler:^(NSError *error) {
@@ -129,7 +142,7 @@ static void connectionEnded(void *token) {
         gExited = nil;
         gExitingToken = NULL;
     } else if (token == (__bridge void *)gConnection) {
-        NSLog(@"[game-process] the game process went away");
+        noteEvent(@"The game process went away.");
         terminated = loseProcess(&userdata);
     }
     os_unfair_lock_unlock(&gLock);
@@ -269,7 +282,7 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
 
 @implementation EmpoGameProcessClient
 
-+ (void)beginWithFramework:(NSString *)framework bookmarks:(NSArray<NSData *> *)bookmarks {
++ (void)beginWithFramework:(NSString *)framework {
     os_unfair_lock_lock(&gLock);
     NSAssert(!gOpen, @"a game process session is open");
     gOpen = YES;
@@ -289,10 +302,10 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
     os_unfair_lock_unlock(&gLock);
     send(^(id<EmpoGameProcess> process) {
         [process openCore:framework
-                bookmarks:bookmarks
                     reply:^(NSString *error) {
                         if (error != nil) {
-                            NSLog(@"[game-process] %@", error);
+                            noteEvent([NSString
+                                stringWithFormat:@"The game process could not open the core: %@", error]);
                             [EmpoGameProcessClient processLost];
                         }
                     }];
@@ -352,11 +365,19 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
         BOOL waiting = gExitingToken == token;
         os_unfair_lock_unlock(&gLock);
         if (waiting) {
-            NSLog(@"[game-process] the game process did not end");
+            noteEvent(@"The game process did not end in time, and Empo closed its connection.");
             [connection invalidate];
             connectionEnded(token);
         }
     });
+}
+
++ (void)setEventHandler:(void (^)(NSString *))handler {
+    gEventHandler = [handler copy];
+}
+
++ (uint64_t)memoryFootprint {
+    return [statusValue(EmpoGameProcessStatusMemoryFootprint) unsignedLongLongValue];
 }
 
 + (void)processLost {
@@ -373,7 +394,7 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
 
 @end
 
-int EmpoCoreIsOpen(void) {
+int EmpoGameProcessIsOpen(void) {
     os_unfair_lock_lock(&gLock);
     BOOL open = gOpen;
     os_unfair_lock_unlock(&gLock);
@@ -382,94 +403,107 @@ int EmpoCoreIsOpen(void) {
 
 // MARK: - GameCore.h
 
+// AppCoreForwarders.c sends each gamecore_* call here while games run
+// in a game process. Each gameprocess_* function stands for the
+// gamecore_* function of the same name.
+
+// The game draws in the window of its own process.
+void *gameprocess_getGameWindow(void) {
+    return NULL;
+}
+
+// The app ends the game process instead (GameProcessHost.end).
+void gameprocess_killSession(void) {
+}
+
 // The game process runs the core with its own arguments.
-int gamecore_run_app(int argc, char **argv) {
+int gameprocess_run_app(int argc, char **argv) {
     send(^(id<EmpoGameProcess> process) { [process runApp]; });
     return 0;
 }
 
-int gamecore_isGameReady(void) {
+int gameprocess_isGameReady(void) {
     return [statusValue(EmpoGameProcessStatusGameReady) boolValue];
 }
 
-void gamecore_setGamePath(const char *path) {
+void gameprocess_setGamePath(const char *path) {
     NSString *value = @(path);
     send(^(id<EmpoGameProcess> process) { [process setGamePath:value]; });
 }
 
-int gamecore_isEngineTerminated(void) {
+int gameprocess_isEngineTerminated(void) {
     os_unfair_lock_lock(&gLock);
     BOOL terminated = gTerminated;
     os_unfair_lock_unlock(&gLock);
     return terminated;
 }
 
-int gamecore_didEngineExitCleanly(void) {
+int gameprocess_didEngineExitCleanly(void) {
     os_unfair_lock_lock(&gLock);
     BOOL clean = gExitedCleanly;
     os_unfair_lock_unlock(&gLock);
     return clean;
 }
 
-int gamecore_isEngineHung(void) {
+int gameprocess_isEngineHung(void) {
     os_unfair_lock_lock(&gLock);
     BOOL hung = gHung;
     os_unfair_lock_unlock(&gLock);
     return hung;
 }
 
-void gamecore_setEngineTerminatedCallback(gamecore_EngineTerminatedCallback cb, void *userdata) {
+void gameprocess_setEngineTerminatedCallback(gamecore_EngineTerminatedCallback cb, void *userdata) {
     os_unfair_lock_lock(&gLock);
     gTerminatedCallback = cb;
     gTerminatedUserdata = userdata;
     os_unfair_lock_unlock(&gLock);
 }
 
-void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, void *userdata) {
+void gameprocess_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, void *userdata) {
     os_unfair_lock_lock(&gLock);
     gRectCallback = cb;
     gRectUserdata = userdata;
     os_unfair_lock_unlock(&gLock);
 }
 
-void gamecore_injectKeyEvent(int scancode, int pressed) {
+void gameprocess_injectKeyEvent(int scancode, int pressed) {
     send(^(id<EmpoGameProcess> process) { [process injectKeyEvent:scancode pressed:pressed]; });
 }
 
-void gamecore_setLauncherIdentity(const char *name) {
+void gameprocess_setLauncherIdentity(const char *name) {
     NSString *value = name != NULL ? @(name) : nil;
     send(^(id<EmpoGameProcess> process) { [process setLauncherIdentity:value]; });
 }
 
-void gamecore_setCABundlePath(const char *path) {
+void gameprocess_setCABundlePath(const char *path) {
     NSString *value = path != NULL ? @(path) : nil;
     send(^(id<EmpoGameProcess> process) { [process setCABundlePath:value]; });
 }
 
-void gamecore_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *userdata) {
+void gameprocess_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *userdata) {
     os_unfair_lock_lock(&gLock);
     gTextInputCallback = cb;
     gTextInputUserdata = userdata;
     os_unfair_lock_unlock(&gLock);
 }
 
-void gamecore_pushTextInput(const char *utf8) {
+void gameprocess_pushTextInput(const char *utf8) {
     NSString *value = @(utf8);
     send(^(id<EmpoGameProcess> process) { [process pushTextInput:value]; });
 }
 
-int gamecore_isTextInputActive(void) {
+int gameprocess_isTextInputActive(void) {
     os_unfair_lock_lock(&gLock);
     BOOL active = gTextInputActive;
     os_unfair_lock_unlock(&gLock);
     return active;
 }
 
-double gamecore_getAverageFPS(void) {
+double gameprocess_getAverageFPS(void) {
     return [statusValue(EmpoGameProcessStatusAverageFPS) doubleValue];
 }
 
-int gamecore_getTargetFPS(void) {
+int gameprocess_getTargetFPS(void) {
     return [statusValue(EmpoGameProcessStatusTargetFPS) intValue];
 }
 
@@ -480,40 +514,40 @@ static const char *keepText(char **slot, NSString *text) {
     return *slot;
 }
 
-const char *gamecore_getGameTitle(void) {
+const char *gameprocess_getGameTitle(void) {
     static char *title;
     return keepText(&title, statusValue(EmpoGameProcessStatusTitle));
 }
 
-const char *gamecore_getDetails(void) {
+const char *gameprocess_getDetails(void) {
     static char *details;
     return keepText(&details, statusValue(EmpoGameProcessStatusDetails));
 }
 
-void gamecore_setSafeAreaInsets(float top, float bottom, float left, float right) {
+void gameprocess_setSafeAreaInsets(float top, float bottom, float left, float right) {
     send(^(id<EmpoGameProcess> process) {
         [process setSafeAreaInsetsTop:top bottom:bottom left:left right:right];
     });
 }
 
-void gamecore_setHostViewportRegion(float x, float y, float w, float h, bool isPortrait) {
+void gameprocess_setHostViewportRegion(float x, float y, float w, float h, bool isPortrait) {
     send(^(id<EmpoGameProcess> process) {
         [process setHostViewportRegionX:x y:y width:w height:h portrait:isPortrait];
     });
 }
 
-void gamecore_clearHostViewportRegion(void) {
+void gameprocess_clearHostViewportRegion(void) {
     send(^(id<EmpoGameProcess> process) { [process clearHostViewportRegion]; });
 }
 
-GameCoreVerticalAlignment gamecore_getVerticalAlignment(void) {
+GameCoreVerticalAlignment gameprocess_getVerticalAlignment(void) {
     os_unfair_lock_lock(&gLock);
     GameCoreVerticalAlignment alignment = gVerticalAlignment;
     os_unfair_lock_unlock(&gLock);
     return alignment;
 }
 
-void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
+void gameprocess_applySessionConfig(const GameCoreSessionConfig *config) {
     NSString *userData = config->userDataDirectory != NULL ? @(config->userDataDirectory) : nil;
     NSString *fonts = config->sharedFontsDirectory != NULL ? @(config->sharedFontsDirectory) : nil;
     GameCoreVerticalAlignment alignment = config->verticalAlignment;
@@ -525,77 +559,77 @@ void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
     });
 }
 
-void gamecore_setSetting(const char *key, const char *value) {
+void gameprocess_setSetting(const char *key, const char *value) {
     NSString *keyText = @(key);
     NSString *valueText = @(value);
     send(^(id<EmpoGameProcess> process) { [process setSetting:keyText value:valueText]; });
 }
 
-void gamecore_setShowViewportBounds(bool enabled) {
+void gameprocess_setShowViewportBounds(bool enabled) {
     send(^(id<EmpoGameProcess> process) { [process setShowViewportBounds:enabled]; });
 }
 
-void gamecore_setCheatsEnabled(bool enabled) {
+void gameprocess_setCheatsEnabled(bool enabled) {
     os_unfair_lock_lock(&gLock);
     setStatusValue(EmpoGameProcessStatusCheats, @(enabled));
     os_unfair_lock_unlock(&gLock);
     send(^(id<EmpoGameProcess> process) { [process setCheatsEnabled:enabled]; });
 }
 
-bool gamecore_getCheatsEnabled(void) {
+bool gameprocess_getCheatsEnabled(void) {
     return [statusValue(EmpoGameProcessStatusCheats) boolValue];
 }
 
-void gamecore_setGameControllerCaptureEnabled(bool enabled) {
+void gameprocess_setGameControllerCaptureEnabled(bool enabled) {
     send(^(id<EmpoGameProcess> process) { [process setGameControllerCaptureEnabled:enabled]; });
 }
 
-void gamecore_setTouchMouseEnabled(bool enabled) {
+void gameprocess_setTouchMouseEnabled(bool enabled) {
     send(^(id<EmpoGameProcess> process) { [process setTouchMouseEnabled:enabled]; });
 }
 
-void gamecore_setViewportBoundsColor(float r, float g, float b, float a) {
+void gameprocess_setViewportBoundsColor(float r, float g, float b, float a) {
     send(^(id<EmpoGameProcess> process) { [process setViewportBoundsColorRed:r green:g blue:b alpha:a]; });
 }
 
-void gamecore_signalErrorDismissed(void) {
+void gameprocess_signalErrorDismissed(void) {
     send(^(id<EmpoGameProcess> process) { [process signalErrorDismissed]; });
 }
 
-void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata) {
+void gameprocess_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata) {
     os_unfair_lock_lock(&gLock);
     gErrorCallback = cb;
     gErrorUserdata = userdata;
     os_unfair_lock_unlock(&gLock);
 }
 
-void gamecore_signalInfoDismissed(void) {
+void gameprocess_signalInfoDismissed(void) {
     send(^(id<EmpoGameProcess> process) { [process signalInfoDismissed]; });
 }
 
-void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata) {
+void gameprocess_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata) {
     os_unfair_lock_lock(&gLock);
     gInfoCallback = cb;
     gInfoUserdata = userdata;
     os_unfair_lock_unlock(&gLock);
 }
 
-void gamecore_requestPause(void) {
+void gameprocess_requestPause(void) {
     send(^(id<EmpoGameProcess> process) { [process requestPause]; });
 }
 
-void gamecore_requestResume(void) {
+void gameprocess_requestResume(void) {
     send(^(id<EmpoGameProcess> process) { [process requestResume]; });
 }
 
-bool gamecore_isPaused(void) {
+bool gameprocess_isPaused(void) {
     os_unfair_lock_lock(&gLock);
     BOOL paused = gPaused;
     os_unfair_lock_unlock(&gLock);
     return paused;
 }
 
-bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
+bool gameprocess_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
     os_unfair_lock_lock(&gLock);
     NSData *snapshot = gSnapshot;
     *width = gSnapshotWidth;
@@ -608,7 +642,7 @@ bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, in
     return true;
 }
 
-bool gamecore_getSnapshotSize(int *width, int *height) {
+bool gameprocess_getSnapshotSize(int *width, int *height) {
     os_unfair_lock_lock(&gLock);
     BOOL available = gSnapshot != nil;
     *width = gSnapshotWidth;
@@ -617,44 +651,44 @@ bool gamecore_getSnapshotSize(int *width, int *height) {
     return available;
 }
 
-void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata) {
+void gameprocess_setPausedCallback(gamecore_PausedCallback cb, void *userdata) {
     os_unfair_lock_lock(&gLock);
     gPausedCallback = cb;
     gPausedUserdata = userdata;
     os_unfair_lock_unlock(&gLock);
 }
 
-void gamecore_setResumedCallback(gamecore_ResumedCallback cb, void *userdata) {
+void gameprocess_setResumedCallback(gamecore_ResumedCallback cb, void *userdata) {
     os_unfair_lock_lock(&gLock);
     gResumedCallback = cb;
     gResumedUserdata = userdata;
     os_unfair_lock_unlock(&gLock);
 }
 
-void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata) {
+void gameprocess_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata) {
     os_unfair_lock_lock(&gLock);
     gFrameCallback = cb;
     gFrameUserdata = userdata;
     os_unfair_lock_unlock(&gLock);
 }
 
-void gamecore_setFastForwardMultiplier(int multiplier) {
+void gameprocess_setFastForwardMultiplier(int multiplier) {
     os_unfair_lock_lock(&gLock);
     setStatusValue(EmpoGameProcessStatusFastForward, @(multiplier));
     os_unfair_lock_unlock(&gLock);
     send(^(id<EmpoGameProcess> process) { [process setFastForwardMultiplier:multiplier]; });
 }
 
-int gamecore_getFastForwardMultiplier(void) {
+int gameprocess_getFastForwardMultiplier(void) {
     NSNumber *multiplier = statusValue(EmpoGameProcessStatusFastForward);
     return multiplier != nil ? multiplier.intValue : 1;
 }
 
-void gamecore_resetSessionState(void) {
+void gameprocess_resetSessionState(void) {
     send(^(id<EmpoGameProcess> process) { [process resetSessionState]; });
 }
 
-void gamecore_setDebugLogPath(const char *path) {
+void gameprocess_setDebugLogPath(const char *path) {
     NSString *value = path != NULL && path[0] != '\0' ? @(path) : nil;
     send(^(id<EmpoGameProcess> process) { [process setDebugLogPath:value]; });
 }

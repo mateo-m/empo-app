@@ -490,8 +490,9 @@ final class ImportPipeline {
                     selection.displayName)
                 presentError(
                     name: selection.displayName,
-                    message:
-                        "This game is open. Quit it, then import again."
+                    message: EngineSessionCoordinator.shared.canEndGame
+                        ? "This game is open. Quit it, then import again."
+                        : "This game is currently open. Close it from the app switcher and import again."
                 )
             }
         }

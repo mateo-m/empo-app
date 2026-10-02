@@ -7,6 +7,11 @@ struct MvmzCore: GameCore {
     let displayName = "RPG Maker MV and MZ core"
     let gamesLine = "Runs RPG Maker MV and MZ games"
     let madeWith = "RPG Maker"
+    let scriptLanguage = GameScriptLanguage.javaScript
+
+    /// WebKit ends the page and all of its JavaScript when the core
+    /// removes its web view.
+    var canKillSession: Bool { true }
 
     // MV and MZ read B as nothing, and Shift as dash (Input.keyMapper in
     // rpg_core.js and rmmz_core.js).

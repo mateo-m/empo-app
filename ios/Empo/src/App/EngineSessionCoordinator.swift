@@ -32,6 +32,8 @@ final class EngineSessionCoordinator {
     /// The core `openCore` opened, or nil before it runs. The player
     /// UI reads this to hide a row the running core does not answer.
     private(set) var openedCore: (any GameCore)?
+    /// Where the game of `openedCore` runs.
+    private(set) var runner: GameRunner = .app
     /// Per-scancode press start times. Light taps release before the
     /// RGSS thread observes a pressed-edge. We defer KEYUP until the
     /// key has been down for at least one frame (~16ms @ 60fps, with
@@ -58,6 +60,16 @@ final class EngineSessionCoordinator {
         CABundleStore.refreshIfStale {
             EngineSessionCoordinator.shared.pushCABundlePath()
         }
+        EmpoGameProcessClient.setEventHandler { text in
+            Task { @MainActor in
+                EngineSessionCoordinator.shared.note(text)
+            }
+        }
+    }
+
+    /// Adds a line to the log of the running session.
+    func note(_ text: String) {
+        sessionLogger.note(text)
     }
 
     /// Opens `core`, then pushes the launcher state into it.
@@ -66,12 +78,32 @@ final class EngineSessionCoordinator {
     /// is stored in the library entry, so a game imported before a core
     /// existed still picks the right one.
     ///
-    /// Each game runs in a new game process (`GameProcessHost`), and
-    /// the app sends each `gamecore_*` call to it
-    /// (`GameProcessClient.m`). A game starts only after `killSession`
-    /// ended the process of the one before it.
+    /// A Ruby game runs in a new game process (`GameProcessHost`) when
+    /// `AppSettings.rubyGameRunnerThisLaunch` says so. Then the app
+    /// sends each `gamecore_*` call to it (`GameProcessClient.m`). Any
+    /// other game runs in the app, in a core that the app opens. Every
+    /// `gamecore_*` name resolves through a forwarder
+    /// (`AppCoreForwarders.c`) that does one of the two. A call before
+    /// a core opens in the app aborts, on purpose, because a silent
+    /// no-op would hide it.
+    ///
+    /// A game starts only after `killSession` ended the one before it
+    /// (`AppState.killPausedGame`).
     func openCore(_ core: any GameCore) {
-        GameProcessHost.start(framework: core.framework)
+        runner = core.scriptLanguage == .ruby ? AppSettings.rubyGameRunnerThisLaunch : .app
+        EmpoCoreUseRunner(runner.coreRunner)
+        switch runner {
+        case .gameProcess:
+            GameProcessHost.start(framework: core.framework)
+        case .app:
+            // AppState.selectGame refuses a game whose core this build
+            // does not carry, so a failed open is a broken bundle or a
+            // game that was not killed.
+            guard let binary = core.binaryURL, EmpoCoreOpen(binary.path) != 0 else {
+                fatalError("\(core.framework) cannot open. The log says why.")
+            }
+            if let openedCore, openedCore.framework == core.framework { return }
+        }
         openedCore = core
         NSLog("[empo] core opened: %@", core.framework)
 
@@ -108,7 +140,16 @@ final class EngineSessionCoordinator {
             crashTracker.removeMarker(for: container)
         }
         clearPendingKeyHolds()
-        GameProcessHost.end()
+        switch runner {
+        case .gameProcess: GameProcessHost.end()
+        case .app: EmpoCoreKillSession()
+        }
+    }
+
+    /// True when `killSession` can end the open game, so that another
+    /// can start. A Ruby game in the app holds the app until it closes.
+    var canEndGame: Bool {
+        runner == .gameProcess || openedCore?.canKillSession == true
     }
 
     func consumeCrashRecovery() -> String? {
@@ -126,11 +167,27 @@ final class EngineSessionCoordinator {
         )
     }
 
-    /// Hands the engine its game path and starts it. The core reads
-    /// the path as the first step of `gamecore_run_app`.
+    /// Hands the engine its game path and starts it.
+    ///
+    /// The path goes in first. The core reads it as the first step of
+    /// `gamecore_run_app`, so a path that is already set lets it run
+    /// straight through.
+    ///
+    /// In the app, `RunLoop.main.perform`, not a main queue block.
+    /// `EmpoCoreRunEngine` holds the main thread until the game ends,
+    /// and a main queue block would stop that queue from draining for
+    /// the whole session. The header on `EmpoCoreRunEngine` says what
+    /// breaks.
     func launchGamePath(_ path: String) {
         gamecore_setGamePath(path)
-        _ = gamecore_run_app(0, nil)
+        switch runner {
+        case .gameProcess:
+            _ = gamecore_run_app(0, nil)
+        case .app:
+            RunLoop.main.perform {
+                _ = EmpoCoreRunEngine()
+            }
+        }
     }
 
     func requestPause() {
@@ -337,8 +394,10 @@ final class EngineSessionCoordinator {
         // process of a paused game while Empo is in the background.
         if delegate?.coordinatorPhase != nil {
             let cleanExit = gamecore_didEngineExitCleanly() != 0
+            note(cleanExit ? "The game closed itself." : "The game stopped.")
             delegate?.coordinatorEngineTerminatedUnexpectedly(cleanExit: cleanExit)
-        } else {
+        } else if runner == .gameProcess {
+            note("The game process of the paused game stopped.")
             delegate?.coordinatorPausedGameStopped()
         }
     }

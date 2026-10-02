@@ -1,20 +1,50 @@
 ---
 title: Multi-session
-description: How each game runs in its own process, so any game can follow any other.
+description: Where a game runs, and how a game process lets any game follow any other.
 ---
 
 ## Status
 
-Each game runs in its own process. The app does not load a core. It starts the `GameProcess` extension (ExtensionKit, iOS 26), and the extension opens one core and plays one game. To end a game, the app sends `quit`, and the extension calls `_exit(0)`. The next game gets a new process, so no Ruby VM, class, or SFML state stays behind. Any game can start next, on any core:
+A game runs in one of two places, which `GameRunner` names:
+
+- `app`: the app opens the core with `dlopen` and runs the engine on its main thread. This is the default.
+- `gameProcess`: the app starts the `GameProcess` extension (ExtensionKit, iOS 26), and the extension opens one core and plays one game.
+
+The MV and MZ core always runs in the app. It can end a game there with `gamecore_killSession`, so any game can follow it. The Ruby cores (RPG Maker XP, VX and VX Ace, and PSDK) run in a game process only when the person turns on "Quit and switch games" in the Experimental section of Settings. The section shows only in a build with a Ruby core. The app reads the setting once at launch (`AppSettings.rubyGameRunnerThisLaunch`), because a core that the app opened stays in the app until the app ends.
+
+In a game process, the app sends `quit` to end a game, and the extension calls `_exit(0)`. The next game gets a new process, so no Ruby VM, class, or SFML state stays behind. Any game can start next, on any core:
 
 - A paused game gives its place to the next game that the user taps. The library asks first, because the paused game loses its progress that is not saved.
 - A game that ends shows a "Back to Library" button.
 - The More sheet shows "Quit" under "Pause". Quit asks first, then ends the process and goes back to the library.
 - The loading screen shows "Stop Loading".
 
-`GameProcessHost.swift` starts and ends the extension. It shows the game in an `EXHostViewController` behind the app's views. `GameProcessClient.m` implements the `gamecore_*` calls of the app as XPC messages to `GameProcessService.m` in the extension. The getters answer from the last status that the extension sent.
+A Ruby game that runs in the app cannot end. The screens tell the person to close Empo from the app switcher and open it again.
 
-The app waits until the old process ended, with a limit of 2 seconds, before it starts a new one. When the extension stops without a `quit`, the app shows the game as stopped. A paused game that loses its process closes.
+`EngineSessionCoordinator.openCore` picks the runner and calls `EmpoCoreUseRunner`. Every `gamecore_*` call of the app goes through `AppCoreForwarders.c`. In a game process, a forwarder calls the `gameprocess_*` function of the same name in `GameProcessClient.m`, which sends an XPC message to `GameProcessService.m` in the extension. The getters answer from the last status that the extension sent. In the app, a forwarder calls the core that the app opened. `tools/gamecore/generate-core-forwarders.sh` writes the forwarders from `cores/GameCore.h`.
+
+`GameProcessHost.swift` starts and ends the extension. It shows the game in an `EXHostViewController` behind the app's views. The app waits until the old process ended, with a limit of 2 seconds, before it starts a new one. When the extension stops without a `quit`, the app shows the game as stopped. A paused game that loses its process closes.
+
+## Where the data lives
+
+A game process can open only its own folder and the app group folder. It cannot open the app's Documents. The app group ID is `group.` plus the bundle ID of the app. `project.yml` sets it in `EMPO_APP_GROUP`, and the app reads it from the `EmpoAppGroup` key in `Info.plist`.
+
+`DataDirectory.documentsRootURL` is the folder that holds `Games`, `Data`, `Fonts`, `Profiles` and the rescue folders. At launch, before the app reads any of them, it picks the folder from `AppSettings.rubyGameRunnerThisLaunch`:
+
+- `gameProcess`: the app moves each item of Documents into the app group, and puts a link to it in Documents. The links hold full paths, and the path of the app group can change when the app is installed again, so the app makes each link again when it points to a different place.
+- `app`: the app removes the links, and moves each item of the app group back to Documents.
+
+When both folders have an item with the same name, the app does not move it, and writes a log line. The Files app shows the links, but it cannot open them. The setting text tells the person that.
+
+`CABundleStore` keeps its downloaded certificates in the app group, because the game process reads them.
+
+## Reports
+
+A game process session always writes a session log, also when the debug logs setting is off. The extension sends its stdout and stderr to the log, and writes a backtrace to it on a crash signal. The app adds lines that start with `[empo]` for what it saw, for example a quit or a process that went away (`SessionLogger.note`).
+
+`GameReport` turns a session log into a text file to share. The file starts with the app version, the commit, the device and the game. The log names the core and the runner. The person can share the newest report of a game from "Share report" in its Info sheet. "Share Report" on the error alert and on the screen of a game that stopped shares the report of the last session (`GameReport.last`), which the app keeps across launches.
+
+The debug overlay shows where the game runs. In a game process, it shows the memory of the game process and of the app on separate lines.
 
 ## Why this is hard
 

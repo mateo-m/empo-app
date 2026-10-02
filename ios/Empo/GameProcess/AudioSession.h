@@ -6,8 +6,8 @@ extern "C" {
 #endif
 
 /// Configure `AVAudioSession` for game playback. Must run in the
-/// game process before the core opens, so before any code calls
-/// `alcOpenDevice`. See AudioSession.m for rationale.
+/// process of the game before the core opens, so before any code
+/// calls `alcOpenDevice`. See AudioSession.m for rationale.
 void EmpoConfigureAudioSession(void);
 
 #ifdef __cplusplus

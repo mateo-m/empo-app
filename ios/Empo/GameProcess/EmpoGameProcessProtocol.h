@@ -14,11 +14,8 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol EmpoGameProcess
 
 // Opens the core `framework` from the app's Frameworks folder. The
-// bookmarks give the process the app's folders that hold the games,
-// the saves and the logs. The reply is nil on success, or the reason.
-- (void)openCore:(NSString *)framework
-       bookmarks:(NSArray<NSData *> *)bookmarks
-           reply:(void (^)(NSString *_Nullable error))reply;
+// reply is nil on success, or the reason.
+- (void)openCore:(NSString *)framework reply:(void (^)(NSString *_Nullable error))reply;
 
 - (void)setGamePath:(NSString *)path;
 // gamecore_run_app with the process arguments.
@@ -78,6 +75,8 @@ static NSString *const EmpoGameProcessStatusTitle = @"title";
 static NSString *const EmpoGameProcessStatusDetails = @"details";
 static NSString *const EmpoGameProcessStatusCheats = @"cheats";
 static NSString *const EmpoGameProcessStatusFastForward = @"fastForward";
+// The phys_footprint of the game process, in bytes.
+static NSString *const EmpoGameProcessStatusMemoryFootprint = @"memoryFootprint";
 
 NSXPCInterface *EmpoGameProcessInterface(void);
 NSXPCInterface *EmpoGameProcessHostInterface(void);
