@@ -1,5 +1,6 @@
 import Foundation
 import GameProbe
+import Security
 import Synchronization
 
 /// Resolves the writable data directory a session hands the engine
@@ -67,7 +68,9 @@ enum DataDirectory {
     }()
 
     /// Moves the items of Documents, from before the app group, into
-    /// `storage`. An item that is in both stays where it is.
+    /// `storage`. A folder that is in both gets merged. A file that is
+    /// in both keeps its copy in `storage`, and the copy from Documents
+    /// moves next to it with "(from Documents)" in its name.
     private static func moveItems(of documents: URL, to storage: URL) {
         let fm = FileManager.default
         try? fm.createDirectory(at: storage, withIntermediateDirectories: true)
@@ -75,20 +78,58 @@ enum DataDirectory {
         let names = ((try? fm.contentsOfDirectory(atPath: documents.path)) ?? [])
             .filter { !$0.hasPrefix(".") && $0 != "Inbox" }
         for name in names {
-            let destination = storage.appendingPathComponent(name)
-            guard !fm.fileExists(atPath: destination.path) else {
-                NSLog("[DataDirectory] %@ is in Documents and in the app group, so it stays", name)
-                continue
+            merge(documents.appendingPathComponent(name), into: storage.appendingPathComponent(name), fm: fm)
+        }
+    }
+
+    private static func merge(_ item: URL, into destination: URL, fm: FileManager) {
+        // An item can be a link into the app group.
+        let target = (try? fm.destinationOfSymbolicLink(atPath: item.path)).map {
+            URL(fileURLWithPath: $0, relativeTo: item.deletingLastPathComponent())
+        }
+        let source = target ?? item
+        do {
+            if source.resolvingSymlinksInPath() == destination.resolvingSymlinksInPath() {
+                // The link points at the item that is already in place.
+            } else if !fm.fileExists(atPath: destination.path) {
+                try fm.moveItem(at: source, to: destination)
+            } else if isFolder(source, fm: fm), isFolder(destination, fm: fm) {
+                for name in (try? fm.contentsOfDirectory(atPath: source.path)) ?? [] {
+                    merge(
+                        source.appendingPathComponent(name), into: destination.appendingPathComponent(name),
+                        fm: fm)
+                }
+                if (try? fm.contentsOfDirectory(atPath: source.path))?.isEmpty == true {
+                    try fm.removeItem(at: source)
+                }
+            } else {
+                let copy = freeName(for: destination, fm: fm)
+                try fm.moveItem(at: source, to: copy)
+                NSLog(
+                    "[DataDirectory] %@ is in Documents and in the app group, so it moved to %@",
+                    destination.path, copy.lastPathComponent)
             }
-            // An item can be a link into the app group.
-            let item = documents.appendingPathComponent(name)
-            let target = try? fm.destinationOfSymbolicLink(atPath: item.path)
-            do {
-                try fm.moveItem(at: target.map { URL(fileURLWithPath: $0) } ?? item, to: destination)
-                if target != nil { try fm.removeItem(at: item) }
-            } catch {
-                NSLog("[DataDirectory] Cannot move %@ to the app group: %@", name, "\(error)")
-            }
+            if target != nil { try fm.removeItem(at: item) }
+        } catch {
+            NSLog("[DataDirectory] Cannot move %@ to the app group: %@", item.path, "\(error)")
+        }
+    }
+
+    private static func isFolder(_ url: URL, fm: FileManager) -> Bool {
+        var isFolder: ObjCBool = false
+        return fm.fileExists(atPath: url.path, isDirectory: &isFolder) && isFolder.boolValue
+    }
+
+    private static func freeName(for url: URL, fm: FileManager) -> URL {
+        let folder = url.deletingLastPathComponent()
+        let stem = url.deletingPathExtension().lastPathComponent
+        let suffix = url.pathExtension.isEmpty ? "" : "." + url.pathExtension
+        var number = 1
+        while true {
+            let label = number == 1 ? "from Documents" : "from Documents \(number)"
+            let candidate = folder.appendingPathComponent("\(stem) (\(label))\(suffix)")
+            if !fm.fileExists(atPath: candidate.path) { return candidate }
+            number += 1
         }
     }
 
