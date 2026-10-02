@@ -150,6 +150,7 @@ class AppState {
     func cancelLoading() {
         guard canEndStuckGame, phase == .loading else { return }
         session.note("The player stopped the loading.")
+        session.recordSessionPlayTime(for: selectedGame)
         session.killSession(of: selectedGame)
         engineReady = false
         phase = nil
