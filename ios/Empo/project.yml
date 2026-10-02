@@ -337,6 +337,7 @@ targets:
     dependencies:
       - package: GameProbe
       - target: GameProcess
+      - target: FilesProvider
       # Built first, then copied by "Embed the cores".
       - target: MvmzCore
         link: false
@@ -372,6 +373,30 @@ targets:
           - -framework Foundation
           - -framework UIKit
           - -framework AVFoundation
+  FilesProvider:
+    # Shows the games and saves, which live in the app group, in the
+    # Files app.
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: FilesProvider
+        excludes:
+          - Info.plist
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: FilesProvider
+        PRODUCT_BUNDLE_IDENTIFIER: $(inherited).FilesProvider
+        EMPO_HOST_BUNDLE_IDENTIFIER: $(PRODUCT_BUNDLE_IDENTIFIER:base)
+        INFOPLIST_FILE: $(PROJECT_DIR)/FilesProvider/Info.plist
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: FilesProvider/FilesProvider.entitlements
+        EMPO_APP_GROUP: group.$(EMPO_HOST_BUNDLE_IDENTIFIER)
+        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
   MvmzCore:
     type: framework
     platform: iOS

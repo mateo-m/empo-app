@@ -36,90 +36,52 @@ enum DataDirectory {
     /// rescue buckets. The base the recovery ledger's `directory`
     /// paths are relative to.
     ///
-    /// The app group folder while Ruby games run in a game process,
-    /// because that process can open only that folder and its own.
-    /// The Files app shows only Documents, and it cannot open a link
-    /// into the app group, so the data goes back to Documents when the
-    /// game process is off.
+    /// The folder that the Files add-on (`FilesProvider`) shows, in the
+    /// app group, because the game process cannot open the app's
+    /// Documents. The system names it "File Provider Storage"
+    /// (`NSFileProviderManager.documentStorageURL`). Documents is the
+    /// fallback for a build that has no app group.
     static let documentsRootURL: URL = {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         guard let group = appGroupURL else { return documents }
-        if AppSettings.rubyGameRunnerThisLaunch == .gameProcess {
-            moveItems(of: documents, to: group)
-            return group
-        }
-        moveItems(backFrom: group, to: documents)
-        return documents
+        let storage = group.appendingPathComponent("File Provider Storage", isDirectory: true)
+        moveItems(of: documents, to: storage)
+        return storage
     }()
 
-    static let appGroupURL: URL? = (Bundle.main.object(forInfoDictionaryKey: "EmpoAppGroup") as? String)
-        .flatMap(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:))
+    static let appGroupURL: URL? = {
+        guard let configured = Bundle.main.object(forInfoDictionaryKey: "EmpoAppGroup") as? String,
+            !configured.isEmpty
+        else { return nil }
+        // AltStore and SideStore add to the group name when they sign
+        // the app again, and list the new names in ALTAppGroups
+        // (AltStore's ResignAppOperation.swift).
+        let renamed = (Bundle.main.object(forInfoDictionaryKey: "ALTAppGroups") as? [String] ?? [])
+            .filter { $0.contains(configured) }
+            .sorted { $0.count < $1.count }
+        return ([configured] + renamed).lazy
+            .compactMap(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:))
+            .first
+    }()
 
-    private static let linkedFolderNames = ["Games", "Data", "Fonts", "Profiles"]
-
-    /// The names of the user's items in a folder. The system makes
-    /// Library in each app group folder, and Inbox in Documents.
-    private static func itemNames(in folder: URL) -> [String] {
-        ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [])
-            .filter { !$0.hasPrefix(".") && $0 != "Inbox" && $0 != "Library" }
-    }
-
-    private static func isLink(_ url: URL) -> Bool {
-        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType
-            == .typeSymbolicLink
-    }
-
-    /// Moves each item of Documents into the app group, and puts a
-    /// link of the same name in its place, so the Files app still
-    /// lists it. An item that is in both stays where it is.
-    private static func moveItems(of documents: URL, to group: URL) {
+    /// Moves the items of Documents, from before the app group, into
+    /// `storage`. An item that is in both stays where it is.
+    private static func moveItems(of documents: URL, to storage: URL) {
         let fm = FileManager.default
-        let names = Set(linkedFolderNames).union(itemNames(in: documents)).union(itemNames(in: group))
-        for name in names.sorted() {
-            let link = documents.appendingPathComponent(name)
-            let target = group.appendingPathComponent(name, isDirectory: true)
-            do {
-                if isLink(link) {
-                    // The link holds the full path of the app group
-                    // folder, which can change.
-                    let current = try fm.destinationOfSymbolicLink(atPath: link.path) == target.path
-                    if current && fm.fileExists(atPath: target.path) { continue }
-                    try fm.removeItem(at: link)
-                } else if fm.fileExists(atPath: link.path) {
-                    guard !fm.fileExists(atPath: target.path) else {
-                        NSLog("[DataDirectory] %@ is in Documents and in the app group, so it stays", name)
-                        continue
-                    }
-                    try fm.moveItem(at: link, to: target)
-                }
-                if linkedFolderNames.contains(name) {
-                    try fm.createDirectory(at: target, withIntermediateDirectories: true)
-                }
-                guard fm.fileExists(atPath: target.path) else { continue }
-                try fm.createSymbolicLink(at: link, withDestinationURL: target)
-            } catch {
-                NSLog("[DataDirectory] Cannot move %@ to the app group: %@", name, "\(error)")
-            }
-        }
-    }
-
-    /// Puts each item of the app group back in Documents, in place of
-    /// its link.
-    private static func moveItems(backFrom group: URL, to documents: URL) {
-        let fm = FileManager.default
-        for name in itemNames(in: documents) where isLink(documents.appendingPathComponent(name)) {
-            try? fm.removeItem(at: documents.appendingPathComponent(name))
-        }
-        for name in itemNames(in: group) {
-            let destination = documents.appendingPathComponent(name)
+        try? fm.createDirectory(at: storage, withIntermediateDirectories: true)
+        // The system puts files that other apps open in Empo in Inbox.
+        let names = ((try? fm.contentsOfDirectory(atPath: documents.path)) ?? [])
+            .filter { !$0.hasPrefix(".") && $0 != "Inbox" }
+        for name in names {
+            let destination = storage.appendingPathComponent(name)
             guard !fm.fileExists(atPath: destination.path) else {
                 NSLog("[DataDirectory] %@ is in Documents and in the app group, so it stays", name)
                 continue
             }
             do {
-                try fm.moveItem(at: group.appendingPathComponent(name), to: destination)
+                try fm.moveItem(at: documents.appendingPathComponent(name), to: destination)
             } catch {
-                NSLog("[DataDirectory] Cannot move %@ back to Documents: %@", name, "\(error)")
+                NSLog("[DataDirectory] Cannot move %@ to the app group: %@", name, "\(error)")
             }
         }
     }

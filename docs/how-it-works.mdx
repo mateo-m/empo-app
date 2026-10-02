@@ -66,9 +66,9 @@ neutralize `system`, `fork`, and `spawn`, so a game cannot start a process.
 
 ## Import writes containers, not database rows
 
-Each game is a folder under `Documents/Games/<title>/`. There is no database. The import
-pipeline extracts the source one time, validates each game root that it finds, and commits one
-container for each game that you select.
+Each game is a folder under `Games/<title>/` in the Empo data folder. There is no database.
+The import pipeline extracts the source one time, validates each game root that it finds, and
+commits one container for each game that you select.
 
 Read [`import-pipeline.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/import-pipeline.md) for the stages and the invariants.
 
