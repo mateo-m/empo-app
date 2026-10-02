@@ -15,12 +15,11 @@ WORK="${1:-${TMPDIR:-/tmp}/empo-angle}"
 DEST="${2:-$HERE/../../ios/Dependencies/ANGLE}"
 SRC="$WORK/angle"
 
-if [ ! -d "$SRC/.git" ]; then
-    git init -q "$SRC"
+[ -d "$SRC/.git" ] || git init -q "$SRC"
+git -C "$SRC" cat-file -e "$ANGLE_COMMIT^{commit}" 2>/dev/null ||
     git -C "$SRC" fetch -q --depth 1 https://chromium.googlesource.com/angle/angle "$ANGLE_COMMIT"
-    git -C "$SRC" checkout -q FETCH_HEAD
-    for p in "$HERE"/*.patch; do git -C "$SRC" apply "$p"; done
-fi
+git -C "$SRC" reset -q --hard "$ANGLE_COMMIT"
+for p in "$HERE"/*.patch; do git -C "$SRC" apply "$p"; done
 
 [ -d "$WORK/depot_tools" ] ||
     git clone -q --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$WORK/depot_tools"
@@ -67,7 +66,9 @@ for pair in iphoneos:ios-arm64: iphonesimulator:sim-arm64:simulator; do
     # with every other object that they need.
     (cd "$out" && {
         "$GN" desc . //:libEGL_static deps --all
+        "$GN" desc . //:libGLESv2_static deps --all
         echo //:libEGL_static
+        echo //:libGLESv2_static
     } | sort -u |
         while read -r target; do
             label="${target%%(*}"
