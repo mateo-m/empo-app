@@ -351,12 +351,22 @@ targets:
       - path: GameProcess
         excludes:
           - Info.plist
+      # The memory of the game goes in a block that the app lends it
+      # (GameProcess/AppMemory.m). See vendor/mimalloc/README.md and
+      # vendor/fishhook/README.md.
+      - path: vendor/mimalloc/src/static.c
+        compilerFlags: -DMI_DEBUG=0 -DMI_FREE_USE_PAGEMAP=1 -w
+      - path: vendor/fishhook/fishhook.c
     configFiles:
       Debug: Signing.xcconfig
       Release: Signing.xcconfig
     settings:
       base:
         PRODUCT_NAME: GameProcess
+        HEADER_SEARCH_PATHS:
+          - $(inherited)
+          - $(PROJECT_DIR)/vendor/mimalloc/include
+          - $(PROJECT_DIR)/vendor/fishhook
         PRODUCT_BUNDLE_IDENTIFIER: $(inherited).GameProcess
         # The app's bundle identifier. The extension point is
         # <app bundle identifier>.game-process.
@@ -373,6 +383,7 @@ targets:
           - -framework Foundation
           - -framework UIKit
           - -framework AVFoundation
+          - -framework Metal
   FilesProvider:
     # Shows the games and saves, which live in the app group, in the
     # Files app.

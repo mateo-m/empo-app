@@ -1,6 +1,8 @@
 #import "GameProcessClient.h"
 
 #import <os/lock.h>
+#include <mach/mach.h>
+#include <os/proc.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -282,6 +284,36 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
 
 @implementation EmpoGameProcessClient
 
+// A new block for each game, 3/4 of the app's limit, so that a game
+// that fills it does not stop the app. The limit is what the app uses
+// plus what it can still get, and it changes with the device and the
+// app's entitlements. The simulator has no limit, and reports 0.
+static xpc_object_t lentMemory(void) {
+    size_t available = os_proc_available_memory();
+    task_vm_info_data_t info;
+    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+    if (available == 0 ||
+        task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) {
+        return nil;
+    }
+    memory_object_size_t size = (info.phys_footprint + available) / 4 * 3;
+    mach_port_t entry = MACH_PORT_NULL;
+    kern_return_t made = mach_make_memory_entry_64(
+        mach_task_self(), &size, 0, MAP_MEM_NAMED_CREATE | MAP_MEM_PURGABLE | VM_PROT_READ | VM_PROT_WRITE,
+        &entry, MACH_PORT_NULL);
+    if (made != KERN_SUCCESS) {
+        NSLog(@"[game-process] cannot make a memory entry: %s", mach_error_string(made));
+        return nil;
+    }
+    xpc_object_t memory = xpc_dictionary_create(NULL, NULL, 0);
+    xpc_dictionary_set_mach_send(memory, EmpoGameProcessMemoryEntry, entry);
+    xpc_dictionary_set_uint64(memory, EmpoGameProcessMemorySize, size);
+    // The dictionary holds its own send right. iOS frees the memory
+    // when the game process ends.
+    mach_port_deallocate(mach_task_self(), entry);
+    return memory;
+}
+
 + (void)beginWithFramework:(NSString *)framework {
     os_unfair_lock_lock(&gLock);
     NSAssert(!gOpen, @"a game process session is open");
@@ -300,7 +332,11 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
     gSnapshotWidth = 0;
     gSnapshotHeight = 0;
     os_unfair_lock_unlock(&gLock);
+    xpc_object_t memory = lentMemory();
     send(^(id<EmpoGameProcess> process) {
+        if (memory != nil) {
+            [process useMemory:memory];
+        }
         [process openCore:framework
                     reply:^(NSString *error) {
                         if (error != nil) {
