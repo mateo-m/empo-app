@@ -7,7 +7,9 @@ import UniformTypeIdentifiers
 ///
 /// The files are real files in `documentStorageURL`, so the Files app
 /// opens them where they are, and nothing downloads. An item's
-/// identifier is its path relative to that folder.
+/// identifier is its file ID, which stays the same after a rename or a
+/// move. A save that writes a new file and renames it over the old one
+/// gives a new file ID.
 ///
 /// A deleted item goes to `.Trash/<id>/<name>`, which the Files app
 /// shows in Recently Deleted. The file `.Trash/<id>/.from` holds the
@@ -17,14 +19,18 @@ final class FileProviderExtension: NSFileProviderExtension {
     private var trash: URL { root.appendingPathComponent(FileProviderItem.trashFolderName) }
 
     override func item(for identifier: NSFileProviderItemIdentifier) throws -> NSFileProviderItem {
-        guard let url = urlForItem(withPersistentIdentifier: identifier),
+        guard let url = FileProviderItem.url(of: identifier, root: root),
             FileManager.default.fileExists(atPath: url.path)
         else { throw NSFileProviderError(.noSuchItem) }
         return FileProviderItem(url: url, root: root)
     }
 
+    // Files on iOS 27 greys out Recover for a deleted item that has a
+    // URL: it then treats the item as a file in a normal folder.
     override func urlForItem(withPersistentIdentifier identifier: NSFileProviderItemIdentifier) -> URL? {
-        identifier == .rootContainer ? root : root.appendingPathComponent(identifier.rawValue)
+        FileProviderItem.url(of: identifier, root: root).flatMap {
+            FileProviderItem.isDeleted($0, root: root) ? nil : $0
+        }
     }
 
     override func persistentIdentifierForItem(at url: URL) -> NSFileProviderItemIdentifier? {
@@ -144,12 +150,15 @@ final class FileProviderExtension: NSFileProviderExtension {
         perform(completionHandler) {
             let url = try self.existingURL(of: itemIdentifier)
             let folder = url.deletingLastPathComponent()
-            let from = (try? String(contentsOf: folder.appendingPathComponent(".from"), encoding: .utf8))
-                .map { NSFileProviderItemIdentifier($0) }
-            let parent = parentItemIdentifier ?? from ?? .rootContainer
-            let destination = try self.newURL(named: url.lastPathComponent, in: parent)
-            try FileManager.default.createDirectory(
-                at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let destination =
+                try parentItemIdentifier.map {
+                    try self.newURL(named: url.lastPathComponent, in: $0)
+                }
+                ?? FileProviderItem.originalFolder(ofDeleted: url, root: self.root)
+                .appendingPathComponent(url.lastPathComponent)
+            guard !FileManager.default.fileExists(atPath: destination.path) else {
+                throw NSFileProviderError(.filenameCollision)
+            }
             try FileManager.default.moveItem(at: url, to: destination)
             try? FileManager.default.removeItem(at: folder)
             self.trashChanged()
@@ -163,7 +172,7 @@ final class FileProviderExtension: NSFileProviderExtension {
     ) {
         do {
             let url = try existingURL(of: itemIdentifier)
-            let trashed = url.deletingLastPathComponent().deletingLastPathComponent() == trash
+            let trashed = FileProviderItem.isDeleted(url, root: root)
             try FileManager.default.removeItem(at: trashed ? url.deletingLastPathComponent() : url)
             if trashed { trashChanged() }
             completionHandler(nil)
@@ -206,7 +215,7 @@ final class FileProviderExtension: NSFileProviderExtension {
     }
 
     private func existingURL(of identifier: NSFileProviderItemIdentifier) throws -> URL {
-        guard identifier != .rootContainer, let url = urlForItem(withPersistentIdentifier: identifier),
+        guard identifier != .rootContainer, let url = FileProviderItem.url(of: identifier, root: root),
             FileManager.default.fileExists(atPath: url.path)
         else { throw NSFileProviderError(.noSuchItem) }
         return url
@@ -260,9 +269,11 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 
     init(url: URL, root: URL) {
         itemIdentifier = Self.identifier(of: url, root: root) ?? .rootContainer
-        isTrashed = itemIdentifier.rawValue.hasPrefix(Self.trashFolderName + "/")
+        // The system wants the flag on the deleted item only, not on
+        // the items inside it.
+        isTrashed = Self.isDeleted(url, root: root)
         parentItemIdentifier =
-            isTrashed && itemIdentifier.rawValue.split(separator: "/").count == 3
+            isTrashed
             ? .trashContainer
             : itemIdentifier == .rootContainer
                 ? .rootContainer
@@ -285,13 +296,60 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
         contentModificationDate = values?.contentModificationDate
     }
 
-    /// The path of `url` relative to `root`, or nil when `url` is not
-    /// inside it.
     static func identifier(of url: URL, root: URL) -> NSFileProviderItemIdentifier? {
+        guard let path = relativePath(of: url, root: root) else { return nil }
+        if path.isEmpty { return .rootContainer }
+        var info = stat()
+        guard lstat(root.appendingPathComponent(path).path, &info) == 0 else { return nil }
+        return NSFileProviderItemIdentifier(String(info.st_ino))
+    }
+
+    static func url(of identifier: NSFileProviderItemIdentifier, root: URL) -> URL? {
+        if identifier == .rootContainer { return root }
+        guard let fileID = UInt64(identifier.rawValue), let rootPath = realpath(root.path, nil) else {
+            return nil
+        }
+        defer { free(rootPath) }
+        var volume = statfs()
+        guard statfs(rootPath, &volume) == 0 else { return nil }
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard fsgetpath(&buffer, buffer.count, &volume.f_fsid, fileID) > 0 else { return nil }
+        // fsgetpath gives the real path, with /private, which
+        // resolvingSymlinksInPath removes from `root`.
+        guard
+            let path = String(bytes: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, encoding: .utf8)
+        else { return nil }
+        let prefix = String(cString: rootPath) + "/"
+        guard path.hasPrefix(prefix) else { return nil }
+        return root.appendingPathComponent(String(path.dropFirst(prefix.count)))
+    }
+
+    /// True for `.Trash/<id>/<name>`, the item that the user deleted,
+    /// and false for the items inside it.
+    static func isDeleted(_ url: URL, root: URL) -> Bool {
+        guard let path = relativePath(of: url, root: root) else { return false }
+        return path.hasPrefix(trashFolderName + "/") && path.split(separator: "/").count == 3
+    }
+
+    /// The folder that a deleted item came from, or `root` when that
+    /// folder is gone or deleted too.
+    static func originalFolder(ofDeleted url: URL, root: URL) -> URL {
+        (try? String(
+            contentsOf: url.deletingLastPathComponent().appendingPathComponent(".from"), encoding: .utf8))
+            .flatMap { Self.url(of: NSFileProviderItemIdentifier($0), root: root) }
+            .flatMap {
+                relativePath(of: $0, root: root)?.hasPrefix(trashFolderName + "/") == false ? $0 : nil
+            }
+            ?? root
+    }
+
+    /// The path of `url` relative to `root`: empty for `root`, and nil
+    /// when `url` is not inside it.
+    private static func relativePath(of url: URL, root: URL) -> String? {
         let path = url.resolvingSymlinksInPath().path
-        if path == root.path { return .rootContainer }
+        if path == root.path { return "" }
         guard path.hasPrefix(root.path + "/") else { return nil }
-        return NSFileProviderItemIdentifier(String(path.dropFirst(root.path.count + 1)))
+        return String(path.dropFirst(root.path.count + 1))
     }
 }
 
