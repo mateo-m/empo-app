@@ -199,6 +199,48 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
     }
 
+    func testRuby19CallAfterAShiftOrARegexRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        // `i<<x` is a shift and `/<<r>>/` a regex, not heredocs that
+        // end at a line "x" or "r".
+        try """
+        ret|=(i<<x)
+        mask = (1<<index)
+        basedmg=basedmg<<shift
+        ret.gsub!(/<<r>>/,"\\r")
+        half = width/2
+        str.force_encoding('UTF-8')
+
+        """.write(
+            to: scripts.appendingPathComponent("File_Mixins.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
+    func testRuby19CallAfterACommentInAWindowsScriptRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "# Scene_Movie\r\ncase to\r\nwhen 65001; str.force_encoding('UTF-8')\r\nend\r\n".write(
+            to: scripts.appendingPathComponent("Scene_Movie.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
     func testRuby19CallBeforeAGuardedStatementRoutesToRuby31() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
