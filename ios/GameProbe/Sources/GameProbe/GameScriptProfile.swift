@@ -28,7 +28,7 @@ public enum GameScriptProfile {
         /// 3.1 with the legacy transform, not on Ruby 1.8.
         case mixedRuby31 = "mixed-ruby31"
         /// Modern grammar tokens count only in code, not in comments,
-        /// strings, or heredocs.
+        /// strings, or heredocs, except inside `#{...}`.
         case codeOnlyTokens = "code-only-tokens"
     }
 

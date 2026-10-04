@@ -77,6 +77,12 @@ final class GameScriptProfileTests: XCTestCase {
             DOC
             puts "# frozen_string_literal: true", "# frozen_string_literal: true"
             puts "# frozen_string_literal: true"
+            # frozen_string_literal: truest
+            # frozen_string_literal: true_or_false
+            # frozen_string_literal: true, says the old doc
+            raw = <<~'RAW'
+              #{a&.b} #{c&.d} #{e&.f}
+            RAW
             """.write(
                 to: scripts.appendingPathComponent("SDK_Gui.rb"), atomically: true, encoding: .utf8)
 
@@ -96,6 +102,22 @@ final class GameScriptProfileTests: XCTestCase {
             try "# frozen_string_literal: true\nclass \(name); end\n".write(
                 to: scripts.appendingPathComponent("\(name).rb"), atomically: true, encoding: .utf8)
         }
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
+    func testModernTokensInHeredocInterpolationCount() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try """
+            text = <<~DOC
+              #{a&.name} and #{b&.name} and #{c&.name}
+            DOC
+            """.write(to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
 
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
     }

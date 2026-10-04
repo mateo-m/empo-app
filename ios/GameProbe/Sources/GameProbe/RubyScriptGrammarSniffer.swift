@@ -274,7 +274,7 @@ public enum RubyScriptGrammarSniffer {
     /// A magic comment (2.3+, common in modern code). It counts only
     /// on a line that holds nothing else.
     private static let frozenStringLiteral = try? NSRegularExpression(
-        pattern: #"^\s*#\s*frozen_string_literal:\s*true"#)
+        pattern: #"^\s*#\s*frozen_string_literal:\s*true\s*$"#)
 
     /// Threshold to declare the source modern. A single match can
     /// come from an embedded test fixture or chance.
@@ -300,8 +300,8 @@ public enum RubyScriptGrammarSniffer {
         return callsRuby19Methods(source) ? .mixed : .legacy
     }
 
-    /// The source with comments, the plain part of string literals, and
-    /// heredoc bodies replaced by spaces, and the count of
+    /// The source with comments and the plain part of string literals
+    /// and heredoc bodies replaced by spaces, and the count of
     /// `frozen_string_literal` lines. Almost Heroic lists `font:, value:`
     /// in a comment, which reads as keyword-arg shorthand. A quoted
     /// string over several lines stays code, because one misread quote
@@ -310,15 +310,19 @@ public enum RubyScriptGrammarSniffer {
     private static func codeOnly(_ source: String) -> (code: String, magicComments: Int) {
         let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var inBlockComment = false
-        var heredoc: (end: String, indented: Bool)?
+        var heredoc: (end: String, indented: Bool, interpolates: Bool)?
         var magicComments = 0
         var code: [String] = []
         for (number, line) in lines.enumerated() {
             if let open = heredoc {
                 if (open.indented ? line.trimmingCharacters(in: .whitespaces) : line) == open.end {
                     heredoc = nil
+                    code.append("")
+                } else {
+                    let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
+                    let mask = open.interpolates ? codeMask(units, inString: true) : []
+                    code.append(String(units.indices.map { mask.isEmpty || !mask[$0] ? " " : units[$0] }))
                 }
-                code.append("")
                 continue
             }
             if line.hasPrefix("=begin") { inBlockComment = true }
@@ -339,7 +343,8 @@ public enum RubyScriptGrammarSniffer {
                 let closed = lines[(number + 1)...].contains {
                     (indented ? $0.trimmingCharacters(in: .whitespaces) : $0) == end
                 }
-                if closed { heredoc = (end, indented) }
+                let quote = Range(match.range(at: 2), in: line).map { line[$0] } ?? ""
+                if closed { heredoc = (end, indented, quote != "'") }
             }
             code.append(String(units.indices.map { mask[$0] ? units[$0] : " " }))
         }
