@@ -62,7 +62,11 @@ static size_t zonePressureRelief(malloc_zone_t *zone, size_t goal) {
 }
 
 static void zoneFreeDefiniteSize(malloc_zone_t *zone, void *p, size_t size) { zoneFree(zone, p); }
-static boolean_t zoneClaimedAddress(malloc_zone_t *zone, void *p) { return mi_is_in_heap_region(p); }
+// free() can look a block up through this, so it claims the system
+// zone's blocks too, as zoneSize does.
+static boolean_t zoneClaimedAddress(malloc_zone_t *zone, void *p) {
+    return mi_is_in_heap_region(p) || systemOwns(p);
+}
 
 static kern_return_t introEnumerator(task_t task, void *p, unsigned mask, vm_address_t zone, memory_reader_t reader,
                                      vm_range_recorder_t recorder) {
