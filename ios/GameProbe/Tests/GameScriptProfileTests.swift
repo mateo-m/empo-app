@@ -58,6 +58,43 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.grammar, .legacy)
     }
 
+    func testModernTokensInCommentsAndStringsStayOnRuby19() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Scripts.rvdata2"))
+        try """
+            # * optionnal named args = font:, value:, x:, y:
+            =begin
+            list.filter_map { |e| e&.name }
+            =end
+            puts "a&.b x:, h.except(:k)"
+            """.write(
+                to: scripts.appendingPathComponent("SDK_Gui.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .legacy)
+        XCTAssertEqual(profile.rubyVersion, 19)
+    }
+
+    func testFrozenStringLiteralCommentsStillCountAsModern() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        for name in ["A", "B", "C"] {
+            try "# frozen_string_literal: true\nclass \(name); end\n".write(
+                to: scripts.appendingPathComponent("\(name).rb"), atomically: true, encoding: .utf8)
+        }
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
     func testRGSS2LibraryRoutesToRuby18() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

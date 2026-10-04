@@ -269,31 +269,53 @@ public enum RubyScriptGrammarSniffer {
         #"\.filter_map\b"#,
         // Object#then or yield_self (2.5+/2.6+): obj.then { ... }
         #"\.then\s*\{\s*\|"#,
-        // Frozen-string-literal magic comment (2.3+, common in
-        // modern code): # frozen_string_literal: true
-        #"#\s*frozen_string_literal:\s*true"#,
     ]
 
+    /// A magic comment (2.3+, common in modern code). The other
+    /// tokens count only in code, but this one is a comment.
+    private static let frozenStringLiteral = #"#\s*frozen_string_literal:\s*true"#
+
     /// Threshold to declare the source modern. A single match can
-    /// come from a comment, an embedded test fixture, or chance.
+    /// come from an embedded test fixture or chance.
     /// Three or more tokens across the whole source is a strong
     /// signal.
     private static let modernThreshold = 3
 
     private static func classify(source: String) -> Result {
         var hits = 0
-        let range = NSRange(source.startIndex..<source.endIndex, in: source)
-        for pattern in modernTokens {
+        let code = codeOnly(source)
+        let checks = modernTokens.map { ($0, code) } + [(frozenStringLiteral, source)]
+        for (pattern, text) in checks {
             guard
                 let regex = try? NSRegularExpression(
                     pattern: pattern,
                     options: [.anchorsMatchLines]
                 )
             else { continue }
-            hits += regex.numberOfMatches(in: source, options: [], range: range)
+            hits += regex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
             if hits >= modernThreshold { return .modern }
         }
         return callsRuby19Methods(source) ? .mixed : .legacy
+    }
+
+    /// The source with comments and the plain part of string literals
+    /// replaced by spaces. Almost Heroic lists `font:, value:` in a
+    /// comment, which reads as keyword-arg shorthand.
+    private static func codeOnly(_ source: String) -> String {
+        var inBlockComment = false
+        var lines: [String] = []
+        for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
+            if line.hasPrefix("=begin") { inBlockComment = true }
+            if inBlockComment {
+                if line.hasPrefix("=end") { inBlockComment = false }
+                lines.append("")
+                continue
+            }
+            let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
+            let code = codeMask(units)
+            lines.append(String(units.indices.map { code[$0] ? units[$0] : " " }))
+        }
+        return lines.joined(separator: "\n")
     }
 
     private static let ruby19Call = try? NSRegularExpression(
