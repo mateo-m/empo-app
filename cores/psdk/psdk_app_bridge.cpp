@@ -793,18 +793,10 @@ double gamecore_getAverageFPS(void) {
     if (mark <= 0.0) {
         return 0.0;
     }
-    // No frame closed the window: the game stopped drawing.
+    // No frame closed the window, so the game drew nothing for at least
+    // kFpsWindowSeconds.
     if (span >= 2 * kFpsWindowSeconds) {
-        // The frame path stores the mark after the count, so a count
-        // loaded after the mark is never lower.
-        const unsigned long long markFrames = gFpsMarkFrames.load();
-        const unsigned long long frames = gDrawnFrames.load();
-        // A frame closed the window after the first load, so markFrames
-        // can be from the new window. Its average is already stored.
-        if (gFpsMarkSeconds.load() != mark) {
-            return gAverageFps.load();
-        }
-        return static_cast<double>(frames - markFrames) / span;
+        return 0.0;
     }
     return gAverageFps.load();
 }
