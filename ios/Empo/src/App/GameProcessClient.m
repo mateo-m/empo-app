@@ -284,19 +284,15 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
 
 @implementation EmpoGameProcessClient
 
-// A new block for each game, 3/4 of the app's limit, so that a game
-// that fills it does not stop the app. The limit is what the app uses
-// plus what it can still get, and it changes with the device and the
-// app's entitlements. The simulator has no limit, and reports 0.
+// A new block for each game, 3/4 of what the app can still get, so that
+// a game that fills it does not stop the app. iOS counts the block in the
+// app's own use. The simulator has no limit, and reports 0.
 static xpc_object_t lentMemory(void) {
     size_t available = os_proc_available_memory();
-    task_vm_info_data_t info;
-    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
-    if (available == 0 ||
-        task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) {
+    if (available == 0) {
         return nil;
     }
-    memory_object_size_t size = (info.phys_footprint + available) / 4 * 3;
+    memory_object_size_t size = available / 4 * 3;
     mach_port_t entry = MACH_PORT_NULL;
     kern_return_t made = mach_make_memory_entry_64(
         mach_task_self(), &size, 0, MAP_MEM_NAMED_CREATE | MAP_MEM_PURGABLE | VM_PROT_READ | VM_PROT_WRITE,
