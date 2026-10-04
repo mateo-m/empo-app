@@ -33,6 +33,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>EmpoAppGroup</key>
+	<string>$(EMPO_APP_GROUP)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<true/>
 	<key>LSRequiresIPhoneOS</key>
@@ -72,7 +74,7 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIFileSharingEnabled</key>
-	<true/>
+	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>

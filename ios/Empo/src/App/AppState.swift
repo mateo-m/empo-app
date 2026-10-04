@@ -126,25 +126,53 @@ class AppState {
         }
     }
 
-    /// True when the core of the paused game can kill it, so another
-    /// game can start in its place, on any core
-    /// (`ios/Empo/docs/multi-session.md`).
+    /// True when the paused game can end, so another game can start
+    /// in its place (`ios/Empo/docs/multi-session.md`).
     var canKillPausedGame: Bool {
-        PauseManager.shared.pausedGame != nil && session.openedCore?.canKillSession == true
+        PauseManager.shared.pausedGame != nil && session.canEndGame
     }
 
     func killPausedGame() {
         guard canKillPausedGame, let paused = PauseManager.shared.pausedGame else { return }
+        session.note("The paused game closes.")
         session.killSession(of: paused)
         PauseManager.shared.reset()
         engineReady = false
     }
 
-    /// True when the game ended and its core can kill it, so the user
+    /// True when a game that loads too long or stops responding can
+    /// end at once. Only a game process can: Empo ends it, and nothing
+    /// of it stays in the app.
+    var canEndStuckGame: Bool {
+        session.runner == .gameProcess
+    }
+
+    func cancelLoading() {
+        guard canEndStuckGame, phase == .loading else { return }
+        session.note("The player stopped the loading.")
+        session.recordSessionPlayTime(for: selectedGame)
+        session.killSession(of: selectedGame)
+        engineReady = false
+        phase = nil
+    }
+
+    /// A hung core cannot pause, so its process ends at once.
+    func endStuckGame() {
+        guard canEndStuckGame else { return }
+        session.note("The game stopped responding, and Empo ended it.")
+        session.recordSessionPlayTime(for: activeSessionGame)
+        session.killSession(of: activeSessionGame)
+        PauseManager.shared.reset()
+        quitOnPause = false
+        engineReady = false
+        phase = nil
+    }
+
+    /// True when the game ended and can leave the app, so the user
     /// can go back to the library and start another game.
     var canLeaveEndedGame: Bool {
         guard case .ended = phase else { return false }
-        return session.openedCore?.canKillSession == true
+        return session.canEndGame
     }
 
     func leaveEndedGame() {
@@ -159,8 +187,12 @@ class AppState {
     /// kills it once the core says it paused. The game is never marked
     /// paused: the library draws that mark at once, and a mark cleared
     /// in the same turn stayed on the Continue playing card.
+    var canQuitGame: Bool {
+        phase == .playing && session.canEndGame
+    }
+
     func quitGame() {
-        guard phase == .playing, session.openedCore?.canKillSession == true else { return }
+        guard canQuitGame else { return }
         quitOnPause = true
         requestPause()
     }
@@ -213,6 +245,7 @@ class AppState {
         if EngineState.shared.isBackgroundPause { return }
         if quitOnPause {
             quitOnPause = false
+            session.note("The player quit the game.")
             session.killSession(of: selectedGame)
             engineReady = false
             withAnimation(Motion.snappy) {
@@ -250,7 +283,7 @@ class AppState {
             try? await Task.sleep(for: .milliseconds(350))
             guard let self, pm.pausedGame == nil else { return }
             self.phase = .playing
-            AppWindow.resignKeyToSDL()
+            AppWindow.resignKeyToGame()
             // The frame-rendered callback in EngineSessionCoordinator
             // also flips `snapshotCanFade` once the engine has drawn
             // a real frame. This timed fallback guarantees the
@@ -336,6 +369,10 @@ extension AppState: EngineSessionCoordinatorDelegate {
         PauseManager.shared.reset()
     }
 
+    func coordinatorPausedGameStopped() {
+        killPausedGame()
+    }
+
     func coordinatorGameRectDidChange(_ rect: CGRect) {
         let engineState = EngineState.shared
         if engineState.gameRect != rect {
@@ -344,6 +381,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
     }
 
     func coordinatorDidReportEngineError(_ message: String) {
+        session.note("Error shown: \(message)")
         errorMessage = message
     }
 

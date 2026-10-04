@@ -1,6 +1,7 @@
 # Read cores/GameCore.h and print one dlsym forwarder for
 # every gamecore_* function it declares.
-# tools/gamecore/generate-core-forwarders.sh runs this.
+# tools/gamecore/generate-core-forwarders.sh runs this, with
+# mode=process for the game process and mode=app for the app.
 
 /^[ \t]*#/ {
     next
@@ -90,12 +91,32 @@
         args = (args == "") ? arg : args ", " arg
     }
 
+    if (mode == "app") {
+        remote = name
+        sub(/^gamecore_/, "gameprocess_", remote)
+        printf "%s %s(%s);\n\n", ret, remote, params
+    }
     printf "%s %s(%s) {\n", ret, name, params
+    if (mode == "app") {
+        printf "    if (gRunner == EmpoCoreRunnerGameProcess) {\n"
+        if (ret == "void") {
+            printf "        %s(%s);\n", remote, args
+            printf "        return;\n"
+        } else {
+            printf "        return %s(%s);\n", remote, args
+        }
+        printf "    }\n"
+    }
     printf "    static %s (*fn)(%s);\n", ret, params
-    printf "    static unsigned generation;\n"
-    printf "    if (fn == NULL || generation != gCoreGeneration) {\n"
-    printf "        fn = coreSymbol(\"%s\");\n", name
-    printf "        generation = gCoreGeneration;\n"
+    if (mode == "app") {
+        printf "    static unsigned generation;\n"
+        printf "    if (fn == NULL || generation != gCoreGeneration) {\n"
+        printf "        fn = coreSymbol(\"%s\");\n", name
+        printf "        generation = gCoreGeneration;\n"
+    } else {
+        printf "    if (fn == NULL) {\n"
+        printf "        fn = coreSymbol(\"%s\");\n", name
+    }
     printf "    }\n"
     if (ret == "void") {
         printf "    fn(%s);\n", args

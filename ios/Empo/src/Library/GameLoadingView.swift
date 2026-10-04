@@ -177,7 +177,7 @@ struct GameLoadingView: View {
             withAnimation(.spring(duration: duration, bounce: 0)) {
                 appState.phase = .playing
             }
-            AppWindow.resignKeyToSDL()
+            AppWindow.resignKeyToGame()
         }
     }
 
@@ -205,6 +205,12 @@ struct GameLoadingView: View {
                     .padding(.top, Spacing.md)
             } else {
                 messageLine("To play again, close Empo from the app switcher, then open it again.")
+            }
+            if !clean, let report = GameReport.last, report.isShareable {
+                ShareLink(item: report, preview: SharePreview("\(AppInfo.name) report for \(game.title)")) {
+                    Label("Share Report", systemImage: "square.and.arrow.up")
+                }
+                .buttonStyle(.secondary)
             }
             if !clean {
                 reportLine
@@ -240,18 +246,27 @@ struct GameLoadingView: View {
         // game ended: the screen already tells the user what to do, so
         // the "if loading is stuck..." line only clutters it.
         if cancelVisible && appState.errorMessage == nil && !isEnded {
-            // A static label, not a button. Empo has no quit path,
-            // and an app may not close itself: App Store guideline
-            // 2.5.1 forbids it. So the label tells the user to close
-            // Empo from the app switcher, which is the way iOS
-            // allows. See `ios/Empo/docs/multi-session.md`.
-            Text("If loading is stuck, close Empo from the app switcher and reopen.")
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.8))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, Spacing.xl)
-                .padding(.bottom, Spacing.xl)
-                .transition(.opacity.combined(with: .offset(y: 8)))
+            if appState.canEndStuckGame {
+                Button("Stop Loading") { appState.cancelLoading() }
+                    .buttonStyle(.secondary)
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.bottom, Spacing.xl)
+                    .transition(.opacity.combined(with: .offset(y: 8)))
+            } else {
+                // A static label, not a button. A game in the app
+                // can't stop, and an app may not close itself: App
+                // Store guideline 2.5.1 forbids it. So the label tells
+                // the user to close Empo from the app switcher, which
+                // is the way iOS allows. See
+                // `ios/Empo/docs/multi-session.md`.
+                Text("If loading is stuck, close Empo from the app switcher and reopen.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.bottom, Spacing.xl)
+                    .transition(.opacity.combined(with: .offset(y: 8)))
+            }
         }
     }
 

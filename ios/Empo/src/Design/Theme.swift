@@ -121,15 +121,6 @@ extension View {
         shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
 
-    /// Width cap for a custom-titled sheet's principal-toolbar VStack.
-    /// Without this, long interpolated titles push the VStack off-center
-    /// to make room for the trailing toolbar button. Apply it to the
-    /// outer VStack so child Text rows still get their own line-limit
-    /// and scale-factor treatment.
-    func sheetTitle(maxWidth: CGFloat = 250) -> some View {
-        self.frame(maxWidth: maxWidth)
-    }
-
     /// Pin the Liquid Glass material to its dark variant. The player
     /// controls (toolbar, D-pad, action buttons, debug overlay) use
     /// it so the glass tone stays consistent regardless of the

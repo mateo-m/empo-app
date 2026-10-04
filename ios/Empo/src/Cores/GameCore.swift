@@ -17,10 +17,13 @@ protocol GameCore {
     /// The tool the games were made with. The Game cores screen groups
     /// the cores by it.
     var madeWith: String { get }
+    /// The games of this core, as a setting names them.
+    var gamesName: String { get }
     var supportsCheats: Bool { get }
+    var scriptLanguage: GameScriptLanguage { get }
     /// True when `gamecore_killSession` kills the running game and frees
     /// all of its state. Then any number of games, on any core, can run
-    /// after it in the same process, with nothing left from this one.
+    /// after it in the app, with nothing left from this one.
     var canKillSession: Bool { get }
     /// The four keys of the builtin button grid, in grid order.
     func defaultKeys(forGameAt root: URL) -> [GameKey]
@@ -72,6 +75,7 @@ protocol GameCore {
 
 extension GameCore {
     var supportsCheats: Bool { false }
+    var gamesName: String { madeWith }
     var canKillSession: Bool { false }
     func defaultKeys(forGameAt root: URL) -> [GameKey] { GameKey.standard }
     func archiveEntryUse(_ entry: ArchiveEntry) -> ArchiveEntryUse { .skip }
@@ -123,10 +127,12 @@ extension GameCore {
     var version: String {
         bundle?.object(forInfoDictionaryKey: "EmpoCoreVersion") as? String ?? "unknown"
     }
+}
 
-    func isSame(as other: any GameCore) -> Bool {
-        framework == other.framework
-    }
+/// The language the scripts of a core's games are in.
+enum GameScriptLanguage: String {
+    case ruby
+    case javaScript
 }
 
 enum GameCores {
@@ -134,6 +140,18 @@ enum GameCores {
     static let all: [any GameCore] = PsdkCore.all + [MvmzCore(), MkxpCore()]
 
     static var inThisBuild: [any GameCore] { all.filter(\.isInThisBuild) }
+
+    static var rubyInThisBuild: [any GameCore] { inThisBuild.filter { $0.scriptLanguage == .ruby } }
+
+    /// The games of the Ruby cores in this build, for example "PSDK
+    /// games and RPG Maker XP, VX and VX Ace games".
+    static var rubyGamesName: String {
+        var names: [String] = []
+        for core in rubyInThisBuild where !names.contains("\(core.gamesName) games") {
+            names.append("\(core.gamesName) games")
+        }
+        return ListFormatter.localizedString(byJoining: names)
+    }
 
     static func core(forGameAt url: URL, fileManager: FileManager = .default) -> (any GameCore)? {
         all.first { $0.isGameRoot(url, fileManager: fileManager) }

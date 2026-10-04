@@ -6,62 +6,33 @@
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "GameCore.h"
 
 static void *gCore;
-static char gCorePath[1024];
-// Goes up each time a different core opens. A forwarder looks its
-// symbol up again when this changed.
-static unsigned gCoreGeneration;
-static int gSessionKilled;
 
 int EmpoCoreOpen(const char *binaryPath) {
-    if (gCore != NULL && strcmp(gCorePath, binaryPath) == 0) {
-        gSessionKilled = 0;
-        return 1;
-    }
-    if (gCore != NULL && !gSessionKilled) {
-        // The open core still holds a game, and its threads, globals
-        // and working directory would run next to the new engine.
-        fprintf(stderr, "EmpoCore: %s holds a game, refusing %s\n", gCorePath, binaryPath);
+    if (gCore != NULL) {
+        fprintf(stderr, "EmpoCore: a core is open, refusing %s\n", binaryPath);
         return 0;
     }
     // RTLD_LOCAL keeps the core's names out of the global namespace.
     // Every name below reaches this image through its own handle.
-    //
-    // A killed core stays loaded: dlclose does not unload an image that
-    // ran static initializers or registered ObjC classes. It holds no
-    // game, and scripts/audit-ipa.sh keeps its class names its own.
     void *core = dlopen(binaryPath, RTLD_NOW | RTLD_LOCAL);
     if (core == NULL) {
         fprintf(stderr, "EmpoCore: cannot open %s: %s\n", binaryPath, dlerror());
         return 0;
     }
     gCore = core;
-    gCoreGeneration++;
-    gSessionKilled = 0;
-    snprintf(gCorePath, sizeof(gCorePath), "%s", binaryPath);
     return 1;
 }
 
-void EmpoCoreKillSession(void) {
-    gamecore_killSession();
-    gSessionKilled = 1;
-}
-
-int EmpoCoreIsOpen(void) {
-    return gCore != NULL;
-}
-
-// dlsym with the core's handle searches that image only, so each core
-// answers under the same name without a clash with the forwarder below
-// or with another core that stays loaded after a kill.
+// dlsym with the core's handle searches that image only, so the core
+// answers under the same name without a clash with the forwarder below.
 static void *coreSymbol(const char *symbol) {
     void *address = gCore != NULL ? dlsym(gCore, symbol) : NULL;
     if (address == NULL) {
-        // Either the app called the core before it picked a game, or
+        // Either the process called the core before it opened one, or
         // the framework and this file were built from different
         // headers. Both are build errors, and a silent no-op would hide
         // them until a game misbehaved.
@@ -73,480 +44,384 @@ static void *coreSymbol(const char *symbol) {
 
 int gamecore_run_app(int argc, char **argv) {
     static int (*fn)(int argc, char **argv);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_run_app");
-        generation = gCoreGeneration;
     }
     return fn(argc, argv);
 }
 
 int gamecore_isGameReady(void) {
     static int (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_isGameReady");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 void gamecore_setGamePath(const char *path) {
     static void (*fn)(const char *path);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setGamePath");
-        generation = gCoreGeneration;
     }
     fn(path);
 }
 
 int gamecore_isEngineTerminated(void) {
     static int (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_isEngineTerminated");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 int gamecore_didEngineExitCleanly(void) {
     static int (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_didEngineExitCleanly");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 int gamecore_isEngineHung(void) {
     static int (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_isEngineHung");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 void gamecore_setEngineTerminatedCallback(gamecore_EngineTerminatedCallback cb, void *userdata) {
     static void (*fn)(gamecore_EngineTerminatedCallback cb, void *userdata);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setEngineTerminatedCallback");
-        generation = gCoreGeneration;
     }
     fn(cb, userdata);
 }
 
 void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, void *userdata) {
     static void (*fn)(gamecore_GameRectChangedCallback cb, void *userdata);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setGameRectChangedCallback");
-        generation = gCoreGeneration;
     }
     fn(cb, userdata);
 }
 
 void gamecore_injectKeyEvent(int scancode, int pressed) {
     static void (*fn)(int scancode, int pressed);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_injectKeyEvent");
-        generation = gCoreGeneration;
     }
     fn(scancode, pressed);
 }
 
 void gamecore_setLauncherIdentity(const char *name) {
     static void (*fn)(const char *name);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setLauncherIdentity");
-        generation = gCoreGeneration;
     }
     fn(name);
 }
 
 void gamecore_setCABundlePath(const char *path) {
     static void (*fn)(const char *path);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setCABundlePath");
-        generation = gCoreGeneration;
     }
     fn(path);
 }
 
 void gamecore_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *userdata) {
     static void (*fn)(gamecore_TextInputModeCallback cb, void *userdata);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setTextInputModeCallback");
-        generation = gCoreGeneration;
     }
     fn(cb, userdata);
 }
 
 void gamecore_pushTextInput(const char *utf8) {
     static void (*fn)(const char *utf8);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_pushTextInput");
-        generation = gCoreGeneration;
     }
     fn(utf8);
 }
 
 int gamecore_isTextInputActive(void) {
     static int (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_isTextInputActive");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 double gamecore_getAverageFPS(void) {
     static double (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_getAverageFPS");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 int gamecore_getTargetFPS(void) {
     static int (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_getTargetFPS");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 const char *gamecore_getGameTitle(void) {
     static const char *(*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_getGameTitle");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 void gamecore_setSafeAreaInsets(float top, float bottom, float left, float right) {
     static void (*fn)(float top, float bottom, float left, float right);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setSafeAreaInsets");
-        generation = gCoreGeneration;
     }
     fn(top, bottom, left, right);
 }
 
 void gamecore_setHostViewportRegion(float x, float y, float w, float h, bool isPortrait) {
     static void (*fn)(float x, float y, float w, float h, bool isPortrait);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setHostViewportRegion");
-        generation = gCoreGeneration;
     }
     fn(x, y, w, h, isPortrait);
 }
 
 void gamecore_clearHostViewportRegion(void) {
     static void (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_clearHostViewportRegion");
-        generation = gCoreGeneration;
     }
     fn();
 }
 
 void *gamecore_getGameWindow(void) {
     static void *(*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_getGameWindow");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 GameCoreVerticalAlignment gamecore_getVerticalAlignment(void) {
     static GameCoreVerticalAlignment (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_getVerticalAlignment");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
     static void (*fn)(const GameCoreSessionConfig *config);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_applySessionConfig");
-        generation = gCoreGeneration;
     }
     fn(config);
 }
 
 void gamecore_setSetting(const char *key, const char *value) {
     static void (*fn)(const char *key, const char *value);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setSetting");
-        generation = gCoreGeneration;
     }
     fn(key, value);
 }
 
 const char *gamecore_getDetails(void) {
     static const char *(*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_getDetails");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 void gamecore_setShowViewportBounds(bool enabled) {
     static void (*fn)(bool enabled);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setShowViewportBounds");
-        generation = gCoreGeneration;
     }
     fn(enabled);
 }
 
 void gamecore_setCheatsEnabled(bool enabled) {
     static void (*fn)(bool enabled);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setCheatsEnabled");
-        generation = gCoreGeneration;
     }
     fn(enabled);
 }
 
 bool gamecore_getCheatsEnabled(void) {
     static bool (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_getCheatsEnabled");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 void gamecore_setGameControllerCaptureEnabled(bool enabled) {
     static void (*fn)(bool enabled);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setGameControllerCaptureEnabled");
-        generation = gCoreGeneration;
     }
     fn(enabled);
 }
 
 void gamecore_setTouchMouseEnabled(bool enabled) {
     static void (*fn)(bool enabled);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setTouchMouseEnabled");
-        generation = gCoreGeneration;
     }
     fn(enabled);
 }
 
 void gamecore_setViewportBoundsColor(float r, float g, float b, float a) {
     static void (*fn)(float r, float g, float b, float a);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setViewportBoundsColor");
-        generation = gCoreGeneration;
     }
     fn(r, g, b, a);
 }
 
 void gamecore_signalErrorDismissed(void) {
     static void (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_signalErrorDismissed");
-        generation = gCoreGeneration;
     }
     fn();
 }
 
 void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata) {
     static void (*fn)(gamecore_ErrorMessageCallback cb, void *userdata);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setErrorMessageCallback");
-        generation = gCoreGeneration;
     }
     fn(cb, userdata);
 }
 
 void gamecore_signalInfoDismissed(void) {
     static void (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_signalInfoDismissed");
-        generation = gCoreGeneration;
     }
     fn();
 }
 
 void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata) {
     static void (*fn)(gamecore_InfoMessageCallback cb, void *userdata);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setInfoMessageCallback");
-        generation = gCoreGeneration;
     }
     fn(cb, userdata);
 }
 
 void gamecore_requestPause(void) {
     static void (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_requestPause");
-        generation = gCoreGeneration;
     }
     fn();
 }
 
 void gamecore_requestResume(void) {
     static void (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_requestResume");
-        generation = gCoreGeneration;
     }
     fn();
 }
 
 bool gamecore_isPaused(void) {
     static bool (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_isPaused");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
     static bool (*fn)(unsigned char *dest, int destSize, int *width, int *height);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_copySnapshotRGBA");
-        generation = gCoreGeneration;
     }
     return fn(dest, destSize, width, height);
 }
 
 bool gamecore_getSnapshotSize(int *width, int *height) {
     static bool (*fn)(int *width, int *height);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_getSnapshotSize");
-        generation = gCoreGeneration;
     }
     return fn(width, height);
 }
 
 void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata) {
     static void (*fn)(gamecore_PausedCallback cb, void *userdata);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setPausedCallback");
-        generation = gCoreGeneration;
     }
     fn(cb, userdata);
 }
 
 void gamecore_setResumedCallback(gamecore_ResumedCallback cb, void *userdata) {
     static void (*fn)(gamecore_ResumedCallback cb, void *userdata);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setResumedCallback");
-        generation = gCoreGeneration;
     }
     fn(cb, userdata);
 }
 
 void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata) {
     static void (*fn)(gamecore_FrameRenderedCallback cb, void *userdata);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setFrameRenderedCallback");
-        generation = gCoreGeneration;
     }
     fn(cb, userdata);
 }
 
 void gamecore_setFastForwardMultiplier(int multiplier) {
     static void (*fn)(int multiplier);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setFastForwardMultiplier");
-        generation = gCoreGeneration;
     }
     fn(multiplier);
 }
 
 int gamecore_getFastForwardMultiplier(void) {
     static int (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_getFastForwardMultiplier");
-        generation = gCoreGeneration;
     }
     return fn();
 }
 
 void gamecore_resetSessionState(void) {
     static void (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_resetSessionState");
-        generation = gCoreGeneration;
     }
     fn();
 }
 
 void gamecore_killSession(void) {
     static void (*fn)(void);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_killSession");
-        generation = gCoreGeneration;
     }
     fn();
 }
 
 void gamecore_setDebugLogPath(const char *path) {
     static void (*fn)(const char *path);
-    static unsigned generation;
-    if (fn == NULL || generation != gCoreGeneration) {
+    if (fn == NULL) {
         fn = coreSymbol("gamecore_setDebugLogPath");
-        generation = gCoreGeneration;
     }
     fn(path);
 }

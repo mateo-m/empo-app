@@ -22,6 +22,8 @@ final class SessionLogger {
     private static let periodicFlushInterval: TimeInterval = 60
 
     private var sessionStartTime: Date?
+    /// The log of the running session, or nil when debug logs are off.
+    private(set) var logURL: URL?
     private var activeGame: GameEntry?
     private var periodicFlushTask: Task<Void, Never>?
 
@@ -103,6 +105,7 @@ final class SessionLogger {
         enabled: Bool
     ) {
         guard enabled else {
+            logURL = nil
             gamecore_setDebugLogPath(nil)
             return
         }
@@ -120,11 +123,21 @@ final class SessionLogger {
                     "session: \(Self.sessionLogStampFormatter.string(from: start))",
                 ]) + "\n"
         try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
+        logURL = URL(fileURLWithPath: logPath)
 
         gamecore_setDebugLogPath(logPath)
 
         let maxLogFiles = UserDefaults.standard.object(forKey: DefaultsKey.maxLogFiles) as? Int ?? 20
         Self.pruneSessionLogs(in: logsDir, keeping: maxLogFiles)
+    }
+
+    /// Adds a line about what the app saw to the session log. The
+    /// engine and the game process write to the same file, so the line
+    /// goes in with O_APPEND, after what they wrote.
+    func note(_ text: String) {
+        guard let logURL, let file = fopen(logURL.path, "a") else { return }
+        defer { fclose(file) }
+        fputs("[empo] \(Self.isoFormatter.string(from: Date())) \(text)\n", file)
     }
 
     private func appendSessionHistory(

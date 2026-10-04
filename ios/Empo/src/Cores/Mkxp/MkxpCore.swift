@@ -6,6 +6,7 @@ import SwiftUI
 struct MkxpCore: GameCore {
     let framework = "MkxpCore"
     let madeWith = "RPG Maker"
+    let scriptLanguage = GameScriptLanguage.ruby
 
     /// Import refuses a game the mask does not cover, so the name and the
     /// line follow the mask. cores/mkxp/check-framework.sh allows 3, which is
@@ -13,6 +14,10 @@ struct MkxpCore: GameCore {
     /// has 0, and its refusal names the full core.
     var displayName: String {
         rgssVersionMask == 3 ? "RPG Maker XP and VX core" : "RPG Maker XP, VX and VX Ace core"
+    }
+
+    var gamesName: String {
+        rgssVersionMask == 7 ? "RPG Maker XP, VX and VX Ace" : "RPG Maker XP and VX"
     }
 
     var gamesLine: String {

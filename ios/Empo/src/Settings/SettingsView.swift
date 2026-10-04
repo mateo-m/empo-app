@@ -7,11 +7,6 @@ struct SettingsView: View {
     @State private var showBuildInfo = false
     @State private var showWhatsNew = false
 
-    // We deleted the ExperimentalFeature toggles and the
-    // ConfirmSheet/InfoSheet when gamePause/cheats graduated. See
-    // the ExperimentalFeature comment block in AppSettings.swift
-    // for how to bring opt-in toggles back.
-
     var body: some View {
         @Bindable var settings = settings
         return NavigationStack {
@@ -154,6 +149,10 @@ struct SettingsView: View {
                     Text("Advanced")
                 } footer: {
                     Text("These options are for debugging and troubleshooting.")
+                }
+
+                if !GameCores.rubyInThisBuild.isEmpty {
+                    ExperimentalSection()
                 }
 
                 Section {

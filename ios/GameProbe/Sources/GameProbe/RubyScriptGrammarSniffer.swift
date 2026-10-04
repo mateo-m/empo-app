@@ -305,8 +305,9 @@ public enum RubyScriptGrammarSniffer {
     private static let ruby19Guard = try? NSRegularExpression(
         pattern: #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)(?![^#;]*(?:\|\||\bor\b))"#)
 
+    /// A `<<` right after a value, as in `i<<x` or `(1<<n)`, is a shift.
     private static let heredocStart = try? NSRegularExpression(
-        pattern: #"<<([-~]?)(["'`]?)([A-Za-z_]\w*)\2"#)
+        pattern: #"(?<![\w)\]}"'`])<<([-~]?)(["'`]?)([A-Za-z_]\w*)\2"#)
 
     /// What a guard makes safe: every 1.9 call after `defined?(Encoding)`,
     /// or only `force_encoding` on the receiver that `respond_to?` checked.
@@ -334,7 +335,9 @@ public enum RubyScriptGrammarSniffer {
         var inBlockComment = false
         var heredoc: (end: String, indented: Bool, interpolates: Bool)?
         var blocks: [(indent: Int, cover: Cover)] = []
-        for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+        // "\r\n" is one Character, so splitting on "\n" keeps a
+        // Windows-saved script on one line.
+        for line in source.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let indent = line.prefix { $0 == " " || $0 == "\t" }.count
             let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
@@ -444,6 +447,10 @@ public enum RubyScriptGrammarSniffer {
                 stack.append(.literal(open: nil, close: "'", interpolates: false, depth: 0))
             case "%":
                 if let literal = percentLiteral(chars, at: &index) { stack.append(literal) }
+            case "/":
+                if startsRegex(chars, before: index - 1) {
+                    stack.append(.literal(open: nil, close: "/", interpolates: true, depth: 0))
+                }
             case "#":
                 return mask
             case "{":
@@ -464,6 +471,23 @@ public enum RubyScriptGrammarSniffer {
         }
         mask[chars.count] = isCode()
         return mask
+    }
+
+    /// A `/` opens a regex where a value can start, and divides after a
+    /// value: `gsub!(/<<r>>/, "")` against `width/2`.
+    private static func startsRegex(_ chars: [Character], before slash: Int) -> Bool {
+        var cursor = slash
+        while cursor > 0, chars[cursor - 1] == " " || chars[cursor - 1] == "\t" { cursor -= 1 }
+        guard cursor > 0 else { return true }
+        let previous = chars[cursor - 1]
+        if "(,=!~|&{[;?:+-*<>^".contains(previous) { return true }
+        guard previous.isLetter || previous == "_" else { return false }
+        var start = cursor - 1
+        while start > 0, chars[start - 1].isLetter || chars[start - 1].isNumber || chars[start - 1] == "_" {
+            start -= 1
+        }
+        let keywords: Set<String> = ["if", "elsif", "unless", "when", "while", "until", "and", "or", "not", "return", "then"]
+        return keywords.contains(String(chars[start..<cursor]))
     }
 
     /// Reads a `%q(...)`-style literal start after the `%`. A `%` with
