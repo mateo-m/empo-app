@@ -109,7 +109,7 @@ static malloc_zone_t gZone = {
     .claimed_address = zoneClaimedAddress,
 };
 
-void *EmpoHeapPages(size_t size) { return mi_zalloc_aligned(size, 16u << 10); }
+void *EmpoHeapPages(size_t size) { return mi_malloc_aligned(size, 16u << 10); }
 void EmpoHeapFree(void *pointer) { mi_free(pointer); }
 
 bool EmpoUseHeap(void *start, size_t size) {

@@ -18,39 +18,110 @@
 // Raw pages: the mmap calls of the cores.
 
 static char gFrameworks[PATH_MAX];
-// The start and the size of each mapping that came from the block.
-static CFMutableDictionaryRef gMappings;
-static os_unfair_lock gMappingsLock = OS_UNFAIR_LOCK_INIT;
 static void *(*realMmap)(void *, size_t, int, int, int, off_t);
 static int (*realMunmap)(void *, size_t);
+
+// The pages come from chunks of the block, with one bit for each page in
+// use, so that a munmap can give back any part of a mapping.
+// Ruby 3.1 and later map twice the size of a heap page, then unmap the
+// head and the tail. A mapping takes the highest free pages of a chunk,
+// so the next mapping starts in the head that the last one gave back.
+#define CHUNK_PAGES 512u
+typedef struct {
+    char *start;
+    size_t pages, free;
+    uint64_t used[];
+} Chunk;
+static Chunk **gChunks;
+static size_t gChunkCount;
+static os_unfair_lock gChunksLock = OS_UNFAIR_LOCK_INIT;
+
+static bool pageUsed(const Chunk *chunk, size_t page) { return chunk->used[page / 64] >> (page % 64) & 1; }
+
+// Returns the first page of the highest run of `count` free pages, or -1.
+static long freeRun(const Chunk *chunk, size_t count) {
+    size_t run = 0;
+    for (size_t page = chunk->pages; page-- > 0;) {
+        if (page % 64 == 63 && chunk->used[page / 64] == UINT64_MAX) {
+            run = 0;
+            page -= 63;
+        } else if (pageUsed(chunk, page)) {
+            run = 0;
+        } else if (++run == count) {
+            return (long)page;
+        }
+    }
+    return -1;
+}
+
+static Chunk *newChunk(size_t count) {
+    size_t pages = count > CHUNK_PAGES ? (count + 63) / 64 * 64 : CHUNK_PAGES;
+    Chunk *chunk = calloc(1, sizeof(Chunk) + pages / 8);
+    Chunk **chunks = chunk == NULL ? NULL : realloc(gChunks, (gChunkCount + 1) * sizeof *gChunks);
+    if (chunks != NULL) gChunks = chunks;
+    if (chunks == NULL || (chunk->start = EmpoHeapPages(pages * PAGE)) == NULL) {
+        free(chunk);
+        return NULL;
+    }
+    chunk->pages = chunk->free = pages;
+    gChunks[gChunkCount++] = chunk;
+    return chunk;
+}
 
 static void *blockMmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset) {
     bool anonymous = addr == NULL && fd == -1 && (flags & MAP_ANON) && (flags & MAP_PRIVATE) && !(flags & MAP_FIXED) &&
                      prot == (PROT_READ | PROT_WRITE);
     if (!anonymous) return realMmap(addr, len, prot, flags, fd, offset);
-    size_t size = (len + PAGE - 1) / PAGE * PAGE;
-    void *pages = EmpoHeapPages(size);
-    if (pages == NULL) return MAP_FAILED;
-    os_unfair_lock_lock(&gMappingsLock);
-    CFDictionarySetValue(gMappings, pages, (const void *)size);
-    os_unfair_lock_unlock(&gMappingsLock);
+    size_t count = (len + PAGE - 1) / PAGE;
+    os_unfair_lock_lock(&gChunksLock);
+    Chunk *chunk = NULL;
+    long first = -1;
+    for (size_t i = 0; i < gChunkCount && first < 0; i++) {
+        chunk = gChunks[i];
+        if (chunk->free >= count) first = freeRun(chunk, count);
+    }
+    if (first < 0 && (chunk = newChunk(count)) != NULL) first = (long)(chunk->pages - count);
+    if (first < 0) {
+        os_unfair_lock_unlock(&gChunksLock);
+        return MAP_FAILED;
+    }
+    for (size_t page = (size_t)first; page < (size_t)first + count; page++) chunk->used[page / 64] |= 1ull << (page % 64);
+    chunk->free -= count;
+    os_unfair_lock_unlock(&gChunksLock);
+    char *pages = chunk->start + (size_t)first * PAGE;
+    // mmap gives zeroed pages. Zeroing the whole chunk up front would
+    // put pages that no mapping uses in real memory.
+    memset(pages, 0, count * PAGE);
     return pages;
 }
 
-// The heap frees only whole blocks, so a munmap of a part of a mapping
-// keeps the whole mapping until the process ends.
 static int blockMunmap(void *addr, size_t len) {
-    os_unfair_lock_lock(&gMappingsLock);
-    size_t size = (size_t)CFDictionaryGetValue(gMappings, addr);
-    bool whole = size != 0 && len >= size;
-    if (whole) CFDictionaryRemoveValue(gMappings, addr);
-    os_unfair_lock_unlock(&gMappingsLock);
-    if (size == 0) return realMunmap(addr, len);
-    if (whole) {
-        // The caller can have made a guard page with mprotect.
-        mprotect(addr, size, PROT_READ | PROT_WRITE);
-        EmpoHeapFree(addr);
+    os_unfair_lock_lock(&gChunksLock);
+    size_t i = 0;
+    while (i < gChunkCount && ((char *)addr < gChunks[i]->start ||
+                               (char *)addr >= gChunks[i]->start + gChunks[i]->pages * PAGE)) {
+        i++;
     }
+    if (i == gChunkCount) {
+        os_unfair_lock_unlock(&gChunksLock);
+        return realMunmap(addr, len);
+    }
+    Chunk *chunk = gChunks[i];
+    size_t first = (size_t)((char *)addr - chunk->start) / PAGE;
+    size_t end = MIN(first + (len + PAGE - 1) / PAGE, chunk->pages);
+    // The caller can have made a guard page with mprotect.
+    mprotect(chunk->start + first * PAGE, (end - first) * PAGE, PROT_READ | PROT_WRITE);
+    for (size_t page = first; page < end; page++) {
+        if (!pageUsed(chunk, page)) continue;
+        chunk->used[page / 64] &= ~(1ull << (page % 64));
+        chunk->free++;
+    }
+    if (chunk->free == chunk->pages) {
+        gChunks[i] = gChunks[--gChunkCount];
+        EmpoHeapFree(chunk->start);
+        free(chunk);
+    }
+    os_unfair_lock_unlock(&gChunksLock);
     return 0;
 }
 
@@ -82,6 +153,7 @@ static id blockTexture(id device, SEL selector, MTLTextureDescriptor *descriptor
     NSUInteger size = (bytesPerRow * descriptor.height + PAGE - 1) / PAGE * PAGE;
     void *bytes = EmpoHeapPages(size);
     if (bytes == NULL) return realNewTexture(device, selector, descriptor);
+    memset(bytes, 0, size);
     id<MTLBuffer> buffer = [device newBufferWithBytesNoCopy:bytes
                                                      length:size
                                                     options:MTLResourceStorageModeShared
@@ -126,7 +198,6 @@ void EmpoUseAppMemory(xpc_object_t memory) {
         URLByAppendingPathComponent:@"Frameworks/"];
     realpath(frameworks.fileSystemRepresentation, gFrameworks);
     strlcat(gFrameworks, "/", sizeof gFrameworks);
-    gMappings = CFDictionaryCreateMutable(NULL, 0, NULL, NULL);
     realMmap = mmap;
     realMunmap = munmap;
     _dyld_register_func_for_add_image(imageAdded);
