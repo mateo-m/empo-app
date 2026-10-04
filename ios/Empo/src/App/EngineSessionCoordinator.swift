@@ -184,8 +184,13 @@ final class EngineSessionCoordinator {
         case .gameProcess:
             _ = gamecore_run_app(0, nil)
         case .app:
-            RunLoop.main.perform {
-                _ = EmpoCoreRunEngine()
+            Task {
+                // A game process ends a moment after `end`, and the
+                // next game must not run beside it.
+                await GameProcessHost.waitForExit()
+                RunLoop.main.perform {
+                    _ = EmpoCoreRunEngine()
+                }
             }
         }
     }
