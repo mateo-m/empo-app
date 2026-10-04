@@ -795,7 +795,10 @@ double gamecore_getAverageFPS(void) {
     }
     // No frame closed the window: the game stopped drawing.
     if (span >= 2 * kFpsWindowSeconds) {
-        return static_cast<double>(gDrawnFrames.load() - gFpsMarkFrames.load()) / span;
+        // The frame path stores the mark after the count, so a count
+        // loaded after the mark is never lower.
+        const unsigned long long markFrames = gFpsMarkFrames.load();
+        return static_cast<double>(gDrawnFrames.load() - markFrames) / span;
     }
     return gAverageFps.load();
 }
