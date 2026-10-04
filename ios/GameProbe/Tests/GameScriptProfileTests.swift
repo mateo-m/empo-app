@@ -210,15 +210,19 @@ final class GameScriptProfileTests: XCTestCase {
             at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
         try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
         // `i<<x` is a shift and `/<<r>>/` a regex, not heredocs that
-        // end at a line "x" or "r".
+        // end at a line "x", "r", or "tag".
         try """
         ret|=(i<<x)
         mask = (1<<index)
         basedmg=basedmg<<shift
         mask = value <<token
         ret.gsub!(/<<r>>/,"\\r")
+        tags = text.scan /<<tag>>/
         half = width/2
         str.force_encoding('UTF-8')
+        names = %w(
+        tag
+        )
 
         """.write(
             to: scripts.appendingPathComponent("File_Mixins.rb"), atomically: true, encoding: .utf8)
