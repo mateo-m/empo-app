@@ -91,7 +91,7 @@ final class MkxpSettingsState: CoreSettings {
 
     func reset() {
         settings = MkxpSettings()
-        profile = MkxpProfile.load(for: container)
+        profile = MkxpProfile.load(for: container, rescan: true)
         ManagedMkxpConfig.resetAllEngineFields(
             stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
         engine = MkxpEngineSettings.load(from: container.empoStateURL)

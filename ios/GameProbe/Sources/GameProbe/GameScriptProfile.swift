@@ -63,7 +63,8 @@ public enum GameScriptProfile {
     }
 
     /// Every file that `analyze` can read: the top level of the game
-    /// folder and of `Data/`, and all files in the loose script folders.
+    /// folder and of `Data/`, and the `.rb` files that the scan reads in
+    /// the loose script folders.
     public static func inputFiles(gameDirectory: URL) -> [URL] {
         let fm = FileManager.default
         let topLevel = ["", "Data"].flatMap {
@@ -72,14 +73,7 @@ public enum GameScriptProfile {
                 includingPropertiesForKeys: nil,
                 options: [.skipsHiddenFiles])) ?? []
         }
-        let looseScripts = RubyScriptGrammarSniffer.looseScriptDirs.flatMap {
-            fm.enumerator(
-                at: gameDirectory.appendingPathComponent($0),
-                includingPropertiesForKeys: nil,
-                options: [.skipsHiddenFiles]
-            )?.allObjects as? [URL] ?? []
-        }
-        return topLevel + looseScripts
+        return topLevel + RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
     }
 
     // MARK: - Ruby version (formerly RubyVersionDetection)

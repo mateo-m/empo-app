@@ -14,14 +14,14 @@ struct MkxpProfile: Codable {
     /// `inputsDigest` of the files that the scan read.
     var inputs: String
 
-    /// The stored profile. A new scan replaces it when nothing is stored,
-    /// when older rules wrote it, or when a file that the scan reads
-    /// changed.
-    static func load(for container: GameContainer) -> MkxpProfile {
+    /// The stored profile. A new scan replaces it when `rescan` is true,
+    /// when nothing is stored, when older rules wrote it, or when a file
+    /// that the scan reads changed.
+    static func load(for container: GameContainer, rescan: Bool = false) -> MkxpProfile {
         let url = container.metadataURL.appendingPathComponent("mkxp-profile.json")
         let currentSchema = GameScriptProfile.currentSchema.rawValue
         let inputs = inputsDigest(of: container.gameURL)
-        if let data = try? Data(contentsOf: url),
+        if !rescan, let data = try? Data(contentsOf: url),
             let stored = try? JSONDecoder().decode(MkxpProfile.self, from: data),
             stored.schema == currentSchema, stored.inputs == inputs
         {
@@ -41,6 +41,9 @@ struct MkxpProfile: Codable {
     }
 
     private static func inputsDigest(of gameDirectory: URL) -> String {
+        // An archive keeps the dates of its files, so a game imported
+        // again can match the digest with other bytes. The import and
+        // the settings reset scan without the digest.
         let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
         let lines = GameScriptProfile.inputFiles(gameDirectory: gameDirectory).map { file in
             let values = try? file.resourceValues(forKeys: keys)

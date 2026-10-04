@@ -134,7 +134,7 @@ struct MkxpCore: GameCore {
     /// Modern when the scan finds Ruby 3 scripts, and for a JoiPlay
     /// archive made for mkxp-z, which ships Ruby 3 scripts.
     func didImport(_ container: GameContainer, from source: ImportSource, replacing: Bool) {
-        let profile = MkxpProfile.load(for: container)
+        let profile = MkxpProfile.load(for: container, rescan: true)
         guard !replacing else { return }
         let modern: Bool
         switch source {
