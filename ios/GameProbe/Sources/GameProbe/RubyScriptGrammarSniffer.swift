@@ -313,13 +313,13 @@ public enum RubyScriptGrammarSniffer {
     private static func codeOnly(_ source: String) -> (code: String, magicComments: Int) {
         let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var inBlockComment = false
-        var heredoc: (end: String, indented: Bool, interpolates: Bool)?
+        var heredocs: [(end: String, indented: Bool, interpolates: Bool)] = []
         var magicComments = 0
         var code: [String] = []
         for (number, line) in lines.enumerated() {
-            if let open = heredoc {
+            if let open = heredocs.first {
                 if (open.indented ? line.trimmingCharacters(in: .whitespaces) : line) == open.end {
-                    heredoc = nil
+                    heredocs.removeFirst()
                     code.append("")
                 } else {
                     let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
@@ -328,9 +328,9 @@ public enum RubyScriptGrammarSniffer {
                 }
                 continue
             }
-            if line.hasPrefix("=begin") { inBlockComment = true }
+            if startsDirective(line, "=begin") { inBlockComment = true }
             if inBlockComment {
-                if line.hasPrefix("=end") { inBlockComment = false }
+                if startsDirective(line, "=end") { inBlockComment = false }
                 code.append("")
                 continue
             }
@@ -338,16 +338,15 @@ public enum RubyScriptGrammarSniffer {
             if frozenStringLiteral?.firstMatch(in: line, range: range) != nil { magicComments += 1 }
             let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
             let mask = codeMask(units)
-            if let match = heredocStart?.matches(in: line, range: range).first(where: { mask[$0.range.location] }),
-                let endRange = Range(match.range(at: 3), in: line)
-            {
+            for match in heredocStart?.matches(in: line, range: range) ?? [] where mask[match.range.location] {
+                guard let endRange = Range(match.range(at: 3), in: line) else { continue }
                 let end = String(line[endRange])
                 let indented = match.range(at: 1).length > 0
                 let closed = lines[(number + 1)...].contains {
                     (indented ? $0.trimmingCharacters(in: .whitespaces) : $0) == end
                 }
                 let quote = Range(match.range(at: 2), in: line).map { line[$0] } ?? ""
-                if closed { heredoc = (end, indented, quote != "'") }
+                if closed { heredocs.append((end, indented, quote != "'")) }
             }
             code.append(String(units.indices.map { mask[$0] ? units[$0] : " " }))
         }
@@ -390,16 +389,16 @@ public enum RubyScriptGrammarSniffer {
             return covers.contains(.receiver(receiver.isEmpty ? "self" : receiver))
         }
         var inBlockComment = false
-        var heredoc: (end: String, indented: Bool, interpolates: Bool)?
+        var heredocs: [(end: String, indented: Bool, interpolates: Bool)] = []
         var blocks: [(indent: Int, cover: Cover)] = []
         for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let indent = line.prefix { $0 == " " || $0 == "\t" }.count
             let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
             let range = NSRange(line.startIndex..., in: line)
-            if let open = heredoc {
+            if let open = heredocs.first {
                 if (open.indented ? trimmed : line) == open.end {
-                    heredoc = nil
+                    heredocs.removeFirst()
                 } else if open.interpolates {
                     let code = codeMask(units, inString: true)
                     let calls = ruby19Call.matches(in: line, range: range).filter { code[$0.range.location] }
@@ -409,18 +408,18 @@ public enum RubyScriptGrammarSniffer {
                 }
                 continue
             }
-            if line.hasPrefix("=begin") { inBlockComment = true }
-            if line.hasPrefix("=end") { inBlockComment = false }
+            if startsDirective(line, "=begin") { inBlockComment = true }
+            if startsDirective(line, "=end") { inBlockComment = false }
             if inBlockComment { continue }
             let code = codeMask(units)
             func codeMatches(_ regex: NSRegularExpression) -> [NSTextCheckingResult] {
                 regex.matches(in: line, range: range).filter { code[$0.range.location] }
             }
-            if let match = codeMatches(heredocStart).first {
+            for match in codeMatches(heredocStart) {
                 func group(_ number: Int) -> Substring {
                     Range(match.range(at: number), in: line).map { line[$0] } ?? ""
                 }
-                heredoc = (String(group(3)), !group(1).isEmpty, group(2) != "'")
+                heredocs.append((String(group(3)), !group(1).isEmpty, group(2) != "'"))
             }
             func closes(_ text: String) -> Bool {
                 ["end", "else", "elsif"].contains { text.hasPrefix($0) }
@@ -454,6 +453,10 @@ public enum RubyScriptGrammarSniffer {
             }
         }
         return false
+    }
+
+    private static func startsDirective(_ line: String, _ name: String) -> Bool {
+        line.hasPrefix(name) && (line.dropFirst(name.count).first?.isWhitespace ?? true)
     }
 
     private enum Scope {
@@ -500,6 +503,8 @@ public enum RubyScriptGrammarSniffer {
                 stack.append(.literal(open: nil, close: "\"", interpolates: true, depth: 0))
             case "'":
                 stack.append(.literal(open: nil, close: "'", interpolates: false, depth: 0))
+            case "`":
+                stack.append(.literal(open: nil, close: "`", interpolates: true, depth: 0))
             case "%":
                 if let literal = percentLiteral(chars, at: &index) { stack.append(literal) }
             case "#":

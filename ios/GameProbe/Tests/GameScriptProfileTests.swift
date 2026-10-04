@@ -83,6 +83,16 @@ final class GameScriptProfileTests: XCTestCase {
             raw = <<~'RAW'
               #{a&.b} #{c&.d} #{e&.f}
             RAW
+            =begin
+            =endless
+            a&.b x:, h.except(:k)
+            =end
+            system `a&.b x:, h.except(:k)`
+            puts <<~A, <<~B
+              one
+            A
+              a&.b x:, h.except(:k)
+            B
             """.write(
                 to: scripts.appendingPathComponent("SDK_Gui.rb"), atomically: true, encoding: .utf8)
 
