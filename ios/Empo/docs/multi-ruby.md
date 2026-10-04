@@ -95,10 +95,11 @@ enum Schema: String {
     case unified = "unified"
     case sourceOverPackaging = "source-over-packaging"
     case rgss2Ruby18 = "rgss2-ruby18"  // RGSS2 on 1.8, `def` stat method is not an endless def
-    case mixedRuby31 = "mixed-ruby31"  // current: legacy scripts with 1.9 encoding calls on 3.1
+    case mixedRuby31 = "mixed-ruby31"  // legacy scripts with 1.9 encoding calls on 3.1
+    case shiftNotHeredoc = "shift-not-heredoc"  // current: a `<<` with no end line after it is a shift
 }
 
-static let currentSchema: Schema = .mixedRuby31
+static let currentSchema: Schema = .shiftNotHeredoc
 ```
 
 `MkxpProfile` stores the scan result and its schema string in `Metadata/mkxp-profile.json`. `MkxpProfile.load(for:)` compares the stored schema with the current one. On a mismatch, it scans again. The core scans again at import, at launch when both Ruby pickers are on Auto-detect, and when the user resets the settings. `GameScriptProfile` is the only entry point.
