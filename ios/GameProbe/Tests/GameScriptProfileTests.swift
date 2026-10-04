@@ -95,6 +95,10 @@ final class GameScriptProfileTests: XCTestCase {
             A
               a&.b x:, h.except(:k)
             B
+            puts <<~C
+            C\u{20}
+              a&.b x:, h.except(:k)
+            C
             """.write(
                 to: scripts.appendingPathComponent("SDK_Gui.rb"), atomically: true, encoding: .utf8)
 
@@ -127,7 +131,8 @@ final class GameScriptProfileTests: XCTestCase {
 
         try """
             text = <<~DOC
-              #{a&.name} and #{b&.name} and #{c&.name}
+              #{a&.name} and #{
+                b&.name } and #{c&.name}
             DOC
             """.write(to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
 
@@ -148,16 +153,23 @@ final class GameScriptProfileTests: XCTestCase {
     }
 
     func testModuloKeepsTheRestOfTheLineAsCode() throws {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-        let scripts = dir.appendingPathComponent("Scripts")
-        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
+        let lines = [
+            "n %= 2; a&.b; b&.c; c&.d",
+            "m = n%(a&.b + b&.c + c&.d)",
+            "text = \"%s\"%(a&.b + b&.c + c&.d)",
+            "r = n.%(a&.b + b&.c + c&.d)",
+        ]
+        for line in lines {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            let scripts = dir.appendingPathComponent("Scripts")
+            try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
 
-        try "n %= 2; a&.b\nm = n%(b&.c)\ntext = \"%s\"%(c&.d)\n".write(
-            to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
+            try line.write(to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+            XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern, line)
+        }
     }
 
     func testRGSS2LibraryRoutesToRuby18() throws {

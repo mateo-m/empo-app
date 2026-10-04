@@ -314,16 +314,18 @@ public enum RubyScriptGrammarSniffer {
         let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var inBlockComment = false
         var heredocs: [(end: String, indented: Bool, interpolates: Bool)] = []
+        var bodyStack = heredocBody
         var magicComments = 0
         var code: [String] = []
         for (number, line) in lines.enumerated() {
             if let open = heredocs.first {
-                if (open.indented ? line.trimmingCharacters(in: .whitespaces) : line) == open.end {
+                if (open.indented ? withoutIndent(line) : line[...]) == open.end {
                     heredocs.removeFirst()
+                    bodyStack = heredocBody
                     code.append("")
                 } else {
                     let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
-                    let mask = open.interpolates ? codeMask(units, inString: true) : []
+                    let mask = open.interpolates ? codeMask(units, stack: &bodyStack) : []
                     code.append(String(units.indices.map { mask.isEmpty || !mask[$0] ? " " : units[$0] }))
                 }
                 continue
@@ -343,7 +345,7 @@ public enum RubyScriptGrammarSniffer {
                 let end = String(line[endRange])
                 let indented = match.range(at: 1).length > 0
                 let closed = lines[(number + 1)...].contains {
-                    (indented ? $0.trimmingCharacters(in: .whitespaces) : $0) == end
+                    (indented ? withoutIndent($0) : $0[...]) == end
                 }
                 let quote = Range(match.range(at: 2), in: line).map { line[$0] } ?? ""
                 if closed { heredocs.append((end, indented, quote != "'")) }
@@ -390,6 +392,7 @@ public enum RubyScriptGrammarSniffer {
         }
         var inBlockComment = false
         var heredocs: [(end: String, indented: Bool, interpolates: Bool)] = []
+        var bodyStack = heredocBody
         var blocks: [(indent: Int, cover: Cover)] = []
         for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -397,10 +400,11 @@ public enum RubyScriptGrammarSniffer {
             let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
             let range = NSRange(line.startIndex..., in: line)
             if let open = heredocs.first {
-                if (open.indented ? trimmed : line) == open.end {
+                if (open.indented ? withoutIndent(line) : line[...]) == open.end {
                     heredocs.removeFirst()
+                    bodyStack = heredocBody
                 } else if open.interpolates {
-                    let code = codeMask(units, inString: true)
+                    let code = codeMask(units, stack: &bodyStack)
                     let calls = ruby19Call.matches(in: line, range: range).filter { code[$0.range.location] }
                     if calls.contains(where: { !covered($0.range, in: units, by: blocks.map(\.cover)) }) {
                         return true
@@ -455,6 +459,10 @@ public enum RubyScriptGrammarSniffer {
         return false
     }
 
+    private static func withoutIndent(_ line: String) -> Substring {
+        line.drop { $0 == " " || $0 == "\t" }
+    }
+
     private static func startsDirective(_ line: String, _ name: String) -> Bool {
         line.hasPrefix(name) && (line.dropFirst(name.count).first?.isWhitespace ?? true)
     }
@@ -466,10 +474,17 @@ public enum RubyScriptGrammarSniffer {
 
     /// For each UTF-16 unit of a line, true when it sits outside a comment
     /// and outside the plain part of a string literal. Code inside a
-    /// `#{...}` insert counts. `inString` starts inside a heredoc body.
-    private static func codeMask(_ chars: [Character], inString: Bool = false) -> [Bool] {
-        var stack: [Scope] = inString
-            ? [.literal(open: nil, close: "\n", interpolates: true, depth: 0)] : []
+    /// `#{...}` insert counts.
+    private static func codeMask(_ chars: [Character]) -> [Bool] {
+        var stack: [Scope] = []
+        return codeMask(chars, stack: &stack)
+    }
+
+    /// The state at the start of an interpolating heredoc body. Pass the
+    /// same stack for every body line, so a `#{...}` can span lines.
+    private static let heredocBody: [Scope] = [.literal(open: nil, close: "\n", interpolates: true, depth: 0)]
+
+    private static func codeMask(_ chars: [Character], stack: inout [Scope]) -> [Bool] {
         var mask = [Bool](repeating: false, count: chars.count + 1)
         var index = 0
         func isCode() -> Bool {
@@ -531,12 +546,13 @@ public enum RubyScriptGrammarSniffer {
 
     /// Reads a `%q(...)`-style literal start after the `%`. A `%` with
     /// a space, a letter, or `=` after it is the modulo operator, and so
-    /// is a `%` right after a value, as in `a%(b)` or `"%s"%(b)`. Outside
+    /// is a `%` right after a value or a dot, as in `a%(b)`, `"%s"%(b)`,
+    /// or `a.%(b)`. Outside
     /// a literal, a quote before the `%` can only close one.
     private static func percentLiteral(_ chars: [Character], at index: inout Int) -> Scope? {
         if index >= 2 {
             let before = chars[index - 2]
-            if before.isLetter || before.isNumber || "_)]}\"'`".contains(before) { return nil }
+            if before.isLetter || before.isNumber || "_.)]}\"'`".contains(before) { return nil }
         }
         if index < chars.count, chars[index] == "=" { return nil }
         var cursor = index
