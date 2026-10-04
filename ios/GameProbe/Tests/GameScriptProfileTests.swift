@@ -430,12 +430,14 @@ final class GameScriptProfileTests: XCTestCase {
     }
 
     /// A Marshal array of `[id, title, zlib source]` entries. Each source
-    /// is one stored deflate block, so it must be under 118 bytes.
+    /// is one stored deflate block, which adds 11 bytes, and a one-byte
+    /// Marshal length holds at most 122, so a source has at most 111.
     private func compiledScripts(_ sources: [String]) -> Data {
         func string(_ bytes: [UInt8]) -> [UInt8] { [0x22, UInt8(bytes.count + 5)] + bytes }
         var data: [UInt8] = [0x04, 0x08, 0x5b, UInt8(sources.count + 5)]
         for (id, source) in sources.enumerated() {
             let body = Array(source.utf8)
+            precondition(body.count <= 111, "the source is too long for a one-byte length")
             let count = UInt16(body.count)
             let stream: [UInt8] =
                 [0x78, 0x01, 0x01, UInt8(count & 0xff), UInt8(count >> 8), UInt8(~count & 0xff), UInt8(~count >> 8)]
