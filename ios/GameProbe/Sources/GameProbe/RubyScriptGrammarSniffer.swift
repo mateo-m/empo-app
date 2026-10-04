@@ -271,9 +271,10 @@ public enum RubyScriptGrammarSniffer {
         #"\.then\s*\{\s*\|"#,
     ]
 
-    /// A magic comment (2.3+, common in modern code). The other
-    /// tokens count only in code, but this one is a comment.
-    private static let frozenStringLiteral = #"#\s*frozen_string_literal:\s*true"#
+    /// A magic comment (2.3+, common in modern code). It counts only
+    /// on a line that holds nothing else.
+    private static let frozenStringLiteral = try? NSRegularExpression(
+        pattern: #"^\s*#\s*frozen_string_literal:\s*true"#)
 
     /// Threshold to declare the source modern. A single match can
     /// come from an embedded test fixture or chance.
@@ -282,40 +283,67 @@ public enum RubyScriptGrammarSniffer {
     private static let modernThreshold = 3
 
     private static func classify(source: String) -> Result {
-        var hits = 0
-        let code = codeOnly(source)
-        let checks = modernTokens.map { ($0, code) } + [(frozenStringLiteral, source)]
-        for (pattern, text) in checks {
+        let (code, magicComments) = codeOnly(source)
+        var hits = magicComments
+        let range = NSRange(code.startIndex..., in: code)
+        for pattern in modernTokens {
+            if hits >= modernThreshold { return .modern }
             guard
                 let regex = try? NSRegularExpression(
                     pattern: pattern,
                     options: [.anchorsMatchLines]
                 )
             else { continue }
-            hits += regex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
-            if hits >= modernThreshold { return .modern }
+            hits += regex.numberOfMatches(in: code, range: range)
         }
+        if hits >= modernThreshold { return .modern }
         return callsRuby19Methods(source) ? .mixed : .legacy
     }
 
-    /// The source with comments and the plain part of string literals
-    /// replaced by spaces. Almost Heroic lists `font:, value:` in a
-    /// comment, which reads as keyword-arg shorthand.
-    private static func codeOnly(_ source: String) -> String {
+    /// The source with comments, the plain part of string literals, and
+    /// heredoc bodies replaced by spaces, and the count of
+    /// `frozen_string_literal` lines. Almost Heroic lists `font:, value:`
+    /// in a comment, which reads as keyword-arg shorthand. A quoted
+    /// string over several lines stays code, because one misread quote
+    /// would hide the rest of every script. For the same reason, a
+    /// heredoc counts only when its end line exists.
+    private static func codeOnly(_ source: String) -> (code: String, magicComments: Int) {
+        let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var inBlockComment = false
-        var lines: [String] = []
-        for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
+        var heredoc: (end: String, indented: Bool)?
+        var magicComments = 0
+        var code: [String] = []
+        for (number, line) in lines.enumerated() {
+            if let open = heredoc {
+                if (open.indented ? line.trimmingCharacters(in: .whitespaces) : line) == open.end {
+                    heredoc = nil
+                }
+                code.append("")
+                continue
+            }
             if line.hasPrefix("=begin") { inBlockComment = true }
             if inBlockComment {
                 if line.hasPrefix("=end") { inBlockComment = false }
-                lines.append("")
+                code.append("")
                 continue
             }
+            let range = NSRange(line.startIndex..., in: line)
+            if frozenStringLiteral?.firstMatch(in: line, range: range) != nil { magicComments += 1 }
             let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
-            let code = codeMask(units)
-            lines.append(String(units.indices.map { code[$0] ? units[$0] : " " }))
+            let mask = codeMask(units)
+            if let match = heredocStart?.matches(in: line, range: range).first(where: { mask[$0.range.location] }),
+                let endRange = Range(match.range(at: 3), in: line)
+            {
+                let end = String(line[endRange])
+                let indented = match.range(at: 1).length > 0
+                let closed = lines[(number + 1)...].contains {
+                    (indented ? $0.trimmingCharacters(in: .whitespaces) : $0) == end
+                }
+                if closed { heredoc = (end, indented) }
+            }
+            code.append(String(units.indices.map { mask[$0] ? units[$0] : " " }))
         }
-        return lines.joined(separator: "\n")
+        return (code.joined(separator: "\n"), magicComments)
     }
 
     private static let ruby19Call = try? NSRegularExpression(

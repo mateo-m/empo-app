@@ -72,6 +72,11 @@ final class GameScriptProfileTests: XCTestCase {
             list.filter_map { |e| e&.name }
             =end
             puts "a&.b x:, h.except(:k)"
+            text = <<~DOC
+              a&.b x:, h.except(:k)
+            DOC
+            puts "# frozen_string_literal: true", "# frozen_string_literal: true"
+            puts "# frozen_string_literal: true"
             """.write(
                 to: scripts.appendingPathComponent("SDK_Gui.rb"), atomically: true, encoding: .utf8)
 

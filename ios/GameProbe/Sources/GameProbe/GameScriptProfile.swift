@@ -27,9 +27,12 @@ public enum GameScriptProfile {
         /// Legacy scripts that call Ruby 1.9+ methods run on Ruby
         /// 3.1 with the legacy transform, not on Ruby 1.8.
         case mixedRuby31 = "mixed-ruby31"
+        /// Modern grammar tokens count only in code, not in comments,
+        /// strings, or heredocs.
+        case codeOnlyTokens = "code-only-tokens"
     }
 
-    public static let currentSchema: Schema = .mixedRuby31
+    public static let currentSchema: Schema = .codeOnlyTokens
 
     public struct Result {
         public let rubyVersion: Int
