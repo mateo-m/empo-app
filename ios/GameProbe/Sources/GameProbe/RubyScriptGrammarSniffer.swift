@@ -283,6 +283,9 @@ public enum RubyScriptGrammarSniffer {
     private static let modernThreshold = 3
 
     private static func classify(source: String) -> Result {
+        // Swift reads "\r\n" as one Character, so a split on "\n" alone
+        // keeps a Windows file as one line.
+        let source = source.replacingOccurrences(of: "\r\n", with: "\n")
         let (code, magicComments) = codeOnly(source)
         var hits = magicComments
         let range = NSRange(code.startIndex..., in: code)
