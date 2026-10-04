@@ -36,7 +36,7 @@ struct PlayerMoreSheet: View {
     @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
 
-    @State private var measuredHeight: CGFloat = 0
+    @State private var sheetSize = IntrinsicSheetSize()
     @State private var confirmQuit = false
 
     private var fastForwardEnabled: Bool {
@@ -130,7 +130,7 @@ struct PlayerMoreSheet: View {
                 }
             }
             .padding(Spacing.xl)
-            .intrinsicSheetContent(measuredHeight: $measuredHeight)
+            .intrinsicSheetContent(size: $sheetSize)
             // No outer background: the sheet's translucent material
             // shows through around the row-cards. Painting a solid
             // `systemGroupedBackground` here looked like a flat white
@@ -143,7 +143,7 @@ struct PlayerMoreSheet: View {
                 }
             }
         }
-        .intrinsicSheetDetent(measuredHeight: measuredHeight)
+        .intrinsicSheetDetent(size: $sheetSize)
     }
 
     /// Hairline separator between rows inside the action group.
