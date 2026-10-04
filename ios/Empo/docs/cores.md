@@ -214,7 +214,8 @@ same `gamecore_` name, so the compiler checks each signature against it.
 3. Open the core when the user picks a game, not at launch. A core that is
    never picked is never loaded.
 
-Empo does step 2 through `ios/Empo/src/App/GameCoreForwarders.c`, which
+Empo does step 2 through `ios/Empo/src/App/AppCoreForwarders.c`. It makes a
+forwarder for each function of `GameCoreFunctions.h`, the list that
 `tools/gamecore/generate-core-forwarders.sh` writes from `GameCore.h`. Every
 `gamecore_*` call in the app lands in a forwarder that asks the open core for the
 same name. A call made before the core opens
@@ -269,8 +270,7 @@ the engine source the core was linked from. The Game cores screen shows it.
 
 ## One core in each process
 
-Each game process opens one core (`multi-session.md`). `EmpoCoreOpen` in
-`GameCoreForwarders.c` refuses a second core. The app opens a second core
+Each game process opens one core (`multi-session.md`). The app opens a second core
 only after `gamecore_killSession`, which only the MV and MZ core supports.
 Two cores in one process load without binding to each other, and
 `cores/mkxp/test-host/host.m` proves that with `MKXP_ALSO_OPEN`. Two cores

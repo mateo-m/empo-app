@@ -14,18 +14,16 @@
 #ifndef EMPO_APP_CORE_H
 #define EMPO_APP_CORE_H
 
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum __attribute__((enum_extensibility(closed))) EmpoCoreRunner : int {
-    EmpoCoreRunnerApp,
-    EmpoCoreRunnerGameProcess,
-} EmpoCoreRunner;
-
-// Picks where the gamecore_* calls of the next game go. Call it before
-// the game opens, and never while a game runs.
-void EmpoCoreUseRunner(EmpoCoreRunner runner);
+// Picks where the gamecore_* calls of the next game go: the game
+// process, or the core the app opened. Call it before the game opens,
+// and never while a game runs.
+void EmpoCoreUseGameProcess(bool use);
 
 // Opens the core at binaryPath in the app, which is the Mach-O file
 // inside the framework bundle, not the bundle. Returns 1 on success and
@@ -36,7 +34,7 @@ void EmpoCoreUseRunner(EmpoCoreRunner runner);
 // signal handlers, the audio device and the main thread.
 int EmpoCoreOpen(const char *binaryPath);
 
-// True when a game process runs for the runner EmpoCoreRunnerGameProcess.
+// True when a game process runs, after EmpoCoreUseGameProcess(true).
 // Else true once the app opened a core.
 int EmpoCoreIsOpen(void);
 

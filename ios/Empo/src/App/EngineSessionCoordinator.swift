@@ -91,7 +91,7 @@ final class EngineSessionCoordinator {
     /// (`AppState.killPausedGame`).
     func openCore(_ core: any GameCore) {
         runner = core.scriptLanguage == .ruby ? AppSettings.rubyGameRunnerThisLaunch : .app
-        EmpoCoreUseRunner(runner.coreRunner)
+        EmpoCoreUseGameProcess(runner == .gameProcess)
         switch runner {
         case .gameProcess:
             GameProcessHost.start(framework: core.framework)

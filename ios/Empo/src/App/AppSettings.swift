@@ -113,13 +113,6 @@ enum AppTheme: String, CaseIterable {
 enum GameRunner: String {
     case app
     case gameProcess
-
-    var coreRunner: EmpoCoreRunner {
-        switch self {
-        case .app: .app
-        case .gameProcess: .gameProcess
-        }
-    }
 }
 
 @MainActor

@@ -12,9 +12,9 @@ extern "C" {
 #endif
 
 // Opens the core at binaryPath, which is the Mach-O file inside the
-// framework bundle, not the bundle. Returns 1 on success. Returns 0
-// when dlopen fails or when a core is open already, after it writes
-// the reason to stderr. A game process runs one core.
+// framework bundle, not the bundle. Returns 1 on success, and 0 when
+// dlopen fails, after it writes the reason to stderr. A game process
+// opens one core.
 int EmpoCoreOpen(const char *binaryPath);
 
 #ifdef __cplusplus

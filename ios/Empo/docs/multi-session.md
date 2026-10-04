@@ -21,7 +21,7 @@ In a game process, the app sends `quit` to end a game, and the extension calls `
 
 A Ruby game that runs in the app cannot end. The screens tell the person to close Empo from the app switcher and open it again.
 
-`EngineSessionCoordinator.openCore` picks the runner and calls `EmpoCoreUseRunner`. Every `gamecore_*` call of the app goes through `AppCoreForwarders.c`. In a game process, a forwarder calls the `gameprocess_*` function of the same name in `GameProcessClient.m`, which sends an XPC message to `GameProcessService.m` in the extension. The getters answer from the last status that the extension sent. In the app, a forwarder calls the core that the app opened. `tools/gamecore/generate-core-forwarders.sh` writes the forwarders from `cores/GameCore.h`.
+`EngineSessionCoordinator.openCore` picks the runner and calls `EmpoCoreUseGameProcess`. Every `gamecore_*` call of the app goes through `AppCoreForwarders.c`. In a game process, a forwarder calls the `gameprocess_*` function of the same name in `GameProcessClient.m`, which sends an XPC message to `GameProcessService.m` in the extension. The getters answer from the last status that the extension sent. In the app, a forwarder calls the core that the app opened. `tools/gamecore/generate-core-forwarders.sh` writes the list of the forwarded functions, `GameCoreFunctions.h`, from `cores/GameCore.h`.
 
 `GameProcessHost.swift` starts and ends the extension. It shows the game in an `EXHostViewController` behind the app's views. The app waits until the old process ended, with a limit of 2 seconds, before it starts a new one. When the extension stops without a `quit`, the app shows the game as stopped. A paused game that loses its process closes.
 
