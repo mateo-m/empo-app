@@ -354,8 +354,10 @@ targets:
       # The memory of the game goes in a block that the app lends it
       # (GameProcess/AppMemory.m). See vendor/mimalloc/README.md and
       # vendor/fishhook/README.md.
+      # Each free() of the game goes through it. At -O0, a Ruby 1.8
+      # garbage collection took more than twice as long.
       - path: vendor/mimalloc/src/static.c
-        compilerFlags: -DMI_DEBUG=0 -DMI_FREE_USE_PAGEMAP=1 -w
+        compilerFlags: -O3 -DMI_DEBUG=0 -DMI_FREE_USE_PAGEMAP=1 -w
       - path: vendor/fishhook/fishhook.c
     configFiles:
       Debug: Signing.xcconfig
