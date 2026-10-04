@@ -798,7 +798,13 @@ double gamecore_getAverageFPS(void) {
         // The frame path stores the mark after the count, so a count
         // loaded after the mark is never lower.
         const unsigned long long markFrames = gFpsMarkFrames.load();
-        return static_cast<double>(gDrawnFrames.load() - markFrames) / span;
+        const unsigned long long frames = gDrawnFrames.load();
+        // A frame closed the window after the first load, so markFrames
+        // can be from the new window. Its average is already stored.
+        if (gFpsMarkSeconds.load() != mark) {
+            return gAverageFps.load();
+        }
+        return static_cast<double>(frames - markFrames) / span;
     }
     return gAverageFps.load();
 }
