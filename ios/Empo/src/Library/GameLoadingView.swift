@@ -15,8 +15,6 @@ struct GameLoadingView: View {
 
     private var mode: Mode { pauseManager.pauseSnapshot != nil ? .resuming : .loading }
 
-    @State private var titleVisible = false
-    @State private var spinnerVisible = false
     @State private var kenBurns = false
     @State private var appearedAt: ContinuousClock.Instant?
 
@@ -125,16 +123,12 @@ struct GameLoadingView: View {
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundStyle(.white)
-                        .opacity(titleVisible ? 1 : 0)
-                        .offset(y: titleVisible ? 0 : 12)
 
                     ProgressView()
                         .progressViewStyle(.circular)
                         .tint(.white)
                         .scaleEffect(1.2)
                         .accessibilityLabel("Loading game")
-                        .opacity(spinnerVisible ? 1 : 0)
-                        .offset(y: spinnerVisible ? 0 : 12)
                 }
             }
         }
@@ -147,12 +141,6 @@ struct GameLoadingView: View {
         }
         .onAppear {
             appearedAt = .now
-            withAnimation(Motion.standard.delay(0.2)) {
-                titleVisible = true
-            }
-            withAnimation(Motion.standard.delay(0.28)) {
-                spinnerVisible = true
-            }
             withAnimation(.linear(duration: 20).repeatForever(autoreverses: true)) {
                 kenBurns = true
             }
