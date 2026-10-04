@@ -54,7 +54,7 @@ public enum RubyScriptGrammarSniffer {
     /// forks that ship both. The sniffer then falls back to the
     /// compiled `Scripts.{rxdata,rvdata,rvdata2}` file, unless a
     /// packed script archive makes that file a stale bootstrap.
-    /// It runs the grammar classifier on the joined source.
+    /// It runs the grammar classifier on those scripts.
     static func sniff(gameDirectory: URL) -> Result {
         let fm = FileManager.default
 
@@ -65,9 +65,9 @@ public enum RubyScriptGrammarSniffer {
         // are the live runtime. The .rxdata is a leftover.
         let looseURLs = locateLooseScripts(in: gameDirectory, fm: fm)
         if !looseURLs.isEmpty {
-            let source = readLooseScripts(urls: looseURLs)
-            if !source.isEmpty {
-                return classify(source: source)
+            let scripts = readLooseScripts(urls: looseURLs)
+            if !scripts.isEmpty {
+                return classify(scripts: scripts)
             }
         }
 
@@ -86,10 +86,10 @@ public enum RubyScriptGrammarSniffer {
         guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm) else {
             return .inconclusive
         }
-        guard let source = decodeScripts(at: url) else {
+        guard let scripts = decodeScripts(at: url) else {
             return .inconclusive
         }
-        return classify(source: source)
+        return classify(scripts: scripts)
     }
 
     // MARK: - File location
@@ -167,24 +167,25 @@ public enum RubyScriptGrammarSniffer {
         return found
     }
 
-    /// Reads up to `maxLooseFiles` `.rb` files and joins them.
-    /// A 4 MB cap on the total prevents one huge generated file
-    /// from using too much memory.
-    private static func readLooseScripts(urls: [URL]) -> String {
-        var combined = ""
+    /// Reads up to `maxLooseFiles` `.rb` files. A 4 MB cap on the
+    /// total prevents one huge generated file from using too much
+    /// memory.
+    private static func readLooseScripts(urls: [URL]) -> [String] {
+        var scripts: [String] = []
+        var total = 0
         let cap = 4_000_000
         for url in urls {
             guard let str = try? Data(contentsOf: url).decodeAsLooseText() else { continue }
-            combined.append(str)
-            combined.append("\n")
-            if combined.count > cap { break }
+            scripts.append(str)
+            total += str.count
+            if total > cap { break }
         }
-        return combined
+        return scripts
     }
 
     // MARK: - Marshal + Zlib decode
 
-    private static func decodeScripts(at url: URL) -> String? {
+    private static func decodeScripts(at url: URL) -> [String]? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         var reader = MarshalReader(data: data)
         guard reader.readVersion() else { return nil }
@@ -194,7 +195,8 @@ public enum RubyScriptGrammarSniffer {
             return nil
         }
 
-        var combined = ""
+        var scripts: [String] = []
+        var total = 0
         // Cap the total inflated source. A corrupted file with a
         // huge claimed count then cannot run us out of memory.
         // 4 MB is about 10x the largest real Scripts file we have
@@ -216,12 +218,12 @@ public enum RubyScriptGrammarSniffer {
             if let inflated = inflate(deflated),
                 let source = inflated.decodeAsLooseText()
             {
-                combined.append(source)
-                combined.append("\n")
-                if combined.count > combinedCap { break }
+                scripts.append(source)
+                total += source.count
+                if total > combinedCap { break }
             }
         }
-        return combined.isEmpty ? nil : combined
+        return scripts.isEmpty ? nil : scripts
     }
 
     private static func inflate(_ data: Data) -> Data? {
@@ -280,7 +282,8 @@ public enum RubyScriptGrammarSniffer {
     /// signal.
     private static let modernThreshold = 3
 
-    private static func classify(source: String) -> Result {
+    private static func classify(scripts: [String]) -> Result {
+        let source = scripts.joined(separator: "\n")
         var hits = 0
         let range = NSRange(source.startIndex..<source.endIndex, in: source)
         for pattern in modernTokens {
@@ -293,7 +296,8 @@ public enum RubyScriptGrammarSniffer {
             hits += regex.numberOfMatches(in: source, options: [], range: range)
             if hits >= modernThreshold { return .modern }
         }
-        return callsRuby19Methods(source) ? .mixed : .legacy
+        // Each script ends its own heredocs and blocks.
+        return scripts.contains(where: callsRuby19Methods) ? .mixed : .legacy
     }
 
     private static let ruby19Call = try? NSRegularExpression(
@@ -370,7 +374,7 @@ public enum RubyScriptGrammarSniffer {
             func codeMatches(_ regex: NSRegularExpression) -> [NSTextCheckingResult] {
                 regex.matches(in: line, range: range).filter { code[$0.range.location] }
             }
-            if let match = codeMatches(heredocStart).first {
+            for match in codeMatches(heredocStart) {
                 func group(_ number: Int) -> Substring {
                     Range(match.range(at: number), in: line).map { line[$0] } ?? ""
                 }
@@ -378,6 +382,7 @@ public enum RubyScriptGrammarSniffer {
                 let indented = !group(1).isEmpty
                 if ((indented ? lastTrimmedLine[end] : lastLine[end]) ?? -1) > number {
                     heredoc = (end, indented, group(2) != "'")
+                    break
                 }
             }
             func closes(_ text: String) -> Bool {

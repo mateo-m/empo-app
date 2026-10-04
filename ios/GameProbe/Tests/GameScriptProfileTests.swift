@@ -230,6 +230,36 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
     }
 
+    func testRuby19CallAfterAShiftWithAnEndLineInALaterScriptRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // A heredoc ends in its own script.
+        try compiledScripts([
+            "mask = value <<token\nstr.force_encoding('UTF-8')\n",
+            "names = %w(\ntoken\n)\n",
+        ]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
+    func testRuby19CallInAHeredocAfterAShiftOnTheSameLineRoutesToRuby18() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try compiledScripts([
+            "text = value <<shift + <<'END'\nstr.force_encoding('UTF-8')\nEND\n"
+        ]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 18)
+    }
+
     func testRuby19CallAfterACommentInAWindowsScriptRoutesToRuby31() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -397,5 +427,21 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.grammar, .inconclusive)
         XCTAssertTrue(profile.modernRubyScripts)
         XCTAssertEqual(profile.rubyVersion, 31)
+    }
+
+    /// A Marshal array of `[id, title, zlib source]` entries. Each source
+    /// is one stored deflate block, so it must be under 118 bytes.
+    private func compiledScripts(_ sources: [String]) -> Data {
+        func string(_ bytes: [UInt8]) -> [UInt8] { [0x22, UInt8(bytes.count + 5)] + bytes }
+        var data: [UInt8] = [0x04, 0x08, 0x5b, UInt8(sources.count + 5)]
+        for (id, source) in sources.enumerated() {
+            let body = Array(source.utf8)
+            let count = UInt16(body.count)
+            let stream: [UInt8] =
+                [0x78, 0x01, 0x01, UInt8(count & 0xff), UInt8(count >> 8), UInt8(~count & 0xff), UInt8(~count >> 8)]
+                + body + [0, 0, 0, 0]
+            data += [0x5b, 0x08, 0x69, UInt8(id + 6)] + string(Array("Script".utf8)) + string(stream)
+        }
+        return Data(data)
     }
 }
