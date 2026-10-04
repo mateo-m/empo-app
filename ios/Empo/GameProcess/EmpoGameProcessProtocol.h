@@ -79,6 +79,5 @@ static NSString *const EmpoGameProcessStatusFastForward = @"fastForward";
 static NSString *const EmpoGameProcessStatusMemoryFootprint = @"memoryFootprint";
 
 NSXPCInterface *EmpoGameProcessInterface(void);
-NSXPCInterface *EmpoGameProcessHostInterface(void);
 
 NS_ASSUME_NONNULL_END

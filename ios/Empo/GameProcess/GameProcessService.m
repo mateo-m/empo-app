@@ -384,7 +384,7 @@ BOOL EmpoGameProcessAccept(NSXPCConnection *connection) {
     gConnection = connection;
     connection.exportedInterface = EmpoGameProcessInterface();
     connection.exportedObject = [EmpoGameProcessService new];
-    connection.remoteObjectInterface = EmpoGameProcessHostInterface();
+    connection.remoteObjectInterface = [NSXPCInterface interfaceWithProtocol:@protocol(EmpoGameProcessHost)];
     // The app ended, or closed the connection. Nothing else can reach
     // this game.
     connection.invalidationHandler = ^{

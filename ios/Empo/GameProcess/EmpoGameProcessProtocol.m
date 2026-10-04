@@ -8,7 +8,3 @@ NSXPCInterface *EmpoGameProcessInterface(void) {
                   ofReply:YES];
     return interface;
 }
-
-NSXPCInterface *EmpoGameProcessHostInterface(void) {
-    return [NSXPCInterface interfaceWithProtocol:@protocol(EmpoGameProcessHost)];
-}

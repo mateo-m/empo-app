@@ -316,7 +316,7 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
     EmpoGameProcessHostReceiver *receiver = [EmpoGameProcessHostReceiver new];
     receiver.connection = connection;
     connection.remoteObjectInterface = EmpoGameProcessInterface();
-    connection.exportedInterface = EmpoGameProcessHostInterface();
+    connection.exportedInterface = [NSXPCInterface interfaceWithProtocol:@protocol(EmpoGameProcessHost)];
     connection.exportedObject = receiver;
     // A pointer to compare, never to follow: the handlers can run after
     // the connection is gone.
