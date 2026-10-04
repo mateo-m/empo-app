@@ -27,8 +27,9 @@ public enum GameScriptProfile {
         /// Legacy scripts that call Ruby 1.9+ methods run on Ruby
         /// 3.1 with the legacy transform, not on Ruby 1.8.
         case mixedRuby31 = "mixed-ruby31"
-        /// A `<<` right after a value is a shift, not a heredoc that
-        /// hides the rest of the scripts from the Ruby 1.9 check.
+        /// A `<<` right after a value, or with no end line after it, is
+        /// a shift, not a heredoc that hides the rest of the scripts
+        /// from the Ruby 1.9 check.
         case shiftNotHeredoc = "shift-not-heredoc"
     }
 

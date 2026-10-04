@@ -337,7 +337,16 @@ public enum RubyScriptGrammarSniffer {
         var blocks: [(indent: Int, cover: Cover)] = []
         // "\r\n" is one Character, so splitting on "\n" keeps a
         // Windows-saved script on one line.
-        for line in source.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init) {
+        let lines = source.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
+        // Ruby needs the end line of a heredoc. With no end line after
+        // it, `value <<token` is a shift.
+        var lastLine: [String: Int] = [:]
+        var lastTrimmedLine: [String: Int] = [:]
+        for (number, line) in lines.enumerated() {
+            lastLine[line] = number
+            lastTrimmedLine[line.trimmingCharacters(in: .whitespaces)] = number
+        }
+        for (number, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let indent = line.prefix { $0 == " " || $0 == "\t" }.count
             let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
@@ -365,7 +374,11 @@ public enum RubyScriptGrammarSniffer {
                 func group(_ number: Int) -> Substring {
                     Range(match.range(at: number), in: line).map { line[$0] } ?? ""
                 }
-                heredoc = (String(group(3)), !group(1).isEmpty, group(2) != "'")
+                let end = String(group(3))
+                let indented = !group(1).isEmpty
+                if ((indented ? lastTrimmedLine[end] : lastLine[end]) ?? -1) > number {
+                    heredoc = (end, indented, group(2) != "'")
+                }
             }
             func closes(_ text: String) -> Bool {
                 ["end", "else", "elsif"].contains { text.hasPrefix($0) }

@@ -215,6 +215,7 @@ final class GameScriptProfileTests: XCTestCase {
         ret|=(i<<x)
         mask = (1<<index)
         basedmg=basedmg<<shift
+        mask = value <<token
         ret.gsub!(/<<r>>/,"\\r")
         half = width/2
         str.force_encoding('UTF-8')
