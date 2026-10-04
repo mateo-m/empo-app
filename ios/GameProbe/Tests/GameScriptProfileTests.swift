@@ -88,6 +88,8 @@ final class GameScriptProfileTests: XCTestCase {
             a&.b x:, h.except(:k)
             =end
             system `a&.b x:, h.except(:k)`
+            list = %w(a&.b x:, h.except(:k))
+            puts %(a&.b x:, h.except(:k))
             puts <<~A, <<~B
               one
             A
@@ -143,6 +145,19 @@ final class GameScriptProfileTests: XCTestCase {
             to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
 
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
+    }
+
+    func testModuloKeepsTheRestOfTheLineAsCode() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "n %= 2; a&.b; b&.c\nm = n%(c&.d)\n".write(
+            to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
     }
 
     func testRGSS2LibraryRoutesToRuby18() throws {

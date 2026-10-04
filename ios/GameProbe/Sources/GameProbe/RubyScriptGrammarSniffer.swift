@@ -530,8 +530,14 @@ public enum RubyScriptGrammarSniffer {
     }
 
     /// Reads a `%q(...)`-style literal start after the `%`. A `%` with
-    /// a space or a letter after it is the modulo operator.
+    /// a space, a letter, or `=` after it is the modulo operator, and so
+    /// is a `%` right after a value, as in `a%(b)`.
     private static func percentLiteral(_ chars: [Character], at index: inout Int) -> Scope? {
+        if index >= 2 {
+            let before = chars[index - 2]
+            if before.isLetter || before.isNumber || "_)]}".contains(before) { return nil }
+        }
+        if index < chars.count, chars[index] == "=" { return nil }
         var cursor = index
         var kind: Character?
         if cursor < chars.count, "qQwWiIrsx".contains(chars[cursor]) {
