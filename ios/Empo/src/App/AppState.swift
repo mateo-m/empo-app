@@ -207,13 +207,6 @@ class AppState {
         }
     }
 
-    func dismissCrashRecovery() {
-        // No-op: CrashTracker.init already cleaned up stale markers
-        // at app launch. The recovery flag is only an in-memory bool
-        // that consumeRecovery flips.
-        errorMessage = nil
-    }
-
     // MARK: - Pause lifecycle
 
     /// Toggle the pause menu. Same path as the on-screen pause control (SPEC section 8).

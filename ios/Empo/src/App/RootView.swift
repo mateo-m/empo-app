@@ -260,14 +260,7 @@ struct RootView: View {
     private func closeErrorAlert() {
         let hung = engineHung
         dismissErrorAlert()
-        if hung {
-            appState.endStuckGame()
-            return
-        }
-        if appState.phase != nil {
-            return
-        }
-        appState.dismissCrashRecovery()
+        if hung { appState.endStuckGame() }
     }
 
     private var showErrorAlert: Binding<Bool> {
