@@ -154,7 +154,7 @@ final class GameScriptProfileTests: XCTestCase {
         try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try "n %= 2; a&.b; b&.c\nm = n%(c&.d)\n".write(
+        try "n %= 2; a&.b\nm = n%(b&.c)\ntext = \"%s\"%(c&.d)\n".write(
             to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
 
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)

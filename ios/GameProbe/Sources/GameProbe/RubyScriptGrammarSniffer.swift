@@ -531,11 +531,12 @@ public enum RubyScriptGrammarSniffer {
 
     /// Reads a `%q(...)`-style literal start after the `%`. A `%` with
     /// a space, a letter, or `=` after it is the modulo operator, and so
-    /// is a `%` right after a value, as in `a%(b)`.
+    /// is a `%` right after a value, as in `a%(b)` or `"%s"%(b)`. Outside
+    /// a literal, a quote before the `%` can only close one.
     private static func percentLiteral(_ chars: [Character], at index: inout Int) -> Scope? {
         if index >= 2 {
             let before = chars[index - 2]
-            if before.isLetter || before.isNumber || "_)]}".contains(before) { return nil }
+            if before.isLetter || before.isNumber || "_)]}\"'`".contains(before) { return nil }
         }
         if index < chars.count, chars[index] == "=" { return nil }
         var cursor = index
