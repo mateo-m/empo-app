@@ -19,9 +19,7 @@ final class FileProviderExtension: NSFileProviderExtension {
     private var trash: URL { root.appendingPathComponent(FileProviderItem.trashFolderName) }
 
     override func item(for identifier: NSFileProviderItemIdentifier) throws -> NSFileProviderItem {
-        guard let url = FileProviderItem.url(of: identifier, root: root),
-            FileManager.default.fileExists(atPath: url.path)
-        else { throw NSFileProviderError(.noSuchItem) }
+        let url = identifier == .rootContainer ? root : try existingURL(of: identifier)
         return FileProviderItem(url: url, root: root)
     }
 
@@ -263,7 +261,6 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
             .allowsReading, .allowsWriting, .allowsRenaming, .allowsReparenting, .allowsDeleting,
             .allowsTrashing,
             .allowsAddingSubItems,
-            .allowsContentEnumerating,
         ]
     }
 
