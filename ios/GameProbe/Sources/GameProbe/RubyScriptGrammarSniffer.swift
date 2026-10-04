@@ -100,7 +100,7 @@ public enum RubyScriptGrammarSniffer {
         "Scripts.rvdata2",
     ]
 
-    private static let looseScriptDirs = [
+    static let looseScriptDirs = [
         "Scripts",
         "Data/Scripts",
     ]
@@ -177,7 +177,7 @@ public enum RubyScriptGrammarSniffer {
             guard let str = try? Data(contentsOf: url).decodeAsLooseText() else { continue }
             combined.append(str)
             combined.append("\n")
-            if combined.count > cap { break }
+            if combined.utf8.count > cap { break }
         }
         return combined
     }
@@ -218,7 +218,7 @@ public enum RubyScriptGrammarSniffer {
             {
                 combined.append(source)
                 combined.append("\n")
-                if combined.count > combinedCap { break }
+                if combined.utf8.count > combinedCap { break }
             }
         }
         return combined.isEmpty ? nil : combined

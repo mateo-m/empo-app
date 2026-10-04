@@ -101,7 +101,7 @@ enum Schema: String {
 static let currentSchema: Schema = .mixedRuby31
 ```
 
-`MkxpProfile` stores the scan result and its schema string in `Metadata/mkxp-profile.json`. `MkxpProfile.load(for:)` compares the stored schema with the current one. On a mismatch, it scans again. The core scans again at import, at launch when both Ruby pickers are on Auto-detect, and when the user resets the settings. `GameScriptProfile` is the only entry point.
+`MkxpProfile` stores the scan result, its schema string, and a digest of the files that the scan reads in `Metadata/mkxp-profile.json`. The digest holds the path, size, and modification date of each file in the game folder, in `Data/`, and in the loose script folders (`GameScriptProfile.inputFiles`). `MkxpProfile.load(for:)` scans again when the schema or the digest is different. `GameScriptProfile` is the only entry point.
 
 ## Per-version compile
 

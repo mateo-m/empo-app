@@ -58,6 +58,23 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.grammar, .legacy)
     }
 
+    func testInputFilesHoldWhatTheScanReads() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: dir) }
+        let files = ["Game.ini", "RGSS104E.dll", "Data/Scripts.rxdata", "Data/Scripts/Plugins/a.rb", "Graphics/Titles/t.png"]
+        for file in files {
+            let url = dir.appendingPathComponent(file)
+            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: url)
+        }
+
+        let inputs = Set(GameScriptProfile.inputFiles(gameDirectory: dir).map { $0.resolvingSymlinksInPath().path })
+        let paths = files.map { dir.appendingPathComponent($0).resolvingSymlinksInPath().path }
+        XCTAssertTrue(inputs.isSuperset(of: paths.dropLast()), "\(inputs)")
+        XCTAssertFalse(inputs.contains(paths.last!))
+    }
+
     func testRGSS2LibraryRoutesToRuby18() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

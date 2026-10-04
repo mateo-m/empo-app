@@ -48,12 +48,6 @@ struct MkxpSettings: GameSettingsGroup {
     var postloadScriptsEnabled: Bool { postloadScripts ?? true }
     var joiplayCompatEnabled: Bool { joiplayCompat ?? false }
     var networkAccessEnabled: Bool { networkEnabled ?? true }
-
-    /// True when both Ruby pickers are on Auto-detect, so the script scan
-    /// decides.
-    var followsScriptScan: Bool {
-        rubyVersionOverride == nil && useModernRuby == nil
-    }
 }
 
 @MainActor @Observable
@@ -97,7 +91,7 @@ final class MkxpSettingsState: CoreSettings {
 
     func reset() {
         settings = MkxpSettings()
-        profile = MkxpProfile.load(for: container, rescan: true)
+        profile = MkxpProfile.load(for: container)
         ManagedMkxpConfig.resetAllEngineFields(
             stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
         engine = MkxpEngineSettings.load(from: container.empoStateURL)
