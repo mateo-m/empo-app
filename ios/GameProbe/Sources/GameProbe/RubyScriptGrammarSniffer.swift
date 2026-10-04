@@ -489,12 +489,15 @@ public enum RubyScriptGrammarSniffer {
     /// A `/` opens a regex where a value can start, and divides after a
     /// value: `gsub!(/<<r>>/, "")` against `width/2`. As in Ruby, a name,
     /// a space, and a `/` with no space after it is a call with a regex:
-    /// `text.scan /<<tag>>/`.
+    /// `text.scan /<<tag>>/`. Ruby reads it as division when the name is
+    /// a local variable, so with no closing `/` on the line it divides:
+    /// `width /3`.
     private static func startsRegex(_ chars: [Character], before slash: Int) -> Bool {
         var cursor = slash
         while cursor > 0, chars[cursor - 1] == " " || chars[cursor - 1] == "\t" { cursor -= 1 }
         let next: Character = slash + 1 < chars.count ? chars[slash + 1] : " "
         let callArgument = cursor < slash && !next.isWhitespace && next != "="
+            && closesRegex(chars, after: slash)
         guard cursor > 0 else { return true }
         let previous = chars[cursor - 1]
         if "(,=!~|&{[;?:+-*<>^".contains(previous) { return true }
@@ -505,6 +508,19 @@ public enum RubyScriptGrammarSniffer {
         }
         let keywords: Set<String> = ["if", "elsif", "unless", "when", "while", "until", "and", "or", "not", "return", "then"]
         return callArgument || keywords.contains(String(chars[start..<cursor]))
+    }
+
+    private static func closesRegex(_ chars: [Character], after slash: Int) -> Bool {
+        var index = slash + 1
+        while index < chars.count {
+            if chars[index] == "\\" {
+                index += 2
+                continue
+            }
+            if chars[index] == "/" { return true }
+            index += 1
+        }
+        return false
     }
 
     /// Reads a `%q(...)`-style literal start after the `%`. A `%` with

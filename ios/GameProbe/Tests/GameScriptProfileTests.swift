@@ -219,7 +219,7 @@ final class GameScriptProfileTests: XCTestCase {
         ret.gsub!(/<<r>>/,"\\r")
         tags = text.scan /<<tag>>/
         half = width/2
-        str.force_encoding('UTF-8')
+        third = width /3; str.force_encoding('UTF-8')
         names = %w(
         tag
         )
