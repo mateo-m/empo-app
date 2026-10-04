@@ -65,9 +65,9 @@ public enum RubyScriptGrammarSniffer {
         // are the live runtime. The .rxdata is a leftover.
         let looseURLs = locateLooseScripts(in: gameDirectory, fm: fm)
         if !looseURLs.isEmpty {
-            let source = readLooseScripts(urls: looseURLs)
-            if !source.isEmpty {
-                return classify(source: source)
+            let scripts = readLooseScripts(urls: looseURLs)
+            if !scripts.isEmpty {
+                return classify(scripts: scripts)
             }
         }
 
@@ -86,10 +86,10 @@ public enum RubyScriptGrammarSniffer {
         guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm) else {
             return .inconclusive
         }
-        guard let source = decodeScripts(at: url) else {
+        guard let scripts = decodeScripts(at: url) else {
             return .inconclusive
         }
-        return classify(source: source)
+        return classify(scripts: scripts)
     }
 
     // MARK: - File location
@@ -167,24 +167,25 @@ public enum RubyScriptGrammarSniffer {
         return found
     }
 
-    /// Reads up to `maxLooseFiles` `.rb` files and joins them.
+    /// Reads up to `maxLooseFiles` `.rb` files.
     /// A 4 MB cap on the total prevents one huge generated file
     /// from using too much memory.
-    private static func readLooseScripts(urls: [URL]) -> String {
-        var combined = ""
+    private static func readLooseScripts(urls: [URL]) -> [String] {
+        var scripts: [String] = []
+        var total = 0
         let cap = 4_000_000
         for url in urls {
             guard let str = try? Data(contentsOf: url).decodeAsLooseText() else { continue }
-            combined.append(str)
-            combined.append("\n")
-            if combined.count > cap { break }
+            scripts.append(str)
+            total += str.count
+            if total > cap { break }
         }
-        return combined
+        return scripts
     }
 
     // MARK: - Marshal + Zlib decode
 
-    private static func decodeScripts(at url: URL) -> String? {
+    private static func decodeScripts(at url: URL) -> [String]? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         var reader = MarshalReader(data: data)
         guard reader.readVersion() else { return nil }
@@ -194,7 +195,8 @@ public enum RubyScriptGrammarSniffer {
             return nil
         }
 
-        var combined = ""
+        var scripts: [String] = []
+        var total = 0
         // Cap the total inflated source. A corrupted file with a
         // huge claimed count then cannot run us out of memory.
         // 4 MB is about 10x the largest real Scripts file we have
@@ -216,12 +218,12 @@ public enum RubyScriptGrammarSniffer {
             if let inflated = inflate(deflated),
                 let source = inflated.decodeAsLooseText()
             {
-                combined.append(source)
-                combined.append("\n")
-                if combined.count > combinedCap { break }
+                scripts.append(source)
+                total += source.count
+                if total > combinedCap { break }
             }
         }
-        return combined.isEmpty ? nil : combined
+        return scripts.isEmpty ? nil : scripts
     }
 
     private static func inflate(_ data: Data) -> Data? {
@@ -272,7 +274,8 @@ public enum RubyScriptGrammarSniffer {
     ]
 
     /// A magic comment (2.3+, common in modern code). It counts only
-    /// on a line that holds nothing else.
+    /// on a line that holds nothing else, in the comment lines at the
+    /// top of a script, where Ruby reads it.
     private static let frozenStringLiteral = try? NSRegularExpression(
         pattern: #"^\s*#\s*frozen_string_literal:\s*true\s*$"#)
 
@@ -282,12 +285,13 @@ public enum RubyScriptGrammarSniffer {
     /// signal.
     private static let modernThreshold = 3
 
-    private static func classify(source: String) -> Result {
+    private static func classify(scripts: [String]) -> Result {
         // Swift reads "\r\n" as one Character, so a split on "\n" alone
         // keeps a Windows file as one line.
-        let source = source.replacingOccurrences(of: "\r\n", with: "\n")
-        let (code, magicComments) = codeOnly(source)
-        var hits = magicComments
+        let scripts = scripts.map { $0.replacingOccurrences(of: "\r\n", with: "\n") }
+        let source = scripts.joined(separator: "\n")
+        let code = codeOnly(source)
+        var hits = scripts.filter(startsFrozen).count
         let range = NSRange(code.startIndex..., in: code)
         for pattern in modernTokens {
             if hits >= modernThreshold { return .modern }
@@ -304,18 +308,27 @@ public enum RubyScriptGrammarSniffer {
     }
 
     /// The source with comments and the plain part of string literals
-    /// and heredoc bodies replaced by spaces, and the count of
-    /// `frozen_string_literal` lines. Almost Heroic lists `font:, value:`
+    /// and heredoc bodies replaced by spaces. Almost Heroic lists `font:, value:`
     /// in a comment, which reads as keyword-arg shorthand. A quoted
     /// string over several lines stays code, because one misread quote
     /// would hide the rest of every script. For the same reason, a
     /// heredoc counts only when its end line exists.
-    private static func codeOnly(_ source: String) -> (code: String, magicComments: Int) {
+    private static func startsFrozen(_ script: String) -> Bool {
+        for line in script.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            if frozenStringLiteral?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
+                return true
+            }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty && !trimmed.hasPrefix("#") { return false }
+        }
+        return false
+    }
+
+    private static func codeOnly(_ source: String) -> String {
         let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var inBlockComment = false
         var heredocs: [(end: String, indented: Bool, interpolates: Bool)] = []
         var bodyStack = heredocBody
-        var magicComments = 0
         var code: [String] = []
         for (number, line) in lines.enumerated() {
             if let open = heredocs.first {
@@ -337,7 +350,6 @@ public enum RubyScriptGrammarSniffer {
                 continue
             }
             let range = NSRange(line.startIndex..., in: line)
-            if frozenStringLiteral?.firstMatch(in: line, range: range) != nil { magicComments += 1 }
             let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
             let mask = codeMask(units)
             for match in heredocStart?.matches(in: line, range: range) ?? [] where mask[match.range.location] {
@@ -352,7 +364,7 @@ public enum RubyScriptGrammarSniffer {
             }
             code.append(String(units.indices.map { mask[$0] ? units[$0] : " " }))
         }
-        return (code.joined(separator: "\n"), magicComments)
+        return code.joined(separator: "\n")
     }
 
     private static let ruby19Call = try? NSRegularExpression(

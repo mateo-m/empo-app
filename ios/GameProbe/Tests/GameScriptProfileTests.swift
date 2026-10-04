@@ -78,6 +78,10 @@ final class GameScriptProfileTests: XCTestCase {
             puts "# frozen_string_literal: true", "# frozen_string_literal: true"
             puts "# frozen_string_literal: true"
             # frozen_string_literal: truest
+            def a; end
+            # frozen_string_literal: true
+            # frozen_string_literal: true
+            # frozen_string_literal: true
             # frozen_string_literal: true_or_false
             # frozen_string_literal: true, says the old doc
             raw = <<~'RAW'
