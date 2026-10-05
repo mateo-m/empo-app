@@ -151,7 +151,7 @@ struct SettingsView: View {
                     Text("These options are for debugging and troubleshooting.")
                 }
 
-                if !GameCores.rubyInThisBuild.isEmpty {
+                if !GameCores.gameProcessCores.isEmpty {
                     ExperimentalSection()
                 }
 

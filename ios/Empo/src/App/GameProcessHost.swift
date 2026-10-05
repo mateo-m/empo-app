@@ -43,6 +43,12 @@ enum GameProcessHost {
         }
     }
 
+    /// Returns when the last game process is gone, or after the time
+    /// limit of `EmpoGameProcessClient.end`.
+    static func waitForExit() async {
+        await lastExit?.value
+    }
+
     static func end() {
         session += 1
         let ending = controller
