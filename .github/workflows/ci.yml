@@ -12,9 +12,11 @@
 # the ANGLE tarball. The core releases are public.
 #
 # The repository variables LINUX_RUNNER and MACOS_RUNNER choose the
-# machines as a JSON label list, for example
-# ["self-hosted","linux","md"]. With no variable, a job runs on a
-# GitHub-hosted machine. docs.yml and pr-title.yml read LINUX_RUNNER too.
+# machines. The value is JSON: a label list such as
+# ["self-hosted","linux","md"], or one quoted label such as
+# "ubuntu-latest". A bare ubuntu-latest fails. With no variable, a
+# job runs on a GitHub-hosted machine. docs.yml and pr-title.yml read
+# LINUX_RUNNER too.
 
 name: CI
 
@@ -185,10 +187,9 @@ jobs:
         run: |
           command -v clang-format-18 >/dev/null ||
             { sudo apt-get update && sudo apt-get install -y clang-format-18; }
-          FILES=$(git ls-files 'ios/Empo/src/*.'{h,m,mm,c,cpp} 'ios/Empo/shims/*.'{h,m,mm,c,cpp})
-          if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs clang-format-18 --dry-run --Werror
-          fi
+          set -o pipefail
+          git ls-files -z 'ios/Empo/src/*.'{h,m,mm,c,cpp} 'ios/Empo/shims/*.'{h,m,mm,c,cpp} |
+            xargs -0 -r clang-format-18 --dry-run --Werror
 
   shell:
     name: Bash (shellcheck + shfmt)
@@ -216,6 +217,8 @@ jobs:
           mkdir -p "$HOME/.local/bin"
           curl -fsSL -o "$HOME/.local/bin/shfmt" \
             https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64
+          echo "fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1  $HOME/.local/bin/shfmt" |
+            sha256sum --check --strict
           chmod +x "$HOME/.local/bin/shfmt"
           echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
