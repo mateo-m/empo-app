@@ -333,13 +333,19 @@ static xpc_object_t lentMemory(void) {
         if (memory != nil) {
             [process useMemory:memory];
         }
+        // A late reply can come after a new session began, so it ends
+        // only the connection that sent it.
+        __weak NSXPCConnection *weakConnection = gConnection;
         [process openCore:framework
                     reply:^(NSString *error) {
-                        if (error != nil) {
-                            noteEvent([NSString
-                                stringWithFormat:@"The game process could not open the core: %@", error]);
-                            [EmpoGameProcessClient processLost];
+                        NSXPCConnection *connection = weakConnection;
+                        if (error == nil || connection == nil) {
+                            return;
                         }
+                        noteEvent([NSString
+                            stringWithFormat:@"The game process could not open the core: %@", error]);
+                        [connection invalidate];
+                        connectionEnded((__bridge void *)connection);
                     }];
     });
 }
