@@ -20,7 +20,7 @@ final class GameProcessUITests: XCTestCase {
         let play = UInt32(env["EMPO_GP_PLAY"] ?? "") ?? 0
         let app = XCUIApplication()
         app.launchArguments += ["-whatsNewSeenVersion", "999", "-debugLogs", "YES"]
-        if let runner = env["EMPO_GP_RUNNER"] { app.launchArguments += ["-rubyGameRunner", runner] }
+        app.launchArguments += ["-rubyGameRunner", env["EMPO_GP_RUNNER"] ?? "gameProcess"]
         if let probe = env["EMPO_TEMP_PROBE"] { app.launchEnvironment["EMPO_TEMP_PROBE"] = probe }
         if let ruby = env["EMPO_TEMP_RUBY"] { app.launchEnvironment["EMPO_TEMP_RUBY"] = ruby }
         XCUIDevice.shared.orientation = .portrait
@@ -347,72 +347,6 @@ final class GameProcessUITests: XCTestCase {
         XCTAssertFalse(stopped(app, game: env["EMPO_FP_TITLE"] ?? fpGame))
         shot("z-after-rename")
         quit(app, game: env["EMPO_FP_TITLE"] ?? fpGame)
-    }
-
-    func testMoreSheetBothRunners() throws {
-        let news = XCUIApplication()
-        news.launchArguments = ["-whatsNewSeenVersion", "0"]
-        news.launch()
-        let understand0 = news.buttons["I understand"]
-        if understand0.waitForExistence(timeout: 8) { understand0.tap() }
-        print("GP whats new")
-        sleep(6)
-        news.terminate()
-        sleep(2)
-        for runner in ["app", "gameProcess"] {
-            let app = XCUIApplication()
-            app.launchArguments = ["-whatsNewSeenVersion", "999", "-rubyGameRunner", runner]
-            app.launch()
-            let understand = app.buttons["I understand"]
-            if understand.waitForExistence(timeout: 8) { understand.tap() }
-            sleep(3)
-            start(app, game: env["EMPO_GP_GAMES"] ?? "Pokemon Uranium")
-            sleep(12)
-            print("GP runner \(runner) tap More")
-            app.buttons["More options"].firstMatch.tap()
-            sleep(3)
-            let done = app.buttons["Done"].firstMatch
-            if done.exists { done.tap() }
-            sleep(3)
-            app.terminate()
-            sleep(2)
-        }
-        XCTFail("keep the screen recording")
-    }
-
-    func testMoreSheetMotion() throws {
-        let app = XCUIApplication()
-        app.launchArguments += [
-            "-whatsNewSeenVersion", "999", "-rubyGameRunner", env["EMPO_GP_RUNNER"] ?? "gameProcess",
-        ]
-        app.launch()
-        let understand = app.buttons["I understand"]
-        if understand.waitForExistence(timeout: 8) { understand.tap() }
-        sleep(3)
-        let game = env["EMPO_GP_GAMES"] ?? "Pokemon Uranium"
-        start(app, game: game)
-        sleep(12)
-        for _ in 0..<2 {
-            app.buttons["More options"].firstMatch.tap()
-            sleep(3)
-            app.swipeDown(velocity: .fast)
-            sleep(3)
-        }
-        XCTFail("keep the screen recording")
-    }
-
-    func testListLibrary() throws {
-        let app = XCUIApplication()
-        app.launchArguments += ["-whatsNewSeenVersion", "999", "-debugLogs", "YES"]
-        app.launch()
-        let understand = app.buttons["I understand"]
-        if understand.waitForExistence(timeout: 8) { understand.tap() }
-        sleep(3)
-        for page in 0..<4 {
-            print("GP library \(page) \(app.debugDescription)")
-            app.swipeUp()
-            sleep(1)
-        }
     }
 
     /// Returns false when the game stopped before it started.
