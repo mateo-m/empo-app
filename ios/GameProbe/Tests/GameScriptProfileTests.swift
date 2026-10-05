@@ -63,7 +63,7 @@ final class GameScriptProfileTests: XCTestCase {
         let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? fm.removeItem(at: dir) }
         let read = ["Game.ini", "RGSS104E.dll", "Game.rgssad", "Data/Scripts.rxdata", "Data/a.fpk", "Data/Scripts/Plugins/a.rb"]
-        let unread = ["Save01.rxdata", "Data/Map001.rxdata", "Graphics/Titles/t.png"]
+        let unread = ["Save01.rxdata", "Data/Map001.rxdata", "Data/Game.ini", "Data/x.dll", "a.fpk", "Graphics/Titles/t.png"]
         let files = read + unread
         for file in files {
             let url = dir.appendingPathComponent(file)

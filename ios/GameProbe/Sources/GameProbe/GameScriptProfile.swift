@@ -69,16 +69,19 @@ public enum GameScriptProfile {
     /// and they are not in the list.
     public static func inputFiles(gameDirectory: URL) -> [URL] {
         let fm = FileManager.default
-        let names: Set<String> = ["Game.ini", "Scripts.rxdata", "Scripts.rvdata", "Scripts.rvdata2"]
-        let extensions: Set<String> = ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a", "fpk"]
-        let topLevel = ["", "Data"].flatMap {
+        let scripts = ["Scripts.rxdata", "Scripts.rvdata", "Scripts.rvdata2"]
+        func files(in folder: String, named names: [String], extensions: Set<String>) -> [URL] {
             ((try? fm.contentsOfDirectory(
-                at: gameDirectory.appendingPathComponent($0),
+                at: gameDirectory.appendingPathComponent(folder),
                 includingPropertiesForKeys: nil,
                 options: [.skipsHiddenFiles])) ?? [])
                 .filter { names.contains($0.lastPathComponent) || extensions.contains($0.pathExtension.lowercased()) }
         }
-        return topLevel + RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
+        return files(
+            in: "", named: ["Game.ini"] + scripts,
+            extensions: ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
+            + files(in: "Data", named: scripts, extensions: ["fpk"])
+            + RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
     }
 
     // MARK: - Ruby version (formerly RubyVersionDetection)
