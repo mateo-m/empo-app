@@ -54,16 +54,41 @@ struct GameReport: Codable, Identifiable, Transferable {
 
     static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(exportedContentType: .plainText) { report in
-            SentTransferredFile(try await report.write())
+            SentTransferredFile(try report.write(header: await report.header()))
         }
     }
 
     /// Writes the report to a new file in the temporary folder.
     @MainActor
-    func write() throws -> URL {
-        let log = (try? String(contentsOf: logURL, encoding: .utf8)) ?? "The session log is missing.\n"
+    func write() throws -> URL { try write(header: header()) }
+
+    /// The engine output in the log has no size limit, so the log goes
+    /// into the file in parts.
+    func write(header: String) throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "Reports", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appendingPathComponent(
+            "\(AppInfo.name) report \(logURL.deletingPathExtension().lastPathComponent).txt")
+        try Data((header + "\n").utf8).write(to: url)
+        let output = try FileHandle(forWritingTo: url)
+        defer { try? output.close() }
+        try output.seekToEnd()
+        guard let input = try? FileHandle(forReadingFrom: logURL) else {
+            try output.write(contentsOf: Data("The session log is missing.\n".utf8))
+            return url
+        }
+        defer { try? input.close() }
+        while let part = try input.read(upToCount: 1 << 20), !part.isEmpty {
+            try output.write(contentsOf: part)
+        }
+        return url
+    }
+
+    @MainActor
+    func header() -> String {
         let device = UIDevice.current
-        let header = [
+        return [
             "\(AppInfo.name) game report",
             "app: \(AppInfo.version) (\(AppInfo.build))",
             "commit: \(GitInfo.commit)\(GitInfo.dirty ? " (dirty)" : "")",
@@ -71,13 +96,6 @@ struct GameReport: Codable, Identifiable, Transferable {
             "game: \(gameTitle)",
             "---",
         ].joined(separator: "\n")
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "Reports", isDirectory: true)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let url = folder.appendingPathComponent(
-            "\(AppInfo.name) report \(logURL.deletingPathExtension().lastPathComponent).txt")
-        try (header + "\n" + log).write(to: url, atomically: true, encoding: .utf8)
-        return url
     }
 
     /// For example "iPhone17,1". The simulator names the Mac's CPU, so

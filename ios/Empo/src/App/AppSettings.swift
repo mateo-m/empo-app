@@ -195,13 +195,14 @@ class AppSettings {
         }
     }
 
-    /// Where Ruby games run from the next launch. Experimental, and off
+    /// Where the games of `GameCores.gameProcessCores` run from the next
+    /// launch. Experimental, and off
     /// (`.app`) by default.
     var rubyGameRunner: GameRunner {
         didSet { UserDefaults.standard.set(rubyGameRunner.rawValue, forKey: DefaultsKey.rubyGameRunner) }
     }
 
-    /// Where Ruby games run until Empo closes. A game in the app stays
+    /// `rubyGameRunner` until Empo closes. A game in the app stays
     /// for the life of the process, so a change applies at the next
     /// launch only. `DataDirectory` reads it before the main actor runs.
     nonisolated static let rubyGameRunnerThisLaunch: GameRunner = {
@@ -209,10 +210,10 @@ class AppSettings {
         return gameProcessIsAvailable ? GameRunner(rawValue: raw) ?? .app : .app
     }()
 
-    /// The game process needs a Ruby core, and the app group folder
-    /// for the games and the saves.
+    /// The game process needs a core that cannot kill its session, and
+    /// the app group folder for the games and the saves.
     nonisolated static var gameProcessIsAvailable: Bool {
-        !GameCores.rubyInThisBuild.isEmpty && DataDirectory.appGroupURL != nil
+        !GameCores.gameProcessCores.isEmpty && DataDirectory.appGroupURL != nil
     }
 
     // MARK: - Splash disclaimer acknowledgment
