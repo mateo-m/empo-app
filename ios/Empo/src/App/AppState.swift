@@ -78,7 +78,7 @@ class AppState {
             return
         }
 
-        guard phase == nil, pauseManager.pausedGame == nil else { return }
+        guard phase == nil, pauseManager.pausedGame == nil, resumeTask == nil else { return }
         guard let container = game.container,
             let core = GameCores.core(forGameAt: container.gameURL), core.isInThisBuild
         else { return }
@@ -161,7 +161,6 @@ class AppState {
         session.note("The game stopped responding, and Empo ended it.")
         session.recordSessionPlayTime(for: activeSessionGame)
         session.killSession(of: activeSessionGame)
-        quitOnPause = false
         clearEndedGame()
         phase = nil
     }
@@ -180,6 +179,7 @@ class AppState {
     }
 
     @ObservationIgnored private var quitOnPause = false
+    @ObservationIgnored private var resumeTask: Task<Void, Never>?
 
     /// Pauses the game, so the library comes back the same way, and
     /// kills it once the core says it paused. The game is never marked
@@ -235,7 +235,6 @@ class AppState {
         guard phase == .playing else { return }
         if EngineState.shared.isBackgroundPause { return }
         if quitOnPause {
-            quitOnPause = false
             session.note("The player quit the game.")
             session.killSession(of: selectedGame)
             clearEndedGame()
@@ -257,10 +256,8 @@ class AppState {
     /// PlayerView picks it up as a fade-out overlay, so there is no
     /// flash at handoff.
     ///
-    /// The `pm.pausedGame == nil` guard in the Task keeps a stray
-    /// `phase = .playing` out after the session ends mid-resume.
-    /// Before the guard, the chained asyncAfter calls could race
-    /// past the teardown and put the app back into .playing with no
+    /// A teardown cancels `resumeTask`, so a session that ends
+    /// mid-resume does not put the app back into .playing with no
     /// game loaded.
     func resumePausedGame() {
         let pm = PauseManager.shared
@@ -270,9 +267,10 @@ class AppState {
         session.requestResume()
         session.resumeSessionTiming(for: activeSessionGame)
 
-        Task { @MainActor [weak self] in
+        resumeTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
-            guard let self, pm.pausedGame == nil else { return }
+            guard let self, !Task.isCancelled else { return }
+            self.resumeTask = nil
             self.phase = .playing
             AppWindow.resignKeyToGame()
             // The frame-rendered callback in EngineSessionCoordinator
@@ -352,6 +350,9 @@ extension AppState: EngineSessionCoordinatorDelegate {
     }
 
     private func clearEndedGame() {
+        quitOnPause = false
+        resumeTask?.cancel()
+        resumeTask = nil
         selectedGame = nil
         // Unbind the controls layout. Library-screen UI that reads
         // it then sees a neutral default, and mutations (they should
@@ -365,7 +366,11 @@ extension AppState: EngineSessionCoordinatorDelegate {
     }
 
     func coordinatorPausedGameStopped() {
-        killPausedGame()
+        // A game in the resume transition is no longer paused, and the
+        // library still shows.
+        guard resumeTask != nil else { return killPausedGame() }
+        session.killSession(of: selectedGame)
+        clearEndedGame()
     }
 
     func coordinatorGameRectDidChange(_ rect: CGRect) {
