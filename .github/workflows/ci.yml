@@ -108,13 +108,24 @@ jobs:
         with:
           submodules: false
 
+      - name: Find a preinstalled Swift 6.2
+        # The self-hosted runners cannot use sudo, and swiftly-action
+        # always runs apt-get with sudo. Their image ships Swift 6.2.
+        id: preinstalled
+        run: |
+          if swift --version 2>/dev/null | grep -q 'Swift version 6\.2'; then
+            echo "swift=true" >>"$GITHUB_OUTPUT"
+          fi
+
       - name: Cache Swift toolchain
+        if: steps.preinstalled.outputs.swift != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.local/share/swiftly
           key: swiftly-${{ runner.os }}-6.2
 
       - name: Install Swift toolchain
+        if: steps.preinstalled.outputs.swift != 'true'
         # Swiftly is Apple's official toolchain manager. Gives us
         # swift-format on ubuntu-latest without a custom container.
         # On cache hit the action detects the existing toolchain and
@@ -128,11 +139,17 @@ jobs:
         # `LINUX_SOURCEKIT_LIB_PATH`. The `swift` binary on PATH is
         # actually swiftly's manager, not the toolchain's swift, so
         # `which swift` doesn't help. Locate the lib directly under
-        # `$SWIFTLY_HOME_DIR/toolchains/<version>/usr/lib/`.
+        # `$SWIFTLY_HOME_DIR/toolchains/<version>/usr/lib/`. A
+        # preinstalled toolchain has it next to its own `swift`.
         run: |
-          SK_LIB_FILE=$(find "$SWIFTLY_HOME_DIR/toolchains" -name 'libsourcekitdInProc.so' 2>/dev/null | head -1)
+          if [ -n "${SWIFTLY_HOME_DIR:-}" ]; then
+            SK_ROOT="$SWIFTLY_HOME_DIR/toolchains"
+          else
+            SK_ROOT=$(dirname "$(dirname "$(readlink -f "$(command -v swift)")")")
+          fi
+          SK_LIB_FILE=$(find "$SK_ROOT" -name 'libsourcekitdInProc.so' 2>/dev/null | head -1)
           if [ -z "$SK_LIB_FILE" ]; then
-            echo "::error::libsourcekitdInProc.so not found under $SWIFTLY_HOME_DIR"
+            echo "::error::libsourcekitdInProc.so not found under $SK_ROOT"
             exit 1
           fi
           SK_LIB=$(dirname "$SK_LIB_FILE")
@@ -162,14 +179,16 @@ jobs:
           submodules: false
 
       - name: clang-format check
-        # DoozyX is the canonical clang-format CI action. Pinning
-        # clang-format 18 to match local (Apple clang-format 21 is
-        # also fine, the shipped .clang-format is style-stable).
-        uses: DoozyX/clang-format-lint-action@v0.20
-        with:
-          source: "ios/Empo/src ios/Empo/shims"
-          extensions: "h,m,mm,c,cpp"
-          clangFormatVersion: 18
+        # clang-format 18 matches local (Apple clang-format 21 is also
+        # fine, the shipped .clang-format is style-stable). The
+        # self-hosted runners have no Docker daemon for a Docker action.
+        run: |
+          command -v clang-format-18 >/dev/null ||
+            { sudo apt-get update && sudo apt-get install -y clang-format-18; }
+          FILES=$(git ls-files 'ios/Empo/src/*.'{h,m,mm,c,cpp} 'ios/Empo/shims/*.'{h,m,mm,c,cpp})
+          if [ -n "$FILES" ]; then
+            echo "$FILES" | xargs clang-format-18 --dry-run --Werror
+          fi
 
   shell:
     name: Bash (shellcheck + shfmt)
@@ -177,7 +196,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Find preinstalled tools
+        # The self-hosted runners cannot use sudo, so apt cannot run
+        # there. Their image ships these tools.
+        id: preinstalled
+        run: |
+          command -v shellcheck >/dev/null && echo "shellcheck=true" >>"$GITHUB_OUTPUT" || true
+
       - name: "Cache apt: shellcheck"
+        if: steps.preinstalled.outputs.shellcheck != 'true'
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: shellcheck
@@ -185,9 +212,12 @@ jobs:
 
       - name: Install shfmt
         run: |
-          curl -fsSL -o /usr/local/bin/shfmt \
+          command -v shfmt >/dev/null && exit 0
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/shfmt" \
             https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64
-          chmod +x /usr/local/bin/shfmt
+          chmod +x "$HOME/.local/bin/shfmt"
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
       - name: shellcheck
         run: |
@@ -216,7 +246,15 @@ jobs:
       - name: Install JS tools
         run: bun install --frozen-lockfile
 
+      - name: Find preinstalled tools
+        # The self-hosted runners cannot use sudo, so apt cannot run
+        # there. Their image ships yamllint.
+        id: preinstalled
+        run: |
+          command -v yamllint >/dev/null && echo "yamllint=true" >>"$GITHUB_OUTPUT" || true
+
       - name: "Cache apt: yamllint"
+        if: steps.preinstalled.outputs.yamllint != 'true'
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: yamllint
@@ -269,13 +307,24 @@ jobs:
         with:
           submodules: false
 
+      - name: Find a preinstalled Swift 6.2
+        # The self-hosted runners cannot use sudo, and swiftly-action
+        # always runs apt-get with sudo. Their image ships Swift 6.2.
+        id: preinstalled
+        run: |
+          if swift --version 2>/dev/null | grep -q 'Swift version 6\.2'; then
+            echo "swift=true" >>"$GITHUB_OUTPUT"
+          fi
+
       - name: Cache Swift toolchain
+        if: steps.preinstalled.outputs.swift != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.local/share/swiftly
           key: swiftly-${{ runner.os }}-6.2
 
       - name: Install Swift toolchain
+        if: steps.preinstalled.outputs.swift != 'true'
         uses: vapor/swiftly-action@v0.2
         with:
           toolchain: "6.2"
