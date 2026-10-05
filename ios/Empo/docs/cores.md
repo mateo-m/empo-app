@@ -217,10 +217,18 @@ same `gamecore_` name, so the compiler checks each signature against it.
 Empo does step 2 through `ios/Empo/src/App/AppCoreForwarders.c`. It makes a
 forwarder for each function of `GameCoreFunctions.h`, the list that
 `tools/gamecore/generate-core-forwarders.sh` writes from `GameCore.h`. Every
-`gamecore_*` call in the app lands in a forwarder that asks the open core for the
-same name. A call made before the core opens
-aborts with the name it wanted, because a silent no-op would hide a build
-mistake until a game misbehaved.
+`gamecore_*` call in the app lands in a forwarder.
+
+When the game runs in the app, the forwarder asks the open core for the same
+name. A call made before the core opens aborts with the name it wanted,
+because a silent no-op would hide a build mistake until a game misbehaved.
+
+When the game runs in a game process, the forwarder calls the `gameprocess_*`
+function of the same name in `GameProcessClient.m`. The app opens no core and
+does not use `dlsym`. A call made before the process connects waits, and goes
+to the process when it connects. A call outside a session goes nowhere. The
+getters answer from the last status that the process sent. The game process
+opens the core with steps 1 and 2 through `GameProcess/GameCoreForwarders.c`.
 
 ## Which thread runs the game
 

@@ -14,7 +14,6 @@ struct PsdkCore: GameCore {
     let ruby: String
     let gamesLine: String
     let madeWith = "PSDK"
-    let scriptLanguage = GameScriptLanguage.ruby
 
     var framework: String { "Psdk\(ruby.replacingOccurrences(of: ".", with: ""))Core" }
     var displayName: String { "PSDK core for Ruby \(ruby)" }

@@ -20,7 +20,6 @@ protocol GameCore {
     /// The games of this core, as a setting names them.
     var gamesName: String { get }
     var supportsCheats: Bool { get }
-    var scriptLanguage: GameScriptLanguage { get }
     /// True when `gamecore_killSession` kills the running game and frees
     /// all of its state. Then any number of games, on any core, can run
     /// after it in the app, with nothing left from this one.
@@ -129,25 +128,21 @@ extension GameCore {
     }
 }
 
-/// The language the scripts of a core's games are in.
-enum GameScriptLanguage: String {
-    case ruby
-    case javaScript
-}
-
 enum GameCores {
     /// The first core that accepts a folder runs it.
     static let all: [any GameCore] = PsdkCore.all + [MvmzCore(), MkxpCore()]
 
     static var inThisBuild: [any GameCore] { all.filter(\.isInThisBuild) }
 
-    static var rubyInThisBuild: [any GameCore] { inThisBuild.filter { $0.scriptLanguage == .ruby } }
+    /// The cores in this build that run in a game process when the
+    /// setting is on.
+    static var gameProcessCores: [any GameCore] { inThisBuild.filter { !$0.canKillSession } }
 
-    /// The games of the Ruby cores in this build, for example "PSDK
-    /// games and RPG Maker XP, VX and VX Ace games".
-    static var rubyGamesName: String {
+    /// The games of `gameProcessCores`, for example "PSDK games and RPG
+    /// Maker XP, VX and VX Ace games".
+    static var gameProcessGamesName: String {
         var names: [String] = []
-        for core in rubyInThisBuild where !names.contains("\(core.gamesName) games") {
+        for core in gameProcessCores where !names.contains("\(core.gamesName) games") {
             names.append("\(core.gamesName) games")
         }
         return ListFormatter.localizedString(byJoining: names)
