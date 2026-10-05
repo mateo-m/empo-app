@@ -58,6 +58,32 @@ settings:
     Release:
       OTHER_CFLAGS: "-fdeclspec -O3"
       PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo
+targetTemplates:
+  # An extension that the app embeds. Its files are in the folder of
+  # its name.
+  Extension:
+    platform: iOS
+    sources:
+      - path: ${target_name}
+        excludes:
+          - Info.plist
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: ${target_name}
+        PRODUCT_BUNDLE_IDENTIFIER: $(inherited).${target_name}
+        # The app's bundle identifier. The game process extension point
+        # is <app bundle identifier>.game-process.
+        EMPO_HOST_BUNDLE_IDENTIFIER: $(PRODUCT_BUNDLE_IDENTIFIER:base)
+        INFOPLIST_FILE: $(PROJECT_DIR)/${target_name}/Info.plist
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Empo.entitlements
+        EMPO_APP_GROUP: group.$(EMPO_HOST_BUNDLE_IDENTIFIER)
+        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
 targets:
   Empo:
     type: application
@@ -292,14 +318,6 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
-        # Keep an .entitlements file in the build, so that the signed
-        # binary always has an entitlements blob. Naive resigners (notably ESign) read this
-        # blob as their template. Without it they synthesize an
-        # incomplete blob that breaks document picker's sandbox-
-        # extension grants on the picked URL (Open does nothing for
-        # files, spinner-forever for folders). Sideloadly + AltStore
-        # synthesize correctly so they work regardless, but shipping
-        # an explicit file unblocks ESign too.
         CODE_SIGN_ENTITLEMENTS: Empo.entitlements
         # The folder that the app shares with the game process.
         EMPO_APP_GROUP: group.$(PRODUCT_BUNDLE_IDENTIFIER)
@@ -346,11 +364,9 @@ targets:
     # One process for each game. The app starts it with ExtensionKit,
     # and it opens the core of the game from the app's Frameworks.
     type: extensionkit-extension
-    platform: iOS
+    templates:
+      - Extension
     sources:
-      - path: GameProcess
-        excludes:
-          - Info.plist
       # The memory of the game goes in a block that the app lends it
       # (GameProcess/AppMemory.m). See vendor/mimalloc/README.md and
       # vendor/fishhook/README.md.
@@ -359,28 +375,13 @@ targets:
       - path: vendor/mimalloc/src/static.c
         compilerFlags: -O3 -DMI_DEBUG=0 -DMI_FREE_USE_PAGEMAP=1 -w
       - path: vendor/fishhook/fishhook.c
-    configFiles:
-      Debug: Signing.xcconfig
-      Release: Signing.xcconfig
     settings:
       base:
-        PRODUCT_NAME: GameProcess
         HEADER_SEARCH_PATHS:
           - $(inherited)
           - $(PROJECT_DIR)/vendor/mimalloc/include
           - $(PROJECT_DIR)/vendor/fishhook
-        PRODUCT_BUNDLE_IDENTIFIER: $(inherited).GameProcess
-        # The app's bundle identifier. The extension point is
-        # <app bundle identifier>.game-process.
-        EMPO_HOST_BUNDLE_IDENTIFIER: $(PRODUCT_BUNDLE_IDENTIFIER:base)
-        INFOPLIST_FILE: $(PROJECT_DIR)/GameProcess/Info.plist
-        SWIFT_VERSION: "6.0"
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/GameProcess/GameProcess-Bridging-Header.h
-        TARGETED_DEVICE_FAMILY: "1,2"
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_ENTITLEMENTS: GameProcess/GameProcess.entitlements
-        EMPO_APP_GROUP: group.$(EMPO_HOST_BUNDLE_IDENTIFIER)
-        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
         OTHER_LDFLAGS:
           - -framework Foundation
           - -framework UIKit
@@ -390,26 +391,8 @@ targets:
     # Shows the games and saves, which live in the app group, in the
     # Files app.
     type: app-extension
-    platform: iOS
-    sources:
-      - path: FilesProvider
-        excludes:
-          - Info.plist
-    configFiles:
-      Debug: Signing.xcconfig
-      Release: Signing.xcconfig
-    settings:
-      base:
-        PRODUCT_NAME: FilesProvider
-        PRODUCT_BUNDLE_IDENTIFIER: $(inherited).FilesProvider
-        EMPO_HOST_BUNDLE_IDENTIFIER: $(PRODUCT_BUNDLE_IDENTIFIER:base)
-        INFOPLIST_FILE: $(PROJECT_DIR)/FilesProvider/Info.plist
-        SWIFT_VERSION: "6.0"
-        TARGETED_DEVICE_FAMILY: "1,2"
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_ENTITLEMENTS: FilesProvider/FilesProvider.entitlements
-        EMPO_APP_GROUP: group.$(EMPO_HOST_BUNDLE_IDENTIFIER)
-        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
+    templates:
+      - Extension
   MvmzCore:
     type: framework
     platform: iOS
