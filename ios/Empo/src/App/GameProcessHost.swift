@@ -29,8 +29,9 @@ enum GameProcessHost {
         let current = session
         let previousExit = lastExit
         Task {
-            // The system gives a launch that comes before the old
-            // process is gone that old process, which then quits.
+            // When a launch comes before the old process is gone, the
+            // system connects the launch to the old process, which then
+            // quits.
             await previousExit?.value
             guard current == session else { return }
             guard let identity = await identity() else {
