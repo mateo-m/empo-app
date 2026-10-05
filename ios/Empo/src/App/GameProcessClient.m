@@ -329,12 +329,16 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
     void *token = (__bridge void *)connection;
     connection.interruptionHandler = ^{ connectionEnded(token); };
     connection.invalidationHandler = ^{ connectionEnded(token); };
-    [connection resume];
 
     os_unfair_lock_lock(&gLock);
     BOOL wanted = gOpen && gConnection == nil && !gTerminated;
     if (wanted) {
         gConnection = connection;
+    }
+    // The handlers can run as soon as the connection resumes. They wait
+    // for the lock, so they see the connection as the current one.
+    [connection resume];
+    if (wanted) {
         id<EmpoGameProcess> process = proxyOf(connection);
         for (Call call in gWaiting) {
             call(process);
