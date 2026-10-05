@@ -16,7 +16,8 @@
 # ["self-hosted","linux","md"], or one quoted label such as
 # "ubuntu-latest". A bare ubuntu-latest fails. With no variable, a
 # job runs on a GitHub-hosted machine. A pull request from a fork
-# always does, so its code never runs on a self-hosted machine.
+# does too. A fork can edit this file, so only the repository's
+# approval rule for fork runs keeps fork code off a self-hosted machine.
 # docs.yml and pr-title.yml read LINUX_RUNNER too.
 
 name: CI
