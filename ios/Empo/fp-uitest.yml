@@ -1,0 +1,31 @@
+include:
+  - project.yml
+name: EmpoFP
+targets:
+  EmpoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - FPUITests
+    dependencies:
+      - target: Empo
+    configFiles:
+      Debug: Signing.xcconfig
+    settings:
+      base:
+        TEST_TARGET_NAME: Empo
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev2.gpuitests
+        CODE_SIGNING_ALLOWED: YES
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Empo:
+    build:
+      targets:
+        Empo: all
+        EmpoUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - EmpoUITests
+    run:
+      config: Debug

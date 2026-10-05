@@ -11,6 +11,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#import "AppMemory.h"
 #import "AudioSession.h"
 #import "EmpoCore.h"
 #import "EmpoGameProcessProtocol.h"
@@ -173,6 +174,10 @@ static void runCore(void) {
                       runCore();
                   }
                 }];
+}
+
+- (void)useMemory:(xpc_object_t)memory {
+    EmpoUseAppMemory(memory);
 }
 
 - (void)openCore:(NSString *)framework reply:(void (^)(NSString *_Nullable))reply {
