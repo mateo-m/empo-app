@@ -10,6 +10,11 @@
 #
 # Requires secret EMPO_DEPS_READ_TOKEN (read access to empo-deps) for
 # the ANGLE tarball. The core releases are public.
+#
+# The repository variables LINUX_RUNNER and MACOS_RUNNER choose the
+# machines as a JSON label list, for example
+# ["self-hosted","linux","md"]. With no variable, a job runs on a
+# GitHub-hosted machine. docs.yml and pr-title.yml read LINUX_RUNNER too.
 
 name: CI
 
@@ -49,7 +54,7 @@ jobs:
   # root, so a change to either must still run the tests.
   changes:
     name: Detect docs-only changes
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     permissions:
       contents: read
       pull-requests: read
@@ -97,7 +102,7 @@ jobs:
     name: Swift (swiftlint + swift-format)
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -150,7 +155,7 @@ jobs:
 
   objc-cpp:
     name: ObjC / C / C++ (clang-format)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -168,7 +173,7 @@ jobs:
 
   shell:
     name: Bash (shellcheck + shfmt)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
 
@@ -200,7 +205,7 @@ jobs:
 
   yaml:
     name: YAML (oxfmt + yamllint)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
 
@@ -232,7 +237,7 @@ jobs:
 
   markdown:
     name: Markdown (markdownlint)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
 
@@ -255,7 +260,7 @@ jobs:
     name: GameProbe (swift test, Linux)
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     defaults:
       run:
         working-directory: ios/GameProbe
@@ -283,7 +288,7 @@ jobs:
 
   deps-pins:
     name: Verify empo-deps release pins
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -302,7 +307,7 @@ jobs:
     name: Simulator build
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: macos-latest
+    runs-on: ${{ fromJSON(vars.MACOS_RUNNER || '"macos-latest"') }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
@@ -427,7 +432,7 @@ jobs:
       - deps-pins
       - simulator
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - name: Verify every job passed
         run: |

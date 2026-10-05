@@ -48,7 +48,7 @@ concurrency:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       # The changelog page reads the engine commits between the engine
       # pins of two release tags, so it needs the tags and the engine history.
@@ -79,7 +79,7 @@ jobs:
     name: Deploy
     if: github.event_name != 'pull_request'
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     permissions:
       pages: write
       id-token: write
