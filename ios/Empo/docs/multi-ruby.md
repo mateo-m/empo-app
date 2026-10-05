@@ -102,7 +102,7 @@ enum Schema: String {
 static let currentSchema: Schema = .codeOnlyTokens
 ```
 
-`MkxpProfile` stores the scan result, its schema string, and a digest of the files that the scan reads in `Metadata/mkxp-profile.json`. The digest holds the path, size, and modification date of each file in the game folder and in `Data/`, and of the `.rb` files that the scan reads in the loose script folders (`GameScriptProfile.inputFiles`). `MkxpProfile.load(for:)` scans again when the schema or the digest is different. The import and the settings reset always scan again, because an archive keeps the dates of its files. `GameScriptProfile` is the only entry point.
+`MkxpProfile` stores the scan result, its schema string, and a digest of the files that the scan reads in `Metadata/mkxp-profile.json`. The digest holds the path, size, and modification date of each file that the scan reads (`GameScriptProfile.inputFiles`): `Game.ini`, the `Scripts` file, the libraries and the RGSS and `.fpk` archives in the game folder and in `Data/`, and the `.rb` files in the loose script folders. Saves are not in it, so a save does not start a new scan. `MkxpProfile.load(for:)` scans again when the schema or the digest is different. The import and the settings reset always scan again, because an archive keeps the dates of its files. `GameScriptProfile` is the only entry point.
 
 ## Per-version compile
 

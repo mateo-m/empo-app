@@ -65,16 +65,18 @@ public enum GameScriptProfile {
         )
     }
 
-    /// Every file that `analyze` can read: the top level of the game
-    /// folder and of `Data/`, and the `.rb` files that the scan reads in
-    /// the loose script folders.
+    /// Every file that `analyze` can read. Saves sit beside these files,
+    /// and they are not in the list.
     public static func inputFiles(gameDirectory: URL) -> [URL] {
         let fm = FileManager.default
+        let names: Set<String> = ["Game.ini", "Scripts.rxdata", "Scripts.rvdata", "Scripts.rvdata2"]
+        let extensions: Set<String> = ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a", "fpk"]
         let topLevel = ["", "Data"].flatMap {
-            (try? fm.contentsOfDirectory(
+            ((try? fm.contentsOfDirectory(
                 at: gameDirectory.appendingPathComponent($0),
                 includingPropertiesForKeys: nil,
-                options: [.skipsHiddenFiles])) ?? []
+                options: [.skipsHiddenFiles])) ?? [])
+                .filter { names.contains($0.lastPathComponent) || extensions.contains($0.pathExtension.lowercased()) }
         }
         return topLevel + RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
     }

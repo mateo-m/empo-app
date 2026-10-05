@@ -62,7 +62,9 @@ final class GameScriptProfileTests: XCTestCase {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? fm.removeItem(at: dir) }
-        let files = ["Game.ini", "RGSS104E.dll", "Data/Scripts.rxdata", "Data/Scripts/Plugins/a.rb", "Graphics/Titles/t.png"]
+        let read = ["Game.ini", "RGSS104E.dll", "Game.rgssad", "Data/Scripts.rxdata", "Data/a.fpk", "Data/Scripts/Plugins/a.rb"]
+        let unread = ["Save01.rxdata", "Data/Map001.rxdata", "Graphics/Titles/t.png"]
+        let files = read + unread
         for file in files {
             let url = dir.appendingPathComponent(file)
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -71,8 +73,7 @@ final class GameScriptProfileTests: XCTestCase {
 
         let inputs = Set(GameScriptProfile.inputFiles(gameDirectory: dir).map { $0.resolvingSymlinksInPath().path })
         let paths = files.map { dir.appendingPathComponent($0).resolvingSymlinksInPath().path }
-        XCTAssertTrue(inputs.isSuperset(of: paths.dropLast()), "\(inputs)")
-        XCTAssertFalse(inputs.contains(paths.last!))
+        XCTAssertEqual(inputs, Set(paths.prefix(read.count)))
     }
 
     func testModernTokensInCommentsAndStringsStayOnRuby19() throws {
