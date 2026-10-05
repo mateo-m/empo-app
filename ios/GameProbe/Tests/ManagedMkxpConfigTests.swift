@@ -61,12 +61,12 @@ final class ManagedMkxpConfigTests: XCTestCase {
             )
         )
         let payload = try parseOverlayJSON(json)
-        XCTAssertTrue(payload["defScreenW"] is NSNull)
-        XCTAssertTrue(payload["defScreenH"] is NSNull)
+        XCTAssertEqual(payload["defScreenW"] as? Int, 0)
+        XCTAssertEqual(payload["defScreenH"] as? Int, 0)
         XCTAssertNil(payload["smoothScaling"])
     }
 
-    func testOverlayStringHandAddedScreenKeyBeatsNullPatch() throws {
+    func testOverlayStringHandAddedScreenKeyBeatsZeroPatch() throws {
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
@@ -108,8 +108,8 @@ final class ManagedMkxpConfigTests: XCTestCase {
             )
         )
         let payload = try parseOverlayJSON(json)
-        XCTAssertTrue(payload["defScreenW"] is NSNull)
-        XCTAssertTrue(payload["defScreenH"] is NSNull)
+        XCTAssertEqual(payload["defScreenW"] as? Int, 0)
+        XCTAssertEqual(payload["defScreenH"] as? Int, 0)
     }
 
     func testOverlayStringAppliesVsyncPatchOnlyWhenConditionsMet() throws {
@@ -131,7 +131,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
         let payload = try parseOverlayJSON(json)
         XCTAssertEqual(payload["syncToRefreshrate"] as? Bool, true)
         XCTAssertNil(payload["vsync"])
-        XCTAssertTrue(payload["defScreenW"] is NSNull)
+        XCTAssertEqual(payload["defScreenW"] as? Int, 0)
         XCTAssertNil(payload["defScreenH"])
     }
 
@@ -184,7 +184,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertNotNil(logged)
         let payload = try parseOverlayJSON(json)
         XCTAssertEqual(payload["syncToRefreshrate"] as? Bool, true)
-        XCTAssertTrue(payload["defScreenW"] is NSNull)
+        XCTAssertEqual(payload["defScreenW"] as? Int, 0)
     }
 
     func testOverlayStringNilWhenNothingToSend() throws {

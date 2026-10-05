@@ -114,12 +114,19 @@ std::atomic<bool> gCheatsEnabled{false};
 std::atomic<bool> gShowViewportBounds{false};
 std::atomic<bool> gControllerCaptureEnabled{false};
 std::atomic<int> gFastForwardMultiplier{1};
-// Drawn frames, and the clock and the count the last read took. The
-// average covers the time between two reads, so a reader that asks once
-// a second gets the last second.
+// The frame path measures the rate over windows of kFpsWindowSeconds.
+// A read changes nothing, because with a game process the app reads it
+// more than once for each value that it shows.
+constexpr double kFpsWindowSeconds = 0.5;
 std::atomic<unsigned long long> gDrawnFrames{0};
 std::atomic<unsigned long long> gFpsMarkFrames{0};
 std::atomic<double> gFpsMarkSeconds{0.0};
+std::atomic<double> gAverageFps{0.0};
+
+double monotonicSeconds() {
+    return static_cast<double>(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9;
+}
+
 std::atomic<int> gArgc{0};
 std::atomic<char **> gArgv{nullptr};
 
@@ -364,7 +371,17 @@ void onFrame(void *) {
         placeOutputRegion();
     }
 
-    gDrawnFrames.fetch_add(1);
+    const unsigned long long frames = gDrawnFrames.fetch_add(1) + 1;
+    const double now = monotonicSeconds();
+    const double mark = gFpsMarkSeconds.load();
+    if (mark <= 0.0) {
+        gFpsMarkSeconds.store(now);
+        gFpsMarkFrames.store(frames);
+    } else if (now - mark >= kFpsWindowSeconds) {
+        gAverageFps.store(static_cast<double>(frames - gFpsMarkFrames.load()) / (now - mark));
+        gFpsMarkSeconds.store(now);
+        gFpsMarkFrames.store(frames);
+    }
 
     bool first = !gGameReady.exchange(true);
     if (first) {
@@ -771,15 +788,17 @@ const char *gamecore_getDetails(void) {
     return details.c_str();
 }
 double gamecore_getAverageFPS(void) {
-    const unsigned long long frames = gDrawnFrames.load();
-    const double now = static_cast<double>(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9;
-    const double then = gFpsMarkSeconds.exchange(now);
-    const unsigned long long before = gFpsMarkFrames.exchange(frames);
-    const double span = now - then;
-    if (then <= 0.0 || span <= 0.0) {
+    const double mark = gFpsMarkSeconds.load();
+    const double span = monotonicSeconds() - mark;
+    if (mark <= 0.0) {
         return 0.0;
     }
-    return static_cast<double>(frames - before) / span;
+    // No frame closed the window, so the game drew nothing for at least
+    // kFpsWindowSeconds.
+    if (span >= 2 * kFpsWindowSeconds) {
+        return 0.0;
+    }
+    return gAverageFps.load();
 }
 int gamecore_getTargetFPS(void) {
     return 60;

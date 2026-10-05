@@ -85,9 +85,9 @@ struct PsdkCore: GameCore {
         GameCores.firstTitlesPicture(in: root)
     }
 
-    // ponytail: reads all of Data/Scripts.dat at each launch, 0.11 s
-    // for Edelweiss Chronicles on a Mac. Run it once at import and keep
-    // a mark if a slow device shows the wait.
+    // ponytail: reads all of Data/Scripts.dat at each launch, 0.05 s
+    // for Edelweiss Chronicles on an iPhone 13 Pro. Run it once at import
+    // and keep a mark if a game shows the wait.
     func launch(_ container: GameContainer) {
         PsdkGame.matchFileNameCase(in: container.gameURL)
         let settings = GameSettings.load(from: container.empoStateURL)
