@@ -58,6 +58,142 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.grammar, .legacy)
     }
 
+    func testInputFilesHoldWhatTheScanReads() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: dir) }
+        let read = ["Game.ini", "RGSS104E.dll", "Game.rgssad", "Data/Scripts.rxdata", "Data/a.fpk", "Data/Scripts/Plugins/a.rb"]
+        let unread = ["Save01.rxdata", "Data/Map001.rxdata", "Data/Game.ini", "Data/x.dll", "a.fpk", "Graphics/Titles/t.png"]
+        let files = read + unread
+        for file in files {
+            let url = dir.appendingPathComponent(file)
+            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: url)
+        }
+
+        let inputs = Set(GameScriptProfile.inputFiles(gameDirectory: dir).map { $0.resolvingSymlinksInPath().path })
+        let paths = files.map { dir.appendingPathComponent($0).resolvingSymlinksInPath().path }
+        XCTAssertEqual(inputs, Set(paths.prefix(read.count)))
+    }
+
+    func testModernTokensInCommentsAndStringsStayOnRuby19() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Scripts.rvdata2"))
+        try """
+            # * optionnal named args = font:, value:, x:, y:
+            =begin
+            list.filter_map { |e| e&.name }
+            =end
+            puts "a&.b x:, h.except(:k)"
+            text = <<~DOC
+              a&.b x:, h.except(:k)
+            DOC
+            puts "# frozen_string_literal: true", "# frozen_string_literal: true"
+            puts "# frozen_string_literal: true"
+            # frozen_string_literal: truest
+            def a; end
+            # frozen_string_literal: true
+            # frozen_string_literal: true
+            # frozen_string_literal: true
+            # frozen_string_literal: true_or_false
+            # frozen_string_literal: true, says the old doc
+            raw = <<~'RAW'
+              #{a&.b} #{c&.d} #{e&.f}
+            RAW
+            =begin
+            =endless
+            a&.b x:, h.except(:k)
+            =end
+            system `a&.b x:, h.except(:k)`
+            list = %w(a&.b x:, h.except(:k))
+            puts %(a&.b x:, h.except(:k))
+            puts <<~A, <<~B
+              one
+            A
+              a&.b x:, h.except(:k)
+            B
+            puts <<~C
+            C\u{20}
+              a&.b x:, h.except(:k)
+            C
+            """.write(
+                to: scripts.appendingPathComponent("SDK_Gui.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .legacy)
+        XCTAssertEqual(profile.rubyVersion, 19)
+    }
+
+    func testFrozenStringLiteralCommentsStillCountAsModern() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        for name in ["A", "B", "C"] {
+            try "# frozen_string_literal: true\nclass \(name); end\n".write(
+                to: scripts.appendingPathComponent("\(name).rb"), atomically: true, encoding: .utf8)
+        }
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
+    func testModernTokensInHeredocInterpolationCount() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try """
+            text = <<~DOC
+              #{a&.name} and #{
+                b&.name } and #{c&.name}
+            DOC
+            """.write(to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
+    func testWindowsLineEndingsCloseHeredocs() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "text = <<~DOC\r\n  a&.b x:, h.except(:k)\r\nDOC\r\nputs text\r\n".write(
+            to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
+    }
+
+    func testModuloKeepsTheRestOfTheLineAsCode() throws {
+        let lines = [
+            "n %= 2; a&.b; b&.c; c&.d",
+            "m = n%(a&.b + b&.c + c&.d)",
+            "text = \"%s\"%(a&.b + b&.c + c&.d)",
+            "r = n.%(a&.b + b&.c + c&.d)",
+        ]
+        for line in lines {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            let scripts = dir.appendingPathComponent("Scripts")
+            try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+
+            try line.write(to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
+
+            XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern, line)
+        }
+    }
+
     func testRGSS2LibraryRoutesToRuby18() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -195,6 +331,83 @@ final class GameScriptProfileTests: XCTestCase {
 
         """.write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
+    func testRuby19CallAfterAShiftOrARegexRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        // `i<<x` is a shift and `/<<r>>/` a regex, not heredocs that
+        // end at a line "x", "r", or "tag".
+        try """
+        ret|=(i<<x)
+        mask = (1<<index)
+        basedmg=basedmg<<shift
+        mask = value <<token
+        ret.gsub!(/<<r>>/,"\\r")
+        tags = text.scan /<<tag>>/
+        half = width/2
+        third = width /3; str.force_encoding('UTF-8')
+        names = %w(
+        tag
+        )
+
+        """.write(
+            to: scripts.appendingPathComponent("File_Mixins.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
+    func testRuby19CallAfterAShiftWithAnEndLineInALaterScriptRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // A heredoc ends in its own script.
+        try compiledScripts([
+            "mask = value <<token\nstr.force_encoding('UTF-8')\n",
+            "names = %w(\ntoken\n)\n",
+        ]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+    }
+
+    func testRuby19CallInAHeredocAfterAShiftOnTheSameLineRoutesToRuby18() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try compiledScripts([
+            "text = value <<shift + <<'END'\nstr.force_encoding('UTF-8')\nEND\n"
+        ]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 18)
+    }
+
+    func testRuby19CallAfterACommentInAWindowsScriptRoutesToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "# Scene_Movie\r\ncase to\r\nwhen 65001; str.force_encoding('UTF-8')\r\nend\r\n".write(
+            to: scripts.appendingPathComponent("Scene_Movie.rb"), atomically: true, encoding: .utf8)
 
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
     }
@@ -350,5 +563,23 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.grammar, .inconclusive)
         XCTAssertTrue(profile.modernRubyScripts)
         XCTAssertEqual(profile.rubyVersion, 31)
+    }
+
+    /// A Marshal array of `[id, title, zlib source]` entries. Each source
+    /// is one stored deflate block, which adds 11 bytes, and a one-byte
+    /// Marshal length holds at most 122, so a source has at most 111.
+    private func compiledScripts(_ sources: [String]) -> Data {
+        func string(_ bytes: [UInt8]) -> [UInt8] { [0x22, UInt8(bytes.count + 5)] + bytes }
+        var data: [UInt8] = [0x04, 0x08, 0x5b, UInt8(sources.count + 5)]
+        for (id, source) in sources.enumerated() {
+            let body = Array(source.utf8)
+            precondition(body.count <= 111, "the source is too long for a one-byte length")
+            let count = UInt16(body.count)
+            let stream: [UInt8] =
+                [0x78, 0x01, 0x01, UInt8(count & 0xff), UInt8(count >> 8), UInt8(~count & 0xff), UInt8(~count >> 8)]
+                + body + [0, 0, 0, 0]
+            data += [0x5b, 0x08, 0x69, UInt8(id + 6)] + string(Array("Script".utf8)) + string(stream)
+        }
+        return Data(data)
     }
 }
