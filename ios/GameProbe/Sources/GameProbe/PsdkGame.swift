@@ -115,23 +115,13 @@ extension PsdkGame {
     private static let pathPattern = try! NSRegularExpression(
         pattern: #"(?:graphics|audio|Fonts|plugins|pokemonsdk)(?:/[A-Za-z0-9_.-]+)+\.[a-z]{2,4}(?![A-Za-z0-9_])"#)
 
+    // Latin-1 maps each byte to one character. The pattern matches only
+    // printable ASCII, so a match never runs into the binary between two
+    // strings.
     private static func pathLiterals(in scripts: Data) -> Set<String> {
-        var literals = Set<String>()
-        var run: [UInt8] = []
-        func flush() {
-            if run.count >= 4, let text = String(bytes: run, encoding: .ascii) {
-                let range = NSRange(text.startIndex..., in: text)
-                for match in pathPattern.matches(in: text, range: range) {
-                    literals.insert((text as NSString).substring(with: match.range))
-                }
-            }
-            run.removeAll(keepingCapacity: true)
-        }
-        for byte in scripts {
-            if (0x20...0x7e).contains(byte) { run.append(byte) } else { flush() }
-        }
-        flush()
-        return literals
+        guard let text = String(data: scripts, encoding: .isoLatin1) as NSString? else { return [] }
+        let matches = pathPattern.matches(in: text as String, range: NSRange(location: 0, length: text.length))
+        return Set(matches.map { text.substring(with: $0.range) })
     }
 
     /// The names on disk along `parts`, matched without case. Nil when a

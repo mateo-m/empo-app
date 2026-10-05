@@ -450,7 +450,7 @@ struct GameLibraryView: View {
         EmptyStateView(
             icon: Image(.empoMark),
             title: "No games yet",
-            subtitle: "Import an RPG Maker or PSDK game to get started.",
+            subtitle: "Import a game to start playing.",
             revealed: splashDismissed,
             initialDelay: entranceDelay
         )

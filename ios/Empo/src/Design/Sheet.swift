@@ -67,7 +67,7 @@ struct StandardSheet<Content: View>: View {
     var trailingButton: SheetBarAction?
     @ViewBuilder var content: Content
 
-    @State private var measuredHeight: CGFloat = 0
+    @State private var sheetSize = IntrinsicSheetSize()
 
     /// An identity-block sheet with no toolbar action has an empty
     /// bar. Hiding it lets the sheet hug its content.
@@ -99,7 +99,7 @@ struct StandardSheet<Content: View>: View {
                     content
                 }
                 .padding(Spacing.xl)
-                .intrinsicSheetContent(measuredHeight: $measuredHeight)
+                .intrinsicSheetContent(size: $sheetSize)
             }
             .scrollBounceBehavior(.basedOnSize)
             .navigationTitle(emblem == nil ? title : "")
@@ -114,7 +114,7 @@ struct StandardSheet<Content: View>: View {
             }
         }
         .intrinsicSheetDetent(
-            measuredHeight: measuredHeight,
+            size: $sheetSize,
             chromeAllowance: chromeAllowance ?? (barHidden ? 28 : 64)
         )
         .tint(.brand)

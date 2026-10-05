@@ -1,0 +1,25 @@
+import XCTest
+
+@testable import Empo
+
+final class MkxpProfileTests: XCTestCase {
+
+    func testScanRunsAgainOnlyWhenAScriptChanges() throws {
+        let container = GameContainer(folderName: "mkxp-profile-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: container.url) }
+        let script = container.gameURL.appendingPathComponent("Data/Scripts/Main.rb")
+        try FileManager.default.createDirectory(
+            at: script.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "x = 1\n".write(to: script, atomically: true, encoding: .utf8)
+        XCTAssertFalse(MkxpProfile.load(for: container).modernRubyScripts)
+
+        let stored = container.metadataURL.appendingPathComponent("mkxp-profile.json")
+        var profile = try JSONDecoder().decode(MkxpProfile.self, from: Data(contentsOf: stored))
+        profile.modernRubyScripts = true
+        try JSONEncoder().encode(profile).write(to: stored)
+        XCTAssertTrue(MkxpProfile.load(for: container).modernRubyScripts)
+
+        try "x = 1\ny = 2\n".write(to: script, atomically: true, encoding: .utf8)
+        XCTAssertFalse(MkxpProfile.load(for: container).modernRubyScripts)
+    }
+}

@@ -204,43 +204,38 @@ struct GameInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .animation(Motion.snappy, value: titleScrollProgress > 0.5)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 0) {
-                        // Title slides in: frame height grows to push subtitle down,
-                        // opacity fades in so no visible clipping needed.
-                        Text(displayTitle)
+            .sheetToolbar {
+                VStack(spacing: 0) {
+                    // Title slides in: frame height grows to push subtitle down,
+                    // opacity fades in so no visible clipping needed.
+                    Text(displayTitle)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .frame(height: 20 * titleScrollProgress, alignment: .bottom)
+                        .opacity(titleScrollProgress)
+
+                    // Subtitle cross-fades between headline and caption sizes.
+                    // Font changes aren't animatable, so both are overlaid.
+                    ZStack {
+                        Text("Info")
                             .font(.headline)
-                            .lineLimit(1)
-                            .frame(height: 20 * titleScrollProgress, alignment: .bottom)
+                            .opacity(1 - titleScrollProgress)
+                            .blur(radius: titleScrollProgress * 4)
+
+                        Text("Info")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             .opacity(titleScrollProgress)
-
-                        // Subtitle cross-fades between headline and caption sizes.
-                        // Font changes aren't animatable, so both are overlaid.
-                        ZStack {
-                            Text("Info")
-                                .font(.headline)
-                                .opacity(1 - titleScrollProgress)
-                                .blur(radius: titleScrollProgress * 4)
-
-                            Text("Info")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .opacity(titleScrollProgress)
-                        }
-                    }
-                    .sheetTitle()
-                    .animation(Motion.standard, value: titleScrollProgress)
-                    .onGeometryChange(for: CGFloat.self) { proxy in
-                        proxy.frame(in: .global).maxY
-                    } action: { newValue in
-                        navBarBottomY = newValue
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .tint(.brand)
+                .animation(Motion.standard, value: titleScrollProgress)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.frame(in: .global).maxY
+                } action: { newValue in
+                    navBarBottomY = newValue
                 }
+            } done: {
+                dismiss()
             }
             .imageSourcePicker(
                 isPresented: $showArtworkPicker,
