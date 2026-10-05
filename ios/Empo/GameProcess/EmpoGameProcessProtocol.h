@@ -7,11 +7,16 @@
 // gamecore_* call of the same name, in the order the app sent it.
 
 #import <Foundation/Foundation.h>
+#import <xpc/xpc.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 // App -> game process.
 @protocol EmpoGameProcess
+
+// A block of the app's memory, with the keys EmpoGameProcessMemory*
+// below. The app sends it before openCore.
+- (void)useMemory:(xpc_object_t)memory;
 
 // Opens the core `framework` from the app's Frameworks folder. The
 // reply is nil on success, or the reason.
@@ -75,6 +80,15 @@ static NSString *const EmpoGameProcessStatusTitle = @"title";
 static NSString *const EmpoGameProcessStatusDetails = @"details";
 static NSString *const EmpoGameProcessStatusCheats = @"cheats";
 static NSString *const EmpoGameProcessStatusFastForward = @"fastForward";
+// iOS gives the game process a limit of about 300 MB, and kills it at
+// that limit. A game can need more: Infinite Fusion asks for 227 MB in
+// one call when it starts. iOS counts the pages of a purgeable memory
+// entry against the task that made it, also when another process
+// writes them. So the app makes the entry, and the game process puts
+// its memory in it.
+static const char *const EmpoGameProcessMemoryEntry = "entry";
+static const char *const EmpoGameProcessMemorySize = "size";
+
 // The phys_footprint of the game process, in bytes.
 static NSString *const EmpoGameProcessStatusMemoryFootprint = @"memoryFootprint";
 

@@ -1,5 +1,6 @@
 import Foundation
 import GameProbe
+import Security
 import Synchronization
 
 /// Resolves the writable data directory a session hands the engine
@@ -36,105 +37,99 @@ enum DataDirectory {
     /// rescue buckets. The base the recovery ledger's `directory`
     /// paths are relative to.
     ///
-    /// The app group folder while Ruby games run in a game process,
-    /// because that process can open only that folder and its own.
-    /// The Files app shows only Documents, and it cannot open a link
-    /// into the app group, so the data goes back to Documents when the
-    /// game process is off, or when an item cannot move into the group.
+    /// The folder that the Files add-on (`FilesProvider`) shows, in the
+    /// app group, because the game process cannot open the app's
+    /// Documents. The system names it "File Provider Storage"
+    /// (`NSFileProviderManager.documentStorageURL`). Documents is the
+    /// fallback for a build that has no app group.
     static let documentsRootURL: URL = {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         guard let group = appGroupURL else { return documents }
-        if AppSettings.rubyGameRunnerChosen == .gameProcess, moveItems(of: documents, to: group) {
-            return group
-        }
-        moveItems(backFrom: group, to: documents)
-        return documents
+        let storage = group.appendingPathComponent("File Provider Storage", isDirectory: true)
+        moveItems(of: documents, to: storage)
+        return storage
     }()
 
-    static let appGroupURL: URL? = (Bundle.main.object(forInfoDictionaryKey: "EmpoAppGroup") as? String)
-        .flatMap(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:))
+    static let appGroupURL: URL? = {
+        guard let configured = Bundle.main.object(forInfoDictionaryKey: "EmpoAppGroup") as? String,
+            !configured.isEmpty,
+            let task = SecTaskCreateFromSelf(nil),
+            let signed = SecTaskCopyValueForEntitlement(
+                task, "com.apple.security.application-groups" as CFString, nil) as? [String]
+        else { return nil }
+        // AltStore and SideStore add "." and the team ID to the group
+        // name when they sign the app. LiveContainer runs the app with
+        // its own signature, which has only LiveContainer's groups, and
+        // gives the app a hidden folder for any other group name.
+        return signed.lazy
+            .filter { $0 == configured || $0.hasPrefix(configured + ".") }
+            .compactMap(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:))
+            .first
+    }()
 
-    private static let linkedFolderNames = ["Games", "Data", "Fonts", "Profiles"]
-
-    /// The names of the user's items in a folder. The system makes
-    /// Library in each app group folder, and Inbox in Documents.
-    private static func itemNames(in folder: URL) -> [String] {
-        ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? [])
-            .filter { !$0.hasPrefix(".") && $0 != "Inbox" && $0 != "Library" }
-    }
-
-    private static func isLink(_ url: URL) -> Bool {
-        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType
-            == .typeSymbolicLink
-    }
-
-    /// Moves each item of Documents into the app group, and puts a
-    /// link of the same name in its place, so the Files app still
-    /// lists it. An item that is in both stays where it is. False when
-    /// an item cannot move or is in both, because a real item in
-    /// Documents is the copy that the last launch used.
-    private static func moveItems(of documents: URL, to group: URL) -> Bool {
+    /// Moves the items of Documents, from before the app group, into
+    /// `storage`. A folder that is in both gets merged. A file that is
+    /// in both keeps its copy in `storage`, and the copy from Documents
+    /// moves next to it with "(from Documents)" in its name.
+    private static func moveItems(of documents: URL, to storage: URL) {
         let fm = FileManager.default
-        var movedAll = true
-        let names = Set(linkedFolderNames).union(itemNames(in: documents)).union(itemNames(in: group))
-        for name in names.sorted() {
-            let link = documents.appendingPathComponent(name)
-            let target = group.appendingPathComponent(name, isDirectory: true)
-            do {
-                if isLink(link) {
-                    // The link holds the full path of the app group
-                    // folder, which can change.
-                    let current = try fm.destinationOfSymbolicLink(atPath: link.path) == target.path
-                    if current && fm.fileExists(atPath: target.path) { continue }
-                    try fm.removeItem(at: link)
-                } else if fm.fileExists(atPath: link.path) {
-                    guard !fm.fileExists(atPath: target.path) else {
-                        NSLog("[DataDirectory] %@ is in Documents and in the app group, so it stays", name)
-                        movedAll = false
-                        continue
-                    }
-                    try fm.moveItem(at: link, to: target)
-                }
-                if linkedFolderNames.contains(name) {
-                    try fm.createDirectory(at: target, withIntermediateDirectories: true)
-                }
-                guard fm.fileExists(atPath: target.path) else { continue }
-                try fm.createSymbolicLink(at: link, withDestinationURL: target)
-            } catch {
-                NSLog("[DataDirectory] Cannot move %@ to the app group: %@", name, "\(error)")
-                movedAll = false
-            }
+        try? fm.createDirectory(at: storage, withIntermediateDirectories: true)
+        // The system puts files that other apps open in Empo in Inbox.
+        let names = ((try? fm.contentsOfDirectory(atPath: documents.path)) ?? [])
+            .filter { !$0.hasPrefix(".") && $0 != "Inbox" }
+        for name in names {
+            merge(documents.appendingPathComponent(name), into: storage.appendingPathComponent(name), fm: fm)
         }
-        return movedAll
     }
 
-    /// Puts each item of the app group back in Documents, in place of
-    /// its link. An item that cannot move keeps a link, so the app
-    /// still finds it.
-    static func moveItems(backFrom group: URL, to documents: URL) {
-        let fm = FileManager.default
-        let groupNames = itemNames(in: group)
-        for name in itemNames(in: documents)
-        where !groupNames.contains(name) && isLink(documents.appendingPathComponent(name)) {
-            try? fm.removeItem(at: documents.appendingPathComponent(name))
+    private static func merge(_ item: URL, into destination: URL, fm: FileManager) {
+        // An item can be a link into the app group.
+        let target = (try? fm.destinationOfSymbolicLink(atPath: item.path)).map {
+            URL(fileURLWithPath: $0, relativeTo: item.deletingLastPathComponent())
         }
-        for name in groupNames {
-            let source = group.appendingPathComponent(name)
-            let destination = documents.appendingPathComponent(name)
-            do {
-                if isLink(destination) {
-                    try fm.removeItem(at: destination)
-                } else if fm.fileExists(atPath: destination.path) {
-                    NSLog("[DataDirectory] %@ is in Documents and in the app group, so it stays", name)
-                    continue
-                }
+        let source = target ?? item
+        do {
+            if source.resolvingSymlinksInPath() == destination.resolvingSymlinksInPath() {
+                // The link points at the item that is already in place.
+            } else if !fm.fileExists(atPath: destination.path) {
                 try fm.moveItem(at: source, to: destination)
-            } catch {
-                NSLog("[DataDirectory] Cannot move %@ back to Documents: %@", name, "\(error)")
-                if !isLink(destination) && !fm.fileExists(atPath: destination.path) {
-                    try? fm.createSymbolicLink(at: destination, withDestinationURL: source)
+            } else if isFolder(source, fm: fm), isFolder(destination, fm: fm) {
+                for name in (try? fm.contentsOfDirectory(atPath: source.path)) ?? [] {
+                    merge(
+                        source.appendingPathComponent(name), into: destination.appendingPathComponent(name),
+                        fm: fm)
                 }
+                if (try? fm.contentsOfDirectory(atPath: source.path))?.isEmpty == true {
+                    try fm.removeItem(at: source)
+                }
+            } else {
+                let copy = freeName(for: destination, fm: fm)
+                try fm.moveItem(at: source, to: copy)
+                NSLog(
+                    "[DataDirectory] %@ is in Documents and in the app group, so it moved to %@",
+                    destination.path, copy.lastPathComponent)
             }
+            if target != nil { try fm.removeItem(at: item) }
+        } catch {
+            NSLog("[DataDirectory] Cannot move %@ to the app group: %@", item.path, "\(error)")
+        }
+    }
+
+    private static func isFolder(_ url: URL, fm: FileManager) -> Bool {
+        var isFolder: ObjCBool = false
+        return fm.fileExists(atPath: url.path, isDirectory: &isFolder) && isFolder.boolValue
+    }
+
+    private static func freeName(for url: URL, fm: FileManager) -> URL {
+        let folder = url.deletingLastPathComponent()
+        let stem = url.deletingPathExtension().lastPathComponent
+        let suffix = url.pathExtension.isEmpty ? "" : "." + url.pathExtension
+        var number = 1
+        while true {
+            let label = number == 1 ? "from Documents" : "from Documents \(number)"
+            let candidate = folder.appendingPathComponent("\(stem) (\(label))\(suffix)")
+            if !fm.fileExists(atPath: candidate.path) { return candidate }
+            number += 1
         }
     }
 

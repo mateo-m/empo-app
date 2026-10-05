@@ -29,12 +29,11 @@ A Ruby game that runs in the app cannot end. The screens tell the person to clos
 
 A game process can open only its own folder and the app group folder. It cannot open the app's Documents. The app group ID is `group.` plus the bundle ID of the app. `project.yml` sets it in `EMPO_APP_GROUP`, and the app reads it from the `EmpoAppGroup` key in `Info.plist`.
 
-`DataDirectory.documentsRootURL` is the folder that holds `Games`, `Data`, `Fonts`, `Profiles` and the rescue folders. At launch, before the app reads any of them, it picks the folder from `AppSettings.rubyGameRunnerThisLaunch`:
+`DataDirectory.documentsRootURL` is the folder that holds `Games`, `Data`, `Fonts`, `Profiles` and the rescue folders. It is `File Provider Storage` in the app group, for both runners, so the setting does not move any data. At the first launch of a build with the app group, the app moves each item of Documents into it. When an item in Documents is a link into the app group, the app moves the item that the link points to, then removes the link. When both folders have a folder with the same name, the app merges the two. When both have a file with the same name, the file in the app group stays, and the file from Documents moves next to it with "(from Documents)" in its name.
 
-- `gameProcess`: the app moves each item of Documents into the app group, and puts a link to it in Documents. The links hold full paths, and the path of the app group can change when the app is installed again, so the app makes each link again when it points to a different place.
-- `app`: the app removes the links, and moves each item of the app group back to Documents.
+AltStore and SideStore add `.` and the team ID to the group name when they sign the app. `DataDirectory.appGroupURL` reads the group names from the app's own signature with `SecTaskCopyValueForEntitlement`, and uses the first one that is the configured name or starts with it and a `.`. LiveContainer runs the app with its own signature, so no group matches, and the root is Documents. When no app group is available, the root is Documents, the game process is not available, and the Files app does not show the data in the Empo location. Settings then shows "Quit and switch games" off and disabled, with a note that says why.
 
-When both folders have an item with the same name, the app does not move it, and writes a log line. The Files app shows the links, but it cannot open them. The setting text tells the person that.
+The `FilesProvider` extension shows the root in the Files app, under Locations. It is an `NSFileProviderExtension`, and `NSExtensionFileProviderDocumentGroup` names the app group. `UIFileSharingEnabled` is off, so the Files app does not also show the empty Documents under "On My iPhone". A deleted item goes to `.Trash/<UUID>/` in the root, and the Files app shows it in Recently Deleted. The extension removes trashed items after 30 days.
 
 `CABundleStore` keeps its downloaded certificates in the app group, because the game process reads them.
 

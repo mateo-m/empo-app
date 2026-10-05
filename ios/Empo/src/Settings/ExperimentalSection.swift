@@ -18,7 +18,7 @@ struct ExperimentalSection: View {
                         set: { settings.rubyGameRunner = $0 ? .gameProcess : .app }
                     ),
                     description:
-                        "Quit a game and start another one without closing \(AppInfo.name). Works with \(GameCores.gameProcessGamesName). While this is on, the Files app can't open your games and saves."
+                        "Quit a game and start another one without closing \(AppInfo.name). Works with \(GameCores.gameProcessGamesName)."
                 )
                 .disabled(!isAvailable)
                 if !isAvailable {
