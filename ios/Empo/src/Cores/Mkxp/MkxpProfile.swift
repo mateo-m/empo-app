@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import GameProbe
 import os
@@ -10,15 +11,19 @@ struct MkxpProfile: Codable {
     var modernRubyScripts: Bool
     /// `GameScriptProfile.currentSchema` of the scan that wrote this.
     var schema: String
+    /// `inputsDigest` of the files that the scan read.
+    var inputs: String
 
     /// The stored profile. A new scan replaces it when `rescan` is true,
-    /// when nothing is stored, or when older rules wrote it.
+    /// when nothing is stored, when older rules wrote it, or when a file
+    /// that the scan reads changed.
     static func load(for container: GameContainer, rescan: Bool = false) -> MkxpProfile {
         let url = container.metadataURL.appendingPathComponent("mkxp-profile.json")
         let currentSchema = GameScriptProfile.currentSchema.rawValue
+        let inputs = inputsDigest(of: container.gameURL)
         if !rescan, let data = try? Data(contentsOf: url),
             let stored = try? JSONDecoder().decode(MkxpProfile.self, from: data),
-            stored.schema == currentSchema
+            stored.schema == currentSchema, stored.inputs == inputs
         {
             return stored
         }
@@ -26,12 +31,27 @@ struct MkxpProfile: Codable {
         let profile = MkxpProfile(
             rubyVersion: result.rubyVersion,
             modernRubyScripts: result.modernRubyScripts,
-            schema: currentSchema)
+            schema: currentSchema,
+            inputs: inputs)
         container.ensureMetadataDirectory()
         if let data = try? JSONEncoder().encode(profile) {
             try? data.write(to: url, options: .atomic)
         }
         return profile
+    }
+
+    private static func inputsDigest(of gameDirectory: URL) -> String {
+        // An archive keeps the dates of its files, so a game imported
+        // again can match the digest with other bytes. The import and
+        // the settings reset scan without the digest.
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+        let lines = GameScriptProfile.inputFiles(gameDirectory: gameDirectory).map { file in
+            let values = try? file.resourceValues(forKeys: keys)
+            let date = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+            return "\(file.path) \(values?.fileSize ?? -1) \(date)"
+        }
+        return SHA256.hash(data: Data(lines.sorted().joined(separator: "\n").utf8))
+            .map { String(format: "%02x", $0) }.joined()
     }
 }
 

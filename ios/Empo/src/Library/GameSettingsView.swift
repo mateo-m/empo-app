@@ -92,24 +92,18 @@ struct GameSettingsView: View {
             } message: {
                 Text("This clears every change you made to \"\(game.title)\". You can't undo this.")
             }
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text(game.title)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                        Text("Settings")
-                            .font(.headline)
-                    }
-                    .sheetTitle()
+            .sheetToolbar {
+                VStack(spacing: 1) {
+                    Text(game.title)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text("Settings")
+                        .font(.headline)
                 }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
+            } done: {
+                dismiss()
             }
             .onChange(of: model.settings) { model.save() }
             // A quick dismissal can tear the sheet down in the same
