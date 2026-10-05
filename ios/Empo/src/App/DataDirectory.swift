@@ -104,22 +104,31 @@ enum DataDirectory {
     }
 
     /// Puts each item of the app group back in Documents, in place of
-    /// its link.
-    private static func moveItems(backFrom group: URL, to documents: URL) {
+    /// its link. An item that cannot move keeps a link, so the app
+    /// still finds it.
+    static func moveItems(backFrom group: URL, to documents: URL) {
         let fm = FileManager.default
-        for name in itemNames(in: documents) where isLink(documents.appendingPathComponent(name)) {
+        let groupNames = itemNames(in: group)
+        for name in itemNames(in: documents)
+        where !groupNames.contains(name) && isLink(documents.appendingPathComponent(name)) {
             try? fm.removeItem(at: documents.appendingPathComponent(name))
         }
-        for name in itemNames(in: group) {
+        for name in groupNames {
+            let source = group.appendingPathComponent(name)
             let destination = documents.appendingPathComponent(name)
-            guard !fm.fileExists(atPath: destination.path) else {
-                NSLog("[DataDirectory] %@ is in Documents and in the app group, so it stays", name)
-                continue
-            }
             do {
-                try fm.moveItem(at: group.appendingPathComponent(name), to: destination)
+                if isLink(destination) {
+                    try fm.removeItem(at: destination)
+                } else if fm.fileExists(atPath: destination.path) {
+                    NSLog("[DataDirectory] %@ is in Documents and in the app group, so it stays", name)
+                    continue
+                }
+                try fm.moveItem(at: source, to: destination)
             } catch {
                 NSLog("[DataDirectory] Cannot move %@ back to Documents: %@", name, "\(error)")
+                if !isLink(destination) && !fm.fileExists(atPath: destination.path) {
+                    try? fm.createSymbolicLink(at: destination, withDestinationURL: source)
+                }
             }
         }
     }
