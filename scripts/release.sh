@@ -300,7 +300,6 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         -destination 'generic/platform=iOS' \
         -configuration Release \
         CODE_SIGNING_ALLOWED=NO \
-        PRODUCT_BUNDLE_IDENTIFIER=sh.mateo.empo \
         CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
         ${CORE_SETTING[@]+"${CORE_SETTING[@]}"} \
         build 2>&1 | grep -E "^(Build|error:|warning: |CompileSwift|Ld )" || true
@@ -312,18 +311,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     fi
 
     echo "==> ad-hoc signing with entitlements"
-    # Inside out. A nested framework carries its own signature, and
-    # signing the app root does not reach inside it. The build ran with
-    # CODE_SIGNING_ALLOWED=NO, so every core framework arrives unsigned.
-    # Sign every core that the bundle has.
-    for FRAMEWORK in "$APP_PATH"/Frameworks/*.framework; do
-        [[ -d "$FRAMEWORK" ]] || continue
-        codesign --force --sign - --timestamp=none "$FRAMEWORK"
-    done
-    codesign --force --sign - \
-        --generate-entitlement-der \
-        --entitlements "$PROJECT_DIR/Empo.entitlements" \
-        "$APP_PATH"
+    "$REPO_ROOT/scripts/sign-app.sh" "$APP_PATH"
 
     "$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" \
         ${AUDIT_CORES[@]+"${AUDIT_CORES[@]}"} "$APP_PATH"
