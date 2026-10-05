@@ -71,7 +71,8 @@ enum DataDirectory {
     /// Moves each item of Documents into the app group, and puts a
     /// link of the same name in its place, so the Files app still
     /// lists it. An item that is in both stays where it is. False when
-    /// an item cannot move.
+    /// an item cannot move or is in both, because a real item in
+    /// Documents is the copy that the last launch used.
     private static func moveItems(of documents: URL, to group: URL) -> Bool {
         let fm = FileManager.default
         var movedAll = true
@@ -89,6 +90,7 @@ enum DataDirectory {
                 } else if fm.fileExists(atPath: link.path) {
                     guard !fm.fileExists(atPath: target.path) else {
                         NSLog("[DataDirectory] %@ is in Documents and in the app group, so it stays", name)
+                        movedAll = false
                         continue
                     }
                     try fm.moveItem(at: link, to: target)
