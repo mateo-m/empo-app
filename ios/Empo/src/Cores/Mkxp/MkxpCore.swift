@@ -158,7 +158,7 @@ struct MkxpCore: GameCore {
     func launch(_ container: GameContainer) {
         Self.migrateOldSettings(in: container)
         let settings = MkxpSettings.load(from: container.empoStateURL)
-        let profile = MkxpProfile.load(for: container, rescan: settings.followsScriptScan)
+        let profile = MkxpProfile.load(for: container)
         let ruby = settings.rubyVersionOverride ?? profile.rubyVersion
         let modern = settings.useModernRuby ?? profile.modernRubyScripts
         let inGameKeyboard =

@@ -54,7 +54,7 @@ public enum RubyScriptGrammarSniffer {
     /// forks that ship both. The sniffer then falls back to the
     /// compiled `Scripts.{rxdata,rvdata,rvdata2}` file, unless a
     /// packed script archive makes that file a stale bootstrap.
-    /// It runs the grammar classifier on the joined source.
+    /// It runs the grammar classifier on those scripts.
     static func sniff(gameDirectory: URL) -> Result {
         let fm = FileManager.default
 
@@ -65,9 +65,9 @@ public enum RubyScriptGrammarSniffer {
         // are the live runtime. The .rxdata is a leftover.
         let looseURLs = locateLooseScripts(in: gameDirectory, fm: fm)
         if !looseURLs.isEmpty {
-            let source = readLooseScripts(urls: looseURLs)
-            if !source.isEmpty {
-                return classify(source: source)
+            let scripts = readLooseScripts(urls: looseURLs)
+            if !scripts.isEmpty {
+                return classify(scripts: scripts)
             }
         }
 
@@ -86,10 +86,10 @@ public enum RubyScriptGrammarSniffer {
         guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm) else {
             return .inconclusive
         }
-        guard let source = decodeScripts(at: url) else {
+        guard let scripts = decodeScripts(at: url) else {
             return .inconclusive
         }
-        return classify(source: source)
+        return classify(scripts: scripts)
     }
 
     // MARK: - File location
@@ -100,7 +100,7 @@ public enum RubyScriptGrammarSniffer {
         "Scripts.rvdata2",
     ]
 
-    private static let looseScriptDirs = [
+    static let looseScriptDirs = [
         "Scripts",
         "Data/Scripts",
     ]
@@ -136,7 +136,7 @@ public enum RubyScriptGrammarSniffer {
     /// thousands of scripts cannot make the sniff slow.
     private static let maxLooseFiles = 200
 
-    private static func locateLooseScripts(
+    static func locateLooseScripts(
         in gameDirectory: URL,
         fm: FileManager
     ) -> [URL] {
@@ -167,24 +167,25 @@ public enum RubyScriptGrammarSniffer {
         return found
     }
 
-    /// Reads up to `maxLooseFiles` `.rb` files and joins them.
+    /// Reads up to `maxLooseFiles` `.rb` files.
     /// A 4 MB cap on the total prevents one huge generated file
     /// from using too much memory.
-    private static func readLooseScripts(urls: [URL]) -> String {
-        var combined = ""
+    private static func readLooseScripts(urls: [URL]) -> [String] {
+        var scripts: [String] = []
+        var total = 0
         let cap = 4_000_000
         for url in urls {
             guard let str = try? Data(contentsOf: url).decodeAsLooseText() else { continue }
-            combined.append(str)
-            combined.append("\n")
-            if combined.count > cap { break }
+            scripts.append(str)
+            total += str.utf8.count
+            if total > cap { break }
         }
-        return combined
+        return scripts
     }
 
     // MARK: - Marshal + Zlib decode
 
-    private static func decodeScripts(at url: URL) -> String? {
+    private static func decodeScripts(at url: URL) -> [String]? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         var reader = MarshalReader(data: data)
         guard reader.readVersion() else { return nil }
@@ -194,7 +195,8 @@ public enum RubyScriptGrammarSniffer {
             return nil
         }
 
-        var combined = ""
+        var scripts: [String] = []
+        var total = 0
         // Cap the total inflated source. A corrupted file with a
         // huge claimed count then cannot run us out of memory.
         // 4 MB is about 10x the largest real Scripts file we have
@@ -216,12 +218,12 @@ public enum RubyScriptGrammarSniffer {
             if let inflated = inflate(deflated),
                 let source = inflated.decodeAsLooseText()
             {
-                combined.append(source)
-                combined.append("\n")
-                if combined.count > combinedCap { break }
+                scripts.append(source)
+                total += source.utf8.count
+                if total > combinedCap { break }
             }
         }
-        return combined.isEmpty ? nil : combined
+        return scripts.isEmpty ? nil : scripts
     }
 
     private static func inflate(_ data: Data) -> Data? {
@@ -269,31 +271,100 @@ public enum RubyScriptGrammarSniffer {
         #"\.filter_map\b"#,
         // Object#then or yield_self (2.5+/2.6+): obj.then { ... }
         #"\.then\s*\{\s*\|"#,
-        // Frozen-string-literal magic comment (2.3+, common in
-        // modern code): # frozen_string_literal: true
-        #"#\s*frozen_string_literal:\s*true"#,
     ]
 
+    /// A magic comment (2.3+, common in modern code). It counts only
+    /// on a line that holds nothing else, in the comment lines at the
+    /// top of a script, where Ruby reads it.
+    private static let frozenStringLiteral = try? NSRegularExpression(
+        pattern: #"^\s*#\s*frozen_string_literal:\s*true\s*$"#)
+
     /// Threshold to declare the source modern. A single match can
-    /// come from a comment, an embedded test fixture, or chance.
+    /// come from an embedded test fixture or chance.
     /// Three or more tokens across the whole source is a strong
     /// signal.
     private static let modernThreshold = 3
 
-    private static func classify(source: String) -> Result {
-        var hits = 0
-        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+    private static func classify(scripts: [String]) -> Result {
+        // Swift reads "\r\n" as one Character, so a split on "\n" alone
+        // keeps a Windows file as one line.
+        let scripts = scripts.map { $0.replacingOccurrences(of: "\r\n", with: "\n") }
+        // Each script ends its own heredocs.
+        let code = scripts.map(codeOnly).joined(separator: "\n")
+        var hits = scripts.filter(startsFrozen).count
+        let range = NSRange(code.startIndex..., in: code)
         for pattern in modernTokens {
+            if hits >= modernThreshold { return .modern }
             guard
                 let regex = try? NSRegularExpression(
                     pattern: pattern,
                     options: [.anchorsMatchLines]
                 )
             else { continue }
-            hits += regex.numberOfMatches(in: source, options: [], range: range)
-            if hits >= modernThreshold { return .modern }
+            hits += regex.numberOfMatches(in: code, range: range)
         }
-        return callsRuby19Methods(source) ? .mixed : .legacy
+        if hits >= modernThreshold { return .modern }
+        return scripts.contains(where: callsRuby19Methods) ? .mixed : .legacy
+    }
+
+    /// The source with comments and the plain part of string literals
+    /// and heredoc bodies replaced by spaces. Almost Heroic lists `font:, value:`
+    /// in a comment, which reads as keyword-arg shorthand. A quoted
+    /// string over several lines stays code, because one misread quote
+    /// would hide the rest of every script. For the same reason, a
+    /// heredoc counts only when its end line exists.
+    private static func startsFrozen(_ script: String) -> Bool {
+        for line in script.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+            if frozenStringLiteral?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
+                return true
+            }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty && !trimmed.hasPrefix("#") { return false }
+        }
+        return false
+    }
+
+    private static func codeOnly(_ source: String) -> String {
+        let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var inBlockComment = false
+        var heredocs: [(end: String, indented: Bool, interpolates: Bool)] = []
+        var bodyStack = heredocBody
+        var code: [String] = []
+        for (number, line) in lines.enumerated() {
+            if let open = heredocs.first {
+                if (open.indented ? withoutIndent(line) : line[...]) == open.end {
+                    heredocs.removeFirst()
+                    bodyStack = heredocBody
+                    code.append("")
+                } else {
+                    let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
+                    let mask = open.interpolates ? codeMask(units, stack: &bodyStack) : []
+                    code.append(String(units.indices.map { mask.isEmpty || !mask[$0] ? " " : units[$0] }))
+                }
+                continue
+            }
+            if startsDirective(line, "=begin") { inBlockComment = true }
+            if inBlockComment {
+                if startsDirective(line, "=end") { inBlockComment = false }
+                code.append("")
+                continue
+            }
+            let range = NSRange(line.startIndex..., in: line)
+            let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
+            let mask = codeMask(units)
+            for match in heredocStart?.matches(in: line, range: range) ?? [] where mask[match.range.location] {
+                guard let endRange = Range(match.range(at: 3), in: line) else { continue }
+                let end = String(line[endRange])
+                let indented = match.range(at: 1).length > 0
+                let closed = lines[(number + 1)...].contains {
+                    (indented ? withoutIndent($0) : $0[...]) == end
+                }
+                let quote = Range(match.range(at: 2), in: line).map { line[$0] } ?? ""
+                if closed { heredocs.append((end, indented, quote != "'")) }
+            }
+            code.append(String(units.indices.map { mask[$0] ? units[$0] : " " }))
+        }
+        return code.joined(separator: "\n")
     }
 
     private static let ruby19Call = try? NSRegularExpression(
@@ -305,8 +376,9 @@ public enum RubyScriptGrammarSniffer {
     private static let ruby19Guard = try? NSRegularExpression(
         pattern: #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)(?![^#;]*(?:\|\||\bor\b))"#)
 
+    /// A `<<` right after a value, as in `i<<x` or `(1<<n)`, is a shift.
     private static let heredocStart = try? NSRegularExpression(
-        pattern: #"<<([-~]?)(["'`]?)([A-Za-z_]\w*)\2"#)
+        pattern: #"(?<![\w)\]}"'`])<<([-~]?)(["'`]?)([A-Za-z_]\w*)\2"#)
 
     /// What a guard makes safe: every 1.9 call after `defined?(Encoding)`,
     /// or only `force_encoding` on the receiver that `respond_to?` checked.
@@ -332,18 +404,29 @@ public enum RubyScriptGrammarSniffer {
             return covers.contains(.receiver(receiver.isEmpty ? "self" : receiver))
         }
         var inBlockComment = false
-        var heredoc: (end: String, indented: Bool, interpolates: Bool)?
+        var heredocs: [(end: String, indented: Bool, interpolates: Bool)] = []
+        var bodyStack = heredocBody
         var blocks: [(indent: Int, cover: Cover)] = []
-        for line in source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+        let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        // Ruby needs the end line of a heredoc. With no end line after
+        // it, `value <<token` is a shift.
+        var lastLine: [String: Int] = [:]
+        var lastIndentlessLine: [String: Int] = [:]
+        for (number, line) in lines.enumerated() {
+            lastLine[line] = number
+            lastIndentlessLine[String(withoutIndent(line))] = number
+        }
+        for (number, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let indent = line.prefix { $0 == " " || $0 == "\t" }.count
             let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
             let range = NSRange(line.startIndex..., in: line)
-            if let open = heredoc {
-                if (open.indented ? trimmed : line) == open.end {
-                    heredoc = nil
+            if let open = heredocs.first {
+                if (open.indented ? withoutIndent(line) : line[...]) == open.end {
+                    heredocs.removeFirst()
+                    bodyStack = heredocBody
                 } else if open.interpolates {
-                    let code = codeMask(units, inString: true)
+                    let code = codeMask(units, stack: &bodyStack)
                     let calls = ruby19Call.matches(in: line, range: range).filter { code[$0.range.location] }
                     if calls.contains(where: { !covered($0.range, in: units, by: blocks.map(\.cover)) }) {
                         return true
@@ -351,18 +434,22 @@ public enum RubyScriptGrammarSniffer {
                 }
                 continue
             }
-            if line.hasPrefix("=begin") { inBlockComment = true }
-            if line.hasPrefix("=end") { inBlockComment = false }
+            if startsDirective(line, "=begin") { inBlockComment = true }
+            if startsDirective(line, "=end") { inBlockComment = false }
             if inBlockComment { continue }
             let code = codeMask(units)
             func codeMatches(_ regex: NSRegularExpression) -> [NSTextCheckingResult] {
                 regex.matches(in: line, range: range).filter { code[$0.range.location] }
             }
-            if let match = codeMatches(heredocStart).first {
+            for match in codeMatches(heredocStart) {
                 func group(_ number: Int) -> Substring {
                     Range(match.range(at: number), in: line).map { line[$0] } ?? ""
                 }
-                heredoc = (String(group(3)), !group(1).isEmpty, group(2) != "'")
+                let end = String(group(3))
+                let indented = !group(1).isEmpty
+                if ((indented ? lastIndentlessLine[end] : lastLine[end]) ?? -1) > number {
+                    heredocs.append((end, indented, group(2) != "'"))
+                }
             }
             func closes(_ text: String) -> Bool {
                 ["end", "else", "elsif"].contains { text.hasPrefix($0) }
@@ -398,6 +485,14 @@ public enum RubyScriptGrammarSniffer {
         return false
     }
 
+    private static func withoutIndent(_ line: String) -> Substring {
+        line.drop { $0 == " " || $0 == "\t" }
+    }
+
+    private static func startsDirective(_ line: String, _ name: String) -> Bool {
+        line.hasPrefix(name) && (line.dropFirst(name.count).first?.isWhitespace ?? true)
+    }
+
     private enum Scope {
         case literal(open: Character?, close: Character, interpolates: Bool, depth: Int)
         case insert(braces: Int)
@@ -405,10 +500,17 @@ public enum RubyScriptGrammarSniffer {
 
     /// For each UTF-16 unit of a line, true when it sits outside a comment
     /// and outside the plain part of a string literal. Code inside a
-    /// `#{...}` insert counts. `inString` starts inside a heredoc body.
-    private static func codeMask(_ chars: [Character], inString: Bool = false) -> [Bool] {
-        var stack: [Scope] = inString
-            ? [.literal(open: nil, close: "\n", interpolates: true, depth: 0)] : []
+    /// `#{...}` insert counts.
+    private static func codeMask(_ chars: [Character]) -> [Bool] {
+        var stack: [Scope] = []
+        return codeMask(chars, stack: &stack)
+    }
+
+    /// The state at the start of an interpolating heredoc body. Pass the
+    /// same stack for every body line, so a `#{...}` can span lines.
+    private static let heredocBody: [Scope] = [.literal(open: nil, close: "\n", interpolates: true, depth: 0)]
+
+    private static func codeMask(_ chars: [Character], stack: inout [Scope]) -> [Bool] {
         var mask = [Bool](repeating: false, count: chars.count + 1)
         var index = 0
         func isCode() -> Bool {
@@ -442,8 +544,14 @@ public enum RubyScriptGrammarSniffer {
                 stack.append(.literal(open: nil, close: "\"", interpolates: true, depth: 0))
             case "'":
                 stack.append(.literal(open: nil, close: "'", interpolates: false, depth: 0))
+            case "`":
+                stack.append(.literal(open: nil, close: "`", interpolates: true, depth: 0))
             case "%":
                 if let literal = percentLiteral(chars, at: &index) { stack.append(literal) }
+            case "/":
+                if startsRegex(chars, before: index - 1) {
+                    stack.append(.literal(open: nil, close: "/", interpolates: true, depth: 0))
+                }
             case "#":
                 return mask
             case "{":
@@ -466,9 +574,54 @@ public enum RubyScriptGrammarSniffer {
         return mask
     }
 
+    /// A `/` opens a regex where a value can start, and divides after a
+    /// value: `gsub!(/<<r>>/, "")` against `width/2`. As in Ruby, a name,
+    /// a space, and a `/` with no space after it is a call with a regex:
+    /// `text.scan /<<tag>>/`. Ruby reads it as division when the name is
+    /// a local variable, so with no closing `/` on the line it divides:
+    /// `width /3`.
+    private static func startsRegex(_ chars: [Character], before slash: Int) -> Bool {
+        var cursor = slash
+        while cursor > 0, chars[cursor - 1] == " " || chars[cursor - 1] == "\t" { cursor -= 1 }
+        let next: Character = slash + 1 < chars.count ? chars[slash + 1] : " "
+        let callArgument = cursor < slash && !next.isWhitespace && next != "="
+            && closesRegex(chars, after: slash)
+        guard cursor > 0 else { return true }
+        let previous = chars[cursor - 1]
+        if "(,=!~|&{[;?:+-*<>^".contains(previous) { return true }
+        guard previous.isLetter || previous == "_" else { return false }
+        var start = cursor - 1
+        while start > 0, chars[start - 1].isLetter || chars[start - 1].isNumber || chars[start - 1] == "_" {
+            start -= 1
+        }
+        let keywords: Set<String> = ["if", "elsif", "unless", "when", "while", "until", "and", "or", "not", "return", "then"]
+        return callArgument || keywords.contains(String(chars[start..<cursor]))
+    }
+
+    private static func closesRegex(_ chars: [Character], after slash: Int) -> Bool {
+        var index = slash + 1
+        while index < chars.count {
+            if chars[index] == "\\" {
+                index += 2
+                continue
+            }
+            if chars[index] == "/" { return true }
+            index += 1
+        }
+        return false
+    }
+
     /// Reads a `%q(...)`-style literal start after the `%`. A `%` with
-    /// a space or a letter after it is the modulo operator.
+    /// a space, a letter, or `=` after it is the modulo operator, and so
+    /// is a `%` right after a value or a dot, as in `a%(b)`, `"%s"%(b)`,
+    /// or `a.%(b)`. Outside
+    /// a literal, a quote before the `%` can only close one.
     private static func percentLiteral(_ chars: [Character], at index: inout Int) -> Scope? {
+        if index >= 2 {
+            let before = chars[index - 2]
+            if before.isLetter || before.isNumber || "_.)]}\"'`".contains(before) { return nil }
+        }
+        if index < chars.count, chars[index] == "=" { return nil }
         var cursor = index
         var kind: Character?
         if cursor < chars.count, "qQwWiIrsx".contains(chars[cursor]) {

@@ -27,9 +27,16 @@ public enum GameScriptProfile {
         /// Legacy scripts that call Ruby 1.9+ methods run on Ruby
         /// 3.1 with the legacy transform, not on Ruby 1.8.
         case mixedRuby31 = "mixed-ruby31"
+        /// Modern grammar tokens count only in code, not in comments,
+        /// strings, or heredocs, except inside `#{...}`.
+        case codeOnlyTokens = "code-only-tokens"
+        /// A `<<` right after a value, or with no end line after it, is
+        /// a shift, not a heredoc that hides the rest of the scripts
+        /// from the Ruby 1.9 check.
+        case shiftNotHeredoc = "shift-not-heredoc"
     }
 
-    public static let currentSchema: Schema = .mixedRuby31
+    public static let currentSchema: Schema = .shiftNotHeredoc
 
     public struct Result {
         public let rubyVersion: Int
@@ -60,6 +67,25 @@ public enum GameScriptProfile {
             modernRubyScripts: modern,
             grammar: grammar
         )
+    }
+
+    /// Every file that `analyze` can read. Saves sit beside these files,
+    /// and they are not in the list.
+    public static func inputFiles(gameDirectory: URL) -> [URL] {
+        let fm = FileManager.default
+        let scripts = ["Scripts.rxdata", "Scripts.rvdata", "Scripts.rvdata2"]
+        func files(in folder: String, named names: [String], extensions: Set<String>) -> [URL] {
+            ((try? fm.contentsOfDirectory(
+                at: gameDirectory.appendingPathComponent(folder),
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles])) ?? [])
+                .filter { names.contains($0.lastPathComponent) || extensions.contains($0.pathExtension.lowercased()) }
+        }
+        return files(
+            in: "", named: ["Game.ini"] + scripts,
+            extensions: ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
+            + files(in: "Data", named: scripts, extensions: ["fpk"])
+            + RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
     }
 
     // MARK: - Ruby version (formerly RubyVersionDetection)
