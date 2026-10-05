@@ -27,6 +27,9 @@ public enum GameScriptProfile {
         /// Legacy scripts that call Ruby 1.9+ methods run on Ruby
         /// 3.1 with the legacy transform, not on Ruby 1.8.
         case mixedRuby31 = "mixed-ruby31"
+        /// Modern grammar tokens count only in code, not in comments,
+        /// strings, or heredocs, except inside `#{...}`.
+        case codeOnlyTokens = "code-only-tokens"
         /// A `<<` right after a value, or with no end line after it, is
         /// a shift, not a heredoc that hides the rest of the scripts
         /// from the Ruby 1.9 check.
