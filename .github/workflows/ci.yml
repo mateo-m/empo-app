@@ -10,6 +10,15 @@
 #
 # Requires secret EMPO_DEPS_READ_TOKEN (read access to empo-deps) for
 # the ANGLE tarball. The core releases are public.
+#
+# The repository variables LINUX_RUNNER and MACOS_RUNNER choose the
+# machines. The value is JSON: a label list such as
+# ["self-hosted","linux","md"], or one quoted label such as
+# "ubuntu-latest". A bare ubuntu-latest fails. With no variable, a
+# job runs on a GitHub-hosted machine. A pull request from a fork
+# does too. A fork can edit this file, so only the repository's
+# approval rule for fork runs keeps fork code off a self-hosted machine.
+# docs.yml and pr-title.yml read LINUX_RUNNER too.
 
 name: CI
 
@@ -49,7 +58,7 @@ jobs:
   # root, so a change to either must still run the tests.
   changes:
     name: Detect docs-only changes
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     permissions:
       contents: read
       pull-requests: read
@@ -97,19 +106,30 @@ jobs:
     name: Swift (swiftlint + swift-format)
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: false
 
+      - name: Find a preinstalled Swift 6.2
+        # The self-hosted runners cannot use sudo, and swiftly-action
+        # always runs apt-get with sudo. Their image ships Swift 6.2.
+        id: preinstalled
+        run: |
+          if swift --version 2>/dev/null | grep -q 'Swift version 6\.2'; then
+            echo "swift=true" >>"$GITHUB_OUTPUT"
+          fi
+
       - name: Cache Swift toolchain
+        if: steps.preinstalled.outputs.swift != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.local/share/swiftly
           key: swiftly-${{ runner.os }}-6.2
 
       - name: Install Swift toolchain
+        if: steps.preinstalled.outputs.swift != 'true'
         # Swiftly is Apple's official toolchain manager. Gives us
         # swift-format on ubuntu-latest without a custom container.
         # On cache hit the action detects the existing toolchain and
@@ -123,11 +143,17 @@ jobs:
         # `LINUX_SOURCEKIT_LIB_PATH`. The `swift` binary on PATH is
         # actually swiftly's manager, not the toolchain's swift, so
         # `which swift` doesn't help. Locate the lib directly under
-        # `$SWIFTLY_HOME_DIR/toolchains/<version>/usr/lib/`.
+        # `$SWIFTLY_HOME_DIR/toolchains/<version>/usr/lib/`. A
+        # preinstalled toolchain has it next to its own `swift`.
         run: |
-          SK_LIB_FILE=$(find "$SWIFTLY_HOME_DIR/toolchains" -name 'libsourcekitdInProc.so' 2>/dev/null | head -1)
+          if [ -n "${SWIFTLY_HOME_DIR:-}" ]; then
+            SK_ROOT="$SWIFTLY_HOME_DIR/toolchains"
+          else
+            SK_ROOT=$(dirname "$(dirname "$(readlink -f "$(command -v swift)")")")
+          fi
+          SK_LIB_FILE=$(find "$SK_ROOT" -name 'libsourcekitdInProc.so' 2>/dev/null | head -1)
           if [ -z "$SK_LIB_FILE" ]; then
-            echo "::error::libsourcekitdInProc.so not found under $SWIFTLY_HOME_DIR"
+            echo "::error::libsourcekitdInProc.so not found under $SK_ROOT"
             exit 1
           fi
           SK_LIB=$(dirname "$SK_LIB_FILE")
@@ -150,29 +176,38 @@ jobs:
 
   objc-cpp:
     name: ObjC / C / C++ (clang-format)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: false
 
       - name: clang-format check
-        # DoozyX is the canonical clang-format CI action. Pinning
-        # clang-format 18 to match local (Apple clang-format 21 is
-        # also fine, the shipped .clang-format is style-stable).
-        uses: DoozyX/clang-format-lint-action@v0.20
-        with:
-          source: "ios/Empo/src ios/Empo/shims"
-          extensions: "h,m,mm,c,cpp"
-          clangFormatVersion: 18
+        # clang-format 18 matches local (Apple clang-format 21 is also
+        # fine, the shipped .clang-format is style-stable). The
+        # self-hosted runners have no Docker daemon for a Docker action.
+        run: |
+          command -v clang-format-18 >/dev/null ||
+            { sudo apt-get update && sudo apt-get install -y clang-format-18; }
+          set -o pipefail
+          git ls-files -z 'ios/Empo/src/*.'{h,m,mm,c,cpp} 'ios/Empo/shims/*.'{h,m,mm,c,cpp} |
+            xargs -0 -r clang-format-18 --dry-run --Werror
 
   shell:
     name: Bash (shellcheck + shfmt)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
 
+      - name: Find preinstalled tools
+        # The self-hosted runners cannot use sudo, so apt cannot run
+        # there. Their image ships these tools.
+        id: preinstalled
+        run: |
+          command -v shellcheck >/dev/null && echo "shellcheck=true" >>"$GITHUB_OUTPUT" || true
+
       - name: "Cache apt: shellcheck"
+        if: steps.preinstalled.outputs.shellcheck != 'true'
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: shellcheck
@@ -180,9 +215,14 @@ jobs:
 
       - name: Install shfmt
         run: |
-          curl -fsSL -o /usr/local/bin/shfmt \
+          command -v shfmt >/dev/null && exit 0
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/shfmt" \
             https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64
-          chmod +x /usr/local/bin/shfmt
+          echo "fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1  $HOME/.local/bin/shfmt" |
+            sha256sum --check --strict
+          chmod +x "$HOME/.local/bin/shfmt"
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
       - name: shellcheck
         run: |
@@ -200,7 +240,7 @@ jobs:
 
   yaml:
     name: YAML (oxfmt + yamllint)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
 
@@ -211,7 +251,15 @@ jobs:
       - name: Install JS tools
         run: bun install --frozen-lockfile
 
+      - name: Find preinstalled tools
+        # The self-hosted runners cannot use sudo, so apt cannot run
+        # there. Their image ships yamllint.
+        id: preinstalled
+        run: |
+          command -v yamllint >/dev/null && echo "yamllint=true" >>"$GITHUB_OUTPUT" || true
+
       - name: "Cache apt: yamllint"
+        if: steps.preinstalled.outputs.yamllint != 'true'
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: yamllint
@@ -232,7 +280,7 @@ jobs:
 
   markdown:
     name: Markdown (markdownlint)
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
 
@@ -255,7 +303,7 @@ jobs:
     name: GameProbe (swift test, Linux)
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     defaults:
       run:
         working-directory: ios/GameProbe
@@ -264,13 +312,24 @@ jobs:
         with:
           submodules: false
 
+      - name: Find a preinstalled Swift 6.2
+        # The self-hosted runners cannot use sudo, and swiftly-action
+        # always runs apt-get with sudo. Their image ships Swift 6.2.
+        id: preinstalled
+        run: |
+          if swift --version 2>/dev/null | grep -q 'Swift version 6\.2'; then
+            echo "swift=true" >>"$GITHUB_OUTPUT"
+          fi
+
       - name: Cache Swift toolchain
+        if: steps.preinstalled.outputs.swift != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.local/share/swiftly
           key: swiftly-${{ runner.os }}-6.2
 
       - name: Install Swift toolchain
+        if: steps.preinstalled.outputs.swift != 'true'
         uses: vapor/swiftly-action@v0.2
         with:
           toolchain: "6.2"
@@ -283,7 +342,7 @@ jobs:
 
   deps-pins:
     name: Verify empo-deps release pins
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -302,7 +361,7 @@ jobs:
     name: Simulator build
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: macos-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.MACOS_RUNNER || '"macos-latest"') }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
@@ -427,7 +486,7 @@ jobs:
       - deps-pins
       - simulator
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - name: Verify every job passed
         run: |

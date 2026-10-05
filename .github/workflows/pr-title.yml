@@ -27,7 +27,7 @@ permissions: {}
 jobs:
   conventional-title:
     name: Conventional title
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - name: Check the title against the commit convention
         env:
