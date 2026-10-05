@@ -78,7 +78,8 @@ final class EngineSessionCoordinator {
     /// is stored in the library entry, so a game imported before a core
     /// existed still picks the right one.
     ///
-    /// A Ruby game runs in a new game process (`GameProcessHost`) when
+    /// A game whose core cannot kill its session runs in a new game
+    /// process (`GameProcessHost`) when
     /// `AppSettings.rubyGameRunnerThisLaunch` says so. Then the app
     /// sends each `gamecore_*` call to it (`GameProcessClient.m`). Any
     /// other game runs in the app, in a core that the app opens. Every
@@ -90,7 +91,7 @@ final class EngineSessionCoordinator {
     /// A game starts only after `killSession` ended the one before it
     /// (`AppState.killPausedGame`).
     func openCore(_ core: any GameCore) {
-        runner = core.scriptLanguage == .ruby ? AppSettings.rubyGameRunnerThisLaunch : .app
+        runner = core.canKillSession ? .app : AppSettings.rubyGameRunnerThisLaunch
         EmpoCoreUseGameProcess(runner == .gameProcess)
         switch runner {
         case .gameProcess:
