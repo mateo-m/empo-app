@@ -75,6 +75,124 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertFalse(inputs.contains(paths.last!))
     }
 
+    func testModernTokensInCommentsAndStringsStayOnRuby19() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Scripts.rvdata2"))
+        try """
+            # * optionnal named args = font:, value:, x:, y:
+            =begin
+            list.filter_map { |e| e&.name }
+            =end
+            puts "a&.b x:, h.except(:k)"
+            text = <<~DOC
+              a&.b x:, h.except(:k)
+            DOC
+            puts "# frozen_string_literal: true", "# frozen_string_literal: true"
+            puts "# frozen_string_literal: true"
+            # frozen_string_literal: truest
+            def a; end
+            # frozen_string_literal: true
+            # frozen_string_literal: true
+            # frozen_string_literal: true
+            # frozen_string_literal: true_or_false
+            # frozen_string_literal: true, says the old doc
+            raw = <<~'RAW'
+              #{a&.b} #{c&.d} #{e&.f}
+            RAW
+            =begin
+            =endless
+            a&.b x:, h.except(:k)
+            =end
+            system `a&.b x:, h.except(:k)`
+            list = %w(a&.b x:, h.except(:k))
+            puts %(a&.b x:, h.except(:k))
+            puts <<~A, <<~B
+              one
+            A
+              a&.b x:, h.except(:k)
+            B
+            puts <<~C
+            C\u{20}
+              a&.b x:, h.except(:k)
+            C
+            """.write(
+                to: scripts.appendingPathComponent("SDK_Gui.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .legacy)
+        XCTAssertEqual(profile.rubyVersion, 19)
+    }
+
+    func testFrozenStringLiteralCommentsStillCountAsModern() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        for name in ["A", "B", "C"] {
+            try "# frozen_string_literal: true\nclass \(name); end\n".write(
+                to: scripts.appendingPathComponent("\(name).rb"), atomically: true, encoding: .utf8)
+        }
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
+    func testModernTokensInHeredocInterpolationCount() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try """
+            text = <<~DOC
+              #{a&.name} and #{
+                b&.name } and #{c&.name}
+            DOC
+            """.write(to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
+    func testWindowsLineEndingsCloseHeredocs() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "text = <<~DOC\r\n  a&.b x:, h.except(:k)\r\nDOC\r\nputs text\r\n".write(
+            to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
+    }
+
+    func testModuloKeepsTheRestOfTheLineAsCode() throws {
+        let lines = [
+            "n %= 2; a&.b; b&.c; c&.d",
+            "m = n%(a&.b + b&.c + c&.d)",
+            "text = \"%s\"%(a&.b + b&.c + c&.d)",
+            "r = n.%(a&.b + b&.c + c&.d)",
+        ]
+        for line in lines {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            let scripts = dir.appendingPathComponent("Scripts")
+            try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+
+            try line.write(to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
+
+            XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern, line)
+        }
+    }
+
     func testRGSS2LibraryRoutesToRuby18() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
