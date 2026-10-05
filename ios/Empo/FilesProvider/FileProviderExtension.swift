@@ -412,12 +412,14 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     }
 
     /// The identifiers that the system got for this container, kept in
-    /// the add-on's own Caches, outside the folder that Files shows.
+    /// the add-on's own Application Support, outside the folder that
+    /// Files shows. iOS can empty Caches, and then Files would keep the
+    /// items that went away before that.
     private var listedURL: URL {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let name = Data(container.rawValue.utf8).base64EncodedString()
             .replacingOccurrences(of: "/", with: "_")
-        return caches.appendingPathComponent("Listed", isDirectory: true).appendingPathComponent(name)
+        return support.appendingPathComponent("Listed", isDirectory: true).appendingPathComponent(name)
     }
 
     private func listed() -> Set<String> {
