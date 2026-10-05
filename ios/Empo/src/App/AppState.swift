@@ -136,8 +136,7 @@ class AppState {
         guard canKillPausedGame, let paused = PauseManager.shared.pausedGame else { return }
         session.note("The paused game closes.")
         session.killSession(of: paused)
-        PauseManager.shared.reset()
-        engineReady = false
+        clearEndedGame()
     }
 
     /// True when a game that loads too long or stops responding can
@@ -152,7 +151,7 @@ class AppState {
         session.note("The player stopped the loading.")
         session.recordSessionPlayTime(for: selectedGame)
         session.killSession(of: selectedGame)
-        engineReady = false
+        clearEndedGame()
         phase = nil
     }
 
@@ -162,9 +161,8 @@ class AppState {
         session.note("The game stopped responding, and Empo ended it.")
         session.recordSessionPlayTime(for: activeSessionGame)
         session.killSession(of: activeSessionGame)
-        PauseManager.shared.reset()
         quitOnPause = false
-        engineReady = false
+        clearEndedGame()
         phase = nil
     }
 
@@ -240,7 +238,7 @@ class AppState {
             quitOnPause = false
             session.note("The player quit the game.")
             session.killSession(of: selectedGame)
-            engineReady = false
+            clearEndedGame()
             withAnimation(Motion.snappy) {
                 phase = nil
             }
@@ -350,6 +348,10 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // becomes nil while an error alert already presents, SwiftUI
         // swallows the NavigationStack pop.
         phase = .ended(clean: cleanExit, started: phase == .playing)
+        clearEndedGame()
+    }
+
+    private func clearEndedGame() {
         selectedGame = nil
         // Unbind the controls layout. Library-screen UI that reads
         // it then sees a neutral default, and mutations (they should
