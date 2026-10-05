@@ -204,11 +204,15 @@ class AppSettings {
 
     /// `rubyGameRunner` until Empo closes. A game in the app stays
     /// for the life of the process, so a change applies at the next
-    /// launch only. `DataDirectory` reads it before the main actor runs.
-    nonisolated static let rubyGameRunnerThisLaunch: GameRunner = {
+    /// launch only. `.app` when the data cannot move into the app group.
+    nonisolated static let rubyGameRunnerThisLaunch: GameRunner =
+        DataDirectory.documentsRootURL == DataDirectory.appGroupURL ? .gameProcess : .app
+
+    /// `DataDirectory` reads it before the main actor runs.
+    nonisolated static var rubyGameRunnerChosen: GameRunner {
         let raw = UserDefaults.standard.string(forKey: DefaultsKey.rubyGameRunner) ?? ""
         return gameProcessIsAvailable ? GameRunner(rawValue: raw) ?? .app : .app
-    }()
+    }
 
     /// The game process needs a core that cannot kill its session, and
     /// the app group folder for the games and the saves.

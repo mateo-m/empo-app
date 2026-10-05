@@ -40,12 +40,11 @@ enum DataDirectory {
     /// because that process can open only that folder and its own.
     /// The Files app shows only Documents, and it cannot open a link
     /// into the app group, so the data goes back to Documents when the
-    /// game process is off.
+    /// game process is off, or when an item cannot move into the group.
     static let documentsRootURL: URL = {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         guard let group = appGroupURL else { return documents }
-        if AppSettings.rubyGameRunnerThisLaunch == .gameProcess {
-            moveItems(of: documents, to: group)
+        if AppSettings.rubyGameRunnerChosen == .gameProcess, moveItems(of: documents, to: group) {
             return group
         }
         moveItems(backFrom: group, to: documents)
@@ -71,9 +70,11 @@ enum DataDirectory {
 
     /// Moves each item of Documents into the app group, and puts a
     /// link of the same name in its place, so the Files app still
-    /// lists it. An item that is in both stays where it is.
-    private static func moveItems(of documents: URL, to group: URL) {
+    /// lists it. An item that is in both stays where it is. False when
+    /// an item cannot move.
+    private static func moveItems(of documents: URL, to group: URL) -> Bool {
         let fm = FileManager.default
+        var movedAll = true
         let names = Set(linkedFolderNames).union(itemNames(in: documents)).union(itemNames(in: group))
         for name in names.sorted() {
             let link = documents.appendingPathComponent(name)
@@ -99,8 +100,10 @@ enum DataDirectory {
                 try fm.createSymbolicLink(at: link, withDestinationURL: target)
             } catch {
                 NSLog("[DataDirectory] Cannot move %@ to the app group: %@", name, "\(error)")
+                movedAll = false
             }
         }
+        return movedAll
     }
 
     /// Puts each item of the app group back in Documents, in place of
