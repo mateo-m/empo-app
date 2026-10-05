@@ -257,11 +257,14 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
     static let trashFolderName = ".Trash"
 
     var capabilities: NSFileProviderItemCapabilities {
-        [
+        var capabilities: NSFileProviderItemCapabilities = [
             .allowsReading, .allowsWriting, .allowsRenaming, .allowsReparenting, .allowsDeleting,
             .allowsTrashing,
-            .allowsAddingSubItems,
         ]
+        if contentType == .folder {
+            capabilities.insert(.allowsAddingSubItems)
+        }
+        return capabilities
     }
 
     init(url: URL, root: URL) {

@@ -70,7 +70,7 @@ static Chunk *newChunk(size_t count) {
 
 static void *blockMmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset) {
     bool anonymous = addr == NULL && fd == -1 && (flags & MAP_ANON) && (flags & MAP_PRIVATE) && !(flags & MAP_FIXED) &&
-                     prot == (PROT_READ | PROT_WRITE);
+                     prot == (PROT_READ | PROT_WRITE) && len > 0 && len <= PTRDIFF_MAX;
     if (!anonymous) return realMmap(addr, len, prot, flags, fd, offset);
     size_t count = (len + PAGE - 1) / PAGE;
     os_unfair_lock_lock(&gChunksLock);
@@ -105,6 +105,11 @@ static int blockMunmap(void *addr, size_t len) {
     if (i == gChunkCount) {
         os_unfair_lock_unlock(&gChunksLock);
         return realMunmap(addr, len);
+    }
+    if ((uintptr_t)addr % PAGE != 0 || len == 0 || len > PTRDIFF_MAX) {
+        os_unfair_lock_unlock(&gChunksLock);
+        errno = EINVAL;
+        return -1;
     }
     Chunk *chunk = gChunks[i];
     size_t first = (size_t)((char *)addr - chunk->start) / PAGE;

@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Features in testing. Shown only in a build with a Ruby core, because
-/// the one feature here is the game process for Ruby games.
+/// Features in testing. Shown only in a build with a core in
+/// `GameCores.gameProcessCores`, because the one feature here is the
+/// game process for those cores.
 struct ExperimentalSection: View {
     @Environment(\.appSettings) private var settings
 
@@ -17,7 +18,7 @@ struct ExperimentalSection: View {
                         set: { settings.rubyGameRunner = $0 ? .gameProcess : .app }
                     ),
                     description:
-                        "Quit a game and start another one without closing \(AppInfo.name). Works with \(GameCores.rubyGamesName)."
+                        "Quit a game and start another one without closing \(AppInfo.name). Works with \(GameCores.gameProcessGamesName)."
                 )
                 .disabled(!isAvailable)
                 if !isAvailable {
