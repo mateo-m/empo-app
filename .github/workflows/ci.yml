@@ -15,8 +15,9 @@
 # machines. The value is JSON: a label list such as
 # ["self-hosted","linux","md"], or one quoted label such as
 # "ubuntu-latest". A bare ubuntu-latest fails. With no variable, a
-# job runs on a GitHub-hosted machine. docs.yml and pr-title.yml read
-# LINUX_RUNNER too.
+# job runs on a GitHub-hosted machine. A pull request from a fork
+# always does, so its code never runs on a self-hosted machine.
+# docs.yml and pr-title.yml read LINUX_RUNNER too.
 
 name: CI
 
@@ -56,7 +57,7 @@ jobs:
   # root, so a change to either must still run the tests.
   changes:
     name: Detect docs-only changes
-    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     permissions:
       contents: read
       pull-requests: read
@@ -104,7 +105,7 @@ jobs:
     name: Swift (swiftlint + swift-format)
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -174,7 +175,7 @@ jobs:
 
   objc-cpp:
     name: ObjC / C / C++ (clang-format)
-    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -193,7 +194,7 @@ jobs:
 
   shell:
     name: Bash (shellcheck + shfmt)
-    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
 
@@ -238,7 +239,7 @@ jobs:
 
   yaml:
     name: YAML (oxfmt + yamllint)
-    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
 
@@ -278,7 +279,7 @@ jobs:
 
   markdown:
     name: Markdown (markdownlint)
-    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
 
@@ -301,7 +302,7 @@ jobs:
     name: GameProbe (swift test, Linux)
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     defaults:
       run:
         working-directory: ios/GameProbe
@@ -340,7 +341,7 @@ jobs:
 
   deps-pins:
     name: Verify empo-deps release pins
-    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -359,7 +360,7 @@ jobs:
     name: Simulator build
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ fromJSON(vars.MACOS_RUNNER || '"macos-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.MACOS_RUNNER || '"macos-latest"') }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
@@ -484,7 +485,7 @@ jobs:
       - deps-pins
       - simulator
     if: always()
-    runs-on: ${{ fromJSON(vars.LINUX_RUNNER || '"ubuntu-latest"') }}
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - name: Verify every job passed
         run: |
