@@ -3,6 +3,7 @@
 #import <UIKit/UIKit.h>
 
 #include <crt_externs.h>
+#include <errno.h>
 #include <execinfo.h>
 #include <fcntl.h>
 #include <mach/mach.h>
