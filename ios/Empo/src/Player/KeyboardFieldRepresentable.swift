@@ -1,3 +1,4 @@
+import GameController
 import SwiftUI
 
 /// Invisible UIKit text field with one job: bring up the system
@@ -71,6 +72,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         Coordinator()
     }
 
+    @MainActor
     class Coordinator: NSObject, UITextFieldDelegate {
         func textField(
             _ textField: UITextField, shouldChangeCharactersIn range: NSRange,
@@ -83,7 +85,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // stays enabled), so we must translate the empty-replacement
             // case into a scancode injection explicitly.
             if string.isEmpty && range.length > 0 {
-                EngineSessionCoordinator.shared.injectKeyTap(scancode: Int32(GAMECORE_SCANCODE_BACKSPACE))
+                type([(Int32(GAMECORE_SCANCODE_BACKSPACE), false)])
                 textField.text = " "
                 return false
             }
@@ -116,36 +118,52 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                 string.withCString { gamecore_pushTextInput($0) }
             }
 
-            for char in string {
-                let c = char.utf16.first ?? 0
-                let isUpper =
-                    (c >= UInt16(Character("A").asciiValue!) && c <= UInt16(Character("Z").asciiValue!))
-                let sc = scancodeForSwiftCharacter(c)
-                if sc == GAMECORE_SCANCODE_UNKNOWN { continue }
-
-                if isUpper {
-                    EngineSessionCoordinator.shared.injectKey(
-                        scancode: Int32(GAMECORE_SCANCODE_LSHIFT), pressed: true)
-                }
-                EngineSessionCoordinator.shared.injectKey(scancode: sc, pressed: true)
-                let scancode = sc
-                let upper = isUpper
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(50))
-                    EngineSessionCoordinator.shared.injectKey(scancode: scancode, pressed: false)
-                    if upper {
-                        EngineSessionCoordinator.shared.injectKey(
-                            scancode: Int32(GAMECORE_SCANCODE_LSHIFT), pressed: false)
-                    }
-                }
-            }
+            type(
+                string.compactMap { char in
+                    let c = char.utf16.first ?? 0
+                    let sc = scancodeForSwiftCharacter(c)
+                    if sc == GAMECORE_SCANCODE_UNKNOWN { return nil }
+                    return (sc, char.isASCII && char.isUppercase)
+                })
             textField.text = " "
             return false
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-            EngineSessionCoordinator.shared.injectKeyTap(scancode: Int32(GAMECORE_SCANCODE_RETURN))
+            type([(Int32(GAMECORE_SCANCODE_RETURN), false)])
             return false
+        }
+
+        private var pendingKeys: [(scancode: Int32, shifted: Bool)] = []
+        private var typing: Task<Void, Never>?
+
+        /// Taps the keys one after another. Games read the keyboard
+        /// once per frame, often at 40 fps or less, and see keys that
+        /// overlap as one chord: Shift held for a capital turns the
+        /// next letter into a capital too, and two letters in the
+        /// same frame type only one.
+        private func type(_ keys: [(scancode: Int32, shifted: Bool)]) {
+            // A hardware keyboard types into this field too, and
+            // KeyboardInputManager already sends its real key edges.
+            // A second copy from here would release Shift while the
+            // player still holds it.
+            guard GCKeyboard.coalesced == nil else { return }
+            pendingKeys += keys
+            guard typing == nil else { return }
+            typing = Task { @MainActor in
+                let engine = EngineSessionCoordinator.shared
+                let shift = Int32(GAMECORE_SCANCODE_LSHIFT)
+                while !pendingKeys.isEmpty {
+                    let key = pendingKeys.removeFirst()
+                    if key.shifted { engine.injectKey(scancode: shift, pressed: true) }
+                    engine.injectKey(scancode: key.scancode, pressed: true)
+                    try? await Task.sleep(for: .milliseconds(50))
+                    engine.injectKey(scancode: key.scancode, pressed: false)
+                    if key.shifted { engine.injectKey(scancode: shift, pressed: false) }
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                typing = nil
+            }
         }
 
         private func scancodeForSwiftCharacter(_ c: UInt16) -> Int32 {
