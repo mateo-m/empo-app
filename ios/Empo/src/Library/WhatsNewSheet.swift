@@ -1,33 +1,14 @@
 import SwiftUI
 
-/// To announce a release, add an entry at the top with the next
-/// version. Copy the items from the Highlights section of
-/// CHANGELOG.md.
+/// To announce a release, add an entry at the top of WhatsNew.json
+/// with the next `version` and the app version that ships it. The
+/// release copies the items of that app version into the AltStore
+/// update text (scripts/whats-new-notes.sh).
 enum WhatsNew {
-    static let releases: [WhatsNewRelease] = [
-        WhatsNewRelease(
-            version: 1,
-            items: [
-                WhatsNewItem(
-                    symbol: "gamecontroller",
-                    title: "PSDK games",
-                    detail: "Empo now plays games made with PSDK. Import one the same way "
-                        + "you import an RPG Maker game."
-                ),
-                WhatsNewItem(
-                    symbol: "slider.horizontal.3",
-                    title: "Controls that fit the game",
-                    detail: "Each game gets the on-screen buttons and the settings that its "
-                        + "engine supports."
-                ),
-                WhatsNewItem(
-                    symbol: "cpu",
-                    title: "Game cores",
-                    detail: "See the game cores built into Empo in Settings."
-                ),
-            ]
-        )
-    ]
+    static let releases: [WhatsNewRelease] = {
+        let url = Bundle.main.url(forResource: "WhatsNew", withExtension: "json")!
+        return try! JSONDecoder().decode([WhatsNewRelease].self, from: Data(contentsOf: url))
+    }()
 
     static let version = releases.map(\.version).max() ?? 0
 
@@ -45,12 +26,12 @@ enum WhatsNew {
     }
 }
 
-struct WhatsNewRelease {
+struct WhatsNewRelease: Decodable {
     let version: Int
     let items: [WhatsNewItem]
 }
 
-struct WhatsNewItem {
+struct WhatsNewItem: Decodable {
     let symbol: String
     let title: String
     let detail: String

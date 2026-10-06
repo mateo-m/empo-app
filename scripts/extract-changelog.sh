@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Print the CHANGELOG.md section for one version (without its heading).
 # scripts/release.sh and .github/workflows/release.yml share this
-# script, so the GitHub release, the AltStore description, and the
-# committed changelog always carry the same text.
+# script, so the GitHub release and the committed changelog always
+# carry the same text.
 #
 # Usage: scripts/extract-changelog.sh <version> [changelog-path]
 set -euo pipefail

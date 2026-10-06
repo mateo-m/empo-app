@@ -1,0 +1,39 @@
+[
+  {
+    "version": 2,
+    "appVersion": "0.7.1",
+    "items": [
+      {
+        "symbol": "gamecontroller",
+        "title": "RPG Maker MV and MZ",
+        "detail": "Empo now plays games made with RPG Maker MV and MZ. Import one the same way as any other game."
+      },
+      {
+        "symbol": "checkmark.circle",
+        "title": "More games start",
+        "detail": "Some RPG Maker XP games that stopped at launch, such as Vinemon, now start."
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "appVersion": "0.7.0",
+    "items": [
+      {
+        "symbol": "gamecontroller",
+        "title": "PSDK games",
+        "detail": "Empo now plays games made with PSDK. Import one the same way you import an RPG Maker game."
+      },
+      {
+        "symbol": "slider.horizontal.3",
+        "title": "Controls that fit the game",
+        "detail": "Each game gets the on-screen buttons and the settings that its engine supports."
+      },
+      {
+        "symbol": "cpu",
+        "title": "Game cores",
+        "detail": "See the game cores built into Empo in Settings."
+      }
+    ]
+  }
+]

@@ -98,9 +98,9 @@ run_ci_sync() {
     echo "    ipa published ($ipa_size bytes)"
 
     echo "==> syncing altstore source"
-    local slug changelog build release_date
+    local slug notes build release_date
     slug=$(repo_slug)
-    changelog=$("$REPO_ROOT/scripts/extract-changelog.sh" "$version" "$CHANGELOG_PATH")
+    notes=$("$REPO_ROOT/scripts/whats-new-notes.sh" "$version" "$CHANGELOG_PATH")
     build=$(sed -n 's/.*CURRENT_PROJECT_VERSION: //p' "$PROJECT_YML" | head -n 1)
     release_date=$(date -u +%Y-%m-%d)
     bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
@@ -109,7 +109,7 @@ run_ci_sync() {
         --size "$ipa_size" \
         --date "$release_date" \
         --download-url "https://github.com/$slug/releases/download/v$version/$ipa_name" \
-        --description "$changelog"
+        --description "$notes"
     # The Format gate (oxfmt) checks this file on main. Keep the
     # generated manifest formatted so the gate stays green.
     bunx oxfmt "$ALTSTORE_SOURCE"
@@ -364,7 +364,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         --size "$IPA_SIZE" \
         --date "$RELEASE_DATE" \
         --download-url "$IPA_DOWNLOAD_URL" \
-        --description "$CHANGELOG"
+        --description "$("$REPO_ROOT/scripts/whats-new-notes.sh" "$VERSION" "$CHANGELOG_PATH")"
 
     git -C "$REPO_ROOT" add "$ALTSTORE_SOURCE"
     if ! git -C "$REPO_ROOT" diff --cached --quiet; then
