@@ -74,34 +74,45 @@ enum DataDirectory {
     private static func moveItems(of documents: URL, to storage: URL) {
         let fm = FileManager.default
         try? fm.createDirectory(at: storage, withIntermediateDirectories: true)
+        let group = storage.deletingLastPathComponent().resolvingSymlinksInPath().path + "/"
         // The system puts files that other apps open in Empo in Inbox.
         let names = ((try? fm.contentsOfDirectory(atPath: documents.path)) ?? [])
             .filter { !$0.hasPrefix(".") && $0 != "Inbox" }
         for name in names {
-            merge(documents.appendingPathComponent(name), into: storage.appendingPathComponent(name), fm: fm)
+            let item = documents.appendingPathComponent(name)
+            let destination = storage.appendingPathComponent(name)
+            // An earlier build moved the item into the app group and left a
+            // link to it here. Any other link moves as a link.
+            guard
+                let link = try? fm.destinationOfSymbolicLink(atPath: item.path),
+                case let target = URL(fileURLWithPath: link, relativeTo: documents).resolvingSymlinksInPath(),
+                target.path.hasPrefix(group)
+            else {
+                merge(item, into: destination, fm: fm)
+                continue
+            }
+            if target == destination.resolvingSymlinksInPath() || merge(target, into: destination, fm: fm) {
+                try? fm.removeItem(at: item)
+            }
         }
     }
 
-    private static func merge(_ item: URL, into destination: URL, fm: FileManager) {
-        // An item can be a link into the app group.
-        let target = (try? fm.destinationOfSymbolicLink(atPath: item.path)).map {
-            URL(fileURLWithPath: $0, relativeTo: item.deletingLastPathComponent())
-        }
-        let source = target ?? item
+    /// Returns true when nothing is left at `source`. A link moves as a
+    /// link, and its target stays where it is.
+    @discardableResult
+    private static func merge(_ source: URL, into destination: URL, fm: FileManager) -> Bool {
         do {
-            if source.resolvingSymlinksInPath() == destination.resolvingSymlinksInPath() {
-                // The link points at the item that is already in place.
-            } else if !fm.fileExists(atPath: destination.path) {
+            if !exists(destination, fm: fm) {
                 try fm.moveItem(at: source, to: destination)
             } else if isFolder(source, fm: fm), isFolder(destination, fm: fm) {
-                for name in (try? fm.contentsOfDirectory(atPath: source.path)) ?? [] {
+                let names = try fm.contentsOfDirectory(atPath: source.path)
+                let moved = names.map {
                     merge(
-                        source.appendingPathComponent(name), into: destination.appendingPathComponent(name),
+                        source.appendingPathComponent($0), into: destination.appendingPathComponent($0),
                         fm: fm)
                 }
-                if (try? fm.contentsOfDirectory(atPath: source.path))?.isEmpty == true {
-                    try fm.removeItem(at: source)
-                }
+                guard !moved.contains(false) else { return false }
+                try fm.removeItem(at: source)
             } else {
                 let copy = freeName(for: destination, fm: fm)
                 try fm.moveItem(at: source, to: copy)
@@ -109,15 +120,20 @@ enum DataDirectory {
                     "[DataDirectory] %@ is in Documents and in the app group, so it moved to %@",
                     destination.path, copy.lastPathComponent)
             }
-            if target != nil { try fm.removeItem(at: item) }
+            return true
         } catch {
-            NSLog("[DataDirectory] Cannot move %@ to the app group: %@", item.path, "\(error)")
+            NSLog("[DataDirectory] Cannot move %@ to the app group: %@", source.path, "\(error)")
+            return false
         }
     }
 
+    // `fileExists(atPath:)` follows a link. `attributesOfItem` does not.
+    private static func exists(_ url: URL, fm: FileManager) -> Bool {
+        (try? fm.attributesOfItem(atPath: url.path)) != nil
+    }
+
     private static func isFolder(_ url: URL, fm: FileManager) -> Bool {
-        var isFolder: ObjCBool = false
-        return fm.fileExists(atPath: url.path, isDirectory: &isFolder) && isFolder.boolValue
+        (try? fm.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType == .typeDirectory
     }
 
     private static func freeName(for url: URL, fm: FileManager) -> URL {
@@ -128,7 +144,7 @@ enum DataDirectory {
         while true {
             let label = number == 1 ? "from Documents" : "from Documents \(number)"
             let candidate = folder.appendingPathComponent("\(stem) (\(label))\(suffix)")
-            if !fm.fileExists(atPath: candidate.path) { return candidate }
+            if !exists(candidate, fm: fm) { return candidate }
             number += 1
         }
     }
