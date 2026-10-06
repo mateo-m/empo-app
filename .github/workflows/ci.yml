@@ -323,7 +323,7 @@ jobs:
         # DEVELOPER_DIR instead of xcode-select: no sudo, so the same
         # step works on hosted runners and a self-hosted Mac.
         run: |
-          XCODE="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          XCODE="$(find /Applications -maxdepth 1 -name 'Xcode*.app' | sort -V | tail -n 1)"
           echo "Using $XCODE"
           echo "DEVELOPER_DIR=$XCODE/Contents/Developer" >> "$GITHUB_ENV"
           DEVELOPER_DIR="$XCODE/Contents/Developer" xcodebuild -version
