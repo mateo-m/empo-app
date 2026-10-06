@@ -4,6 +4,7 @@
 #import <Metal/Metal.h>
 #import <objc/runtime.h>
 #include <dlfcn.h>
+#include <errno.h>
 #include <mach-o/dyld.h>
 #include <mach/mach.h>
 #include <os/lock.h>
@@ -83,6 +84,7 @@ static void *blockMmap(void *addr, size_t len, int prot, int flags, int fd, off_
     if (first < 0 && (chunk = newChunk(count)) != NULL) first = (long)(chunk->pages - count);
     if (first < 0) {
         os_unfair_lock_unlock(&gChunksLock);
+        errno = ENOMEM;
         return MAP_FAILED;
     }
     for (size_t page = (size_t)first; page < (size_t)first + count; page++) chunk->used[page / 64] |= 1ull << (page % 64);
