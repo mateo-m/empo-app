@@ -234,8 +234,9 @@ cd "$REPO_ROOT"
 # 7. Generate release notes before the version-bump commit so
 # `--unreleased --tag` covers everything since the previous tag
 # under the version we're about to ship. After prepending the entry to
-# CHANGELOG.md, re-read that section back out so every downstream
-# consumer (AltStore + GitHub release) uses the exact committed text.
+# CHANGELOG.md, re-read that section back out so the GitHub release
+# uses the exact committed text. AltStore gets the What's new items
+# from scripts/whats-new-notes.sh.
 echo "==> generating release notes"
 # git-cliff reads the PR labels from the GitHub API. Without a token,
 # GitHub allows 60 requests an hour.
