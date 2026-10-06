@@ -36,15 +36,15 @@ Both parsers preserve `//` sequences **inside** quoted strings (for example URLs
 ## Session flags outside mkxp.json
 
 Network access is **not** an `mkxp.json` key. It is a per-boot host bridge
-flag (`MKXPSessionConfig.networkEnabled`, from the per-game "Network access"
-setting, default on). Game scripts and patches can branch on it via
+setting (the `networkEnabled` key of `mkxp_setSetting`, from the per-game
+"Network access" setting, default on). Game scripts and patches can branch on it via
 `System.network_enabled?`. When the flag is false, the game sees the
 equivalent of airplane mode. Network libraries load and their classes exist,
 but the native client refuses requests. Socket connects raise
 `Errno::ENETDOWN`, and downloads report failure. Games then take the same
 offline fallback paths that they ship for desktop players without internet.
 Postload stubs for Windows-only online modules still apply while the game is
-offline. The host provides the TLS trust store (`mkxp_setCABundlePath`,
+offline. The host provides the TLS trust store (`gamecore_setCABundlePath`,
 exported to Ruby as `SSL_CERT_FILE`). The launcher refreshes the store
 silently.
 
@@ -79,4 +79,4 @@ it with the game.
 ## Related
 
 - [Ship custom controls](/controls-format): the `empo/controls.json` manifest
-- [patches-format.md](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/main/docs/patches-format.md) in the engine repo: the `patches.json` script-patching format
+- [patches-format.md](https://github.com/mateo-m/mkxp-z-apple-mobile/blob/dev/docs/patches-format.md) in the engine repo: the `patches.json` script-patching format

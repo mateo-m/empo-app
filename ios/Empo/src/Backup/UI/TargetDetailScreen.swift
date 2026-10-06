@@ -222,7 +222,8 @@ struct TargetDetailScreen: View {
         if item.pendingDeletions > 0 || needsAction {
             Section {
                 if item.pendingDeletions > 0 {
-                    let count = item.pendingDeletions == 1 ? "1 old backup" : "\(item.pendingDeletions) old backups"
+                    let count =
+                        item.pendingDeletions == 1 ? "1 old backup" : "\(item.pendingDeletions) old backups"
                     Text("\(count) waiting to be deleted")
                 }
                 if needsAction {

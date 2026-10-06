@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AddButtonSheet: View {
     var layout: ControlsLayout
+    var actions: PlayerActionRegistry?
     @Environment(\.dismiss) private var dismiss
 
     /// The file format caps key buttons + action buttons at 21 per
@@ -30,7 +31,7 @@ struct AddButtonSheet: View {
                         actionRow(for: action)
                     }
                 }
-                Section("Common") {
+                Section("Common keys") {
                     ForEach(keyCatalog.filter { isCommon($0) }) { entry in
                         row(for: entry)
                     }
@@ -65,10 +66,15 @@ struct AddButtonSheet: View {
 
     private func row(for entry: KeyEntry) -> some View {
         HStack {
-            Text(entry.label)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.label)
+                if let hint = entry.hint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Spacer()
-            Text(scancodeDisplayName(entry.scancode))
-                .foregroundStyle(.secondary)
         }
         .contentShape(Rectangle())
         .opacity(atCap ? 0.4 : 1)
@@ -88,6 +94,13 @@ struct AddButtonSheet: View {
                 Text(action.blurb)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let actions, !actions.isAvailable(action.id) {
+                    Text(
+                        "Fast forward is off for this game. The button shows in games that have Fast forward on."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
             Spacer()
         }
@@ -102,26 +115,26 @@ struct AddButtonSheet: View {
 
     private func isCommon(_ entry: KeyEntry) -> Bool {
         let common: Set<Int32> = [
-            Int32(MKXP_SCANCODE_Z), Int32(MKXP_SCANCODE_X),
-            Int32(MKXP_SCANCODE_LSHIFT), Int32(MKXP_SCANCODE_LCTRL),
-            Int32(MKXP_SCANCODE_SPACE), Int32(MKXP_SCANCODE_RETURN),
-            Int32(MKXP_SCANCODE_ESCAPE), Int32(MKXP_SCANCODE_TAB),
-            Int32(MKXP_SCANCODE_LALT), Int32(MKXP_SCANCODE_BACKSPACE),
+            Int32(GAMECORE_SCANCODE_Z), Int32(GAMECORE_SCANCODE_X),
+            Int32(GAMECORE_SCANCODE_LSHIFT), Int32(GAMECORE_SCANCODE_LCTRL),
+            Int32(GAMECORE_SCANCODE_SPACE), Int32(GAMECORE_SCANCODE_RETURN),
+            Int32(GAMECORE_SCANCODE_ESCAPE), Int32(GAMECORE_SCANCODE_TAB),
+            Int32(GAMECORE_SCANCODE_LALT), Int32(GAMECORE_SCANCODE_BACKSPACE),
         ]
         return common.contains(entry.scancode)
     }
 
     private func isLetter(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(MKXP_SCANCODE_A) && entry.scancode <= Int32(MKXP_SCANCODE_Z)
+        entry.scancode >= Int32(GAMECORE_SCANCODE_A) && entry.scancode <= Int32(GAMECORE_SCANCODE_Z)
             && !isCommon(entry)
     }
 
     private func isNumber(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(MKXP_SCANCODE_1) && entry.scancode <= Int32(MKXP_SCANCODE_0)
+        entry.scancode >= Int32(GAMECORE_SCANCODE_1) && entry.scancode <= Int32(GAMECORE_SCANCODE_0)
     }
 
     private func isFunction(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(MKXP_SCANCODE_F1) && entry.scancode <= Int32(MKXP_SCANCODE_F12)
+        entry.scancode >= Int32(GAMECORE_SCANCODE_F1) && entry.scancode <= Int32(GAMECORE_SCANCODE_F12)
     }
 }
 
@@ -130,13 +143,13 @@ struct AddButtonSheet: View {
 enum ControlSizePresets {
     static let button: [(String, CGFloat)] = [
         ("Small", 44), ("Medium", 50),
-        ("Default", 56), ("Large", 68), ("Extra large", 80),
+        ("Standard", 56), ("Large", 68), ("Extra large", 80),
     ]
     /// Matches the button progression's feel. The D-pad's default
     /// (140pt) is the middle preset.
     static let dpad: [(String, CGFloat)] = [
         ("Small", 110), ("Medium", 125),
-        ("Default", 140), ("Large", 160), ("Extra large", 180),
+        ("Standard", 140), ("Large", 160), ("Extra large", 180),
     ]
 }
 
@@ -236,7 +249,7 @@ struct ButtonEditSheet: View {
                         HStack {
                             Text("Label")
                             Spacer()
-                            TextField("Label", text: $labelText)
+                            TextField("e.g. Z", text: $labelText)
                                 .multilineTextAlignment(.trailing)
                                 .onChange(of: labelText) { _, newValue in
                                     if !labelEditSnapshotRecorded && newValue != button.label {
@@ -300,7 +313,14 @@ struct ButtonEditSheet: View {
         List {
             ForEach(keyCatalog) { entry in
                 HStack {
-                    Text(entry.label)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.label)
+                        if let hint = entry.hint {
+                            Text(hint)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     Spacer()
                     if entry.scancode == scancode {
                         Image(systemName: "checkmark")
@@ -314,7 +334,7 @@ struct ButtonEditSheet: View {
                 }
             }
         }
-        .navigationTitle("Emulated key")
+        .navigationTitle("Key")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -449,6 +469,7 @@ struct DPadEditSheet: View {
 
 struct ControlsEditDialogs: ViewModifier {
     var layout: ControlsLayout
+    var actions: PlayerActionRegistry?
 
     @Binding var showAddSheet: Bool
     @Binding var showResetConfirm: Bool
@@ -459,10 +480,10 @@ struct ControlsEditDialogs: ViewModifier {
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: $showAddSheet) {
-                AddButtonSheet(layout: layout)
+                AddButtonSheet(layout: layout, actions: actions)
             }
             .alert(layout.resetConfirmationTitle, isPresented: $showResetConfirm) {
-                Button("Reset", role: .destructive) {
+                Button(layout.resetConfirmationActionTitle, role: .destructive) {
                     layout.resetToResolvedDefault()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -485,6 +506,7 @@ struct ControlsEditDialogs: ViewModifier {
 extension View {
     func controlsEditDialogs(
         layout: ControlsLayout,
+        actions: PlayerActionRegistry?,
         showAddSheet: Binding<Bool>,
         showResetConfirm: Binding<Bool>,
         editingButton: Binding<ButtonModel?>,
@@ -494,6 +516,7 @@ extension View {
         modifier(
             ControlsEditDialogs(
                 layout: layout,
+                actions: actions,
                 showAddSheet: showAddSheet,
                 showResetConfirm: showResetConfirm,
                 editingButton: editingButton,

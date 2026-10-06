@@ -54,7 +54,7 @@ final class PlayerRuntimeState {
         )
         apply(outcome.write)
         fastForwardActive = outcome.active
-        cheatsEnabled = mkxp_getCheatsEnabled()
+        cheatsEnabled = gamecore_getCheatsEnabled()
     }
 
     // MARK: - Fast forward
@@ -114,14 +114,14 @@ final class PlayerRuntimeState {
     /// The Ruby-side poller the engine installs keeps $CHEATS in sync
     /// with the bridge flag each Input.update.
     func toggleCheats() {
-        let next = !mkxp_getCheatsEnabled()
-        mkxp_setCheatsEnabled(next)
+        let next = !gamecore_getCheatsEnabled()
+        gamecore_setCheatsEnabled(next)
         cheatsEnabled = next
         if next {
             // The KEYUP must land at least one RGSS tick after the
             // KEYDOWN or Input.trigger?(HOME) never sees the edge.
             EngineSessionCoordinator.shared.injectKeyTap(
-                scancode: Int32(MKXP_SCANCODE_HOME), holdMilliseconds: 100)
+                scancode: Int32(GAMECORE_SCANCODE_HOME), holdMilliseconds: 100)
         }
     }
 
@@ -136,7 +136,7 @@ final class PlayerRuntimeState {
         fastForwardMultiplier = settings.speedMultiplier
         // `eventthread.cpp` reads this atomic on every synthesized
         // mouse event, so the next frame sees the new value.
-        mkxp_setTouchMouseEnabled(settings.touchMouseEnabled)
+        gamecore_setTouchMouseEnabled(settings.touchMouseEnabled)
     }
 
     private func refreshFastForwardActive() {
@@ -144,12 +144,12 @@ final class PlayerRuntimeState {
     }
 
     private func bridgeMultiplier() -> Int {
-        Int(mkxp_getFastForwardMultiplier())
+        Int(gamecore_getFastForwardMultiplier())
     }
 
     private func apply(_ write: Int?) {
         guard let write else { return }
-        mkxp_setFastForwardMultiplier(Int32(write))
+        gamecore_setFastForwardMultiplier(Int32(write))
     }
 }
 

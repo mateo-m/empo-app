@@ -1,5 +1,4 @@
 import Foundation
-import GameProbe
 import UIKit
 
 /// Per-game metadata stored at `<container>/Metadata/metadata.json`,
@@ -35,48 +34,6 @@ struct GameMetadata: Codable {
     var manifestVersion: String?
     var manifestDescription: String?
 
-    // Ruby interpreter version this game expects, encoded as the
-    // engine bridge's MKXPRubyVersion enum raw value (18, 19, 30,
-    // or 31). nil = default, fall back to whatever the engine's
-    // legacy path picks. Populated at import time by sniffing the bundled
-    // Ruby DLL filename, script grammar, RGSS archive type, and
-    // Game.ini's Library= field. AppState.selectGame reads this and
-    // calls `mkxp_setActiveRubyVersion()` so the multi-Ruby
-    // dispatcher (binding.h's getActiveScriptBinding) routes to the
-    // correct per-version `_mkxp_get_script_binding_NN()` entry point.
-    //
-    // Stored as Int so unknown values from a future Empo build
-    // don't break decoding of older metadata.json (compare to the
-    // coreKind String pattern, same idea, different type).
-    var rubyVersion: Int?
-
-    // Identifier (raw value of `GameScriptProfile.Schema`) for
-    // the heuristic set this entry's `rubyVersion` was produced
-    // by. Library load compares the stored string against
-    // `GameScriptProfile.currentSchema.rawValue`. If it differs
-    // (or is missing), we re-run detection and overwrite.
-    //
-    // Stored as String, not the enum directly, so an older Empo
-    // build reading metadata written by a newer one with an
-    // unknown case doesn't crash. It only sees a non-matching
-    // string and re-detects with its own (older) heuristics.
-    //
-    // The `rubyVersionOverride` user setting still wins. This only
-    // affects the auto-detected default.
-    var rubyVersionDetectedSchema: String?
-
-    // Whether auto-detect classifies this game's scripts as modern
-    // Ruby 3 syntax (true = Modern with no syntax transform,
-    // false = Legacy). Populated at import and refreshed when
-    // `useModernRuby` is nil, same lifecycle as `rubyVersion`.
-    // `GameSettings.useModernRuby` override still wins.
-    var modernRubyScriptsDetected: Bool?
-
-    // Schema id for the heuristic that produced
-    // `modernRubyScriptsDetected`. Same forward-compat pattern as
-    // `rubyVersionDetectedSchema`.
-    var modernRubyScriptsDetectedSchema: String?
-
     init() {}
 
     /// Field-by-field decode. The synthesized `Codable.init(from:)`
@@ -84,9 +41,8 @@ struct GameMetadata: Codable {
     /// fails to decode, which then trips `load()`'s `?? GameMetadata()`
     /// fallback and silently overwrites every legitimate value
     /// (dateAdded, totalPlayTime, etc.) on the next save. We hit
-    /// exactly that bug while migrating `rubyVersionDetectedSchema`
-    /// from Int (schema 1/2) to String (named cases), losing a few
-    /// `dateAdded` timestamps in the process.
+    /// exactly that bug while migrating a schema field from Int to
+    /// String, losing a few `dateAdded` timestamps in the process.
     ///
     /// Decoding each field with `try?` keeps unrelated values intact
     /// when one field's type changes between Empo builds. Future
@@ -103,13 +59,6 @@ struct GameMetadata: Codable {
         manifestId = (try? c.decodeIfPresent(String.self, forKey: .manifestId))
         manifestVersion = (try? c.decodeIfPresent(String.self, forKey: .manifestVersion))
         manifestDescription = (try? c.decodeIfPresent(String.self, forKey: .manifestDescription))
-        rubyVersion = (try? c.decodeIfPresent(Int.self, forKey: .rubyVersion))
-        rubyVersionDetectedSchema =
-            (try? c.decodeIfPresent(String.self, forKey: .rubyVersionDetectedSchema))
-        modernRubyScriptsDetected =
-            (try? c.decodeIfPresent(Bool.self, forKey: .modernRubyScriptsDetected))
-        modernRubyScriptsDetectedSchema =
-            (try? c.decodeIfPresent(String.self, forKey: .modernRubyScriptsDetectedSchema))
     }
 
     static func load(from container: GameContainer) -> GameMetadata {
@@ -138,50 +87,6 @@ struct GameMetadata: Codable {
 
         if let f = customArtworkFilename, !isValidFilename(f) { customArtworkFilename = nil }
         if let f = customBannerFilename, !isValidFilename(f) { customBannerFilename = nil }
-    }
-
-    /// Refresh the auto-detected Ruby version if this metadata is
-    /// missing one, was produced by older heuristics, or the caller
-    /// wants to force a fresh sniff for the current launch.
-    ///
-    /// `forceRefresh` is used by the game-launch path so upgraded
-    /// installs recover even if the library didn't get a chance to
-    /// rewrite stale metadata before the user boots a game.
-    /// Re-run `GameScriptProfile` and persist ruby version + modern-
-    /// script flags when schema is stale or values are missing.
-    mutating func refreshDetectedProfile(
-        in container: GameContainer,
-        forceRefresh: Bool = false
-    ) {
-        let currentSchema = GameScriptProfile.currentSchema.rawValue
-        let needsDetect =
-            forceRefresh
-            || rubyVersion == nil
-            || modernRubyScriptsDetected == nil
-            || rubyVersionDetectedSchema != currentSchema
-            || modernRubyScriptsDetectedSchema != currentSchema
-        guard needsDetect else { return }
-
-        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
-        rubyVersion = profile.rubyVersion
-        modernRubyScriptsDetected = profile.modernRubyScripts
-        rubyVersionDetectedSchema = currentSchema
-        modernRubyScriptsDetectedSchema = currentSchema
-        save(to: container)
-    }
-
-    mutating func refreshDetectedRubyVersion(
-        in container: GameContainer,
-        forceRefresh: Bool = false
-    ) {
-        refreshDetectedProfile(in: container, forceRefresh: forceRefresh)
-    }
-
-    mutating func refreshDetectedModernRubyScripts(
-        in container: GameContainer,
-        forceRefresh: Bool = false
-    ) {
-        refreshDetectedProfile(in: container, forceRefresh: forceRefresh)
     }
 
     private func isValidFilename(_ name: String) -> Bool {
@@ -297,217 +202,7 @@ struct GameMetadata: Codable {
     static func formatDiskSize(_ bytes: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
-
-    /// Detect the game's RGSS API version (1 = XP, 2 = VX,
-    /// 3 = VX Ace). Returns nil when no signal is found.
-    ///
-    /// RGSS version is the *graphics API* version (Sprite/Bitmap/
-    /// Window/Tilemap conventions), not the Ruby parser version.
-    /// A modern custom engine can ship RGSS1 graphics with Ruby 3.x
-    /// (Pokemon Flux), so this is independent of the bundled Ruby.
-    ///
-    /// Priority of signals (each catches games the next misses):
-    ///   1. `mkxp.json` `rgssVersion` integer (developer-declared,
-    ///      highest authority).
-    ///   2. `Game.ini` `Scripts=` path extension. `.rxdata` = 1,
-    ///      `.rvdata` = 2, `.rvdata2` = 3. Vanilla RPG Maker writes
-    ///      this. PE forks and most fan engines preserve it.
-    ///   3. Archive presence: `.rgssad` = 1, `.rgss2a` = 2,
-    ///      `.rgss3a` = 3. Encrypted-script games often only ship
-    ///      these and a stub Game.ini.
-    ///   4. Loose `Data/` files: prefer the highest-numbered family
-    ///      present (`.rvdata2` > `.rvdata` > `.rxdata`) since
-    ///      newer-format files coexist with older ones in some
-    ///      hybrid games.
-    static func detectRGSSVersion(in gameDirectory: URL) -> Int? {
-        let fm = FileManager.default
-
-        // Signal 1: mkxp.json
-        let mkxpURL = gameDirectory.appendingPathComponent("mkxp.json")
-        if let data = try? Data(contentsOf: mkxpURL),
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let v = json["rgssVersion"] as? Int,
-            (1...3).contains(v)
-        {
-            return v
-        }
-
-        // Signal 2: Game.ini Scripts= extension
-        let iniURL = gameDirectory.appendingPathComponent("Game.ini")
-        if let scripts = GameINI.parseINIValue(in: iniURL, section: "game", key: "scripts") {
-            let lower = scripts.lowercased()
-            if lower.hasSuffix(".rvdata2") { return 3 }
-            if lower.hasSuffix(".rvdata") { return 2 }
-            if lower.hasSuffix(".rxdata") { return 1 }
-        }
-
-        // Signal 3: archives at game root or in Data/
-        for dir in [gameDirectory, gameDirectory.appendingPathComponent("Data")] {
-            let exts = Set(
-                dir.directoryEntries(
-                    matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm
-                ).map { $0.pathExtension.lowercased() })
-            if exts.contains("rgss3a") { return 3 }
-            if exts.contains("rgss2a") { return 2 }
-            if exts.contains("rgssad") { return 1 }
-        }
-
-        // Signal 4: loose Data/* files
-        let dataDir = gameDirectory.appendingPathComponent("Data")
-        let dataExts = Set(
-            dataDir.directoryEntries(
-                matchingExtensions: ["rxdata", "rvdata", "rvdata2"], fm: fm
-            ).map { $0.pathExtension.lowercased() })
-        if dataExts.contains("rvdata2") { return 3 }
-        if dataExts.contains("rvdata") { return 2 }
-        if dataExts.contains("rxdata") { return 1 }
-
-        return nil
-    }
-
-    /// Detect the bundled Ruby version a game ships, if any.
-    /// Returns the version string (e.g., `"3.1.0p0"`) or nil when
-    /// no bundled runtime is found (game runs against the engine's
-    /// own Ruby).
-    ///
-    /// Robust to filename: scans the byte contents of every
-    /// `.dll`/`.dylib`/`.so` in the game folder for Ruby's embedded
-    /// `RUBY_DESCRIPTION` literal (`"ruby X.Y.ZpN"`). A developer
-    /// can rename the DLL to `bundled.dll` and we still find it.
-    /// Files larger than 64 MB are skipped as a safety bound.
-    /// Real Ruby DLLs are 5-15 MB.
-    static func detectBundledRubyVersion(in gameDirectory: URL) -> String? {
-        let fm = FileManager.default
-        let scanBudget = 64 * 1024 * 1024
-
-        for url in gameDirectory.directoryEntries(matchingExtensions: ["dll", "dylib", "so"], fm: fm) {
-            guard let attrs = try? fm.attributesOfItem(atPath: url.path),
-                let size = attrs[.size] as? Int,
-                size <= scanBudget,
-                let data = try? Data(contentsOf: url, options: .alwaysMapped)
-            else { continue }
-
-            if let v = scanRubyDescription(in: data) { return v }
-        }
-
-        return nil
-    }
-
-    /// Read the host engine's Ruby version by scanning the app's
-    /// own executable for `RUBY_DESCRIPTION` string literals.
-    ///
-    /// In Debug builds Xcode splits the binary in two: a thin
-    /// loader stub at `Bundle.main.executableURL` that contains
-    /// no Ruby code, and the actual implementation at
-    /// `<bundle>/Empo.debug.dylib`. Release builds put everything
-    /// in the executable. We try the dylib first if it exists,
-    /// then fall back to the executable.
-    ///
-    /// With multi-Ruby (`feat/multi-ruby-v2`), the binary contains
-    /// up to four `RUBY_DESCRIPTION` literals (one per merged.o:
-    /// 1.8 / 1.9 / 3.0 / 3.1). Pass `forMajorMinor: "1.9"` (or
-    /// "1.8" / "3.0" / "3.1") to pick the one that matches the
-    /// game's detected Ruby version. Pass nil for the legacy
-    /// "first match wins" behaviour.
-    ///
-    /// Cached on (filter, found-version) pairs so multi-Ruby
-    /// callers don't re-scan the binary on every Game Info refresh.
-    static func engineRubyVersion(forMajorMinor majorMinor: String? = nil) -> String? {
-        let key = majorMinor ?? ""
-        if let cached = _engineRubyVersionCache.lookup(key) { return cached }
-
-        // Candidate paths to scan, dylib first since Debug builds
-        // are split. Maps to executable in Release.
-        var candidates: [URL] = []
-        let bundleURL = Bundle.main.bundleURL
-        let dylib = bundleURL.appendingPathComponent("Empo.debug.dylib")
-        if FileManager.default.fileExists(atPath: dylib.path) {
-            candidates.append(dylib)
-        }
-        if let exe = Bundle.main.executableURL {
-            candidates.append(exe)
-        }
-
-        for url in candidates {
-            guard let data = try? Data(contentsOf: url, options: .alwaysMapped)
-            else { continue }
-            if let v = scanRubyDescription(in: data, matchingMajorMinor: majorMinor) {
-                _engineRubyVersionCache.store(key, value: v)
-                return v
-            }
-        }
-        return nil
-    }
-
-    /// Search a binary blob for Ruby's embedded `RUBY_DESCRIPTION`
-    /// literal (`"ruby X.Y.ZpN ..."`) and return the version capture.
-    /// Decodes the bytes as Latin-1 (each byte maps 1:1 to U+0000
-    /// through U+00FF) so binary data round-trips losslessly into
-    /// a Swift String for `NSRegularExpression` to scan.
-    ///
-    /// When `majorMinor` is non-nil (e.g. "1.9"), iterates all
-    /// matches and returns the first one whose version starts
-    /// with that prefix. Necessary in the multi-Ruby binary which
-    /// contains up to four `RUBY_DESCRIPTION` literals back-to-back.
-    private static func scanRubyDescription(
-        in data: Data,
-        matchingMajorMinor majorMinor: String? = nil
-    ) -> String? {
-        guard let regex = _rubyVersionRegex else { return nil }
-        let asciiString = String(data: data, encoding: .isoLatin1) ?? ""
-        let range = NSRange(asciiString.startIndex..., in: asciiString)
-
-        if let majorMinor {
-            let prefix = majorMinor + "."  // "1.9" -> "1.9." anchor
-            let matches = regex.matches(in: asciiString, options: [], range: range)
-            for match in matches where match.numberOfRanges >= 2 {
-                guard let versionRange = Range(match.range(at: 1), in: asciiString)
-                else { continue }
-                let v = String(asciiString[versionRange])
-                if v.hasPrefix(prefix) { return v }
-            }
-            return nil
-        }
-
-        // Legacy first-match-wins path.
-        guard let match = regex.firstMatch(in: asciiString, options: [], range: range),
-            match.numberOfRanges >= 2,
-            let versionRange = Range(match.range(at: 1), in: asciiString)
-        else { return nil }
-        return String(asciiString[versionRange])
-    }
-
-    // Cached, lazily-built regex. Pattern matches "ruby 1.8.7",
-    // "ruby 2.6.10", "ruby 3.1.0p0", "ruby 3.4.0p1234". It
-    // tolerates a patch suffix. Anchors on the literal "ruby "
-    // prefix so unrelated version strings inside the binary don't
-    // match.
-    private static let _rubyVersionRegex = try? NSRegularExpression(
-        pattern: #"ruby (\d+\.\d+\.\d+(?:p\d+)?)"#
-    )
 }
-
-/// Per-filter cache for `engineRubyVersion(forMajorMinor:)`. Swift
-/// doesn't let us easily mutate a `static var` from inside a
-/// `static func` without `nonisolated(unsafe)` ceremony. A
-/// reference-typed holder is the cleanest workaround.
-private final class _EngineRubyVersionCache: @unchecked Sendable {
-    private var values: [String: String] = [:]
-    private let lock = NSLock()
-
-    func lookup(_ key: String) -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-        return values[key]
-    }
-
-    func store(_ key: String, value: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        values[key] = value
-    }
-}
-private let _engineRubyVersionCache = _EngineRubyVersionCache()
 
 extension UIImage {
     fileprivate func resizedToFit(maxDimension: CGFloat) -> UIImage {

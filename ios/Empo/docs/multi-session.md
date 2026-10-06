@@ -1,43 +1,80 @@
 ---
 title: Multi-session
-description: Why Empo plays one game for each process, which quit paths it removed, and what must change before cross-session play returns.
+description: Where a game runs, and how a game process lets any game follow any other.
 ---
 
 ## Status
 
-Cross-session play is **disabled**. After a clean game exit, Empo shows an alert ("close from app switcher to play again"). It does not return to the library. To start a different game, the user must force-close the app and open it again.
+A game runs in one of two places, which `GameRunner` names:
 
-The original UX ("drop to library, pick another game in the same process") is gone from the code until Ruby state cleanup is reliable. The app removed every quit path in August 2026. The git history holds them.
+- `app`: the app opens the core with `dlopen` and runs the engine on its main thread. This is the default.
+- `gameProcess`: the app starts the `GameProcess` extension (ExtensionKit, iOS 26), and the extension opens one core and plays one game.
+
+The MV and MZ core always runs in the app. It can end a game there with `gamecore_killSession`, so any game can follow it. The Ruby cores (RPG Maker XP, VX and VX Ace, and PSDK) run in a game process only when the person turns on "Quit and switch games" in the Experimental section of Settings. The section shows only in a build with a Ruby core. The app reads the setting once at launch (`AppSettings.rubyGameRunnerThisLaunch`), because a core that the app opened stays in the app until the app ends.
+
+In a game process, the app sends `quit` to end a game, and the extension calls `_exit(0)`. The next game gets a new process, so no Ruby VM, class, or SFML state stays behind. Any game can start next, on any core:
+
+- A paused game gives its place to the next game that the user taps. The library asks first, because the paused game loses its progress that is not saved.
+- A game that ends shows a "Back to Library" button.
+- The More sheet shows "Quit" under "Pause". Quit asks first, then ends the process and goes back to the library.
+- The loading screen shows "Stop Loading".
+
+A Ruby game that runs in the app cannot end. The screens tell the person to close Empo from the app switcher and open it again.
+
+`EngineSessionCoordinator.openCore` picks the runner and calls `EmpoCoreUseGameProcess`. Every `gamecore_*` call of the app goes through `AppCoreForwarders.c`. In a game process, a forwarder calls the `gameprocess_*` function of the same name in `GameProcessClient.m`, which sends an XPC message to `GameProcessService.m` in the extension. The getters answer from the last status that the extension sent. In the app, a forwarder calls the core that the app opened. `tools/gamecore/generate-core-forwarders.sh` writes the list of the forwarded functions, `GameCoreFunctions.h`, from `cores/GameCore.h`.
+
+`GameProcessHost.swift` starts and ends the extension. It shows the game in an `EXHostViewController` behind the app's views. The app waits until the old process ended, with a limit of 2 seconds, before it starts a new one. When the extension stops without a `quit`, the app shows the game as stopped. A paused game that loses its process closes.
+
+## Where the data lives
+
+A game process can open only its own folder and the app group folder. It cannot open the app's Documents. The app group ID is `group.` plus the bundle ID of the app. `project.yml` sets it in `EMPO_APP_GROUP`, and the app reads it from the `EmpoAppGroup` key in `Info.plist`.
+
+`DataDirectory.documentsRootURL` is the folder that holds `Games`, `Data`, `Fonts`, `Profiles` and the rescue folders. It is `File Provider Storage` in the app group, for both runners, so the setting does not move any data. At the first launch of a build with the app group, the app moves each item of Documents into it. When an item in Documents is a link into the app group, the app moves the item that the link points to, then removes the link. When both folders have a folder with the same name, the app merges the two. When both have a file with the same name, the file in the app group stays, and the file from Documents moves next to it with "(from Documents)" in its name.
+
+AltStore and SideStore add `.` and the team ID to the group name when they sign the app. `DataDirectory.appGroupURL` reads the group names from the app's own signature with `SecTaskCopyValueForEntitlement`, and uses the first one that is the configured name or starts with it and a `.`. LiveContainer runs the app with its own signature, so no group matches, and the root is Documents. When no app group is available, the root is Documents, the game process is not available, and the Files app does not show the data in the Empo location. Settings then shows "Quit and switch games" off and disabled, with a note that says why.
+
+The `FilesProvider` extension shows the root in the Files app, under Locations. It is an `NSFileProviderExtension`, and `NSExtensionFileProviderDocumentGroup` names the app group. `UIFileSharingEnabled` is off, so the Files app does not also show the empty Documents under "On My iPhone". A deleted item goes to `.Trash/<UUID>/` in the root, and the Files app shows it in Recently Deleted. The extension removes trashed items after 30 days.
+
+`CABundleStore` keeps its downloaded certificates in the app group, because the game process reads them.
+
+## Reports
+
+A game process session always writes a session log, also when the debug logs setting is off. The extension sends its stdout and stderr to the log, and writes a backtrace to it on a crash signal. The app adds lines that start with `[empo]` for what it saw, for example a quit or a process that went away (`SessionLogger.note`).
+
+`GameReport` turns a session log into a text file to share. The file starts with the app version, the commit, the device and the game. The log names the core and the runner. The person can share the newest report of a game from "Share report" in its Info sheet. "Share Report" on the error alert and on the screen of a game that stopped shares the report of the last session (`GameReport.last`), which the app keeps across launches.
+
+The debug overlay shows where the game runs. In a game process, it shows the memory of the game process and of the app on separate lines.
 
 ## Why this is hard
 
-An iOS app cannot kill itself and start again. Android emulators (JoiPlay) avoid the problem: they call `Process.killProcess()` after each game. On iOS, the app must clean the active Ruby VM's state manually between games:
+An iOS app cannot stop itself and start again. Android players such as JoiPlay stop the process after each game with `Process.killProcess()`. On iOS, the app must clean the state of the Ruby VM between games:
 
-- Game A defines `class Foo < Bar`. The class lives in the active Ruby's constant table.
-- Game B runs in the same VM. It defines `class Foo < Baz`. Ruby raises `TypeError: superclass mismatch for class Foo`.
-- The set of leaked classes, monkey-patches, aliases, and disposed RGSS objects across two arbitrary games is unpredictable.
+- Game A defines `class Foo < Bar`. The class stays in the constant table of the VM.
+- Game B runs in the same VM and defines `class Foo < Baz`. Ruby raises `TypeError: superclass mismatch for class Foo`.
+- Two games can leave any set of classes, patches, aliases and disposed RGSS objects behind. Nobody can know that set in advance.
 
-An earlier version cleaned up hard between sessions. It compared constants against a baseline, recorded a singleton-method baseline, used the `MkxpNullMouse` stand-in for leftover globals, and detached disposables from their lists. It worked for a few same-version game pairs. It failed on wider game sets, above all when two games used different Ruby versions, because the data structures differ.
+A cleanup between sessions worked for some pairs of games with the same Ruby version. It failed on larger sets of games, and on games with different Ruby versions.
 
-The decision: show a clear alert that asks the player to close the app, rather than a half-working flow that fails at random. Two later options can bring cross-session play back. The app can fork a process, so each game gets its own PID. Or the engine can move its per-session VM state into a container it can reset in full.
+A flow that fails at random is worse than a restart. A process for each game makes the cleanup unnecessary. ExtensionKit lets an iOS app start a process of its own, and the app can end that process without ending itself.
 
-## What still happens at engine shutdown
+## What happens when a game ends
 
-The user cannot switch to another game in the same process. The engine still does session teardown when Ruby raises `SystemExit` / `Reset`:
+When Ruby raises `SystemExit` or `Reset` in the RPG Maker XP, VX and VX Ace core:
 
 1. `binding-mri.cpp` catches the exception and calls `mkxp_setEngineExitedCleanly()`.
-2. `runSessions` waits for `rqTermAck`, then `eventThread.cleanup()`, framebuffer clear, "Game session ended."
-3. `mkxp_setEngineTerminated()` fires the iOS callback.
-4. `AppState`'s callback sets `errorMessage = cleanExitMessage`. The SwiftUI alert appears.
-5. The user taps OK. The alert dismisses, but `phase` stays non-nil, so SwiftUI does not navigate.
-6. The user force-closes the app from the app switcher.
-7. On the next launch, `CrashTracker.consumeRecovery()` deletes the on-disk `.session-active` markers. This fix landed with the alert UX. Without it, the marker outlived the in-memory flag and re-triggered "didn't exit cleanly" on every launch.
+2. `EngineHost::runSession` in `main.cpp` waits for `rqTermAck` (`waitForRGSSAck`), then stops the event thread and clears the framebuffer.
+3. `mkxp_setEngineTerminated()` calls the iOS callback.
+4. The `AppState` callback sets `phase` to `.ended`. `GameLoadingView` takes the place of the game and says that the game closed. For an error, it says that the game stopped.
+5. When the game can end, the screen shows "Back to Library", which ends the game. A Ruby game that runs in the app cannot end, so the screen tells the person to close Empo from the app switcher.
+6. On the next launch, `CrashTracker.consumeRecovery()` deletes the `.session-active` markers on disk. Without this step, each launch would say that the last game did not exit cleanly.
 
-## Quit-bypass shims
+The app sets the callback with `gamecore_setEngineTerminatedCallback`, which goes to the core of the game. The PSDK and MV/MZ cores call it too. A game that ends before its first frame gets the same screen. For an error, the screen says that the game did not start.
 
-Two `scripts/preload/platform_compat.rb` shims keep this flow safe when game scripts try to skip the engine's catch:
+## Scripts that try to quit the process
 
-- **`Kernel.exit!` / `Process.exit!` redirect to `Kernel.exit`** - Pokemon Essentials' `pbExit` and many forks of it call `exit!` to skip `at_exit` handlers. On desktop, this is harmless. On iOS, `exit!` calls C `_exit(status)` directly, and the app vanishes before the engine knows. The redirect to `exit` raises `SystemExit` instead, which the engine catches. App Store guideline 2.5.1 also forbids programmatic process termination, so the redirect gives correct behavior and meets the policy.
-- **`Thread.critical` / `Thread.critical=` no-ops on Ruby 1.9+** - Vintage RGSS code wraps `Marshal.load` and save-file I/O in `Thread.critical = true` blocks. This is a Ruby 1.8 cooperative-scheduling idiom, and Ruby 1.9 removed both methods. Without the shim, Ruby 1.9+ raises `NoMethodError` mid-quit. The error escapes the script-eval loop, and `SharedState::finiInstance()` segfaults on iOS while it tears down graphics with a pending exception.
+Two parts of `scripts/preload/platform_compat.rb` in the engine keep a quit inside this flow:
 
-See `ios/Empo/docs/multi-ruby.md` for the wider picture.
+- **`Kernel.exit!` and `Process.exit!` call `Kernel.exit`.** Pokemon Essentials' `pbExit` and many forks call `exit!`. On iOS, `exit!` calls C `_exit(status)`, and the game process ends before the engine can show the end screen. `exit` raises `SystemExit`, and the engine catches it. App Store guideline 2.5.1 also forbids an app that stops its own process.
+- **`Thread.critical` and `Thread.critical=` do nothing on Ruby 1.9 and later.** Old RGSS code puts `Marshal.load` and save file I/O in `Thread.critical = true` blocks. Ruby 1.9 removed both methods. Without this part, the game raises `NoMethodError` while it quits, and `SharedState::finiInstance()` crashes while it stops the graphics.
+
+See [`multi-ruby.md`](multi-ruby.md) for the Ruby versions.

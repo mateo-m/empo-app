@@ -17,12 +17,12 @@ class EngineState {
     /// The caller must guard `phase == .playing` before the call.
     func requestBackgroundPause() {
         isBackgroundPause = true
-        mkxp_requestPause()
+        gamecore_requestPause()
     }
 
     /// The caller must guard `phase == .playing` before the call.
     func resumeFromBackground() {
-        guard mkxp_isPaused() else { return }
-        mkxp_requestResume()
+        guard gamecore_isPaused() else { return }
+        gamecore_requestResume()
     }
 }

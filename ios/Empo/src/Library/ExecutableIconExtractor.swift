@@ -1,5 +1,4 @@
 import Foundation
-import GameProbe
 import UIKit
 
 /// Extracts the embedded icon from a Windows PE executable
@@ -194,14 +193,8 @@ struct PEImage {
         /// data directory array. PE32: 92. PE32+: 108.
         static let optionalNumberOfRvaAndSizesOffset32: Int = 92
         static let optionalNumberOfRvaAndSizesOffset64: Int = 108
-        /// IMAGE_DIRECTORY_ENTRY_IMPORT index.
-        static let importDirectoryIndex: Int = 1
         /// IMAGE_SECTION_HEADER record size.
         static let sectionHeaderSize: Int = 40
-        /// IMAGE_IMPORT_DESCRIPTOR record size.
-        static let importDescriptorSize: Int = 20
-        /// IMAGE_IMPORT_DESCRIPTOR.Name lives at offset 12.
-        static let importDescriptorNameOffset: Int = 12
     }
 
     init?(data: Data) {
@@ -281,61 +274,6 @@ struct PEImage {
             }
         }
         return nil
-    }
-
-    // MARK: - Imports
-
-    /// Returns true when any of the executable's imported DLL
-    /// names starts with "rgss" (case-insensitive) and ends in
-    /// ".dll". That matches the real-world RPG Maker runtime
-    /// filenames (`RGSS102E.dll`, `RGSS202J.dll`, `RGSS300.dll`,
-    /// and any JoiPlay / patched variants that keep the prefix).
-    func importsRGSSRuntime() -> Bool {
-        for name in importedDLLNames() {
-            let lower = name.lowercased()
-            if lower.hasPrefix("rgss"), lower.hasSuffix(".dll") {
-                return true
-            }
-        }
-        return false
-    }
-
-    /// Iterates the import directory and yields each imported DLL
-    /// name as a Swift string. Returns an empty array when the
-    /// executable has no imports (rare for a real game) or the
-    /// import directory is malformed.
-    func importedDLLNames() -> [String] {
-        guard dataDirectoryCount > Layout.importDirectoryIndex else { return [] }
-
-        let dirBase = dataDirectoryBase + Layout.importDirectoryIndex * 8
-        guard let importRVA = reader.readUInt32(at: dirBase),
-            let importSize = reader.readUInt32(at: dirBase + 4),
-            importRVA != 0, importSize != 0
-        else {
-            return []
-        }
-        guard let tableOffset = rvaToFileOffset(importRVA) else { return [] }
-
-        var names: [String] = []
-        var cursor = tableOffset
-        let end = tableOffset + Int(importSize)
-
-        // IMAGE_IMPORT_DESCRIPTOR array terminated by a zeroed
-        // entry. Read the Name RVA, resolve it to a file
-        // offset, then read a null-terminated ASCII string.
-        while cursor + Layout.importDescriptorSize <= end {
-            guard let nameRVA = reader.readUInt32(at: cursor + Layout.importDescriptorNameOffset) else {
-                break
-            }
-            if nameRVA == 0 { break }  // terminator
-            if let fileOffset = rvaToFileOffset(nameRVA),
-                let name = reader.readNullTerminatedASCII(at: fileOffset)
-            {
-                names.append(name)
-            }
-            cursor += Layout.importDescriptorSize
-        }
-        return names
     }
 
     // MARK: - Icons
@@ -662,24 +600,6 @@ private struct ByteReader {
         let end = offset + length
         guard end <= data.count else { return nil }
         return data[(data.startIndex + offset)..<(data.startIndex + end)]
-    }
-
-    /// Reads a null-terminated ASCII string starting at `offset`,
-    /// capped at a reasonable length so a malformed PE without a
-    /// terminator doesn't scan to EOF. DLL names in PE imports
-    /// comfortably fit in 256 chars (MS_MAX_PATH territory).
-    func readNullTerminatedASCII(at offset: Int, maxLength: Int = 256) -> String? {
-        guard offset >= 0 else { return nil }
-        var bytes: [UInt8] = []
-        bytes.reserveCapacity(min(maxLength, 64))
-        for i in 0..<maxLength {
-            let pos = offset + i
-            guard pos < data.count else { break }
-            let byte = data[data.startIndex + pos]
-            if byte == 0 { break }
-            bytes.append(byte)
-        }
-        return bytes.isEmpty ? nil : String(bytes: bytes, encoding: .ascii)
     }
 }
 

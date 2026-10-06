@@ -22,7 +22,8 @@ struct ProgressBar: View {
             }
             .animation(
                 fill == nil ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true) : nil,
-                value: slid)
+                value: slid
+            )
             .animation(Motion.snappy, value: fill)
         }
         .frame(height: height)

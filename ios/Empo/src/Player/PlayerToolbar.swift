@@ -9,17 +9,12 @@ struct PlayerToolbar: View {
     let safeArea: EdgeInsets
     let geoSize: CGSize
     let controlsHidden: Bool
+    let keyboardShown: Bool
     let toolbarOpacity: Double
     let onToggleKeyboard: () -> Void
     let onToggleEditMode: () -> Void
     let onToggleHideControls: () -> Void
     let onShowMore: () -> Void
-    /// `false` when `PlayerMoreSheet` would render no rows given
-    /// the current settings + per-game state - typically when the
-    /// user has disabled cheats, fast-forward, pause, and the
-    /// diagnostics overlay. We hide the Menu button rather than
-    /// surface an empty sheet.
-    let menuVisible: Bool
     let onResetIdleTimer: () -> Void
 
     var body: some View {
@@ -34,6 +29,7 @@ struct PlayerToolbar: View {
             ForEach(Array(buttons.enumerated()), id: \.offset) { _, entry in
                 IconButton(
                     entry.icon,
+                    label: entry.label,
                     style: .outline,
                     size: .sm,
                     tint: entry.tint
@@ -41,7 +37,6 @@ struct PlayerToolbar: View {
                     onResetIdleTimer()
                     entry.action()
                 }
-                .accessibilityLabel(entry.label)
             }
         }
         // Pin the Liquid Glass material to the dark variant so the
@@ -56,13 +51,14 @@ struct PlayerToolbar: View {
         .position(toolbarPosition)
     }
 
-    /// Build the toolbar entries imperatively so the `Menu` cap
-    /// can be appended only when `menuVisible` is true. Inlining
-    /// this in `body` collides with SwiftUI's ViewBuilder, which
-    /// disallows non-View `if` branches at expression scope.
     private func toolbarButtons() -> [ToolbarEntry] {
-        var entries: [ToolbarEntry] = [
-            ToolbarEntry(icon: "keyboard", label: "Toggle keyboard", tint: .white, action: onToggleKeyboard),
+        [
+            ToolbarEntry(
+                icon: "keyboard",
+                label: keyboardShown ? "Hide keyboard" : "Show keyboard",
+                tint: .white,
+                action: onToggleKeyboard
+            ),
             // square.and.pencil reads as "edit this region" which
             // fits the controls-edit mode better than a generic
             // gear/settings.
@@ -74,16 +70,9 @@ struct PlayerToolbar: View {
                 tint: .white,
                 action: onToggleHideControls
             ),
+            ToolbarEntry(
+                icon: "ellipsis.circle", label: "More options", tint: .white, action: onShowMore),
         ]
-        if menuVisible {
-            // ellipsis.circle is the iOS-idiomatic "more options"
-            // cue. It opens PlayerMoreSheet for cheats / fast-forward
-            // / diagnostics-overlay / pause. It stays hidden when
-            // none of those rows would render.
-            entries.append(
-                ToolbarEntry(icon: "ellipsis.circle", label: "Menu", tint: .white, action: onShowMore))
-        }
-        return entries
     }
 
     private struct ToolbarEntry {
@@ -208,22 +197,20 @@ struct PlayerEditToolbar: View {
     /// full-screen region.
     private var actionsRow: some View {
         HStack(spacing: Spacing.md) {
-            IconButton("plus", style: .outline, size: .sm, tint: .white) {
+            IconButton("plus", label: "Add button", style: .outline, size: .sm, tint: .white) {
                 showAddSheet = true
             }
-            .accessibilityLabel("Add button")
 
             IconButton(
-                "arrow.uturn.backward", style: .outline, size: .sm,
+                "arrow.uturn.backward", label: "Undo layout change", style: .outline, size: .sm,
                 tint: .white.opacity(layout.canUndo ? 1 : Alpha.disabled)
             ) {
                 layout.undoLastEdit()
             }
-            .accessibilityLabel("Undo layout change")
             .disabled(!layout.canUndo)
 
             IconButton(
-                "grid", style: .outline, size: .sm,
+                "grid", label: "Snap to grid", style: .outline, size: .sm,
                 tint: snapToGrid ? .brand : .white
             ) {
                 // On: round every control onto the lattice now. Off:
@@ -237,12 +224,13 @@ struct PlayerEditToolbar: View {
                     layout.revertGridSnap()
                 }
             }
-            .accessibilityLabel("Snap to grid")
+            .accessibilityValue(snapToGrid ? "on" : "off")
 
-            IconButton("arrow.counterclockwise", style: .outline, size: .sm, tint: .brand) {
+            IconButton(
+                "arrow.counterclockwise", label: "Reset layout", style: .outline, size: .sm, tint: .brand
+            ) {
                 showResetConfirm = true
             }
-            .accessibilityLabel("Reset layout")
 
             Button {
                 onDone()
@@ -265,7 +253,7 @@ struct PlayerEditToolbar: View {
         case .pinnedProfile(let name):
             return "Editing \(name). Changes apply to every game that uses it."
         case .gameLayout, .defaultProfile, .builtin:
-            return "Edits save as a new profile"
+            return "Your edits will create a new profile."
         }
     }
 }

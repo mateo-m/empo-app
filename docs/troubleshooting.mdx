@@ -15,9 +15,9 @@ switcher, and open it again. [`multi-session.md`](https://github.com/mateo-m/emp
 Try these steps in order:
 
 <Steps>
-  <Step title="Check the RGSS version">
-    Empo runs RPG Maker XP, VX, and VX Ace games, and modern mkxp-z forks. Other engines, such as
-    RPG Maker MV and MZ, do not run.
+  <Step title="Check the engine">
+    Empo runs RPG Maker XP, VX, VX Ace, MV, and MZ games, modern mkxp-z forks, and PSDK games.
+    Other engines, such as RPG Maker 2000 and 2003, do not run.
   </Step>
   <Step title="Check for an RTP warning">
     If the game asks for a Run-Time Package, Empo warns you before it starts. Empo cannot install
@@ -73,9 +73,9 @@ Battle scenes and large maps cost the most. Older devices show it first.
 Empo keeps saves inside the folder of the game, so an app update never removes them.
 
 A defect in versions before v0.6.1 renamed the save files of some games. Empo v0.6.1 and newer
-restore the newest save for each affected game at launch, and show a **Saves Recovered** sheet.
+restore the newest save for each affected game at launch, and show a **Saves recovered** sheet.
 The renamed copies stay in the folder of the game as backups. You can reach them in the Files
-app, under **On My iPhone → Empo**.
+app, under **Browse → Locations → Empo**.
 
 :::warning
 Do not delete Empo to fix a problem. iOS removes the app sandbox with the app, and your games
@@ -84,7 +84,7 @@ and saves go with it.
 
 ## A card in the library looks broken
 
-Go to **Settings → Advanced**, and tap **Clean up broken imports**. Empo removes the folders
+Go to **Settings → Advanced**, and turn on **Delete broken imports**. Empo deletes the folders
 that a failed import left behind.
 
 ## Report a problem

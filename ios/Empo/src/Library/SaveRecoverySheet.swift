@@ -84,9 +84,10 @@ private struct SaveRecoverySheet: View {
             emblem: "checkmark.arrow.trianglehead.counterclockwise"
         ) {
             SheetBodyText(
-                "An older Empo renamed save files on this device, so games "
-                    + "showed only \u{201C}New Game\u{201D}. Empo put back the "
-                    + "latest save of each game below."
+                "A defect in earlier Empo versions renamed save files on this "
+                    + "device, so games showed only \"New Game\". "
+                    + "Empo restored the most recent save file for each game "
+                    + "below."
             )
 
             SheetCard {
@@ -105,10 +106,8 @@ private struct SaveRecoverySheet: View {
             }
 
             SheetFootnote(
-                "The renamed copies stay in each game's data folder as "
-                    + "\u{201C}.pre-literal.bak\u{201D} files. If a save is not "
-                    + "the one you expect, tap Files and rename a copy to the "
-                    + "save file's name."
+                "Empo kept the renamed copies as backups. If a restored save "
+                    + "isn't the one you wanted, tap Files on that game to find them."
             )
 
             SheetPrimaryButton("Done") { isPresented = false }
@@ -169,6 +168,8 @@ private struct SaveRecoveryRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(record.name), restored \(subtitle)")
+        .accessibilityHint("Opens this game's folder in Files")
     }
 
     private var subtitle: String {

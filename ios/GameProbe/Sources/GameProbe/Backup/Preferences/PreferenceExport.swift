@@ -51,6 +51,10 @@ public enum PreferenceKeys {
     public static let showTouchZone = PreferenceEntry("showTouchZone", .deviceLocal)
     public static let pointerInjection = PreferenceEntry("pointerInjection", .deviceLocal)
     public static let caBundleLastRefresh = PreferenceEntry("caBundleLastRefresh", .neverStored)
+    /// The device decides if a game process can run, so this choice
+    /// stays on the device that made it.
+    public static let rubyGameRunner = PreferenceEntry("rubyGameRunner", .deviceLocal)
+    public static let lastGameReport = PreferenceEntry("lastGameReport", .neverStored)
 
     // MARK: - Library
 
@@ -101,6 +105,9 @@ public enum PreferenceKeys {
     /// restoring this key would let it skip that screen.
     public static let disclaimerAcknowledgedVersion = PreferenceEntry(
         "disclaimerAcknowledgedVersion", .neverStored)
+    /// A new install shows the What's new sheet of its own version,
+    /// so this key does not travel either.
+    public static let whatsNewSeenVersion = PreferenceEntry("whatsNewSeenVersion", .neverStored)
     public static let updateCheckerLastCheckedAt = PreferenceEntry(
         "UpdateChecker.lastCheckedAt", .neverStored)
     public static let updateCheckerLastKnownLatestVersion = PreferenceEntry(
@@ -111,11 +118,13 @@ public enum PreferenceKeys {
     public static let all: [PreferenceEntry] = [
         theme, interfaceHaptics, controllerHaptics, controlsEditSnapToGrid, debugMode, debugLogs,
         maxLogFiles, showViewportBounds, showTouchZone, pointerInjection, caBundleLastRefresh,
+        rubyGameRunner, lastGameReport,
         libraryDisplayMode, librarySortOption, showContinuePlaying, titlePosition,
         cleanupInvalidGames, pendingDuplicateGameNames, pendingSaveRecoveries, controllerMapGlobal,
         layoutProfilesGameNoticeShown, layoutProfilesDefault, viewportBoundsR, viewportBoundsG,
         viewportBoundsB, viewportBoundsA, backupOverCellular, backupRetention,
         backupNotificationsAsked, backupNotificationPromptSpent, disclaimerAcknowledgedVersion,
+        whatsNewSeenVersion,
         updateCheckerLastCheckedAt, updateCheckerLastKnownLatestVersion,
     ]
 

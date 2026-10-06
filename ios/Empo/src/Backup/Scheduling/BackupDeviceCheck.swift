@@ -136,7 +136,9 @@ enum BackupDeviceCheck {
                 log("\(descriptor.id) holds no snapshot of \(folderName)")
                 continue
             }
-            log("restore of \(folderName) from \(descriptor.id), snapshot \(row.snapshotId), \(row.bytesToDownload) bytes")
+            log(
+                "restore of \(folderName) from \(descriptor.id), snapshot \(row.snapshotId), \(row.bytesToDownload) bytes"
+            )
             let outcome = await RestoreCoordinator.shared.restore(
                 row, into: GameIdentities.match(row.identity), provider: provider,
                 descriptor: descriptor, scope: .wholeGame)

@@ -48,8 +48,7 @@ enum GameContainerMigration {
     /// Where duplicate legacy imports land. A sibling of `Games/`
     /// so discovery never surfaces them as library entries, and
     /// non-hidden so the user can reach them in the Files app.
-    static let duplicatesRootURL: URL = FileManager.default
-        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+    static let duplicatesRootURL: URL = DataDirectory.documentsRootURL
         .appendingPathComponent("Duplicate Games", isDirectory: true)
 
     @MainActor private static var didRunThisLaunch = false
@@ -226,7 +225,9 @@ enum GameContainerMigration {
                 // fine - the resolve at game launch retries, and
                 // the alias matcher keeps the old name reachable
                 // meanwhile.
-                _ = DataDirectory.resolve(for: GameContainer(url: destination))
+                let moved = GameContainer(url: destination)
+                _ = DataDirectory.resolve(
+                    for: moved, core: GameCores.core(forGameAt: moved.gameURL))
                 NSLog(
                     "[GameContainerMigration] Renamed %@ -> %@",
                     candidate.id,

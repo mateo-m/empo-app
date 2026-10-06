@@ -21,8 +21,8 @@
 #
 # EMPO_TESTS_NO_SKIP=1 turns every host-capability skip into a
 # failure. See ios/GameProbe/Tests/SkipPolicy.swift. Set it on a host
-# that has the legacy text encodings and the engine submodule, which
-# means macOS. The Linux runner has neither.
+# that has the legacy text encodings, which means macOS. The Linux
+# runner has none.
 
 set -e
 
@@ -30,7 +30,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
 # package directory, floor on macOS, floor on Linux
-ALL_PACKAGES="ios/GameProbe:1578:1577 ios/Json5:21:21"
+ALL_PACKAGES="ios/GameProbe:1635:1634 ios/Json5:20:20"
 
 case "$(uname -s)" in
     Darwin) HOST=darwin ;;

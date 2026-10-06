@@ -29,7 +29,8 @@ enum GameBackupSets {
         return GameBackupSetRequest(
             containerURL: container.url,
             mode: mode,
-            sharedDataDirectory: DataDirectory.resolve(for: container),
+            sharedDataDirectory: DataDirectory.resolve(
+                for: container, core: GameCores.core(forGameAt: container.gameURL)),
             documentsRoot: DataDirectory.documentsRootURL,
             rescuedSavesBuckets: buckets,
             manualMarks: intent.manualMarks,

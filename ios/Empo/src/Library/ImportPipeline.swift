@@ -72,9 +72,25 @@ struct ImportReplacePrompt: Identifiable {
 }
 
 struct ImportPipelineAlert: Identifiable {
+    struct Failure {
+        let name: String
+        let reason: String
+    }
+
     let id = UUID()
-    let title: String
-    let message: String
+    let failures: [Failure]
+
+    var title: String {
+        failures.count == 1
+            ? "Couldn't import \(quoted(failures[0].name))"
+            : "Some games didn't import"
+    }
+
+    var message: String {
+        failures.count == 1
+            ? failures[0].reason
+            : failures.map { "\(quoted($0.name)): \($0.reason)" }.joined(separator: "\n\n")
+    }
 }
 
 struct ImportPreparedSource: Hashable, Sendable {
@@ -310,7 +326,7 @@ final class ImportPipeline {
                 currentSession = nil
                 resolutionTask = nil
                 presentError(
-                    title: "Couldn't import \(quoted(request.archiveName))",
+                    name: request.archiveName,
                     message: error.localizedDescription
                 )
                 startNextResolutionIfPossible()
@@ -453,7 +469,7 @@ final class ImportPipeline {
                     "[ImportPipeline] Refusing import of %@: an import with that name is in flight",
                     selection.displayName)
                 presentError(
-                    title: "Couldn't import \(quoted(selection.displayName))",
+                    name: selection.displayName,
                     message: "This game is already being imported. "
                         + "Wait for the current import to finish, then try again."
                 )
@@ -463,9 +479,9 @@ final class ImportPipeline {
                     "[ImportPipeline] Refusing import of %@: duplicate title in batch",
                     selection.displayName)
                 presentError(
-                    title: "Couldn't import \(quoted(selection.displayName))",
-                    message: "Another game in this import has the same title, "
-                        + "so only one of them can be imported."
+                    name: selection.displayName,
+                    message: "Two games in this import share the same title. "
+                        + "Import them one at a time, or rename one folder first."
                 )
 
             case .refusedOpenGame:
@@ -473,9 +489,10 @@ final class ImportPipeline {
                     "[ImportPipeline] Dropping import of %@: it would replace the open game",
                     selection.displayName)
                 presentError(
-                    title: "Couldn't import \(quoted(selection.displayName))",
-                    message:
-                        "This game is currently open. Close it from the app switcher and import again."
+                    name: selection.displayName,
+                    message: EngineSessionCoordinator.shared.canEndGame
+                        ? "This game is open. Quit it, then import again."
+                        : "This game is currently open. Close it from the app switcher and import again."
                 )
             }
         }
@@ -532,8 +549,8 @@ final class ImportPipeline {
         guard let library else {
             preparedSource.cleanup()
             presentError(
-                title: "Couldn't import \(quoted(archiveName))",
-                message: "Import system is unavailable right now."
+                name: archiveName,
+                message: "Empo isn't ready to import yet. Reopen Empo, then try again."
             )
             return
         }
@@ -565,18 +582,11 @@ final class ImportPipeline {
             if succeeded > 0 {
                 Haptics.impact()
             }
-            let surfacedFailures = failures.filter { !($0.1 is GameLibrary.ImportCancelled) }
-            if let first = surfacedFailures.first {
+            for (selection, error) in failures where !(error is GameLibrary.ImportCancelled) {
                 self.presentError(
-                    title: "Couldn't import \(quoted(archiveName))",
-                    message: first.1.localizedDescription
+                    name: selection.displayName,
+                    message: error.localizedDescription
                 )
-                for extra in surfacedFailures.dropFirst() {
-                    NSLog(
-                        "[ImportPipeline] Additional import failure: %@",
-                        extra.1.localizedDescription
-                    )
-                }
             }
         }
     }
@@ -595,23 +605,12 @@ final class ImportPipeline {
         currentSession?.request.id == requestID
     }
 
-    private func presentError(title: String, message: String) {
+    private func presentError(name: String, message: String) {
         // One batch can refuse several selections in one pass. A
         // plain overwrite would surface only the last refusal, so
         // later errors fold into the pending alert instead.
-        guard let existing = alert else {
-            alert = ImportPipelineAlert(title: title, message: message)
-            return
-        }
-        let mergedTitle = "Some imports failed"
-        let existingBody =
-            existing.title == mergedTitle
-            ? existing.message
-            : "\(existing.title): \(existing.message)"
-        alert = ImportPipelineAlert(
-            title: mergedTitle,
-            message: "\(existingBody)\n\n\(title): \(message)"
-        )
+        let failure = ImportPipelineAlert.Failure(name: name, reason: message)
+        alert = ImportPipelineAlert(failures: (alert?.failures ?? []) + [failure])
     }
 }
 
@@ -640,14 +639,33 @@ private enum ImportPipelineService {
                 if accessing { url.stopAccessingSecurityScopedResource() }
             }
 
+            let fm = FileManager.default
             guard ArchiveExtractor.Format(extension: url.pathExtension) != nil else {
-                return ImportPreparedSource(
-                    workingURL: url,
-                    cleanupDirectoryURL: nil
+                // A folder with a packed exe gets a private copy, so
+                // the probe can unpack into it without touching the
+                // user's folder.
+                guard EnigmaVirtualBoxImport.containsPackedExecutable(under: url) else {
+                    return ImportPreparedSource(
+                        workingURL: url,
+                        cleanupDirectoryURL: nil
+                    )
+                }
+                let copyDirectoryURL = try ImportTemporaryDirectory.makeScopedDirectory(
+                    kind: .stagedArchive,
+                    fm: fm
                 )
+                let copyURL = copyDirectoryURL.appendingPathComponent(url.lastPathComponent)
+                do {
+                    try fm.copyItem(at: url, to: copyURL)
+                } catch {
+                    try? fm.removeItem(at: copyDirectoryURL)
+                    throw error
+                }
+                try EnigmaVirtualBoxImport.unpackProbeFiles(under: copyURL)
+                return ImportPreparedSource(
+                    workingURL: copyURL, cleanupDirectoryURL: copyDirectoryURL)
             }
 
-            let fm = FileManager.default
             let archiveCopyDirectoryURL = try ImportTemporaryDirectory.makeScopedDirectory(
                 kind: .stagedArchive,
                 fm: fm
@@ -909,8 +927,8 @@ extension GameLibrary {
                         onRescueFailure()
                     } else {
                         onError?(
-                            "Empo could not rescue this game's saves. "
-                                + "The game was not deleted.")
+                            "Empo couldn't move this game's saves, so it kept the game. "
+                                + "Free up space, then delete again.")
                     }
                 case .failed(let message):
                     GameLibrary.shared.restoreEntryAfterFailedDelete(id: container.id)
@@ -1120,6 +1138,12 @@ extension GameLibrary {
                     for surfacer in surfacers.values {
                         surfacer.drain()
                     }
+                    try ImportSignpost.interval("unpack-packed-exe", id: batchID) {
+                        try EnigmaVirtualBoxImport.unpackAll(under: tmpDir) {
+                            checkCancellations()
+                            return active.isEmpty
+                        }
+                    }
                     stagedBaseURL = tmpDir
                 } else {
                     let folderName = sourceURL.lastPathComponent
@@ -1130,6 +1154,12 @@ extension GameLibrary {
                             try fm.moveItem(at: sourceURL, to: tmpDest)
                         } catch {
                             try fm.copyItem(at: sourceURL, to: tmpDest)
+                        }
+                    }
+                    try ImportSignpost.interval("unpack-packed-exe", id: batchID) {
+                        try EnigmaVirtualBoxImport.unpackAll(under: tmpDest) {
+                            checkCancellations()
+                            return active.isEmpty
                         }
                     }
 
@@ -1154,7 +1184,7 @@ extension GameLibrary {
                             continue
                         }
 
-                        var artworkPath = GameCatalog.findFolderImportArtwork(at: root)
+                        var artworkPath = GameCores.core(forGameAt: root)?.titlePicture(at: root)?.path
                         if artworkPath == nil {
                             artworkPath = writeProbeIconSidecar(sel.iconPNG, to: container)
                         }
@@ -1218,6 +1248,22 @@ extension GameLibrary {
                         gameRoot = try resolveRoot(in: stagedBaseURL, relativePath: sel.relativePath)
                     } catch {
                         failSelection(sel, error)
+                        continue
+                    }
+
+                    // A build can leave cores out (EMPO_CORES). Refuse
+                    // the game here, where the message reaches the
+                    // user, instead of importing a game no core can
+                    // open.
+                    guard let core = GameCores.core(forGameAt: gameRoot) else {
+                        failSelection(sel, GameImportValidator.ImportError.notAGame)
+                        continue
+                    }
+                    guard core.isInThisBuild else {
+                        failSelection(
+                            sel,
+                            GameImportValidator.ImportError.unsupportedRuntime(
+                                core.notInThisBuildMessage))
                         continue
                     }
 
@@ -1287,14 +1333,16 @@ extension GameLibrary {
                     self.updateCardProgress(sel.importID, 0.97)
 
                     ImportSignpost.interval("finalize", id: sel.importID) {
+                        let source: ImportSource
                         if let bundle = jgpBundle {
                             GameImporter.finalizeJgpImport(
                                 container: container,
                                 bundle: bundle,
                                 preservingExistingState: preserveExistingState
                             )
-                        } else if isArchive {
-                            if !fm.fileExists(atPath: container.exeIconSidecarURL.path) {
+                            source = .joiPlay(type: bundle.manifest.type)
+                        } else {
+                            if !isArchive || !fm.fileExists(atPath: container.exeIconSidecarURL.path) {
                                 _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
                             }
                             if preserveExistingState {
@@ -1302,14 +1350,9 @@ extension GameLibrary {
                             } else {
                                 GameImporter.createMetadata(in: container)
                             }
-                        } else {
-                            _ = ExecutableIconExtractor.writeSidecarIfPossible(in: container)
-                            if preserveExistingState {
-                                GameImporter.refreshMetadataAfterReplacement(in: container)
-                            } else {
-                                GameImporter.seedFolderImport(in: container)
-                            }
+                            source = isArchive ? .archive : .folder
                         }
+                        core.didImport(container, from: source, replacing: preserveExistingState)
                     }
 
                     if !isReplacement {

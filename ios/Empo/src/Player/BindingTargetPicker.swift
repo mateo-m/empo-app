@@ -5,6 +5,8 @@ import SwiftUI
 struct BindingTargetPicker: View {
     let source: BindingSource
     let current: BindingMap.Target?
+    let scope: BindingsCatalog.Scope
+    let actions: PlayerActionRegistry
     let onSelect: (BindingMap.Target) -> Void
 
     /// A key can stand in for a controller button, which hands it
@@ -19,13 +21,16 @@ struct BindingTargetPicker: View {
             List {
                 Section("Actions") {
                     ForEach(EmpoActionCatalog.all, id: \.id) { action in
+                        let available = actions.isAvailable(action.id)
                         actionRow(
                             label: action.displayName,
                             blurb: action.blurb,
-                            target: .action(action.id)
+                            note: available ? nil : unavailableNote,
+                            target: .action(action.id),
+                            enabled: available || scope == .allGames
                         )
                     }
-                    actionRow(label: "Unbound", target: .unbound)
+                    actionRow(label: "Do nothing", target: .unbound)
                 }
 
                 if offersElements {
@@ -67,31 +72,51 @@ struct BindingTargetPicker: View {
         .presentationDragIndicator(.visible)
     }
 
+    private var unavailableNote: String {
+        switch scope {
+        case .thisGame:
+            return "Fast forward is off for this game. Turn it on in Game settings."
+        case .allGames:
+            return "Fast forward is off for this game. The binding works in games that have Fast forward on."
+        }
+    }
+
     private func actionRow(
         label: String,
         blurb: String? = nil,
-        target: BindingMap.Target
+        note: String? = nil,
+        target: BindingMap.Target,
+        enabled: Bool = true
     ) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                if let blurb {
-                    Text(blurb)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            if targetsMatch(current, target) {
-                Image(systemName: "checkmark")
-                    .foregroundStyle(.brand)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
+        Button {
             onSelect(target)
             dismiss()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label)
+                    if let blurb {
+                        Text(blurb)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let note {
+                        Text(note)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if targetsMatch(current, target) {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.brand)
+                }
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .opacity(enabled ? 1 : 0.4)
+        .disabled(!enabled)
     }
 
     private func keyRow(code: String, group: KeyCodePickerGroup) -> some View {
@@ -99,26 +124,28 @@ struct BindingTargetPicker: View {
         let title = KeyCodeTable.displayName(for: code) ?? code
         let annotation = group == .common ? BindingsCatalog.commonKeyAnnotations[code] : nil
 
-        return HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                if let annotation {
-                    Text(annotation)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            if targetsMatch(current, target) {
-                Image(systemName: "checkmark")
-                    .foregroundStyle(.brand)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
+        return Button {
             onSelect(target)
             dismiss()
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    if let annotation {
+                        Text(annotation)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if targetsMatch(current, target) {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(.brand)
+                }
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     private func targetsMatch(_ lhs: BindingMap.Target?, _ rhs: BindingMap.Target) -> Bool {

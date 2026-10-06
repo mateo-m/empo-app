@@ -45,7 +45,7 @@ struct DisclaimerView: View {
             .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("I am a lone dev who builds this in my spare time.")
+                Text("I build Empo alone in my spare time.")
                 Text("Things can crash, freeze, or refuse to load.")
                 // The build generates the URL from the git origin
                 // (see project.yml's "Generate Git Info" phase).

@@ -39,6 +39,9 @@ struct RootView: View {
     /// root background for the zoom transition, and a fade in over
     /// that colour reads as a white flash.
     @State private var libraryFaded = false
+    /// The report that the share sheet sends, after an alert's Share
+    /// Report button.
+    @State private var sharedReport: GameReport?
 
     init() {
         let recovering = AppState.shared.pendingCrashRecovery
@@ -160,35 +163,43 @@ struct RootView: View {
             }
         }
         .alert(
-            (engineHung || appState.phase != nil) ? "Restart Empo" : "Something went wrong",
+            errorAlertTitle,
             isPresented: showErrorAlert
         ) {
-            Button("OK") {
-                dismissErrorAlert()
-                if engineHung {
-                    return
+            Button("Got it") {
+                closeErrorAlert()
+            }
+            if let report = GameReport.last, report.isShareable {
+                Button("Share Report") {
+                    closeErrorAlert()
+                    sharedReport = report
                 }
-                if appState.phase != nil {
-                    return
-                }
-                appState.dismissCrashRecovery()
             }
         } message: {
             if engineHung {
-                Text("The game stopped responding. Close Empo and reopen it.")
+                Text(
+                    appState.canEndStuckGame
+                        ? "It stopped responding and will close. Progress you haven't saved will be lost."
+                        : "The game stopped responding. Close Empo and reopen it."
+                )
             } else if appState.phase != nil {
                 Text(
-                    "\(appState.errorMessage ?? "An error occurred.") Close Empo from the app switcher and reopen it to continue."
+                    appState.canEndStuckGame
+                        ? appState.errorMessage ?? "Something went wrong while it was running."
+                        : "\(appState.errorMessage ?? "The game stopped.")\n\nClose Empo from the app switcher, then reopen it."
                 )
             } else {
                 Text(appState.errorMessage ?? "")
             }
         }
+        .sheet(item: $sharedReport) { report in
+            ReportShareSheet(report: report)
+        }
         .alert(
             infoAlertTitle,
             isPresented: showInfoAlert
         ) {
-            Button("OK") {
+            Button("Continue") {
                 dismissInfoAlert()
             }
         } message: {
@@ -244,6 +255,17 @@ struct RootView: View {
         }
     }
 
+    private var errorAlertTitle: String {
+        guard engineHung || appState.phase != nil else { return "Last session ended early" }
+        return appState.canEndStuckGame ? "The game stopped" : "Restart Empo"
+    }
+
+    private func closeErrorAlert() {
+        let hung = engineHung
+        dismissErrorAlert()
+        if hung { appState.endStuckGame() }
+    }
+
     private var showErrorAlert: Binding<Bool> {
         Binding(
             get: { appState.errorMessage != nil },
@@ -251,9 +273,9 @@ struct RootView: View {
         )
     }
 
-    /// Unblocks any engine thread waiting in `mkxp_presentErrorAndWait()`.
+    /// Unblocks a core that waits for the error alert to close.
     private func dismissErrorAlert() {
-        mkxp_signalErrorDismissed()
+        if EmpoCoreIsOpen() != 0 { gamecore_signalErrorDismissed() }
         appState.errorMessage = nil
     }
 
@@ -269,13 +291,13 @@ struct RootView: View {
     private var infoAlertTitle: String {
         appState.selectedGame?.title
             ?? PauseManager.shared.pausedGame?.title
-            ?? "Message"
+            ?? "Game message"
     }
 
-    /// Unblocks the engine thread that waits in `mkxp_presentInfoAndWait()`.
+    /// Unblocks the core that waits for the info alert to close.
     /// The game resumes right where it called `msgbox`.
     private func dismissInfoAlert() {
-        mkxp_signalInfoDismissed()
+        if EmpoCoreIsOpen() != 0 { gamecore_signalInfoDismissed() }
         appState.infoMessage = nil
     }
 
@@ -285,7 +307,7 @@ struct RootView: View {
     /// way out is for the user to close and reopen the app manually.
     /// We do not call `exit()`, per App Store guideline 2.5.1.
     private var engineHung: Bool {
-        mkxp_isEngineHung() != 0
+        EmpoCoreIsOpen() != 0 && gamecore_isEngineHung() != 0
     }
 
     /// Wait (up to `scanGraceDuration`) for the initial library scan.
@@ -348,6 +370,7 @@ private struct SplashView: View {
             PixelDitherPattern(color: .white)
                 .ignoresSafeArea()
                 .opacity(exiting ? 0 : 1)
+                .accessibilityHidden(true)
 
             // Logo + wordmark. During the disclaimer phase these fade/
             // blur/scale out but the splash background stays. Same
@@ -358,6 +381,7 @@ private struct SplashView: View {
                     .scaledToFit()
                     .frame(width: 96, height: 96)
                     .foregroundStyle(.white)
+                    .accessibilityHidden(true)
                 Text(AppInfo.name)
                     .font(AppFont.wordmark)
                     .foregroundStyle(.white)
@@ -479,4 +503,33 @@ private struct PixelDitherPattern: View {
             }
         }
     }
+}
+
+/// The system share sheet for a game report.
+private struct ReportShareSheet: UIViewControllerRepresentable {
+    let report: GameReport
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(
+            activityItems: [ReportItemProvider(report: report, header: report.header())],
+            applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+/// The share sheet reads `item` on a background thread, after the person
+/// picks where to send the report. The log can be large.
+private final class ReportItemProvider: UIActivityItemProvider, @unchecked Sendable {
+    private let report: GameReport
+    private let header: String
+
+    init(report: GameReport, header: String) {
+        self.report = report
+        self.header = header
+        super.init(
+            placeholderItem: FileManager.default.temporaryDirectory.appendingPathComponent("report.txt"))
+    }
+
+    override var item: Any { (try? report.write(header: header)) ?? Data() }
 }

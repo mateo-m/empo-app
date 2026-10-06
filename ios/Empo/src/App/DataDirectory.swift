@@ -1,31 +1,24 @@
 import Foundation
 import GameProbe
+import Security
 import Synchronization
 
 /// Resolves the writable data directory a session hands the engine
-/// (`MKXPSessionConfig.userDataDirectory`, surfaced to games as
+/// (`GameCoreSessionConfig.userDataDirectory`, surfaced to games as
 /// `System.data_directory`).
 ///
-/// Every game resolves to
+/// A game whose core names a folder (`GameCore.sharedDataFolder`)
+/// resolves to
 ///
-///     Documents/Data/<org>/<app>/
+///     Documents/Data/<components>/
 ///
 /// shared across containers and visible in the Files app next to
-/// `Games/`. This mirrors desktop mkxp-z, where `dataPathOrg` and
-/// `dataPathApp` from the effective mkxp config (`Game/mkxp.json`
-/// merged with the `EmpoState/mkxp.json` overlay) feed
-/// `SDL_GetPrefPath(org, app)`. Two releases that resolve to the
-/// same pair share one directory, which is how fan games carry
-/// saves across versions. That matters more now that re-importing
-/// replaces the old container.
-///
-/// Defaults mirror mkxp-z's: an org of `"."` or blank adds no path
-/// component, and a missing `dataPathApp` falls back to the INI
-/// title, then the container folder name. See
-/// `MkxpDataPath.sharedDirectoryComponents` for why the engine's
-/// `"mkxp-z"` last resort is skipped. Children of `Data/` are
-/// reused case-insensitively, so a case-only title change keeps
-/// its saves the way desktop Windows would.
+/// `Games/`. Two releases that resolve to the same folder share
+/// it, which is how fan games carry saves across versions. That
+/// matters more now that re-importing replaces the old container.
+/// Children of `Data/` are reused case-insensitively, so a
+/// case-only title change keeps its saves the way desktop Windows
+/// would.
 ///
 /// The per-game `<container>/UserData/` directory is now a legacy
 /// staging area only. `SaveMigration` funnels old save locations
@@ -36,13 +29,125 @@ import Synchronization
 /// Unlike `Games/`, `Data/` is deliberately NOT excluded from
 /// backups. It holds what games choose to persist, meaning saves,
 /// settings, and mod state, which is small and precious.
+///
+/// `Documents/` in the paths of this app means `documentsRootURL`.
 enum DataDirectory {
 
-    /// Parent of `Data/`, `Games/`, and the rescue buckets. The
-    /// base every root below derives from, and the base the
-    /// recovery ledger's `directory` paths are relative to.
-    static let documentsRootURL: URL = FileManager.default
-        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+    /// Parent of `Data/`, `Games/`, `Fonts/`, `Profiles/`, and the
+    /// rescue buckets. The base the recovery ledger's `directory`
+    /// paths are relative to.
+    ///
+    /// The folder that the Files add-on (`FilesProvider`) shows, in the
+    /// app group, because the game process cannot open the app's
+    /// Documents. The system names it "File Provider Storage"
+    /// (`NSFileProviderManager.documentStorageURL`). Documents is the
+    /// fallback for a build that has no app group.
+    static let documentsRootURL: URL = {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        guard let group = appGroupURL else { return documents }
+        let storage = group.appendingPathComponent("File Provider Storage", isDirectory: true)
+        moveItems(of: documents, to: storage)
+        return storage
+    }()
+
+    static let appGroupURL: URL? = {
+        guard let configured = Bundle.main.object(forInfoDictionaryKey: "EmpoAppGroup") as? String,
+            !configured.isEmpty,
+            let task = SecTaskCreateFromSelf(nil),
+            let signed = SecTaskCopyValueForEntitlement(
+                task, "com.apple.security.application-groups" as CFString, nil) as? [String]
+        else { return nil }
+        // AltStore and SideStore add "." and the team ID to the group
+        // name when they sign the app. LiveContainer runs the app with
+        // its own signature, which has only LiveContainer's groups, and
+        // gives the app a hidden folder for any other group name.
+        return signed.lazy
+            .filter { $0 == configured || $0.hasPrefix(configured + ".") }
+            .compactMap(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:))
+            .first
+    }()
+
+    /// Moves the items of Documents, from before the app group, into
+    /// `storage`. A folder that is in both gets merged. A file that is
+    /// in both keeps its copy in `storage`, and the copy from Documents
+    /// moves next to it with "(from Documents)" in its name.
+    private static func moveItems(of documents: URL, to storage: URL) {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: storage, withIntermediateDirectories: true)
+        let group = storage.deletingLastPathComponent().resolvingSymlinksInPath().path + "/"
+        // The system puts files that other apps open in Empo in Inbox.
+        let names = ((try? fm.contentsOfDirectory(atPath: documents.path)) ?? [])
+            .filter { !$0.hasPrefix(".") && $0 != "Inbox" }
+        for name in names {
+            let item = documents.appendingPathComponent(name)
+            let destination = storage.appendingPathComponent(name)
+            // An earlier build moved the item into the app group and left a
+            // link to it here. Any other link moves as a link.
+            guard
+                let link = try? fm.destinationOfSymbolicLink(atPath: item.path),
+                case let target = URL(fileURLWithPath: link, relativeTo: documents).resolvingSymlinksInPath(),
+                target.path.hasPrefix(group)
+            else {
+                merge(item, into: destination, fm: fm)
+                continue
+            }
+            if target == destination.resolvingSymlinksInPath() || merge(target, into: destination, fm: fm) {
+                try? fm.removeItem(at: item)
+            }
+        }
+    }
+
+    /// Returns true when nothing is left at `source`. A link moves as a
+    /// link, and its target stays where it is.
+    @discardableResult
+    private static func merge(_ source: URL, into destination: URL, fm: FileManager) -> Bool {
+        do {
+            if !exists(destination, fm: fm) {
+                try fm.moveItem(at: source, to: destination)
+            } else if isFolder(source, fm: fm), isFolder(destination, fm: fm) {
+                let names = try fm.contentsOfDirectory(atPath: source.path)
+                let moved = names.map {
+                    merge(
+                        source.appendingPathComponent($0), into: destination.appendingPathComponent($0),
+                        fm: fm)
+                }
+                guard !moved.contains(false) else { return false }
+                try fm.removeItem(at: source)
+            } else {
+                let copy = freeName(for: destination, fm: fm)
+                try fm.moveItem(at: source, to: copy)
+                NSLog(
+                    "[DataDirectory] %@ is in Documents and in the app group, so it moved to %@",
+                    destination.path, copy.lastPathComponent)
+            }
+            return true
+        } catch {
+            NSLog("[DataDirectory] Cannot move %@ to the app group: %@", source.path, "\(error)")
+            return false
+        }
+    }
+
+    // `fileExists(atPath:)` follows a link. `attributesOfItem` does not.
+    private static func exists(_ url: URL, fm: FileManager) -> Bool {
+        (try? fm.attributesOfItem(atPath: url.path)) != nil
+    }
+
+    private static func isFolder(_ url: URL, fm: FileManager) -> Bool {
+        (try? fm.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType == .typeDirectory
+    }
+
+    private static func freeName(for url: URL, fm: FileManager) -> URL {
+        let folder = url.deletingLastPathComponent()
+        let stem = url.deletingPathExtension().lastPathComponent
+        let suffix = url.pathExtension.isEmpty ? "" : "." + url.pathExtension
+        var number = 1
+        while true {
+            let label = number == 1 ? "from Documents" : "from Documents \(number)"
+            let candidate = folder.appendingPathComponent("\(stem) (\(label))\(suffix)")
+            if !exists(candidate, fm: fm) { return candidate }
+            number += 1
+        }
+    }
 
     /// Parent of all shared data directories. `Documents/Data/`.
     static let sharedRootURL: URL =
@@ -98,21 +203,9 @@ enum DataDirectory {
     /// directory and fail spuriously.
     private static let drainLock = Mutex<Void>(())
 
-    /// The component derivation (org/app normalization, INI-title
-    /// fallback) lives on `MkxpDataPath.sharedDirectoryComponents`
-    /// in GameProbe so the Linux CI tests exercise it. This wrapper
-    /// adds the on-disk part: case-insensitive reuse of existing
-    /// directories.
-    static func resolve(for container: GameContainer) -> URL {
-        let dataPath = ManagedMkxpConfig.readDataPath(
-            stateDirectory: container.empoStateURL,
-            gameDirectory: container.gameURL
-        )
-        let iniTitle = GameINI.gameTitle(at: container.gameURL)
-        let components = dataPath.sharedDirectoryComponents(
-            iniTitleFallback: iniTitle,
-            folderNameFallback: container.folderName
-        )
+    /// Nil when the core of the game names no folder.
+    static func resolve(for container: GameContainer, core: (any GameCore)?) -> URL? {
+        guard let components = core?.sharedDataFolder(for: container) else { return nil }
 
         let fm = FileManager.default
         var url = sharedRootURL
@@ -154,8 +247,8 @@ enum DataDirectory {
     /// falls back to the per-game `UserData/` directory rather
     /// than handing the engine an uncreatable path - which would
     /// silently break every in-game save.
-    static func resolveAndPrepare(for container: GameContainer) -> URL {
-        let resolved = resolve(for: container)
+    static func resolveAndPrepare(for container: GameContainer, core: (any GameCore)?) -> URL? {
+        guard let resolved = resolve(for: container, core: core) else { return nil }
         let fm = FileManager.default
         try? fm.createDirectory(at: resolved, withIntermediateDirectories: true)
 
@@ -181,6 +274,29 @@ enum DataDirectory {
         // must heal at the destination.
         healChains(in: resolved, noticeName: resolved.lastPathComponent, fm: fm)
         return resolved
+    }
+
+    /// Older builds made a folder here for every game, also for a game
+    /// that keeps its files in its own folder. A game with a shared
+    /// folder makes it again at launch.
+    static func removeEmptyFolders() {
+        let fm = FileManager.default
+        func removeIfEmpty(_ url: URL) {
+            // A game can link back to a parent folder.
+            guard (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == false
+            else { return }
+            for name in fm.subdirectoryNames(at: url) {
+                removeIfEmpty(url.appendingPathComponent(name, isDirectory: true))
+            }
+            // Unlike `removeItem`, `rmdir` fails when a file appeared
+            // after the check.
+            rmdir(url.path)
+        }
+        drainLock.withLock { _ in
+            for name in fm.subdirectoryNames(at: sharedRootURL) {
+                removeIfEmpty(sharedRootURL.appendingPathComponent(name, isDirectory: true))
+            }
+        }
     }
 
     // MARK: - Pre-literal save heal
@@ -362,7 +478,10 @@ enum DataDirectory {
         if hasLeftoverContent(container.userDataURL) {
             // Verify the shared destination before draining. The
             // fallback path means the destination could not exist.
-            let resolved = resolveAndPrepare(for: container)
+            let core = GameCores.core(forGameAt: container.gameURL)
+            guard let resolved = resolveAndPrepare(for: container, core: core) else {
+                return false
+            }
             if resolved.path == container.userDataURL.path {
                 rescued = false
             } else {
@@ -447,9 +566,9 @@ enum DataDirectory {
     /// `Data/` components.
     private static func rescueBucket(for container: GameContainer, fm: FileManager) -> URL {
         let metadata = GameMetadata.load(from: container)
-        let iniTitle = GameINI.gameTitle(at: container.gameURL)
+        let gameTitle = GameCores.core(forGameAt: container.gameURL)?.title(at: container.gameURL)
         let title =
-            metadata.customTitle ?? metadata.baseTitle ?? iniTitle ?? container.folderName
+            metadata.customTitle ?? metadata.baseTitle ?? gameTitle ?? container.folderName
         let name = GameFolderName.sanitize(title)
 
         let chosen = DirectoryNameMatch.preferringExisting(
@@ -487,9 +606,8 @@ enum DataDirectory {
         }
         // An emptied root is clutter in the Files app. Remove it
         // only when the LAST bucket is gone.
-        if ((try? fm.contentsOfDirectory(atPath: rescuedSavesRootURL.path)) ?? []).isEmpty {
-            try? fm.removeItem(at: rescuedSavesRootURL)
-        }
+        // `rmdir` fails unless the folder is empty.
+        rmdir(rescuedSavesRootURL.path)
     }
 
     private static func logDrain(

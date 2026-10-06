@@ -22,6 +22,8 @@ final class SessionLogger {
     private static let periodicFlushInterval: TimeInterval = 60
 
     private var sessionStartTime: Date?
+    /// The log of the running session, or nil when debug logs are off.
+    private(set) var logURL: URL?
     private var activeGame: GameEntry?
     private var periodicFlushTask: Task<Void, Never>?
 
@@ -103,33 +105,39 @@ final class SessionLogger {
         enabled: Bool
     ) {
         guard enabled else {
-            mkxp_setDebugLogPath(nil)
+            logURL = nil
+            gamecore_setDebugLogPath(nil)
             return
         }
 
         let logsDir = container.ensureLogsDirectory()
 
-        let timestamp = Self.isoFormatter.string(from: Date())
-            .replacingOccurrences(of: ":", with: "-")
-        // The filename is only the timestamp. The parent dir
-        // (`<container>/Logs/`) already lives inside
-        // `Games/<title>/`, so a game name in the filename
-        // would be redundant.
-        let filename = "\(timestamp).log"
-        let logPath = logsDir.appendingPathComponent(filename).path
+        let start = Date()
+        let logPath = logsDir.appendingPathComponent(Self.sessionLogName(for: start)).path
 
         let header =
             Self.logHeader(
                 title: "\(AppInfo.name) debug log",
                 extras: [
                     "game: \(game.title) [\(game.id)]",
-                    "session: \(timestamp)",
+                    "session: \(Self.sessionLogStampFormatter.string(from: start))",
                 ]) + "\n"
         try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
+        logURL = URL(fileURLWithPath: logPath)
 
-        mkxp_setDebugLogPath(logPath)
+        gamecore_setDebugLogPath(logPath)
 
-        pruneOldLogs(in: logsDir)
+        let maxLogFiles = UserDefaults.standard.object(forKey: DefaultsKey.maxLogFiles) as? Int ?? 20
+        Self.pruneSessionLogs(in: logsDir, keeping: maxLogFiles)
+    }
+
+    /// Adds a line about what the app saw to the session log. The
+    /// engine and the game process write to the same file, so the line
+    /// goes in with O_APPEND, after what they wrote.
+    func note(_ text: String) {
+        guard let logURL, let file = fopen(logURL.path, "a") else { return }
+        defer { fclose(file) }
+        fputs("[empo] \(Self.isoFormatter.string(from: Date())) \(text)\n", file)
     }
 
     private func appendSessionHistory(
@@ -159,29 +167,35 @@ final class SessionLogger {
         }
     }
 
-    private func pruneOldLogs(in logsDir: URL) {
+    /// A session log is named after the UTC time its session started,
+    /// with dashes in place of colons.
+    private static let sessionLogStampFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd'T'HH-mm-ss'Z'"
+        return formatter
+    }()
+
+    private static let sessionLogSuffix = ".log"
+
+    static func sessionLogName(for date: Date) -> String {
+        sessionLogStampFormatter.string(from: date) + sessionLogSuffix
+    }
+
+    static func isSessionLogName(_ name: String) -> Bool {
+        name.hasSuffix(sessionLogSuffix)
+            && sessionLogStampFormatter.date(from: String(name.dropLast(sessionLogSuffix.count))) != nil
+    }
+
+    /// The cap counts session logs only. `Logs/` also holds files that
+    /// span sessions, such as controls.json.log and engine-config.log.
+    static func pruneSessionLogs(in logsDir: URL, keeping limit: Int) {
         let fm = FileManager.default
-        guard
-            let files = try? fm.contentsOfDirectory(
-                at: logsDir, includingPropertiesForKeys: [.creationDateKey])
-        else { return }
-
-        // Only prune debug logs (<iso8601>.log). Leave
-        // session-history.log alone.
-        let logFiles = files.filter {
-            $0.lastPathComponent != "session-history.log" && $0.pathExtension == "log"
-        }
-        let maxLogFiles = UserDefaults.standard.object(forKey: DefaultsKey.maxLogFiles) as? Int ?? 20
-        guard logFiles.count > maxLogFiles else { return }
-
-        let sorted = logFiles.sorted {
-            let d0 = (try? $0.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-            let d1 = (try? $1.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
-            return d0 < d1
-        }
-
-        for file in sorted.prefix(sorted.count - maxLogFiles) {
-            try? fm.removeItem(at: file)
+        guard let names = try? fm.contentsOfDirectory(atPath: logsDir.path) else { return }
+        // The stamps have a fixed width, so name order is time order.
+        for name in names.filter(isSessionLogName).sorted().dropLast(limit) {
+            try? fm.removeItem(at: logsDir.appendingPathComponent(name))
         }
     }
 
@@ -192,7 +206,8 @@ final class SessionLogger {
     private static func logHeader(title: String, extras: [String] = []) -> String {
         var header = "\(title)\n"
         header += "commit: \(GitInfo.commit)\(commitSuffix())\n"
-        header += "engine: bindings=\(GitInfo.engineFingerprint) core=\(GitInfo.engineCoreFingerprint)\n"
+        let cores = GameCores.inThisBuild.map { "\($0.framework) \($0.version)" }
+        header += "cores: \(cores.joined(separator: ", "))\n"
         for line in extras {
             header += "\(line)\n"
         }

@@ -14,7 +14,7 @@ struct DebugOverlayHeightKey: PreferenceKey {
 /// Observable state that backs `DebugOverlayView`. It lives in the
 /// player view as a long-lived property so the overlay can transition
 /// in and out (via `if showDebugOverlay { ... }`) without loss of its
-/// FPS graph, cached game title, or RGSS version.
+/// FPS graph or cached game title.
 @MainActor @Observable
 final class DebugOverlayState {
     var fps: Double = 0
@@ -24,7 +24,9 @@ final class DebugOverlayState {
     /// anywhere between. 0 until the engine reports a value.
     var targetFPS: Double = 0
     var gameTitle: String = "--"
-    var rgssVersion: Int32 = 0
+    /// The core's own lines (`gamecore_getDetails`), such as its
+    /// language version and renderer.
+    var details: [String] = []
     var ringBuffer = FPSRingBuffer(capacity: 120)
     var metadataLoaded = false
     /// Resident memory in MB (phys_footprint via task_vm_info, the
@@ -39,6 +41,11 @@ final class DebugOverlayState {
     /// capacity as the FPS buffer so the two line charts stay
     /// visually aligned.
     var memoryBuffer = FPSRingBuffer(capacity: 120)
+    var runner: GameRunner = .app
+    /// The footprint of the game process in MB, for the runner
+    /// `.gameProcess`. `memoryMB` is then the app's own footprint.
+    var processMemoryMB: Double = 0
+    var processMemoryBuffer = FPSRingBuffer(capacity: 120)
 }
 
 struct DebugOverlayView: View {
@@ -47,37 +54,36 @@ struct DebugOverlayView: View {
     // Local aliases so the existing view body stays legible.
     private var fps: Double { state.fps }
     private var gameTitle: String { state.gameTitle }
-    private var rgssVersion: Int32 { state.rgssVersion }
     private var ringBuffer: FPSRingBuffer { state.ringBuffer }
-    private var memoryMB: Double { state.memoryMB }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
-            gameTitleBlock
+            debugText(gameTitle, font: AppFont.debugTitle, color: .white)
 
-            debugText(rubyLine)
-            if let line = syntaxTransformLine {
+            ForEach(state.details, id: \.self) { line in
                 debugText(line)
-            }
-            debugText(rendererLine)
-
-            if let device = metalDeviceLine {
-                debugText(device)
             }
 
             debugText(
-                mkxp_isGameReady() != 0 ? "Running" : "Loading\u{2026}",
-                color: mkxp_isGameReady() != 0 ? .success : .warning
+                gamecore_isGameReady() != 0 ? "Running" : "Loading\u{2026}",
+                color: gamecore_isGameReady() != 0 ? .success : .warning
             )
 
-            memoryRow
+            debugText(state.runner == .gameProcess ? "Runs in a game process" : "Runs in the app")
+
+            if state.runner == .gameProcess {
+                memoryRow("Game", megabytes: state.processMemoryMB, samples: state.processMemoryBuffer)
+                memoryRow("App", megabytes: state.memoryMB, samples: state.memoryBuffer)
+            } else {
+                memoryRow("Memory", megabytes: state.memoryMB, samples: state.memoryBuffer)
+            }
 
             HStack(spacing: Spacing.xs) {
                 Text("\(Int(fps.rounded())) FPS")
                     .font(AppFont.debugFPS)
                     .monospacedDigit()
                     .foregroundStyle(fpsColor)
-                    .frame(width: 90, alignment: .leading)
+                    .frame(width: 104, alignment: .leading)
 
                 // FPS Graph. Canvas has no intrinsic content size, so
                 // we constrain it to a fixed height. Otherwise it grabs
@@ -127,18 +133,29 @@ struct DebugOverlayView: View {
             }
         )
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
-            guard mkxp_isEngineTerminated() == 0 else { return }
-            state.fps = mkxp_getAverageFPS()
-            state.targetFPS = Double(mkxp_getTargetFPS())
+            guard gamecore_isEngineTerminated() == 0 else { return }
+            state.fps = gamecore_getAverageFPS()
+            state.targetFPS = Double(gamecore_getTargetFPS())
             state.ringBuffer.append(state.fps)
+            state.runner = EngineSessionCoordinator.shared.runner
             state.memoryMB = Self.currentMemoryMB()
             if state.memoryMB > 0 {
                 state.memoryBuffer.append(state.memoryMB)
             }
+            if state.runner == .gameProcess {
+                state.processMemoryMB = Double(EmpoGameProcessClient.memoryFootprint()) / 1_048_576.0
+                if state.processMemoryMB > 0 {
+                    state.processMemoryBuffer.append(state.processMemoryMB)
+                }
+            }
+
+            // The core fills in some lines only after the renderer starts.
+            let details = String(cString: gamecore_getDetails())
+                .split(separator: "\n").map(String.init)
+            if details != state.details { state.details = details }
 
             if !state.metadataLoaded {
-                state.rgssVersion = mkxp_getRGSSVersion()
-                if let title = mkxp_getGameTitle(), title[0] != 0 {
+                if let title = gamecore_getGameTitle(), title[0] != 0 {
                     state.gameTitle = String(cString: title)
                     state.metadataLoaded = true
                 }
@@ -153,19 +170,19 @@ struct DebugOverlayView: View {
     /// visible even as the baseline increases. That makes leak
     /// trends easy to spot.
     @ViewBuilder
-    private var memoryRow: some View {
+    private func memoryRow(_ label: String, megabytes: Double, samples buffer: FPSRingBuffer) -> some View {
         HStack(spacing: Spacing.xs) {
             // Fixed-width slot with monospaced digits so digit-count
             // changes (e.g. 99 MB -> 100 MB) don't nudge the graph
             // left/right mid-session.
-            Text(memoryLine)
+            Text(megabytes > 0 ? String(format: "%@ %.0f MB", label, megabytes) : "\(label) --")
                 .font(AppFont.debugBody)
                 .monospacedDigit()
                 .foregroundStyle(.white.opacity(Alpha.textMuted))
-                .frame(width: 90, alignment: .leading)
+                .frame(width: 104, alignment: .leading)
 
             Canvas { context, size in
-                let samples = state.memoryBuffer.samples
+                let samples = buffer.samples
                 guard samples.count >= 2 else { return }
                 let lo = samples.min() ?? 0
                 let hi = samples.max() ?? 0
@@ -175,7 +192,7 @@ struct DebugOverlayView: View {
                 let range = max(hi - lo, 1)
                 var path = Path()
                 for (i, sample) in samples.enumerated() {
-                    let x = CGFloat(i) / CGFloat(state.memoryBuffer.capacity - 1) * size.width
+                    let x = CGFloat(i) / CGFloat(buffer.capacity - 1) * size.width
                     let y = size.height - ((sample - lo) / range) * size.height
                     let clamped = max(0, min(size.height, y))
                     if i == 0 {
@@ -206,15 +223,6 @@ struct DebugOverlayView: View {
         }
         guard kerr == KERN_SUCCESS else { return 0 }
         return Double(info.phys_footprint) / 1_048_576.0
-    }
-
-    /// Memory line. Shows "--" while the first sample settles, then
-    /// the current footprint.
-    private var memoryLine: String {
-        if memoryMB <= 0 {
-            return "Memory --"
-        }
-        return String(format: "Memory %.0f MB", memoryMB)
     }
 
     /// The frame cap to measure against. Games set the cap
@@ -259,67 +267,6 @@ struct DebugOverlayView: View {
             .foregroundStyle(color)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    /// Game title with the RGSS version next to it when it fits on one
-    /// line (a middle-dot separates them), or stacked on a second line
-    /// when it doesn't. ViewThatFits picks the first child whose
-    /// measured size is <= the proposed width. The single-line variant
-    /// comes first, and the two-row variant takes over when the
-    /// overlay's 220pt width can't hold the full title + dot + RGSS.
-    @ViewBuilder
-    private var gameTitleBlock: some View {
-        if rgssVersion > 0 {
-            ViewThatFits(in: .horizontal) {
-                debugText(
-                    "\(gameTitle) \u{00B7} RGSS\(rgssVersion)",
-                    font: AppFont.debugTitle, color: .white
-                )
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    debugText(gameTitle, font: AppFont.debugTitle, color: .white)
-                    debugText("RGSS\(rgssVersion)", font: AppFont.debugTitle, color: .white)
-                }
-            }
-        } else {
-            debugText(gameTitle, font: AppFont.debugTitle, color: .white)
-        }
-    }
-
-    private var rubyLine: String {
-        "Ruby \(String(cString: mkxp_getRubyVersion()))"
-    }
-
-    /// Reports the active syntax-transform mode set via
-    /// `mkxp_setSyntaxTransformMode`. The transforms only take
-    /// effect on the patched Ruby 3.1 parser. On the Ruby
-    /// 1.8 / 1.9 / 3.0 builds the value is a no-op, so we hide
-    /// the line. Returns nil when the mode hasn't been set or
-    /// when the active interpreter doesn't honor the patches.
-    private var syntaxTransformLine: String? {
-        let rubyTag = String(cString: mkxp_getRubyVersion())
-        guard rubyTag.hasPrefix("3.1") else { return nil }
-        switch mkxp_getSyntaxTransformMode() {
-        case MKXP_SYNTAX_TRANSFORM_LEGACY: return "Compatibility: legacy"
-        case MKXP_SYNTAX_TRANSFORM_DISABLED: return "Compatibility: modern"
-        case MKXP_SYNTAX_TRANSFORM_CUSTOM: return "Compatibility: custom"
-        default: return nil
-        }
-    }
-
-    /// Renderer line. Shows the ANGLE version once GL has initialized.
-    /// Falls back to `ANGLE (Metal)` before then.
-    private var rendererLine: String {
-        let version = String(cString: mkxp_getANGLEVersion())
-        if version == "unknown" {
-            return "ANGLE (Metal)"
-        }
-        return "ANGLE \(version) (Metal)"
-    }
-
-    /// Metal device line. Hidden (returns nil) until GL has initialized.
-    private var metalDeviceLine: String? {
-        let device = String(cString: mkxp_getMetalDeviceName())
-        return device == "unknown" ? nil : device
     }
 }
 

@@ -307,7 +307,8 @@ extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDeleg
         } catch {
             BackupLog.line(
                 "BackupTransferSession",
-                "\(downloadTask.taskDescription ?? "?") landed but could not move: \(error.localizedDescription)")
+                "\(downloadTask.taskDescription ?? "?") landed but could not move: \(error.localizedDescription)"
+            )
         }
     }
 

@@ -30,24 +30,18 @@ struct BackupSheet: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text(model.gameName)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                        Text("Backup")
-                            .font(.headline)
-                    }
-                    .sheetTitle()
+            .sheetToolbar {
+                VStack(spacing: 1) {
+                    Text(model.gameName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text("Backup")
+                        .font(.headline)
                 }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
+            } done: {
+                dismiss()
             }
             .task { await model.load() }
             .sheet(item: $confirmation) { sheet in

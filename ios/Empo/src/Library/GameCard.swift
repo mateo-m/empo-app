@@ -365,10 +365,12 @@ struct GameStatusIndicator: View {
             Image(systemName: "play.fill")
                 .font(iconFont)
                 .foregroundStyle(.primary)
+                .accessibilityLabel("Ready to play")
         case .paused:
             Image(systemName: "pause.fill")
                 .font(iconFont)
                 .foregroundStyle(pausedForeground)
+                .accessibilityLabel("Paused")
         case .deleting:
             // White fill paired with the `.difference` wrap, like the
             // stop square - but a glyph, not a button: no cancel.
@@ -380,6 +382,7 @@ struct GameStatusIndicator: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(iconFont)
                 .foregroundStyle(.warning)
+                .accessibilityLabel("This game won't open")
         case .backingUp:
             // White paired with the `.difference` wrap above, like
             // the import stop square.

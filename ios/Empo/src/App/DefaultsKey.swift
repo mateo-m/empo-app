@@ -24,6 +24,10 @@ enum DefaultsKey {
     static let interfaceHaptics = PreferenceKeys.interfaceHaptics.name
     static let controllerHaptics = PreferenceKeys.controllerHaptics.name
     static let caBundleLastRefresh = PreferenceKeys.caBundleLastRefresh.name
+    /// `GameRunner.rawValue`. String.
+    static let rubyGameRunner = PreferenceKeys.rubyGameRunner.name
+    /// The `GameReport` of the last session that started. JSON `Data`.
+    static let lastGameReport = PreferenceKeys.lastGameReport.name
 
     /// Controls edit mode: drags land on a fixed grid. Bool.
     static let controlsEditSnapToGrid = PreferenceKeys.controlsEditSnapToGrid.name
@@ -53,6 +57,11 @@ enum DefaultsKey {
     // MARK: - Disclaimer
 
     static let disclaimerAcknowledgedVersion = PreferenceKeys.disclaimerAcknowledgedVersion.name
+
+    // MARK: - What's new
+
+    /// The last `WhatsNew.version` the user saw. Int.
+    static let whatsNewSeenVersion = PreferenceKeys.whatsNewSeenVersion.name
 
     // MARK: - Library
 

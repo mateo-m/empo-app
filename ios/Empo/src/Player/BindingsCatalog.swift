@@ -41,9 +41,9 @@ enum BindingsCatalog {
         "KeyZ": "Confirm (VX/Ace)",
         "KeyQ": "Page up (L)",
         "KeyW": "Page down (R)",
-        "KeyA": "X key",
-        "KeyS": "Y key",
-        "KeyD": "Z key",
+        "KeyA": "RPG Maker X button",
+        "KeyS": "RPG Maker Y button",
+        "KeyD": "RPG Maker Z button",
         "F5": "Script hotkeys",
         "F6": "Script hotkeys",
         "F7": "Script hotkeys",
@@ -74,20 +74,20 @@ enum BindingsCatalog {
             id: "leftStick",
             title: "Left stick",
             elements: [
-                Row(source: .element("-leftx"), label: "Left stick ←"),
-                Row(source: .element("+leftx"), label: "Left stick →"),
-                Row(source: .element("-lefty"), label: "Left stick ↑"),
-                Row(source: .element("+lefty"), label: "Left stick ↓"),
+                Row(source: .element("-leftx"), label: "Left stick left"),
+                Row(source: .element("+leftx"), label: "Left stick right"),
+                Row(source: .element("-lefty"), label: "Left stick up"),
+                Row(source: .element("+lefty"), label: "Left stick down"),
                 Row(source: .element("leftstick"), label: "L3 click"),
             ]),
         Section(
             id: "rightStick",
             title: "Right stick",
             elements: [
-                Row(source: .element("-rightx"), label: "Right stick ←"),
-                Row(source: .element("+rightx"), label: "Right stick →"),
-                Row(source: .element("-righty"), label: "Right stick ↑"),
-                Row(source: .element("+righty"), label: "Right stick ↓"),
+                Row(source: .element("-rightx"), label: "Right stick left"),
+                Row(source: .element("+rightx"), label: "Right stick right"),
+                Row(source: .element("-righty"), label: "Right stick up"),
+                Row(source: .element("+righty"), label: "Right stick down"),
                 Row(source: .element("rightstick"), label: "R3 click"),
             ]),
         Section(
@@ -105,7 +105,7 @@ enum BindingsCatalog {
             elements: [
                 Row(source: .element("start"), label: "Menu / Start"),
                 Row(source: .element("back"), label: "Options / Select"),
-                Row(source: .element("guide"), label: "Home / Guide (often reserved by iOS)"),
+                Row(source: .element("guide"), label: "Home / Guide (iOS usually takes this)"),
             ]),
     ]
 
@@ -168,7 +168,7 @@ enum BindingsCatalog {
     }
 
     static func displayName(for target: BindingMap.Target?) -> String {
-        guard let target else { return "Unbound" }
+        guard let target else { return "None" }
         switch target {
         case .key(let code):
             return KeyCodeTable.displayName(for: code) ?? code
@@ -178,9 +178,9 @@ enum BindingsCatalog {
             // Unknown = written by a newer Empo or by hand. The
             // binding stays in the map (W005 rule) and does nothing.
             return EmpoActionCatalog.action(id: name)?.displayName
-                ?? "Unavailable action (\(name))"
+                ?? "Not supported in this version of Empo"
         case .unbound:
-            return "Unbound"
+            return "None"
         }
     }
 

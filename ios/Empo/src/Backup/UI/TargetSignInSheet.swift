@@ -34,7 +34,9 @@ struct TargetSignInSheet: View {
     private func submit(_ values: [String: String]) async {
         isWorking = true
         defer { isWorking = false }
-        if AppSettings.shared.debugLogs { BackupLog.line("TargetSignInSheet", "\(target.id) signs in through the form") }
+        if AppSettings.shared.debugLogs {
+            BackupLog.line("TargetSignInSheet", "\(target.id) signs in through the form")
+        }
         let outcome =
             target.provider == .s3
             ? await BackupTargetAdd.s3(form: values, id: target.id)

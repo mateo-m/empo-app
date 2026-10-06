@@ -288,9 +288,9 @@ would be a chain, and Empo rejects it (V023).
 A key you do not name reaches the game unchanged, so a real keyboard
 keeps typing. Use `null` to silence a key.
 
-Players do the same thing in the app: **Menu → Buttons → Keyboard →
-Add a key** asks them to press the button, reads the key it sends, and
-binds it.
+Players do the same thing in the app: **More options → Controller
+buttons → Keyboard → Add a key** asks them to press the button, reads
+the key it sends, and binds it.
 
 **Your map is a patch.** Empo has a built-in mapping (table below).
 Your file changes only the elements you list, and `null` removes a
@@ -323,6 +323,11 @@ Notes:
 - Triggers and stick directions act as digital buttons. They press at
   50% travel and release below 40%, so a half-pulled trigger never
   flutters.
+- A stick has eight sectors. A push within 30 degrees of an axis
+  sends that direction alone. The 30 degrees in the middle of each
+  quadrant send both directions at once. A sector boundary moves 5
+  degrees away from the current sector, so a thumb that rests on a
+  boundary does not flicker.
 - iOS often reserves `guide` for the system. You can bind it, but test
   on a real device before you rely on it.
 - Paddles and touchpad only exist on some controllers (Xbox Elite,

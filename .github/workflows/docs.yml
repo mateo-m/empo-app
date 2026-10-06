@@ -48,9 +48,9 @@ concurrency:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
-      # The changelog page reads the engine commits between the submodule
+      # The changelog page reads the engine commits between the engine
       # pins of two release tags, so it needs the tags and the engine history.
       - uses: actions/checkout@v6
         with:
@@ -58,8 +58,8 @@ jobs:
 
       - name: Fetch the engine history
         run: |
-          git -c url."https://github.com/".insteadOf="git@github.com:" \
-              submodule update --init mkxp-z-apple-mobile
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/mateo-m/mkxp-z-apple-mobile.git .engine-history
 
       - uses: oven-sh/setup-bun@v2
 
@@ -79,7 +79,7 @@ jobs:
     name: Deploy
     if: github.event_name != 'pull_request'
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     permissions:
       pages: write
       id-token: write

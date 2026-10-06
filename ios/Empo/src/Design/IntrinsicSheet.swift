@@ -5,26 +5,60 @@ import SwiftUI
 /// measurement is pending. Several sheets share this pattern (image
 /// sources, player menu, build info, save recovery), so the layout
 /// and detent boilerplate lives here. The full sheet rules - surface,
-/// anatomy, alignment, metrics - are in `ios/Empo/docs/sheet-design.md`.
+/// anatomy, alignment, metrics - are in the Sheets section of
+/// `ios/Empo/docs/design-system.md`.
+struct IntrinsicSheetSize {
+    var width: CGFloat = 0
+    var height: CGFloat = 0
+}
+
 extension View {
     /// Apply to the sheet's inner content. Asks the view to size
-    /// itself vertically and writes the measured height into `binding`.
+    /// itself vertically and writes the measured height into `size`.
     /// The caller controls padding so each sheet can pick its own gutter.
-    func intrinsicSheetContent(measuredHeight binding: Binding<CGFloat>) -> some View {
-        self
+    func intrinsicSheetContent(size: Binding<IntrinsicSheetSize>) -> some View {
+        let width = size.wrappedValue.width
+        // A NavigationStack lays its content out once at zero width
+        // before the sheet has a size. The text then wraps on every
+        // word, and the sheet opens several times too tall and slides
+        // down to its real height. The width comes from outside the
+        // stack, and a height measured at any other width is dropped.
+        return
+            self
+            .frame(width: width > 0 ? width : nil)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { newHeight in
-                binding.wrappedValue = newHeight
+            .onGeometryChange(for: CGSize.self) { proxy in
+                proxy.size
+            } action: { newSize in
+                guard width > 0, newSize.width == width else { return }
+                size.wrappedValue.height = newSize.height
             }
+            .frame(maxWidth: .infinity, alignment: .top)
     }
 
-    /// Apply to the sheet's outermost view. Sizes the sheet to
-    /// `measuredHeight + chromeAllowance`, or falls back to `.medium`
-    /// while the first measurement is pending. Later changes animate
-    /// the sheet to the new height.
+    /// Apply to the sheet's outermost view, outside its
+    /// NavigationStack. Sizes the sheet to the height that
+    /// `intrinsicSheetContent(size:)` measured, plus `chromeAllowance`.
+    func intrinsicSheetDetent(
+        size: Binding<IntrinsicSheetSize>,
+        chromeAllowance: CGFloat = 64
+    ) -> some View {
+        self
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { newWidth in
+                size.wrappedValue.width = newWidth
+            }
+            .intrinsicSheetDetent(
+                measuredHeight: size.wrappedValue.height,
+                chromeAllowance: chromeAllowance
+            )
+    }
+
+    /// Sizes the sheet to `measuredHeight + chromeAllowance`, or falls
+    /// back to `.medium` while the first measurement is pending. Later
+    /// changes animate the sheet to the new height. The default
+    /// allowance covers a standard nav bar and drag indicator.
     func intrinsicSheetDetent(
         measuredHeight: CGFloat,
         chromeAllowance: CGFloat = 64

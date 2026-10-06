@@ -89,7 +89,7 @@ struct ScreenRegionGizmo: View {
             .contentShape(Rectangle())
             .gesture(moveGesture)
             .accessibilityLabel("Game screen position")
-            .accessibilityHint("Drag to move the game picture")
+            .accessibilityHint("Drag to move the game screen")
 
             // Crop-style corner grabber: reads as "drag to resize"
             // where the small circle did not. It sits ON the border
@@ -118,7 +118,7 @@ struct ScreenRegionGizmo: View {
                     .contentShape(Rectangle())
                     .position(corner.point(in: rect, inset: 16))
                     .gesture(resizeGesture(for: corner))
-                    .accessibilityLabel("Resize game screen")
+                    .accessibilityLabel("Resize game screen, \(corner.accessibilityName)")
             }
         }
     }
@@ -203,6 +203,15 @@ struct ScreenRegionGizmo: View {
             case .topRight: 1
             case .bottomLeft: 2
             case .bottomRight: 3
+            }
+        }
+
+        var accessibilityName: String {
+            switch self {
+            case .topLeft: "top left corner"
+            case .topRight: "top right corner"
+            case .bottomLeft: "bottom left corner"
+            case .bottomRight: "bottom right corner"
             }
         }
 
@@ -311,9 +320,8 @@ struct ScreenRegionChips: View {
                     .glassEffect(.regular.interactive(), in: .capsule)
                 }
                 .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
-                .accessibilityLabel(
-                    overlayOn
-                        ? "Put controls below the game" : "Put controls over the game")
+                .accessibilityLabel("Controls over game")
+                .accessibilityValue(overlayOn ? "on" : "off")
             }
         }
         // Pin the glass chips to the dark variant like the rest of

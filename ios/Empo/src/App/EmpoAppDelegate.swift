@@ -1,11 +1,7 @@
 import BackgroundTasks
 import UIKit
 
-/// Empo's app delegate, on top of SDL's.
-///
-/// SDL owns `main` and its own delegate does the engine work, so this
-/// class calls `super` first and adds what SDL knows nothing about.
-/// Two things need a delegate and reach no other way.
+/// Two things need an app delegate and reach no other way.
 ///
 /// 1. `BGTaskScheduler` wants every launch handler in place before
 ///    launch ends, per its header. A scene delegate is too late.
@@ -13,27 +9,21 @@ import UIKit
 ///    `application(_:handleEventsForBackgroundURLSession:completionHandler:)`
 ///    alone.
 @objc(EmpoAppDelegate)
-final class EmpoAppDelegate: SDLUIKitDelegate {
+final class EmpoAppDelegate: UIResponder, UIApplicationDelegate {
 
-    override func application(
+    func application(
         _ application: UIApplication,
-        didFinishLaunchingWithOptions launchOptions: [AnyHashable: Any]? = nil
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        let started = super.application(
-            application, didFinishLaunchingWithOptions: launchOptions)
-        // SDL defers its own `postFinishLaunch` by a run loop turn, so
-        // this line still runs inside launch.
-        MainActor.assumeIsolated {
-            BackupTaskScheduler.register()
-            BackupNotifier.start()
-        }
-        return started
+        BackupTaskScheduler.register()
+        BackupNotifier.start()
+        return true
     }
 
     /// Hands the wake to the one background session of 7.3. iOS gives
     /// the app a few seconds here, and the completion handler ends
     /// them.
-    override func application(
+    func application(
         _ application: UIApplication,
         handleEventsForBackgroundURLSession identifier: String,
         completionHandler: @escaping () -> Void

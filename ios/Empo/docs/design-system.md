@@ -45,7 +45,7 @@ Rules:
   pinned to the dark scheme, so it stays dark in light mode.
 - The player (toolbar, D-pad, buttons) pins the glass material to its dark variant. The game
   decides the backdrop, so the controls cannot depend on the system scheme.
-- The docs site uses the same accent (`#fa8f29`) with a medium radius.
+- The docs site uses the same orange as an OKLCH value in `blume.config.ts`, with a medium radius.
 
 Opacity tokens, for foreground content over images or glass:
 
@@ -54,7 +54,7 @@ Opacity tokens, for foreground content over images or glass:
 | `textMuted`  | 0.7   | Secondary text and icons over images  |
 | `border`     | 0.2   | Hairline rims and dividers            |
 | `disabled`   | 0.4   | A disabled glass control              |
-| `brandTint`  | 0.1   | Brand tint behind a secondary control |
+| `brandTintBackground` | 0.1 | Brand tint behind a secondary control |
 
 Scrims that dim what is behind them: 0.3 light, 0.5 medium (a modal), 0.6 heavy.
 
@@ -117,8 +117,7 @@ Sizes:
 - Floating elements use an 8 pt shadow at 25%. Small icons over artwork use a 3 pt shadow
   at 50%. Text over artwork uses a 3 pt shadow at 70%.
 - Bottom sheets sit on one opaque grouped surface. A sheet that floats over a running game
-  uses the translucent material instead, so the game stays visible. See
-  [Sheet design rules](sheet-design.md).
+  uses the translucent material instead, so the game stays visible. See [Sheets](#sheets).
 
 ## Motion
 
@@ -159,17 +158,137 @@ Rules:
 - The on-screen game controls fire a light impact on engage, behind a separate setting, so
   a player can keep interface haptics and drop the buzz during play.
 
+## Sheets
+
+Build a sheet from the parts in `ios/Empo/src/Design/Sheet.swift`. Examples to copy:
+`SaveRecoverySheet`, `ImageSourceSheet`, `WhatsNewSheet`, the build info sheet in
+`SettingsView`, and `PlayerMoreSheet` for a sheet over a running game.
+
+```swift
+StandardSheet(
+    title: "Resume the backup?",
+    barAction: SheetBarAction("Not now") { answer(.later) }
+) {
+    SheetBodyText("Rejuvenation did not finish backing up. About 2.8 GB left.", naming: "Rejuvenation")
+    SheetPrimaryButton("Resume") { answer(.resume) }
+    SheetQuietButton("Stop backup") { show(.stop) }
+}
+```
+
+`StandardSheet` sets the surface, the title row, the corner icon, the height and the brand
+tint. The sheet author sets the content, the alignment in rows, the tap targets and the
+haptics. A sheet over a running game passes `surface: .material`.
+
+### Ask like a person
+
+A sheet that asks something follows these rules. They come from the Human Interface
+Guidelines on alerts, action sheets and writing, from the Windows dialog guidelines, and
+from the tray pattern of the Family app.
+
+- The title is the question that the buttons answer, or the one thing that happened.
+  "Resume the backup?", "Remove Dropbox?", "Saves recovered". Sentence case. No label
+  titles such as "Backup Interrupted".
+- The body says why the sheet is here and what the user cannot see. One or two short
+  sentences. It never repeats the title. Name the game or the target with
+  `SheetBodyText(_:naming:)`, so that it is heavier than the words around it.
+- Buttons are verbs that name the result, three words at most. "Resume", "Back it up",
+  "Sync settings". Never "Yes", "No" or "OK". "Done" closes a sheet that only informs.
+- The safe exit ("Not now", "Cancel") is the corner icon, never a button in the stack. A
+  swipe down does the same as the icon, and the sheet records that answer too.
+- A destructive answer is one step deeper. Its step asks the question again, the body
+  says what goes and what stays, and the one button is `SheetDestructiveButton`. A
+  `SheetQuietButton` under the primary opens that step. The icon on that step is
+  `symbol: .back`, at the leading corner.
+- One question per step. Change the step in `withAnimation`, and give the content
+  `.transition(.sheetStep)`. The old step and the old title blur and fade out, the new
+  ones blur and fade in, and the sheet changes its height with the same motion.
+- Never ask with an alert at launch. A record that needs an answer gets a sheet, on the
+  library, after the splash.
+
+### When to use a sheet
+
+- Use a sheet when the user reads, chooses or acts on structured content: option lists,
+  summaries, actions for each item.
+- Use an alert only for a short confirmation with two choices or fewer and no structure.
+
+### Surface
+
+- The whole sheet is one surface. Do not paint `systemGroupedBackground` on the content
+  stack only. It stops at the content bounds, and a second tone shows when the user pulls
+  the sheet up. `StandardSheet` paints the surface with `presentationBackground`.
+- A `List` or `Form` sheet (`LibrarySortSheet`, `GameSettingsView`) sets its own surface.
+- Cards in a sheet use `secondarySystemGroupedBackground` with `Radius.md` (`SheetCard`).
+- A sheet over a running game keeps the system translucent material, so the game stays
+  visible. Do not paint it.
+
+### Height
+
+- `StandardSheet` fits its content, scrolls when the content is taller than the screen,
+  and keeps the content at the top when the user pulls past the detent. A sheet that does
+  not use `StandardSheet` uses the `intrinsicSheetContent` and `intrinsicSheetDetent`
+  modifiers in `IntrinsicSheet.swift`.
+- A sheet with long content (settings, game info) uses the standard detents.
+- The drag indicator is always visible.
+
+### Layout
+
+From top to bottom. Each part is optional, except the action.
+
+1. **Title.** Use one of two shapes. Do not mix them.
+   - No emblem: a centered `title2` bold title at the top of the content. Close is at
+     the trailing corner, back at the leading corner.
+   - An emblem: the title and the 48 pt brand-tinted symbol are one centered block at the
+     top of the content. Pass `emblem:` to `StandardSheet`. The corner icon, if there is
+     one, floats over that block.
+2. **Body text.** `subheadline` secondary, aligned to the leading edge. Only the title
+   block is centered.
+3. **Card.** Rows aligned to the leading edge: a 44 pt thumbnail (`Radius.sm`), a text
+   column, then a trailing action (`SecondaryButtonStyle(size: .sm)`). The divider between
+   rows starts after the thumbnail (`Spacing.lg + 44 + Spacing.lg`).
+4. **Footer.** `footnote` secondary, aligned to the leading edge.
+5. **Primary action.** One full-width button at the bottom (`SheetPrimaryButton`). A
+   secondary action, such as a link, goes under it as centered `subheadline` brand text
+   with a 44 pt tap target (`WhatsNewSheet`). A destructive action is never the brand
+   primary. It is a row in its own card, or the one `SheetDestructiveButton` of a
+   confirmation step. A picker with steps can confirm from the toolbar
+   (`ImportRootPickerSheet`).
+
+### Tap targets
+
+- Everything that the user can tap is 44 pt tall or more.
+- When a row has one action, the whole row is the button. The trailing chevron, link or
+  checkmark is only decoration.
+
+### Metrics
+
+- Outer padding: `Spacing.xl` on the sides and the top, `Spacing.sm` at the bottom. The
+  safe area of the home indicator pads the rest.
+- Between parts: `Spacing.xl`.
+- In a text column: `Spacing.xxs` to `Spacing.md`.
+- Row padding: `Spacing.lg` horizontal, `Spacing.md` vertical.
+
+### Behavior
+
+- Titles and button labels are sentence case. Only names keep their capitals.
+- A rare sheet can have more motion. A sheet the user opens often (sort, image sources)
+  uses only the system transition.
+- The system sheet controls the drag. Do not change it.
+- A sheet that shows a rare good result can play `Haptics.success()` one time when it
+  opens.
+- A sheet that shows one time (save recovery, duplicate games, What's new) waits until the
+  splash screen is gone.
+- A sheet that shows one time counts any dismissal, button or swipe, as read. Get
+  `isPresented` from the pending state, and clear that state in the setter of the binding.
+- A sheet keeps its loading, state and dismissal in its own `ViewModifier`
+  (`SaveRecoveryPresentation`). The view that shows it adds one modifier line.
+
 ## Voice
 
-The interface copy is short, first person where the author speaks, and honest about what
-can go wrong.
+The interface text is short. It uses the first person where the author speaks, and it
+says what can go wrong.
 
-- The disclaimer says "Here be dragons, or bugs!" and "I am a lone dev who builds this in
-  my spare time."
-- The empty library says "No Games Yet. Add your favorite RPG Maker games to get started!"
-- The settings footer says "Made with ☕ by Grid."
-- Alerts state the reason and the one action, and nothing else.
-- Hints use the filled lightbulb and one sentence.
+- An alert gives the reason and the one action, and nothing else.
+- A hint uses the filled lightbulb and one sentence.
 
-Use the same voice on the web. Headlines are plain statements of what Empo does. Warnings
-give the condition first, then the instruction.
+Use the same voice on the web. A headline says what Empo does. A warning gives the
+condition first, then the instruction.

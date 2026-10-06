@@ -1,4 +1,3 @@
-import GameProbe
 import SwiftUI
 
 struct GameInfoView: View {
@@ -11,9 +10,8 @@ struct GameInfoView: View {
     @State private var metadata: GameMetadata
     @State private var editingTitle: String
     @State private var diskSize: Int64?
-    @State private var rgssVersion: Int?
-    @State private var rubyVersion: String?
-    @State private var runtimeProbeFinished = false
+    /// The core's rows for the Runtime section. Empty hides it.
+    @State private var runtimeRows: [InfoRow] = []
     @State private var showArtworkPicker = false
     @State private var showBannerPicker = false
     @State private var isEditingTitle = false
@@ -40,15 +38,15 @@ struct GameInfoView: View {
 
         // Title shown when the user hasn't set a customTitle. For
         // JGP imports this is the manifest name. For plain
-        // folder/zip imports it's the Game.ini title. The label
+        // folder/zip imports it's the core's title. The label
         // under the text field (and the text-field placeholder)
         // both track this so resetting the custom title gives the
         // user back what the import originally showed, not the
         // raw Game.ini one which may be uglier.
         self.originalTitle =
             meta.baseTitle
-            ?? GameINI.gameTitle(at: container.gameURL)
-            ?? "Unknown Game"
+            ?? GameCores.core(forGameAt: container.gameURL)?.defaultTitle(of: container)
+            ?? "Untitled game"
     }
 
     private var container: GameContainer? { game.container }
@@ -144,7 +142,7 @@ struct GameInfoView: View {
 
                             Divider().padding(.leading, Spacing.xl)
 
-                            DetailRow("Local ID") {
+                            DetailRow("Folder name") {
                                 Text(game.id)
                                     .monospaced()
                                     .font(.caption)
@@ -154,70 +152,21 @@ struct GameInfoView: View {
                             }
                         }
 
-                        // Runtime diagnostics. Surfaces the engine
-                        // graphics-API version and the bundled-Ruby
-                        // version (when present) so an advanced user
-                        // can confirm what compatibility surface a
-                        // game ships with. Useful for debugging
-                        // syntax-transform misdetections (a custom
-                        // engine shipping RGSS1 graphics + Ruby 3.x
-                        // vs vanilla XP shipping RGSS1 + Ruby 1.8).
                         // Gated on debugLogs because casual users
-                        // shouldn't see internal API version numbers.
-                        if settings.debugLogs {
+                        // shouldn't see internal version numbers.
+                        if settings.debugLogs, !runtimeRows.isEmpty {
                             GroupedSection("Runtime") {
-                                DetailRow("RGSS version") {
-                                    if let v = rgssVersion {
-                                        Text("RGSS\(v)")
-                                    } else if runtimeProbeFinished {
-                                        Text("Unknown")
-                                    } else {
-                                        ProgressView()
-                                    }
-                                }
-
-                                Divider().padding(.leading, Spacing.xl)
-
-                                // Ruby (bundled): the version the game's
-                                // own DLL targets (e.g. Pokemon Flux's
-                                // x64-msvcrt-ruby310.dll). On iOS we
-                                // execute on the statically-linked engine
-                                // Ruby below. This row only says what the
-                                // scripts were written for.
-                                if let v = rubyVersion {
-                                    DetailRow("Ruby (bundled)") {
-                                        Text(v).monospaced()
-                                    }
-
-                                    Divider().padding(.leading, Spacing.xl)
-                                }
-
-                                // Ruby (runtime): the version executing
-                                // the scripts on iOS, scanned from Empo's
-                                // binary. For games with a bundled DLL
-                                // this row makes the gap explicit
-                                // (e.g. "3.1.0p0 bundled vs 3.1.3p185
-                                // runtime").
-                                DetailRow("Ruby (runtime)") {
-                                    if !runtimeProbeFinished {
-                                        ProgressView()
-                                    } else {
-                                        // Pass the game's detected RGSS-derived
-                                        // Ruby major.minor so multi-Ruby binaries
-                                        // (which contain up to 4 RUBY_DESCRIPTION
-                                        // strings, one per merged.o) report the
-                                        // version that will run THIS game,
-                                        // not whichever string sits earliest in
-                                        // the .rodata section.
-                                        let majorMinor = rubyMajorMinorForGame()
-                                        if let engine = GameMetadata.engineRubyVersion(
-                                            forMajorMinor: majorMinor
-                                        ) {
-                                            Text(engine).monospaced()
+                                ForEach(runtimeRows) { row in
+                                    DetailRow(row.label) {
+                                        if let value = row.value {
+                                            Text(value).monospaced()
                                         } else {
                                             Text("Unknown")
                                                 .foregroundStyle(.secondary)
                                         }
+                                    }
+                                    if row.id != runtimeRows.last?.id {
+                                        Divider().padding(.leading, Spacing.xl)
                                     }
                                 }
                             }
@@ -227,17 +176,22 @@ struct GameInfoView: View {
                             Button {
                                 openInFiles()
                             } label: {
-                                Label("Browse game files", systemImage: "folder")
+                                Label("Open in Files", systemImage: "folder")
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, Spacing.xl)
                                     .padding(.vertical, Spacing.lg)
                             }
 
-                            if let logURL = sessionLogURL(), settings.debugLogs {
+                            if let container,
+                                let report = GameReport.latest(gameTitle: displayTitle, in: container)
+                            {
                                 Divider().padding(.leading, Spacing.xl)
 
-                                ShareLink(item: logURL) {
-                                    Label("Export logs", systemImage: "square.and.arrow.up")
+                                ShareLink(
+                                    item: report,
+                                    preview: SharePreview("\(AppInfo.name) report for \(report.gameTitle)")
+                                ) {
+                                    Label("Share report", systemImage: "square.and.arrow.up")
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.horizontal, Spacing.xl)
                                         .padding(.vertical, Spacing.lg)
@@ -250,43 +204,38 @@ struct GameInfoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .animation(Motion.snappy, value: titleScrollProgress > 0.5)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 0) {
-                        // Title slides in: frame height grows to push subtitle down,
-                        // opacity fades in so no visible clipping needed.
-                        Text(displayTitle)
+            .sheetToolbar {
+                VStack(spacing: 0) {
+                    // Title slides in: frame height grows to push subtitle down,
+                    // opacity fades in so no visible clipping needed.
+                    Text(displayTitle)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .frame(height: 20 * titleScrollProgress, alignment: .bottom)
+                        .opacity(titleScrollProgress)
+
+                    // Subtitle cross-fades between headline and caption sizes.
+                    // Font changes aren't animatable, so both are overlaid.
+                    ZStack {
+                        Text("Info")
                             .font(.headline)
-                            .lineLimit(1)
-                            .frame(height: 20 * titleScrollProgress, alignment: .bottom)
+                            .opacity(1 - titleScrollProgress)
+                            .blur(radius: titleScrollProgress * 4)
+
+                        Text("Info")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             .opacity(titleScrollProgress)
-
-                        // Subtitle cross-fades between headline and caption sizes.
-                        // Font changes aren't animatable, so both are overlaid.
-                        ZStack {
-                            Text("Information")
-                                .font(.headline)
-                                .opacity(1 - titleScrollProgress)
-                                .blur(radius: titleScrollProgress * 4)
-
-                            Text("Information")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .opacity(titleScrollProgress)
-                        }
-                    }
-                    .sheetTitle()
-                    .animation(Motion.standard, value: titleScrollProgress)
-                    .onGeometryChange(for: CGFloat.self) { proxy in
-                        proxy.frame(in: .global).maxY
-                    } action: { newValue in
-                        navBarBottomY = newValue
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close") { dismiss() }
-                        .tint(.brand)
+                .animation(Motion.standard, value: titleScrollProgress)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.frame(in: .global).maxY
+                } action: { newValue in
+                    navBarBottomY = newValue
                 }
+            } done: {
+                dismiss()
             }
             .imageSourcePicker(
                 isPresented: $showArtworkPicker,
@@ -334,25 +283,10 @@ struct GameInfoView: View {
                 }
             }
             .task {
-                // Runtime probe: scan game folder for RGSS version
-                // and bundled Ruby version. Off-main-thread because
-                // the Ruby scan opens DLLs (5-15 MB each, a few in
-                // a typical PE-derived game) and runs an
-                // NSRegularExpression over the ASCII-decoded bytes.
-                guard let container, settings.debugLogs else {
-                    runtimeProbeFinished = true
-                    return
-                }
-                let gameURL = container.gameURL
-                let result: (Int?, String?) = await Task.detached(priority: .utility) {
-                    (
-                        GameMetadata.detectRGSSVersion(in: gameURL),
-                        GameMetadata.detectBundledRubyVersion(in: gameURL)
-                    )
-                }.value
-                rgssVersion = result.0
-                rubyVersion = result.1
-                runtimeProbeFinished = true
+                guard let container, settings.debugLogs,
+                    let core = GameCores.core(forGameAt: container.gameURL)
+                else { return }
+                runtimeRows = await core.infoRows(for: container)
             }
             .onDisappear {
                 if needsLibraryRefresh {
@@ -371,48 +305,6 @@ struct GameInfoView: View {
             return .ignored
         }
         .tint(.brand)
-    }
-
-    /// Map the game's detected/overridden Ruby version code
-    /// (18 / 19 / 30 / 31, persisted as `metadata.rubyVersion` or
-    /// `GameSettings.rubyVersionOverride`) to the corresponding
-    /// "<major>.<minor>" string the binary scanner expects. Falls
-    /// back to deriving from `rgssVersion` (RGSS1/2 → 1.8, RGSS3
-    /// → 1.9) when the explicit Ruby field hasn't been set yet
-    /// (e.g. games imported before multi-Ruby detection rolled
-    /// out, or before the library backfill task ran).
-    /// Returns nil when no signal is available. The caller falls
-    /// back to a no-filter scan.
-    private func rubyMajorMinorForGame() -> String? {
-        // Per-game override wins.
-        if let container = game.container {
-            let settings = GameSettings.load(from: container.empoStateURL)
-            if let override = settings.rubyVersionOverride {
-                return rubyCodeToMajorMinor(override)
-            }
-        }
-        // Detector's persisted result.
-        if let v = metadata.rubyVersion {
-            return rubyCodeToMajorMinor(v)
-        }
-        // Fall back to RGSS-derived if the detector hasn't run yet.
-        switch rgssVersion {
-        case 1, 2: return "1.8"
-        case 3: return "1.9"
-        default: return nil
-        }
-    }
-
-    private func rubyCodeToMajorMinor(_ code: Int) -> String? {
-        switch code {
-        case 18: return "1.8"
-        case 19: return "1.9"
-        // 30 may appear in old metadata.json from when a native
-        // 3.0 binding shipped. The dispatcher routes 30 to the
-        // 3.1 runtime so report 3.1 to match the engine state.
-        case 30, 31: return "3.1"
-        default: return nil
-        }
     }
 
     private let bannerHeight: CGFloat = 260
@@ -655,12 +547,6 @@ struct GameInfoView: View {
         if let url = URL(string: "shareddocuments://\(encoded)") {
             UIApplication.shared.open(url)
         }
-    }
-
-    private func sessionLogURL() -> URL? {
-        guard let container else { return nil }
-        let historyLog = container.sessionHistoryURL
-        return FileManager.default.fileExists(atPath: historyLog.path) ? historyLog : nil
     }
 }
 

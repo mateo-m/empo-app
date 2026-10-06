@@ -18,7 +18,7 @@ struct HintBanner: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if hint.hasDetail {
-                Button("More") { showDetail = true }
+                Button("Show details") { showDetail = true }
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.brand)
             }
@@ -62,7 +62,7 @@ private struct HintDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        StandardSheet(title: "Hint", emblem: icon) {
+        StandardSheet(title: "Tip", emblem: icon) {
             Text(excerpt)
                 .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -24,9 +24,19 @@ public enum GameScriptProfile {
         /// RGSS2 games run on Ruby 1.8, and the endless-def token
         /// skips the RGSS2/3 `def` stat method.
         case rgss2Ruby18 = "rgss2-ruby18"
+        /// Legacy scripts that call Ruby 1.9+ methods run on Ruby
+        /// 3.1 with the legacy transform, not on Ruby 1.8.
+        case mixedRuby31 = "mixed-ruby31"
+        /// Modern grammar tokens count only in code, not in comments,
+        /// strings, or heredocs, except inside `#{...}`.
+        case codeOnlyTokens = "code-only-tokens"
+        /// A `<<` right after a value, or with no end line after it, is
+        /// a shift, not a heredoc that hides the rest of the scripts
+        /// from the Ruby 1.9 check.
+        case shiftNotHeredoc = "shift-not-heredoc"
     }
 
-    public static let currentSchema: Schema = .rgss2Ruby18
+    public static let currentSchema: Schema = .shiftNotHeredoc
 
     public struct Result {
         public let rubyVersion: Int
@@ -59,6 +69,25 @@ public enum GameScriptProfile {
         )
     }
 
+    /// Every file that `analyze` can read. Saves sit beside these files,
+    /// and they are not in the list.
+    public static func inputFiles(gameDirectory: URL) -> [URL] {
+        let fm = FileManager.default
+        let scripts = ["Scripts.rxdata", "Scripts.rvdata", "Scripts.rvdata2"]
+        func files(in folder: String, named names: [String], extensions: Set<String>) -> [URL] {
+            ((try? fm.contentsOfDirectory(
+                at: gameDirectory.appendingPathComponent(folder),
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles])) ?? [])
+                .filter { names.contains($0.lastPathComponent) || extensions.contains($0.pathExtension.lowercased()) }
+        }
+        return files(
+            in: "", named: ["Game.ini"] + scripts,
+            extensions: ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
+            + files(in: "Data", named: scripts, extensions: ["fpk"])
+            + RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
+    }
+
     // MARK: - Ruby version (formerly RubyVersionDetection)
 
     private static func detectRubyVersion(
@@ -80,6 +109,9 @@ public enum GameScriptProfile {
             ) {
                 return scriptVer
             }
+        case .mixed:
+            let scriptVer = rubyVersionFromScriptExtension(at: gameDirectory, fm: fm)
+            return scriptVer == 19 ? 19 : 31
         case .inconclusive:
             break
         }
@@ -121,7 +153,7 @@ public enum GameScriptProfile {
         switch grammar {
         case .modern:
             return true
-        case .legacy:
+        case .legacy, .mixed:
             return false
         case .inconclusive:
             return runtime.embedsRuby3 || packedScripts

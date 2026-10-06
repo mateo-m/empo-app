@@ -29,7 +29,7 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>JoiPlay Archive</string>
+			<string>JoiPlay game archive</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
@@ -95,6 +95,8 @@
 	     Google Drive from the add flow at runtime. -->
 	<key>EmpoGoogleDriveClientId</key>
 	<string>$(GOOGLE_DRIVE_CLIENT_ID)</string>
+	<key>EmpoAppGroup</key>
+	<string>$(EMPO_APP_GROUP)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<true/>
 	<key>LSRequiresIPhoneOS</key>
@@ -103,12 +105,17 @@
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Game controllers may connect over Bluetooth.</string>
+	<string>Empo uses Bluetooth so you can play with a wireless game controller.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo to use as custom game artwork or banner.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Some games offer local multiplayer, which needs permission to find other players on your network.</string>
+	<string>Empo finds nearby players on your network so you can play local multiplayer games.</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.sh.mateo.empo</key>
@@ -145,7 +152,7 @@
 		<string>processing</string>
 	</array>
 	<key>UIFileSharingEnabled</key>
-	<true/>
+	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>
@@ -169,7 +176,7 @@
 				<string>public.zip-archive</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>JoiPlay Archive</string>
+			<string>JoiPlay game archive</string>
 			<key>UTTypeIdentifier</key>
 			<string>cyou.joiplay.jgp</string>
 			<key>UTTypeTagSpecification</key>

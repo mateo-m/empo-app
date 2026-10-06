@@ -6,38 +6,21 @@ import UIKit
 /// finalization after files land in the container.
 enum GameImporter {
 
-    nonisolated static func createMetadata(
-        in container: GameContainer,
-        profile: GameScriptProfile.Result
-    ) {
+    nonisolated static func createMetadata(in container: GameContainer) {
         var metadata = GameMetadata()
         metadata.dateAdded = Date()
-        metadata.rubyVersion = profile.rubyVersion
-        metadata.rubyVersionDetectedSchema = GameScriptProfile.currentSchema.rawValue
-        metadata.modernRubyScriptsDetected = profile.modernRubyScripts
-        metadata.modernRubyScriptsDetectedSchema =
-            GameScriptProfile.currentSchema.rawValue
         metadata.save(to: container)
     }
 
-    nonisolated static func createMetadata(in container: GameContainer) {
-        createMetadata(
-            in: container,
-            profile: GameScriptProfile.analyze(gameDirectory: container.gameURL)
-        )
-    }
-
-    /// Post-replacement metadata pass: the game files changed, so
-    /// re-run script-profile detection, but keep everything the user
+    /// Post-replacement metadata pass: keep everything the user
     /// accumulated (dateAdded, play time, custom title/artwork).
     /// Counterpart of `createMetadata` for updates of an installed
     /// game.
     nonisolated static func refreshMetadataAfterReplacement(in container: GameContainer) {
         var metadata = GameMetadata.load(from: container)
-        if metadata.dateAdded == nil {
-            metadata.dateAdded = Date()
-        }
-        metadata.refreshDetectedProfile(in: container, forceRefresh: true)
+        guard metadata.dateAdded == nil else { return }
+        metadata.dateAdded = Date()
+        metadata.save(to: container)
     }
 
     /// Transactional in-place update of an installed game: the new
@@ -83,33 +66,17 @@ enum GameImporter {
         }
     }
 
-    nonisolated static func seedFolderImport(in container: GameContainer) {
-        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
-        if profile.modernRubyScripts {
-            persistModernRubySettings(in: container)
-        }
-        createMetadata(in: container, profile: profile)
-    }
-
-    private nonisolated static func persistModernRubySettings(in container: GameContainer) {
-        let stateDir = container.ensureEmpoStateDirectory()
-        var settings = GameSettings.load(from: stateDir)
-        settings.useModernRuby = true
-        settings.save(to: stateDir)
-    }
-
     nonisolated static func preprocessJgp(at gameRoot: URL) throws -> Jgp.Bundle {
         guard let bundle = Jgp.parseBundle(at: gameRoot) else {
             throw GameImportValidator.ImportError.invalidJgpManifest
         }
 
-        switch bundle.manifest.type {
-        case .rpgmxp, .rpgmvx, .rpgmvxace, .mkxpZ:
-            break
-        case .unsupported(let raw):
+        let type = bundle.manifest.type
+        guard GameCores.all.contains(where: { $0.joiPlayTypes.contains(type) }) else {
+            let games = GameCores.all.compactMap(\.joiPlayGames).joined(separator: " and ")
             throw GameImportValidator.ImportError.unsupportedRuntime(
-                "This JoiPlay archive uses '\(raw)', which Empo does not support. "
-                    + "Empo currently supports only RPG Maker XP, VX, VX Ace, and mkxp-z games."
+                "This JoiPlay archive uses '\(type)', which Empo does not support. "
+                    + "Empo imports only JoiPlay archives of \(games)."
             )
         }
 
@@ -127,29 +94,17 @@ enum GameImporter {
     /// `preservingExistingState` is the replacement path: the user's
     /// settings, engine overlay, custom artwork, and accumulated
     /// metadata (dateAdded, play time) stay. Only the manifest
-    /// fields and the re-detected script profile refresh.
+    /// fields refresh.
     nonisolated static func finalizeJgpImport(
         container: GameContainer,
         bundle: Jgp.Bundle,
         preservingExistingState: Bool = false
     ) {
-        let profile = GameScriptProfile.analyze(gameDirectory: container.gameURL)
-
         if !preservingExistingState {
-            var settings = bundle.configuration?.toGameSettings() ?? GameSettings()
-            if bundle.manifest.type == .mkxpZ {
-                settings.useModernRuby = true
-            } else if profile.modernRubyScripts {
-                settings.useModernRuby = true
-            }
-
+            let settings = bundle.configuration?.toGameSettings() ?? GameSettings()
             let stateDir = container.ensureEmpoStateDirectory()
             if let engineValues = bundle.configuration?.toMkxpEngineValues() {
-                EngineConfigProjector.applyEngineValues(
-                    engineValues,
-                    stateDirectory: stateDir,
-                    gameDirectory: container.gameURL
-                )
+                ManagedMkxpConfig.writeOverlay(overrides: engineValues, stateDirectory: stateDir)
             }
             settings.save(to: stateDir)
         }
@@ -163,11 +118,6 @@ enum GameImporter {
         metadata.manifestId = bundle.manifest.id
         metadata.manifestVersion = bundle.manifest.version
         metadata.manifestDescription = bundle.manifest.description
-        metadata.rubyVersion = profile.rubyVersion
-        metadata.rubyVersionDetectedSchema = GameScriptProfile.currentSchema.rawValue
-        metadata.modernRubyScriptsDetected = profile.modernRubyScripts
-        metadata.modernRubyScriptsDetectedSchema =
-            GameScriptProfile.currentSchema.rawValue
 
         let mayWriteArtwork =
             !preservingExistingState || metadata.customArtworkFilename == nil

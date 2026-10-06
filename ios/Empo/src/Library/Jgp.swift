@@ -2,56 +2,6 @@ import Foundation
 import GameProbe
 import UIKit
 
-/// JoiPlay archive runtime type. Any value outside the known
-/// cases becomes `.unsupported(raw:)` so we can show a
-/// precise error. The supported set covers every RGSS version our
-/// mkxp-z engine handles (XP = RGSS1, VX = RGSS2, VX Ace = RGSS3).
-/// It also covers the explicit "mkxp-z" label JoiPlay uses for
-/// games pre-packaged against the mkxp-z engine with Ruby 3. That
-/// label matches our runtime exactly, so we accept it too.
-/// JoiPlay also issues archives for Ren'Py, TyranoBuilder, HTML,
-/// Flash, and MZ/MV. We have no runtime for those and reject them
-/// with a per-type explanation during import.
-enum JgpRuntime: Codable, Equatable {
-    case rpgmxp  // RPG Maker XP  (RGSS1)
-    case rpgmvx  // RPG Maker VX  (RGSS2)
-    case rpgmvxace  // RPG Maker VX Ace (RGSS3)
-    case mkxpZ  // Prebuilt for mkxp-z with Ruby 3
-    case unsupported(raw: String)
-
-    init(from decoder: Decoder) throws {
-        let raw = try decoder.singleValueContainer().decode(String.self)
-        switch raw {
-        case "rpgmxp": self = .rpgmxp
-        case "rpgmvx": self = .rpgmvx
-        case "rpgmvxace": self = .rpgmvxace
-        case "mkxp-z": self = .mkxpZ
-        default: self = .unsupported(raw: raw)
-        }
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        switch self {
-        case .rpgmxp: try c.encode("rpgmxp")
-        case .rpgmvx: try c.encode("rpgmvx")
-        case .rpgmvxace: try c.encode("rpgmvxace")
-        case .mkxpZ: try c.encode("mkxp-z")
-        case .unsupported(let r): try c.encode(r)
-        }
-    }
-
-    var displayName: String {
-        switch self {
-        case .rpgmxp: "RPG Maker XP"
-        case .rpgmvx: "RPG Maker VX"
-        case .rpgmvxace: "RPG Maker VX Ace"
-        case .mkxpZ: "mkxp-z"
-        case .unsupported(let r): r
-        }
-    }
-}
-
 /// `manifest.json`: identifies the game and its runtime.
 struct JgpManifest: Codable {
     let id: String
@@ -60,7 +10,9 @@ struct JgpManifest: Codable {
     let description: String?
     let icon: String?
     let executable: String?
-    let type: JgpRuntime
+    /// The engine JoiPlay runs the game with, such as "rpgmvxace" or
+    /// "mkxp-z". A core claims its types in `joiPlayTypes`.
+    let type: String
 }
 
 /// `configuration.json`: engine and renderer preferences bundled by the
@@ -142,7 +94,6 @@ extension JgpConfiguration {
     /// Engine keys that belong in `EmpoState/mkxp.json`.
     func toMkxpEngineValues() -> MkxpEngineValues {
         MkxpEngineValues(
-            smoothScaling: smoothScaling,
             frameSkip: frameSkip,
             vsync: vsync,
             pathCache: pathCache,
@@ -156,6 +107,7 @@ extension JgpConfiguration {
     /// Engine keys route through `toMkxpEngineValues()` into mkxp.json.
     func toGameSettings() -> GameSettings {
         var s = GameSettings()
+        s.smoothScaling = smoothScaling
         // Intentionally NOT mapping `enablePostloadScripts` onto our
         // `postloadScripts` setting. JoiPlay's flag controls its own
         // JoiPlay-specific postload hooks. Ours controls the engine's

@@ -92,8 +92,16 @@ class AppWindow: UIWindow {
 
     override func safeAreaInsetsDidChange() {
         super.safeAreaInsetsDidChange()
-        let insets = safeAreaInsets
-        mkxp_setSafeAreaInsets(
+        AppWindow.pushSafeAreaInsets()
+    }
+
+    /// The engine keeps a copy of the safe area. The user can rotate
+    /// the device in the library, before any core is open, so this
+    /// reads the live window and `EngineSessionCoordinator.openCore`
+    /// calls it once the core is in.
+    static func pushSafeAreaInsets() {
+        guard EmpoCoreIsOpen() != 0, let insets = instance?.safeAreaInsets else { return }
+        gamecore_setSafeAreaInsets(
             Float(insets.top), Float(insets.bottom),
             Float(insets.left), Float(insets.right)
         )
@@ -103,13 +111,20 @@ class AppWindow: UIWindow {
     /// published by `PlayerView`. `_UIHostingView` is hit-testable
     /// across the full window and owns every SwiftUI gesture, so view
     /// identity cannot distinguish empty game area from chrome.
+    ///
+    /// A presented sheet lives in its own `UITransitionView`, outside
+    /// the root view. Its content is a `HostingView` too, so the rule
+    /// stays limited to the root view tree. Before that limit, a sheet
+    /// row over the game rect sent its tap to the game (iPad, where the
+    /// Menu sheet sits over the game).
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
         guard AppState.shared.phase == .playing else { return hit }
         guard let hit else { return nil }
+        guard let rootView = rootViewController?.view, hit.isDescendant(of: rootView) else { return hit }
 
         let typeName = String(describing: type(of: hit))
-        let isHostingLayer = typeName.contains("Hosting") || hit === rootViewController?.view
+        let isHostingLayer = typeName.contains("Hosting") || hit === rootView
 
         if isHostingLayer {
             if ChromeHitRegions.contains(point) {
@@ -125,7 +140,7 @@ class AppWindow: UIWindow {
             // permissive.
             let gameRect = EngineState.shared.gameRect
             if gameRect.isEmpty || gameRect.contains(point) {
-                return GameViewEmbedder.embeddedView
+                return gameTouchTarget(at: point, with: event)
             }
             return hit
         }
@@ -141,6 +156,16 @@ class AppWindow: UIWindow {
             view = current.superview
         }
         return hit
+    }
+
+    /// The view Empo embedded is the engine's own top view, and the
+    /// view that reads the touch can sit inside it. SFML puts its touch
+    /// view in a container, and the container answers nothing, so a
+    /// touch sent straight to it is lost. SDL's top view reads the touch
+    /// itself and answers with itself here.
+    private func gameTouchTarget(at point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let gameView = GameProcessHost.gameView ?? GameViewEmbedder.embeddedView else { return nil }
+        return gameView.hitTest(convert(point, to: gameView), with: event) ?? gameView
     }
 
     /// Any tap during play wakes the toolbar via
@@ -159,8 +184,10 @@ class AppWindow: UIWindow {
     // Controls handle their own key injection via the bridge.
 
     /// In library/loading: this window must be key for SwiftUI.
-    /// In player: SDL needs key, unless keyboard mode is active or
-    /// an error alert presents (SDL would steal OK taps).
+    /// In player: key only while keyboard mode is active or an alert
+    /// shows. A game in the app needs key for its keys, and SDL would
+    /// steal the OK tap of an alert. A game in its own process gets
+    /// none, so a hardware key does not move SwiftUI focus.
     override var canBecomeKey: Bool {
         let state = AppState.shared
         if state.errorMessage != nil { return true }
@@ -169,7 +196,13 @@ class AppWindow: UIWindow {
         return allowKeyWindow
     }
 
+    static var rootViewController: UIViewController? { instance?.rootViewController }
+
     static var hostView: UIView? { instance?.rootViewController?.view }
+
+    static var currentScreenBounds: CGRect {
+        instance?.windowScene?.screen.bounds ?? .zero
+    }
 
     static var currentSafeArea: EdgeInsets {
         guard let window = instance else { return .init() }
@@ -184,20 +217,27 @@ class AppWindow: UIWindow {
         if allow {
             window.makeKey()
         } else {
-            resignKeyToSDL()
+            resignKeyToGame()
         }
     }
 
-    /// Returns UIKit key-window status to SDL after the overlay
+    /// Gives key-window status back to the game after the overlay
     /// gives up `canBecomeKey` (e.g. loading -> playing).
+    ///
+    /// A game in its own process has no window here, so the overlay
+    /// only ends editing.
     ///
     /// Never hand key status to a keyboard window. Once the system
     /// keyboard has shown, its `UITextEffectsWindow` joins
     /// `scene.windows`, and making it key while the keyboard
     /// dismisses briefly wakes the keyboard's own UI (the Memoji
     /// stickers splash with its "Continue" button).
-    @objc static func resignKeyToSDL() {
+    static func resignKeyToGame() {
         guard let overlay = instance, let scene = overlay.windowScene else { return }
+        guard EngineSessionCoordinator.shared.runner == .app else {
+            overlay.endEditing(true)
+            return
+        }
         let candidates = scene.windows.filter { window in
             guard window !== overlay else { return false }
             let className = String(describing: type(of: window))
@@ -263,11 +303,7 @@ class AppWindow: UIWindow {
         window.makeKeyAndVisible()
         instance = window
 
-        let insets = window.safeAreaInsets
-        mkxp_setSafeAreaInsets(
-            Float(insets.top), Float(insets.bottom),
-            Float(insets.left), Float(insets.right)
-        )
+        pushSafeAreaInsets()
 
         window.overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle
 
@@ -293,10 +329,13 @@ class AppWindow: UIWindow {
         }
     }
 
-    /// Keep AppWindow visible. Reparent SDL's game view here while
-    /// the game plays, so one UIWindow owns the compositing stack.
+    /// Keep AppWindow visible. Reparent the game view of a game in the
+    /// app here while the game plays, so one UIWindow owns the
+    /// compositing stack. GameProcessHost puts the view of a game
+    /// process here itself.
     private static func applyOverlayPresentationMode(window: AppWindow) {
         let playing = AppState.shared.phase == .playing
+        let inApp = EngineSessionCoordinator.shared.runner == .app
 
         if playing {
             window.isHidden = false
@@ -306,7 +345,9 @@ class AppWindow: UIWindow {
             if let root = window.rootViewController?.view {
                 clearPassThroughBackdrop(in: root)
             }
-            GameViewEmbedder.embedWithRetry()
+            if inApp {
+                GameViewEmbedder.embedWithRetry()
+            }
         } else {
             GameViewEmbedder.detach()
             window.isHidden = false

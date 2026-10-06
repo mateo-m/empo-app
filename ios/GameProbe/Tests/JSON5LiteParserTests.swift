@@ -104,9 +104,8 @@ final class JSON5LiteParserTests: XCTestCase {
 
     /// A developer-shipped mkxp.json that uses every JSON5 feature
     /// that json5pp accepts and stock JSONSerialization rejects. The
-    /// `patches` array must survive. The managed-config projection in
-    /// EngineConfigProjector must not drop overlay mounts that the
-    /// engine itself would honor.
+    /// `patches` array must survive. ManagedMkxpConfig must not drop
+    /// overlay mounts that the engine itself would honor.
     func testDevMkxpJsonWithJSON5FeaturesKeepsPatches() {
         let raw = """
             {

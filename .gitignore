@@ -31,15 +31,23 @@ ios/Dependencies/ANGLE/iphonesimulator/include/
 ios/Dependencies/ANGLE/iphonesimulator/lib/
 ios/Dependencies/ANGLE/.fetched-version
 
-# Native deps (OpenSSL/SDL/Ruby/mkxp-merged) — hydrated by
-# tools/fetch-native-deps.sh from empo-deps release assets. Version-pinned
-# via ios/Dependencies/native/.version (tracked).
-ios/Dependencies/native/.fetched-version
+# The mkxp-z core release, fetched by cores/mkxp/fetch.sh.
+# Version-pinned via cores/mkxp/.version (tracked).
+ios/Dependencies/mkxp-core/
+ios/Dependencies/mkxp-core.*
 
-# Engine-core prebuilt (libmkxpz-core.a) — hydrated by
-# tools/fetch-engine-prebuilt.sh from mkxp-z-apple-mobile release assets.
-# Version-pinned via ios/Dependencies/engine/.version (tracked).
-ios/Dependencies/engine/.fetched-version
+# The engine history that tools/changelog-page.ts reads.
+.engine-history/
+
+# The PSDK core release, fetched by cores/psdk/fetch.sh.
+# Version-pinned via cores/psdk/.version (tracked).
+ios/Dependencies/psdk-core/
+ios/Dependencies/psdk-core.*
+
+# The MV/MZ core release, fetched by cores/mvmz/fetch.sh.
+# Version-pinned via cores/mvmz/.version (tracked).
+ios/Dependencies/mvmz-core/
+ios/Dependencies/mvmz-core.*
 
 # MetalANGLE.xcframework - unreferenced by the build, kept untracked
 # in case anything ever needs it. Currently not in the working tree.
@@ -82,14 +90,11 @@ __pycache__/
 # Per-contributor code signing config (see Signing.xcconfig.example)
 ios/Empo/Signing.xcconfig
 
-# Assets.bundle is assembled at build time from engine submodule sources.
+# Assets.bundle is assembled at build time.
 # Only .gitkeep is tracked to preserve the directory.
 ios/Empo/Assets.bundle/*
 !ios/Empo/Assets.bundle/.gitkeep
 
-# Bundled pure-Ruby stdlib, assembled at build time from the prebuilt
-# native-deps tree (see the "Assemble Ruby stdlib" phase in project.yml).
-ios/Empo/Ruby/
 # Node tool caches (CI uses bun + bun.lock instead).
 node_modules/
 
@@ -99,3 +104,4 @@ build/
 # Root-level local object files from ad-hoc builds
 /*.o
 .blume-verify/
+ios/Empo/EmpoFP.xcodeproj/

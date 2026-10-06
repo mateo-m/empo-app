@@ -5,12 +5,3 @@ pre-commit:
       run: "git symbolic-ref -q HEAD >/dev/null || { printf 'pre-commit failed: refusing commit on detached HEAD\n' >&2; exit 1; }"
     checks:
       run: scripts/hooks/pre-commit.sh
-
-pre-push:
-  parallel: false
-  # A script, not a command: lefthook skips a command when its
-  # push-file list is empty, and it drops the submodule path from that
-  # list. See .lefthook/pre-push/submodule-dev-check.
-  scripts:
-    "submodule-dev-check":
-      runner: sh

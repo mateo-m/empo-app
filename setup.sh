@@ -5,32 +5,21 @@
 
 set -e
 
-REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-
 echo "Installing repo-managed git hooks via LeftHook..."
 if ! command -v bun >/dev/null 2>&1; then
     echo "Missing required tool: bun" >&2
     exit 1
 fi
 bun install
-if [ -f "$REPO_ROOT/mkxp-z-apple-mobile/package.json" ]; then
-    (cd "$REPO_ROOT/mkxp-z-apple-mobile" && bun install)
-fi
 echo "Git hooks configured."
 
 echo "Verifying required hook tools..."
-. "$REPO_ROOT/scripts/hooks/ruby-env.sh"
-for tool in swift-format swiftlint clang-format bun shfmt shellcheck bundle; do
+for tool in swift-format swiftlint clang-format bun shfmt shellcheck; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "Missing required tool: $tool" >&2
         exit 1
     fi
 done
 echo "All required hook tools are installed."
-
-if [ -f "$REPO_ROOT/mkxp-z-apple-mobile/Gemfile" ]; then
-    echo "Installing mkxp-z Ruby lint deps..."
-    (cd "$REPO_ROOT/mkxp-z-apple-mobile" && bundle install)
-fi
 
 echo "Done."

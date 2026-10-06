@@ -15,8 +15,7 @@ struct KeyCaptureSheet: View {
             barAction: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(
-                "Press the button on your controller, or the key on your "
-                    + "keyboard, that you want to bind."
+                "Press the controller button or keyboard key you want to bind."
             )
         }
     }

@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// Bottom sheet of secondary in-game actions reachable from the
-/// player toolbar's "Menu" button. Houses options that don't earn a
-/// permanent toolbar slot: pause, cheats, debug overlay, fast
-/// forward. Toggles update host state directly. Tap actions
+/// player toolbar's "More options" button. Houses options that
+/// don't earn a permanent toolbar slot: pause, cheats, debug
+/// overlay, fast forward. Toggles update host state directly. Tap actions
 /// dismiss the sheet via `dismiss()` so the user lands back in the
 /// game.
 ///
@@ -14,8 +14,8 @@ import SwiftUI
 struct PlayerMoreSheet: View {
     /// Display title of the running game. The pause row interpolates
     /// it ("Pause <title>") so the user sees exactly what they act
-    /// on. Falls back to "Game" if `selectedGame` is nil at present
-    /// time.
+    /// on. Falls back to "this game" if `selectedGame` is nil at
+    /// present time.
     let gameTitle: String
     @Binding var showDebugOverlay: Bool
     @Binding var fastForwardActive: Bool
@@ -23,42 +23,26 @@ struct PlayerMoreSheet: View {
     /// fast-forward is off for this game, so the row stays hidden.
     let fastForwardMultiplier: Int?
     let showControllerRemap: Bool
+    /// The core running the game. Rows the core cannot answer stay
+    /// hidden. Nil before a core opens, which the sheet never sees,
+    /// because the toolbar that opens it only exists during a session.
+    let core: (any GameCore)?
     let onControllerRemap: () -> Void
     let onLayoutProfile: () -> Void
     let onPause: () -> Void
+    /// Nil hides the Quit row, for a game that can't end without
+    /// closing Empo.
+    let onQuit: (() -> Void)?
     let onCheats: () -> Void
 
     @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
 
-    @State private var measuredHeight: CGFloat = 0
+    @State private var sheetSize = IntrinsicSheetSize()
+    @State private var confirmQuit = false
 
     private var fastForwardEnabled: Bool {
         (fastForwardMultiplier ?? 0) >= 2
-    }
-
-    /// Whether the sheet would render any actionable row given the
-    /// current settings + per-game state. Mirrors the row-gating
-    /// logic in `body` exactly.
-    ///
-    /// Used by `PlayerToolbar` to hide the Menu button when this
-    /// returns false - otherwise the toolbar offers a button that
-    /// opens an empty sheet, which has been confusing users who
-    /// disable all the experimental features in app settings.
-    static func hasContent(
-        settings: AppSettings,
-        fastForwardMultiplier: Int?,
-        controllerRemapAvailable: Bool = false
-    ) -> Bool {
-        // Cheats and pause graduated from experimental in May 2026
-        // and are now always enabled. Diagnostics overlay and
-        // fast-forward remain user-gated (the former via app
-        // settings, the latter per-game).
-        let cheats = true
-        let fastFwd = (fastForwardMultiplier ?? 0) >= 2
-        let diag = settings.diagnosticsOverlay
-        let pause = true
-        return cheats || fastFwd || diag || pause || controllerRemapAvailable
     }
 
     var body: some View {
@@ -71,11 +55,11 @@ struct PlayerMoreSheet: View {
                     InterleavedRows(
                         separator: { rowSeparator },
                         content: {
-                            // Cheats: graduated from experimental in
-                            // May 2026, always enabled now.
-                            MenuRow(icon: "wand.and.stars", label: "Cheats") {
-                                onCheats()
-                                dismiss()
+                            if core?.supportsCheats == true {
+                                MenuRow(icon: "wand.and.stars", label: "Show cheats") {
+                                    onCheats()
+                                    dismiss()
+                                }
                             }
                             if fastForwardEnabled {
                                 MenuToggleRow(
@@ -92,7 +76,7 @@ struct PlayerMoreSheet: View {
                                 )
                             }
                             if showControllerRemap {
-                                MenuRow(icon: "gamecontroller.fill", label: "Buttons") {
+                                MenuRow(icon: "gamecontroller.fill", label: "Controller buttons") {
                                     onControllerRemap()
                                     dismiss()
                                 }
@@ -128,18 +112,32 @@ struct PlayerMoreSheet: View {
                                 onPause()
                                 dismiss()
                             }
+                            if onQuit != nil {
+                                MenuRow(icon: "xmark", label: "Quit \(gameTitle)", role: .destructive) {
+                                    confirmQuit = true
+                                }
+                            }
                         }
                     )
                 }
                 .clipShape(.rect(cornerRadius: Radius.md))
+                .alert("Quit \"\(gameTitle)\"?", isPresented: $confirmQuit) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Quit", role: .destructive) {
+                        onQuit?()
+                        dismiss()
+                    }
+                } message: {
+                    Text("Progress you haven't saved will be lost.")
+                }
             }
             .padding(Spacing.xl)
-            .intrinsicSheetContent(measuredHeight: $measuredHeight)
+            .intrinsicSheetContent(size: $sheetSize)
             // No outer background: the sheet's translucent material
             // shows through around the row-cards. Painting a solid
             // `systemGroupedBackground` here looked like a flat white
             // panel hovering over the game.
-            .navigationTitle("Menu")
+            .navigationTitle("More")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -147,7 +145,7 @@ struct PlayerMoreSheet: View {
                 }
             }
         }
-        .intrinsicSheetDetent(measuredHeight: measuredHeight)
+        .intrinsicSheetDetent(size: $sheetSize)
     }
 
     /// Hairline separator between rows inside the action group.
@@ -210,6 +208,7 @@ private struct MenuRow: View {
                     .frame(width: 24)
                 Text(label)
                     .foregroundStyle(role == .destructive ? .red : .primary)
+                    .multilineTextAlignment(.leading)
                 Spacer()
             }
             .padding(.horizontal, Spacing.lg)

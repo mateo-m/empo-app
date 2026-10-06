@@ -6,7 +6,8 @@
 	`EMPO_ENTITLEMENTS` at this file in your own Signing.xcconfig. See
 	Signing.xcconfig.example.
 
-	The dict stays empty, and it must not become a missing file. A
+	The dict holds only the app group, and it must not become a
+	missing file. A
 	build with no entitlements file at all signs with no entitlements
 	blob, and a naive resigner then synthesizes an incomplete one that
 	breaks the document picker. Empo.entitlements carries the same
@@ -18,5 +19,9 @@
 -->
 <plist version="1.0">
 <dict>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(EMPO_APP_GROUP)</string>
+	</array>
 </dict>
 </plist>

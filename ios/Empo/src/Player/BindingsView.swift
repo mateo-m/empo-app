@@ -8,6 +8,7 @@ struct BindingsView: View {
     let gameTitle: String
     let manifest: BindingMap?
     var input: SessionInput
+    let actions: PlayerActionRegistry
 
     @Environment(\.dismiss) private var dismiss
 
@@ -67,6 +68,16 @@ struct BindingsView: View {
                         if input.keyboard.hasHadKeyboardThisSession {
                             keyboardSection
                         }
+
+                        if BindingsCatalog.hasOverrides(scope: scope, container: container) {
+                            Section {
+                                Button("Reset to defaults", role: .destructive) {
+                                    showResetConfirm = true
+                                }
+                            } footer: {
+                                Text(resetFooter)
+                            }
+                        }
                     }
                     .listStyle(.insetGrouped)
                     .onChange(of: highlighted) { _, row in
@@ -77,17 +88,11 @@ struct BindingsView: View {
                     }
                 }
             }
-            .navigationTitle("Buttons")
+            .navigationTitle("Controller buttons")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(resetTitle) {
-                        showResetConfirm = true
-                    }
-                    .disabled(!BindingsCatalog.hasOverrides(scope: scope, container: container))
+                    Button("Done") { dismiss() }
                 }
             }
             .alert(resetTitle, isPresented: $showResetConfirm) {
@@ -111,7 +116,9 @@ struct BindingsView: View {
                             scope: scope,
                             container: container,
                             manifest: manifest
-                        )
+                        ),
+                        scope: scope,
+                        actions: actions
                     ) { target in
                         BindingsCatalog.save(
                             source: row.source,
@@ -170,9 +177,8 @@ struct BindingsView: View {
         } footer: {
             Text(
                 """
-                A controller in keyboard mode sends keys, not buttons. \
-                Bind its keys to controller buttons here and every \
-                button binding applies to it.
+                Some controllers send keys instead of buttons. Map \
+                those keys here to reuse your button bindings.
                 """
             )
         }
@@ -189,16 +195,25 @@ struct BindingsView: View {
     }
 
     private var resetTitle: String {
-        scope == .thisGame ? "Reset this game's overrides" : "Reset global overrides"
+        scope == .thisGame ? "Reset buttons for this game?" : "Reset buttons for all games?"
+    }
+
+    private var resetFooter: String {
+        switch scope {
+        case .thisGame:
+            return "Clears the buttons you changed for this game."
+        case .allGames:
+            return "Clears the buttons you changed for all games. Buttons you changed for one game stay."
+        }
     }
 
     private var resetMessage: String {
         switch scope {
         case .thisGame:
-            return
-                "Remove all button overrides for \(gameTitle). Game defaults and global settings will apply again."
+            return "The buttons you changed for \(gameTitle) go back to their defaults. You can't undo this."
         case .allGames:
-            return "Remove every global button change. Empo's defaults apply until you set new buttons."
+            return
+                "The buttons you changed for all games go back to their defaults. Buttons you changed for one game stay. You can't undo this."
         }
     }
 
@@ -230,7 +245,7 @@ struct BindingsView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     if provenance == .gameDefault {
-                        Text("game default")
+                        Text("Game default")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     } else if provenance == .empoDefault {
@@ -264,7 +279,7 @@ struct BindingsView: View {
         provenance: BindingsCatalog.Provenance?
     ) -> some View {
         if provenance == .userOverride {
-            Button("Remove override", role: .destructive) {
+            Button("Reset to default", role: .destructive) {
                 BindingsCatalog.removeOverride(
                     source: row.source,
                     scope: scope,

@@ -47,6 +47,7 @@ struct PlayerView: View {
     /// cheats / fast-forward / debug-overlay so the toolbar itself
     /// stays trimmed to keyboard / edit / hide / more.
     @State private var showMoreSheet = false
+    @State private var sheetAction: SheetAction?
     @State private var showControllerRemap = false
     @State private var showLayoutProfilePicker = false
 
@@ -155,16 +156,12 @@ struct PlayerView: View {
                         safeArea: safeArea,
                         geoSize: geo.size,
                         controlsHidden: controlsHidden,
+                        keyboardShown: keyboardMode,
                         toolbarOpacity: toolbarOpacity,
                         onToggleKeyboard: { toggleKeyboard() },
                         onToggleEditMode: { toggleEditMode() },
                         onToggleHideControls: { toggleHideControls() },
                         onShowMore: { showMoreSheet = true },
-                        menuVisible: PlayerMoreSheet.hasContent(
-                            settings: settings,
-                            fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
-                            controllerRemapAvailable: input.hasSeenPhysicalInput
-                        ),
                         onResetIdleTimer: { resetToolbarIdleTimer() }
                     )
                     .opacity(editMode ? 0 : 1)
@@ -206,6 +203,14 @@ struct PlayerView: View {
                     )
                 )
                 .allowsHitTesting(showDebugOverlay)
+                .onChange(of: appState.selectedGame?.title, initial: true) { _, title in
+                    // The RPG Maker XP, VX and VX Ace core reads the title
+                    // from Game.ini and wins once it lands. The PSDK core reports no
+                    // title, so the library name is all the overlay gets.
+                    if !debugOverlayState.metadataLoaded, let title {
+                        debugOverlayState.gameTitle = title
+                    }
+                }
 
                 // Stays mounted in both keyboard states. Removing the
                 // field while it is first responder kills the input
@@ -234,10 +239,10 @@ struct PlayerView: View {
                 // replaced their default profile.
                 if layout.gameLayoutNoticePending && !editMode && !layout.importOfferPending {
                     noticeCapsule(hitRegionKey: "gameLayoutNotice", safeArea: safeArea) {
-                        Text("This game comes with its own control layout. It is now active.")
+                        Text("This game's own control layout is now active.")
                             .font(.footnote)
                             .foregroundStyle(.white)
-                        Button("OK") {
+                        Button("Got it") {
                             layout.dismissGameLayoutNotice()
                         }
                         .font(.footnote.weight(.semibold))
@@ -249,7 +254,7 @@ struct PlayerView: View {
                 // folder waits for the user's import decision.
                 if layout.importOfferPending && !editMode {
                     noticeCapsule(hitRegionKey: "importOffer", safeArea: safeArea) {
-                        Text("This game's folder has a controls file.")
+                        Text("This game includes its own control layout.")
                             .font(.footnote)
                             .foregroundStyle(.white)
                         Button("Import as profile") {
@@ -398,9 +403,9 @@ struct PlayerView: View {
                 startSnapshotFade()
             }
         }
-        .sheet(isPresented: $showMoreSheet) {
+        .sheet(isPresented: $showMoreSheet, onDismiss: runSheetAction) {
             PlayerMoreSheet(
-                gameTitle: appState.selectedGame?.title ?? "Game",
+                gameTitle: appState.selectedGame?.title ?? "this game",
                 showDebugOverlay: $showDebugOverlay,
                 fastForwardActive: Binding(
                     get: { actions.runtime.fastForwardActive },
@@ -408,9 +413,11 @@ struct PlayerView: View {
                 ),
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: input.hasSeenPhysicalInput,
+                core: EngineSessionCoordinator.shared.openedCore,
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
-                onPause: { appState.requestPause() },
+                onPause: { sheetAction = .pause },
+                onQuit: appState.canQuitGame ? { sheetAction = .quit } : nil,
                 onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) }
             )
         }
@@ -422,9 +429,10 @@ struct PlayerView: View {
         .sheet(isPresented: $showControllerRemap) {
             BindingsView(
                 container: layout.currentContainer,
-                gameTitle: appState.selectedGame?.title ?? "Game",
+                gameTitle: appState.selectedGame?.title ?? "this game",
                 manifest: layout.activeManifest?.bindings,
-                input: input
+                input: input,
+                actions: actions
             )
         }
         .onChange(of: showMoreSheet) { _, opened in
@@ -440,6 +448,7 @@ struct PlayerView: View {
         .tint(nil)
         .controlsEditDialogs(
             layout: layout,
+            actions: actions,
             showAddSheet: $showAddSheet,
             showResetConfirm: $showResetConfirm,
             editingButton: $editingButton,
@@ -614,9 +623,9 @@ struct PlayerView: View {
         // The shared preset calculator holds the ONE copy of the
         // fit-and-align math.
         let preset: ScreenPreset
-        switch mkxp_getVerticalAlignment() {
-        case MKXP_VALIGN_TOP: preset = .top
-        case MKXP_VALIGN_CENTER: preset = .center
+        switch gamecore_getVerticalAlignment() {
+        case GAMECORE_VALIGN_TOP: preset = .top
+        case GAMECORE_VALIGN_CENTER: preset = .center
         default: preset = .topCenter
         }
         let safeArea = AppWindow.currentSafeArea
@@ -637,15 +646,17 @@ struct PlayerView: View {
         if layout.manifestRejectionErrorCount > 0 {
             let errorCount = layout.manifestRejectionErrorCount
             let errorLabel = errorCount == 1 ? "error" : "errors"
-            return "This game ships a controls.json with \(errorCount) \(errorLabel). See Logs."
+            return
+                "This game's controls file has \(errorCount) \(errorLabel), so Empo used its own layout. Open Logs for details."
         }
         if layout.profileRejectionErrorCount > 0 {
             let errorCount = layout.profileRejectionErrorCount
             let errorLabel = errorCount == 1 ? "error" : "errors"
-            return "The pinned profile has \(errorCount) \(errorLabel). See Logs."
+            return
+                "Your layout profile has \(errorCount) \(errorLabel), so Empo used its own layout. Open Logs for details."
         }
         if layout.pinFellThrough {
-            return "The pinned layout is missing. This game uses the next layout in line."
+            return "That layout profile is gone, so this game is using the Empo default."
         }
         return nil
     }
@@ -715,6 +726,23 @@ struct PlayerView: View {
         .transition(.opacity)
     }
 
+    private enum SheetAction {
+        case pause, quit
+    }
+
+    /// The pause and the quit remove this view. When they run while
+    /// the More sheet is still on screen, SwiftUI can keep the view
+    /// after the game ended, so they wait until the sheet is gone.
+    private func runSheetAction() {
+        let action = sheetAction
+        sheetAction = nil
+        switch action {
+        case .pause: appState.requestPause()
+        case .quit: appState.quitGame()
+        case nil: break
+        }
+    }
+
     private func toggleEditMode() {
         let entering = !editMode
         if entering && controlsHidden {
@@ -754,8 +782,8 @@ struct PlayerView: View {
         var covered = Set<Int32>()
         if !controlsHidden {
             covered.formUnion([
-                Int32(MKXP_SCANCODE_UP), Int32(MKXP_SCANCODE_DOWN),
-                Int32(MKXP_SCANCODE_LEFT), Int32(MKXP_SCANCODE_RIGHT),
+                Int32(GAMECORE_SCANCODE_UP), Int32(GAMECORE_SCANCODE_DOWN),
+                Int32(GAMECORE_SCANCODE_LEFT), Int32(GAMECORE_SCANCODE_RIGHT),
             ])
             for button in layout.buttons {
                 covered.insert(button.scancode)

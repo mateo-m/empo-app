@@ -5,7 +5,8 @@ import SwiftUI
 /// one-surface background, intrinsic sizing, brand tint - and the
 /// `Sheet*` pieces below are the building blocks its content
 /// composes. A sheet built from these cannot spell the chrome
-/// wrong. The rules they encode live in `ios/Empo/docs/sheet-design.md`.
+/// wrong. The rules they encode live in the Sheets section of
+/// `ios/Empo/docs/design-system.md`.
 ///
 /// Composition works like slots: the sheet declares WHAT it
 /// shows, the vocabulary decides HOW it looks.
@@ -70,7 +71,7 @@ struct StandardSheet<Content: View>: View {
     var barAction: SheetBarAction?
     @ViewBuilder var content: Content
 
-    @State private var measuredHeight: CGFloat = 0
+    @State private var sheetSize = IntrinsicSheetSize()
 
     var body: some View {
         switch surface {
@@ -100,7 +101,7 @@ struct StandardSheet<Content: View>: View {
                         .hidden()
                         .accessibilityHidden(true)
                         .transaction { $0.animation = nil }
-                        .intrinsicSheetContent(measuredHeight: $measuredHeight)
+                        .intrinsicSheetContent(size: $sheetSize)
                 }
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -109,7 +110,7 @@ struct StandardSheet<Content: View>: View {
         // clipping on, the scroll view cuts the old step off in one
         // frame. With it off, the sheet's moving edge does the cut.
         .scrollClipDisabled()
-        .intrinsicSheetDetent(measuredHeight: measuredHeight, chromeAllowance: 0)
+        .intrinsicSheetDetent(size: $sheetSize, chromeAllowance: 0)
         .tint(.brand)
     }
 

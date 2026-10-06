@@ -6,6 +6,10 @@ import SwiftUI
 enum GamePhase: Equatable {
     case loading
     case playing
+    /// The game closed itself, or stopped with an error. `started` is
+    /// false when that happened before its first frame.
+    /// `GameLoadingView` says which.
+    case ended(clean: Bool, started: Bool)
 }
 
 @MainActor @Observable
@@ -16,16 +20,11 @@ class AppState {
     var selectedGame: GameEntry?
     var errorMessage: String?
     /// A deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
-    /// The engine thread blocks in `mkxp_presentInfoAndWait()` until
-    /// the user dismisses RootView's info alert. The game then
+    /// The core blocks its game thread until the user dismisses
+    /// RootView's info alert. The game then
     /// continues to run, so the alert shows no restart framing.
     var infoMessage: String?
     var engineReady = false
-    /// Becomes true when an error alert fires during a `.loading`
-    /// session. Stays true until the next `selectGame`. The loading
-    /// view reads this after the user dismisses the alert, then
-    /// switches from the spinner to the error content.
-    var sessionHadError = false
     /// The latest release-check result for sideload/dev builds.
     /// `RootView` fills it at launch. Settings and the library banner
     /// read it.
@@ -67,6 +66,7 @@ class AppState {
         GameContainerMigration.migrateLegacyContainersIfNeeded()
         SaveMigration.migrateAllDiscoveredGamesIfNeeded()
         DataDirectory.healPreLiteralChainsAtLaunch()
+        DataDirectory.removeEmptyFolders()
         session = EngineSessionCoordinator.shared
         session.delegate = self
     }
@@ -78,14 +78,15 @@ class AppState {
             return
         }
 
-        guard phase == nil, pauseManager.pausedGame == nil else { return }
-        guard let container = game.container else { return }
+        guard phase == nil, pauseManager.pausedGame == nil, resumeTask == nil else { return }
+        guard let container = game.container,
+            let core = GameCores.core(forGameAt: container.gameURL), core.isInThisBuild
+        else { return }
         SaveMigration.migrateLegacySavesIfNeeded(for: container)
         // The hard stop of 7.6. A restore in flight stops at once,
         // and it keeps its record and its staged blobs.
         RestoreCoordinator.shared.stopForGameLaunch()
         selectedGame = game
-        sessionHadError = false
         // Bind the controls layout to this game so edits during play
         // persist to this game's layout profile.
         ControlsLayout.shared.switchGame(id: game.id, container: container, title: game.title)
@@ -99,42 +100,24 @@ class AppState {
         // .session-active, etc.). `Logs/` and `Metadata/` complete
         // the per-game tree.
         try? container.ensureSubdirs()
-        let gameDir = container.gameURL
-        // Every game gets a shared Documents/Data/<org>/<app>/ data
-        // directory. This mirrors how desktop mkxp-z resolves
-        // dataPathOrg/dataPathApp through SDL_GetPrefPath for every
-        // game, declared or not.
         // The engine compares this path against getcwd output, so
         // it must receive the symlink-resolved spelling (see
         // `engineSpelling` for the /var vs /private/var trap).
-        let userDataDir = DataDirectory.engineSpelling(
-            of: DataDirectory.resolveAndPrepare(for: container))
+        let userDataDir = DataDirectory.resolveAndPrepare(for: container, core: core)
+            .map(DataDirectory.engineSpelling(of:))
         let stateDir = container.empoStateURL
 
-        GameSettings.migrateLegacyEngineSettingsIfNeeded(
-            stateDirectory: stateDir,
-            gameDirectory: gameDir
-        )
-        ManagedMkxpConfig.removeLegacyEngineConfigDirectory(in: stateDir)
+        ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDir)
 
-        var settings = GameSettings.load(from: stateDir)
-        var metadata = GameMetadata.load(from: container)
-        GameSession.refreshMetadataIfNeeded(
-            settings: settings,
-            metadata: &metadata,
-            container: container,
-            forceRefresh: true
-        )
+        let settings = GameSettings.load(from: stateDir)
 
         session.configureEngine(
             GameSession.LaunchInput(
                 game: game,
                 container: container,
-                gameDir: gameDir,
-                stateDir: stateDir,
                 userDataDir: userDataDir,
+                core: core,
                 settings: settings,
-                metadata: metadata,
                 debugLogsEnabled: AppSettings.shared.debugLogs
             )
         )
@@ -146,33 +129,83 @@ class AppState {
         }
     }
 
+    /// True when the paused game can end, so another game can start
+    /// in its place (`ios/Empo/docs/multi-session.md`).
+    var canKillPausedGame: Bool {
+        PauseManager.shared.pausedGame != nil && session.canEndGame
+    }
+
+    func killPausedGame() {
+        guard canKillPausedGame, let paused = PauseManager.shared.pausedGame else { return }
+        session.note("The paused game closes.")
+        session.killSession(of: paused)
+        clearEndedGame()
+    }
+
+    /// True when a game that loads too long or stops responding can
+    /// end at once. Only a game process can: Empo ends it, and nothing
+    /// of it stays in the app.
+    var canEndStuckGame: Bool {
+        session.runner == .gameProcess
+    }
+
+    func cancelLoading() {
+        guard canEndStuckGame, phase == .loading else { return }
+        session.note("The player stopped the loading.")
+        session.recordSessionPlayTime(for: selectedGame)
+        session.killSession(of: selectedGame)
+        clearEndedGame()
+        phase = nil
+    }
+
+    /// A hung core cannot pause, so its process ends at once.
+    func endStuckGame() {
+        guard canEndStuckGame else { return }
+        session.note("The game stopped responding, and Empo ended it.")
+        session.recordSessionPlayTime(for: activeSessionGame)
+        session.killSession(of: activeSessionGame)
+        clearEndedGame()
+        phase = nil
+    }
+
+    /// True when the game ended and can leave the app, so the user
+    /// can go back to the library and start another game.
+    var canLeaveEndedGame: Bool {
+        guard case .ended = phase else { return false }
+        return session.canEndGame
+    }
+
+    func leaveEndedGame() {
+        guard canLeaveEndedGame else { return }
+        session.killSession(of: nil)
+        phase = nil
+    }
+
+    @ObservationIgnored private var quitOnPause = false
+    @ObservationIgnored private var resumeTask: Task<Void, Never>?
+
+    /// Pauses the game, so the library comes back the same way, and
+    /// kills it once the core says it paused. The game is never marked
+    /// paused: the library draws that mark at once, and a mark cleared
+    /// in the same turn stayed on the Continue playing card.
+    var canQuitGame: Bool {
+        phase == .playing && session.canEndGame
+    }
+
+    func quitGame() {
+        guard canQuitGame else { return }
+        quitOnPause = true
+        requestPause()
+    }
+
     private var activeSessionGame: GameEntry? {
         selectedGame ?? PauseManager.shared.pausedGame
     }
-
-    /// Body text for when the engine signals a clean exit
-    /// (Ruby `SystemExit` / `Reset`) mid-session. Sources: the
-    /// game's built-in "Exit to desktop" menu, or postload scripts
-    /// that raise Reset after they compile data files.
-    /// Cross-session play is disabled (`ios/Empo/docs/multi-session.md`), so
-    /// we cannot safely return to the library and launch another
-    /// game in the same process. The user has to force-close and
-    /// reopen. RootView appends "Close Empo from the app switcher
-    /// and reopen it to continue." so the body reads as one natural
-    /// sentence.
-    private static let cleanExitMessage = "The game has ended or requested a restart."
 
     func consumeCrashRecovery() {
         if let message = session.consumeCrashRecovery() {
             errorMessage = message
         }
-    }
-
-    func dismissCrashRecovery() {
-        // No-op: CrashTracker.init already cleaned up stale markers
-        // at app launch. The recovery flag is only an in-memory bool
-        // that consumeRecovery flips.
-        errorMessage = nil
     }
 
     // MARK: - Pause lifecycle
@@ -208,6 +241,15 @@ class AppState {
     func handlePause(snapshot: UIImage?) {
         guard phase == .playing else { return }
         if EngineState.shared.isBackgroundPause { return }
+        if quitOnPause {
+            session.note("The player quit the game.")
+            session.killSession(of: selectedGame)
+            clearEndedGame()
+            withAnimation(Motion.snappy) {
+                phase = nil
+            }
+            return
+        }
         let pm = PauseManager.shared
         pm.pauseSnapshot = snapshot
         pm.pausedGame = selectedGame
@@ -221,10 +263,8 @@ class AppState {
     /// PlayerView picks it up as a fade-out overlay, so there is no
     /// flash at handoff.
     ///
-    /// The `pm.pausedGame == nil` guard in the Task keeps a stray
-    /// `phase = .playing` out after the session ends mid-resume.
-    /// Before the guard, the chained asyncAfter calls could race
-    /// past the teardown and put the app back into .playing with no
+    /// A teardown cancels `resumeTask`, so a session that ends
+    /// mid-resume does not put the app back into .playing with no
     /// game loaded.
     func resumePausedGame() {
         let pm = PauseManager.shared
@@ -234,11 +274,12 @@ class AppState {
         session.requestResume()
         session.resumeSessionTiming(for: activeSessionGame)
 
-        Task { @MainActor [weak self] in
+        resumeTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(350))
-            guard let self, pm.pausedGame == nil else { return }
+            guard let self, !Task.isCancelled else { return }
+            self.resumeTask = nil
             self.phase = .playing
-            AppWindow.resignKeyToSDL()
+            AppWindow.resignKeyToGame()
             // The frame-rendered callback in EngineSessionCoordinator
             // also flips `snapshotCanFade` once the engine has drawn
             // a real frame. This timed fallback guarantees the
@@ -280,15 +321,19 @@ class AppState {
     }
 }
 
-// MARK: - RTP launch warning
+// MARK: - Missing game core
 
 extension AppState {
-    /// True when the game declares RTP in `Game.ini` but Empo has no
-    /// configured RTP paths. `GameLibraryView` warns before launch.
-    /// The user can continue anyway.
-    static func needsRTPLaunchWarning(for container: GameContainer) -> Bool {
-        guard !RTPAvailability.isConfigured else { return false }
-        return GameRTPRequirement.detect(at: container.gameURL) != nil
+    /// The core the game needs, when this build does not carry it, and
+    /// nil when it does. `GameLibraryView` refuses the tap.
+    ///
+    /// Import refuses such a game too, so this covers a library the user
+    /// filled with a build that had more cores.
+    static func missingCore(for container: GameContainer) -> (any GameCore)? {
+        guard let core = GameCores.core(forGameAt: container.gameURL), !core.isInThisBuild else {
+            return nil
+        }
+        return core
     }
 }
 
@@ -308,28 +353,20 @@ extension AppState: EngineSessionCoordinatorDelegate {
     }
 
     func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool) {
+        // We intentionally do NOT set phase = nil here. If phase
+        // becomes nil while an error alert already presents, SwiftUI
+        // swallows the NavigationStack pop.
+        phase = .ended(clean: cleanExit, started: phase == .playing)
+        clearEndedGame()
+    }
+
+    private func clearEndedGame() {
         // The backup backbone of SPEC 7.3 runs at session end. The
         // game goes away below, so read it first.
         let played = activeSessionGame
-        // Both clean and crash exits surface an alert that routes
-        // through RootView's dismiss-only branch (phase != nil).
-        // Cross-session play is disabled (`ios/Empo/docs/multi-session.md`),
-        // so we cannot safely return to the library and launch
-        // another game in the same process. To play again, the user
-        // must force-close from the app switcher.
-        //
-        // We intentionally do NOT set phase = nil here. If phase
-        // becomes nil while an error alert already presents, SwiftUI
-        // swallows the NavigationStack pop. Phase stays non-nil, so
-        // the alert OK button sees phase != nil and routes through
-        // the dismiss-only handler.
-        if errorMessage == nil {
-            errorMessage =
-                cleanExit ? Self.cleanExitMessage : EngineSessionCoordinator.crashMessage
-        }
-        if phase == .loading {
-            sessionHadError = true
-        }
+        quitOnPause = false
+        resumeTask?.cancel()
+        resumeTask = nil
         selectedGame = nil
         // Unbind the controls layout. Library-screen UI that reads
         // it then sees a neutral default, and mutations (they should
@@ -345,6 +382,14 @@ extension AppState: EngineSessionCoordinatorDelegate {
         BackupScheduler.shared.playSessionDidEnd(game: played)
     }
 
+    func coordinatorPausedGameStopped() {
+        // A game in the resume transition is no longer paused, and the
+        // library still shows.
+        guard resumeTask != nil else { return killPausedGame() }
+        session.killSession(of: selectedGame)
+        clearEndedGame()
+    }
+
     func coordinatorGameRectDidChange(_ rect: CGRect) {
         let engineState = EngineState.shared
         if engineState.gameRect != rect {
@@ -353,6 +398,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
     }
 
     func coordinatorDidReportEngineError(_ message: String) {
+        session.note("Error shown: \(message)")
         errorMessage = message
     }
 

@@ -17,6 +17,7 @@ protocol EngineSessionCoordinatorDelegate: AnyObject {
     func coordinatorDidReportEngineError(_ message: String)
     func coordinatorDidReportEngineInfo(_ message: String)
     func coordinatorEngineDidPause(snapshot: UIImage?)
+    func coordinatorPausedGameStopped()
 }
 
 @MainActor
@@ -28,7 +29,11 @@ final class EngineSessionCoordinator {
     private let crashTracker = CrashTracker()
     private let sessionLogger = SessionLogger()
     private var textInputModeHandler: ((Bool) -> Void)?
-    private var inputBridgesInstalled = false
+    /// The core `openCore` opened, or nil before it runs. The player
+    /// UI reads this to hide a row the running core does not answer.
+    private(set) var openedCore: (any GameCore)?
+    /// Where the game of `openedCore` runs.
+    private(set) var runner: GameRunner = .app
     /// Per-scancode press start times. Light taps release before the
     /// RGSS thread observes a pressed-edge. We defer KEYUP until the
     /// key has been down for at least one frame (~16ms @ 60fps, with
@@ -45,37 +50,107 @@ final class EngineSessionCoordinator {
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
 
     static let crashMessage =
-        "The game did not exit cleanly last time. "
-        + "Your save data should be fine."
+        "The game crashed last time. Your saves are safe. "
+        + "Open it again to keep playing."
 
     private init() {
         sessionLogger.onPlayTimeFlushed = { gameID in
             GameLibrary.shared.refreshGameEntry(id: gameID)
         }
-        // Game scripts see `$userAgent = "empo"` and `$empo = true`,
-        // alongside the engine's JoiPlay-compat `$joiplay`.
-        mkxp_setLauncherIdentity("empo")
-        // TLS trust store for the engine's networking (native HTTP
-        // client + Ruby openssl via SSL_CERT_FILE). Without it, TLS
-        // fails closed. Plain http still works. CABundleStore keeps
-        // the store refreshed silently. The native client re-reads
-        // the path on each request, so a refresh that lands mid-run
-        // applies to that side immediately (Ruby picks it up next
-        // session).
-        if let caPath = CABundleStore.effectivePath {
-            mkxp_setCABundlePath(caPath)
-        } else {
-            // Bundle assembly must have skipped the CA store. Catch
-            // it in development. In release, fail closed (no TLS).
-            assertionFailure("cacert.pem missing from Assets.bundle")
-        }
         CABundleStore.refreshIfStale {
-            if let caPath = CABundleStore.effectivePath {
-                mkxp_setCABundlePath(caPath)
+            EngineSessionCoordinator.shared.pushCABundlePath()
+        }
+        EmpoGameProcessClient.setEventHandler { text in
+            Task { @MainActor in
+                EngineSessionCoordinator.shared.note(text)
             }
         }
+    }
+
+    /// Adds a line to the log of the running session.
+    func note(_ text: String) {
+        sessionLogger.note(text)
+    }
+
+    /// Opens `core`, then pushes the launcher state into it.
+    ///
+    /// The folder picks the core (`GameCores.core(forGameAt:)`). Nothing
+    /// is stored in the library entry, so a game imported before a core
+    /// existed still picks the right one.
+    ///
+    /// A game whose core cannot kill its session runs in a new game
+    /// process (`GameProcessHost`) when
+    /// `AppSettings.rubyGameRunnerThisLaunch` says so. Then the app
+    /// sends each `gamecore_*` call to it (`GameProcessClient.m`). Any
+    /// other game runs in the app, in a core that the app opens. Every
+    /// `gamecore_*` name resolves through a forwarder
+    /// (`AppCoreForwarders.c`) that does one of the two. A call before
+    /// a core opens in the app aborts, on purpose, because a silent
+    /// no-op would hide it.
+    ///
+    /// A game starts only after `killSession` ended the one before it
+    /// (`AppState.killPausedGame`).
+    func openCore(_ core: any GameCore) {
+        runner = core.canKillSession ? .app : AppSettings.rubyGameRunnerThisLaunch
+        EmpoCoreUseGameProcess(runner == .gameProcess)
+        switch runner {
+        case .gameProcess:
+            GameProcessHost.start(framework: core.framework)
+        case .app:
+            // AppState.selectGame refuses a game whose core this build
+            // does not carry, so a failed open is a broken bundle or a
+            // game that was not killed.
+            guard let binary = core.binaryURL, EmpoCoreOpen(binary.path) != 0 else {
+                fatalError("\(core.framework) cannot open. The log says why.")
+            }
+            if let openedCore, openedCore.framework == core.framework { return }
+        }
+        openedCore = core
+        NSLog("[empo] core opened: %@", core.framework)
+
+        // Game scripts see `$userAgent = "empo"` and `$empo = true`,
+        // alongside the engine's JoiPlay-compat `$joiplay`.
+        gamecore_setLauncherIdentity("empo")
+        pushCABundlePath()
+        AppSettings.shared.pushToCore()
+        AppWindow.pushSafeAreaInsets()
         registerBridgeCallbacks()
-        installInputBridgesIfNeeded()
+    }
+
+    /// TLS trust store for the engine's networking (native HTTP client
+    /// plus Ruby openssl through SSL_CERT_FILE). Without it, TLS fails
+    /// closed. Plain http still works. CABundleStore keeps the store
+    /// refreshed silently. The native client re-reads the path on each
+    /// request, so a refresh that lands mid-run applies to that side
+    /// immediately, and Ruby picks it up next session.
+    private func pushCABundlePath() {
+        guard openedCore != nil else { return }
+        if let caPath = CABundleStore.effectivePath {
+            gamecore_setCABundlePath(caPath)
+        } else {
+            // Bundle assembly must have skipped the CA store. Catch it
+            // in development. In release, fail closed (no TLS).
+            assertionFailure("cacert.pem missing from Assets.bundle")
+        }
+    }
+
+    /// Kills a paused or ended game, so that the next one can start.
+    /// The pause or the end already recorded its play time.
+    func killSession(of game: GameEntry?) {
+        if let container = game?.container {
+            crashTracker.removeMarker(for: container)
+        }
+        clearPendingKeyHolds()
+        switch runner {
+        case .gameProcess: GameProcessHost.end()
+        case .app: EmpoCoreKillSession()
+        }
+    }
+
+    /// True when `killSession` can end the open game, so that another
+    /// can start. A Ruby game in the app holds the app until it closes.
+    var canEndGame: Bool {
+        runner == .gameProcess || openedCore?.canKillSession == true
     }
 
     func consumeCrashRecovery() -> String? {
@@ -85,6 +160,7 @@ final class EngineSessionCoordinator {
     }
 
     func configureEngine(_ input: GameSession.LaunchInput) {
+        openCore(input.core)
         GameSession.configureEngine(
             input,
             crashTracker: crashTracker,
@@ -96,23 +172,40 @@ final class EngineSessionCoordinator {
         GameSaveWatch.shared.beginSession(container: input.container)
     }
 
-    /// Hands the RGSS thread its game path.
+    /// Hands the engine its game path and starts it.
     ///
-    /// There is no wait for an earlier session to tear down. Empo
-    /// plays one game for each process, per `ios/Empo/docs/multi-session.md`,
-    /// and `selectGame` refuses a second launch while a game is
-    /// paused or an exit alert is up. So the thread is always parked
-    /// in `waitForGamePath` when this runs.
+    /// The path goes in first. The core reads it as the first step of
+    /// `gamecore_run_app`, so a path that is already set lets it run
+    /// straight through.
+    ///
+    /// In the app, `RunLoop.main.perform`, not a main queue block.
+    /// `EmpoCoreRunEngine` holds the main thread until the game ends,
+    /// and a main queue block would stop that queue from draining for
+    /// the whole session. The header on `EmpoCoreRunEngine` says what
+    /// breaks.
     func launchGamePath(_ path: String) {
-        mkxp_setGamePath(path)
+        gamecore_setGamePath(path)
+        switch runner {
+        case .gameProcess:
+            _ = gamecore_run_app(0, nil)
+        case .app:
+            Task {
+                // A game process ends a moment after `end`, and the
+                // next game must not run beside it.
+                await GameProcessHost.waitForExit()
+                RunLoop.main.perform {
+                    _ = EmpoCoreRunEngine()
+                }
+            }
+        }
     }
 
     func requestPause() {
-        mkxp_requestPause()
+        gamecore_requestPause()
     }
 
     func requestResume() {
-        mkxp_requestResume()
+        gamecore_requestResume()
     }
 
     func recordSessionPlayTime(for game: GameEntry?) {
@@ -180,21 +273,21 @@ final class EngineSessionCoordinator {
         if pressed {
             pendingKeyReleases.removeValue(forKey: scancode)?.cancel()
             keyPressStartedAt[scancode] = .now
-            mkxp_injectKeyEvent(scancode, 1)
+            gamecore_injectKeyEvent(scancode, 1)
             return
         }
 
         pendingKeyReleases.removeValue(forKey: scancode)?.cancel()
 
         guard let started = keyPressStartedAt[scancode] else {
-            mkxp_injectKeyEvent(scancode, 0)
+            gamecore_injectKeyEvent(scancode, 0)
             return
         }
 
         let held = ContinuousClock.now - started
         if held >= Self.minimumKeyHold {
             keyPressStartedAt.removeValue(forKey: scancode)
-            mkxp_injectKeyEvent(scancode, 0)
+            gamecore_injectKeyEvent(scancode, 0)
             return
         }
 
@@ -204,7 +297,7 @@ final class EngineSessionCoordinator {
             guard !Task.isCancelled else { return }
             self.keyPressStartedAt.removeValue(forKey: scancode)
             self.pendingKeyReleases.removeValue(forKey: scancode)
-            mkxp_injectKeyEvent(scancode, 0)
+            gamecore_injectKeyEvent(scancode, 0)
         }
     }
 
@@ -222,7 +315,7 @@ final class EngineSessionCoordinator {
         }
         pendingKeyReleases.removeAll()
         for scancode in keyPressStartedAt.keys {
-            mkxp_injectKeyEvent(scancode, 0)
+            gamecore_injectKeyEvent(scancode, 0)
         }
         keyPressStartedAt.removeAll()
         // A holder left behind would make the next session's first
@@ -231,35 +324,30 @@ final class EngineSessionCoordinator {
         keyHolders.removeAll()
     }
 
-    private func installInputBridgesIfNeeded() {
-        guard !inputBridgesInstalled else { return }
-        inputBridgesInstalled = true
-
-        mkxp_setTextInputModeCallback(
+    private func registerBridgeCallbacks() {
+        gamecore_setTextInputModeCallback(
             { active, _ in
                 let on = active != 0
                 Task { @MainActor in
                     EngineSessionCoordinator.shared.textInputModeHandler?(on)
                 }
             }, nil)
-    }
 
-    private func registerBridgeCallbacks() {
-        mkxp_setFrameRenderedCallback(
+        gamecore_setFrameRenderedCallback(
             { _ in
                 Task { @MainActor in
                     EngineSessionCoordinator.shared.delegate?.coordinatorFrameRendered()
                 }
             }, nil)
 
-        mkxp_setEngineTerminatedCallback(
+        gamecore_setEngineTerminatedCallback(
             { _ in
                 Task { @MainActor in
                     EngineSessionCoordinator.shared.handleEngineTerminated()
                 }
             }, nil)
 
-        mkxp_setGameRectChangedCallback(
+        gamecore_setGameRectChangedCallback(
             { x, y, w, h, _ in
                 let newRect = CGRect(
                     x: CGFloat(x), y: CGFloat(y), width: CGFloat(w), height: CGFloat(h))
@@ -269,7 +357,7 @@ final class EngineSessionCoordinator {
                 }
             }, nil)
 
-        mkxp_setErrorMessageCallback(
+        gamecore_setErrorMessageCallback(
             { msg, _ in
                 guard let msg else { return }
                 let message = String(cString: msg)
@@ -280,7 +368,7 @@ final class EngineSessionCoordinator {
                 }
             }, nil)
 
-        mkxp_setInfoMessageCallback(
+        gamecore_setInfoMessageCallback(
             { msg, _ in
                 guard let msg else { return }
                 let message = String(cString: msg)
@@ -291,7 +379,7 @@ final class EngineSessionCoordinator {
                 }
             }, nil)
 
-        mkxp_setPausedCallback(
+        gamecore_setPausedCallback(
             { _ in
                 let snapshot = EngineSessionCoordinator.capturePauseSnapshot()
                 Task { @MainActor in
@@ -300,7 +388,7 @@ final class EngineSessionCoordinator {
                 }
             }, nil)
 
-        mkxp_setResumedCallback({ _ in }, nil)
+        gamecore_setResumedCallback({ _ in }, nil)
     }
 
     private func handleEngineTerminated() {
@@ -311,23 +399,27 @@ final class EngineSessionCoordinator {
         }
         GameLibrary.shared.reload()
 
-        // The app never asks the engine to terminate: Empo plays one
-        // game for each process, per `ios/Empo/docs/multi-session.md`. So
-        // every termination comes from the game itself or from a
-        // crash, and both surface the alert.
+        // `killSession` does not report here. So every termination
+        // comes from the game itself or from a crash of its process,
+        // and both surface the alert. The system can also stop the
+        // process of a paused game while Empo is in the background.
         if delegate?.coordinatorPhase != nil {
-            let cleanExit = mkxp_didEngineExitCleanly() != 0
+            let cleanExit = gamecore_didEngineExitCleanly() != 0
+            note(cleanExit ? "The game closed itself." : "The game stopped.")
             delegate?.coordinatorEngineTerminatedUnexpectedly(cleanExit: cleanExit)
+        } else if runner == .gameProcess {
+            note("The game process of the paused game stopped.")
+            delegate?.coordinatorPausedGameStopped()
         }
     }
 
     private static func capturePauseSnapshot() -> UIImage? {
         var w: Int32 = 0
         var h: Int32 = 0
-        guard mkxp_getSnapshotSize(&w, &h), w > 0, h > 0 else { return nil }
+        guard gamecore_getSnapshotSize(&w, &h), w > 0, h > 0 else { return nil }
         let totalBytes = Int(w) * Int(h) * 4
         var buffer = [UInt8](repeating: 0, count: totalBytes)
-        guard mkxp_copySnapshotRGBA(&buffer, Int32(totalBytes), &w, &h) else { return nil }
+        guard gamecore_copySnapshotRGBA(&buffer, Int32(totalBytes), &w, &h) else { return nil }
         let data = Data(buffer)
         let bytesPerRow = Int(w) * 4
         guard let provider = CGDataProvider(data: data as CFData),

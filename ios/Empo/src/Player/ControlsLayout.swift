@@ -277,10 +277,17 @@ class ControlsLayout {
     }
 
     var resetConfirmationTitle: String {
-        if case .pinnedProfile = provenance {
-            return "Stop using the profile"
+        if case .pinnedProfile(let name) = provenance {
+            return "Stop using \(name)?"
         }
         return hasManifestTouchSection ? "Reset to game default" : "Reset to Empo default"
+    }
+
+    var resetConfirmationActionTitle: String {
+        if case .pinnedProfile = provenance {
+            return "Stop using"
+        }
+        return "Reset"
     }
 
     /// A method, not a property: building the message resolves the
@@ -293,8 +300,8 @@ class ControlsLayout {
                 ? base + " The screen returns to automatic placement." : base
         }
         return screenChangesOnReset()
-            ? "This removes your custom layout. The screen returns to automatic placement."
-            : "This removes your custom layout."
+            ? "This deletes your custom layout and returns the screen to automatic placement. You can't undo this."
+            : "This deletes your custom layout. You can't undo this."
     }
 
     /// The reset clause must only promise "automatic placement" when
@@ -422,9 +429,9 @@ class ControlsLayout {
         applyDefaultsForCurrentOrientation()
     }
 
-    // nonisolated(unsafe): written once on the main actor at init,
-    // read in deinit (which is nonisolated by definition).
-    private nonisolated(unsafe) var notificationTokens: [NSObjectProtocol] = []
+    // Written once on the main actor at init, read in deinit (which is
+    // nonisolated by definition).
+    @ObservationIgnored private nonisolated(unsafe) var notificationTokens: [NSObjectProtocol] = []
 
     private func observeProfileNotifications() {
         notificationTokens.append(
@@ -803,6 +810,9 @@ class ControlsLayout {
         separationLogSignature = nil
         activeManifestSource = nil
         resolutionInvolvesDerivation = false
+        Self.activeKeys =
+            container.flatMap { GameCores.core(forGameAt: $0.gameURL)?.defaultKeys(forGameAt: $0.gameURL) }
+            ?? GameKey.standard
         loadManifest(from: container?.gameURL)
         if let container, newGameID != nil {
             Self.migrateLegacyPersistence(container: container)
@@ -895,8 +905,9 @@ class ControlsLayout {
     // MARK: - Defaults
     //
     // Default constants are `nonisolated` so legacy migration paths can
-    // read them without a hop to the main actor. They're plain Swift
-    // `let`s of value types, so any thread can read them safely.
+    // read them without a hop to the main actor. They hold value types,
+    // and only `switchGame` writes the core flag the button sets read,
+    // so any thread can read them safely.
 
     nonisolated static let defaultDPadCenterPortrait = CGPoint(x: 0.13, y: 0.72)
     nonisolated static let defaultDPadCenterLandscape = CGPoint(x: 0.10, y: 0.65)
@@ -908,44 +919,35 @@ class ControlsLayout {
     /// the more common case.
     nonisolated static let defaultDPadCenter = defaultDPadCenterPortrait
 
+    /// The keys of the core that runs the active game. `switchGame` sets
+    /// them before the layout resolves, and the builtin button sets read
+    /// them.
+    nonisolated(unsafe) private static var activeKeys = GameKey.standard
+
     /// 2x2 button grid in the bottom-right of a portrait viewport.
-    nonisolated static let defaultButtonsPortrait: [ButtonModel] = [
-        ButtonModel(
-            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN),
-            relativeCenter: CGPoint(x: 0.70, y: 0.67),
-            size: 56),
-        ButtonModel(
-            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE),
-            relativeCenter: CGPoint(x: 0.88, y: 0.67),
-            size: 56),
-        ButtonModel(
-            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.70, y: 0.76),
-            size: 56),
-        ButtonModel(
-            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.76),
-            size: 56),
-    ]
+    nonisolated static var defaultButtonsPortrait: [ButtonModel] {
+        buttons(at: [
+            CGPoint(x: 0.70, y: 0.67), CGPoint(x: 0.88, y: 0.67),
+            CGPoint(x: 0.70, y: 0.76), CGPoint(x: 0.88, y: 0.76),
+        ])
+    }
 
     /// 2x2 button grid in the bottom-right of a landscape viewport.
-    /// Shorter screen height + wider screen width means the grid
-    /// can sit higher and more spread out without overlapping the
-    /// game viewport's center.
-    nonisolated static let defaultButtonsLandscape: [ButtonModel] = [
-        ButtonModel(
-            label: "Enter", scancode: Int32(MKXP_SCANCODE_RETURN),
-            relativeCenter: CGPoint(x: 0.80, y: 0.59),
-            size: 56),
-        ButtonModel(
-            label: "Escape", scancode: Int32(MKXP_SCANCODE_ESCAPE),
-            relativeCenter: CGPoint(x: 0.88, y: 0.59),
-            size: 56),
-        ButtonModel(
-            label: "Z", scancode: Int32(MKXP_SCANCODE_Z), relativeCenter: CGPoint(x: 0.80, y: 0.75),
-            size: 56),
-        ButtonModel(
-            label: "B", scancode: Int32(MKXP_SCANCODE_B), relativeCenter: CGPoint(x: 0.88, y: 0.75),
-            size: 56),
-    ]
+    /// Landscape holds a shorter screen and a wider one, so the grid
+    /// sits higher and further apart without covering the middle of
+    /// the game viewport.
+    nonisolated static var defaultButtonsLandscape: [ButtonModel] {
+        buttons(at: [
+            CGPoint(x: 0.80, y: 0.59), CGPoint(x: 0.88, y: 0.59),
+            CGPoint(x: 0.80, y: 0.75), CGPoint(x: 0.88, y: 0.75),
+        ])
+    }
+
+    private nonisolated static func buttons(at centers: [CGPoint]) -> [ButtonModel] {
+        zip(activeKeys, centers).map {
+            ButtonModel(label: $0.label, scancode: $0.scancode, relativeCenter: $1, size: 56)
+        }
+    }
 
     /// Legacy alias for callers that grab "the" defaults without
     /// orientation. Returns the portrait set.
@@ -1745,8 +1747,7 @@ class ControlsLayout {
         case .pinToExisting(let profile, let renameToShared, let hash):
             var target = profile
             if renameToShared {
-                let count = store.gamesPinned(to: profile).count + 1
-                let shared = store.uniqueName(base: "Shared layout (\(count) games)")
+                let shared = store.uniqueName(base: "Shared layout")
                 if LayoutProfilesManager.renameProfile(from: profile, to: shared) {
                     target = shared
                     for (gameID, entry) in record.games where entry.profile == profile {
@@ -2053,7 +2054,7 @@ class ControlsLayout {
     /// top falls back to a 4:3 game-bottom estimate when the engine has
     /// not published `gameRect` yet (typical at game select).
     private static func touchZoneMetricsForManifestLoad() -> TouchZoneMetrics {
-        let bounds = UIScreen.main.bounds
+        let bounds = AppWindow.currentScreenBounds
         let safeArea = AppWindow.currentSafeArea
         let portraitWidth = min(bounds.width, bounds.height)
         let portraitHeight = max(bounds.width, bounds.height)

@@ -1,4 +1,3 @@
-import GameProbe
 import SwiftUI
 
 private struct EmptyStateHeightKey: PreferenceKey {
@@ -31,7 +30,7 @@ struct GameLibraryView: View {
     // copy fallbacks should move into it alongside the other
     // user-facing text. Keep the literals here for now so the
     // existing string-search audit still points at a single spot.
-    @State private var errorTitle: String = "Oops!"
+    @State private var errorTitle: String = "Couldn't delete this game"
     @State private var showErrorAlert = false
     @State private var showCancelValidationAlert = false
     @State private var gameToDelete: GameEntry?
@@ -41,7 +40,8 @@ struct GameLibraryView: View {
     /// fail several rescues, and each game gets its own Delete
     /// Anyway / Keep Game choice, one alert after another.
     @State private var saveRescueFailures: [GameEntry] = []
-    @State private var showInvalidAlert = false
+    @State private var invalidReason: String?
+    @State private var gameWithNoCore: GameEntry?
     @State private var path = NavigationPath()
     @State private var searchText = ""
     /// Search text applied to the catalog. Trails
@@ -53,9 +53,8 @@ struct GameLibraryView: View {
     @State private var gameForInfo: GameEntry?
     @State private var pendingGame: GameEntry?
     @State private var showPausedGameAlert = false
-    @State private var rtpWarnedGame: GameEntry?
-    @State private var rtpWarnedRequirement: GameRTPRequirement?
-    @State private var showRTPRequiredAlert = false
+    @State private var warnedLaunch: WarnedLaunch?
+    @State private var autoStartDone = false
     @State private var staggerTrigger = UUID()
     @State private var entranceDelay: TimeInterval = 0.15
     @State private var emptyStateHeight: CGFloat = 0
@@ -226,8 +225,12 @@ struct GameLibraryView: View {
                 }
             }
             .task { takeTheResumeQuestion() }
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) {
+                _ in
                 takeTheResumeQuestion()
+            }
+            .task(id: library.initialScanCompleted && appState.errorMessage == nil) {
+                autoStartGameFromEnvironment()
             }
     }
 
@@ -281,6 +284,7 @@ struct GameLibraryView: View {
             .modifier(
                 SaveRecoveryPresentation(games: library.games, active: splashDismissed)
             )
+            .modifier(WhatsNewPresentation(active: splashDismissed))
             .modifier(
                 LibrarySheetPresentation(
                     showSettings: $showSettings,
@@ -301,21 +305,23 @@ struct GameLibraryView: View {
                     showErrorAlert: $showErrorAlert,
                     gameToDelete: $gameToDelete,
                     showDeleteConfirm: $showDeleteConfirm,
-                    showInvalidAlert: $showInvalidAlert,
+                    invalidReason: $invalidReason,
                     showCancelValidationAlert: $showCancelValidationAlert,
                     showPausedGameAlert: $showPausedGameAlert,
-                    showRTPRequiredAlert: $showRTPRequiredAlert,
-                    rtpWarnedGame: rtpWarnedGame,
-                    rtpWarnedRequirement: rtpWarnedRequirement,
+                    gameWithNoCore: $gameWithNoCore,
+                    warnedLaunch: $warnedLaunch,
                     importPipelineAlert: importPipelineAlertBinding,
                     saveRescueFailures: $saveRescueFailures,
                     pausedGame: pauseManager.pausedGame,
+                    pendingGame: pendingGame,
+                    canClosePausedGame: appState.canKillPausedGame,
                     onDeleteGame: deleteSelectedGame,
                     onDeleteGameDiscardingSaves: deleteGameDiscardingSaves,
                     onDismissImportPipelineAlert: importPipeline.dismissAlert,
                     onCancelValidation: importPipeline.cancelValidation,
                     onDismissPausedGameAlert: { pendingGame = nil },
-                    onContinueDespiteRTP: continueDespiteRTPWarning
+                    onReplacePausedGame: replacePausedGame,
+                    onContinueDespiteWarning: continueDespiteLaunchWarning
                 )
             )
             .toolbarVisibility(.hidden, for: .navigationBar)
@@ -518,8 +524,8 @@ struct GameLibraryView: View {
     private var emptyStateContent: some View {
         EmptyStateView(
             icon: Image(.empoMark),
-            title: "No Games Yet",
-            subtitle: "Add your favorite RPG Maker\ngames to get started!",
+            title: "No games yet",
+            subtitle: "Import a game to start playing.",
             revealed: splashDismissed,
             initialDelay: entranceDelay
         )
@@ -537,8 +543,8 @@ struct GameLibraryView: View {
                 Spacer()
                 Text(
                     selectedIDs.isEmpty
-                        ? "Select Games"
-                        : "\(selectedIDs.count) Selected"
+                        ? "Select games"
+                        : "\(selectedIDs.count) selected"
                 )
                 .font(.headline)
                 Spacer()
@@ -546,8 +552,7 @@ struct GameLibraryView: View {
                     .font(.body.weight(.semibold))
                     .tint(.brand)
             } else {
-                IconButton("gearshape", style: .outline) { showSettings = true }
-                    .accessibilityLabel("Settings")
+                IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
                 Spacer()
                 Text("Library")
                     .font(.title)
@@ -939,9 +944,21 @@ struct GameLibraryView: View {
         }
         switch game.status {
         case .ready: handleGameTap(game, from: .item)
-        case .invalid: showInvalidAlert = true
+        case .invalid: invalidReason = Self.whyInvalid(game)
         case .importing, .deleting: break
         }
+    }
+
+    /// A core that refuses a game gives its own reason. A new import
+    /// meets the same refusal, so the usual advice to import again
+    /// would be wrong there.
+    private static func whyInvalid(_ game: GameEntry) -> String {
+        do {
+            if let container = game.container { try GameImportValidator.validate(container.gameURL) }
+        } catch GameImportValidator.ImportError.unsupportedRuntime(let reason) {
+            return reason
+        } catch {}
+        return "Empo can't read this game's files. Delete it, then import it again."
     }
 
     /// Enter selection mode. When `gameId` is non-nil the game is
@@ -1030,9 +1047,85 @@ struct GameLibraryView: View {
         Button(role: .destructive) {
             showBulkDeleteConfirm = true
         } label: {
-            Label("Delete (\(selectedIDs.count))", systemImage: "trash")
+            Label(
+                "Delete \(selectedIDs.count) game\(selectedIDs.count == 1 ? "" : "s")",
+                systemImage: "trash"
+            )
         }
         .buttonStyle(.primary(tint: .red))
+    }
+
+    /// Opens the game that `EMPO_AUTOSTART_GAME` names.
+    ///
+    /// A test on a real iPhone cannot tap the screen, and
+    /// `devicectl device process launch --environment-variables` is the
+    /// only way a script reaches the app. The scan fills `games` off the
+    /// main thread, so this waits for `initialScanCompleted`.
+    private func autoStartGameFromEnvironment() {
+        #if DEBUG
+        // UIKit refuses a second alert while the "Last session ended
+        // early" alert is up, and SwiftUI drops the launch warning.
+        guard !autoStartDone, library.initialScanCompleted, appState.errorMessage == nil,
+            let wanted = ProcessInfo.processInfo.environment["EMPO_AUTOSTART_GAME"],
+            let game = library.games.first(where: { $0.title == wanted })
+        else { return }
+        autoStartDone = true
+        handleGameTap(game)
+        autoPressKeysFromEnvironment()
+        autoRotateFromEnvironment()
+        #endif
+    }
+
+    /// Turns the device as `EMPO_AUTOROTATE` names, as
+    /// `<second>:<portrait|landscape>` pairs separated by commas.
+    ///
+    /// simctl has no rotate command, and this machine holds no Simulator
+    /// application, so a script cannot turn a simulator from outside.
+    /// requestGeometryUpdate turns the scene, which runs the same path a
+    /// real turn runs: UIKit changes the interface orientation and
+    /// resizes every window in the scene.
+    private func autoRotateFromEnvironment() {
+        #if DEBUG
+        guard let plan = ProcessInfo.processInfo.environment["EMPO_AUTOROTATE"] else { return }
+        for pair in plan.split(separator: ",") {
+            let parts = pair.split(separator: ":")
+            guard parts.count == 2, let second = Double(parts[0]) else { continue }
+            let mask: UIInterfaceOrientationMask =
+                parts[1] == "landscape" ? .landscapeRight : .portrait
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(second))
+                guard
+                    let scene = UIApplication.shared.connectedScenes
+                        .compactMap({ $0 as? UIWindowScene }).first
+                else { return }
+                NSLog("[empo] rotate to %@ at %.1fs", String(parts[1]), second)
+                scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask))
+            }
+        }
+        #endif
+    }
+
+    /// Presses the keys that `EMPO_AUTOKEYS` names, as
+    /// `<second>:<scancode>` pairs separated by commas. The scancodes are
+    /// the GAMECORE_SCANCODE numbers.
+    ///
+    /// A test on a real iPhone cannot tap the screen, so this is the only
+    /// way a script reaches the on-screen controls.
+    private func autoPressKeysFromEnvironment() {
+        #if DEBUG
+        guard let plan = ProcessInfo.processInfo.environment["EMPO_AUTOKEYS"] else { return }
+        for pair in plan.split(separator: ",") {
+            let parts = pair.split(separator: ":")
+            guard parts.count == 2, let second = Double(parts[0]), let code = Int32(parts[1])
+            else { continue }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(second))
+                // A launch warning can hold the game back past the plan.
+                guard EmpoCoreIsOpen() != 0 else { return }
+                EngineSessionCoordinator.shared.injectKeyTap(scancode: code, holdMilliseconds: 200)
+            }
+        }
+        #endif
     }
 
     private func handleGameTap(_ game: GameEntry, from source: GameTapSource = .item) {
@@ -1040,16 +1133,24 @@ struct GameLibraryView: View {
         if pauseManager.pausedGame?.id == game.id {
             appState.resumePausedGame()
             push(game)
+        } else if let container = game.container,
+            AppState.missingCore(for: container) != nil
+        {
+            gameWithNoCore = game
         } else if pauseManager.pausedGame != nil {
             pendingGame = game
             showPausedGameAlert = true
-        } else if let container = game.container,
-            AppState.needsRTPLaunchWarning(for: container),
-            let requirement = GameRTPRequirement.detect(at: container.gameURL)
+        } else {
+            startUnlessWarned(game)
+        }
+    }
+
+    private func startUnlessWarned(_ game: GameEntry) {
+        if let container = game.container,
+            let warning = GameCores.core(forGameAt: container.gameURL)?
+                .launchWarning(for: container, gameTitle: game.title)
         {
-            rtpWarnedGame = game
-            rtpWarnedRequirement = requirement
-            showRTPRequiredAlert = true
+            warnedLaunch = WarnedLaunch(game: game, warning: warning)
         } else {
             appState.selectGame(game)
             push(game)
@@ -1063,10 +1164,14 @@ struct GameLibraryView: View {
         path.append(game)
     }
 
-    private func continueDespiteRTPWarning() {
-        guard let game = rtpWarnedGame else { return }
-        rtpWarnedGame = nil
-        rtpWarnedRequirement = nil
+    private func replacePausedGame() {
+        guard let game = pendingGame else { return }
+        pendingGame = nil
+        appState.killPausedGame()
+        startUnlessWarned(game)
+    }
+
+    private func continueDespiteLaunchWarning(_ game: GameEntry) {
         appState.selectGame(game)
         push(game)
     }
@@ -1191,7 +1296,7 @@ private struct BulkDeleteAlert: ViewModifier {
     let onConfirm: () -> Void
 
     func body(content: Content) -> some View {
-        content.alert("Delete \(count) Games?", isPresented: $isPresented) {
+        content.alert("Delete \(count) game\(count == 1 ? "" : "s")?", isPresented: $isPresented) {
             Button("Delete", role: .destructive) {
                 onConfirm()
             }
@@ -1199,7 +1304,7 @@ private struct BulkDeleteAlert: ViewModifier {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "This deletes the game files for the selected games. Saves in the Data folder are kept. Empo moves the save files it finds in the game folders to Rescued Saves. If Empo does not recognize a save file, it is deleted with its game."
+                "This deletes the selected games from your device. Empo keeps the saves it recognizes and moves them to Rescued Saves. Any saves it doesn't recognize go with their game. You can't undo this."
             )
         }
     }
@@ -1230,12 +1335,10 @@ private struct DuplicateGamesNotice: ViewModifier {
         let list = names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
             .map { "\u{2022} \($0)" }
             .joined(separator: "\n")
-        return "Empo now stores each game in a folder named after its title, "
-            + "and the library keeps one copy per title because games locate "
-            + "their data by that name. The most recently played copy of each "
-            + "game stayed in your library. These extra copies were moved, "
-            + "saves included, to \"Duplicate Games\" inside Empo's folder in "
-            + "the Files app:\n\n\(list)"
+        return "Empo keeps one copy of each game, so it moved the extra copies "
+            + "below out of your library. The most recently played copy stayed. "
+            + "The rest, saves included, are in \"Duplicate Games\" in Empo's "
+            + "folder in Files:\n\n\(list)"
     }
 
     private func acknowledge() {
@@ -1245,10 +1348,10 @@ private struct DuplicateGamesNotice: ViewModifier {
 
     func body(content: Content) -> some View {
         content.alert(
-            "Duplicate Games Moved",
+            "Empo moved your duplicate games",
             isPresented: isPresented
         ) {
-            Button("OK", action: acknowledge)
+            Button("Got it", action: acknowledge)
         } message: {
             Text(message)
         }
@@ -1281,15 +1384,17 @@ private struct ImportReplaceAlert: ViewModifier {
 
     private var title: String {
         (prompt?.titles.count ?? 1) > 1
-            ? "Games Already in Library" : "Game Already in Library"
+            ? "These games are already in your library"
+            : "This game is already in your library"
     }
 
     private func message(for prompt: ImportReplacePrompt) -> String {
         let names = prompt.titles.map { "\"\($0)\"" }.joined(separator: ", ")
         let verb = prompt.titles.count == 1 ? "is" : "are"
+        let possessive = prompt.titles.count == 1 ? "its" : "their"
         return "\(names) \(verb) already in your library. "
-            + "Importing overwrites the installed files that the import also contains. "
-            + "Saves, settings, and everything else are kept."
+            + "Importing replaces \(possessive) files with the new ones. "
+            + "Your saves and settings stay. You can't undo this."
     }
 
     func body(content: Content) -> some View {
@@ -1298,7 +1403,7 @@ private struct ImportReplaceAlert: ViewModifier {
             isPresented: isPresented,
             presenting: prompt
         ) { _ in
-            Button("Import", role: .destructive, action: onReplace)
+            Button("Update game", role: .destructive, action: onReplace)
             Button("Cancel", role: .cancel, action: onCancel)
         } message: { prompt in
             Text(message(for: prompt))
@@ -1346,27 +1451,35 @@ private struct LibrarySheetPresentation: ViewModifier {
     }
 }
 
+/// A launch the game's core warned about. The user can play anyway.
+private struct WarnedLaunch {
+    let game: GameEntry
+    let warning: LaunchWarning
+}
+
 private struct LibraryAlertPresentation: ViewModifier {
     let title: String
     let errorMessage: String?
     @Binding var showErrorAlert: Bool
     @Binding var gameToDelete: GameEntry?
     @Binding var showDeleteConfirm: Bool
-    @Binding var showInvalidAlert: Bool
+    @Binding var invalidReason: String?
     @Binding var showCancelValidationAlert: Bool
     @Binding var showPausedGameAlert: Bool
-    @Binding var showRTPRequiredAlert: Bool
-    let rtpWarnedGame: GameEntry?
-    let rtpWarnedRequirement: GameRTPRequirement?
+    @Binding var gameWithNoCore: GameEntry?
+    @Binding var warnedLaunch: WarnedLaunch?
     @Binding var importPipelineAlert: ImportPipelineAlert?
     @Binding var saveRescueFailures: [GameEntry]
     let pausedGame: GameEntry?
+    let pendingGame: GameEntry?
+    let canClosePausedGame: Bool
     let onDeleteGame: () -> Void
     let onDeleteGameDiscardingSaves: (GameEntry) -> Void
     let onDismissImportPipelineAlert: () -> Void
     let onCancelValidation: () -> Void
     let onDismissPausedGameAlert: () -> Void
-    let onContinueDespiteRTP: () -> Void
+    let onReplacePausedGame: () -> Void
+    let onContinueDespiteWarning: (GameEntry) -> Void
 
     func body(content: Content) -> some View {
         content
@@ -1374,15 +1487,15 @@ private struct LibraryAlertPresentation: ViewModifier {
                 Alert(
                     title: Text(alert.title),
                     message: Text(alert.message),
-                    dismissButton: .default(Text("OK"), action: onDismissImportPipelineAlert)
+                    dismissButton: .default(Text("Got it"), action: onDismissImportPipelineAlert)
                 )
             }
             .alert(title, isPresented: $showErrorAlert) {
-                Button("OK") {}
+                Button("Got it") {}
             } message: {
-                Text(errorMessage ?? "Something went wrong.")
+                Text(errorMessage ?? "Empo couldn't finish this. Reopen Empo and try again.")
             }
-            .alert("Delete Game?", isPresented: $showDeleteConfirm) {
+            .alert("Delete this game?", isPresented: $showDeleteConfirm) {
                 Button("Delete", role: .destructive, action: onDeleteGame)
                     .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
@@ -1394,17 +1507,17 @@ private struct LibraryAlertPresentation: ViewModifier {
                         // stays - promising file removal here would
                         // be false.
                         Text(
-                            "This stops the import of \"\(game.title)\". An update leaves the installed game as it was."
+                            "This stops importing \"\(game.title)\". If you were updating a game you already have, that copy stays as it is."
                         )
                     } else {
                         Text(
-                            "This deletes the game files for \"\(game.title)\". Saves in the Data folder are kept. Empo moves the save files it finds in the game folder to Rescued Saves. If Empo does not recognize a save file, it is deleted with the game."
+                            "This deletes \"\(game.title)\" from your device. Empo keeps the saves it recognizes and moves them to Rescued Saves. Any saves it doesn't recognize go with the game. You can't undo this."
                         )
                     }
                 }
             }
             .alert(
-                "Couldn't Move Saves",
+                "Couldn't move the saves",
                 isPresented: Binding(
                     get: { !saveRescueFailures.isEmpty },
                     set: { presented in
@@ -1419,52 +1532,83 @@ private struct LibraryAlertPresentation: ViewModifier {
                 ),
                 presenting: saveRescueFailures.first
             ) { game in
-                Button("Delete Anyway", role: .destructive) {
+                Button("Delete anyway", role: .destructive) {
                     onDeleteGameDiscardingSaves(game)
                 }
-                Button("Keep Game", role: .cancel) {}
+                Button("Keep game", role: .cancel) {}
             } message: { game in
                 Text(
-                    "Empo could not rescue the saves for \"\(game.title)\". If you delete the game anyway, these saves are lost forever. You can also keep the game and try again."
+                    "Empo couldn't move the saves for \"\(game.title)\" to Rescued Saves. Free up space and delete again, or delete now and lose those saves. You can't undo this."
                 )
             }
-            .alert("Invalid Game", isPresented: $showInvalidAlert) {
-                Button("OK") {}
-            } message: {
-                Text("Empo could not load this game correctly. You can delete it and import it again.")
-            }
-            .alert("Run-Time Package Required", isPresented: $showRTPRequiredAlert) {
-                Button("Cancel", role: .cancel) {}
-                Button("Continue") {
-                    onContinueDespiteRTP()
-                }
-            } message: {
-                if let game = rtpWarnedGame, let requirement = rtpWarnedRequirement {
+            .alert(
+                "Empo can't run this game",
+                isPresented: Binding(
+                    get: { gameWithNoCore != nil },
+                    set: { presented in if !presented { gameWithNoCore = nil } }
+                ),
+                presenting: gameWithNoCore
+            ) { _ in
+                Button("Got it") { gameWithNoCore = nil }
+            } message: { game in
+                if let container = game.container,
+                    let core = AppState.missingCore(for: container)
+                {
                     Text(
-                        """
-                        "\(game.title)" needs shared RPG Maker assets from \
-                        \(requirement.friendlySummary) (\(requirement.summary)). \
-                        These Run-Time Packages are not bundled with the game.
-
-                        Empo cannot load Run-Time Packages yet, so the game \
-                        may fail to start or be missing graphics and audio.
-                        """
+                        "This build of Empo has no \(core.displayName), so it can't run \"\(game.title)\"."
                     )
                 }
             }
-            .alert("Cancel import?", isPresented: $showCancelValidationAlert) {
-                Button("Keep importing", role: .cancel) {}
-                Button("Cancel import", role: .destructive, action: onCancelValidation)
-            } message: {
-                Text("Empo is still validating the game. If you cancel, the import stops.")
+            .alert(
+                "This game won't open",
+                isPresented: Binding(
+                    get: { invalidReason != nil },
+                    set: { presented in if !presented { invalidReason = nil } }
+                ),
+                presenting: invalidReason
+            ) { _ in
+                Button("Got it") { invalidReason = nil }
+            } message: { reason in
+                Text(reason)
             }
-            .alert("A game is paused", isPresented: $showPausedGameAlert) {
-                // The alert is informational. To play another game the
-                // user resumes the paused one from its card, or
-                // force-closes the app. See `ios/Empo/docs/multi-session.md`.
-                Button("OK", role: .cancel, action: onDismissPausedGameAlert)
+            .alert(
+                warnedLaunch?.warning.title ?? "",
+                isPresented: Binding(
+                    get: { warnedLaunch != nil },
+                    set: { presented in if !presented { warnedLaunch = nil } }
+                ),
+                presenting: warnedLaunch
+            ) { launch in
+                Button("Cancel", role: .cancel) {}
+                Button(launch.warning.confirm) {
+                    onContinueDespiteWarning(launch.game)
+                }
+            } message: { launch in
+                Text(launch.warning.message)
+            }
+            .alert("Stop import?", isPresented: $showCancelValidationAlert) {
+                Button("Keep importing", role: .cancel) {}
+                Button("Stop import", role: .destructive, action: onCancelValidation)
             } message: {
-                if let pausedGame {
+                Text("Empo is still checking this game. Stopping now discards it.")
+            }
+            .alert(
+                canClosePausedGame ? "Play \"\(pendingGame?.title ?? "")\"?" : "A game is paused",
+                isPresented: $showPausedGameAlert
+            ) {
+                if canClosePausedGame {
+                    Button("Cancel", role: .cancel, action: onDismissPausedGameAlert)
+                    Button("Close and Play", role: .destructive, action: onReplacePausedGame)
+                } else {
+                    // To play another game the user resumes the paused
+                    // one from its card, or force-closes the app. See
+                    // `ios/Empo/docs/multi-session.md`.
+                    Button("Got it", role: .cancel, action: onDismissPausedGameAlert)
+                }
+            } message: {
+                if canClosePausedGame, let pausedGame {
+                    Text("\"\(pausedGame.title)\" will close. Progress you haven't saved will be lost.")
+                } else if let pausedGame {
                     Text(
                         "\"\(pausedGame.title)\" is still running. Resume it from its card, or force-close the app to play a different game."
                     )

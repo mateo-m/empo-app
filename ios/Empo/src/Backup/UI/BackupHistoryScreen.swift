@@ -15,7 +15,8 @@ struct BackupHistoryScreen: View {
                 ContentUnavailableView(
                     "No backups yet",
                     systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-                    description: Text("Your first backup shows up here."))
+                    description: Text("Your first backup shows up here.")
+                )
                 .listRowBackground(Color.clear)
             }
             ForEach(model.history, id: \.id) { run in

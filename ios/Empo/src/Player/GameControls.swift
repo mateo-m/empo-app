@@ -435,7 +435,7 @@ struct DPad: View {
         // circles.
         .darkGlass()
         .contentShape(Circle())
-        .accessibilityLabel("Directional pad")
+        .accessibilityLabel("D-pad")
         .accessibilityHint("Touch and drag to move the character")
         .accessibilityAddTraits(.allowsDirectInteraction)
     }
@@ -518,7 +518,7 @@ struct Joystick: View {
         .frame(width: size, height: size)
         .darkGlass()
         .contentShape(Circle())
-        .accessibilityLabel("Movement stick")
+        .accessibilityLabel("Joystick")
         .accessibilityHint("Touch and drag to move the character")
         .accessibilityAddTraits(.allowsDirectInteraction)
     }
@@ -545,10 +545,10 @@ typealias DPadDirection = DPadTouchReducer.Direction
 extension DPadDirection {
     var scancode: Int32 {
         switch self {
-        case .up: Int32(MKXP_SCANCODE_UP)
-        case .down: Int32(MKXP_SCANCODE_DOWN)
-        case .left: Int32(MKXP_SCANCODE_LEFT)
-        case .right: Int32(MKXP_SCANCODE_RIGHT)
+        case .up: Int32(GAMECORE_SCANCODE_UP)
+        case .down: Int32(GAMECORE_SCANCODE_DOWN)
+        case .left: Int32(GAMECORE_SCANCODE_LEFT)
+        case .right: Int32(GAMECORE_SCANCODE_RIGHT)
         }
     }
 

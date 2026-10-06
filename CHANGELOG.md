@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.7.0 - 2026-09-23
+
+### Highlights
+
+- Run PSDK games next to RPG Maker games (#150) ([`2a9eb75`](https://github.com/mateo-m/empo-app/commit/2a9eb7533ef0e6db5aab27f55537ec18f5a1be51))
+
+### Features
+
+- Disable fast forward bindings for a game that has fast forward off (#149) ([`ab1f074`](https://github.com/mateo-m/empo-app/commit/ab1f0745b0490f3e818a35c6469ca8226c8d8590))
+- Show a what's new sheet once after an update (#151) ([`4653ff2`](https://github.com/mateo-m/empo-app/commit/4653ff2affd8918edfc74a139dd83ae516a33365))
+
+### Bug Fixes
+
+- Name PSDK games next to RPG Maker games (#153) ([`f78e000`](https://github.com/mateo-m/empo-app/commit/f78e000efb192a73dc109c30b03cd569ee91fe14))
+
+## 0.6.10 - 2026-09-16
+
+### Bug Fixes
+
+- Apply the UX writing audit to every user-visible string (#148) ([`225e9ec`](https://github.com/mateo-m/empo-app/commit/225e9ecdcecc38ca3737df2e089ec4c1cd5695ad))
+- Read sticks as eight sectors and rebuild controller input on the physical profile ([`d426ed8`](https://github.com/mateo-m/empo-app/commit/d426ed82cb6452bcb3512627d7328dbe01d3c7ae))
+- Keep taps on a presented sheet out of the game view ([`cca37b6`](https://github.com/mateo-m/empo-app/commit/cca37b6d84d83fe4c6847fa4fce42d6dc5c30ca9))
+- Count only session logs against the per-game log limit ([`9ddad9d`](https://github.com/mateo-m/empo-app/commit/9ddad9ddbb5502a50223ea84d7dcefcd0f295d4f))
+
+### Other
+
+- Add the EmpoTests target with controller input manager tests ([`002ba85`](https://github.com/mateo-m/empo-app/commit/002ba851dc6de8e4eefd3c5d41728cee95491799))
+- Let UI tests drive a virtual pad and ignore the simulator gamepad ([`9e5a887`](https://github.com/mateo-m/empo-app/commit/9e5a887b1e2212d7131443f74d227d943e06dbf2))
+
+## 0.6.9 - 2026-09-12
+
+### Bug Fixes
+
+- Compare unpacked bytes with fixtures instead of CryptoKit hashes ([`d03fcce`](https://github.com/mateo-m/empo-app/commit/d03fccef8acc5dc65fcb09ec6a537d9e7043c2cb))
+
+### Chores
+
+- Pick up the pointer injection bridge and the async mouse fix (#147) ([`ea7385b`](https://github.com/mateo-m/empo-app/commit/ea7385b80b05e3df70dff77a4df903c4787d5697))
+
+### Features
+
+- Unpack games packed with Enigma Virtual Box ([`7332eff`](https://github.com/mateo-m/empo-app/commit/7332effd6f384d95719121c70dbd69e8bca250ba))
+
+## 0.6.8 - 2026-09-08
+
+### Bug Fixes
+
+- Declare the OpenSSL encryption in Info.plist ([`a34a694`](https://github.com/mateo-m/empo-app/commit/a34a694a574ff05787aebf14955350a745828599))
+- Link the settings to the site privacy policy and terms ([`561bcd6`](https://github.com/mateo-m/empo-app/commit/561bcd66b2819954b6f875eead698a634844d647))
+- Run RGSS2 games on Ruby 1.8 and skip the def stat in the endless-def sniff ([`d846d5d`](https://github.com/mateo-m/empo-app/commit/d846d5d5bbdcd025859a877195887879d29506c6))
+
+### Chores
+
+- Add the GPLv2 license file ([`e1d9fc0`](https://github.com/mateo-m/empo-app/commit/e1d9fc0c6f618da4705a5e20bd627ab513918c80))
+- Pin engine-2026-09-08 with the font substitution fix ([`58a316f`](https://github.com/mateo-m/empo-app/commit/58a316f1177de55b9a3edd5db75c92288ddf8757))
+
+### Documentation
+
+- Build the privacy, terms, and support pages from root markdown files ([`9eb43ce`](https://github.com/mateo-m/empo-app/commit/9eb43ceda381cf8f194696a3d3d94acac58d68ef))
+
+### Features
+
+- Add the App Store listing and the review notes ([`2b45040`](https://github.com/mateo-m/empo-app/commit/2b45040a336e93992d8f93adca44e714887913f1))
+
 ## 0.6.7 - 2026-09-07
 
 ### Bug Fixes

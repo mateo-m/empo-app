@@ -25,8 +25,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: 0.6.7
-    CURRENT_PROJECT_VERSION: 676
+    MARKETING_VERSION: 0.7.0
+    CURRENT_PROJECT_VERSION: 704
     # The Dropbox app key of SPEC 9.2. A PKCE client holds no secret,
     # so the key is public and lives here. It builds the callback
     # scheme `db-<key>` in Info.plist. An empty key hides Dropbox from
@@ -70,59 +70,18 @@ settings:
       -Wno-unused-const-variable
       -Wno-deprecated-literal-operator
       -Wno-unused-function
-    DEPENDENCY_SEARCH_PATH: $(PROJECT_DIR)/../Dependencies/build-$(PLATFORM_NAME)-arm64
+    # Which game cores the app ships. The "Embed the cores" phase reads
+    # it, and the Game cores screen lists what it finds in the bundle.
+    # Build one core only by passing it on the command line:
+    #   xcodebuild ... EMPO_CORES=Psdk30Core
+    EMPO_CORES: MkxpCore Psdk25Core Psdk30Core Psdk32Core Psdk33Core MvmzCore
     HEADER_SEARCH_PATHS:
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/audio
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/crypto
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/display
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/display/gl
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/display/libnsgif
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/etc
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/filesystem
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/input
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/net
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/system
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/theoraplay
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/src/util
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/binding
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/shader
-      # H-Mode7 port (//hmode7-apple-mobile submodule). Headers live
-      # next to the .cpp sources. The binding layer includes them via
-      # short names (hm7_apply_opacity.h etc.).
-      - $(PROJECT_DIR)/../../mkxp-z-apple-mobile/hmode7/src
-      - $(PROJECT_DIR)/shims
+      # GameCore.h, the interface between Empo and every core.
+      - $(PROJECT_DIR)/../../cores
       - $(PROJECT_DIR)/shims/libarchive
       # Vendored libmspack (CAB reader for self-extracting .exe game
       # installers). Its sources use angled includes (<mspack.h>).
       - $(PROJECT_DIR)/vendor/libmspack
-      # Ruby 3.1 headers live under /include/ruby31/ now (Phase D
-      # header isolation, MULTI_RUBY_PLAN.md). Keep this AHEAD of
-      # the global $(DEPENDENCY_SEARCH_PATH)/include in
-      # SYSTEM_HEADER_SEARCH_PATHS below so Ruby resolves to 3.1
-      # for the legacy direct-link path. Once the legacy path is
-      # dropped (Phase F), this line and the SYSTEM_HEADER_SEARCH_PATHS
-      # entry both go away. Only the per-Ruby merged.o targets
-      # need Ruby headers.
-      - $(DEPENDENCY_SEARCH_PATH)/include/ruby31
-      - $(DEPENDENCY_SEARCH_PATH)/include/SDL2
-      - $(DEPENDENCY_SEARCH_PATH)/include/pixman-1
-      - $(DEPENDENCY_SEARCH_PATH)/include/uchardet
-      - $(DEPENDENCY_SEARCH_PATH)/include/freetype2
-      - $(PROJECT_DIR)/../Dependencies/ANGLE/$(PLATFORM_NAME)/include
-    SYSTEM_HEADER_SEARCH_PATHS:
-      - $(DEPENDENCY_SEARCH_PATH)/include
-    FRAMEWORK_SEARCH_PATHS: []
-    LIBRARY_SEARCH_PATHS:
-      - $(DEPENDENCY_SEARCH_PATH)/lib
-      - $(PROJECT_DIR)/../Dependencies/ANGLE/$(PLATFORM_NAME)/lib
-    # No engine preprocessor defines here. The engine no longer
-    # compiles in this target: the core is a prebuilt library, and
-    # the binding objects come from common.make. Shared engine
-    # feature flags live in one place, the submodule's
-    # src/mkxpz-buildconfig.h. App sources use no engine macros
-    # (app_bridge.h is self-contained).
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: YES # yamllint disable-line rule:truthy
   configs:
@@ -136,6 +95,32 @@ settings:
     Release:
       OTHER_CFLAGS: "-fdeclspec -O3"
       PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo
+targetTemplates:
+  # An extension that the app embeds. Its files are in the folder of
+  # its name.
+  Extension:
+    platform: iOS
+    sources:
+      - path: ${target_name}
+        excludes:
+          - Info.plist
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    settings:
+      base:
+        PRODUCT_NAME: ${target_name}
+        PRODUCT_BUNDLE_IDENTIFIER: $(inherited).${target_name}
+        # The app's bundle identifier. The game process extension point
+        # is <app bundle identifier>.game-process.
+        EMPO_HOST_BUNDLE_IDENTIFIER: $(PRODUCT_BUNDLE_IDENTIFIER:base)
+        INFOPLIST_FILE: $(PROJECT_DIR)/${target_name}/Info.plist
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Extension.entitlements
+        EMPO_APP_GROUP: group.$(EMPO_HOST_BUNDLE_IDENTIFIER)
+        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
 targets:
   Empo:
     type: application
@@ -151,76 +136,51 @@ targets:
         script: |
           "${PROJECT_DIR}/../../tools/fetch-angle.sh"
 
-      - name: Hydrate native dependency trees
-        # OpenSSL/SDL/Ruby/mkxp-merged trees (~hundreds of MB) are not
-        # built during normal Xcode iteration. They are prebuilt per SDK
-        # on empo-deps (or built locally once via
-        # scripts/rebuild-all-native-deps.sh). See tools/fetch-native-deps.sh.
+      - name: Wrap the mkxp-z core
+        # Fetches the mkxp-z-apple-mobile release that
+        # cores/mkxp/.version pins, and links it into
+        # MkxpCore.framework. A stamp skips the link when nothing
+        # changed. See cores/mkxp/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
-          "${PROJECT_DIR}/../../tools/fetch-native-deps.sh"
+          "${PROJECT_DIR}/../../cores/mkxp/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
 
-      - name: Hydrate engine core prebuilt
-        # libmkxpz-core.a per SDK, published from the public
-        # mkxp-z-apple-mobile repo's CI and pinned in
-        # ios/Dependencies/engine/.version. No-op when the pin is
-        # `unpublished` (local `make mkxp-core` builds) or
-        # EMPO_ENGINE_FROM_SOURCE=1. See tools/fetch-engine-prebuilt.sh.
+      - name: Wrap the PSDK cores
+        # Fetches the psdk-apple-mobile release that
+        # cores/psdk/.version pins, and links each Ruby's
+        # library with psdk_app_bridge.cpp into Psdk<NN>Core.framework.
+        # A stamp skips the link when nothing
+        # changed. See cores/psdk/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
-          "${PROJECT_DIR}/../../tools/fetch-engine-prebuilt.sh"
-
-      - name: Verify native deps for active SDK
-        # Fail fast when the tree for the current destination (device or
-        # simulator) is missing or platform-contaminated. See
-        # scripts/verify-native-deps.sh.
-        basedOnDependencyAnalysis: false
-        script: |
-          set -e
-          PLATFORM_NAME="${PLATFORM_NAME}" \
-            "${PROJECT_DIR}/../../scripts/verify-native-deps.sh"
+          "${PROJECT_DIR}/../../cores/psdk/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
 
       - name: Assemble Assets.bundle
-        # Force every build. The script globs the engine's shader/font/
-        # script directories and copies whatever is there, so declaring
-        # a static outputFiles list would drift out of date and silently
-        # drop newly-added assets.
+        # Force every build. The script copies whatever is in the
+        # source directories, so a static outputFiles list would drift
+        # and drop a new file without a word.
+        #
+        # The engine's own assets are not here. Shaders, fonts,
+        # gamecontrollerdb.txt, icon.png, the preload and the postload
+        # scripts all live in MkxpCore.framework/Assets.bundle, which
+        # the engine reads through dladdr on its own image
+        # (filesystemImplIOS.mm mkxpOwnBundle). A second copy in the
+        # app is dead weight, and nothing in the app reads one.
         basedOnDependencyAnalysis: false
         script: |
-          ENGINE="${PROJECT_DIR}/../../mkxp-z-apple-mobile"
           BUNDLE="${PROJECT_DIR}/Assets.bundle"
 
-          # Shaders
-          mkdir -p "$BUNDLE/Shaders"
-          cp "$ENGINE"/shader/*.frag "$BUNDLE/Shaders/" 2>/dev/null || true
-          cp "$ENGINE"/shader/*.vert "$BUNDLE/Shaders/" 2>/dev/null || true
-          cp "$ENGINE"/shader/*.h    "$BUNDLE/Shaders/" 2>/dev/null || true
+          # Mozilla CA root bundle. CABundleStore reads this copy from
+          # the main bundle and pushes the path into the engine, so
+          # the app needs its own.
+          mkdir -p "$BUNDLE"
+          cp "${PROJECT_DIR}/../Dependencies/mkxp-core/assets/cacert.pem" "$BUNDLE/"
 
-          # Fonts
-          mkdir -p "$BUNDLE/Fonts"
-          cp "$ENGINE"/assets/liberation.ttf   "$BUNDLE/Fonts/"
-          cp "$ENGINE"/assets/wqymicrohei.ttf  "$BUNDLE/Fonts/"
-
-          # Loose assets
-          cp "$ENGINE"/assets/gamecontrollerdb.txt "$BUNDLE/"
-          cp "$ENGINE"/assets/icon.png             "$BUNDLE/"
-          # Mozilla CA root bundle: TLS trust store for the native
-          # HTTP client and Ruby's openssl (via SSL_CERT_FILE).
-          cp "$ENGINE"/assets/cacert.pem           "$BUNDLE/"
-
-          # Preload scripts
-          mkdir -p "$BUNDLE/Preload"
-          cp "$ENGINE"/scripts/preload/*.rb "$BUNDLE/Preload/"
-
-          # Postload scripts
-          mkdir -p "$BUNDLE/Postload"
-          cp "$ENGINE"/scripts/postload/*.rb "$BUNDLE/Postload/"
-
-          # Curated patch distribution was removed (2026-07): the
-          # engine's generic Patcher (scriptPatches / game-folder
-          # patches.json) remains, but Empo no longer ships or merges
-          # a curated patch bundle. Drop any stale assembled copy.
-          rm -rf "$BUNDLE/Patches"
+          # Assets that moved into the framework. Drop a stale copy
+          # from a tree built before that move.
+          rm -rf "$BUNDLE/Shaders" "$BUNDLE/Fonts" "$BUNDLE/Preload" \
+            "$BUNDLE/Postload" "$BUNDLE/Patches"
+          rm -f "$BUNDLE/gamecontrollerdb.txt" "$BUNDLE/icon.png"
 
           # Splash background icon pack. Pixelated 16x16 SVGs that
           # the splash's PixelDitherPattern picks N random ones from
@@ -231,22 +191,72 @@ targets:
           rm -rf "$BUNDLE/SplashIcons"
           mkdir -p "$BUNDLE/SplashIcons"
           cp "${PROJECT_DIR}/curated-splash-icons/"*.svg "$BUNDLE/SplashIcons/"
-      - name: Assemble Ruby stdlib
-        # Pure-Ruby stdlib subsets from the prebuilt dep tree, landing
-        # at Empo.app/Ruby/{3.1.0,1.9.1,1.8}. The engine pushes the
-        # per-VM directory onto $LOAD_PATH (binding-mri.cpp), which is
-        # what makes `require 'net/http'` etc. resolve in games.
+      - name: Embed the cores
+        # One framework for each core. MkxpCore holds mkxp-z, its
+        # three Ruby versions and its SDL. Psdk25Core, Psdk30Core,
+        # Psdk32Core and Psdk33Core each wrap the psdk-apple-mobile
+        # library of the Ruby of their name. MvmzCore wraps the
+        # mvmz-apple-mobile library, which shows RPG Maker MV and MZ
+        # games in a web view. The MvmzCore target below builds it with
+        # the app. The app links none of them and opens
+        # one of them with dlopen when the user picks a game
+        # (EngineSessionCoordinator.openCore).
+        #
+        # A copy phase, not a linked dependency. The app must not bind
+        # a single engine name at launch, or a second core could bind
+        # to the first core's definitions.
+        #
+        # EMPO_CORES says which cores to embed, so a release can ship
+        # some of them. The app reads the bundle to find out what it got
+        # (GameCores.inThisBuild), and refuses a game it cannot run.
+        #
         # Force every build: content follows the fetched deps version,
         # not any file Xcode tracks.
         basedOnDependencyAnalysis: false
         script: |
           set -e
-          STDLIB_SRC="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/ruby-stdlib"
-          if [ ! -d "$STDLIB_SRC" ]; then
-            echo "error: $STDLIB_SRC missing - run: cd ios/Dependencies && make -f ${PLATFORM_NAME}.make ruby-stdlib (or refetch native deps)" >&2
+          TREE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64"
+          DEST="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          mkdir -p "$DEST"
+          if [ -z "${EMPO_CORES:-}" ]; then
+            echo "error: EMPO_CORES is empty - the app would ship no game core" >&2
             exit 1
           fi
-          rsync -a --delete "$STDLIB_SRC/" "${PROJECT_DIR}/Ruby/"
+          for CORE in ${EMPO_CORES}; do
+            case "$CORE" in
+              MkxpCore) HOW="cores/mkxp/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
+              Psdk25Core|Psdk30Core|Psdk32Core|Psdk33Core) HOW="cores/psdk/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
+              MvmzCore) HOW="build the MvmzCore target" ;;
+              *)
+                echo "error: EMPO_CORES names an unknown core: $CORE" >&2
+                exit 1
+                ;;
+            esac
+            CORE_SRC="$TREE/$CORE.framework"
+            [ "$CORE" = MvmzCore ] && CORE_SRC="${BUILT_PRODUCTS_DIR}/$CORE.framework"
+            if [ ! -d "$CORE_SRC" ]; then
+              echo "error: $CORE_SRC missing - run: $HOW" >&2
+              exit 1
+            fi
+            rsync -a --delete "$CORE_SRC" "$DEST/"
+            # A nested framework carries its own signature. The app's
+            # own signing step does not reach inside it, so sign it
+            # here, the way Xcode's Embed Frameworks phase does.
+            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] && [ "${CODE_SIGNING_ALLOWED:-YES}" != "NO" ]; then
+              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
+                --preserve-metadata=identifier,entitlements,flags \
+                --timestamp=none "$DEST/$CORE.framework"
+            fi
+          done
+          # An incremental build keeps the framework folder from the last
+          # build, so remove a core this build does not ship. PsdkCore is
+          # in the list because older builds shipped it.
+          for CORE in MkxpCore MvmzCore Psdk25Core Psdk30Core Psdk32Core Psdk33Core PsdkCore; do
+            case " ${EMPO_CORES} " in
+              *" $CORE "*) continue ;;
+            esac
+            rm -rf "$DEST/$CORE.framework"
+          done
       - name: Generate Git Info
         # Force this script to run every build. Without this, Xcode sees
         # the declared output file already on disk and skips the script,
@@ -284,23 +294,6 @@ targets:
           [ -z "$ORIGIN_URL" ] && ORIGIN_URL="https://github.com/mateo-m/empo-app"
           ISSUES_URL="$ORIGIN_URL/issues"
 
-          # Engine fingerprints for the active SDK. The debug log
-          # prints them next to the commit so stale engine code is
-          # visible in bug reports: the app can be built from HEAD while
-          # the prebuilt engine inside it is weeks older (the July 2026
-          # stale-msgbox bug). The engine ships in two halves with
-          # separate stamps: the merged bindings (mkxp*-merged.o) and
-          # the core (libmkxpz-core.a). A core-only change moves only
-          # the core stamp, so the log must show both. 12 hex chars is
-          # enough to compare against the stamp files under
-          # ios/Dependencies/build-<sdk>-arm64/lib/.
-          FP_FILE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib/.mkxp-binding-fingerprint"
-          ENGINE_FP=$(head -c 12 "$FP_FILE" 2>/dev/null || true)
-          [ -z "$ENGINE_FP" ] && ENGINE_FP="unstamped"
-          CORE_FP_FILE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64/lib/.mkxp-core-fingerprint"
-          ENGINE_CORE_FP=$(head -c 12 "$CORE_FP_FILE" 2>/dev/null || true)
-          [ -z "$ENGINE_CORE_FP" ] && ENGINE_CORE_FP="unstamped"
-
           OUT="${PROJECT_DIR}/src/App/GitInfo.generated.swift"
           NEW=$(
             echo "// Auto-generated by build script — do not edit"
@@ -311,8 +304,6 @@ targets:
             echo "    static let defaultBranch = \"$DEFAULT_BRANCH\""
             echo "    static let originURL = \"$ORIGIN_URL\""
             echo "    static let issuesURL = \"$ISSUES_URL\""
-            echo "    static let engineFingerprint = \"$ENGINE_FP\""
-            echo "    static let engineCoreFingerprint = \"$ENGINE_CORE_FP\""
             echo "}"
           )
           # Only touch the file when the content changed so
@@ -322,27 +313,25 @@ targets:
             echo "$NEW" > "$OUT"
           fi
     sources:
-      # The mkxp-z engine is NOT compiled here.
+      # No engine is compiled or linked here. Each one is built into
+      # its own framework, which the "Embed the cores" phase copies
+      # into the app. MkxpCore holds the mkxp-z core, the three
+      # per-Ruby binding objects, every Ruby, SDL and the Ruby stdlib.
+      # Psdk25Core, Psdk30Core, Psdk32Core and Psdk33Core each hold
+      # LiteRGSS2, LiteCGSS, SFML and the Ruby of their name.
       #
-      # - Engine core (mkxp-z-apple-mobile/src/**) is prebuilt into
-      #   libmkxpz-core.a by the engine repo's tools/build-core-ios.sh
-      #   (invoked via `make -f <platform>.make mkxp-core` in
-      #   ios/Dependencies, or hydrated from a published artifact per
-      #   ios/Dependencies/engine/.version). Linked via -force_load in
-      #   OTHER_LDFLAGS below. Staleness is caught per build by
-      #   scripts/verify-native-deps.sh against .mkxp-core-fingerprint.
-      #
-      # - Binding half (binding/*.cpp + hmode7/*.cpp, all Ruby-API
-      #   users) compiles per-Ruby-version inside common.make's
-      #   mkxp*-merged targets. Each version's libruby + binding code
-      #   merges into a single relocatable .o via `ld -r` with Ruby
-      #   symbols hidden via the unexport list. The merged .o files
-      #   are linked below in OTHER_LDFLAGS.
+      # cores/mkxp/build-framework-ios.sh links MkxpCore from the
+      # mkxp-z-apple-mobile release, and cores/mkxp/check-framework.sh
+      # proves it exports nothing but mkxp_*.
       # Vendored libmspack CAB reader (see vendor/libmspack/README.md).
       - path: vendor/libmspack
         type: group
       - path: src
         type: group
+      # The messages between the app and its game process.
+      - path: GameProcess/EmpoGameProcessProtocol.m
+      # A game that runs in the app plays its sound through the app.
+      - path: GameProcess/AudioSession.m
       # Gitignored generated file. Listed explicitly so xcodegen keeps
       # it in Compile Sources after `src` group scans skip ignored paths.
       - path: src/App/GitInfo.generated.swift
@@ -352,13 +341,6 @@ targets:
       - path: Assets.bundle
         type: folder
         buildPhase: resources
-      # Populated by the "Assemble Ruby stdlib" script phase from the
-      # prebuilt dep tree. Gitignored (content is versioned by the
-      # native-deps pin, not this repo).
-      - path: Ruby
-        type: folder
-        buildPhase: resources
-        optional: true
     # Code signing is configured via a local, untracked xcconfig
     # (Signing.xcconfig in this directory) so each machine can set
     # DEVELOPMENT_TEAM and optionally override PRODUCT_BUNDLE_IDENTIFIER
@@ -388,90 +370,51 @@ targets:
         # Signing.xcconfig. CI leaves that file empty, so the default
         # applies and the unsigned build carries the iCloud keys.
         CODE_SIGN_ENTITLEMENTS: $(EMPO_ENTITLEMENTS:default=Empo.entitlements)
+        # The folder that the app shares with the game process.
+        EMPO_APP_GROUP: group.$(PRODUCT_BUNDLE_IDENTIFIER)
         SWIFT_VERSION: "5.0"
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/Empo-Bridging-Header.h
+        # Writes the game-process extension point that
+        # GameProcessHost.swift declares into the app.
+        EX_ENABLE_EXTENSION_POINT_GENERATION: YES # yamllint disable-line rule:truthy
+        HEADER_SEARCH_PATHS:
+          - $(inherited)
+          - $(PROJECT_DIR)/GameProcess
         OTHER_LDFLAGS:
-          - -lSDL2
-          - -lSDL2main
-          - -lSDL2_image
-          - -lSDL2_sound
-          - -lSDL2_ttf
-          # Ruby static libs (1.8 / 1.9 / 3.1) are linked indirectly
-          # via the per-version mkxpNN-merged.o files below in
-          # OTHER_LDFLAGS. Their symbols are private-extern inside
-          # those merged .o's, so versions don't clash on `_rb_*`.
-          - -lfreetype
-          - -lpixman-1
-          - -lpng16
-          - -logg
-          - -lvorbis
-          - -lvorbisfile
-          - -ltheora
-          - -ltheoradec
-          - -lphysfs
-          - -luchardet
+          # The engine is not here. It lives in MkxpCore.framework or a
+          # core framework, which the "Embed the cores" phase copies
+          # into the app. Every gamecore_* name the app calls resolves
+          # through AppCoreForwarders.c, which sends the call to the
+          # GameProcess extension or to the core the app opened with
+          # dlopen, so the linker sees none of them.
+          #
+          # What stays is what Empo itself uses: libarchive and its
+          # compressors for the importer, and the frameworks its own
+          # UI, audio session and controller code need.
+          - -larchive
           - -lz
           - -lbz2
           - -liconv
-          - -larchive
-          # OpenAL-Soft static lib (replaces Apple's deprecated
-          # `-framework OpenAL`). Must precede system libs so the
-          # static archive is searched before any system fallback.
-          - -lopenal
-          # Multi-Ruby Phase D: per-version binding+libruby merged
-          # objects, one per supported Ruby (1.8 / 1.9 / 3.1).
-          # Each exposes a single `_mkxp_get_script_binding_<NN>()`
-          # entry. Everything else (libruby's `_rb_*` + mkxp-z
-          # binding internals) is private-extern, hidden inside the
-          # merged .o so versions coexist without symbol clashes.
-          # Native Ruby 3.0 was dropped: the syntax-transform parser
-          # patches only exist in the 3.1 source, so 3.0 + Legacy
-          # compat was a silent no-op. Auto-detect now folds
-          # 3.0-bundling games (Pokemon Essentials forks shipping
-          # `x64-msvcrt-ruby300.dll`) onto 3.1 + Legacy.
-          #
-          # `binding.h`'s `getActiveScriptBinding()` dispatches at
-          # runtime based on the host's `mkxp_setActiveRubyVersion()`
-          # setting (per-game detection in RubyVersionDetection.swift).
-          # Default + UNSET fall through to 3.1, matching the legacy
-          # behaviour before multi-Ruby. Adding 1.9 / 1.8 is a
-          # mechanical extension. Drop the new merged.o here, add
-          # the case in `getActiveScriptBinding()`.
-          # Engine core (src/**) as a prebuilt static library. See
-          # the note at the top of `sources`. -force_load keeps every
-          # member (ObjC impls and constructors included) so behavior
-          # matches the old compile-into-app layout exactly.
-          - -Wl,-force_load,$(DEPENDENCY_SEARCH_PATH)/lib/libmkxpz-core.a
-          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp18-merged.o
-          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp19-merged.o
-          - $(DEPENDENCY_SEARCH_PATH)/lib/mkxp31-merged.o
-          - -lssl
-          - -lcrypto
-          - -ldl
-          - -lpthread
           - -framework Foundation
           - -framework UIKit
           - -framework CoreFoundation
           - -framework CoreGraphics
-          - -framework CoreVideo
-          - -framework CoreAudio
-          - -framework AudioToolbox
-          - -framework AVFoundation
-          - -framework Metal
           - -framework QuartzCore
+          - -framework AVFoundation
           - -framework GameController
-          - -framework CoreMotion
-          - -weak_framework CoreBluetooth
           - -weak_framework CoreHaptics
-          - -lANGLE_static
-          - -lEGL_static
-          - -lGLESv2_static
     dependencies:
       - package: GameProbe
       - package: AppAuth
         product: AppAuth
       - package: Automerge
         product: Automerge
+      - target: GameProcess
+      - target: FilesProvider
+      # Built first, then copied by "Embed the cores".
+      - target: MvmzCore
+        link: false
+        embed: false
   EmpoChecks:
     type: bundle.ui-testing
     platform: iOS
@@ -490,6 +433,108 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
+  GameProcess:
+    # One process for each game. The app starts it with ExtensionKit,
+    # and it opens the core of the game from the app's Frameworks.
+    type: extensionkit-extension
+    templates:
+      - Extension
+    sources:
+      # The memory of the game goes in a block that the app lends it
+      # (GameProcess/AppMemory.m). See vendor/mimalloc/README.md and
+      # vendor/fishhook/README.md.
+      # Each free() of the game goes through it. At -O0, a Ruby 1.8
+      # garbage collection took more than twice as long.
+      - path: vendor/mimalloc/src/static.c
+        compilerFlags: -O3 -DMI_DEBUG=0 -DMI_FREE_USE_PAGEMAP=1 -w
+      - path: vendor/fishhook/fishhook.c
+    settings:
+      base:
+        HEADER_SEARCH_PATHS:
+          - $(inherited)
+          - $(PROJECT_DIR)/vendor/mimalloc/include
+          - $(PROJECT_DIR)/vendor/fishhook
+        SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/GameProcess/GameProcess-Bridging-Header.h
+        OTHER_LDFLAGS:
+          - -framework Foundation
+          - -framework UIKit
+          - -framework AVFoundation
+          - -framework Metal
+  FilesProvider:
+    # Shows the games and saves, which live in the app group, in the
+    # Files app.
+    type: app-extension
+    templates:
+      - Extension
+  MvmzCore:
+    type: framework
+    platform: iOS
+    sources:
+      - path: ../../cores/mvmz
+        excludes:
+          - Info.plist
+          - fetch.sh
+          - .version
+    preBuildScripts:
+      - name: Fetch the MV/MZ core
+        # The mvmz-apple-mobile release that cores/mvmz/.version
+        # pins. See cores/mvmz/fetch.sh.
+        basedOnDependencyAnalysis: false
+        script: |
+          "${PROJECT_DIR}/../../cores/mvmz/fetch.sh"
+      - name: Write the core export list
+        basedOnDependencyAnalysis: false
+        outputFiles:
+          - $(TARGET_TEMP_DIR)/gamecore.exports
+        script: |
+          mkdir -p "${TARGET_TEMP_DIR}"
+          "${PROJECT_DIR}/../../cores/gamecore-exports.sh" "${TARGET_TEMP_DIR}/gamecore.exports"
+    postBuildScripts:
+      - name: Name the MV/MZ core release
+        # The Game cores screen shows EmpoCoreVersion, the release tag
+        # that cores/mvmz/.version pins. The input orders it after Xcode
+        # writes the Info.plist. Without one, the two can run in either
+        # order.
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
+        script: |
+          set -e
+          VERSION="$(cut -d" " -f1 "${PROJECT_DIR}/../Dependencies/mvmz-core/.fetched-pin")"
+          /usr/libexec/PlistBuddy -c "Set :EmpoCoreVersion $VERSION" "${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
+    settings:
+      base:
+        PRODUCT_NAME: MvmzCore
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.mvmzcore
+        INFOPLIST_FILE: $(PROJECT_DIR)/../../cores/mvmz/Info.plist
+        HEADER_SEARCH_PATHS:
+          - $(PROJECT_DIR)/../../cores
+          - $(PROJECT_DIR)/../Dependencies/mvmz-core/include
+        OTHER_LDFLAGS:
+          - -Wl,-exported_symbols_list,$(TARGET_TEMP_DIR)/gamecore.exports
+          - $(PROJECT_DIR)/../Dependencies/mvmz-core/$(PLATFORM_NAME)/libmvmz.a
+          - -framework WebKit
+          - -framework UIKit
+          - -framework Metal
+          - -framework UniformTypeIdentifiers
+        CLANG_ENABLE_MODULES: YES # yamllint disable-line rule:truthy
+        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
+        DEFINES_MODULE: NO # yamllint disable-line rule:truthy
+        VERSIONING_SYSTEM: ""
+        # "Embed the cores" signs the copy inside the app.
+        CODE_SIGNING_ALLOWED: NO
+  EmpoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests
+    dependencies:
+      - target: Empo
+    settings:
+      base:
+        TEST_TARGET_NAME: Empo
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.tests
+        CODE_SIGNING_ALLOWED: NO
 schemes:
   EmpoChecks:
     build:
@@ -504,6 +549,11 @@ schemes:
     build:
       targets:
         Empo: all
+        EmpoTests: [test]
+    test:
+      config: Debug
+      targets:
+        - EmpoTests
     run:
       config: Debug
     profile:
