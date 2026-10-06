@@ -1,0 +1,41 @@
+diff --git a/mkconfig.rb b/mkconfig.rb
+index 584f0fa2d8..1b60bcd4f4 100755
+--- a/mkconfig.rb
++++ b/mkconfig.rb
+@@ -8,7 +8,15 @@ srcdir = File.dirname(__FILE__)
+ $:.replace [srcdir+"/lib"] unless defined?(CROSS_COMPILING)
+ $:.unshift(".")
+ 
+-require "fileutils"
++if defined?(CROSS_COMPILING)
++  __saved_load_path = $LOAD_PATH.dup
++  $LOAD_PATH.reject! { |p| p == '.' || p == '' || File.expand_path(p) == File.expand_path('.') }
++  require 'rbconfig'
++  require 'fileutils'
++  $LOAD_PATH.replace(__saved_load_path)
++else
++  require "fileutils"
++end
+ mkconfig = File.basename($0)
+ 
+ rbconfig_rb = ARGV[0] || 'rbconfig.rb'
+diff --git a/template/fake.rb.in b/template/fake.rb.in
+index ed9416a16f..8d8ccc1189 100644
+--- a/template/fake.rb.in
++++ b/template/fake.rb.in
+@@ -1,4 +1,15 @@
++# Pre-load rbconfig + fileutils via the host ruby's stdlib BEFORE we
++# overwrite RUBY_VERSION. Without this, mkconfig.rb fails with
++# "ruby lib version doesn't match executable version" because the
++# host (e.g. system ruby 2.6) tries to load its own rbconfig after
++# fake.rb has already redefined the constant to @MAJOR@.@MINOR@.@TEENY@.
++__saved_load_path = $LOAD_PATH.dup
++$LOAD_PATH.reject! { |p| p == '.' || p == '' || File.expand_path(p) == File.expand_path('.') }
++require 'rbconfig'
++require 'fileutils'
++$LOAD_PATH.replace(__saved_load_path)
+ class Object
++  remove_const :CROSS_COMPILING if defined?(CROSS_COMPILING)
+   CROSS_COMPILING = RUBY_PLATFORM
+   remove_const :RUBY_PLATFORM
+   remove_const :RUBY_VERSION

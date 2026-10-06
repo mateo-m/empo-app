@@ -1,0 +1,287 @@
+diff --git a/src/video/uikit/SDL_uikitopengles.m b/src/video/uikit/SDL_uikitopengles.m
+index e0e7b5b38..e271b9306 100644
+--- a/src/video/uikit/SDL_uikitopengles.m
++++ b/src/video/uikit/SDL_uikitopengles.m
+@@ -121,9 +121,9 @@ int UIKit_GL_SwapWindow(_THIS, SDL_Window * window)
+ 
+         [context.sdlView swapBuffers];
+ 
+-        /* You need to pump events in order for the OS to make changes visible.
+-         * We don't pump events here because we don't want iOS application events
+-         * (low memory, terminate, etc.) to happen inside low level rendering. */
++        if (context.sdlView.glContextBroken) {
++            return SDL_SetError("GL context crashed (SIGSEGV in presentRenderbuffer)");
++        }
+     }
+     return 0;
+ }
+diff --git a/src/video/uikit/SDL_uikitopenglview.h b/src/video/uikit/SDL_uikitopenglview.h
+index 15f1770a4..dd1b70182 100644
+--- a/src/video/uikit/SDL_uikitopenglview.h
++++ b/src/video/uikit/SDL_uikitopenglview.h
+@@ -53,6 +53,8 @@
+ @property (nonatomic, readonly) GLuint drawableFramebuffer;
+ @property (nonatomic, readonly) GLuint msaaResolveFramebuffer;
+ 
++@property (nonatomic, readonly) BOOL glContextBroken;
++
+ - (void)swapBuffers;
+ 
+ - (void)updateFrame;
+diff --git a/src/video/uikit/SDL_uikitopenglview.m b/src/video/uikit/SDL_uikitopenglview.m
+index 3e59f19bc..4a819e2ca 100644
+--- a/src/video/uikit/SDL_uikitopenglview.m
++++ b/src/video/uikit/SDL_uikitopenglview.m
+@@ -26,6 +26,9 @@
+ #include <OpenGLES/ES2/glext.h>
+ #import "SDL_uikitopenglview.h"
+ #include "SDL_uikitwindow.h"
++#include <stdatomic.h>
++
++extern void mkxp_setGLContextBroken(void);
+ 
+ @implementation SDL_uikitopenglview {
+     /* The renderbuffer and framebuffer used to render to this layer. */
+@@ -46,11 +49,28 @@
+     int samples;
+ 
+     BOOL retainedBacking;
++
++    BOOL _glContextBroken;
++
++    int _presentFailCount;
++
++    /* Set by layoutSubviews (main thread) when the layer size changes.
++     * Consumed by swapBuffers (RGSS thread) to defer the renderbuffer
++     * resize to the thread that owns the GL context.  This prevents
++     * concurrent EAGLContext access between threads.
++     *
++     * NOTE: The SIGSEGV in libGLImage __glgProcessPixelsWithProcessor
++     * during rapid rotation is a confirmed iOS Simulator bug — it
++     * reproduces even with ALL resize/GL code disabled, triggered
++     * purely by presentRenderbuffer while the simulator rotates.
++     * It does not reproduce on real devices. */
++    atomic_bool _needsFrameUpdate;
+ }
+ 
+ @synthesize context;
+ @synthesize backingWidth;
+ @synthesize backingHeight;
++@synthesize glContextBroken = _glContextBroken;
+ 
+ + (Class)layerClass
+ {
+@@ -278,20 +298,46 @@
+ 
+ - (void)swapBuffers
+ {
++    if (_glContextBroken) {
++        return;
++    }
++
++    /* Perform deferred renderbuffer resize on the RGSS thread (the sole
++     * owner of the EAGLContext).  glFinish() drains pending GL commands
++     * before we destroy the old renderbuffer storage. */
++    if (atomic_load_explicit(&_needsFrameUpdate, memory_order_acquire)) {
++        glFinish();
++        [self updateFrame];
++        atomic_store_explicit(&_needsFrameUpdate, false, memory_order_release);
++
++        GLenum err = glGetError();
++        if (err != GL_NO_ERROR) {
++            _glContextBroken = YES;
++            mkxp_setGLContextBroken();
++            return;
++        }
++
++        GLuint fbo = msaaFramebuffer ? msaaFramebuffer : viewFramebuffer;
++        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
++        GLenum fbStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
++        if (fbStatus != GL_FRAMEBUFFER_COMPLETE || backingWidth <= 0 || backingHeight <= 0) {
++            _glContextBroken = YES;
++            mkxp_setGLContextBroken();
++            return;
++        }
++    }
++
+     if (msaaFramebuffer) {
+         const GLenum attachments[] = {GL_COLOR_ATTACHMENT0};
+ 
+         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, viewFramebuffer);
+ 
+-        /* OpenGL ES 3+ provides explicit MSAA resolves via glBlitFramebuffer.
+-         * In OpenGL ES 1 and 2, MSAA resolves must be done via an extension. */
+         if (context.API >= kEAGLRenderingAPIOpenGLES3) {
+             int w = backingWidth;
+             int h = backingHeight;
+             glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+ 
+             if (!retainedBacking) {
+-                /* Discard the contents of the MSAA drawable color buffer. */
+                 glInvalidateFramebuffer(GL_READ_FRAMEBUFFER, 1, attachments);
+             }
+         } else {
+@@ -302,15 +348,21 @@
+             }
+         }
+ 
+-        /* We assume the "drawable framebuffer" (MSAA draw framebuffer) was
+-         * previously bound... */
+         glBindFramebuffer(GL_DRAW_FRAMEBUFFER, msaaFramebuffer);
+     }
+ 
+-    /* viewRenderbuffer should always be bound here. Code that binds something
+-     * else is responsible for rebinding viewRenderbuffer, to reduce duplicate
+-     * state changes. */
+-    [context presentRenderbuffer:GL_RENDERBUFFER];
++    /* presentRenderbuffer: returns NO when the GL context or layer is
++     * in a bad state (e.g. during rapid simulator rotation).  A few
++     * transient failures are tolerable, but consecutive failures mean
++     * the context is unrecoverable. */
++    if (![context presentRenderbuffer:GL_RENDERBUFFER]) {
++        if (++_presentFailCount >= 3) {
++            _glContextBroken = YES;
++            mkxp_setGLContextBroken();
++        }
++    } else {
++        _presentFailCount = 0;
++    }
+ }
+ 
+ - (void)layoutSubviews
+@@ -320,18 +372,10 @@
+     int width  = (int) (self.bounds.size.width * self.contentScaleFactor);
+     int height = (int) (self.bounds.size.height * self.contentScaleFactor);
+ 
+-    /* Update the color and depth buffer storage if the layer size has changed. */
+     if (width != backingWidth || height != backingHeight) {
+-        EAGLContext *prevContext = [EAGLContext currentContext];
+-        if (prevContext != context) {
+-            [EAGLContext setCurrentContext:context];
+-        }
+-
+-        [self updateFrame];
+-
+-        if (prevContext != context) {
+-            [EAGLContext setCurrentContext:prevContext];
+-        }
++        backingWidth = width;
++        backingHeight = height;
++        atomic_store_explicit(&_needsFrameUpdate, true, memory_order_release);
+     }
+ }
+ 
+diff --git a/src/video/uikit/SDL_uikitvideo.h b/src/video/uikit/SDL_uikitvideo.h
+index 99e8b0fb2..94f926ecf 100644
+--- a/src/video/uikit/SDL_uikitvideo.h
++++ b/src/video/uikit/SDL_uikitvideo.h
+@@ -35,6 +35,9 @@
+ 
+ CGRect UIKit_ComputeViewFrame(SDL_Window *window, UIScreen *screen);
+ 
++API_AVAILABLE(ios(13.0))
++UIWindowScene *UIKit_GetActiveWindowScene(void);
++
+ #endif /* __OBJC__ */
+ 
+ void UIKit_SuspendScreenSaver(_THIS);
+diff --git a/src/video/uikit/SDL_uikitvideo.m b/src/video/uikit/SDL_uikitvideo.m
+index 8b16c2399..9dae2f137 100644
+--- a/src/video/uikit/SDL_uikitvideo.m
++++ b/src/video/uikit/SDL_uikitvideo.m
+@@ -230,6 +230,39 @@ CGRect UIKit_ComputeViewFrame(SDL_Window *window, UIScreen *screen)
+     return frame;
+ }
+ 
++UIWindowScene *UIKit_GetActiveWindowScene(void)
++{
++    if (@available(iOS 13.0, tvOS 13.0, *)) {
++        NSSet<UIScene *> *connectedScenes = [UIApplication sharedApplication].connectedScenes;
++
++        for (UIScene *scene in connectedScenes) {
++            if ([scene isKindOfClass:[UIWindowScene class]]) {
++                UIWindowScene *windowScene = (UIWindowScene *)scene;
++                if (windowScene.activationState == UISceneActivationStateForegroundActive) {
++                    return windowScene;
++                }
++            }
++        }
++
++        for (UIScene *scene in connectedScenes) {
++            if ([scene isKindOfClass:[UIWindowScene class]]) {
++                UIWindowScene *windowScene = (UIWindowScene *)scene;
++                if (windowScene.activationState == UISceneActivationStateForegroundInactive) {
++                    return windowScene;
++                }
++            }
++        }
++
++        for (UIScene *scene in connectedScenes) {
++            if ([scene isKindOfClass:[UIWindowScene class]]) {
++                return (UIWindowScene *)scene;
++            }
++        }
++    }
++
++    return nil;
++}
++
+ void UIKit_ForceUpdateHomeIndicator()
+ {
+ #if !TARGET_OS_TV
+diff --git a/src/video/uikit/SDL_uikitviewcontroller.m b/src/video/uikit/SDL_uikitviewcontroller.m
+index 3baadd854..0a4e1d401 100644
+--- a/src/video/uikit/SDL_uikitviewcontroller.m
++++ b/src/video/uikit/SDL_uikitviewcontroller.m
+@@ -426,6 +426,20 @@ SDL_HideHomeIndicatorHintChanged(void *userdata, const char *name, const char *o
+ 
+ - (void)updateKeyboard
+ {
++    /* Empo: when the host app has reparented SDL's view into its own
++     * window (single-window compositing), the host owns the view's
++     * geometry. SDL's hidden UIWindow stops tracking rotation, so
++     * reassigning the frame from it here would stamp stale bounds
++     * onto the game surface every time the soft keyboard shows or
++     * hides, resizing/squashing the rendered game. */
++    if (window != NULL) {
++        SDL_WindowData *data = (__bridge SDL_WindowData *) window->driverdata;
++        if (data != nil && data.uiwindow != nil && self.view.window != nil &&
++            self.view.window != data.uiwindow) {
++            return;
++        }
++    }
++
+     CGAffineTransform t = self.view.transform;
+     CGPoint offset = CGPointMake(0.0, 0.0);
+     CGRect frame = UIKit_ComputeViewFrame(window, self.view.window.screen);
+diff --git a/src/video/uikit/SDL_uikitwindow.m b/src/video/uikit/SDL_uikitwindow.m
+index d69617983..233dec716 100644
+--- a/src/video/uikit/SDL_uikitwindow.m
++++ b/src/video/uikit/SDL_uikitwindow.m
+@@ -212,11 +212,24 @@ int UIKit_CreateWindow(_THIS, SDL_Window *window)
+ 
+         /* ignore the size user requested, and make a fullscreen window */
+         /* !!! FIXME: can we have a smaller view? */
+-        UIWindow *uiwindow = [[SDL_uikitwindow alloc] initWithFrame:data.uiscreen.bounds];
++        UIWindow *uiwindow = nil;
++        if (@available(iOS 13.0, tvOS 13.0, *)) {
++            UIWindowScene *scene = UIKit_GetActiveWindowScene();
++            if (scene) {
++                uiwindow = [[SDL_uikitwindow alloc] initWithWindowScene:scene];
++            }
++        }
++        if (!uiwindow) {
++            uiwindow = [[SDL_uikitwindow alloc] initWithFrame:data.uiscreen.bounds];
++        }
+ 
+         /* put the window on an external display if appropriate. */
+         if (data.uiscreen != [UIScreen mainScreen]) {
+-            [uiwindow setScreen:data.uiscreen];
++            if (@available(iOS 13.0, tvOS 13.0, *)) {
++                /* iOS 13+ uses UIWindowScene to manage screen association */
++            } else {
++                [uiwindow setScreen:data.uiscreen];
++            }
+         }
+ 
+         if (SetupWindowData(_this, window, uiwindow, SDL_TRUE) < 0) {

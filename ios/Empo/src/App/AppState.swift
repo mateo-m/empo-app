@@ -83,6 +83,9 @@ class AppState {
             let core = GameCores.core(forGameAt: container.gameURL), core.isInThisBuild
         else { return }
         SaveMigration.migrateLegacySavesIfNeeded(for: container)
+        // The hard stop of 7.6. A restore in flight stops at once,
+        // and it keeps its record and its staged blobs.
+        RestoreCoordinator.shared.stopForGameLaunch()
         selectedGame = game
         // Bind the controls layout to this game so edits during play
         // persist to this game's layout profile.
@@ -224,6 +227,10 @@ class AppState {
         // here so last-played and totals update even though the
         // engine keeps running.
         session.recordSessionPlayTime(for: activeSessionGame)
+        // The runtime watch of SPEC 3.6 reads here too. The pause is
+        // the only way back to the library, so it is the last point
+        // the app controls before the user may close it.
+        GameSaveWatch.shared.takeReading()
         EngineState.shared.isBackgroundPause = false
         session.requestPause()
     }
@@ -301,6 +308,10 @@ class AppState {
     func flushSessionPlayTimeForBackground() {
         guard activeSessionGame != nil else { return }
         session.recordSessionPlayTime(for: activeSessionGame)
+        // Same reason as the play time: the user can close Empo from
+        // the app switcher, and no callback follows. A save the game
+        // wrote before that must still join the set of SPEC 3.6.
+        GameSaveWatch.shared.takeReading()
     }
 
     /// Restarts the session timer after the app returns from the
@@ -350,6 +361,9 @@ extension AppState: EngineSessionCoordinatorDelegate {
     }
 
     private func clearEndedGame() {
+        // The backup backbone of SPEC 7.3 runs at session end. The
+        // game goes away below, so read it first.
+        let played = activeSessionGame
         quitOnPause = false
         resumeTask?.cancel()
         resumeTask = nil
@@ -363,6 +377,9 @@ extension AppState: EngineSessionCoordinatorDelegate {
         ScreenRegionApplier.endSession()
         engineReady = false
         PauseManager.shared.reset()
+        // Last, because 7.6 counts a paused session as live and
+        // `reset()` is what ends it.
+        BackupScheduler.shared.playSessionDidEnd(game: played)
     }
 
     func coordinatorPausedGameStopped() {

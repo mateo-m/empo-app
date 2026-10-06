@@ -85,6 +85,16 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    SettingsNavigationRow(
+                        title: "Backups",
+                        description:
+                            "Keep copies of your saves in iCloud Drive, Dropbox, Google Drive, or on your own server."
+                    ) {
+                        BackupsScreen()
+                    }
+                }
+
+                Section {
                     SettingsToggle(
                         title: "Diagnostics overlay",
                         isOn: $settings.diagnosticsOverlay,
@@ -896,8 +906,7 @@ private struct BuildInfoSheet: View {
     var body: some View {
         StandardSheet(
             title: "Build info",
-            chromeAllowance: AppSize.libraryHeader,
-            trailingButton: SheetBarAction("Done") { dismiss() }
+            barAction: SheetBarAction("Close") { dismiss() }
         ) {
             SheetCard {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in

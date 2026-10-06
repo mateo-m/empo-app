@@ -165,17 +165,45 @@ Build a sheet from the parts in `ios/Empo/src/Design/Sheet.swift`. Examples to c
 `SettingsView`, and `PlayerMoreSheet` for a sheet over a running game.
 
 ```swift
-StandardSheet(title: "Saves recovered", emblem: "checkmark.seal") {
-    SheetBodyText("What happened and why.")
-    SheetCard { /* rows, with SheetRowSeparator between them */ }
-    SheetFootnote("The fine print.")
-    SheetPrimaryButton("Done") { dismiss() }
+StandardSheet(
+    title: "Resume the backup?",
+    barAction: SheetBarAction("Not now") { answer(.later) }
+) {
+    SheetBodyText("Rejuvenation did not finish backing up. About 2.8 GB left.", naming: "Rejuvenation")
+    SheetPrimaryButton("Resume") { answer(.resume) }
+    SheetQuietButton("Stop backup") { show(.stop) }
 }
 ```
 
-`StandardSheet` sets the surface, the title, the height, the brand tint and the optional
-toolbar action. The sheet author sets the content, the alignment in rows, the tap targets
-and the haptics. A sheet over a running game passes `surface: .material`.
+`StandardSheet` sets the surface, the title row, the corner icon, the height and the brand
+tint. The sheet author sets the content, the alignment in rows, the tap targets and the
+haptics. A sheet over a running game passes `surface: .material`.
+
+### Ask like a person
+
+A sheet that asks something follows these rules. They come from the Human Interface
+Guidelines on alerts, action sheets and writing, from the Windows dialog guidelines, and
+from the tray pattern of the Family app.
+
+- The title is the question that the buttons answer, or the one thing that happened.
+  "Resume the backup?", "Remove Dropbox?", "Saves recovered". Sentence case. No label
+  titles such as "Backup Interrupted".
+- The body says why the sheet is here and what the user cannot see. One or two short
+  sentences. It never repeats the title. Name the game or the target with
+  `SheetBodyText(_:naming:)`, so that it is heavier than the words around it.
+- Buttons are verbs that name the result, three words at most. "Resume", "Back it up",
+  "Sync settings". Never "Yes", "No" or "OK". "Done" closes a sheet that only informs.
+- The safe exit ("Not now", "Cancel") is the corner icon, never a button in the stack. A
+  swipe down does the same as the icon, and the sheet records that answer too.
+- A destructive answer is one step deeper. Its step asks the question again, the body
+  says what goes and what stays, and the one button is `SheetDestructiveButton`. A
+  `SheetQuietButton` under the primary opens that step. The icon on that step is
+  `symbol: .back`, at the leading corner.
+- One question per step. Change the step in `withAnimation`, and give the content
+  `.transition(.sheetStep)`. The old step and the old title blur and fade out, the new
+  ones blur and fade in, and the sheet changes its height with the same motion.
+- Never ask with an alert at launch. A record that needs an answer gets a sheet, on the
+  library, after the splash.
 
 ### When to use a sheet
 
@@ -207,9 +235,11 @@ and the haptics. A sheet over a running game passes `surface: .material`.
 From top to bottom. Each part is optional, except the action.
 
 1. **Title.** Use one of two shapes. Do not mix them.
-   - No emblem: an inline navigation bar title (image sources, build info).
+   - No emblem: a centered `title2` bold title at the top of the content. Close is at
+     the trailing corner, back at the leading corner.
    - An emblem: the title and the 48 pt brand-tinted symbol are one centered block at the
-     top of the content. Pass `emblem:` to `StandardSheet`.
+     top of the content. Pass `emblem:` to `StandardSheet`. The corner icon, if there is
+     one, floats over that block.
 2. **Body text.** `subheadline` secondary, aligned to the leading edge. Only the title
    block is centered.
 3. **Card.** Rows aligned to the leading edge: a 44 pt thumbnail (`Radius.sm`), a text
@@ -218,9 +248,10 @@ From top to bottom. Each part is optional, except the action.
 4. **Footer.** `footnote` secondary, aligned to the leading edge.
 5. **Primary action.** One full-width button at the bottom (`SheetPrimaryButton`). A
    secondary action, such as a link, goes under it as centered `subheadline` brand text
-   with a 44 pt tap target (`WhatsNewSheet`). A
-   destructive action goes in its own card above it, never in a red primary button. A
-   picker with steps can confirm from the toolbar (`ImportRootPickerSheet`).
+   with a 44 pt tap target (`WhatsNewSheet`). A destructive action is never the brand
+   primary. It is a row in its own card, or the one `SheetDestructiveButton` of a
+   confirmation step. A picker with steps can confirm from the toolbar
+   (`ImportRootPickerSheet`).
 
 ### Tap targets
 
@@ -230,13 +261,15 @@ From top to bottom. Each part is optional, except the action.
 
 ### Metrics
 
-- Outer padding: `Spacing.xl` on all sides.
+- Outer padding: `Spacing.xl` on the sides and the top, `Spacing.sm` at the bottom. The
+  safe area of the home indicator pads the rest.
 - Between parts: `Spacing.xl`.
 - In a text column: `Spacing.xxs` to `Spacing.md`.
 - Row padding: `Spacing.lg` horizontal, `Spacing.md` vertical.
 
 ### Behavior
 
+- Titles and button labels are sentence case. Only names keep their capitals.
 - A rare sheet can have more motion. A sheet the user opens often (sort, image sources)
   uses only the system transition.
 - The system sheet controls the drag. Do not change it.

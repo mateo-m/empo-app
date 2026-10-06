@@ -1,0 +1,4 @@
+# Ruby 3.1 iOS cross-compile + mkxp-z syntax-transform parser patches.
+ruby31/ios.patch
+ruby31/socket-extconf-ios.patch
+patch:@engine@/syntax-transform/3.1/*.patch

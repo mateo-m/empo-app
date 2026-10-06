@@ -36,6 +36,7 @@ struct GameSettingsView: View {
         NavigationStack {
             Form {
                 model.core?.settingsPage(model)
+                backupSection
 
                 if model.hasAnyCustomizations {
                     Section {
@@ -111,8 +112,45 @@ struct GameSettingsView: View {
             // that onChange delivery, and the change never reaches
             // disk. Save once more on the way out.
             .onDisappear { model.save() }
+            .task {
+                // The row shows the status line alone, so it
+                // reads no size and walks no directory.
+                let model = BackupSheetModel(container: game.container!, gameName: game.title)
+                model.refresh()
+                backupModel = model
+            }
         }
         .tint(.brand)
+    }
+
+    @State private var showBackupSheet = false
+    @State private var backupModel: BackupSheetModel?
+
+    /// The one value row of SPEC 13.15. Its detail text is the
+    /// status line the Backup sheet shows, so the row and the sheet
+    /// always say the same thing.
+    @ViewBuilder private var backupSection: some View {
+        if let backupModel {
+            Section {
+                Button {
+                    showBackupSheet = true
+                } label: {
+                    HStack {
+                        Text("Backup")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(backupModel.line)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .sheet(isPresented: $showBackupSheet) {
+                    BackupSheet(model: backupModel)
+                }
+            } footer: {
+                Text("Copy this game's saves to a service you already use.")
+            }
+        }
     }
 
 }

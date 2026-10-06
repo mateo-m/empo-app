@@ -21,6 +21,10 @@ struct GameLibraryView: View {
     @Environment(\.pauseManager) private var pauseManager
     @State private var showImporter = false
     @State private var showSettings = false
+    /// The Backups screen, which the pill of 13.2 and the 21-day
+    /// banner of 7.1 both open.
+    @State private var showsBackups = false
+    @State private var resumeAsk: ResumeQuestionAsk?
     @State private var errorMessage: String?
     // TODO(localization): once the app has a strings catalog these
     // copy fallbacks should move into it alongside the other
@@ -215,13 +219,50 @@ struct GameLibraryView: View {
             .task {
                 duplicateNoticeNames = GameContainerMigration.pendingDuplicateNoticeNames()
             }
+            .task(id: library.initialScanCompleted) {
+                BackupBadges.shared.reads {
+                    library.games.map { BackupBadgeGame(id: $0.id, lastPlayed: $0.lastPlayed) }
+                }
+            }
+            .task { takeTheResumeQuestion() }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) {
+                _ in
+                takeTheResumeQuestion()
+            }
             .task(id: library.initialScanCompleted && appState.errorMessage == nil) {
                 autoStartGameFromEnvironment()
             }
     }
 
+    /// The question of 13.18 comes once, at the launch after the
+    /// interruption. The system relaunches Empo in the background for
+    /// a finished upload, and that launch never reaches the user, so
+    /// only an active app takes the question. `scenePhase` stays
+    /// `.inactive` under the UIHostingController, so this reads UIKit.
+    private func takeTheResumeQuestion() {
+        guard UIApplication.shared.applicationState == .active, splashDismissed,
+            !Self.tookTheResumeQuestion
+        else {
+            return
+        }
+        // The library comes back from the player with a new `.task`,
+        // and a run that a game start stopped still holds its record
+        // for a moment. Only the first active look is the launch.
+        Self.tookTheResumeQuestion = true
+        resumeAsk = ResumeQuestionAsk.pending()
+    }
+
+    @MainActor private static var tookTheResumeQuestion = false
+
     private var libraryPresentedContent: some View {
         libraryScene
+            .sheet(isPresented: $showsBackups) {
+                NavigationStack { BackupsScreen() }
+                    .tint(.brand)
+            }
+            .sheet(item: $resumeAsk) { ask in
+                ResumeQuestionSheet(ask: ask)
+            }
             .modifier(
                 BulkDeleteAlert(
                     isPresented: $showBulkDeleteConfirm,
@@ -239,6 +280,7 @@ struct GameLibraryView: View {
             .modifier(
                 DuplicateGamesNotice(names: $duplicateNoticeNames, active: splashDismissed)
             )
+            .modifier(PackageImportPresentation(active: splashDismissed))
             .modifier(
                 SaveRecoveryPresentation(games: library.games, active: splashDismissed)
             )
@@ -305,8 +347,10 @@ struct GameLibraryView: View {
             }
             .overlay(alignment: .topTrailing) { importButtonOverlay }
             .overlay(alignment: .bottom) { bulkDeleteOverlay }
-            .safeAreaInset(edge: .bottom, spacing: 0) { updateBannerInset }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomPills }
             .animation(Motion.bouncy, value: showsUpdateBanner)
+            .animation(Motion.bouncy, value: showsBackupPill)
+            .animation(Motion.bouncy, value: BackupBadges.shared.banner)
     }
 
     private var libraryContentLayer: some View {
@@ -363,6 +407,22 @@ struct GameLibraryView: View {
         }
     }
 
+    /// The one banner of 7.1, at 21 days. It names the cause and
+    /// carries the single action that clears it.
+    @ViewBuilder private var backupStaleBanner: some View {
+        if let banner = BackupBadges.shared.banner, !selectionMode, splashDismissed {
+            BackupStaleBannerView(
+                banner: banner, targetLabel: BackupBadges.shared.bannerTargetLabel
+            ) {
+                if BackupBadges.shared.bannerOpensTheBackupsScreen {
+                    showsBackups = true
+                } else {
+                    BackupBadges.shared.pressTheBanner()
+                }
+            }
+        }
+    }
+
     private var libraryBackground: some View {
         // Clear while playing so a faded-out library cannot paint an
         // opaque systemBackground over the SDL game window beneath
@@ -384,14 +444,29 @@ struct GameLibraryView: View {
         return true
     }
 
+    private var showsBackupPill: Bool {
+        BackupRunMonitor.shared.showsPill && !selectionMode && splashDismissed
+    }
+
+    /// The floating pills of the library, one above the other: the
+    /// progress pill of 13.2, the stale banner of 7.1, and the update
+    /// banner. Selection mode hides them for the delete button.
     @ViewBuilder
-    private var updateBannerInset: some View {
-        if showsUpdateBanner {
-            libraryUpdateBanner
-                .padding(.horizontal, Spacing.xl)
-                .padding(.bottom, Spacing._2xl)
+    private var bottomPills: some View {
+        VStack(spacing: Spacing.md) {
+            if showsBackupPill {
+                BackupProgressPill { showsBackups = true }
+                    .transition(.move(edge: .bottom).combined(with: .fadeBlur))
+            }
+            backupStaleBanner
                 .transition(.move(edge: .bottom).combined(with: .fadeBlur))
+            if showsUpdateBanner {
+                libraryUpdateBanner
+                    .transition(.move(edge: .bottom).combined(with: .fadeBlur))
+            }
         }
+        .padding(.horizontal, Spacing.xl)
+        .padding(.bottom, Spacing._2xl)
     }
 
     @ViewBuilder
@@ -1119,6 +1194,7 @@ struct GameLibraryView: View {
 
     private func handleSplashDismissedChange(_ dismissed: Bool) {
         if dismissed {
+            takeTheResumeQuestion()
             staggerTrigger = UUID()
             // Clear entrance delay after first mount so subsequent
             // animations (view mode switch, new imports) play instantly.

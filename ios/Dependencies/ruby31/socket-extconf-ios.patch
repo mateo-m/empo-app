@@ -1,0 +1,23 @@
+diff --git a/ext/socket/extconf.rb b/ext/socket/extconf.rb
+index b70a862414..dc89c435e2 100644
+--- a/ext/socket/extconf.rb
++++ b/ext/socket/extconf.rb
+@@ -660,8 +660,16 @@ def %(s) s || self end
+ int t(struct in6_addr *addr) {return IN6_IS_ADDR_UNSPECIFIED(addr);}
+ SRC
+     print "fixing apple's netinet6/in6.h ..."; $stdout.flush
+-    in6 = File.read("/usr/include/#{hdr}")
+-    if in6.gsub!(/\*\(const\s+__uint32_t\s+\*\)\(const\s+void\s+\*\)\(&(\(\w+\))->s6_addr\[(\d+)\]\)/) do
++    # When cross-compiling (iOS/iPadOS etc.) the build host has no
++    # /usr/include; read the header out of the -isysroot/SDKROOT SDK
++    # instead, and skip the fixup gracefully when it can't be found
++    # rather than aborting the whole extension.
++    sysroot = "#{$CFLAGS} #{$CPPFLAGS} #{ENV['CFLAGS']} #{ENV['CPPFLAGS']}"[/-isysroot *(\S+)/, 1] || ENV['SDKROOT']
++    in6_path = ["/usr/include/#{hdr}"]
++    in6_path.unshift("#{sysroot}/usr/include/#{hdr}") if sysroot
++    in6_path = in6_path.find {|f| File.exist?(f)}
++    in6 = in6_path ? File.read(in6_path) : nil
++    if in6 and in6.gsub!(/\*\(const\s+__uint32_t\s+\*\)\(const\s+void\s+\*\)\(&(\(\w+\))->s6_addr\[(\d+)\]\)/) do
+         i, r = $2.to_i.divmod(4)
+         if r.zero?
+           "#$1->__u6_addr.__u6_addr32[#{i}]"

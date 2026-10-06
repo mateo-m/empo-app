@@ -13,8 +13,30 @@ final class EmpoSceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
         AppWindow.install(in: windowScene)
+        // The backup schedule of SPEC 7. It watches the app lifetime,
+        // so it starts once the scene connects.
+        BackupScheduler.shared.start()
+        // The preference sync of SPEC 10. It runs when Empo opens,
+        // per 10.11.
+        BackupLaunchGate.shared.whenOpen { SyncPass.shared.start() }
         #if DEBUG
         UITestVirtualController.connectIfRequested()
         #endif
+        // A cold launch from Files delivers the file here, not in
+        // openURLContexts.
+        self.scene(scene, openURLContexts: connectionOptions.urlContexts)
+    }
+
+    /// Takes the OAuth callback of SPEC 8.10 and the backup package
+    /// of 12.6.
+    ///
+    /// The callback is a custom URL scheme, because an https link
+    /// needs the Associated Domains entitlement and a sideloaded
+    /// build does not hold it.
+    func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
+        for context in contexts {
+            if OAuthSignIn.shared.resume(with: context.url) { return }
+            if PackageInbox.shared.accept(context.url) { return }
+        }
     }
 }

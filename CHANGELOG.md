@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.7.1 - 2026-10-06
+
+### Highlights
+
+- Add the rpg maker mv and mz core and one psdk core for each ruby (#159) ([`619732a`](https://github.com/mateo-m/empo-app/commit/619732adafd6a53de0a061a9eb448389d86b9272))
+- Run xp games that call ruby 1.9 methods on ruby 3.1 (#172) ([`d2542c7`](https://github.com/mateo-m/empo-app/commit/d2542c7d5418074985a5e3c48f28df90df91cc8f))
+
+### Bug Fixes
+
+- Stop the what's new text from sliding and move the changes link under continue (#157) ([`80e9089`](https://github.com/mateo-m/empo-app/commit/80e9089f89228cf40c9f3cd1b2d6995c5300895c))
+- Make the binding picker rows buttons (#163) ([`70701bf`](https://github.com/mateo-m/empo-app/commit/70701bfc845c004842f78d0771614f6a9923900e))
+- Wait for the crash alert before the test autostart (#165) ([`4c7ad45`](https://github.com/mateo-m/empo-app/commit/4c7ad45898bedfe358cec30b776bf80f83ab3798))
+- Reset fast forward and cheats when a new game starts (#167) ([`720cca3`](https://github.com/mateo-m/empo-app/commit/720cca3057b96708daca17691d26a1fd646f43aa))
+- Ignore modern ruby tokens in comments and strings (#183) ([`8af7dab`](https://github.com/mateo-m/empo-app/commit/8af7daba6eae30a4cfc0a32893805cc83c0835a8))
+- Measure the frame rate when a frame draws, not when the app reads it (#177) ([`8d7f49d`](https://github.com/mateo-m/empo-app/commit/8d7f49df80a8ac29783c5ec4f18795d9a7b336b1))
+- Use one empty library text that fits every game type (#184) ([`eccb13e`](https://github.com/mateo-m/empo-app/commit/eccb13e26ca576dbb8b128e9a2fd3c529f170178))
+- Fix the layout of the continue card, the sheets, and the loading screen (#176) ([`02c33c1`](https://github.com/mateo-m/empo-app/commit/02c33c1cd5dbf9568291af4715524fe1920ce1cf))
+- Read Vinemon scripts and send 0 for the desktop window size (#175) ([`6c8da5d`](https://github.com/mateo-m/empo-app/commit/6c8da5df5018dbb60c5b4a4f8b16cf76bb40e2e2))
+- Scan the scripts again when a file that the scan reads changes (#178) ([`1996f19`](https://github.com/mateo-m/empo-app/commit/1996f1943cbcbb6195ba2fc2c21bb762cad7e8f9))
+
+### Documentation
+
+- Update the notes to match the code and merge the sheet rules into the design system (#156) ([`62a2186`](https://github.com/mateo-m/empo-app/commit/62a2186c627641053dd7c104ed917f5ff60b8b20))
+
+### Features
+
+- Announce MV and MZ games and send the same items to AltStore (#188) ([`4ad959e`](https://github.com/mateo-m/empo-app/commit/4ad959efc4a14cbdd49c6575037c0e58620ae59f))
+
+### Other
+
+- Wrap the engine release from mkxp-z-apple-mobile (#164) ([`90e18c1`](https://github.com/mateo-m/empo-app/commit/90e18c1161f92a1ddf5ef8b97d15fdeeb51464bb))
+
+### Refactor
+
+- Wrap the psdk-apple-mobile core release (#161) ([`36f0fcb`](https://github.com/mateo-m/empo-app/commit/36f0fcb23bcfc593b4e9a219a36e59e12355ef0c))
+- Wrap the core from mvmz-apple-mobile (#162) ([`29173bd`](https://github.com/mateo-m/empo-app/commit/29173bd61a06ca2f359eedd75897877865baa0bf))
+- Give each core wrapper its own folder (#166) ([`331a73a`](https://github.com/mateo-m/empo-app/commit/331a73aaa9363fbd76e99b30399c1300fbab37e8))
+- Make GameCore.h the one contract every core implements (#168) ([`716cffb`](https://github.com/mateo-m/empo-app/commit/716cffb517fd42ca5080c48454eb74e90b60a861))
+- Keep every engine's names and formats out of GameCore.h (#169) ([`7816554`](https://github.com/mateo-m/empo-app/commit/781655477b5310275e2b2d88f6a6a49bc585210d))
+- Keep shared display settings out of mkxp.json (#170) ([`bb0c87b`](https://github.com/mateo-m/empo-app/commit/bb0c87b936d50555253004d87354602f64943e3f))
+- Let each core name its shared save folder (#171) ([`11103c6`](https://github.com/mateo-m/empo-app/commit/11103c64c0cb49aaca97d5dbaed9ed903eb9b3ec))
+
 ## 0.7.0 - 2026-09-23
 
 ### Highlights

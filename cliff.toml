@@ -28,6 +28,7 @@ include_paths = [
   "ios/Empo/Info.plist",
   "ios/Empo/PrivacyInfo.xcprivacy",
   "ios/Empo/Empo.entitlements",
+  "ios/Empo/Extension.entitlements",
   "ios/Empo/project.yml",
   "ios/Dependencies/**",
   "ios/GameProbe/Package.swift",

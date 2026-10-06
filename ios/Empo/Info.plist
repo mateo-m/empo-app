@@ -2,10 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).backup.nightly</string>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER).backup.manual.*</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
+		<dict>
+			<!-- The backup package of SPEC 12.6. Empo takes a ZIP file
+			     from Files so that "Open in Empo" starts the import.
+			     The rank is Alternate, because a ZIP file belongs to
+			     no one app. -->
+			<key>CFBundleTypeName</key>
+			<string>Backup package</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.zip-archive</string>
+			</array>
+		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>JoiPlay game archive</string>
@@ -31,8 +52,49 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<!-- The Dropbox OAuth callback of SPEC 8.10. It is a custom
+			     scheme and never an https link, because an https callback
+			     needs the Associated Domains entitlement, which a
+			     sideloaded build does not hold. -->
+			<key>CFBundleTypeRole</key>
+			<string>None</string>
+			<key>CFBundleURLName</key>
+			<string>sh.mateo.empo.dropbox</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>db-$(DROPBOX_APP_KEY)</string>
+			</array>
+		</dict>
+		<dict>
+			<!-- The Google Drive OAuth callback of SPEC 8.10 and 9.3.
+			     Google gives an iOS client the reversed form of its own
+			     id, and that is the scheme the callback comes back on.
+			     It is a custom scheme and never an https link. -->
+			<key>CFBundleTypeRole</key>
+			<string>None</string>
+			<key>CFBundleURLName</key>
+			<string>sh.mateo.empo.googledrive</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(GOOGLE_DRIVE_REDIRECT_SCHEME)</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- The Dropbox app key of SPEC 9.2. A PKCE client holds no
+	     secret, so this key is public. An empty key hides Dropbox from
+	     the add flow at runtime. -->
+	<key>EmpoDropboxAppKey</key>
+	<string>$(DROPBOX_APP_KEY)</string>
+	<!-- The Google Drive OAuth client id of SPEC 9.3. A PKCE client
+	     holds no secret, so this id is public. An empty id hides
+	     Google Drive from the add flow at runtime. -->
+	<key>EmpoGoogleDriveClientId</key>
+	<string>$(GOOGLE_DRIVE_CLIENT_ID)</string>
 	<key>EmpoAppGroup</key>
 	<string>$(EMPO_APP_GROUP)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -54,6 +116,18 @@
 	<string>Take a photo to use as custom game artwork or banner.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Empo finds nearby players on your network so you can play local multiplayer games.</string>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.sh.mateo.empo</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Empo</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -73,6 +147,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>processing</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<false/>
 	<key>UILaunchScreen</key>

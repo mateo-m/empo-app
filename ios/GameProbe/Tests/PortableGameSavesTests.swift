@@ -54,12 +54,13 @@ final class PortableGameSavesTests: XCTestCase {
     }
 
     func testMarshalMagicDetectsRenamedSavesWithForeignExtensions() throws {
-        try write(marshalBytes, to: "progress.sav")
-        try write(textBytes, to: "settings.sav")
+        // `.bin` carries no name signal, so the magic alone decides.
+        try write(marshalBytes, to: "progress.bin")
+        try write(textBytes, to: "settings.bin")
 
         XCTAssertEqual(
             PortableGameSaves.entryNames(atGameRoot: root),
-            ["progress.sav"])
+            ["progress.bin"])
     }
 
     func testEngineDirectoriesAreNeverEntered() throws {
@@ -117,15 +118,17 @@ final class PortableGameSavesTests: XCTestCase {
 
     func testNearMissMagicBytesAreExcluded() throws {
         // 0x04 0x07 is one off the Marshal version magic.
-        try write(Data([0x04, 0x07]), to: "almost.sav")
+        try write(Data([0x04, 0x07]), to: "almost.bin")
 
         XCTAssertEqual(PortableGameSaves.entryNames(atGameRoot: root), [])
     }
 
     func testEmptyFilesFallBackToTheNameSignal() throws {
-        // An empty file has no magic to read. Only a save-family
-        // extension keeps it (a truncated save is still a rescue
-        // candidate by name).
+        // An empty file has no magic to read. Only a name signal
+        // keeps it: the RGSS family, or the generic save names SPEC
+        // 3.6 added. A truncated save is still a rescue candidate by
+        // name.
+        try write(Data(), to: "empty.bin")
         try write(Data(), to: "empty.sav")
         try write(Data(), to: "empty.rxdata")
 
@@ -133,27 +136,27 @@ final class PortableGameSavesTests: XCTestCase {
             PortableGameSaves.hasMarshalMagic(root.appendingPathComponent("empty.sav")))
         XCTAssertEqual(
             PortableGameSaves.entryNames(atGameRoot: root),
-            ["empty.rxdata"])
+            ["empty.rxdata", "empty.sav"])
     }
 
     func testUnreadableFilesFallBackToTheNameSignal() throws {
         // The magic probe cannot open an unreadable file, so only
         // the save-family extension keeps it.
-        try write(marshalBytes, to: "locked.sav")
+        try write(marshalBytes, to: "locked.bin")
         try write(marshalBytes, to: "locked.rxdata")
-        for name in ["locked.sav", "locked.rxdata"] {
+        for name in ["locked.bin", "locked.rxdata"] {
             try fm.setAttributes(
                 [.posixPermissions: 0o000],
                 ofItemAtPath: root.appendingPathComponent(name).path)
         }
         defer {
-            for name in ["locked.sav", "locked.rxdata"] {
+            for name in ["locked.bin", "locked.rxdata"] {
                 try? fm.setAttributes(
                     [.posixPermissions: 0o644],
                     ofItemAtPath: root.appendingPathComponent(name).path)
             }
         }
-        if (try? FileHandle(forReadingFrom: root.appendingPathComponent("locked.sav"))) != nil {
+        if (try? FileHandle(forReadingFrom: root.appendingPathComponent("locked.bin"))) != nil {
             // Root ignores POSIX permission bits (CI containers can
             // run as root), so the failure cannot be provoked.
             try skipOrFail("0o000 file is still readable, likely running as root")
@@ -166,8 +169,9 @@ final class PortableGameSavesTests: XCTestCase {
 
     func testFileNamedLikeASaveFolderIsExcluded() throws {
         // The folder-name list applies to DIRECTORIES only. A plain
-        // file named "Save" has neither the extension nor the magic.
-        try write(textBytes, to: "Save")
+        // file named "Save Data" carries no extension, no magic, and
+        // no stem from the generic list of SPEC 3.6.
+        try write(textBytes, to: "Save Data")
 
         XCTAssertEqual(PortableGameSaves.entryNames(atGameRoot: root), [])
     }

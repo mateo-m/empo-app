@@ -69,6 +69,46 @@ final class RescuedSavesTests: XCTestCase {
         XCTAssertNil(RescuedSaves.readMarker(inBucket: bucket))
     }
 
+    // MARK: - The backup exclusion of SPEC 5.13
+
+    func testANewBucketIsNotExcludedFromBackup() throws {
+        let bucket = try makeBucket("Fixture Quest", identity: "Fixture Quest")
+
+        XCTAssertFalse(RescuedSaves.isExcludedFromBackup(bucket: bucket))
+    }
+
+    func testTheDeleteMarksTheBucketOutOfTheBackupSet() throws {
+        let bucket = try makeBucket("Fixture Quest", identity: "Fixture Quest")
+
+        XCTAssertTrue(RescuedSaves.excludeFromBackup(bucket: bucket))
+
+        XCTAssertTrue(RescuedSaves.isExcludedFromBackup(bucket: bucket))
+        // The exclusion keeps the identity the rescue wrote, so the
+        // bucket still matches its game on this device.
+        XCTAssertEqual(
+            RescuedSaves.readMarker(inBucket: bucket)?.folderName, "Fixture Quest")
+    }
+
+    func testABucketWithNoMarkerStillTakesTheExclusion() throws {
+        let bucket = try makeBucket("Orphan", identity: nil)
+
+        XCTAssertTrue(RescuedSaves.excludeFromBackup(bucket: bucket))
+        XCTAssertTrue(RescuedSaves.isExcludedFromBackup(bucket: bucket))
+    }
+
+    func testAnExcludedBucketLeavesTheBackupSet() throws {
+        let bucket = try makeBucket(
+            "Fixture Quest", identity: "Fixture Quest", files: ["Save1.rxdata": "slot"])
+        let request = LibraryBackupSetRequest(rescuedSavesBuckets: ["Fixture Quest": bucket])
+        XCTAssertFalse(BackupSetResolver.resolveLibraryStream(request).members.isEmpty)
+
+        RescuedSaves.excludeFromBackup(bucket: bucket)
+
+        // The saves the delete of 5.13 drained do not go back to the
+        // remote on the next run.
+        XCTAssertTrue(BackupSetResolver.resolveLibraryStream(request).members.isEmpty)
+    }
+
     // MARK: - Matching
 
     func testMatchingPrefersTheMarkerIdentityOverTheBucketName() throws {

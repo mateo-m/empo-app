@@ -1,0 +1,70 @@
+Force byte arithmetic for fiber machine-stack size in cont.c
+
+ALLOC_N(VALUE, n) and MEMCPY(dest, src, VALUE, n) both expand to
+sizeof(VALUE) * n bytes. Ruby 1.9's cont_save_machine_stack and
+fiber_setcontext compute n as `start - end` where start and end are
+VALUE *. The C standard makes that pointer subtraction undefined when
+the two pointers don't point into the same array; here `start` and
+`end` are taken from different stack frames (RUBY_INIT_STACK and
+rb_gc_set_stack_end respectively).
+
+Under the iOS sim arm64 toolchain (clang 21) the compiled code emits
+asymmetric size handling: ALLOC_N gets the truncated element count
+(byte_diff >> 3) but the MEMCPY size is folded to the raw byte_diff
+(no shift). Result: malloc returns N*8 bytes, memcpy writes
+N*8 + (byte_diff & 7) bytes - a tiny heap-buffer-overflow that ASan
+flags directly and that xzone_malloc detects later as freelist
+corruption (which surfaces as different-looking crashes deeper in
+the engine: vorbis decode, font lookups, etc).
+
+Casting through char * forces the compiler to treat the subtraction
+as integer math and to apply the >> 3 / * 8 round-trip consistently
+to both call sites. We round DOWN, dropping at most 7 bytes from the
+top of the saved stack region; that loss is a few bytes of
+compiler-padding above the highest live VALUE-aligned slot, never a
+live root.
+
+Same hunk applied to the FIBER_USE_NATIVE branch in fiber_setcontext
+where the symmetric `oldfib->cont.machine_stack_size = ...`
+assignment lives, so a future config that flips FIBER_USE_NATIVE on
+doesn't reintroduce the bug there.
+
+diff --git a/cont.c b/cont.c
+--- a/cont.c
++++ b/cont.c
+@@ -346,11 +346,15 @@ cont_save_machine_stack(rb_thread_t *th, rb_context_t *cont)
+ #endif
+ 
+     if (th->machine_stack_start > th->machine_stack_end) {
+-	size = cont->machine_stack_size = th->machine_stack_start - th->machine_stack_end;
++	size = cont->machine_stack_size =
++	    ((char *)th->machine_stack_start - (char *)th->machine_stack_end) /
++	    sizeof(VALUE);
+ 	cont->machine_stack_src = th->machine_stack_end;
+     }
+     else {
+-	size = cont->machine_stack_size = th->machine_stack_end - th->machine_stack_start;
++	size = cont->machine_stack_size =
++	    ((char *)th->machine_stack_end - (char *)th->machine_stack_start) /
++	    sizeof(VALUE);
+ 	cont->machine_stack_src = th->machine_stack_start;
+     }
+ 
+@@ -635,11 +639,15 @@ fiber_setcontext(rb_fiber_t *newfib, rb_fiber_t *oldfib)
+ 	STACK_GROW_DIR_DETECTION;
+ 	SET_MACHINE_STACK_END(&th->machine_stack_end);
+ 	if (STACK_DIR_UPPER(0, 1)) {
+-	    oldfib->cont.machine_stack_size = th->machine_stack_start - th->machine_stack_end;
++	    oldfib->cont.machine_stack_size =
++		((char *)th->machine_stack_start - (char *)th->machine_stack_end) /
++		sizeof(VALUE);
+ 	    oldfib->cont.machine_stack = th->machine_stack_end;
+ 	}
+ 	else {
+-	    oldfib->cont.machine_stack_size = th->machine_stack_end - th->machine_stack_start;
++	    oldfib->cont.machine_stack_size =
++		((char *)th->machine_stack_end - (char *)th->machine_stack_start) /
++		sizeof(VALUE);
+ 	    oldfib->cont.machine_stack = th->machine_stack_start;
+ 	}
+     }

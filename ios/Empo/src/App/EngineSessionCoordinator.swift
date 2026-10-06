@@ -166,6 +166,10 @@ final class EngineSessionCoordinator {
             crashTracker: crashTracker,
             sessionLogger: sessionLogger
         )
+        // The runtime watch of SPEC 3.6 takes its first reading of
+        // the game tree here, so the difference at session end names
+        // what the game wrote.
+        GameSaveWatch.shared.beginSession(container: input.container)
     }
 
     /// Hands the engine its game path and starts it.
@@ -389,6 +393,7 @@ final class EngineSessionCoordinator {
 
     private func handleEngineTerminated() {
         recordSessionPlayTime(for: delegate?.coordinatorActiveSessionGame)
+        GameSaveWatch.shared.endSession()
         if let container = delegate?.coordinatorSelectedGame?.container {
             crashTracker.removeMarker(for: container)
         }

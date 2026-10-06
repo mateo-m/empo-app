@@ -1,0 +1,6 @@
+{
+  "formatVersion": 1,
+  "hashFunction": "sha-256",
+  "blobNaming": "hash-hex",
+  "fanOutWidth": 2
+}

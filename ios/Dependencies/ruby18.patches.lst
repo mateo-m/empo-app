@@ -1,0 +1,4 @@
+# Ruby 1.8 iOS cross-compile patches (apply order matters).
+ruby18/ios.patch
+ruby18/cross-host.patch
+ruby18/rgss-superclass-override.patch

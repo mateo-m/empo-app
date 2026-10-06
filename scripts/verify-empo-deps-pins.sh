@@ -41,6 +41,17 @@ asset_sha256() {
     repo=$1
     tag=$2
     asset=$3
+    # GitHub's release API gives a sha256 digest for an asset. An asset
+    # without one is downloaded and hashed. The gh 2.45 of Ubuntu 24.04
+    # leaves the digest out of `gh release view --json`.
+    digest=$(gh api "repos/$repo/releases/tags/$tag" \
+        --jq ".assets[] | select(.name == \"$asset\") | .digest") || return 1
+    case "$digest" in
+        sha256:*)
+            printf '%s\n' "${digest#sha256:}"
+            return 0
+            ;;
+    esac
     tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/empo-deps-pin.XXXXXX")
     if ! gh release download "$tag" --repo "$repo" --pattern "$asset" --dir "$tmpdir" >/dev/null 2>&1; then
         rm -rf "$tmpdir"
