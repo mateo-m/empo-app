@@ -364,14 +364,14 @@ jobs:
           set -e
           VERSION="${{ needs.build.outputs.version }}"
           bun install --frozen-lockfile
-          scripts/extract-changelog.sh "$VERSION" > changelog-section.md
+          NOTES=$(scripts/whats-new-notes.sh "$VERSION")
           bun scripts/update-altstore-source.ts \
             --version "$VERSION" \
             --build "${{ needs.build.outputs.build }}" \
             --size "${{ needs.build.outputs.ipa_size }}" \
             --date "$(date -u +%Y-%m-%d)" \
             --download-url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/${{ needs.build.outputs.ipa_name }}" \
-            --description "$(cat changelog-section.md)"
+            --description "$NOTES"
           # The Format gate (oxfmt) checks this file on main. Keep the
           # generated manifest formatted so the gate stays green.
           bunx oxfmt altstore-source.json
