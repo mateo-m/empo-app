@@ -58,12 +58,9 @@ struct GameReport: Codable, Identifiable, Transferable {
         }
     }
 
-    /// Writes the report to a new file in the temporary folder.
-    @MainActor
-    func write() throws -> URL { try write(header: header()) }
-
-    /// The engine output in the log has no size limit, so the log goes
-    /// into the file in parts.
+    /// Writes the report to a new file in the temporary folder. The
+    /// engine output in the log has no size limit, so the log goes into
+    /// the file in parts.
     func write(header: String) throws -> URL {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(
             "Reports", isDirectory: true)

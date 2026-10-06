@@ -507,9 +507,26 @@ private struct ReportShareSheet: UIViewControllerRepresentable {
     let report: GameReport
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let items: [Any] = (try? report.write()).map { [$0] } ?? []
-        return UIActivityViewController(activityItems: items, applicationActivities: nil)
+        UIActivityViewController(
+            activityItems: [ReportItemProvider(report: report, header: report.header())],
+            applicationActivities: nil)
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+/// The share sheet reads `item` on a background thread, after the person
+/// picks where to send the report. The log can be large.
+private final class ReportItemProvider: UIActivityItemProvider, @unchecked Sendable {
+    private let report: GameReport
+    private let header: String
+
+    init(report: GameReport, header: String) {
+        self.report = report
+        self.header = header
+        super.init(
+            placeholderItem: FileManager.default.temporaryDirectory.appendingPathComponent("report.txt"))
+    }
+
+    override var item: Any { (try? report.write(header: header)) ?? Data() }
 }
