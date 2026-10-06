@@ -70,6 +70,9 @@ final class QuotaCheckTests: XCTestCase {
         let line = QuotaCheck.blockedLine(
             QuotaCheck.Shortfall(neededBytes: 2_500_000_000, freeBytes: 400_000_000))
 
-        XCTAssertEqual(line, "This target needs 2,1 GB more for the next backup")
+        // ByteCountFormatter follows the region: "2,1 GB" on a Mac set to France,
+        // "2.1 GB" on the Linux runner.
+        let missing = ByteCountFormatter.string(fromByteCount: 2_100_000_000, countStyle: .file)
+        XCTAssertEqual(line, "This target needs \(missing) more for the next backup")
     }
 }
