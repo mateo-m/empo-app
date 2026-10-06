@@ -194,7 +194,7 @@ BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
 
 APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print :EmpoAppGroup" "$APP/Info.plist")
 has_app_group() {
-    codesign -d --entitlements - --xml "$1" 2>/dev/null | grep -q "<string>$APP_GROUP</string>"
+    codesign -d --entitlements - --xml "$1" 2>/dev/null | grep -qF "<string>$APP_GROUP</string>"
 }
 has_app_group "$APP" || fail "Empo is not signed with the app group $APP_GROUP"
 for extension in "$APP"/Extensions/*.appex "$APP"/PlugIns/*.appex; do
