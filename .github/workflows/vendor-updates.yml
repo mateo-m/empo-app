@@ -28,19 +28,23 @@ jobs:
           set -euo pipefail
           report=""
 
-          mi_pin=$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' ios/Empo/vendor/mimalloc/README.md | head -1)
-          mi_major=${mi_pin%%.*}
-          mi_new=$(gh api repos/microsoft/mimalloc/tags --paginate --jq '.[].name' |
-              grep -E "^${mi_major}\.[0-9]+\.[0-9]+$" | sort -V | tail -1)
-          if [ "$mi_new" != "$mi_pin" ]; then
-              report+="- mimalloc: $mi_pin is pinned, $mi_new is out (https://github.com/microsoft/mimalloc/releases/tag/$mi_new)"$'\n'
+          if [ -f ios/Empo/vendor/mimalloc/README.md ]; then
+              mi_pin=$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' ios/Empo/vendor/mimalloc/README.md | head -1)
+              mi_major=${mi_pin%%.*}
+              mi_new=$(gh api repos/microsoft/mimalloc/tags --paginate --jq '.[].name' |
+                  grep -E "^${mi_major}\.[0-9]+\.[0-9]+$" | sort -V | tail -1)
+              if [ "$mi_new" != "$mi_pin" ]; then
+                  report+="- mimalloc: $mi_pin is pinned, $mi_new is out (https://github.com/microsoft/mimalloc/releases/tag/$mi_new)"$'\n'
+              fi
           fi
 
-          fh_pin=$(grep -oE '[0-9a-f]{40}' ios/Empo/vendor/fishhook/README.md | head -1)
-          fh_commits=$(gh api "repos/facebook/fishhook/compare/$fh_pin...main" \
-              --jq '[.files[].filename | select(test("^fishhook\\.[ch]$"))] | length')
-          if [ "$fh_commits" != 0 ]; then
-              report+="- fishhook: \`fishhook.c\` or \`fishhook.h\` changed after ${fh_pin:0:7} (https://github.com/facebook/fishhook/compare/$fh_pin...main)"$'\n'
+          if [ -f ios/Empo/vendor/fishhook/README.md ]; then
+              fh_pin=$(grep -oE '[0-9a-f]{40}' ios/Empo/vendor/fishhook/README.md | head -1)
+              fh_changed=$(gh api "repos/facebook/fishhook/compare/$fh_pin...main" \
+                  --jq '[.files[].filename | select(test("^fishhook\\.[ch]$"))] | length')
+              if [ "$fh_changed" != 0 ]; then
+                  report+="- fishhook: \`fishhook.c\` or \`fishhook.h\` changed after ${fh_pin:0:7} (https://github.com/facebook/fishhook/compare/$fh_pin...main)"$'\n'
+              fi
           fi
 
           open=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number,title \
