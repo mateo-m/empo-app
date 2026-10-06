@@ -14,8 +14,9 @@ items=$(jq -r --arg v "$VERSION" \
     '[.[] | select(.appVersion == $v) | .items[] | "\(.title)\n\(.detail)"] | join("\n\n")' \
     "$ROOT/ios/Empo/src/Library/WhatsNew.json")
 
+section=$("$ROOT/scripts/extract-changelog.sh" "$VERSION" "$CHANGELOG_PATH")
 fixes=""
-if "$ROOT/scripts/extract-changelog.sh" "$VERSION" "$CHANGELOG_PATH" | grep -q '^### Bug Fixes'; then
+if grep -q '^### Bug Fixes' <<<"$section"; then
     if [[ -n "$items" ]]; then fixes="This update also fixes some bugs."; else fixes="This update fixes some bugs."; fi
 fi
 

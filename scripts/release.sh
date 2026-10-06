@@ -358,13 +358,14 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     IPA_DOWNLOAD_URL="https://github.com/$REPO_SLUG/releases/download/v$VERSION/$IPA_NAME"
     RELEASE_DATE=$(date -u +%Y-%m-%d)
 
+    NOTES=$("$REPO_ROOT/scripts/whats-new-notes.sh" "$VERSION" "$CHANGELOG_PATH")
     bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
         --version "$VERSION" \
         --build "$BUILD" \
         --size "$IPA_SIZE" \
         --date "$RELEASE_DATE" \
         --download-url "$IPA_DOWNLOAD_URL" \
-        --description "$("$REPO_ROOT/scripts/whats-new-notes.sh" "$VERSION" "$CHANGELOG_PATH")"
+        --description "$NOTES"
 
     git -C "$REPO_ROOT" add "$ALTSTORE_SOURCE"
     if ! git -C "$REPO_ROOT" diff --cached --quiet; then
