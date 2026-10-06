@@ -42,8 +42,9 @@ asset_sha256() {
     tag=$2
     asset=$3
     # GitHub's release API gives a sha256 digest for an asset. An asset
-    # without one is downloaded and hashed.
-    digest=$(gh release view "$tag" --repo "$repo" --json assets \
+    # without one is downloaded and hashed. The gh 2.45 of Ubuntu 24.04
+    # leaves the digest out of `gh release view --json`.
+    digest=$(gh api "repos/$repo/releases/tags/$tag" \
         --jq ".assets[] | select(.name == \"$asset\") | .digest") || return 1
     case "$digest" in
         sha256:*)
