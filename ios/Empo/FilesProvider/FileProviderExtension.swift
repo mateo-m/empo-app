@@ -346,7 +346,9 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
     /// The path of `url` relative to `root`: empty for `root`, and nil
     /// when `url` is not inside it.
     private static func relativePath(of url: URL, root: URL) -> String? {
-        let path = url.resolvingSymlinksInPath().path
+        // The item itself can be a link, which is its own item.
+        let path = url.deletingLastPathComponent().resolvingSymlinksInPath()
+            .appendingPathComponent(url.lastPathComponent).path
         if path == root.path { return "" }
         guard path.hasPrefix(root.path + "/") else { return nil }
         return String(path.dropFirst(root.path.count + 1))
