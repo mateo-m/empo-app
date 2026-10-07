@@ -25,8 +25,12 @@ static void injectKey(int scancode, BOOL pressed) {
     NSMutableSet<UIPress *> *_hardwarePresses;
 }
 
-- (BOOL)hardwareKeyHeld {
-    return _hardwarePresses.count > 0;
+- (BOOL)holdsHardwareKey:(NSInteger)scancode {
+    for (UIPress *press in _hardwarePresses) {
+        if (press.key.keyCode == scancode)
+            return YES;
+    }
+    return NO;
 }
 
 - (void)pressesBegan:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {

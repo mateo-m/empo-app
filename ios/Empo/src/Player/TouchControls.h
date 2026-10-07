@@ -13,5 +13,5 @@
 // TCKeyboardField - hidden text field for system keyboard input
 @interface TCKeyboardField : UITextField
 // UIKit inserts the text of a hardware key while its press is held.
-@property (nonatomic, readonly) BOOL hardwareKeyHeld;
+- (BOOL)holdsHardwareKey:(NSInteger)scancode;
 @end

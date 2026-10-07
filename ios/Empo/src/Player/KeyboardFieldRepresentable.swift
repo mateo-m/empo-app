@@ -159,26 +159,30 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // KeyboardInputManager already sends its real key edges.
             // A second copy from here would release Shift while the
             // player still holds it.
-            let hardware = field?.hardwareKeyHeld ?? false
             pending += inputs.filter { input in
-                if case .key = input { return !hardware }
-                return true
+                guard case .key(let scancode, _) = input else { return true }
+                return !(field?.holdsHardwareKey(Int(scancode)) ?? false)
             }
             guard typing == nil else { return }
             typing = Task { @MainActor in
                 let engine = EngineSessionCoordinator.shared
                 let shift = Int32(GAMECORE_SCANCODE_LSHIFT)
                 while !Task.isCancelled, !pending.isEmpty {
-                    switch pending.removeFirst() {
-                    case .text(let text):
-                        text.withCString { gamecore_pushTextInput($0) }
-                    case .key(let scancode, let shifted):
-                        if shifted { engine.injectKey(scancode: shift, pressed: true) }
-                        engine.injectKey(scancode: scancode, pressed: true)
-                        try? await Task.sleep(for: .milliseconds(50))
-                        engine.injectKey(scancode: scancode, pressed: false)
-                        if shifted { engine.injectKey(scancode: shift, pressed: false) }
-                        try? await Task.sleep(for: .milliseconds(50))
+                    let batch = pending
+                    pending = []
+                    for input in batch where !Task.isCancelled {
+                        switch input {
+                        case .text(let text):
+                            text.withCString { gamecore_pushTextInput($0) }
+                            await Task.yield()
+                        case .key(let scancode, let shifted):
+                            if shifted { engine.injectKey(scancode: shift, pressed: true) }
+                            engine.injectKey(scancode: scancode, pressed: true)
+                            try? await Task.sleep(for: .milliseconds(50))
+                            engine.injectKey(scancode: scancode, pressed: false)
+                            if shifted { engine.injectKey(scancode: shift, pressed: false) }
+                            try? await Task.sleep(for: .milliseconds(50))
+                        }
                     }
                 }
                 if !Task.isCancelled { typing = nil }
