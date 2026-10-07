@@ -62,7 +62,7 @@ final class GameScriptProfileTests: XCTestCase {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? fm.removeItem(at: dir) }
-        let read = ["Game.ini", "RGSS104E.dll", "Game.rgssad", "Data/Scripts.rxdata", "Data/a.fpk", "Data/Scripts/Plugins/a.rb"]
+        let read = ["Game.ini", "RGSS104E.dll", "Game.rgssad", "Data/Scripts.rxdata", "Data/PluginScripts.rxdata", "Data/a.fpk", "Data/Scripts/Plugins/a.rb"]
         let unread = ["Save01.rxdata", "Data/Map001.rxdata", "Data/Game.ini", "Data/x.dll", "a.fpk", "Graphics/Titles/t.png"]
         let files = read + unread
         for file in files {
@@ -565,20 +565,53 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.rubyVersion, 31)
     }
 
-    /// A Marshal array of `[id, title, zlib source]` entries. Each source
-    /// is one stored deflate block, which adds 11 bytes, and a one-byte
-    /// Marshal length holds at most 122, so a source has at most 111.
+    func testModernPluginCodeOutranksALegacyScriptsFile() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try compiledScripts(["str.force_encoding('UTF-8')\n"])
+            .write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try pluginScripts([
+            "a = b&.c\n", "list.filter_map { |x| x }\n", "h.except(:k)\n",
+        ]).write(to: dir.appendingPathComponent("Data/PluginScripts.rxdata"))
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertTrue(profile.modernRubyScripts)
+        XCTAssertEqual(profile.rubyVersion, 31)
+    }
+
+    private func marshalString(_ bytes: [UInt8]) -> [UInt8] { [0x22, UInt8(bytes.count + 5)] + bytes }
+
+    /// One stored deflate block, which adds 11 bytes. A one-byte Marshal
+    /// length holds at most 122, so a source has at most 111.
+    private func deflated(_ source: String) -> [UInt8] {
+        let body = Array(source.utf8)
+        precondition(body.count <= 111, "the source is too long for a one-byte length")
+        let count = UInt16(body.count)
+        return [0x78, 0x01, 0x01, UInt8(count & 0xff), UInt8(count >> 8), UInt8(~count & 0xff), UInt8(~count >> 8)]
+            + body + [0, 0, 0, 0]
+    }
+
+    /// A Marshal array of `[id, title, zlib source]` entries.
     private func compiledScripts(_ sources: [String]) -> Data {
-        func string(_ bytes: [UInt8]) -> [UInt8] { [0x22, UInt8(bytes.count + 5)] + bytes }
         var data: [UInt8] = [0x04, 0x08, 0x5b, UInt8(sources.count + 5)]
         for (id, source) in sources.enumerated() {
-            let body = Array(source.utf8)
-            precondition(body.count <= 111, "the source is too long for a one-byte length")
-            let count = UInt16(body.count)
-            let stream: [UInt8] =
-                [0x78, 0x01, 0x01, UInt8(count & 0xff), UInt8(count >> 8), UInt8(~count & 0xff), UInt8(~count >> 8)]
-                + body + [0, 0, 0, 0]
-            data += [0x5b, 0x08, 0x69, UInt8(id + 6)] + string(Array("Script".utf8)) + string(stream)
+            data += [0x5b, 0x08, 0x69, UInt8(id + 6)] + marshalString(Array("Script".utf8))
+                + marshalString(deflated(source))
+        }
+        return Data(data)
+    }
+
+    /// One plugin, `[name, {}, [[path, zlib source], ...]]`, in a Marshal array.
+    private func pluginScripts(_ sources: [String]) -> Data {
+        var data: [UInt8] = [0x04, 0x08, 0x5b, 0x06, 0x5b, 0x08]
+            + marshalString(Array("Plugin".utf8)) + [0x7b, 0x00, 0x5b, UInt8(sources.count + 5)]
+        for (index, source) in sources.enumerated() {
+            data += [0x5b, 0x07] + marshalString(Array("\(index).rb".utf8)) + marshalString(deflated(source))
         }
         return Data(data)
     }

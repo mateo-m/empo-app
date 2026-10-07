@@ -63,11 +63,12 @@ public enum RubyScriptGrammarSniffer {
         // Forks like Pokemon Infinite Fusion ship loose scripts
         // next to a stale compiled Scripts.rxdata. The loose files
         // are the live runtime. The .rxdata is a leftover.
+        let plugins = decodePluginScripts(in: gameDirectory) ?? []
         let looseURLs = locateLooseScripts(in: gameDirectory, fm: fm)
         if !looseURLs.isEmpty {
             let scripts = readLooseScripts(urls: looseURLs)
             if !scripts.isEmpty {
-                return classify(scripts: scripts)
+                return classify(scripts: scripts + plugins)
             }
         }
 
@@ -89,7 +90,7 @@ public enum RubyScriptGrammarSniffer {
         guard let scripts = decodeScripts(at: url) else {
             return .inconclusive
         }
-        return classify(scripts: scripts)
+        return classify(scripts: scripts + plugins)
     }
 
     // MARK: - File location
@@ -224,6 +225,35 @@ public enum RubyScriptGrammarSniffer {
             }
         }
         return scripts.isEmpty ? nil : scripts
+    }
+
+    /// Pokemon Essentials v19+ keeps the plugin code out of the Scripts
+    /// file. The file is an Array of [name, metadata Hash, [[path,
+    /// deflated source], ...]]. In Pokemon Tectonic, the Scripts file
+    /// holds only the Essentials core, and all the Ruby 3 code is here.
+    private static func decodePluginScripts(in gameDirectory: URL) -> [String]? {
+        let url = gameDirectory.appendingPathComponent("Data/PluginScripts.rxdata")
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        var reader = MarshalReader(data: data)
+        guard reader.readVersion(), reader.expect(0x5b),
+            let count = reader.readLong(), count >= 0, count < 100_000
+        else { return nil }
+        var scripts: [String] = []
+        for _ in 0..<count {
+            guard reader.expect(0x5b), reader.readLong() == 3,
+                reader.skipValue(), reader.skipValue(),
+                reader.expect(0x5b), let files = reader.readLong(), files >= 0
+            else { return nil }
+            for _ in 0..<files {
+                guard reader.expect(0x5b), reader.readLong() == 2, reader.skipValue(),
+                    let deflated = reader.readStringBytes()
+                else { return nil }
+                if let source = inflate(deflated)?.decodeAsLooseText() {
+                    scripts.append(source)
+                }
+            }
+        }
+        return scripts
     }
 
     private static func inflate(_ data: Data) -> Data? {
