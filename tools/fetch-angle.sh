@@ -66,11 +66,11 @@ trap 'rm -rf "$TMPDIR"' EXIT
 
 echo "fetch-angle: hydrating $ANGLE_VERSION from $DEPS_REPO"
 
-if ! gh release download "$ANGLE_VERSION" \
+if ! "$REPO_ROOT/scripts/gh-retry.sh" release download "$ANGLE_VERSION" \
     --repo "$DEPS_REPO" \
     --pattern "$ASSET_NAME" \
     --dir "$TMPDIR" \
-    --skip-existing 2>&1; then
+    --clobber 2>&1; then
     echo "fetch-angle: gh release download failed for $DEPS_REPO@$ANGLE_VERSION" >&2
     exit 1
 fi
