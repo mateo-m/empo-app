@@ -242,7 +242,7 @@ struct GameLoadingView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.8))
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, Spacing.xl)
+                .centeredMessageWidth()
                 .padding(.bottom, Spacing.xl)
                 .transition(.opacity.combined(with: .offset(y: 8)))
         }
