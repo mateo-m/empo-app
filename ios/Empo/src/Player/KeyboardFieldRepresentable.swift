@@ -139,14 +139,14 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         }
 
         private var pending: [TypedInput] = []
-        private var typing: Task<Void, Never>?
+        private var typing = false
+        private var stops = 0
 
         /// Drops the keys not typed yet, so a long paste can't reach the
         /// game after the keyboard closes. The key that is down goes up.
         func stopTyping() {
             pending = []
-            typing?.cancel()
-            typing = nil
+            stops += 1
         }
 
         /// Taps the keys one after another. Games read the keyboard
@@ -159,18 +159,21 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // KeyboardInputManager already sends its real key edges.
             // A second copy from here would release Shift while the
             // player still holds it.
+            let hardware = field?.hardwareKeyTyping ?? false
             pending += inputs.filter { input in
-                guard case .key(let scancode, _) = input else { return true }
-                return !(field?.holdsHardwareKey(Int(scancode)) ?? false)
+                if case .key = input { return !hardware }
+                return true
             }
-            guard typing == nil else { return }
-            typing = Task { @MainActor in
+            guard !typing else { return }
+            typing = true
+            Task { @MainActor in
                 let engine = EngineSessionCoordinator.shared
                 let shift = Int32(GAMECORE_SCANCODE_LSHIFT)
-                while !Task.isCancelled, !pending.isEmpty {
+                while !pending.isEmpty {
                     let batch = pending
+                    let stop = stops
                     pending = []
-                    for input in batch where !Task.isCancelled {
+                    for input in batch where stops == stop {
                         switch input {
                         case .text(let text):
                             text.withCString { gamecore_pushTextInput($0) }
@@ -185,7 +188,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                         }
                     }
                 }
-                if !Task.isCancelled { typing = nil }
+                typing = false
             }
         }
 

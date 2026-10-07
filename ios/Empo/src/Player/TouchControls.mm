@@ -25,9 +25,10 @@ static void injectKey(int scancode, BOOL pressed) {
     NSMutableSet<UIPress *> *_hardwarePresses;
 }
 
-- (BOOL)holdsHardwareKey:(NSInteger)scancode {
+- (BOOL)hardwareKeyTyping {
     for (UIPress *press in _hardwarePresses) {
-        if (press.key.keyCode == scancode)
+        UIKeyboardHIDUsage code = press.key.keyCode;
+        if (code < UIKeyboardHIDUsageKeyboardLeftControl || code > UIKeyboardHIDUsageKeyboardRightGUI)
             return YES;
     }
     return NO;
