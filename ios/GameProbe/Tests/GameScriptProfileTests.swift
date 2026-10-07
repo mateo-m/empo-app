@@ -611,6 +611,54 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .inconclusive)
     }
 
+    func testModernPluginCodeOutranksLegacyLooseScripts() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data/Scripts"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "str.force_encoding('UTF-8')\n".write(
+            to: dir.appendingPathComponent("Data/Scripts/Main.rb"), atomically: true, encoding: .utf8)
+        try pluginScripts([
+            "a = b&.c\n", "list.filter_map { |x| x }\n", "h.except(:k)\n",
+        ]).write(to: dir.appendingPathComponent("Data/PluginScripts.rxdata"))
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.rubyVersion, 31)
+    }
+
+    func testModernPluginCodeCountsBesideAPackedArchive() throws {
+        let dir = try packedGame(plugins: [
+            "a = b&.c\n", "list.filter_map { |x| x }\n", "h.except(:k)\n",
+        ])
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.rubyVersion, 31)
+    }
+
+    func testLegacyPluginCodeBesideAPackedArchiveIsInconclusive() throws {
+        let dir = try packedGame(plugins: ["x = 1\n"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .inconclusive)
+    }
+
+    private func packedGame(plugins: [String]) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Data_0.fpk"))
+        try compiledScripts(["str.force_encoding('UTF-8')\n"])
+            .write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try pluginScripts(plugins).write(to: dir.appendingPathComponent("Data/PluginScripts.rxdata"))
+        return dir
+    }
+
     private func marshalString(_ bytes: [UInt8]) -> [UInt8] { [0x22, UInt8(bytes.count + 5)] + bytes }
 
     /// One stored deflate block, which adds 11 bytes. A one-byte Marshal
