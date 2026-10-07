@@ -762,7 +762,7 @@ private struct MarshalReader {
             guard let bytes = readRawString() else { return nil }
             // Skip the ivars (the encoding flag and others). Each
             // ivar is [symbol, value]. skipValue handles both.
-            guard let ivarCount = readLong() else { return nil }
+            guard let ivarCount = readLong(), ivarCount >= 0 else { return nil }
             for _ in 0..<ivarCount {
                 guard skipValue() else { return nil }  // symbol
                 guard skipValue() else { return nil }  // value

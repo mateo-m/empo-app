@@ -647,6 +647,22 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .inconclusive)
     }
 
+    func testPluginSourceWithANegativeIvarCountIsSkipped() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // 0xfa is the Marshal encoding of -1.
+        let plugin: [UInt8] = [0x04, 0x08, 0x5b, 0x06, 0x5b, 0x08]
+            + marshalString(Array("Plugin".utf8)) + [0x7b, 0x00, 0x5b, 0x06, 0x5b, 0x07]
+            + marshalString(Array("0.rb".utf8)) + [0x49] + marshalString(deflated("a = b&.c\n")) + [0xfa]
+        try Data(plugin).write(to: dir.appendingPathComponent("Data/PluginScripts.rxdata"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .inconclusive)
+    }
+
     private func packedGame(plugins: [String]) throws -> URL {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
