@@ -128,6 +128,10 @@ extension View {
     func darkGlass() -> some View {
         environment(\.colorScheme, .dark)
     }
+
+    func centeredMessageWidth() -> some View {
+        containerRelativeFrame(.horizontal) { width, _ in width * 2 / 3 }
+    }
 }
 
 /// Typography tokens for sites that don't fit a SwiftUI semantic

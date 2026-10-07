@@ -123,6 +123,8 @@ struct GameLoadingView: View {
                         .font(.title)
                         .fontWeight(.bold)
                         .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .centeredMessageWidth()
 
                     ProgressView()
                         .progressViewStyle(.circular)
@@ -180,6 +182,7 @@ struct GameLoadingView: View {
             .fontWeight(.bold)
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
+            .centeredMessageWidth()
 
             if !clean {
                 messageLine(
@@ -207,6 +210,7 @@ struct GameLoadingView: View {
             .font(.system(size: 15))
             .foregroundStyle(.white.opacity(0.85))
             .multilineTextAlignment(.center)
+            .centeredMessageWidth()
     }
 
     // The GitHub link routes to the issues page since that is
@@ -219,6 +223,7 @@ struct GameLoadingView: View {
         .font(.system(size: 15))
         .foregroundStyle(.white.opacity(0.85))
         .multilineTextAlignment(.center)
+        .centeredMessageWidth()
         .tint(.brand)
     }
 
