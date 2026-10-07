@@ -197,7 +197,9 @@ jobs:
         # swift-format's lint mode reports the same rule set the
         # formatter would apply, so a clean lint doubles as the
         # format check.
-        run: swift-format lint --strict --recursive ios/Empo/src
+        # GitHub's Ubuntu image ships Swift without swift-format on PATH.
+        # Swift 6 runs the same tool as `swift format`.
+        run: swift format lint --strict --recursive ios/Empo/src
 
       - name: SwiftLint
         if: ${{ !cancelled() && steps.preinstalled.outputs.swiftlint == 'true' }}
