@@ -124,6 +124,9 @@ jobs:
           fi
           command -v shellcheck >/dev/null && command -v yamllint >/dev/null &&
             echo "apt=true" >>"$GITHUB_OUTPUT" || true
+          if [ "$(swiftlint version 2>/dev/null)" = "0.63.2" ]; then
+            echo "swiftlint=true" >>"$GITHUB_OUTPUT"
+          fi
 
       - name: Cache Swift toolchain
         if: steps.preinstalled.outputs.swift != 'true'
@@ -197,7 +200,14 @@ jobs:
         run: swift-format lint --strict --recursive ios/Empo/src
 
       - name: SwiftLint
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.preinstalled.outputs.swiftlint == 'true' }}
+        run: swiftlint lint --strict --reporter github-actions-logging
+
+      - name: SwiftLint (downloaded)
+        if: ${{ !cancelled() && steps.preinstalled.outputs.swiftlint != 'true' }}
+        # The action downloads SwiftLint on each run. One download
+        # stalled for 21 minutes, so the step has a time limit.
+        timeout-minutes: 5
         # cirruslabs action lets us pin the SwiftLint version so it
         # matches what's been validated locally + in `.swiftlint.yml`.
         uses: cirruslabs/swiftlint-action@v1
