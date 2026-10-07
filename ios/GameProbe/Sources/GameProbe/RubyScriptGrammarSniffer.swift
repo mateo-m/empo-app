@@ -78,19 +78,24 @@ public enum RubyScriptGrammarSniffer {
         // Scripts file next to it is a small bootstrap, not the
         // live source, so the sniffer must not classify it.
         if hasPackedScriptArchive(in: gameDirectory, fm: fm) {
-            return .inconclusive
+            return classifyPluginsAlone(plugins)
         }
 
         // Compiled Scripts file. Vanilla RPG Maker XP / VX /
         // VX Ace projects use it, and so do forks that did not
         // extract their scripts.
-        guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm) else {
-            return .inconclusive
-        }
-        guard let scripts = decodeScripts(at: url) else {
-            return .inconclusive
+        guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm),
+            let scripts = decodeScripts(at: url)
+        else {
+            return classifyPluginsAlone(plugins)
         }
         return classify(scripts: scripts + plugins)
+    }
+
+    /// Without the core scripts, only modern plugin code is a sure
+    /// signal. Legacy-looking plugins say nothing about the core.
+    private static func classifyPluginsAlone(_ plugins: [String]) -> Result {
+        plugins.isEmpty || classify(scripts: plugins) != .modern ? .inconclusive : .modern
     }
 
     // MARK: - File location
@@ -239,6 +244,8 @@ public enum RubyScriptGrammarSniffer {
             let count = reader.readLong(), count >= 0, count < 100_000
         else { return nil }
         var scripts: [String] = []
+        var total = 0
+        let combinedCap = 4_000_000
         for _ in 0..<count {
             guard reader.expect(0x5b), reader.readLong() == 3,
                 reader.skipValue(), reader.skipValue(),
@@ -250,6 +257,8 @@ public enum RubyScriptGrammarSniffer {
                 else { return nil }
                 if let source = inflate(deflated)?.decodeAsLooseText() {
                     scripts.append(source)
+                    total += source.utf8.count
+                    if total > combinedCap { return scripts }
                 }
             }
         }

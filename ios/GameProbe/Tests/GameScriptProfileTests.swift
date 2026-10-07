@@ -584,6 +584,33 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.rubyVersion, 31)
     }
 
+    func testModernPluginCodeCountsWithoutAScriptsFile() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try pluginScripts([
+            "a = b&.c\n", "list.filter_map { |x| x }\n", "h.except(:k)\n",
+        ]).write(to: dir.appendingPathComponent("Data/PluginScripts.rxdata"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
+    func testLegacyPluginCodeAloneIsInconclusive() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try pluginScripts(["x = 1\n"])
+            .write(to: dir.appendingPathComponent("Data/PluginScripts.rxdata"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .inconclusive)
+    }
+
     private func marshalString(_ bytes: [UInt8]) -> [UInt8] { [0x22, UInt8(bytes.count + 5)] + bytes }
 
     /// One stored deflate block, which adds 11 bytes. A one-byte Marshal
