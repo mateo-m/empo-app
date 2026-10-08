@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.2 - 2026-10-08
+
+### Bug Fixes
+
+- Capital letters in Insurgence and the plugin scan for Tectonic (#193) ([`974d829`](https://github.com/mateo-m/empo-app/commit/974d829862aef8ecc9638f42c8d54313191ad936))
+- Keep centered titles and messages within 2/3 of the screen width (#194) ([`54b9995`](https://github.com/mateo-m/empo-app/commit/54b9995671138b582d8b968371a89a937e764abc))
+
+### Chores
+
+- Use engine v5 (#197) ([`9f3d090`](https://github.com/mateo-m/empo-app/commit/9f3d09096890d04863c3ac67e2cbcb7ab22bc35e))
+
+### Features
+
+- Show the game's engine and core in game info (#196) ([`cd00d1e`](https://github.com/mateo-m/empo-app/commit/cd00d1ee1bb86543f7931a98597f531ace1e680f))
+
 ## 0.7.1 - 2026-10-06
 
 ### Highlights
