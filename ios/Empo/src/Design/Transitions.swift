@@ -28,6 +28,8 @@ struct EmptyStateView: View {
             Text(title)
                 .font(.title2)
                 .fontWeight(.bold)
+                .multilineTextAlignment(.center)
+                .centeredMessageWidth()
                 .opacity(titleAppeared ? 1 : 0)
                 .offset(y: titleAppeared ? 0 : 12)
             Text(subtitle)
@@ -35,6 +37,7 @@ struct EmptyStateView: View {
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .centeredMessageWidth()
                 .opacity(subtitleAppeared ? 1 : 0)
                 .offset(y: subtitleAppeared ? 0 : 12)
         }
