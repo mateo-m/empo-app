@@ -12,6 +12,11 @@ public enum MvmzGame {
             && fileManager.fileExists(atPath: url.appendingPathComponent("data/System.json").path)
     }
 
+    /// MZ ships `rmmz_core.js`, and MV ships `rpg_core.js`.
+    public static func isMZ(at url: URL, fileManager: FileManager = .default) -> Bool {
+        fileManager.fileExists(atPath: url.appendingPathComponent("js/rmmz_core.js").path)
+    }
+
     /// The title the game shows in its window, from `data/System.json`.
     public static func title(at url: URL) -> String? {
         guard

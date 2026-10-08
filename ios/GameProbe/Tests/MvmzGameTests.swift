@@ -29,6 +29,15 @@ final class MvmzGameTests: XCTestCase {
         XCTAssertEqual(MvmzGame.title(at: root), "Stella's First RPG")
     }
 
+    func testAGameWithTheMZCoreScriptIsMZ() throws {
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("js"), withIntermediateDirectories: true)
+        try write("js/rpg_core.js", "")
+        XCTAssertFalse(MvmzGame.isMZ(at: root))
+        try write("js/rmmz_core.js", "")
+        XCTAssertTrue(MvmzGame.isMZ(at: root))
+    }
+
     func testTheTitlePictureIsTheOneSystemJsonNames() throws {
         try write("data/System.json", #"{"title1Name":"Castle"}"#)
         XCTAssertNil(MvmzGame.titlePicture(at: root))
