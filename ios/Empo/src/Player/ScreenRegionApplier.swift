@@ -93,6 +93,16 @@ enum ScreenRegionApplier {
         return (isPortrait ? resolved.portrait : resolved.landscape).placement
     }
 
+    /// The profile the running game's pin draws profile-owned files
+    /// from (screen placement, skin art). nil without a game or when
+    /// no profile applies.
+    static func activeProfileName() -> String? {
+        guard let container = activeContainer else { return nil }
+        return ProfileSource.name(
+            pin: LayoutProfilesManager.store.loadPin(forGameFolder: container.url).pin,
+            defaultProfileName: LayoutProfilesManager.defaultProfileName)
+    }
+
     /// The resolved placement as a concrete rect for this device.
     static func resolvedRegion(isPortrait: Bool) -> ScreenRegion? {
         resolvedPlacement(isPortrait: isPortrait)

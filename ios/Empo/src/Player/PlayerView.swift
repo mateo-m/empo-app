@@ -13,6 +13,14 @@ struct PlayerView: View {
     /// PlayerEditToolbar).
     @AppStorage(DefaultsKey.controlsEditSnapToGrid) private var snapToGrid = false
     @State private var controlsHidden = false
+    @Environment(\.displayScale) private var displayScale
+    /// The active profile's skin for the current orientation. Held in
+    /// state and refreshed on profile, pin, and geometry changes only:
+    /// resolving it reads files, and the body runs at frame rate
+    /// during a screen drag.
+    @State private var skinArt: UIImage?
+    @State private var skinShowsOutlines = false
+    @State private var skinCanvasSize: CGSize = .zero
     @State private var keyboardMode = false
     @State private var showDebugOverlay = false
     /// Long-lived state for the debug overlay. It lives on `PlayerView`
@@ -74,7 +82,22 @@ struct PlayerView: View {
                 btnSize: toolbarBtnSize,
                 geoHeight: geo.size.height, forcedOverlay: forcedOverlay)
 
+            let controlsVisibility = SkinControlsVisibility.resolve(
+                hasArt: skinArt != nil,
+                showButtonOutlines: skinShowsOutlines,
+                editMode: editMode,
+                controlsHidden: controlsHidden)
+
             ZStack {
+                // Profile skin art: over the game view (with a hole at
+                // gameRect), under every control and toolbar.
+                if let skinArt {
+                    // gameRect is in window points, so the art's space
+                    // must be the full window too.
+                    SkinOverlay(image: skinArt, gameRect: gameRect)
+                        .ignoresSafeArea()
+                }
+
                 // Debug visualization of the touch-mouse zone: the
                 // exact rect AppWindow routes to the game view. Same
                 // source (engine-published gameRect), so what you see
@@ -128,7 +151,7 @@ struct PlayerView: View {
                         }
                 }
 
-                if !controlsHidden && (controlsVisible || resumeSnapshot == nil) {
+                if controlsVisibility.mounted && (controlsVisible || resumeSnapshot == nil) {
                     PlayerControlsOverlay(
                         layout: layout,
                         actions: actions,
@@ -142,6 +165,7 @@ struct PlayerView: View {
                         draggingDPad: $draggingDPad,
                         draggingButtonID: $draggingButtonID
                     )
+                    .environment(\.controlsDrawingHidden, !controlsVisibility.drawn)
                 }
 
                 if editMode {
@@ -296,6 +320,10 @@ struct PlayerView: View {
             // during the loading transition, BEFORE PlayerView mounts.
             // Without an initial firing we miss the one real publish,
             // and translated layouts keep their estimate-based bands.
+            .onChange(of: geo.size, initial: true) { _, size in
+                skinCanvasSize = size
+                refreshSkin()
+            }
             .onChange(of: engineState.gameRect, initial: true) { _, rect in
                 layout.refreshForGameGeometryChange()
                 // Presets compute their rect from the game's aspect.
@@ -321,6 +349,17 @@ struct PlayerView: View {
         // covers the container regions.
         .ignoresSafeArea(.keyboard)
         .background(Color.clear)
+        .onReceive(NotificationCenter.default.publisher(for: .layoutProfileDidChange)) { _ in
+            refreshSkin()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .layoutPinDidChange)) { _ in
+            refreshSkin()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .layoutDefaultProfileDidChange)
+        ) { _ in
+            refreshSkin()
+        }
         .onAppear {
             // The engine fires SDL_StartTextInput / SDL_StopTextInput
             // when the game toggles `Input.text_input`. Auto-flip
@@ -470,6 +509,26 @@ struct PlayerView: View {
         var allowedRect: CGRect
         var autoRegion: ScreenRegion
         var overlayOn: Bool
+    }
+
+    /// Re-resolves the active profile's skin for the current window.
+    /// Clears the art cache first: the cache's own observer may run
+    /// after this one, and a stale image would win.
+    private func refreshSkin() {
+        guard skinCanvasSize.width > 0, skinCanvasSize.height > 0 else { return }
+        guard let profile = ScreenRegionApplier.activeProfileName() else {
+            skinArt = nil
+            skinShowsOutlines = false
+            return
+        }
+        SkinArtCache.shared.invalidate(profile: profile)
+        let portrait = skinCanvasSize.height > skinCanvasSize.width
+        skinArt = LayoutProfilesManager.skinArt(
+            profile: profile, orientation: portrait ? .portrait : .landscape,
+            maxPixel: max(skinCanvasSize.width, skinCanvasSize.height) * displayScale)
+        skinShowsOutlines =
+            LayoutProfilesManager.skinSettings(profile: profile)
+            .showButtonOutlines
     }
 
     private func screenGizmoContext(

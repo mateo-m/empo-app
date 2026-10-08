@@ -123,6 +123,7 @@ struct CircularControlButton<Face: View>: View {
     @ViewBuilder let face: (Bool) -> Face
 
     @State private var isPressed = false
+    @Environment(\.controlsDrawingHidden) private var drawingHidden
 
     var body: some View {
         // Face drawn on top of a Liquid Glass circle. `.interactive()`
@@ -168,6 +169,11 @@ struct CircularControlButton<Face: View>: View {
         // consistent regardless of the system interface style or
         // the brightness of the game content behind them.
         .darkGlass()
+        // Skin art replaces the drawing. Only the drawing fades: the
+        // capture overlay below sits outside this modifier and stays
+        // at full alpha, because UIKit skips hit-testing views under
+        // 0.01.
+        .opacity(drawingHidden ? 0 : 1)
         .contentShape(Circle())
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
@@ -274,9 +280,13 @@ private struct MovementTouchHost<Visual: View>: View {
     /// diffing. This host renders the visual from `reducer.active`
     /// and injects whatever edges the reducer returns, in order.
     @State private var reducer = DPadTouchReducer()
+    @Environment(\.controlsDrawingHidden) private var drawingHidden
 
     var body: some View {
         visual(MovementTouchState(active: reducer.active, touchPoint: leadTouchPoint))
+            // Drawing only, as in `CircularControlButton`: the capture
+            // overlay stays at full alpha.
+            .opacity(drawingHidden ? 0 : 1)
             .overlay {
                 ControlTouchCapture(
                     enabled: !editing,

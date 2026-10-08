@@ -1507,6 +1507,14 @@ class ControlsLayout {
             if portrait != nil || landscape != nil {
                 store.writeScreen(name, portrait: portrait, landscape: landscape)
             }
+            // The skin follows the same way, so moving one button on a
+            // default profile with console art keeps the art.
+            if let source = ProfileSource.name(
+                pin: store.loadPin(forGameFolder: container.url).pin,
+                defaultProfileName: LayoutProfilesManager.defaultProfileName)
+            {
+                try? SkinFiles.copySkin(from: store.profileURL(source), to: store.profileURL(name))
+            }
             screenEdits.removeAll()
             store.writePin(.profile(name), forGameFolder: container.url)
             provenance = .pinnedProfile(name)
