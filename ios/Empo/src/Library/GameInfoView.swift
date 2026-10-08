@@ -27,6 +27,7 @@ struct GameInfoView: View {
 
     private let originalTitle: String
     private let madeWith: String?
+    private let coreName: String?
 
     init(game: GameEntry) {
         self.game = game
@@ -50,6 +51,7 @@ struct GameInfoView: View {
             ?? core?.defaultTitle(of: container)
             ?? "Untitled game"
         self.madeWith = core?.madeWith(at: container.gameURL)
+        self.coreName = core?.displayName
     }
 
     private var container: GameContainer? { game.container }
@@ -105,9 +107,16 @@ struct GameInfoView: View {
                         }
 
                         GroupedSection("Details") {
-                            if let madeWith {
+                            if let madeWith, let coreName {
                                 DetailRow("Made with") {
                                     Text(madeWith)
+                                }
+
+                                Divider().padding(.leading, Spacing.xl)
+
+                                DetailRow("Game core") {
+                                    Text(coreName)
+                                        .multilineTextAlignment(.trailing)
                                 }
 
                                 Divider().padding(.leading, Spacing.xl)
