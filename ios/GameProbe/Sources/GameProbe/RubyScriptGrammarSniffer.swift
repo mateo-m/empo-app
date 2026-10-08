@@ -63,11 +63,12 @@ public enum RubyScriptGrammarSniffer {
         // Forks like Pokemon Infinite Fusion ship loose scripts
         // next to a stale compiled Scripts.rxdata. The loose files
         // are the live runtime. The .rxdata is a leftover.
+        let plugins = decodePluginScripts(in: gameDirectory) ?? []
         let looseURLs = locateLooseScripts(in: gameDirectory, fm: fm)
         if !looseURLs.isEmpty {
             let scripts = readLooseScripts(urls: looseURLs)
             if !scripts.isEmpty {
-                return classify(scripts: scripts)
+                return classify(scripts: scripts + plugins)
             }
         }
 
@@ -77,19 +78,24 @@ public enum RubyScriptGrammarSniffer {
         // Scripts file next to it is a small bootstrap, not the
         // live source, so the sniffer must not classify it.
         if hasPackedScriptArchive(in: gameDirectory, fm: fm) {
-            return .inconclusive
+            return classifyPluginsAlone(plugins)
         }
 
         // Compiled Scripts file. Vanilla RPG Maker XP / VX /
         // VX Ace projects use it, and so do forks that did not
         // extract their scripts.
-        guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm) else {
-            return .inconclusive
+        guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm),
+            let scripts = decodeScripts(at: url)
+        else {
+            return classifyPluginsAlone(plugins)
         }
-        guard let scripts = decodeScripts(at: url) else {
-            return .inconclusive
-        }
-        return classify(scripts: scripts)
+        return classify(scripts: scripts + plugins)
+    }
+
+    /// Without the core scripts, only modern plugin code is a sure
+    /// signal. Legacy-looking plugins say nothing about the core.
+    private static func classifyPluginsAlone(_ plugins: [String]) -> Result {
+        plugins.isEmpty || classify(scripts: plugins) != .modern ? .inconclusive : .modern
     }
 
     // MARK: - File location
@@ -224,6 +230,39 @@ public enum RubyScriptGrammarSniffer {
             }
         }
         return scripts.isEmpty ? nil : scripts
+    }
+
+    /// Pokemon Essentials v19+ keeps the plugin code out of the Scripts
+    /// file. The file is an Array of [name, metadata Hash, [[path,
+    /// deflated source], ...]]. In Pokemon Tectonic, the Scripts file
+    /// holds only the Essentials core, and all the Ruby 3 code is here.
+    private static func decodePluginScripts(in gameDirectory: URL) -> [String]? {
+        let url = gameDirectory.appendingPathComponent("Data/PluginScripts.rxdata")
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        var reader = MarshalReader(data: data)
+        guard reader.readVersion(), reader.expect(0x5b),
+            let count = reader.readLong(), count >= 0, count < 100_000
+        else { return nil }
+        var scripts: [String] = []
+        var total = 0
+        let combinedCap = 4_000_000
+        for _ in 0..<count {
+            guard reader.expect(0x5b), reader.readLong() == 3,
+                reader.skipValue(), reader.skipValue(),
+                reader.expect(0x5b), let files = reader.readLong(), files >= 0
+            else { return nil }
+            for _ in 0..<files {
+                guard reader.expect(0x5b), reader.readLong() == 2, reader.skipValue(),
+                    let deflated = reader.readStringBytes()
+                else { return nil }
+                if let source = inflate(deflated)?.decodeAsLooseText() {
+                    scripts.append(source)
+                    total += source.utf8.count
+                    if total > combinedCap { return scripts }
+                }
+            }
+        }
+        return scripts
     }
 
     private static func inflate(_ data: Data) -> Data? {
@@ -723,7 +762,7 @@ private struct MarshalReader {
             guard let bytes = readRawString() else { return nil }
             // Skip the ivars (the encoding flag and others). Each
             // ivar is [symbol, value]. skipValue handles both.
-            guard let ivarCount = readLong() else { return nil }
+            guard let ivarCount = readLong(), ivarCount >= 0 else { return nil }
             for _ in 0..<ivarCount {
                 guard skipValue() else { return nil }  // symbol
                 guard skipValue() else { return nil }  // value

@@ -12,4 +12,7 @@
 
 // TCKeyboardField - hidden text field for system keyboard input
 @interface TCKeyboardField : UITextField
+// UIKit inserts the text of a hardware key while its press is held.
+// The text can come from another key: Q on AZERTY types "a".
+@property (nonatomic, readonly) BOOL hardwareKeyTyping;
 @end
