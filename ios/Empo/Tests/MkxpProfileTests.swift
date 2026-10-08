@@ -22,4 +22,14 @@ final class MkxpProfileTests: XCTestCase {
         try "x = 1\ny = 2\n".write(to: script, atomically: true, encoding: .utf8)
         XCTAssertFalse(MkxpProfile.load(for: container).modernRubyScripts)
     }
+
+    func testTheRGSSVersionComesFromAnyINIFile() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mkxp-rgss-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try "[Game]\nScripts=Scripts.rvdata2\n"
+            .write(to: root.appendingPathComponent("Custom.ini"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(MkxpRuntimeProbe.rgssVersion(in: root), 3)
+    }
 }

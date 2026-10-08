@@ -26,6 +26,8 @@ struct GameInfoView: View {
     @FocusState private var isTitleFocused: Bool
 
     private let originalTitle: String
+    private let madeWith: String?
+    private let coreName: String?
 
     init(game: GameEntry) {
         self.game = game
@@ -43,10 +45,13 @@ struct GameInfoView: View {
         // both track this so resetting the custom title gives the
         // user back what the import originally showed, not the
         // raw Game.ini one which may be uglier.
+        let core = GameCores.core(forGameAt: container.gameURL)
         self.originalTitle =
             meta.baseTitle
-            ?? GameCores.core(forGameAt: container.gameURL)?.defaultTitle(of: container)
+            ?? core?.defaultTitle(of: container)
             ?? "Untitled game"
+        self.madeWith = core?.madeWith(at: container.gameURL)
+        self.coreName = core?.displayName
     }
 
     private var container: GameContainer? { game.container }
@@ -102,6 +107,21 @@ struct GameInfoView: View {
                         }
 
                         GroupedSection("Details") {
+                            if let madeWith, let coreName {
+                                DetailRow("Made with") {
+                                    Text(madeWith)
+                                }
+
+                                Divider().padding(.leading, Spacing.xl)
+
+                                DetailRow("Game core") {
+                                    Text(coreName)
+                                        .multilineTextAlignment(.trailing)
+                                }
+
+                                Divider().padding(.leading, Spacing.xl)
+                            }
+
                             DetailRow("Date added") {
                                 if let date = metadata.dateAdded {
                                     Text(Self.dateFormatter.string(from: date))
