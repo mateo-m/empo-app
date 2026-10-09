@@ -19,6 +19,7 @@
 // Raw pages: the mmap calls of the cores.
 
 static char gFrameworks[PATH_MAX];
+static char *gBlockStart, *gBlockEnd;
 static void *(*realMmap)(void *, size_t, int, int, int, off_t);
 static int (*realMunmap)(void *, size_t);
 
@@ -106,6 +107,11 @@ static int blockMunmap(void *addr, size_t len) {
     }
     if (i == gChunkCount) {
         os_unfair_lock_unlock(&gChunksLock);
+        // A real munmap there would take pages away from mimalloc.
+        if ((char *)addr < gBlockEnd && (char *)addr + len > gBlockStart) {
+            errno = EINVAL;
+            return -1;
+        }
         return realMunmap(addr, len);
     }
     if ((uintptr_t)addr % PAGE != 0 || len == 0 || len > PTRDIFF_MAX) {
@@ -196,20 +202,31 @@ void EmpoUseAppMemory(xpc_object_t memory) {
     }
     if (!EmpoUseHeap((void *)start, size)) {
         NSLog(@"[game-process] mimalloc refused the app's memory");
+        vm_deallocate(mach_task_self(), start, size);
         return;
     }
+    gBlockStart = (char *)start;
+    gBlockEnd = gBlockStart + size;
 
     // The extension sits in Empo.app/Extensions, and the cores in
     // Empo.app/Frameworks.
     NSURL *frameworks = [NSBundle.mainBundle.bundleURL.URLByDeletingLastPathComponent.URLByDeletingLastPathComponent
         URLByAppendingPathComponent:@"Frameworks/"];
-    realpath(frameworks.fileSystemRepresentation, gFrameworks);
-    strlcat(gFrameworks, "/", sizeof gFrameworks);
-    realMmap = mmap;
-    realMunmap = munmap;
-    _dyld_register_func_for_add_image(imageAdded);
+    // With no prefix, the hooks would go into every system library.
+    if (realpath(frameworks.fileSystemRepresentation, gFrameworks) != NULL) {
+        strlcat(gFrameworks, "/", sizeof gFrameworks);
+        realMmap = mmap;
+        realMunmap = munmap;
+        _dyld_register_func_for_add_image(imageAdded);
+    } else {
+        NSLog(@"[game-process] cannot find the cores' folder: %s", strerror(errno));
+    }
 
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
     Method method = class_getInstanceMethod(object_getClass(device), @selector(newTextureWithDescriptor:));
-    if (method != NULL) realNewTexture = (NewTexture)method_setImplementation(method, (IMP)blockTexture);
+    // Another thread can make a texture as soon as the new method is in.
+    if (method != NULL) {
+        realNewTexture = (NewTexture)method_getImplementation(method);
+        method_setImplementation(method, (IMP)blockTexture);
+    }
 }
