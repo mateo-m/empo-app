@@ -70,6 +70,8 @@ protocol GameCore {
 
     /// Rows for the Runtime section of Game Info. Empty hides the section.
     func infoRows(for container: GameContainer) async -> [InfoRow]
+    /// The tool and its edition for one game, such as "RPG Maker VX Ace".
+    func madeWith(at root: URL) -> String
 }
 
 extension GameCore {
@@ -98,6 +100,7 @@ extension GameCore {
     func displayDefaults(for container: GameContainer) -> GameDisplayDefaults { GameDisplayDefaults() }
     func sharedDataFolder(for container: GameContainer) -> [String]? { nil }
     func infoRows(for container: GameContainer) async -> [InfoRow] { [] }
+    func madeWith(at root: URL) -> String { madeWith }
 
     var notInThisBuildMessage: String {
         "This build of Empo has no \(displayName), so it can't run this game."

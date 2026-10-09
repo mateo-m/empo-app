@@ -282,6 +282,15 @@ struct MkxpCore: GameCore {
         return AnyView(MkxpSettingsPage(model: model, state: state))
     }
 
+    func madeWith(at root: URL) -> String {
+        switch MkxpRuntimeProbe.rgssVersion(in: root) {
+        case 1: "RPG Maker XP"
+        case 2: "RPG Maker VX"
+        case 3: "RPG Maker VX Ace"
+        default: madeWith
+        }
+    }
+
     /// "Ruby (bundled)" is the Ruby that the game's own DLL carries.
     /// "Ruby (runtime)" is the Ruby in this core that runs the game.
     func infoRows(for container: GameContainer) async -> [InfoRow] {

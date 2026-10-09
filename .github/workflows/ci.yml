@@ -40,8 +40,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # A docs-only pull request cannot break the Swift toolchain, the
-  # GameProbe tests, or a Simulator build, so those three jobs skip.
+  # A docs-only pull request cannot break the GameProbe tests or a
+  # Simulator build, so those two jobs skip.
   #
   # The skip MUST be a job-level `if:`, never a workflow-level
   # `paths-ignore`. The ruleset requires the "CI" context. A workflow
@@ -49,7 +49,7 @@ jobs:
   # forever for a status that cannot arrive. A job skipped by `if:`
   # still reports, and GitHub counts a skipped job as a success. The
   # summary job runs with `if: always()` and fails only on `failure` or
-  # `cancelled`, so a skipped `swift` job leaves it green with no edit.
+  # `cancelled`, so a skipped `test` job leaves it green with no edit.
   #
   # The classifier is conservative on purpose. A path that is not
   # documentation counts as code, and any failure to read the file
@@ -98,27 +98,34 @@ jobs:
             echo "the diff touches code: running every job"
             echo "code=true" >>"$GITHUB_OUTPUT"
           else
-            echo "the diff is documentation only: skipping the Swift, test, and Simulator jobs"
+            echo "the diff is documentation only: skipping the test and Simulator jobs"
             echo "code=false" >>"$GITHUB_OUTPUT"
           fi
 
-  swift:
-    name: Swift (swiftlint + swift-format)
-    needs: changes
-    if: needs.changes.outputs.code == 'true'
+  # One job for every lint check, so a run starts one runner for them,
+  # not six. Each check step runs when an earlier one failed, so one
+  # run reports every failure.
+  lint:
+    name: Lint
     runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: false
 
-      - name: Find a preinstalled Swift 6.2
-        # The self-hosted runners cannot use sudo, and swiftly-action
-        # always runs apt-get with sudo. Their image ships Swift 6.2.
+      - name: Find preinstalled tools
+        # The self-hosted runners cannot use sudo, so apt and
+        # swiftly-action cannot run there. Their image ships these
+        # tools.
         id: preinstalled
         run: |
-          if swift --version 2>/dev/null | grep -q 'Swift version 6\.2'; then
+          if swift --version 2>/dev/null | grep -q 'Swift version 6\.4'; then
             echo "swift=true" >>"$GITHUB_OUTPUT"
+          fi
+          command -v shellcheck >/dev/null && command -v yamllint >/dev/null &&
+            echo "apt=true" >>"$GITHUB_OUTPUT" || true
+          if [ "$(swiftlint version 2>/dev/null)" = "0.63.2" ]; then
+            echo "swiftlint=true" >>"$GITHUB_OUTPUT"
           fi
 
       - name: Cache Swift toolchain
@@ -126,7 +133,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/share/swiftly
-          key: swiftly-${{ runner.os }}-6.2
+          key: swiftly-${{ runner.os }}-6.4
 
       - name: Install Swift toolchain
         if: steps.preinstalled.outputs.swift != 'true'
@@ -136,7 +143,32 @@ jobs:
         # short-circuits the slow download.
         uses: vapor/swiftly-action@v0.2
         with:
-          toolchain: "6.2"
+          toolchain: "6.4"
+
+      - name: "Cache apt: shellcheck, yamllint"
+        if: steps.preinstalled.outputs.apt != 'true'
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: shellcheck yamllint
+          version: "1.0"
+
+      - name: Install shfmt
+        run: |
+          command -v shfmt >/dev/null && exit 0
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o "$HOME/.local/bin/shfmt" \
+            https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64
+          echo "fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1  $HOME/.local/bin/shfmt" |
+            sha256sum --check --strict
+          chmod +x "$HOME/.local/bin/shfmt"
+          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
+
+      - uses: oven-sh/setup-bun@v2
+        # Bun's CLI replaces Node + npm. Built-in install cache
+        # keyed off bun.lock. Faster install than npm ci.
+
+      - name: Install JS tools
+        run: bun install --frozen-lockfile
 
       - name: Locate sourcekitd for SwiftLint
         # SwiftLint on Linux loads `libsourcekitdInProc.so` from
@@ -161,12 +193,23 @@ jobs:
           echo "LINUX_SOURCEKIT_LIB_PATH=$SK_LIB" >> "$GITHUB_ENV"
 
       - name: swift-format lint
+        if: ${{ !cancelled() }}
         # swift-format's lint mode reports the same rule set the
         # formatter would apply, so a clean lint doubles as the
-        # format check (this is why Format aggregates this job).
-        run: swift-format lint --strict --recursive ios/Empo/src
+        # format check.
+        # GitHub's Ubuntu image ships Swift without swift-format on PATH.
+        # Swift 6 runs the same tool as `swift format`.
+        run: swift format lint --strict --recursive ios/Empo/src
 
       - name: SwiftLint
+        if: ${{ !cancelled() && steps.preinstalled.outputs.swiftlint == 'true' }}
+        run: swiftlint lint --strict --reporter github-actions-logging
+
+      - name: SwiftLint (downloaded)
+        if: ${{ !cancelled() && steps.preinstalled.outputs.swiftlint != 'true' }}
+        # The action downloads SwiftLint on each run. One download
+        # stalled for 21 minutes, so the step has a time limit.
+        timeout-minutes: 5
         # cirruslabs action lets us pin the SwiftLint version so it
         # matches what's been validated locally + in `.swiftlint.yml`.
         uses: cirruslabs/swiftlint-action@v1
@@ -174,18 +217,10 @@ jobs:
           version: 0.63.2
           args: --strict
 
-  objc-cpp:
-    name: ObjC / C / C++ (clang-format)
-    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: false
-
       - name: clang-format check
+        if: ${{ !cancelled() }}
         # clang-format 18 matches local (Apple clang-format 21 is also
-        # fine, the shipped .clang-format is style-stable). The
-        # self-hosted runners have no Docker daemon for a Docker action.
+        # fine, the shipped .clang-format is style-stable).
         run: |
           command -v clang-format-18 >/dev/null ||
             { sudo apt-get update && sudo apt-get install -y clang-format-18; }
@@ -193,38 +228,8 @@ jobs:
           git ls-files -z 'ios/Empo/src/*.'{h,m,mm,c,cpp} 'ios/Empo/shims/*.'{h,m,mm,c,cpp} |
             xargs -0 -r clang-format-18 --dry-run --Werror
 
-  shell:
-    name: Bash (shellcheck + shfmt)
-    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Find preinstalled tools
-        # The self-hosted runners cannot use sudo, so apt cannot run
-        # there. Their image ships these tools.
-        id: preinstalled
-        run: |
-          command -v shellcheck >/dev/null && echo "shellcheck=true" >>"$GITHUB_OUTPUT" || true
-
-      - name: "Cache apt: shellcheck"
-        if: steps.preinstalled.outputs.shellcheck != 'true'
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: shellcheck
-          version: "1.0"
-
-      - name: Install shfmt
-        run: |
-          command -v shfmt >/dev/null && exit 0
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o "$HOME/.local/bin/shfmt" \
-            https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64
-          echo "fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1  $HOME/.local/bin/shfmt" |
-            sha256sum --check --strict
-          chmod +x "$HOME/.local/bin/shfmt"
-          echo "$HOME/.local/bin" >>"$GITHUB_PATH"
-
       - name: shellcheck
+        if: ${{ !cancelled() }}
         run: |
           FILES=$(git ls-files 'setup.sh' 'tools/*.sh' 'scripts/*.sh' 'scripts/hooks/*.sh')
           if [ -n "$FILES" ]; then
@@ -232,43 +237,19 @@ jobs:
           fi
 
       - name: shfmt check
+        if: ${{ !cancelled() }}
         run: |
           FILES=$(git ls-files 'setup.sh' 'tools/*.sh' 'scripts/*.sh' 'scripts/hooks/*.sh')
           if [ -n "$FILES" ]; then
             echo "$FILES" | xargs shfmt -d -i 4 -ci
           fi
 
-  yaml:
-    name: YAML (oxfmt + yamllint)
-    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: oven-sh/setup-bun@v2
-        # Bun's CLI replaces Node + npm. Built-in install cache
-        # keyed off bun.lock. Faster install than npm ci.
-
-      - name: Install JS tools
-        run: bun install --frozen-lockfile
-
-      - name: Find preinstalled tools
-        # The self-hosted runners cannot use sudo, so apt cannot run
-        # there. Their image ships yamllint.
-        id: preinstalled
-        run: |
-          command -v yamllint >/dev/null && echo "yamllint=true" >>"$GITHUB_OUTPUT" || true
-
-      - name: "Cache apt: yamllint"
-        if: steps.preinstalled.outputs.yamllint != 'true'
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: yamllint
-          version: "1.0"
-
       - name: oxfmt check (YAML + JSON)
+        if: ${{ !cancelled() }}
         run: bun run fmt:check
 
       - name: yamllint
+        if: ${{ !cancelled() }}
         run: |
           # yamllint warnings shouldn't fail CI. Only structural
           # errors should. --strict promotes warnings to failures,
@@ -278,18 +259,8 @@ jobs:
           yamllint --strict -c .yamllint.yml ios/Empo/project.yml \
             || echo "yamllint reported issues (warnings tolerated; failing only on errors)"
 
-  markdown:
-    name: Markdown (markdownlint)
-    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Install markdownlint-cli
-        run: bun install --frozen-lockfile
-
       - name: markdownlint
+        if: ${{ !cancelled() }}
         run: |
           # Drive markdownlint from git ls-files so we only scan
           # tracked files. Vendored upstream READMEs and build outputs
@@ -298,6 +269,15 @@ jobs:
           if [ -n "$FILES" ]; then
             echo "$FILES" | xargs bun x markdownlint -c .markdownlint.json
           fi
+
+      - name: Verify pins against empo-deps
+        if: ${{ !cancelled() }}
+        # Tag-time verification (REQUIRE_PUBLISHED=1) happens in the
+        # Release workflow. Here unpublished pins only warn.
+        env:
+          GH_TOKEN: ${{ secrets.EMPO_DEPS_READ_TOKEN || github.token }}
+          REQUIRE_PUBLISHED: "0"
+        run: scripts/verify-empo-deps-pins.sh
 
   test:
     name: GameProbe (swift test, Linux)
@@ -312,12 +292,12 @@ jobs:
         with:
           submodules: false
 
-      - name: Find a preinstalled Swift 6.2
+      - name: Find a preinstalled Swift 6.4
         # The self-hosted runners cannot use sudo, and swiftly-action
-        # always runs apt-get with sudo. Their image ships Swift 6.2.
+        # always runs apt-get with sudo. Their image ships Swift 6.4.
         id: preinstalled
         run: |
-          if swift --version 2>/dev/null | grep -q 'Swift version 6\.2'; then
+          if swift --version 2>/dev/null | grep -q 'Swift version 6\.4'; then
             echo "swift=true" >>"$GITHUB_OUTPUT"
           fi
 
@@ -326,36 +306,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/share/swiftly
-          key: swiftly-${{ runner.os }}-6.2
+          key: swiftly-${{ runner.os }}-6.4
 
       - name: Install Swift toolchain
         if: steps.preinstalled.outputs.swift != 'true'
         uses: vapor/swiftly-action@v0.2
         with:
-          toolchain: "6.2"
+          toolchain: "6.4"
 
       # Json5 is not in this list. The package ships to iOS, and the
       # macOS Simulator build job runs it.
       - name: swift test
         working-directory: ${{ github.workspace }}
         run: scripts/run-swift-tests.sh ios/GameProbe
-
-  deps-pins:
-    name: Verify empo-deps release pins
-    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: false
-
-      - name: Verify pins against empo-deps
-        # gh ships preinstalled on GitHub-hosted ubuntu runners.
-        # Tag-time verification (REQUIRE_PUBLISHED=1) happens in the
-        # Release workflow. Here unpublished pins only warn.
-        env:
-          GH_TOKEN: ${{ secrets.EMPO_DEPS_READ_TOKEN || github.token }}
-          REQUIRE_PUBLISHED: "0"
-        run: scripts/verify-empo-deps-pins.sh
 
   simulator:
     name: Simulator build
@@ -372,7 +335,7 @@ jobs:
         # DEVELOPER_DIR instead of xcode-select: no sudo, so the same
         # step works on hosted runners and a self-hosted Mac.
         run: |
-          XCODE="$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)"
+          XCODE="$(find /Applications -maxdepth 1 -name 'Xcode*.app' | sort -V | tail -n 1)"
           echo "Using $XCODE"
           echo "DEVELOPER_DIR=$XCODE/Contents/Developer" >> "$GITHUB_ENV"
           DEVELOPER_DIR="$XCODE/Contents/Developer" xcodebuild -version
@@ -477,13 +440,8 @@ jobs:
     name: CI
     needs:
       - changes
-      - swift
-      - objc-cpp
-      - shell
-      - yaml
-      - markdown
+      - lint
       - test
-      - deps-pins
       - simulator
     if: always()
     runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}

@@ -40,6 +40,10 @@ struct MvmzCore: GameCore {
         MvmzGame.titlePicture(at: root)
     }
 
+    func madeWith(at root: URL) -> String {
+        MvmzGame.isMZ(at: root) ? "RPG Maker MZ" : "RPG Maker MV"
+    }
+
     func launch(_ container: GameContainer) {
         let settings = GameSettings.load(from: container.empoStateURL)
         let smooth = settings.smoothScaling ?? GameConfigDefaults.engineSmoothScaling

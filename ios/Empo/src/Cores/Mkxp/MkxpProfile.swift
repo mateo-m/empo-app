@@ -62,7 +62,7 @@ enum MkxpRuntimeProbe {
     /// graphics with Ruby 3.
     ///
     /// Each signal catches games that the next one misses: `rgssVersion`
-    /// in mkxp.json, the extension of `Scripts=` in Game.ini, an RGSS
+    /// in mkxp.json, the extension of `Scripts=` in an INI file, an RGSS
     /// archive, then the newest family of loose `Data/` files.
     static func rgssVersion(in gameDirectory: URL) -> Int? {
         let fm = FileManager.default
@@ -75,8 +75,7 @@ enum MkxpRuntimeProbe {
             return v
         }
 
-        let iniURL = gameDirectory.appendingPathComponent("Game.ini")
-        if let scripts = GameINI.parseINIValue(in: iniURL, section: "game", key: "scripts") {
+        if let scripts = GameINI.parseINIValue(at: gameDirectory, section: "game", key: "scripts") {
             let lower = scripts.lowercased()
             if lower.hasSuffix(".rvdata2") { return 3 }
             if lower.hasSuffix(".rvdata") { return 2 }

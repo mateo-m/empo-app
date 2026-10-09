@@ -23,6 +23,24 @@
       ],
       "versions": [
         {
+          "version": "0.7.2",
+          "buildVersion": "745",
+          "date": "2026-10-08",
+          "localizedDescription": "This update fixes some bugs.",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.7.2/Empo-0.7.2-unsigned.ipa",
+          "size": 65888619,
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.7.1",
+          "buildVersion": "736",
+          "date": "2026-10-06",
+          "localizedDescription": "RPG Maker MV and MZ\nEmpo now plays games made with RPG Maker MV and MZ. Import one the same way as any other game.\n\nMore games start\nSome RPG Maker XP games that stopped at launch, such as Vinemon, now start.\n\nThis update also fixes some bugs.",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.7.1/Empo-0.7.1-unsigned.ipa",
+          "size": 66324700,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.7.0",
           "buildVersion": "704",
           "date": "2026-09-23",
