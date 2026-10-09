@@ -68,9 +68,11 @@ enum DataDirectory {
     }()
 
     /// Moves the items of Documents, from before the app group, into
-    /// `storage`. A folder that is in both gets merged. A file that is
-    /// in both keeps its copy in `storage`, and the copy from Documents
-    /// moves next to it with "(from Documents)" in its name.
+    /// `storage`. A folder that is in both gets merged. For a file that
+    /// is in both, the newer copy keeps the name, and the other copy
+    /// moves next to it with the `LegacyDataDrain` name for a displaced
+    /// copy. An older build can have written a save in Documents after
+    /// this build moved the first one.
     private static func moveItems(of documents: URL, to storage: URL) {
         let fm = FileManager.default
         try? fm.createDirectory(at: storage, withIntermediateDirectories: true)
@@ -114,10 +116,19 @@ enum DataDirectory {
                 guard !moved.contains(false) else { return false }
                 try fm.removeItem(at: source)
             } else {
-                let copy = freeName(for: destination, fm: fm)
-                try fm.moveItem(at: source, to: copy)
+                let name = destination.lastPathComponent
+                let copy = UniqueFileName.firstAvailableURL(
+                    in: destination.deletingLastPathComponent(),
+                    preferring: LegacyDataDrain.displacedName(for: name),
+                    numbered: { LegacyDataDrain.displacedName(for: name, index: $0) }, fm: fm)
+                if isNewerFile(source, than: destination, fm: fm) {
+                    try fm.moveItem(at: destination, to: copy)
+                    try fm.moveItem(at: source, to: destination)
+                } else {
+                    try fm.moveItem(at: source, to: copy)
+                }
                 NSLog(
-                    "[DataDirectory] %@ is in Documents and in the app group, so it moved to %@",
+                    "[DataDirectory] %@ is in Documents and in the app group. The older copy moved to %@",
                     destination.path, copy.lastPathComponent)
             }
             return true
@@ -136,17 +147,13 @@ enum DataDirectory {
         (try? fm.attributesOfItem(atPath: url.path))?[.type] as? FileAttributeType == .typeDirectory
     }
 
-    private static func freeName(for url: URL, fm: FileManager) -> URL {
-        let folder = url.deletingLastPathComponent()
-        let stem = url.deletingPathExtension().lastPathComponent
-        let suffix = url.pathExtension.isEmpty ? "" : "." + url.pathExtension
-        var number = 1
-        while true {
-            let label = number == 1 ? "from Documents" : "from Documents \(number)"
-            let candidate = folder.appendingPathComponent("\(stem) (\(label))\(suffix)")
-            if !exists(candidate, fm: fm) { return candidate }
-            number += 1
-        }
+    private static func isNewerFile(_ first: URL, than second: URL, fm: FileManager) -> Bool {
+        guard let a = try? fm.attributesOfItem(atPath: first.path),
+            let b = try? fm.attributesOfItem(atPath: second.path),
+            a[.type] as? FileAttributeType == .typeRegular, b[.type] as? FileAttributeType == .typeRegular,
+            let aDate = a[.modificationDate] as? Date, let bDate = b[.modificationDate] as? Date
+        else { return false }
+        return aDate > bDate
     }
 
     /// Parent of all shared data directories. `Documents/Data/`.
