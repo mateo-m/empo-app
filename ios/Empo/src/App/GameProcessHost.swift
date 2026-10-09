@@ -64,7 +64,11 @@ enum GameProcessHost {
                 continuation.finish()
             }
         }
+        // A session that ends before its process connects ends at once,
+        // while the process before it can still be exiting.
+        let previousExit = lastExit
         lastExit = Task {
+            await previousExit?.value
             for await _ in exited {}
         }
     }
