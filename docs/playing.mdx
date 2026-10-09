@@ -129,5 +129,10 @@ After you quit an RPG Maker XP, VX, VX Ace or PSDK game, Empo cannot start a dif
 Force-close the app from the app switcher, and open it again. RPG Maker MV and MZ games do not
 have this limit. To stop one of them, tap More, then Quit.
 
+To quit an RPG Maker XP, VX, VX Ace or PSDK game without closing Empo, turn on **Settings → Experimental → Quit and switch games**,
+and then close and open Empo once. Each game then runs in its own process, and **More → Quit** works.
+The setting is still in testing. It is not available when the tool that installed Empo left out
+the part that it needs.
+
 The engine keeps one Ruby interpreter for the lifetime of the process, and the interpreter
 cannot restart cleanly. [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) explains the constraint in full.
