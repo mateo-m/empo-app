@@ -410,7 +410,9 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
         let urls =
             folder.map(list)
             ?? list(root.appendingPathComponent(FileProviderItem.trashFolderName)).flatMap(list)
+        // An item that goes away during the list gets the root's identifier.
         return urls.map { FileProviderItem(url: $0, root: root) }
+            .filter { $0.itemIdentifier != .rootContainer }
     }
 
     /// The identifiers that the system got for this container, kept in
