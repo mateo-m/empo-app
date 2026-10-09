@@ -29,6 +29,9 @@ static void (^gExited)(void);
 // What the process said last.
 static NSDictionary<NSString *, id> *gStatus;
 static BOOL gStatusAsked;
+// Counts the setter calls. A status asked before a setter call is older
+// than the value that the setter wrote.
+static NSUInteger gStatusChanges;
 static BOOL gTextInputActive;
 static BOOL gPaused;
 static BOOL gTerminated;
@@ -94,10 +97,13 @@ static void askForStatus(void) {
     }
     gStatusAsked = YES;
     void *token = (__bridge void *)gConnection;
+    NSUInteger changes = gStatusChanges;
     [proxyOf(gConnection) fetchStatus:^(NSDictionary<NSString *, id> *status) {
         os_unfair_lock_lock(&gLock);
         if ((__bridge void *)gConnection == token) {
-            gStatus = status;
+            if (gStatusChanges == changes) {
+                gStatus = status;
+            }
             gStatusAsked = NO;
         }
         os_unfair_lock_unlock(&gLock);
@@ -118,6 +124,7 @@ static void setStatusValue(NSString *key, id value) {
     NSMutableDictionary<NSString *, id> *status = [gStatus mutableCopy];
     status[key] = value;
     gStatus = status;
+    gStatusChanges++;
 }
 
 // The session lost its process without an end: the game stopped.
