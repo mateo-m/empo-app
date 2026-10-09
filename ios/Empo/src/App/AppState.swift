@@ -233,7 +233,8 @@ class AppState {
     /// transition.
     func handlePause(snapshot: UIImage?) {
         guard phase == .playing else { return }
-        if EngineState.shared.isBackgroundPause { return }
+        // A quit can meet a background pause: the app went to the
+        // background before the game paused for the quit.
         if quitOnPause {
             session.note("The player quit the game.")
             session.killSession(of: selectedGame)
@@ -243,6 +244,7 @@ class AppState {
             }
             return
         }
+        if EngineState.shared.isBackgroundPause { return }
         let pm = PauseManager.shared
         pm.pauseSnapshot = snapshot
         pm.pausedGame = selectedGame
