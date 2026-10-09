@@ -335,8 +335,10 @@ static xpc_object_t lentMemory(void) {
     gSnapshotWidth = 0;
     gSnapshotHeight = 0;
     os_unfair_lock_unlock(&gLock);
-    xpc_object_t memory = lentMemory();
     send(^(id<EmpoGameProcess> process) {
+        // The process connects after the last one is gone. Until then,
+        // iOS counts the last one's memory in the app's use.
+        xpc_object_t memory = lentMemory();
         if (memory != nil) {
             [process useMemory:memory];
         }
