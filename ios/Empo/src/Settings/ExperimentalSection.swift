@@ -23,7 +23,7 @@ struct ExperimentalSection: View {
                 .disabled(!isAvailable)
                 if !isAvailable {
                     Label(
-                        "Not available. The tool that installed \(AppInfo.name) doesn't allow the shared storage this feature needs.",
+                        "Not available. The tool that installed \(AppInfo.name) left out a part this feature needs.",
                         systemImage: "info.circle"
                     )
                     .font(.footnote)
