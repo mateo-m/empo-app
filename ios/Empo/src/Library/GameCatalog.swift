@@ -72,9 +72,9 @@ enum GameCatalog {
                 // but Empo's own folders is an orphan.
                 let leftovers = Set(
                     [container.empoStateURL, container.userDataURL, container.logsURL, container.metadataURL]
-                        .map(\.lastPathComponent))
+                        .map(\.lastPathComponent) + [".DS_Store"])
                 guard let names = try? fm.contentsOfDirectory(atPath: container.url.path),
-                    names.allSatisfy({ $0.hasPrefix(".") || leftovers.contains($0) })
+                    names.allSatisfy(leftovers.contains)
                 else {
                     NSLog("[GameCatalog] Skipping %@: it has no Game folder", container.folderName)
                     continue
