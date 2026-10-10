@@ -182,6 +182,7 @@ static void onFrameRendered(void *userdata) {
 }
 
 static BOOL gSceneActive;
+static BOOL gSceneHasSize;
 static BOOL gRunPending;
 
 // A core may hold the main thread until the game ends, so it runs from
@@ -195,6 +196,20 @@ static void runCore(void) {
       gamecore_run_app(*_NSGetArgc(), *_NSGetArgv());
     });
     CFRunLoopWakeUp(mainLoop);
+}
+
+// ExtensionKit activates the scene before the host gives it a size. The
+// engine reads the size of its window once, at start, so a core that
+// starts at 0x0 can draw nothing for the whole game.
+static void runCoreWhenReady(void) {
+    if (gRunPending && gSceneActive && gSceneHasSize) {
+        runCore();
+    }
+}
+
+void EmpoGameProcessSceneHasSize(void) {
+    gSceneHasSize = YES;
+    runCoreWhenReady();
 }
 
 @interface EmpoGameProcessService : NSObject <EmpoGameProcess>
@@ -215,9 +230,7 @@ static void runCore(void) {
                       return;
                   }
                   gSceneActive = YES;
-                  if (gRunPending) {
-                      runCore();
-                  }
+                  runCoreWhenReady();
                 }];
     [NSNotificationCenter.defaultCenter addObserverForName:GCKeyboardDidConnectNotification
                                                     object:nil
@@ -265,11 +278,8 @@ static void runCore(void) {
 
 - (void)runApp {
     onMain(^{
-      if (gSceneActive) {
-          runCore();
-      } else {
-          gRunPending = YES;
-      }
+      gRunPending = YES;
+      runCoreWhenReady();
     });
 }
 

@@ -12,6 +12,13 @@ final class GameProcessExtension: AppExtension {
         AppExtensionSceneConfiguration(
             PrimitiveAppExtensionScene(id: "game") {
                 Color.black.ignoresSafeArea()
+                    .onGeometryChange(for: Bool.self) {
+                        $0.size.width > 0 && $0.size.height > 0
+                    } action: { hasSize in
+                        if hasSize {
+                            EmpoGameProcessSceneHasSize()
+                        }
+                    }
             } onConnection: { connection in
                 EmpoGameProcessAccept(connection)
             }
