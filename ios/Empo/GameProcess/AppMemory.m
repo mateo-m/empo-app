@@ -108,7 +108,8 @@ static int blockMunmap(void *addr, size_t len) {
     if (i == gChunkCount) {
         os_unfair_lock_unlock(&gChunksLock);
         // A real munmap there would take pages away from mimalloc.
-        if ((char *)addr < gBlockEnd && (char *)addr + len > gBlockStart) {
+        uintptr_t start = (uintptr_t)addr, blockStart = (uintptr_t)gBlockStart;
+        if (start < (uintptr_t)gBlockEnd && (start >= blockStart || len > blockStart - start)) {
             errno = EINVAL;
             return -1;
         }
