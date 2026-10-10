@@ -563,8 +563,7 @@ struct GameInfoView: View {
     }
 
     private func openInFiles() {
-        let encoded = game.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? game.path
-        if let url = URL(string: "shareddocuments://\(encoded)") {
+        if let url = DataDirectory.filesAppURL(for: game.path) {
             UIApplication.shared.open(url)
         }
     }

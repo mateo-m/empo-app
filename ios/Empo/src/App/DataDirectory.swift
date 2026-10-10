@@ -52,6 +52,11 @@ enum DataDirectory {
         return storage
     }()
 
+    static func filesAppURL(for path: String) -> URL? {
+        let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+        return URL(string: "shareddocuments://\(encoded)")
+    }
+
     static let appGroupURL: URL? = {
         // LiveContainer gives the app a made-up folder for any group
         // name, which the game process and the Files app cannot open.

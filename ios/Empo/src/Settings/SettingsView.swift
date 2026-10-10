@@ -85,6 +85,31 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        if let url = DataDirectory.filesAppURL(for: DataDirectory.documentsRootURL.path) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Label {
+                            HStack {
+                                Text("Show in Files")
+                                Spacer()
+                                Image(systemName: "arrow.up.forward")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "folder")
+                        }
+                    }
+                    .tint(.primary)
+                } header: {
+                    Text("Files")
+                } footer: {
+                    Text("Your games, saves, and logs are in the Files app.")
+                }
+
+                Section {
                     SettingsToggle(
                         title: "Diagnostics overlay",
                         isOn: $settings.diagnosticsOverlay,
