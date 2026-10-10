@@ -52,17 +52,19 @@ enum GameProcessHost {
 
     static func end() {
         session += 1
+        // Before the controller goes: its removal can end the connection
+        // on another queue, and before `end` that counts as a lost process.
+        let exited = AsyncStream<Void> { continuation in
+            EmpoGameProcessClient.end {
+                continuation.finish()
+            }
+        }
         let ending = controller
         controller = nil
         if let ending {
             ending.willMove(toParent: nil)
             ending.view.removeFromSuperview()
             ending.removeFromParent()
-        }
-        let exited = AsyncStream<Void> { continuation in
-            EmpoGameProcessClient.end {
-                continuation.finish()
-            }
         }
         // A session that ends before its process connects ends at once,
         // while the process before it can still be exiting.
