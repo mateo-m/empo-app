@@ -15,8 +15,9 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol EmpoGameProcess
 
 // A block of the app's memory, with the keys EmpoGameProcessMemory*
-// below. The app sends it before openCore.
-- (void)useMemory:(xpc_object_t)memory;
+// below. The app sends it before openCore. The reply is nil when the
+// process uses the block, or the reason it does not.
+- (void)useMemory:(xpc_object_t)memory reply:(void (^)(NSString *_Nullable error))reply;
 
 // Opens the core `framework` from the app's Frameworks folder. The
 // reply is nil on success, or the reason.

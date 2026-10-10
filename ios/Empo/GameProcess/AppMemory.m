@@ -189,22 +189,20 @@ static id blockTexture(id device, SEL selector, MTLTextureDescriptor *descriptor
     return texture ?: realNewTexture(device, selector, descriptor);
 }
 
-void EmpoUseAppMemory(xpc_object_t memory) {
+NSString *EmpoUseAppMemory(xpc_object_t memory) {
     mach_port_t entry = xpc_dictionary_copy_mach_send(memory, EmpoGameProcessMemoryEntry);
     uint64_t size = xpc_dictionary_get_uint64(memory, EmpoGameProcessMemorySize);
-    if (entry == MACH_PORT_NULL || size == 0) return;
+    if (entry == MACH_PORT_NULL || size == 0) return @"the app sent no memory";
     vm_address_t start = 0;
     kern_return_t mapped = vm_map(mach_task_self(), &start, size, 0, VM_FLAGS_ANYWHERE, entry, 0, FALSE,
                                   VM_PROT_READ | VM_PROT_WRITE, VM_PROT_READ | VM_PROT_WRITE, VM_INHERIT_NONE);
     mach_port_deallocate(mach_task_self(), entry);
     if (mapped != KERN_SUCCESS) {
-        NSLog(@"[game-process] cannot map the app's memory: %s", mach_error_string(mapped));
-        return;
+        return [NSString stringWithFormat:@"cannot map the app's memory: %s", mach_error_string(mapped)];
     }
     if (!EmpoUseHeap((void *)start, size)) {
-        NSLog(@"[game-process] mimalloc refused the app's memory");
         vm_deallocate(mach_task_self(), start, size);
-        return;
+        return @"mimalloc refused the app's memory";
     }
     gBlockStart = (char *)start;
     gBlockEnd = gBlockStart + size;
@@ -230,4 +228,5 @@ void EmpoUseAppMemory(xpc_object_t memory) {
         realNewTexture = (NewTexture)method_getImplementation(method);
         method_setImplementation(method, (IMP)blockTexture);
     }
+    return nil;
 }

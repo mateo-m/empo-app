@@ -227,8 +227,8 @@ static void runCore(void) {
                                                 }];
 }
 
-- (void)useMemory:(xpc_object_t)memory {
-    EmpoUseAppMemory(memory);
+- (void)useMemory:(xpc_object_t)memory reply:(void (^)(NSString *_Nullable))reply {
+    reply(EmpoUseAppMemory(memory));
 }
 
 - (void)openCore:(NSString *)framework reply:(void (^)(NSString *_Nullable))reply {

@@ -352,8 +352,18 @@ static xpc_object_t lentMemory(void) {
         // The process connects after the last one is gone. Until then,
         // iOS counts the last one's memory in the app's use.
         xpc_object_t memory = lentMemory();
+        // A game can run without the block, but iOS then stops it at
+        // the game process limit. The session log says why.
         if (memory != nil) {
-            [process useMemory:memory];
+            [process useMemory:memory
+                         reply:^(NSString *error) {
+                             if (error != nil) {
+                                 noteEvent([NSString
+                                     stringWithFormat:@"The game process has no memory block: %@", error]);
+                             }
+                         }];
+        } else if (os_proc_available_memory() > 0) {
+            noteEvent(@"The app could not make a memory block for the game process.");
         }
         // A late reply can come after a new session began, so it ends
         // only the connection that sent it.

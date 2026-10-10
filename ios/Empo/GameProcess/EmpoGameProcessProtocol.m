@@ -6,6 +6,6 @@ NSXPCInterface *EmpoGameProcessInterface(void) {
               forSelector:@selector(fetchStatus:)
             argumentIndex:0
                   ofReply:YES];
-    [interface setXPCType:XPC_TYPE_DICTIONARY forSelector:@selector(useMemory:) argumentIndex:0 ofReply:NO];
+    [interface setXPCType:XPC_TYPE_DICTIONARY forSelector:@selector(useMemory:reply:) argumentIndex:0 ofReply:NO];
     return interface;
 }
