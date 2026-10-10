@@ -25,7 +25,8 @@ find the game and reproduce it.
 1. Go to **Settings → Advanced**, and turn on **Debug logs**. Empo removes the older logs at
    the start of each session.
 2. Start the game, and repeat the steps that fail.
-3. Open the Files app, go to **Browse → Locations → Empo**, and share the newest log file. Attach it
+3. Open the Files app, go to **Browse → Locations → Empo**, or to **On My iPhone → Empo** if Empo is not under
+   **Locations**, and share the newest log file. Attach it
    to the issue, or post it on Discord.
 
 ## Suggest a feature
