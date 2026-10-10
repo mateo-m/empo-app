@@ -70,6 +70,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)pausedWithSnapshot:(nullable NSData *)rgba width:(int)width height:(int)height;
 - (void)resumed;
 - (void)frameRendered;
+// iOS sends the hardware keys to the process that the player touched
+// last. After a tap on the game, that is the game process, and it sends
+// each key on with this message.
+- (void)keyChanged:(NSInteger)keyCode pressed:(BOOL)pressed;
 
 @end
 

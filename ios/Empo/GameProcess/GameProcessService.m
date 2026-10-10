@@ -1,5 +1,6 @@
 #import "GameProcessService.h"
 
+#import <GameController/GameController.h>
 #import <UIKit/UIKit.h>
 
 #include <crt_externs.h>
@@ -162,7 +163,21 @@ static void onResumed(void *userdata) {
     [host() resumed];
 }
 
+// The core's SDL takes the one handler slot when it starts, and again
+// when a keyboard connects. The app maps the keys, so this takes the
+// slot back after each of those.
+static void claimKeyboard(void) {
+    GCKeyboard.coalescedKeyboard.keyboardInput.keyChangedHandler =
+        ^(GCKeyboardInput *input, GCControllerButtonInput *key, GCKeyCode keyCode, BOOL pressed) {
+          [host() keyChanged:keyCode pressed:pressed];
+        };
+}
+
 static void onFrameRendered(void *userdata) {
+    static dispatch_once_t claimed;
+    dispatch_once(&claimed, ^{
+      dispatch_async(dispatch_get_main_queue(), ^{ claimKeyboard(); });
+    });
     [host() frameRendered];
 }
 
@@ -204,6 +219,12 @@ static void runCore(void) {
                       runCore();
                   }
                 }];
+    [NSNotificationCenter.defaultCenter addObserverForName:GCKeyboardDidConnectNotification
+                                                    object:nil
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *note) {
+                                                  claimKeyboard();
+                                                }];
 }
 
 - (void)useMemory:(xpc_object_t)memory {

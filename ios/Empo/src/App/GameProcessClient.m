@@ -60,6 +60,7 @@ static gamecore_FrameRenderedCallback gFrameCallback;
 static void *gFrameUserdata;
 
 static void (^gEventHandler)(NSString *);
+static void (^gKeyHandler)(NSInteger, BOOL);
 
 // Logs what happened to the game process, and gives it to the app for
 // the session log.
@@ -287,6 +288,18 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
     }
 }
 
+- (void)keyChanged:(NSInteger)keyCode pressed:(BOOL)pressed {
+    if (!fromSession(self.connection, ^{})) {
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        void (^handler)(NSInteger, BOOL) = gKeyHandler;
+        if (handler != nil) {
+            handler(keyCode, pressed);
+        }
+    });
+}
+
 @end
 
 @implementation EmpoGameProcessClient
@@ -425,6 +438,10 @@ static xpc_object_t lentMemory(void) {
 
 + (void)setEventHandler:(void (^)(NSString *))handler {
     gEventHandler = [handler copy];
+}
+
++ (void)setKeyHandler:(void (^)(NSInteger, BOOL))handler {
+    gKeyHandler = [handler copy];
 }
 
 + (uint64_t)memoryFootprint {

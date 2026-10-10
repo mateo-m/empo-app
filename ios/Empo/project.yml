@@ -388,6 +388,7 @@ targets:
           - -framework Foundation
           - -framework UIKit
           - -framework AVFoundation
+          - -framework GameController
           - -framework Metal
   FilesProvider:
     # Shows the games and saves, which live in the app group, in the

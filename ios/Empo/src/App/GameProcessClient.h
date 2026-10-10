@@ -30,6 +30,10 @@ NS_ASSUME_NONNULL_BEGIN
 // something the app did not ask for. Runs on any thread.
 + (void)setEventHandler:(void (^)(NSString *text))handler;
 
+// Gets the hardware keys that the game process sends on. Runs on the
+// main thread.
++ (void)setKeyHandler:(nullable void (^)(NSInteger keyCode, BOOL pressed))handler;
+
 // The memory footprint of the game process in bytes, from its last
 // status. 0 when no status came yet.
 + (uint64_t)memoryFootprint;
