@@ -6,8 +6,10 @@
 #include <errno.h>
 #include <execinfo.h>
 #include <fcntl.h>
+#include <mach-o/dyld.h>
 #include <mach/mach.h>
 #include <signal.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -48,6 +50,20 @@ static void onMain(dispatch_block_t call) {
     });
 }
 
+// One "0x..." line, with no call that a signal handler cannot make.
+static void writeHex(uintptr_t value) {
+    char line[2 + 2 * sizeof(value) + 1];
+    size_t end = sizeof(line);
+    line[--end] = '\n';
+    do {
+        line[--end] = "0123456789abcdef"[value & 0xf];
+        value >>= 4;
+    } while (value != 0);
+    line[--end] = 'x';
+    line[--end] = '0';
+    write(STDERR_FILENO, line + end, sizeof(line) - end);
+}
+
 // Writes the signal and the stack of a crash to stderr, which is the
 // session log by then, and lets the crash go on. Ruby puts its own
 // handler on SIGSEGV and SIGBUS when it starts, and its report is
@@ -66,8 +82,15 @@ static void onCrashSignal(int signal) {
     }
     write(STDERR_FILENO, name, strlen(name));
     write(STDERR_FILENO, "\n", 1);
+    // backtrace only walks the frame pointers. backtrace_symbols_fd
+    // calls dladdr, which takes the dyld lock, and the crash can hold
+    // that lock. The image list that captureOutput writes turns these
+    // addresses into symbols.
     void *frames[128];
-    backtrace_symbols_fd(frames, backtrace(frames, 128), STDERR_FILENO);
+    int count = backtrace(frames, 128);
+    for (int i = 0; i < count; i++) {
+        writeHex((uintptr_t)frames[i]);
+    }
     struct sigaction fallback = {.sa_handler = SIG_DFL};
     sigaction(signal, &fallback, NULL);
     raise(signal);
@@ -85,6 +108,13 @@ static void captureOutput(const char *logPath) {
     dup2(log, STDERR_FILENO);
     close(log);
     setvbuf(stdout, NULL, _IOLBF, 0);
+
+    for (uint32_t i = 0; i < _dyld_image_count(); i++) {
+        const char *name = _dyld_get_image_name(i);
+        if (strstr(name, ".app/") != NULL) {
+            fprintf(stderr, "[game-process] image %p %s\n", (void *)_dyld_get_image_header(i), name);
+        }
+    }
 
     static const int crashSignals[] = {SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSEGV, SIGTRAP};
     for (size_t i = 0; i < sizeof(crashSignals) / sizeof(crashSignals[0]); i++) {
