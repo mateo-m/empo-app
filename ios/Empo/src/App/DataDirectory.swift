@@ -121,7 +121,12 @@ enum DataDirectory {
                     numbered: { LegacyDataDrain.displacedName(for: name, index: $0) }, fm: fm)
                 if isNewerFile(source, than: destination, fm: fm) {
                     try fm.moveItem(at: destination, to: copy)
-                    try fm.moveItem(at: source, to: destination)
+                    do {
+                        try fm.moveItem(at: source, to: destination)
+                    } catch {
+                        try? fm.moveItem(at: copy, to: destination)
+                        throw error
+                    }
                 } else {
                     try fm.moveItem(at: source, to: copy)
                 }
