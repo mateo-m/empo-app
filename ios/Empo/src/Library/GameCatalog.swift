@@ -64,8 +64,7 @@ enum GameCatalog {
             // importing (e.g. the app was killed mid-extract, leaving only
             // the `Metadata/` sidecar dir behind). It can't become a real
             // game, so drop it instead of surfacing an "Unknown Game" card.
-            // Live imports are excluded by the checks above, so anything
-            // reaching here with no `Game/` is a genuine orphan.
+            // Live imports are excluded by the checks above.
             let gameDirExists = fm.fileExists(atPath: container.gameURL.path)
             if !gameDirExists {
                 // The Files app shows Games, so a person can put a game
@@ -74,8 +73,9 @@ enum GameCatalog {
                 let leftovers = Set(
                     [container.empoStateURL, container.userDataURL, container.logsURL, container.metadataURL]
                         .map(\.lastPathComponent))
-                let names = (try? fm.contentsOfDirectory(atPath: container.url.path)) ?? []
-                guard names.allSatisfy({ $0.hasPrefix(".") || leftovers.contains($0) }) else {
+                guard let names = try? fm.contentsOfDirectory(atPath: container.url.path),
+                    names.allSatisfy({ $0.hasPrefix(".") || leftovers.contains($0) })
+                else {
                     NSLog("[GameCatalog] Skipping %@: it has no Game folder", container.folderName)
                     continue
                 }
