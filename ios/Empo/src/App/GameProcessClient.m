@@ -59,6 +59,8 @@ static void *gResumedUserdata;
 static gamecore_FrameRenderedCallback gFrameCallback;
 static void *gFrameUserdata;
 
+// Not gLock: noteEvent runs with gLock held, and the lock is not recursive.
+static os_unfair_lock gHandlerLock = OS_UNFAIR_LOCK_INIT;
 static void (^gEventHandler)(NSString *);
 static void (^gKeyHandler)(NSInteger, BOOL);
 
@@ -66,7 +68,9 @@ static void (^gKeyHandler)(NSInteger, BOOL);
 // the session log.
 static void noteEvent(NSString *text) {
     NSLog(@"[game-process] %@", text);
+    os_unfair_lock_lock(&gHandlerLock);
     void (^handler)(NSString *) = gEventHandler;
+    os_unfair_lock_unlock(&gHandlerLock);
     if (handler != nil) {
         handler(text);
     }
@@ -293,7 +297,9 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
         return;
     }
     dispatch_async(dispatch_get_main_queue(), ^{
+        os_unfair_lock_lock(&gHandlerLock);
         void (^handler)(NSInteger, BOOL) = gKeyHandler;
+        os_unfair_lock_unlock(&gHandlerLock);
         if (handler != nil) {
             handler(keyCode, pressed);
         }
@@ -447,11 +453,17 @@ static xpc_object_t lentMemory(void) {
 }
 
 + (void)setEventHandler:(void (^)(NSString *))handler {
-    gEventHandler = [handler copy];
+    void (^copy)(NSString *) = [handler copy];
+    os_unfair_lock_lock(&gHandlerLock);
+    gEventHandler = copy;
+    os_unfair_lock_unlock(&gHandlerLock);
 }
 
 + (void)setKeyHandler:(void (^)(NSInteger, BOOL))handler {
-    gKeyHandler = [handler copy];
+    void (^copy)(NSInteger, BOOL) = [handler copy];
+    os_unfair_lock_lock(&gHandlerLock);
+    gKeyHandler = copy;
+    os_unfair_lock_unlock(&gHandlerLock);
 }
 
 + (uint64_t)memoryFootprint {
