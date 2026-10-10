@@ -10,6 +10,7 @@
 set -eu
 
 ANGLE_COMMIT=d81d29e166b6af1181f06e56c916c06676dd6ad1
+DEPOT_TOOLS_COMMIT=a03dfbf7f2d1cefa2795d81d59ca4f16c8616a8f
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="${1:-${TMPDIR:-/tmp}/empo-angle}"
 DEST="${2:-$HERE/../../ios/Dependencies/ANGLE}"
@@ -21,10 +22,13 @@ git -C "$SRC" cat-file -e "$ANGLE_COMMIT^{commit}" 2>/dev/null ||
 git -C "$SRC" reset -q --hard "$ANGLE_COMMIT"
 for p in "$HERE"/*.patch; do git -C "$SRC" apply "$p"; done
 
-[ -d "$WORK/depot_tools" ] ||
-    git clone -q --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$WORK/depot_tools"
+TOOLS="$WORK/depot_tools"
+[ -d "$TOOLS/.git" ] || git init -q "$TOOLS"
+git -C "$TOOLS" cat-file -e "$DEPOT_TOOLS_COMMIT^{commit}" 2>/dev/null ||
+    git -C "$TOOLS" fetch -q --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$DEPOT_TOOLS_COMMIT"
+git -C "$TOOLS" reset -q --hard "$DEPOT_TOOLS_COMMIT"
 
-export PATH="$WORK/depot_tools:$PATH" DEPOT_TOOLS_UPDATE=0
+export PATH="$TOOLS:$PATH" DEPOT_TOOLS_UPDATE=0
 cd "$SRC"
 if [ ! -f .gclient ]; then
     python3 scripts/bootstrap.py
