@@ -45,6 +45,9 @@ enum DataDirectory {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         guard let group = appGroupURL else { return documents }
         let storage = group.appendingPathComponent("File Provider Storage", isDirectory: true)
+        guard
+            (try? FileManager.default.createDirectory(at: storage, withIntermediateDirectories: true)) != nil
+        else { return documents }
         moveItems(of: documents, to: storage)
         return storage
     }()
@@ -71,7 +74,6 @@ enum DataDirectory {
     /// this build moved the first one.
     private static func moveItems(of documents: URL, to storage: URL) {
         let fm = FileManager.default
-        try? fm.createDirectory(at: storage, withIntermediateDirectories: true)
         let group = storage.deletingLastPathComponent().resolvingSymlinksInPath().path + "/"
         // The system puts files that other apps open in Empo in Inbox.
         let names = ((try? fm.contentsOfDirectory(atPath: documents.path)) ?? [])
