@@ -99,44 +99,46 @@ static void *blockMmap(void *addr, size_t len, int prot, int flags, int fd, off_
 }
 
 static int blockMunmap(void *addr, size_t len) {
-    os_unfair_lock_lock(&gChunksLock);
-    size_t i = 0;
-    while (i < gChunkCount && ((char *)addr < gChunks[i]->start ||
-                               (char *)addr >= gChunks[i]->start + gChunks[i]->pages * PAGE)) {
-        i++;
-    }
-    if (i == gChunkCount) {
-        os_unfair_lock_unlock(&gChunksLock);
-        // A real munmap there would take pages away from mimalloc.
-        uintptr_t start = (uintptr_t)addr, blockStart = (uintptr_t)gBlockStart;
-        if (start < (uintptr_t)gBlockEnd && (start >= blockStart || len > blockStart - start)) {
-            errno = EINVAL;
-            return -1;
-        }
-        return realMunmap(addr, len);
-    }
-    if ((uintptr_t)addr % PAGE != 0 || len == 0 || len > PTRDIFF_MAX) {
-        os_unfair_lock_unlock(&gChunksLock);
+    uintptr_t start = (uintptr_t)addr, blockStart = (uintptr_t)gBlockStart, blockEnd = (uintptr_t)gBlockEnd;
+    if (start >= blockEnd || (start < blockStart && len <= blockStart - start)) return realMunmap(addr, len);
+    if (start % PAGE != 0 || len == 0 || len > PTRDIFF_MAX || len > UINTPTR_MAX - start - PAGE) {
         errno = EINVAL;
         return -1;
     }
-    Chunk *chunk = gChunks[i];
-    size_t first = (size_t)((char *)addr - chunk->start) / PAGE;
-    size_t end = MIN(first + (len + PAGE - 1) / PAGE, chunk->pages);
-    // The caller can have made a guard page with mprotect.
-    mprotect(chunk->start + first * PAGE, (end - first) * PAGE, PROT_READ | PROT_WRITE);
-    for (size_t page = first; page < end; page++) {
-        if (!pageUsed(chunk, page)) continue;
-        chunk->used[page / 64] &= ~(1ull << (page % 64));
-        chunk->free++;
-    }
-    if (chunk->free == chunk->pages) {
-        gChunks[i] = gChunks[--gChunkCount];
-        EmpoHeapFree(chunk->start);
-        free(chunk);
+    uintptr_t end = (start + len + PAGE - 1) / PAGE * PAGE;
+    bool released = false;
+    os_unfair_lock_lock(&gChunksLock);
+    // Backwards, so that the chunk that a removal moves to `i` was seen.
+    for (size_t i = gChunkCount; i-- > 0;) {
+        Chunk *chunk = gChunks[i];
+        uintptr_t chunkStart = (uintptr_t)chunk->start, chunkEnd = chunkStart + chunk->pages * PAGE;
+        if (end <= chunkStart || start >= chunkEnd) continue;
+        released = true;
+        size_t first = (MAX(start, chunkStart) - chunkStart) / PAGE, last = (MIN(end, chunkEnd) - chunkStart) / PAGE;
+        // The caller can have made a guard page with mprotect.
+        mprotect(chunk->start + first * PAGE, (last - first) * PAGE, PROT_READ | PROT_WRITE);
+        for (size_t page = first; page < last; page++) {
+            if (!pageUsed(chunk, page)) continue;
+            chunk->used[page / 64] &= ~(1ull << (page % 64));
+            chunk->free++;
+        }
+        if (chunk->free == chunk->pages) {
+            gChunks[i] = gChunks[--gChunkCount];
+            EmpoHeapFree(chunk->start);
+            free(chunk);
+        }
     }
     os_unfair_lock_unlock(&gChunksLock);
-    return 0;
+    // The rest of the block is mimalloc's. A real munmap there would take
+    // its pages away.
+    if (!released) {
+        errno = EINVAL;
+        return -1;
+    }
+    int result = 0;
+    if (start < blockStart) result |= realMunmap(addr, blockStart - start);
+    if (end > blockEnd) result |= realMunmap(gBlockEnd, end - blockEnd);
+    return result == 0 ? 0 : -1;
 }
 
 static void imageAdded(const struct mach_header *header, intptr_t slide) {
