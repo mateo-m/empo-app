@@ -192,7 +192,7 @@ BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
 [[ "$BUNDLE_ID" == "sh.mateo.empo" ]] ||
     fail "unexpected bundle id: $BUNDLE_ID (expected sh.mateo.empo for release IPA)"
 
-APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print :EmpoAppGroup" "$APP/Info.plist")
+APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionFileProviderDocumentGroup" "$APP/PlugIns/FilesProvider.appex/Info.plist")
 has_app_group() {
     codesign -d --entitlements - --xml "$1" 2>/dev/null | grep -qF "<string>$APP_GROUP</string>"
 }

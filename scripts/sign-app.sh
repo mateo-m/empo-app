@@ -13,7 +13,7 @@ trap 'rm -f "$ENTITLEMENTS"' EXIT
 # The app and its extensions share one entitlements file. It names the
 # app group as $(EMPO_APP_GROUP), and only a signed Xcode build fills it
 # in.
-APP_GROUP="$(/usr/libexec/PlistBuddy -c "Print :EmpoAppGroup" "$APP/Info.plist")"
+APP_GROUP="$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionFileProviderDocumentGroup" "$APP/PlugIns/FilesProvider.appex/Info.plist")"
 sed "s/\$(EMPO_APP_GROUP)/$APP_GROUP/" "$PROJECT_DIR/Empo.entitlements" >"$ENTITLEMENTS"
 
 # Inside out. A nested bundle carries its own signature, and signing

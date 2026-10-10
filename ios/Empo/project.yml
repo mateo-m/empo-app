@@ -2,12 +2,6 @@ name: Empo
 packages:
   GameProbe:
     path: ../GameProbe
-configs:
-  Debug: debug
-  Release: release
-  # The App Store archive. Only it leaves out code that App Store
-  # validation rejects (APP_STORE).
-  AppStoreRelease: release
 options:
   bundleIdPrefix: sh.mateo
   deploymentTarget:
@@ -61,12 +55,9 @@ settings:
       # register. Override in the gitignored Signing.xcconfig if needed.
       PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev
       ENABLE_TESTABILITY: YES # yamllint disable-line rule:truthy
-    Release: &release
+    Release:
       OTHER_CFLAGS: "-fdeclspec -O3"
       PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo
-    AppStoreRelease:
-      <<: *release
-      SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) APP_STORE
 targetTemplates:
   # An extension that the app embeds. Its files are in the folder of
   # its name.
@@ -79,7 +70,6 @@ targetTemplates:
     configFiles:
       Debug: Signing.xcconfig
       Release: Signing.xcconfig
-      AppStoreRelease: Signing.xcconfig
     settings:
       base:
         PRODUCT_NAME: ${target_name}
@@ -323,7 +313,6 @@ targets:
     configFiles:
       Debug: Signing.xcconfig
       Release: Signing.xcconfig
-      AppStoreRelease: Signing.xcconfig
     settings:
       base:
         INFOPLIST_FILE: $(PROJECT_DIR)/Info.plist
@@ -492,4 +481,4 @@ schemes:
     analyze:
       config: Debug
     archive:
-      config: AppStoreRelease
+      config: Release

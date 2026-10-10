@@ -1,6 +1,5 @@
 import Foundation
 import GameProbe
-import Security
 import Synchronization
 
 /// Resolves the writable data directory a session hands the engine
@@ -51,27 +50,17 @@ enum DataDirectory {
     }()
 
     static let appGroupURL: URL? = {
-        guard let configured = Bundle.main.object(forInfoDictionaryKey: "EmpoAppGroup") as? String,
-            !configured.isEmpty
-        else { return nil }
-        #if APP_STORE
-        // The App Store keeps the group name. The SecTask functions are
-        // private, and App Store validation rejects them.
-        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: configured)
-        #else
-        guard let task = SecTaskCreateFromSelf(nil),
-            let signed = SecTaskCopyValueForEntitlement(
-                task, "com.apple.security.application-groups" as CFString, nil) as? [String]
+        // LiveContainer gives the app a made-up folder for any group
+        // name, which the game process and the Files app cannot open.
+        guard ProcessInfo.processInfo.environment["LC_HOME_PATH"] == nil,
+            let filesProvider = Bundle.main.builtInPlugInsURL
+                .flatMap({ Bundle(url: $0.appendingPathComponent("FilesProvider.appex")) }),
+            let info = filesProvider.object(forInfoDictionaryKey: "NSExtension") as? [String: Any],
+            let group = info["NSExtensionFileProviderDocumentGroup"] as? String
         else { return nil }
         // AltStore and SideStore add "." and the team ID to the group
-        // name when they sign the app. LiveContainer runs the app with
-        // its own signature, which has only LiveContainer's groups, and
-        // gives the app a hidden folder for any other group name.
-        return signed.lazy
-            .filter { $0 == configured || $0.hasPrefix(configured + ".") }
-            .compactMap(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:))
-            .first
-        #endif
+        // name when they sign the app, and write the new name here.
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
     }()
 
     /// Moves the items of Documents, from before the app group, into
