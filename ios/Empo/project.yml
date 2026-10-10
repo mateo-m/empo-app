@@ -201,7 +201,9 @@ targets:
               echo "error: $CORE_SRC missing - run: $HOW" >&2
               exit 1
             fi
-            rsync -a --delete "$CORE_SRC" "$DEST/"
+            # An archive builds MvmzCore as a link into UninstalledProducts.
+            # The "/" at the end makes rsync copy what the link points to.
+            rsync -a --delete "$CORE_SRC/" "$DEST/$CORE.framework/"
             # A nested framework carries its own signature. The app's
             # own signing step does not reach inside it, so sign it
             # here, the way Xcode's Embed Frameworks phase does.
