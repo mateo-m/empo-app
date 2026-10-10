@@ -106,7 +106,9 @@ struct SettingsView: View {
                 } header: {
                     Text("Files")
                 } footer: {
-                    Text("Your games, saves, and logs are in the Files app.")
+                    Text(
+                        "Your games, saves, and logs are in the Files app. If Files doesn't show Empo, tap Browse › ⋯ › Edit and turn on Empo."
+                    )
                 }
 
                 Section {
