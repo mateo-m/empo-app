@@ -47,7 +47,7 @@ struct ExperimentalSection: View {
             Text("Experimental")
         } footer: {
             Text(
-                "These features are still in testing. If a game stops or doesn't start, share its report from the game's Info and attach it to a GitHub issue."
+                "These features are still in testing. If a game stops or doesn't start, turn on Debug logs and play it again. Then share its report from the game's Info and attach it to a GitHub issue."
             )
         }
     }

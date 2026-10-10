@@ -51,14 +51,8 @@ enum GameSession {
         }
 
         crashTracker.writeMarker(for: container)
-        // A game process session always keeps a log, so that its report
-        // has one.
         let runner = EngineSessionCoordinator.shared.runner
-        sessionLogger.beginSession(
-            for: game,
-            container: container,
-            debugLogsEnabled: input.debugLogsEnabled || runner == .gameProcess
-        )
+        sessionLogger.beginSession(for: game, container: container, debugLogsEnabled: input.debugLogsEnabled)
         GameReport.last = sessionLogger.logURL.map {
             GameReport(gameTitle: game.title, logURL: $0)
         }

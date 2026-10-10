@@ -39,7 +39,7 @@ The `FilesProvider` extension shows the root in the Files app, under Locations. 
 
 ## Reports
 
-A game process session always writes a session log, also when the debug logs setting is off. The extension sends its stdout and stderr to the log, and writes a backtrace to it on a crash signal. The app adds lines that start with `[empo]` for what it saw, for example a quit or a process that went away (`SessionLogger.note`).
+A game process session writes a session log only when the debug logs setting is on, like a session in the app. The extension sends its stdout and stderr to the log, and writes a backtrace to it on a crash signal. The app adds lines that start with `[empo]` for what it saw, for example a quit or a process that went away (`SessionLogger.note`).
 
 `GameReport` turns a session log into a text file to share. The file starts with the app version, the commit, the device and the game. The log names the core and the runner. The person can share the newest report of a game from "Share report" in its Info sheet. "Share Report" on the error alert and on the screen of a game that stopped shares the report of the last session (`GameReport.last`), which the app keeps across launches.
 
