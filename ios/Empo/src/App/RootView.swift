@@ -528,5 +528,11 @@ private final class ReportItemProvider: UIActivityItemProvider, @unchecked Senda
             placeholderItem: FileManager.default.temporaryDirectory.appendingPathComponent("report.txt"))
     }
 
-    override var item: Any { (try? report.write(header: header)) ?? Data() }
+    override var item: Any {
+        do {
+            return try report.write(header: header)
+        } catch {
+            return "\(header)\nThe report file could not be written: \(error.localizedDescription)\n"
+        }
+    }
 }
