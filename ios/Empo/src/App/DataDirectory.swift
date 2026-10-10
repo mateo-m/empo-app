@@ -86,7 +86,7 @@ enum DataDirectory {
         let group = storage.deletingLastPathComponent().resolvingSymlinksInPath().path + "/"
         // The system puts files that other apps open in Empo in Inbox.
         let names = ((try? fm.contentsOfDirectory(atPath: documents.path)) ?? [])
-            .filter { !$0.hasPrefix(".") && $0 != "Inbox" }
+            .filter { $0 != "Inbox" }
         for name in names {
             let item = documents.appendingPathComponent(name)
             let destination = storage.appendingPathComponent(name)
