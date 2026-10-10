@@ -186,13 +186,14 @@ class AppWindow: UIWindow {
     /// In library/loading: this window must be key for SwiftUI.
     /// In player: key only while keyboard mode is active or an alert
     /// shows. A game in the app needs key for its keys, and SDL would
-    /// steal the OK tap of an alert. A game in its own process gets
-    /// none, so a hardware key does not move SwiftUI focus.
+    /// steal the OK tap of an alert. A game in its own process shows in
+    /// this window, and its scene gets the keys only while it is key.
     override var canBecomeKey: Bool {
         let state = AppState.shared
         if state.errorMessage != nil { return true }
         if state.infoMessage != nil { return true }
         if state.phase != .playing { return true }
+        if EngineSessionCoordinator.shared.runner != .app { return true }
         return allowKeyWindow
     }
 
@@ -224,8 +225,8 @@ class AppWindow: UIWindow {
     /// Gives key-window status back to the game after the overlay
     /// gives up `canBecomeKey` (e.g. loading -> playing).
     ///
-    /// A game in its own process has no window here, so the overlay
-    /// only ends editing.
+    /// A game in its own process shows in this window, so the overlay
+    /// stays key and only ends editing.
     ///
     /// Never hand key status to a keyboard window. Once the system
     /// keyboard has shown, its `UITextEffectsWindow` joins

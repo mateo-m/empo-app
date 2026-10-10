@@ -60,6 +60,12 @@ static void injectKey(int scancode, BOOL pressed) {
                    dispatch_get_main_queue(), ^{ injectKey(GAMECORE_SCANCODE_BACKSPACE, NO); });
 }
 
+// On iPadOS, Tab moves keyboard focus to any text field, and the field
+// then takes the keys from a game in its own process.
+- (BOOL)canBecomeFocused {
+    return self.isFirstResponder;
+}
+
 - (CGRect)caretRectForPosition:(UITextPosition *)position {
     return CGRectZero;
 }
