@@ -193,11 +193,19 @@ final class SessionLogger {
         sessionLogStampFormatter.string(from: date) + sessionLogSuffix
     }
 
-    static func isSessionLogName(_ name: String) -> Bool {
-        guard name.hasSuffix(sessionLogSuffix) else { return false }
-        let stamp = String(name.dropLast(sessionLogSuffix.count))
-        return sessionLogStampFormatter.date(from: stamp) != nil
-            || secondStampFormatter.date(from: stamp) != nil
+    /// The session logs among `names`, oldest first. A name without
+    /// milliseconds sorts before a name with them from the same second,
+    /// because only older builds wrote it.
+    static func sessionLogsOldestFirst(_ names: [String]) -> [String] {
+        names.compactMap { name -> (name: String, date: Date, legacy: Bool)? in
+            guard name.hasSuffix(sessionLogSuffix) else { return nil }
+            let stamp = String(name.dropLast(sessionLogSuffix.count))
+            if let date = sessionLogStampFormatter.date(from: stamp) { return (name, date, false) }
+            if let date = secondStampFormatter.date(from: stamp) { return (name, date, true) }
+            return nil
+        }
+        .sorted { ($0.date, $0.legacy ? 0 : 1) < ($1.date, $1.legacy ? 0 : 1) }
+        .map(\.name)
     }
 
     /// The cap counts session logs only. `Logs/` also holds files that
@@ -205,8 +213,7 @@ final class SessionLogger {
     static func pruneSessionLogs(in logsDir: URL, keeping limit: Int) {
         let fm = FileManager.default
         guard let names = try? fm.contentsOfDirectory(atPath: logsDir.path) else { return }
-        // The stamps have a fixed width, so name order is time order.
-        for name in names.filter(isSessionLogName).sorted().dropLast(limit) {
+        for name in sessionLogsOldestFirst(names).dropLast(limit) {
             try? fm.removeItem(at: logsDir.appendingPathComponent(name))
         }
     }

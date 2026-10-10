@@ -45,17 +45,18 @@ final class SessionLoggerTests: XCTestCase {
     }
 
     func testPruneOrdersOldAndNewNamesByTime() throws {
+        // In name order, the old name of 21:04:07 comes after the new one.
         let sessionLogs = [
-            "2026-09-16T21-04-06Z.log", "2026-09-16T21-04-07.000Z.log", "2026-09-16T21-04-07.500Z.log",
+            "2026-09-16T21-04-06.900Z.log", "2026-09-16T21-04-07Z.log", "2026-09-16T21-04-07.500Z.log",
         ]
         for name in sessionLogs {
             try "x".write(to: logsDir.appendingPathComponent(name), atomically: true, encoding: .utf8)
         }
 
-        SessionLogger.pruneSessionLogs(in: logsDir, keeping: 2)
+        SessionLogger.pruneSessionLogs(in: logsDir, keeping: 1)
 
         let remaining = try FileManager.default.contentsOfDirectory(atPath: logsDir.path).sorted()
-        XCTAssertEqual(remaining, Array(sessionLogs.suffix(2)))
+        XCTAssertEqual(remaining, ["2026-09-16T21-04-07.500Z.log"])
     }
 
     func testPruneKeepsEverySessionLogUnderTheLimit() throws {
@@ -72,12 +73,11 @@ final class SessionLoggerTests: XCTestCase {
     func testSessionLogNameRoundTrips() {
         let name = SessionLogger.sessionLogName(for: Date(timeIntervalSince1970: 1_789_592_646.25))
         XCTAssertEqual(name, "2026-09-16T21-04-06.250Z.log")
-        XCTAssertTrue(SessionLogger.isSessionLogName(name))
-        XCTAssertTrue(SessionLogger.isSessionLogName("2026-09-16T21-04-06Z.log"))
-        for other in [
-            "controls.json.log", "engine-config.log", "session-history.log", "2026-09-16T21-04-06Z.txt",
-        ] {
-            XCTAssertFalse(SessionLogger.isSessionLogName(other), other)
-        }
+        XCTAssertEqual(
+            SessionLogger.sessionLogsOldestFirst([
+                name, "2026-09-16T21-04-06Z.log", "controls.json.log", "engine-config.log",
+                "session-history.log", "2026-09-16T21-04-06Z.txt",
+            ]),
+            ["2026-09-16T21-04-06Z.log", name])
     }
 }
