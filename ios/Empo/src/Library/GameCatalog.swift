@@ -68,6 +68,17 @@ enum GameCatalog {
             // reaching here with no `Game/` is a genuine orphan.
             let gameDirExists = fm.fileExists(atPath: container.gameURL.path)
             if !gameDirExists {
+                // The Files app shows Games, so a person can put a game
+                // folder there by hand. Only a folder that holds nothing
+                // but Empo's own folders is an orphan.
+                let leftovers = Set(
+                    [container.empoStateURL, container.userDataURL, container.logsURL, container.metadataURL]
+                        .map(\.lastPathComponent))
+                let names = (try? fm.contentsOfDirectory(atPath: container.url.path)) ?? []
+                guard names.allSatisfy({ $0.hasPrefix(".") || leftovers.contains($0) }) else {
+                    NSLog("[GameCatalog] Skipping %@: it has no Game folder", container.folderName)
+                    continue
+                }
                 // Re-check the live sets right before the delete:
                 // the loop-entry check can be minutes stale on a
                 // long scan, and this cleanup is the one delete
