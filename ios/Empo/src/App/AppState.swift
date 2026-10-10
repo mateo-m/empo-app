@@ -237,19 +237,24 @@ class AppState {
         // background before the game paused for the quit.
         if quitOnPause {
             session.note("The player quit the game.")
-            session.killSession(of: selectedGame)
-            clearEndedGame()
+            let game = selectedGame
+            // The phase changes first, in the same transaction. A change
+            // made before an animated phase change makes SwiftUI draw
+            // inside the phase's willSet, with `.playing`, and the screen
+            // can keep the game controls after the quit.
             withAnimation(Motion.snappy) {
                 phase = nil
+                session.killSession(of: game)
+                clearEndedGame()
             }
             return
         }
         if EngineState.shared.isBackgroundPause { return }
         let pm = PauseManager.shared
-        pm.pauseSnapshot = snapshot
-        pm.pausedGame = selectedGame
         withAnimation(Motion.snappy) {
             phase = nil
+            pm.pauseSnapshot = snapshot
+            pm.pausedGame = selectedGame
         }
     }
 
