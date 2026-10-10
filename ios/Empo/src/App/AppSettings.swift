@@ -211,10 +211,12 @@ class AppSettings {
     }()
 
     /// The game process needs a core that cannot kill its session, and
-    /// the app group folder for the games and the saves. A sideload tool
+    /// the games and the saves in the app group folder. A sideload tool
     /// can remove the extension to save an App ID.
     nonisolated static var gameProcessIsAvailable: Bool {
-        !GameCores.gameProcessCores.isEmpty && DataDirectory.appGroupURL != nil
+        !GameCores.gameProcessCores.isEmpty
+            && DataDirectory.appGroupURL.map { DataDirectory.documentsRootURL.path.hasPrefix($0.path) }
+                == true
             && FileManager.default.fileExists(
                 atPath: Bundle.main.bundleURL.appendingPathComponent("Extensions/GameProcess.appex").path)
     }
