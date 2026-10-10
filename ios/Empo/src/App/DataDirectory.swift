@@ -52,8 +52,14 @@ enum DataDirectory {
 
     static let appGroupURL: URL? = {
         guard let configured = Bundle.main.object(forInfoDictionaryKey: "EmpoAppGroup") as? String,
-            !configured.isEmpty,
-            let task = SecTaskCreateFromSelf(nil),
+            !configured.isEmpty
+        else { return nil }
+        #if APP_STORE
+        // The App Store keeps the group name. The SecTask functions are
+        // private, and App Store validation rejects them.
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: configured)
+        #else
+        guard let task = SecTaskCreateFromSelf(nil),
             let signed = SecTaskCopyValueForEntitlement(
                 task, "com.apple.security.application-groups" as CFString, nil) as? [String]
         else { return nil }
@@ -65,6 +71,7 @@ enum DataDirectory {
             .filter { $0 == configured || $0.hasPrefix(configured + ".") }
             .compactMap(FileManager.default.containerURL(forSecurityApplicationGroupIdentifier:))
             .first
+        #endif
     }()
 
     /// Moves the items of Documents, from before the app group, into
