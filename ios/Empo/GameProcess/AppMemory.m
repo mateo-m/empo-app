@@ -204,7 +204,7 @@ NSString *EmpoUseAppMemory(xpc_object_t memory) {
     }
     if (!EmpoUseHeap((void *)start, size)) {
         vm_deallocate(mach_task_self(), start, size);
-        return @"mimalloc refused the app's memory";
+        return @"the game process could not use the app's memory";
     }
     gBlockStart = (char *)start;
     gBlockEnd = gBlockStart + size;
