@@ -99,6 +99,14 @@ final class KeyboardInputManager {
         }
 
         attach(GCKeyboard.coalesced)
+
+        // After a tap on a game in its own process, iOS sends the keys
+        // there, and the process sends them on to here.
+        EmpoGameProcessClient.setKeyHandler { [weak self] keyCode, pressed in
+            MainActor.assumeIsolated {
+                self?.handle(keyCode: GCKeyCode(rawValue: keyCode), pressed: pressed)
+            }
+        }
     }
 
     func stop() {
@@ -117,6 +125,7 @@ final class KeyboardInputManager {
         // Nothing outside a session needs these keys, and `start()`
         // claims the slot again for the next one.
         GCKeyboard.coalesced?.keyboardInput?.keyChangedHandler = nil
+        EmpoGameProcessClient.setKeyHandler(nil)
         textInputActive = false
     }
 

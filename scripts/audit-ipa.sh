@@ -192,6 +192,25 @@ BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
 [[ "$BUNDLE_ID" == "sh.mateo.empo" ]] ||
     fail "unexpected bundle id: $BUNDLE_ID (expected sh.mateo.empo for release IPA)"
 
+APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionFileProviderDocumentGroup" "$APP/PlugIns/FilesProvider.appex/Info.plist")
+has_app_group() {
+    codesign -d --entitlements - --xml "$1" 2>/dev/null | grep -qF "<string>$APP_GROUP</string>"
+}
+has_app_group "$APP" || fail "Empo is not signed with the app group $APP_GROUP"
+for extension in "$APP"/Extensions/*.appex "$APP"/PlugIns/*.appex; do
+    [[ -d "$extension" ]] || continue
+    name=$(basename "$extension")
+    id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$extension/Info.plist")
+    [[ "$id" == "$BUNDLE_ID".* ]] || fail "$name bundle id $id is not under $BUNDLE_ID"
+    codesign --verify --strict "$extension" 2>/dev/null || fail "$name is not signed"
+    has_app_group "$extension" || fail "$name is not signed with the app group $APP_GROUP"
+done
+GAME_PROCESS="$APP/Extensions/GameProcess.appex"
+[[ -d "$GAME_PROCESS" ]] || fail "GameProcess.appex missing from the app bundle"
+POINT=$(/usr/libexec/PlistBuddy -c "Print :EXAppExtensionAttributes:EXExtensionPointIdentifier" "$GAME_PROCESS/Info.plist")
+[[ "$POINT" == "$BUNDLE_ID.game-process" ]] ||
+    fail "GameProcess.appex extension point $POINT != $BUNDLE_ID.game-process"
+
 if [[ -n "$EXPECTED_VERSION" && "$VERSION" != "$EXPECTED_VERSION" ]]; then
     fail "Info.plist version $VERSION != expected $EXPECTED_VERSION"
 fi

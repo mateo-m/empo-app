@@ -202,11 +202,16 @@ struct GameInfoView: View {
                                     .padding(.vertical, Spacing.lg)
                             }
 
-                            if let logURL = sessionLogURL(), settings.debugLogs {
+                            if let container,
+                                let report = GameReport.latest(gameTitle: displayTitle, in: container)
+                            {
                                 Divider().padding(.leading, Spacing.xl)
 
-                                ShareLink(item: logURL) {
-                                    Label("Export logs", systemImage: "square.and.arrow.up")
+                                ShareLink(
+                                    item: report,
+                                    preview: SharePreview("\(AppInfo.name) report for \(report.gameTitle)")
+                                ) {
+                                    Label("Share report", systemImage: "square.and.arrow.up")
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.horizontal, Spacing.xl)
                                         .padding(.vertical, Spacing.lg)
@@ -558,16 +563,9 @@ struct GameInfoView: View {
     }
 
     private func openInFiles() {
-        let encoded = game.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? game.path
-        if let url = URL(string: "shareddocuments://\(encoded)") {
+        if let url = DataDirectory.filesAppURL(for: game.path) {
             UIApplication.shared.open(url)
         }
-    }
-
-    private func sessionLogURL() -> URL? {
-        guard let container else { return nil }
-        let historyLog = container.sessionHistoryURL
-        return FileManager.default.fileExists(atPath: historyLog.path) ? historyLog : nil
     }
 }
 

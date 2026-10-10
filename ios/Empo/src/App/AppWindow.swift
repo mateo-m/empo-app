@@ -164,7 +164,7 @@ class AppWindow: UIWindow {
     /// touch sent straight to it is lost. SDL's top view reads the touch
     /// itself and answers with itself here.
     private func gameTouchTarget(at point: CGPoint, with event: UIEvent?) -> UIView? {
-        guard let gameView = GameViewEmbedder.embeddedView else { return nil }
+        guard let gameView = GameProcessHost.gameView ?? GameViewEmbedder.embeddedView else { return nil }
         return gameView.hitTest(convert(point, to: gameView), with: event) ?? gameView
     }
 
@@ -184,15 +184,20 @@ class AppWindow: UIWindow {
     // Controls handle their own key injection via the bridge.
 
     /// In library/loading: this window must be key for SwiftUI.
-    /// In player: SDL needs key, unless keyboard mode is active or
-    /// an error alert presents (SDL would steal OK taps).
+    /// In player: key only while keyboard mode is active or an alert
+    /// shows. A game in the app needs key for its keys, and SDL would
+    /// steal the OK tap of an alert. A game in its own process shows in
+    /// this window, and its scene gets the keys only while it is key.
     override var canBecomeKey: Bool {
         let state = AppState.shared
         if state.errorMessage != nil { return true }
         if state.infoMessage != nil { return true }
         if state.phase != .playing { return true }
+        if EngineSessionCoordinator.shared.runner != .app { return true }
         return allowKeyWindow
     }
+
+    static var rootViewController: UIViewController? { instance?.rootViewController }
 
     static var hostView: UIView? { instance?.rootViewController?.view }
 
@@ -213,20 +218,27 @@ class AppWindow: UIWindow {
         if allow {
             window.makeKey()
         } else {
-            resignKeyToSDL()
+            resignKeyToGame()
         }
     }
 
-    /// Returns UIKit key-window status to SDL after the overlay
+    /// Gives key-window status back to the game after the overlay
     /// gives up `canBecomeKey` (e.g. loading -> playing).
+    ///
+    /// A game in its own process shows in this window, so the overlay
+    /// stays key and only ends editing.
     ///
     /// Never hand key status to a keyboard window. Once the system
     /// keyboard has shown, its `UITextEffectsWindow` joins
     /// `scene.windows`, and making it key while the keyboard
     /// dismisses briefly wakes the keyboard's own UI (the Memoji
     /// stickers splash with its "Continue" button).
-    @objc static func resignKeyToSDL() {
+    static func resignKeyToGame() {
         guard let overlay = instance, let scene = overlay.windowScene else { return }
+        guard EngineSessionCoordinator.shared.runner == .app else {
+            overlay.endEditing(true)
+            return
+        }
         let candidates = scene.windows.filter { window in
             guard window !== overlay else { return false }
             let className = String(describing: type(of: window))
@@ -318,10 +330,13 @@ class AppWindow: UIWindow {
         }
     }
 
-    /// Keep AppWindow visible. Reparent SDL's game view here while
-    /// the game plays, so one UIWindow owns the compositing stack.
+    /// Keep AppWindow visible. Reparent the game view of a game in the
+    /// app here while the game plays, so one UIWindow owns the
+    /// compositing stack. GameProcessHost puts the view of a game
+    /// process here itself.
     private static func applyOverlayPresentationMode(window: AppWindow) {
         let playing = AppState.shared.phase == .playing
+        let inApp = EngineSessionCoordinator.shared.runner == .app
 
         if playing {
             window.isHidden = false
@@ -331,7 +346,9 @@ class AppWindow: UIWindow {
             if let root = window.rootViewController?.view {
                 clearPassThroughBackdrop(in: root)
             }
-            GameViewEmbedder.embedWithRetry()
+            if inApp {
+                GameViewEmbedder.embedWithRetry()
+            }
         } else {
             GameViewEmbedder.detach()
             window.isHidden = false

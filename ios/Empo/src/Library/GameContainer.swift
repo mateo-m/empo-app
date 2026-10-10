@@ -178,8 +178,7 @@ struct GameContainer: Equatable, Hashable {
     // MARK: - Roots
 
     /// Parent of all game containers. `Documents/Games/`.
-    static let rootURL: URL = FileManager.default
-        .urls(for: .documentDirectory, in: .userDomainMask)[0]
+    static let rootURL: URL = DataDirectory.documentsRootURL
         .appendingPathComponent("Games", isDirectory: true)
 
     // MARK: - Discovery

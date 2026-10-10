@@ -108,24 +108,12 @@ enum AppTheme: String, CaseIterable {
     }
 }
 
-// We removed the `ExperimentalFeature` enum and its `isEnabled` /
-// `setEnabled` machinery in May 2026, after `gamePause` and
-// `cheats` graduated to always-on. No experimental toggles remain.
-// We also planned `gameQuit` as an experimental feature. It never
-// landed, and we removed the quit paths in August 2026. See
-// ios/Empo/docs/multi-session.md.
-//
-// To bring back an opt-in experimental toggle later, restore:
-//   - this enum (cases + `label` + `description` + `id`)
-//   - `AppSettings.experimentalFlags`, `isEnabled`, `setEnabled`
-//   - the loop in `init` that loads the dictionary from defaults
-//   - the `experimentalBinding(for:)` helper in `SettingsView`
-//   - the `ForEach(ExperimentalFeature.allCases)` in `SettingsView`
-//   - per-feature gating sites in PlayerMoreSheet etc.
-//
-// Make the DefaultsKey strings reuse the historical
-// `experimental.<name>` shape. Users with the old toggle stored
-// then pick it up again automatically.
+/// Where a game runs: in the app, or in a game process of its own
+/// (`GameProcessHost`). See ios/Empo/docs/multi-session.md.
+enum GameRunner: String {
+    case app
+    case gameProcess
+}
 
 @MainActor
 @Observable
@@ -207,6 +195,32 @@ class AppSettings {
         }
     }
 
+    /// Where the games of `GameCores.gameProcessCores` run from the next
+    /// launch. Experimental, and off
+    /// (`.app`) by default.
+    var rubyGameRunner: GameRunner {
+        didSet { UserDefaults.standard.set(rubyGameRunner.rawValue, forKey: DefaultsKey.rubyGameRunner) }
+    }
+
+    /// `rubyGameRunner` until Empo closes. A game in the app stays
+    /// for the life of the process, so a change applies at the next
+    /// launch only.
+    nonisolated static let rubyGameRunnerThisLaunch: GameRunner = {
+        let raw = UserDefaults.standard.string(forKey: DefaultsKey.rubyGameRunner) ?? ""
+        return gameProcessIsAvailable ? GameRunner(rawValue: raw) ?? .app : .app
+    }()
+
+    /// The game process needs a core that cannot kill its session, and
+    /// the games and the saves in the app group folder. A sideload tool
+    /// can remove the extension to save an App ID.
+    nonisolated static var gameProcessIsAvailable: Bool {
+        !GameCores.gameProcessCores.isEmpty
+            && DataDirectory.appGroupURL.map { DataDirectory.documentsRootURL.path.hasPrefix($0.path) }
+                == true
+            && FileManager.default.fileExists(
+                atPath: Bundle.main.bundleURL.appendingPathComponent("Extensions/GameProcess.appex").path)
+    }
+
     // MARK: - Splash disclaimer acknowledgment
 
     /// A version number that only increases. The flow can then prompt
@@ -267,6 +281,8 @@ class AppSettings {
         self.showContinuePlaying = ud.object(forKey: DefaultsKey.showContinuePlaying) as? Bool ?? true
         let sortRaw = ud.string(forKey: DefaultsKey.librarySortOption) ?? LibrarySortOption.titleAZ.rawValue
         self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
+        self.rubyGameRunner =
+            GameRunner(rawValue: ud.string(forKey: DefaultsKey.rubyGameRunner) ?? "") ?? .app
         self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
         self.whatsNewSeenVersion = ud.integer(forKey: DefaultsKey.whatsNewSeenVersion)
 

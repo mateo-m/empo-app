@@ -7,11 +7,6 @@ struct SettingsView: View {
     @State private var showBuildInfo = false
     @State private var showWhatsNew = false
 
-    // We deleted the ExperimentalFeature toggles and the
-    // ConfirmSheet/InfoSheet when gamePause/cheats graduated. See
-    // the ExperimentalFeature comment block in AppSettings.swift
-    // for how to bring opt-in toggles back.
-
     var body: some View {
         @Bindable var settings = settings
         return NavigationStack {
@@ -90,6 +85,33 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        if let url = DataDirectory.filesAppURL(for: DataDirectory.documentsRootURL.path) {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Label {
+                            HStack {
+                                Text("Show in Files")
+                                Spacer()
+                                Image(systemName: "arrow.up.forward")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "folder")
+                        }
+                    }
+                    .tint(.primary)
+                } header: {
+                    Text("Files")
+                } footer: {
+                    Text(
+                        "Your games, saves, and logs are in the Files app. If Files doesn't show Empo, tap Browse › ⋯ › Edit and turn on Empo."
+                    )
+                }
+
+                Section {
                     SettingsToggle(
                         title: "Diagnostics overlay",
                         isOn: $settings.diagnosticsOverlay,
@@ -154,6 +176,10 @@ struct SettingsView: View {
                     Text("Advanced")
                 } footer: {
                     Text("These options are for debugging and troubleshooting.")
+                }
+
+                if !GameCores.gameProcessCores.isEmpty {
+                    ExperimentalSection()
                 }
 
                 Section {

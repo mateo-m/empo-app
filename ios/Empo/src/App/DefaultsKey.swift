@@ -1,13 +1,10 @@
 import Foundation
 
-/// Every UserDefaults key this app reads or writes, in three shapes:
+/// Every UserDefaults key this app reads or writes, in two shapes:
 ///
 ///   - Fixed names: plain `static let`. Most keys.
 ///   - Key families: `static func key(for: ...) -> String`, for
 ///     per-entity storage such as per-game or per-tip.
-///   - Enum-backed families: `ExperimentalFeature.rawValue` drives
-///     the key set directly, prefixed `experimental.*` so the keys
-///     stay grouped with the fixed names.
 enum DefaultsKey {
     // MARK: - App-wide
 
@@ -20,6 +17,10 @@ enum DefaultsKey {
     static let interfaceHaptics = "interfaceHaptics"
     static let controllerHaptics = "controllerHaptics"
     static let caBundleLastRefresh = "caBundleLastRefresh"
+    /// `GameRunner.rawValue`. String.
+    static let rubyGameRunner = "rubyGameRunner"
+    /// The `GameReport` of the last session that started. JSON `Data`.
+    static let lastGameReport = "lastGameReport"
 
     /// Controls edit mode: drags land on a fixed grid. Bool.
     static let controlsEditSnapToGrid = "controlsEditSnapToGrid"

@@ -10,6 +10,9 @@ sidebar:
 This is a known limitation, and not a defect in the game. Force-close Empo from the app
 switcher, and open it again. [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) explains why.
 
+To switch games without a restart, turn on **Settings → Experimental → Quit and switch games**. See
+[One game for each session](/playing#one-game-for-each-session).
+
 ## The game does not start
 
 Try these steps in order:
@@ -75,7 +78,8 @@ Empo keeps saves inside the folder of the game, so an app update never removes t
 A defect in versions before v0.6.1 renamed the save files of some games. Empo v0.6.1 and newer
 restore the newest save for each affected game at launch, and show a **Saves recovered** sheet.
 The renamed copies stay in the folder of the game as backups. You can reach them in the Files
-app, under **On My iPhone → Empo**.
+app, under **Browse → Locations → Empo**, or under **On My iPhone → Empo** if Empo is not under
+**Locations**.
 
 :::warning
 Do not delete Empo to fix a problem. iOS removes the app sandbox with the app, and your games

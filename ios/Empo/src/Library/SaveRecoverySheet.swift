@@ -183,9 +183,7 @@ private struct SaveRecoveryRow: View {
         // and fallback heals live inside the game container.
         let path = DataDirectory.documentsRootURL
             .appendingPathComponent(record.directory, isDirectory: true).path
-        let encoded =
-            path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
-        if let url = URL(string: "shareddocuments://\(encoded)") {
+        if let url = DataDirectory.filesAppURL(for: path) {
             UIApplication.shared.open(url)
         }
     }
