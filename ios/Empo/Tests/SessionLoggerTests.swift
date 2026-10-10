@@ -37,6 +37,27 @@ final class SessionLoggerTests: XCTestCase {
         XCTAssertEqual(remaining, (diagnostics + sessionLogs.suffix(2)).sorted())
     }
 
+    func testTwoStartsInOneSecondGetTwoNames() {
+        let first = SessionLogger.sessionLogName(for: Date(timeIntervalSince1970: 1_789_592_646.1))
+        let second = SessionLogger.sessionLogName(for: Date(timeIntervalSince1970: 1_789_592_646.9))
+        XCTAssertNotEqual(first, second)
+        XCTAssertLessThan(first, second)
+    }
+
+    func testPruneOrdersOldAndNewNamesByTime() throws {
+        let sessionLogs = [
+            "2026-09-16T21-04-06Z.log", "2026-09-16T21-04-07.000Z.log", "2026-09-16T21-04-07.500Z.log",
+        ]
+        for name in sessionLogs {
+            try "x".write(to: logsDir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
+
+        SessionLogger.pruneSessionLogs(in: logsDir, keeping: 2)
+
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: logsDir.path).sorted()
+        XCTAssertEqual(remaining, Array(sessionLogs.suffix(2)))
+    }
+
     func testPruneKeepsEverySessionLogUnderTheLimit() throws {
         for name in ["controls.json.log", "2026-09-16T21-04-06Z.log"] {
             try "x".write(to: logsDir.appendingPathComponent(name), atomically: true, encoding: .utf8)
@@ -49,9 +70,10 @@ final class SessionLoggerTests: XCTestCase {
     }
 
     func testSessionLogNameRoundTrips() {
-        let name = SessionLogger.sessionLogName(for: Date(timeIntervalSince1970: 1_789_592_646))
-        XCTAssertEqual(name, "2026-09-16T21-04-06Z.log")
+        let name = SessionLogger.sessionLogName(for: Date(timeIntervalSince1970: 1_789_592_646.25))
+        XCTAssertEqual(name, "2026-09-16T21-04-06.250Z.log")
         XCTAssertTrue(SessionLogger.isSessionLogName(name))
+        XCTAssertTrue(SessionLogger.isSessionLogName("2026-09-16T21-04-06Z.log"))
         for other in [
             "controls.json.log", "engine-config.log", "session-history.log", "2026-09-16T21-04-06Z.txt",
         ] {

@@ -112,7 +112,12 @@ final class SessionLogger {
 
         let logsDir = container.ensureLogsDirectory()
 
-        let start = Date()
+        var start = Date()
+        while FileManager.default.fileExists(
+            atPath: logsDir.appendingPathComponent(Self.sessionLogName(for: start)).path)
+        {
+            start += 0.001
+        }
         let logPath = logsDir.appendingPathComponent(Self.sessionLogName(for: start)).path
 
         let header =
@@ -168,14 +173,19 @@ final class SessionLogger {
     }
 
     /// A session log is named after the UTC time its session started,
-    /// with dashes in place of colons.
-    private static let sessionLogStampFormatter: DateFormatter = {
+    /// with dashes in place of colons. A quit and a new start can come in
+    /// the same second, so the name has milliseconds.
+    private static let sessionLogStampFormatter = stampFormatter("yyyy-MM-dd'T'HH-mm-ss.SSS'Z'")
+    /// The names of logs from builds before the milliseconds.
+    private static let secondStampFormatter = stampFormatter("yyyy-MM-dd'T'HH-mm-ss'Z'")
+
+    private static func stampFormatter(_ format: String) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "UTC")
-        formatter.dateFormat = "yyyy-MM-dd'T'HH-mm-ss'Z'"
+        formatter.dateFormat = format
         return formatter
-    }()
+    }
 
     private static let sessionLogSuffix = ".log"
 
@@ -184,8 +194,10 @@ final class SessionLogger {
     }
 
     static func isSessionLogName(_ name: String) -> Bool {
-        name.hasSuffix(sessionLogSuffix)
-            && sessionLogStampFormatter.date(from: String(name.dropLast(sessionLogSuffix.count))) != nil
+        guard name.hasSuffix(sessionLogSuffix) else { return false }
+        let stamp = String(name.dropLast(sessionLogSuffix.count))
+        return sessionLogStampFormatter.date(from: stamp) != nil
+            || secondStampFormatter.date(from: stamp) != nil
     }
 
     /// The cap counts session logs only. `Logs/` also holds files that
