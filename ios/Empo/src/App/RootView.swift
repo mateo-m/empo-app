@@ -532,7 +532,10 @@ private final class ReportItemProvider: UIActivityItemProvider, @unchecked Senda
         do {
             return try report.write(header: header)
         } catch {
-            return "\(header)\nThe report file could not be written: \(error.localizedDescription)\n"
+            // The placeholder is a file, so some share targets take only a file.
+            let text = "\(header)\nThe report file could not be written: \(error.localizedDescription)\n"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("report.txt")
+            return (try? Data(text.utf8).write(to: url)) != nil ? url : text
         }
     }
 }
