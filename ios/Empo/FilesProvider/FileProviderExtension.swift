@@ -104,7 +104,7 @@ final class FileProviderExtension: NSFileProviderExtension {
     ) {
         perform(completionHandler) {
             let url = try self.existingURL(of: itemIdentifier)
-            let destination = url.deletingLastPathComponent().appendingPathComponent(itemName)
+            let destination = try self.child(named: itemName, of: url.deletingLastPathComponent())
             return try self.move(url, to: destination)
         }
     }
@@ -152,8 +152,9 @@ final class FileProviderExtension: NSFileProviderExtension {
                 try parentItemIdentifier.map {
                     try self.newURL(named: url.lastPathComponent, in: $0)
                 }
-                ?? FileProviderItem.originalFolder(ofDeleted: url, root: self.root)
-                .appendingPathComponent(url.lastPathComponent)
+                ?? self.child(
+                    named: url.lastPathComponent,
+                    of: FileProviderItem.originalFolder(ofDeleted: url, root: self.root))
             guard !FileManager.default.fileExists(atPath: destination.path) else {
                 throw NSFileProviderError(.filenameCollision)
             }
@@ -223,9 +224,21 @@ final class FileProviderExtension: NSFileProviderExtension {
         guard let folder = urlForItem(withPersistentIdentifier: parent) else {
             throw NSFileProviderError(.noSuchItem)
         }
-        let url = folder.appendingPathComponent(name)
+        let url = try child(named: name, of: folder)
         guard !FileManager.default.fileExists(atPath: url.path) else {
             throw NSFileProviderError(.filenameCollision)
+        }
+        return url
+    }
+
+    private func child(named name: String, of folder: URL) throws -> URL {
+        guard !name.isEmpty, name != ".", name != "..", !name.contains("/") else {
+            throw CocoaError(.fileWriteInvalidFileName)
+        }
+        // A folder can be a link to a folder outside the root.
+        let url = folder.appendingPathComponent(name)
+        guard FileProviderItem.relativePath(of: url, root: root) != nil else {
+            throw CocoaError(.fileWriteNoPermission)
         }
         return url
     }
@@ -345,7 +358,7 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 
     /// The path of `url` relative to `root`: empty for `root`, and nil
     /// when `url` is not inside it.
-    private static func relativePath(of url: URL, root: URL) -> String? {
+    static func relativePath(of url: URL, root: URL) -> String? {
         // The item itself can be a link, which is its own item.
         let path = url.deletingLastPathComponent().resolvingSymlinksInPath()
             .appendingPathComponent(url.lastPathComponent).path
