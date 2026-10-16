@@ -33,7 +33,8 @@ core_commits() {
             {username: null, pr_title: null, pr_number: null, pr_labels: [], is_first_time: false} as $remote
             | .commits[]
             | (.commit.message | split("\n")[0]
-               | capture("^(?<type>fix|feat|perf)(\\([^)]*\\))?!?: (?<text>.*)$")) as $c
+               | capture("^(?<type>fix|feat|perf)(\\((?<scope>[^)]*)\\))?!?: (?<text>.*)$")) as $c
+            | select(["build", "ci", "deps", "docs", "test"] | index($c.scope) | not)
             | {id: .sha,
                message: ($c.text | sub(" \\(#(?<n>[0-9]+)\\)$"; " (\($repo)#\(.n))")),
                group: {fix: "Bug Fixes", feat: "Features", perf: "Performance"}[$c.type],
