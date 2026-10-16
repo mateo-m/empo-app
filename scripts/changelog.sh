@@ -14,10 +14,12 @@ VERSION="${1:?usage: $0 <version>}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-LAST_TAG="$(git describe --tags --abbrev=0 --match 'v*.*.*' HEAD)"
+# Empty before the first release.
+LAST_TAG="$(git describe --tags --abbrev=0 --match 'v*.*.*' HEAD 2>/dev/null || true)"
 
 core_commits() {
     local pin var old new core repo
+    [[ -n "$LAST_TAG" ]] || return 0
     for pin in cores/*/.version; do
         var="$(sed -n 's/^\([A-Z0-9_]*_CORE_VERSION\)=.*/\1/p' "$pin")"
         new="$(sed -n "s/^$var=//p" "$pin")"
@@ -53,5 +55,9 @@ git-cliff --config cliff.toml --unreleased --tag "v$VERSION" --context |
         | .[0].commits |= map(select(.scope as $s
             | (.raw_message | test("^chore\\([a-z]+\\): use ")) and ($listed | index($s)) | not))
         | .[0].commits += $core' >"$CONTEXT"
-git-cliff --config cliff.toml --unreleased --from-context "$CONTEXT" --prepend CHANGELOG.md
+if [[ -f CHANGELOG.md ]]; then
+    git-cliff --config cliff.toml --unreleased --from-context "$CONTEXT" --prepend CHANGELOG.md
+else
+    git-cliff --config cliff.toml --unreleased --from-context "$CONTEXT" --output CHANGELOG.md
+fi
 perl -0pi -e 's/\n{3,}/\n\n/g' CHANGELOG.md
