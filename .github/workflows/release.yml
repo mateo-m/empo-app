@@ -294,7 +294,6 @@ jobs:
             -destination 'generic/platform=iOS' \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO \
-            PRODUCT_BUNDLE_IDENTIFIER=sh.mateo.empo \
             CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
             build 2>&1 | tail -n 40
           test -d build/Release-iphoneos/Empo.app
@@ -306,19 +305,7 @@ jobs:
         id: package
         run: |
           set -e
-          # Inside out. A nested framework carries its own signature,
-          # and signing the app root does not reach inside it. The
-          # build ran with CODE_SIGNING_ALLOWED=NO, so every core
-          # framework arrives unsigned. Sign what the bundle has:
-          # EMPO_CORES in ios/Empo/project.yml decides which cores
-          # this build ships.
-          for FRAMEWORK in build/Release-iphoneos/Empo.app/Frameworks/*.framework; do
-            codesign --force --sign - --timestamp=none "$FRAMEWORK"
-          done
-          codesign --force --sign - \
-            --generate-entitlement-der \
-            --entitlements ios/Empo/Empo.entitlements \
-            build/Release-iphoneos/Empo.app
+          scripts/sign-app.sh build/Release-iphoneos/Empo.app
           scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
           mkdir -p build/ipa/Payload
           cp -R build/Release-iphoneos/Empo.app build/ipa/Payload/Empo.app

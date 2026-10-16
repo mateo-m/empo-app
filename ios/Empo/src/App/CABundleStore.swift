@@ -37,10 +37,11 @@ enum CABundleStore {
     private static let minimumCertCount = 50
 
     private static var refreshedURL: URL? {
+        // The game process reads the file, and it can open only the
+        // app group folder, not the app's own Library.
         guard
-            let support = FileManager.default.urls(
-                for: .applicationSupportDirectory, in: .userDomainMask
-            ).first
+            let support = DataDirectory.appGroupURL?.appendingPathComponent("Library/Application Support")
+                ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         else { return nil }
         return support.appendingPathComponent("CABundle/cacert.pem")
     }

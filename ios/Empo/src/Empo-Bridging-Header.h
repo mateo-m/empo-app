@@ -2,7 +2,8 @@
 // Exposes C bridge functions and ObjC touch control classes to Swift
 
 #import "GameCore.h"
-#import "EmpoCore.h"
+#import "EmpoAppCore.h"
+#import "GameProcessClient.h"
 #import "TouchControls.h"
 
 // libarchive - for zip/7z/rar extraction in ArchiveExtractor.

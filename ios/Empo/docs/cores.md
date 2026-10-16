@@ -92,7 +92,8 @@ calls, into `Psdk<NN>Core.framework`. Xcode runs it before each build.
 Each PSDK framework carries its own SFML, with the Objective-C classes
 `SFAppDelegate`, `SFView` and `SFViewController`. Objective-C keeps one class
 for each name in a process, so a second PSDK core must not open in a process.
-It cannot, because a PSDK core cannot kill its game (`canKillSession`).
+It cannot. A game process opens one core, and the app never ends a Ruby
+game, so it never opens a second Ruby core (`multi-session.md`).
 
 PSDK releases from December 2019 to about March 2021 carry Ruby 2.5 bytecode.
 They were written for LiteRGSS 1 and play sound only through FMOD, a
@@ -213,12 +214,21 @@ same `gamecore_` name, so the compiler checks each signature against it.
 3. Open the core when the user picks a game, not at launch. A core that is
    never picked is never loaded.
 
-Empo does step 2 through `ios/Empo/src/App/GameCoreForwarders.c`, which
+Empo does step 2 through `ios/Empo/src/App/AppCoreForwarders.c`. It makes a
+forwarder for each function of `GameCoreFunctions.h`, the list that
 `tools/gamecore/generate-core-forwarders.sh` writes from `GameCore.h`. Every
-`gamecore_*` call in the app lands in a forwarder that asks the open core for the
-same name. A call made before the core opens
-aborts with the name it wanted, because a silent no-op would hide a build
-mistake until a game misbehaved.
+`gamecore_*` call in the app lands in a forwarder.
+
+When the game runs in the app, the forwarder asks the open core for the same
+name. A call made before the core opens aborts with the name it wanted,
+because a silent no-op would hide a build mistake until a game misbehaved.
+
+When the game runs in a game process, the forwarder calls the `gameprocess_*`
+function of the same name in `GameProcessClient.m`. The app opens no core and
+does not use `dlsym`. A call made before the process connects waits, and goes
+to the process when it connects. A call outside a session goes nowhere. The
+getters answer from the last status that the process sent. The game process
+opens the core with steps 1 and 2 through `GameProcess/GameCoreForwarders.c`.
 
 ## Which thread runs the game
 
@@ -266,20 +276,14 @@ the framework's `Info.plist` from the same build flag the engine reads, and
 Both `build-framework-ios.sh` scripts also write `EmpoCoreVersion`, which names
 the engine source the core was linked from. The Game cores screen shows it.
 
-## More than one core in a process
+## One core in each process
 
-A core opens only after the open core killed its game with
-`gamecore_killSession` (`multi-session.md`). Only a core whose Swift type says
-`canKillSession` can do that, so an MV or MZ game can come before a Ruby game,
-but not after one. `EmpoCoreOpen` refuses any other change of core, and
-`EngineSessionCoordinator.openCore` then stops the app. Two cores in one
-process load without binding to each other, and `cores/mkxp/test-host/host.m`
-proves that with `MKXP_ALSO_OPEN`. Two cores cannot run at once. Both want the
-working directory, the signal handlers, the audio device and the main thread.
-
-The killed core stays loaded, because `dlclose` does not unload a framework
-with Objective-C classes. Each forwarder in `GameCoreForwarders.c` looks its
-symbol up again after a different core opens.
+Each game process opens one core (`multi-session.md`). The app opens a second core
+only after `gamecore_killSession`, which only the MV and MZ core supports.
+Two cores in one process load without binding to each other, and
+`cores/mkxp/test-host/host.m` proves that with `MKXP_ALSO_OPEN`. Two cores
+cannot run at once. Both want the working directory, the signal handlers, the
+audio device and the main thread.
 
 Objective-C registers every class by name for the whole process, also when
 its symbol is hidden. `scripts/audit-ipa.sh` fails a release when the app or

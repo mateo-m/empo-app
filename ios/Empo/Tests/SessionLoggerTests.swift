@@ -37,6 +37,28 @@ final class SessionLoggerTests: XCTestCase {
         XCTAssertEqual(remaining, (diagnostics + sessionLogs.suffix(2)).sorted())
     }
 
+    func testTwoStartsInOneSecondGetTwoNames() {
+        let first = SessionLogger.sessionLogName(for: Date(timeIntervalSince1970: 1_789_592_646.1))
+        let second = SessionLogger.sessionLogName(for: Date(timeIntervalSince1970: 1_789_592_646.9))
+        XCTAssertNotEqual(first, second)
+        XCTAssertLessThan(first, second)
+    }
+
+    func testPruneOrdersOldAndNewNamesByTime() throws {
+        // In name order, the old name of 21:04:07 comes after the new one.
+        let sessionLogs = [
+            "2026-09-16T21-04-06.900Z.log", "2026-09-16T21-04-07Z.log", "2026-09-16T21-04-07.500Z.log",
+        ]
+        for name in sessionLogs {
+            try "x".write(to: logsDir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
+
+        SessionLogger.pruneSessionLogs(in: logsDir, keeping: 1)
+
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: logsDir.path).sorted()
+        XCTAssertEqual(remaining, ["2026-09-16T21-04-07.500Z.log"])
+    }
+
     func testPruneKeepsEverySessionLogUnderTheLimit() throws {
         for name in ["controls.json.log", "2026-09-16T21-04-06Z.log"] {
             try "x".write(to: logsDir.appendingPathComponent(name), atomically: true, encoding: .utf8)
@@ -49,13 +71,13 @@ final class SessionLoggerTests: XCTestCase {
     }
 
     func testSessionLogNameRoundTrips() {
-        let name = SessionLogger.sessionLogName(for: Date(timeIntervalSince1970: 1_789_592_646))
-        XCTAssertEqual(name, "2026-09-16T21-04-06Z.log")
-        XCTAssertTrue(SessionLogger.isSessionLogName(name))
-        for other in [
-            "controls.json.log", "engine-config.log", "session-history.log", "2026-09-16T21-04-06Z.txt",
-        ] {
-            XCTAssertFalse(SessionLogger.isSessionLogName(other), other)
-        }
+        let name = SessionLogger.sessionLogName(for: Date(timeIntervalSince1970: 1_789_592_646.25))
+        XCTAssertEqual(name, "2026-09-16T21-04-06.250Z.log")
+        XCTAssertEqual(
+            SessionLogger.sessionLogsOldestFirst([
+                name, "2026-09-16T21-04-06Z.log", "controls.json.log", "engine-config.log",
+                "session-history.log", "2026-09-16T21-04-06Z.txt",
+            ]),
+            ["2026-09-16T21-04-06Z.log", name])
     }
 }

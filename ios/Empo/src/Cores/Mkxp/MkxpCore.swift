@@ -15,6 +15,10 @@ struct MkxpCore: GameCore {
         rgssVersionMask == 3 ? "RPG Maker XP and VX core" : "RPG Maker XP, VX and VX Ace core"
     }
 
+    var gamesName: String {
+        rgssVersionMask == 7 ? "RPG Maker XP, VX and VX Ace" : "RPG Maker XP and VX"
+    }
+
     var gamesLine: String {
         rgssVersionMask == 7
             ? "Runs RPG Maker XP, VX and VX Ace games"

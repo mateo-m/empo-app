@@ -1,10 +1,8 @@
 // Process entry.
 //
-// Empo owns UIApplicationMain. It used to come from libSDL2main, which
-// ran SDLUIKitDelegate, which called the engine's SDL_main. The engine
-// now sits in MkxpCore.framework, which Empo opens with dlopen when the
-// user picks a game, so neither that main nor that delegate is
-// reachable at launch.
+// Empo owns UIApplicationMain. The engine is in a core that Empo opens
+// with dlopen when the user picks a game, so SDL's main and its app
+// delegate do not run.
 //
 // EmpoAppDelegate does nothing. UIKit needs an application delegate
 // class, and EmpoSceneDelegate (named in Info.plist) builds the UI.
@@ -14,7 +12,7 @@
 
 #import <UIKit/UIKit.h>
 
-#include "EmpoCore.h"
+#include "EmpoAppCore.h"
 #include "GameCore.h"
 
 @interface EmpoAppDelegate : UIResponder <UIApplicationDelegate>

@@ -1,0 +1,16 @@
+diff --git a/src/libANGLE/renderer/metal/DisplayMtl.mm b/src/libANGLE/renderer/metal/DisplayMtl.mm
+index 92d1957..6d8c06e 100644
+--- a/src/libANGLE/renderer/metal/DisplayMtl.mm
++++ b/src/libANGLE/renderer/metal/DisplayMtl.mm
+@@ -149,7 +149,10 @@ angle::Result DisplayMtl::initializeImpl(egl::Display *display)
+             return angle::Result::Stop;
+         }
+ 
+-        mCmdQueue.set([[mMetalDevice newCommandQueue] ANGLE_MTL_AUTORELEASE]);
++        // The AGX driver keeps memory for each command buffer in flight, and the default
++        // limit is 64. A frame with many render passes then goes over the iOS memory limit.
++        mCmdQueue.set(
++            [[mMetalDevice newCommandQueueWithMaxCommandBufferCount:4] ANGLE_MTL_AUTORELEASE]);
+ 
+         ANGLE_TRY(mFormatTable.initialize(this));
+         ANGLE_TRY(initializeShaderLibrary());

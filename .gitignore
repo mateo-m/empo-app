@@ -104,3 +104,4 @@ build/
 # Root-level local object files from ad-hoc builds
 /*.o
 .blume-verify/
+ios/Empo/EmpoFP.xcodeproj/

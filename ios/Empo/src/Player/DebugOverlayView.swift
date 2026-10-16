@@ -41,6 +41,11 @@ final class DebugOverlayState {
     /// capacity as the FPS buffer so the two line charts stay
     /// visually aligned.
     var memoryBuffer = FPSRingBuffer(capacity: 120)
+    var runner: GameRunner = .app
+    /// The footprint of the game process in MB, for the runner
+    /// `.gameProcess`. `memoryMB` is then the app's own footprint.
+    var processMemoryMB: Double = 0
+    var processMemoryBuffer = FPSRingBuffer(capacity: 120)
 }
 
 struct DebugOverlayView: View {
@@ -50,7 +55,6 @@ struct DebugOverlayView: View {
     private var fps: Double { state.fps }
     private var gameTitle: String { state.gameTitle }
     private var ringBuffer: FPSRingBuffer { state.ringBuffer }
-    private var memoryMB: Double { state.memoryMB }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -65,14 +69,21 @@ struct DebugOverlayView: View {
                 color: gamecore_isGameReady() != 0 ? .success : .warning
             )
 
-            memoryRow
+            debugText(state.runner == .gameProcess ? "Runs in a game process" : "Runs in the app")
+
+            if state.runner == .gameProcess {
+                memoryRow("Game", megabytes: state.processMemoryMB, samples: state.processMemoryBuffer)
+                memoryRow("App", megabytes: state.memoryMB, samples: state.memoryBuffer)
+            } else {
+                memoryRow("Memory", megabytes: state.memoryMB, samples: state.memoryBuffer)
+            }
 
             HStack(spacing: Spacing.xs) {
                 Text("\(Int(fps.rounded())) FPS")
                     .font(AppFont.debugFPS)
                     .monospacedDigit()
                     .foregroundStyle(fpsColor)
-                    .frame(width: 90, alignment: .leading)
+                    .frame(width: 104, alignment: .leading)
 
                 // FPS Graph. Canvas has no intrinsic content size, so
                 // we constrain it to a fixed height. Otherwise it grabs
@@ -126,9 +137,16 @@ struct DebugOverlayView: View {
             state.fps = gamecore_getAverageFPS()
             state.targetFPS = Double(gamecore_getTargetFPS())
             state.ringBuffer.append(state.fps)
+            state.runner = EngineSessionCoordinator.shared.runner
             state.memoryMB = Self.currentMemoryMB()
             if state.memoryMB > 0 {
                 state.memoryBuffer.append(state.memoryMB)
+            }
+            if state.runner == .gameProcess {
+                state.processMemoryMB = Double(EmpoGameProcessClient.memoryFootprint()) / 1_048_576.0
+                if state.processMemoryMB > 0 {
+                    state.processMemoryBuffer.append(state.processMemoryMB)
+                }
             }
 
             // The core fills in some lines only after the renderer starts.
@@ -152,19 +170,19 @@ struct DebugOverlayView: View {
     /// visible even as the baseline increases. That makes leak
     /// trends easy to spot.
     @ViewBuilder
-    private var memoryRow: some View {
+    private func memoryRow(_ label: String, megabytes: Double, samples buffer: FPSRingBuffer) -> some View {
         HStack(spacing: Spacing.xs) {
             // Fixed-width slot with monospaced digits so digit-count
             // changes (e.g. 99 MB -> 100 MB) don't nudge the graph
             // left/right mid-session.
-            Text(memoryLine)
+            Text(megabytes > 0 ? String(format: "%@ %.0f MB", label, megabytes) : "\(label) --")
                 .font(AppFont.debugBody)
                 .monospacedDigit()
                 .foregroundStyle(.white.opacity(Alpha.textMuted))
-                .frame(width: 90, alignment: .leading)
+                .frame(width: 104, alignment: .leading)
 
             Canvas { context, size in
-                let samples = state.memoryBuffer.samples
+                let samples = buffer.samples
                 guard samples.count >= 2 else { return }
                 let lo = samples.min() ?? 0
                 let hi = samples.max() ?? 0
@@ -174,7 +192,7 @@ struct DebugOverlayView: View {
                 let range = max(hi - lo, 1)
                 var path = Path()
                 for (i, sample) in samples.enumerated() {
-                    let x = CGFloat(i) / CGFloat(state.memoryBuffer.capacity - 1) * size.width
+                    let x = CGFloat(i) / CGFloat(buffer.capacity - 1) * size.width
                     let y = size.height - ((sample - lo) / range) * size.height
                     let clamped = max(0, min(size.height, y))
                     if i == 0 {
@@ -205,15 +223,6 @@ struct DebugOverlayView: View {
         }
         guard kerr == KERN_SUCCESS else { return 0 }
         return Double(info.phys_footprint) / 1_048_576.0
-    }
-
-    /// Memory line. Shows "--" while the first sample settles, then
-    /// the current footprint.
-    private var memoryLine: String {
-        if memoryMB <= 0 {
-            return "Memory --"
-        }
-        return String(format: "Memory %.0f MB", memoryMB)
     }
 
     /// The frame cap to measure against. Games set the cap

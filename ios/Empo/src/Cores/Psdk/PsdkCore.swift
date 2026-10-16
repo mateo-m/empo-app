@@ -7,8 +7,9 @@ import SwiftUI
 ///
 /// Each framework carries SFML's SFView, SFViewController and
 /// SFAppDelegate, and Objective-C keeps one class for each name in a
-/// process. That holds only while a PSDK core can't kill its game
-/// (`canKillSession`), so that no second PSDK core opens after it.
+/// process. That holds because a PSDK core can't kill its game in the
+/// app (`canKillSession`), so no second PSDK core opens after it there.
+/// A game process runs one core.
 struct PsdkCore: GameCore {
     let ruby: String
     let gamesLine: String
