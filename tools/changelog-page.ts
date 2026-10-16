@@ -92,7 +92,8 @@ const sections = releases.map((release) => {
   for (const name of keptGroups) {
     const entries = release.groups.get(name);
     if (!entries) continue;
-    parts.push("", `### ${name}`, "", ...entries);
+    // Blume reads ":Union" in "Re:Union" as a directive and drops it.
+    parts.push("", `### ${name}`, "", ...entries.map((entry) => entry.replace(/:(?=[A-Za-z])/g, "\\:")));
   }
   return parts.join("\n");
 });
