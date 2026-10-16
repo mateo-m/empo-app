@@ -243,15 +243,7 @@ echo "==> generating release notes"
 if [[ -z "${GITHUB_TOKEN:-}" ]] && GH_AUTH_TOKEN=$(gh auth token 2>/dev/null); then
     export GITHUB_TOKEN="$GH_AUTH_TOKEN"
 fi
-FULL_CHANGELOG_ENTRY=$(git-cliff --config "$REPO_ROOT/cliff.toml" --unreleased --tag "v$VERSION")
-
-if [[ -f "$CHANGELOG_PATH" ]]; then
-    git-cliff --config "$REPO_ROOT/cliff.toml" --unreleased --tag "v$VERSION" --prepend "$CHANGELOG_PATH"
-else
-    printf '%s\n' "$FULL_CHANGELOG_ENTRY" >"$CHANGELOG_PATH"
-fi
-
-perl -0pi -e 's/\n{3,}/\n\n/g' "$CHANGELOG_PATH"
+"$REPO_ROOT/scripts/changelog.sh" "$VERSION"
 
 CHANGELOG=$("$REPO_ROOT/scripts/extract-changelog.sh" "$VERSION" "$CHANGELOG_PATH")
 
