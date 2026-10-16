@@ -43,15 +43,7 @@ public enum ScreenResolution {
     ) -> Result {
         let auto = Outcome(placement: nil, provenance: .engineAuto)
 
-        let sourceName: String?
-        switch pin {
-        case .profile(let name):
-            sourceName = name
-        case .gameLayout:
-            sourceName = nil
-        case .defaultProfile, .followChain:
-            sourceName = defaultProfileName
-        }
+        let sourceName = ProfileSource.name(pin: pin, defaultProfileName: defaultProfileName)
 
         guard let sourceName, let read = readScreen(sourceName) else {
             return Result(portrait: auto, landscape: auto)
