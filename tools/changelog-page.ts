@@ -39,7 +39,8 @@ const engineEntries = (from: string, to: string) => {
   return entries;
 };
 
-type Release = { version: string; date: string; groups: Map<string, string[]> };
+// scripts/changelog.sh writes the engine entries into CHANGELOG.md from 0.7.3 on.
+type Release = { version: string; date: string; groups: Map<string, string[]>; hasEngineEntries: boolean };
 
 const releases: Release[] = [];
 let current: Release | undefined;
@@ -48,7 +49,7 @@ let group: string | undefined;
 for (const line of source.split("\n")) {
   const release = line.match(/^## (\S+) - (\d{4}-\d{2}-\d{2})$/);
   if (release) {
-    current = { version: release[1], date: release[2], groups: new Map() };
+    current = { version: release[1], date: release[2], groups: new Map(), hasEngineEntries: false };
     releases.push(current);
     group = undefined;
     continue;
@@ -64,9 +65,10 @@ for (const line of source.split("\n")) {
   }
   if (!current || !group || !line.startsWith("- ")) continue;
   if (!keptGroups.includes(group)) continue;
+  if (line.includes("https://github.com/mateo-m/mkxp-z-apple-mobile/commit/")) current.hasEngineEntries = true;
   const entry = line
     .replace(/ \(\[`[0-9a-f]+`\]\(https:\/\/github\.com\/[^)]+\)\)$/, "")
-    .replace(/ \(#\d+\)$/, "");
+    .replace(/ \((?:[\w.-]+\/[\w.-]+)?#\d+\)$/, "");
   const entries = current.groups.get(group) ?? [];
   entries.push(entry);
   current.groups.set(group, entries);
@@ -76,7 +78,7 @@ releases.forEach((release, index) => {
   const previous = releases[index + 1];
   const to = enginePin(release.version);
   const from = previous && enginePin(previous.version);
-  if (!to || !from) return;
+  if (!to || !from || release.hasEngineEntries) return;
   for (const [group, entries] of engineEntries(from, to)) {
     release.groups.set(group, [...(release.groups.get(group) ?? []), ...entries]);
   }
