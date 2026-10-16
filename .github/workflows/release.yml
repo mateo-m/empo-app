@@ -448,9 +448,11 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      # A tag push checks out the tag. Announce mode checks out the
+      # branch it runs on, so it posts notes that were fixed after the
+      # release.
       - uses: actions/checkout@v6
         with:
-          ref: v${{ steps.version.outputs.version }}
           submodules: false
 
       - name: Extract release notes
