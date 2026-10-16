@@ -2,9 +2,11 @@
 
 ## 0.7.3 - 2026-10-16
 
-### Chores
+### Bug Fixes
 
-- Use engine v6 (#198) ([`79d9bd8`](https://github.com/mateo-m/empo-app/commit/79d9bd8956b904506f99dccc053634c2b46c74e3))
+- Fast-forward in Pokémon Re:Union and Rejuvenation (mateo-m/mkxp-z-apple-mobile#58) ([`7399328`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/73993288c71c109338f44f9a8d1ff09df2d697b3))
+- Games that sometimes started on a black screen, such as A Day and a Night (mateo-m/mkxp-z-apple-mobile#52) ([`0efdcba`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/0efdcba7459c9d2019c7fdce8da7628fdd2d71b9))
+- Downloads and "Regalo Misterioso" in Essentials BES games, such as Pokémon GS Vitro (mateo-m/mkxp-z-apple-mobile#50) ([`980dfae`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/980dfaea30e29b5fe6c625d6d27fa05b7fcf1889))
 
 ## 0.7.2 - 2026-10-08
 

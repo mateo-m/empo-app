@@ -26,6 +26,7 @@
           "version": "0.7.3",
           "buildVersion": "748",
           "date": "2026-10-16",
+          "localizedDescription": "This update fixes some bugs.",
           "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.7.3/Empo-0.7.3-unsigned.ipa",
           "size": 64781762,
           "minOSVersion": "26.0"
