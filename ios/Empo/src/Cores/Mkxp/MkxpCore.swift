@@ -24,8 +24,8 @@ struct MkxpCore: GameCore {
             : "Runs RPG Maker XP and VX games"
     }
 
-    /// The core loads a cheat menu script and copies the bridge flag into
-    /// `$CHEATS` on every update.
+    /// The core loads a cheat menu script, which opens on HOME while the
+    /// bridge flag is on.
     var supportsCheats: Bool { true }
 
     /// Which RGSS versions the core runs, as the bitmask that

@@ -111,11 +111,8 @@ final class PlayerRuntimeState {
 
     // MARK: - Cheats
 
-    /// Toggle the JoiPlay-derived cheat menu. The first activation
-    /// arms $CHEATS and injects a HOME keypress so the in-game
-    /// Scene_Cheat hook fires immediately. The next disarms $CHEATS.
-    /// The Ruby-side poller the engine installs keeps $CHEATS in sync
-    /// with the bridge flag each Input.update.
+    /// The engine's cheat scripts open their menu on HOME while the
+    /// bridge flag is on, so turning cheats on also taps HOME.
     func toggleCheats() {
         let next = !gamecore_getCheatsEnabled()
         gamecore_setCheatsEnabled(next)
