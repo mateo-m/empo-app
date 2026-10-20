@@ -376,7 +376,7 @@ jobs:
           set -e
           VERSION="${{ needs.build.outputs.version }}"
           bun install --frozen-lockfile
-          NOTES=$(scripts/whats-new-notes.sh "$VERSION")
+          NOTES=$(scripts/altstore-notes.sh "$VERSION")
           bun scripts/update-altstore-source.ts \
             --version "$VERSION" \
             --build "${{ needs.build.outputs.build }}" \

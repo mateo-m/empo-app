@@ -4,9 +4,7 @@
 import SwiftUI
 
 /// To announce a release, add an entry at the top of WhatsNew.json
-/// with the next `version` and the app version that ships it. The
-/// release copies the items of that app version into the AltStore
-/// update text (scripts/whats-new-notes.sh).
+/// with the next `version` and the app version that ships it.
 enum WhatsNew {
     static let releases: [WhatsNewRelease] = {
         let url = Bundle.main.url(forResource: "WhatsNew", withExtension: "json")!

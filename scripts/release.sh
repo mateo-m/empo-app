@@ -103,7 +103,7 @@ run_ci_sync() {
     echo "==> syncing altstore source"
     local slug notes build release_date
     slug=$(repo_slug)
-    notes=$("$REPO_ROOT/scripts/whats-new-notes.sh" "$version" "$CHANGELOG_PATH")
+    notes=$("$REPO_ROOT/scripts/altstore-notes.sh" "$version" "$CHANGELOG_PATH")
     build=$(sed -n 's/.*CURRENT_PROJECT_VERSION: //p' "$PROJECT_YML" | head -n 1)
     release_date=$(date -u +%Y-%m-%d)
     bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
@@ -238,8 +238,8 @@ cd "$REPO_ROOT"
 # `--unreleased --tag` covers everything since the previous tag
 # under the version we're about to ship. After prepending the entry to
 # CHANGELOG.md, re-read that section back out so the GitHub release
-# uses the exact committed text. AltStore gets the What's new items
-# from scripts/whats-new-notes.sh.
+# uses the exact committed text. AltStore gets the same section as
+# plain text from scripts/altstore-notes.sh.
 echo "==> generating release notes"
 # git-cliff reads the PR labels from the GitHub API. Without a token,
 # GitHub allows 60 requests an hour.
@@ -354,7 +354,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     IPA_DOWNLOAD_URL="https://github.com/$REPO_SLUG/releases/download/v$VERSION/$IPA_NAME"
     RELEASE_DATE=$(date -u +%Y-%m-%d)
 
-    NOTES=$("$REPO_ROOT/scripts/whats-new-notes.sh" "$VERSION" "$CHANGELOG_PATH")
+    NOTES=$("$REPO_ROOT/scripts/altstore-notes.sh" "$VERSION" "$CHANGELOG_PATH")
     bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
         --version "$VERSION" \
         --build "$BUILD" \
