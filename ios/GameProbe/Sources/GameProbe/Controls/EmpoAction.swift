@@ -80,10 +80,10 @@ public enum EmpoActionCatalog {
         ),
         EmpoAction(
             id: toggleCheats,
-            displayName: "Cheats",
-            blurb: "Turns the cheats screen on or off.",
+            displayName: "Show cheats",
+            blurb: "Opens the cheat menu.",
             symbolName: "wand.and.stars",
-            kind: .toggle,
+            kind: .instant,
             touchValid: true
         ),
         EmpoAction(

@@ -345,7 +345,7 @@ can never hold an action.
 | `$fastForward` | Speed the game up while held | yes |
 | `$toggleFastForward` | Turn fast forward on or off | yes |
 | `$pauseMenu` | Open and close Empo's pause menu | yes |
-| `$toggleCheats` | Turn the cheats screen on or off | yes |
+| `$toggleCheats` | Open the cheat menu | yes |
 | `$toggleTouchControls` | Show and hide the touch controls | no |
 
 The fast-forward actions work only in games where the player set a
