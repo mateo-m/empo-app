@@ -43,7 +43,10 @@ struct LayoutProfilePickerSheet: View {
                 if !profiles.isEmpty {
                     Section("Profiles") {
                         ForEach(visibleProfiles, id: \.self) { name in
-                            row(label: name, detail: nil, target: .profile(name))
+                            HStack {
+                                SkinThumbnail(profileName: name)
+                                row(label: name, detail: nil, target: .profile(name))
+                            }
                         }
                     }
                 }
@@ -253,6 +256,7 @@ struct LayoutProfilesSettingsView: View {
             LayoutProfileEditorView(profileName: name)
         } label: {
             HStack {
+                SkinThumbnail(profileName: name)
                 Text(name)
                 Spacer()
                 if defaultName == name {
@@ -392,6 +396,9 @@ struct LayoutProfileEditorView: View {
     @State private var editingDPad = false
     @State private var draggingDPad = false
     @State private var draggingButtonID: UUID?
+    @State private var showSkinSheet = false
+    /// Bumped by the skin sheet so the canvas re-reads the art.
+    @State private var skinRevision = 0
 
     init(profileName: String) {
         self.profileName = profileName
@@ -448,6 +455,15 @@ struct LayoutProfileEditorView: View {
             width: region.w * size.width, height: region.h * size.height)
     }
 
+    /// The profile's skin art for the orientation being edited.
+    private var editorSkinArt: UIImage? {
+        _ = skinRevision
+        return LayoutProfilesManager.skinArt(
+            profile: currentName,
+            orientation: editingOrientation == .portrait ? .portrait : .landscape,
+            maxPixel: 1200)
+    }
+
     /// The placeholder is the 4:3 fit INSIDE the region, the
     /// engine letterboxes centered inside it, so the controls
     /// clamp against what the player will show.
@@ -490,7 +506,8 @@ struct LayoutProfileEditorView: View {
                 editingActionButton: $editingActionButton,
                 editingDPad: $editingDPad,
                 draggingDPad: $draggingDPad,
-                draggingButtonID: $draggingButtonID
+                draggingButtonID: $draggingButtonID,
+                skinArt: editorSkinArt
             ) { size, gameRect in
                 screenGizmoLayers(size: size, gameRect: gameRect)
             }
@@ -522,6 +539,17 @@ struct LayoutProfileEditorView: View {
                 }
                 .accessibilityLabel("Rename profile")
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showSkinSheet = true
+                } label: {
+                    Image(systemName: "paintpalette")
+                }
+                .accessibilityLabel("Skin")
+            }
+        }
+        .sheet(isPresented: $showSkinSheet) {
+            SkinSheet(profileName: currentName) { skinRevision += 1 }
         }
         .alert("Rename profile", isPresented: $showRename) {
             TextField("Name", text: $renameText)
@@ -698,6 +726,9 @@ struct EditorCanvasShell<UnderControls: View>: View {
     /// The read-only viewer turns hit testing off entirely, so no
     /// touch reaches the controls and nothing can write.
     var hitTesting = true
+    /// The profile's skin art for this orientation, drawn behind the
+    /// controls with a hole at the game placeholder.
+    var skinArt: UIImage?
     @ViewBuilder let underControls: (CGSize, CGRect) -> UnderControls
 
     var body: some View {
@@ -727,6 +758,11 @@ struct EditorCanvasShell<UnderControls: View>: View {
         return ZStack {
             RoundedRectangle(cornerRadius: Radius.sm)
                 .fill(Color.black)
+
+            if let skinArt {
+                SkinOverlay(image: skinArt, gameRect: gameRect)
+                    .frame(width: size.width, height: size.height)
+            }
 
             // Game-picture placeholder.
             Rectangle()
