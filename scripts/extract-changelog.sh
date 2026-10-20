@@ -30,7 +30,7 @@ SECTION=$(VERSION="$VERSION" perl -0ne '
     }
 ' "$CHANGELOG_PATH")
 
-if [[ -z "${SECTION//[$' \t\r\n']/}" ]]; then
+if [[ ! "$SECTION" =~ [^[:space:]] ]]; then
     echo "error: no v$VERSION section found in $CHANGELOG_PATH" >&2
     exit 1
 fi
