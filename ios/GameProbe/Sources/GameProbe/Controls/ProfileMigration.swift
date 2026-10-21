@@ -130,9 +130,13 @@ public struct MigrationRecord: Equatable, Sendable {
     }
 
     public var games: [String: Entry]
+    /// Profiles that two games came to use. One game can later leave
+    /// the profile, so the count of games can't tell this.
+    public var sharedProfiles: Set<String>
 
-    public init(games: [String: Entry] = [:]) {
+    public init(games: [String: Entry] = [:], sharedProfiles: Set<String> = []) {
         self.games = games
+        self.sharedProfiles = sharedProfiles
     }
 
     public static let fileName = ".migration.json"
@@ -158,7 +162,12 @@ public struct MigrationRecord: Equatable, Sendable {
             guard let hash = raw["hash"] as? String else { continue }
             games[id] = Entry(hash: hash, profile: raw["profile"] as? String)
         }
-        return MigrationRecord(games: games)
+        // Versions without the list named every shared profile
+        // "Shared layout", "Shared layout 2", and so on, in English.
+        let shared =
+            (object["shared"] as? [String]).map(Set.init)
+            ?? Set(games.values.compactMap(\.profile).filter { $0.hasPrefix("Shared layout") })
+        return MigrationRecord(games: games, sharedProfiles: shared)
     }
 
     public func serialize() -> Data {
@@ -170,7 +179,9 @@ public struct MigrationRecord: Equatable, Sendable {
             }
             rawGames[id] = raw
         }
-        let object: [String: Any] = ["version": 1, "games": rawGames]
+        let object: [String: Any] = [
+            "version": 1, "games": rawGames, "shared": sharedProfiles.sorted(),
+        ]
         return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
             ?? Data()
     }
@@ -275,18 +286,14 @@ public enum ProfileMigration {
         // Dedupe: hash is only a shortcut. Bytes decide. Profiles
         // with a screen region are skipped. Equal controls bytes do
         // not make them true duplicates of screen-less game content.
-        // A profile is shared once two games use it. Its name can't
-        // tell, because the name is in the language Empo had then.
-        var gamesPerProfile: [String: Int] = [:]
-        for case let profile? in context.record.games.values.map(\.profile) {
-            gamesPerProfile[profile, default: 0] += 1
-        }
+        let migrationProfiles = Set(context.record.games.values.compactMap(\.profile))
         for profile in context.existingProfiles {
             guard !context.profileHasScreen(profile) else { continue }
             guard let bytes = context.profileCanonicalBytes(profile), bytes == canonical else {
                 continue
             }
-            let renameToShared = gamesPerProfile[profile] == 1
+            let renameToShared =
+                migrationProfiles.contains(profile) && !context.record.sharedProfiles.contains(profile)
             return .pinToExisting(profile: profile, renameToShared: renameToShared, hash: hash)
         }
 
