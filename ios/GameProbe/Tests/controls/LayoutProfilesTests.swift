@@ -421,6 +421,21 @@ final class LayoutProfilesTests: XCTestCase {
         XCTAssertTrue(renameToShared)
     }
 
+    func testMigrationKeepsTranslatedSharedProfileName() {
+        XCTAssertTrue(store.createProfile("Disposition partagée", touch: materializedSample()))
+        let record = MigrationRecord(games: [
+            "game-a": MigrationRecord.Entry(hash: "irrelevant", profile: "Disposition partagée"),
+            "game-b": MigrationRecord.Entry(hash: "irrelevant", profile: "Disposition partagée"),
+        ])
+        let action = decide(
+            userTouch: sampleTouch(), record: record, gameID: "game-c", title: "Clone")
+        guard case .pinToExisting(let profile, let renameToShared, _) = action else {
+            return XCTFail("\(action)")
+        }
+        XCTAssertEqual(profile, "Disposition partagée")
+        XCTAssertFalse(renameToShared)
+    }
+
     func testMigrationMatchesUserProfileWithoutSharedRename() {
         // A hand-made profile with identical content: pin to it, but
         // never rename a profile the user named.

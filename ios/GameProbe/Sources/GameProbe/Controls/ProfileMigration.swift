@@ -275,14 +275,18 @@ public enum ProfileMigration {
         // Dedupe: hash is only a shortcut. Bytes decide. Profiles
         // with a screen region are skipped. Equal controls bytes do
         // not make them true duplicates of screen-less game content.
-        let migrationProfiles = Set(context.record.games.values.compactMap(\.profile))
+        // A profile is shared once two games use it. Its name can't
+        // tell, because the name is in the language Empo had then.
+        var gamesPerProfile: [String: Int] = [:]
+        for case let profile? in context.record.games.values.map(\.profile) {
+            gamesPerProfile[profile, default: 0] += 1
+        }
         for profile in context.existingProfiles {
             guard !context.profileHasScreen(profile) else { continue }
             guard let bytes = context.profileCanonicalBytes(profile), bytes == canonical else {
                 continue
             }
-            let renameToShared =
-                migrationProfiles.contains(profile) && !profile.hasPrefix("Shared layout")
+            let renameToShared = gamesPerProfile[profile] == 1
             return .pinToExisting(profile: profile, renameToShared: renameToShared, hash: hash)
         }
 
