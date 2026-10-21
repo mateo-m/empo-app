@@ -2084,11 +2084,11 @@ class ControlsLayout {
             portraitTop = Double(safeArea.top) + portraitWidth * 0.75 + ControlsZone.toolbarGap
         }
 
-        // Landscape lateral insets = the notch / home-indicator depth,
-        // which the render clamp reserves on both edges. When currently
-        // landscape, the live safe area has the exact values. In
-        // portrait the notch depth appears as safeArea.top, so use it
-        // as the estimate for both landscape edges.
+        // Side insets for the sideways layout: the notch depth, which
+        // the render clamp keeps clear on both edges. A sideways window
+        // has the exact values. In an upright window the notch is
+        // usually at the top, but the closed iPhone Duo puts its camera
+        // and status bar on the right edge (top 0, trailing 84).
         let isLandscapeNow = bounds.width > bounds.height
         let landscapeLeading: Double
         let landscapeTrailing: Double
@@ -2096,8 +2096,9 @@ class ControlsLayout {
             landscapeLeading = Double(safeArea.leading)
             landscapeTrailing = Double(safeArea.trailing)
         } else {
-            landscapeLeading = Double(safeArea.top)
-            landscapeTrailing = Double(safeArea.top)
+            let notchDepth = Double(max(safeArea.top, safeArea.leading, safeArea.trailing))
+            landscapeLeading = notchDepth
+            landscapeTrailing = notchDepth
         }
 
         return TouchZoneMetrics(

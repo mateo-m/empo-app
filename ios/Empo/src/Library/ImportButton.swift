@@ -107,7 +107,14 @@ struct ImportButton: View {
             .onGeometryChange(for: CGFloat.self) {
                 $0.size.height
             } action: {
-                buttonHeight = $0
+                // SwiftUI snaps the measured height to the pixel grid
+                // at the button's position, and the position depends on
+                // this height. On some window sizes (iPhone Duo, closed
+                // and sideways) the two settle on no value: 37.33 and
+                // 38 swap forever and the first frame never commits.
+                if abs($0 - buttonHeight) >= 1 {
+                    buttonHeight = $0
+                }
             }
             .overlay {
                 Capsule()
