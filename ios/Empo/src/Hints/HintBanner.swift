@@ -60,8 +60,8 @@ struct HintBanner: View {
 
 private struct HintDetailSheet: View {
     let icon: String
-    let excerpt: String
-    let description: String
+    let excerpt: LocalizedStringResource
+    let description: LocalizedStringResource
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {

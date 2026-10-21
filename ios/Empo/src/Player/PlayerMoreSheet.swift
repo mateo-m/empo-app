@@ -17,9 +17,8 @@ import SwiftUI
 struct PlayerMoreSheet: View {
     /// Display title of the running game. The pause row interpolates
     /// it ("Pause <title>") so the user sees exactly what they act
-    /// on. Falls back to "this game" if `selectedGame` is nil at
-    /// present time.
-    let gameTitle: String
+    /// on. Nil if `selectedGame` is nil at present time.
+    let gameTitle: String?
     @Binding var showDebugOverlay: Bool
     @Binding var fastForwardActive: Bool
     /// Multiplier the user configured in Game Settings. nil means
@@ -44,6 +43,18 @@ struct PlayerMoreSheet: View {
 
     private var fastForwardEnabled: Bool {
         (fastForwardMultiplier ?? 0) >= 2
+    }
+
+    private var pauseLabel: LocalizedStringResource {
+        if let gameTitle { "Pause \(gameTitle)" } else { "Pause game" }
+    }
+
+    private var quitLabel: LocalizedStringResource {
+        if let gameTitle { "Quit \(gameTitle)" } else { "Quit game" }
+    }
+
+    private var quitQuestion: LocalizedStringResource {
+        if let gameTitle { "Quit \"\(gameTitle)\"?" } else { "Quit this game?" }
     }
 
     var body: some View {
@@ -108,13 +119,13 @@ struct PlayerMoreSheet: View {
                         content: {
                             MenuRow(
                                 icon: "pause.fill",
-                                label: "Pause \(gameTitle)"
+                                label: pauseLabel
                             ) {
                                 onPause()
                                 dismiss()
                             }
                             if core?.canKillSession == true {
-                                MenuRow(icon: "xmark", label: "Quit \(gameTitle)", role: .destructive) {
+                                MenuRow(icon: "xmark", label: quitLabel, role: .destructive) {
                                     confirmQuit = true
                                 }
                             }
@@ -122,7 +133,7 @@ struct PlayerMoreSheet: View {
                     )
                 }
                 .clipShape(.rect(cornerRadius: Radius.md))
-                .alert("Quit \"\(gameTitle)\"?", isPresented: $confirmQuit) {
+                .alert(quitQuestion, isPresented: $confirmQuit) {
                     Button("Cancel", role: .cancel) {}
                     Button("Quit", role: .destructive) {
                         onQuit()
@@ -197,7 +208,7 @@ private struct InterleavedRows<Separator: View, Content: View>: View {
 /// styling can diverge if needed.
 private struct MenuRow: View {
     let icon: String
-    let label: String
+    let label: LocalizedStringResource
     var role: ButtonRole?
     let action: () -> Void
 
@@ -222,7 +233,7 @@ private struct MenuRow: View {
 /// text rather than the system tint so it reads as one unit.
 private struct MenuToggleRow: View {
     let icon: String
-    let label: String
+    let label: LocalizedStringResource
     @Binding var isOn: Bool
 
     var body: some View {

@@ -12,7 +12,7 @@ import SwiftUI
 /// native-SwiftUI sheets.
 struct ImageSourceSheet: View {
     @Binding var isPresented: Bool
-    let title: String
+    let title: LocalizedStringResource
     let hasExisting: Bool
     let onPickPhoto: () -> Void
     let onTakePhoto: () -> Void
@@ -33,7 +33,7 @@ struct ImageSourceSheet: View {
             SheetCard {
                 ImageSourceRow(
                     icon: "photo.on.rectangle",
-                    label: "Photos"
+                    label: LocalizedStringResource("Photos", comment: "Pick an image from the Photos app")
                 ) {
                     isPresented = false
                     onPickPhoto()
@@ -85,7 +85,7 @@ struct ImageSourceSheet: View {
 /// right-edge accessory (a checkmark).
 private struct ImageSourceRow: View {
     let icon: String
-    let label: String
+    let label: LocalizedStringResource
     var role: ButtonRole?
     let action: () -> Void
 

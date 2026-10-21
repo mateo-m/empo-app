@@ -18,7 +18,7 @@ struct KeyCaptureSheet: View {
             trailingButton: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(
-                "Press the controller button or keyboard key you want to bind."
+                "Press the controller button or keyboard key you want to set up."
             )
         }
     }

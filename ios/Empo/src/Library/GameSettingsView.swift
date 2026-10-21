@@ -28,7 +28,11 @@ struct GameSettingsView: View {
         let list = changed.formatted(.list(type: .and, width: .standard))
         return Hint(
             id: "gameSettings.restartRequired",
-            excerpt: "Restart this game to apply: \(list).",
+            excerpt: LocalizedStringResource(
+                "Restart this game to apply: \(list).",
+                comment:
+                    "The placeholder is a list of setting names, such as \"Smooth scaling and Render scale\"."
+            ),
             description: nil,
             dismissal: .none,
             icon: "arrow.clockwise.circle.fill"

@@ -50,9 +50,9 @@ final class EngineSessionCoordinator {
 
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
 
-    static let crashMessage =
-        "The game crashed last time. Your saves are safe. "
-        + "Open it again to keep playing."
+    static var crashMessage: String {
+        String(localized: "The game crashed last time. Your saves are safe. Open it again to keep playing.")
+    }
 
     private init() {
         sessionLogger.onPlayTimeFlushed = { gameID in

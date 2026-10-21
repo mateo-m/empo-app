@@ -80,7 +80,7 @@ struct PlayerToolbar: View {
 
     private struct ToolbarEntry {
         let icon: String
-        let label: String
+        let label: LocalizedStringResource
         let tint: Color?
         let action: () -> Void
     }
@@ -227,7 +227,10 @@ struct PlayerEditToolbar: View {
                     layout.revertGridSnap()
                 }
             }
-            .accessibilityValue(snapToGrid ? "on" : "off")
+            .accessibilityValue(
+                snapToGrid
+                    ? Text("On", comment: "Spoken state of a switch.")
+                    : Text("Off", comment: "Spoken state of a switch."))
 
             IconButton(
                 "arrow.counterclockwise", label: "Reset layout", style: .outline, size: .sm, tint: .brand
@@ -251,7 +254,7 @@ struct PlayerEditToolbar: View {
         .darkGlass()
     }
 
-    private var editBannerText: String {
+    private var editBannerText: LocalizedStringResource {
         switch layout.provenance {
         case .pinnedProfile(let name):
             return "Editing \(name). Changes apply to every game that uses it."

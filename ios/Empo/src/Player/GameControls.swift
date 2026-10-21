@@ -52,7 +52,11 @@ struct ActionButton: View {
         CircularControlButton(
             size: size,
             editing: editing,
-            accessibilityLabel: "\(label) button",
+            accessibilityLabel: String(
+                localized: "\(label) button",
+                comment:
+                    "VoiceOver name of an on-screen game button. The placeholder is the label on the button, such as A."
+            ),
             onPress: {
                 EngineSessionCoordinator.shared.holdKey(
                     scancode: scancode, by: .touch("button:\(label)"))
@@ -94,7 +98,7 @@ struct FunctionButton: View {
             size: size,
             editing: editing,
             isActive: isActive,
-            accessibilityLabel: action.displayName,
+            accessibilityLabel: action.localizedName,
             onPress: onPress,
             onRelease: onRelease,
             face: { isPressed in

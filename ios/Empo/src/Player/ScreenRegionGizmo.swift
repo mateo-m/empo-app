@@ -121,7 +121,7 @@ struct ScreenRegionGizmo: View {
                     .contentShape(Rectangle())
                     .position(corner.point(in: rect, inset: 16))
                     .gesture(resizeGesture(for: corner))
-                    .accessibilityLabel("Resize game screen, \(corner.accessibilityName)")
+                    .accessibilityLabel(corner.accessibilityLabel)
             }
         }
     }
@@ -209,12 +209,12 @@ struct ScreenRegionGizmo: View {
             }
         }
 
-        var accessibilityName: String {
+        var accessibilityLabel: LocalizedStringResource {
             switch self {
-            case .topLeft: "top left corner"
-            case .topRight: "top right corner"
-            case .bottomLeft: "bottom left corner"
-            case .bottomRight: "bottom right corner"
+            case .topLeft: "Resize game screen, top left corner"
+            case .topRight: "Resize game screen, top right corner"
+            case .bottomLeft: "Resize game screen, bottom left corner"
+            case .bottomRight: "Resize game screen, bottom right corner"
             }
         }
 
@@ -324,7 +324,10 @@ struct ScreenRegionChips: View {
                 }
                 .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
                 .accessibilityLabel("Controls over game")
-                .accessibilityValue(overlayOn ? "on" : "off")
+                .accessibilityValue(
+                    overlayOn
+                        ? Text("On", comment: "Spoken state of a switch.")
+                        : Text("Off", comment: "Spoken state of a switch."))
             }
         }
         // Pin the glass chips to the dark variant like the rest of

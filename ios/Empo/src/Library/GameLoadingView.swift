@@ -176,16 +176,12 @@ struct GameLoadingView: View {
 
     private func endedContent(clean: Bool, started: Bool) -> some View {
         VStack(spacing: Spacing.md) {
-            Text(
-                clean
-                    ? "\(game.title) closed"
-                    : started ? "\(game.title) stopped" : "\(game.title) didn't start"
-            )
-            .font(.title)
-            .fontWeight(.bold)
-            .foregroundStyle(.white)
-            .multilineTextAlignment(.center)
-            .centeredMessageWidth()
+            Text(endedTitle(clean: clean, started: started))
+                .font(.title)
+                .fontWeight(.bold)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .centeredMessageWidth()
 
             if !clean {
                 messageLine(
@@ -208,7 +204,21 @@ struct GameLoadingView: View {
         .transition(.opacity)
     }
 
-    private func messageLine(_ text: String) -> some View {
+    private func endedTitle(clean: Bool, started: Bool) -> LocalizedStringResource {
+        if clean {
+            return LocalizedStringResource(
+                "\(game.title) closed", comment: "The placeholder is the game's name.")
+        }
+        if started {
+            return LocalizedStringResource(
+                "\(game.title) stopped",
+                comment: "The game ended because of a problem. The placeholder is the game's name.")
+        }
+        return LocalizedStringResource(
+            "\(game.title) didn't start", comment: "The placeholder is the game's name.")
+    }
+
+    private func messageLine(_ text: LocalizedStringResource) -> some View {
         Text(text)
             .font(.system(size: 15))
             .foregroundStyle(.white.opacity(0.85))
@@ -221,7 +231,8 @@ struct GameLoadingView: View {
     // filing a bug report, not browsing the repo.
     private var reportLine: some View {
         Text(
-            "If this keeps happening, \(Text("[report it on GitHub](\(GitInfo.issuesURL))").foregroundColor(.brand))."
+            "If this keeps happening, \(Text("[report it on GitHub](\(GitInfo.issuesURL))", comment: "A Markdown link. Translate the words in brackets. Keep the placeholder in parentheses as it is.").foregroundColor(.brand)).",
+            comment: "The placeholder is the link \"report it on GitHub\"."
         )
         .font(.system(size: 15))
         .foregroundStyle(.white.opacity(0.85))
@@ -241,7 +252,7 @@ struct GameLoadingView: View {
             // 2.5.1 forbids it. So the label tells the user to close
             // Empo from the app switcher, which is the way iOS
             // allows. See `ios/Empo/docs/multi-session.md`.
-            Text("If loading is stuck, close Empo from the app switcher and reopen.")
+            Text("If loading is stuck, close Empo from the app switcher, then reopen it.")
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.8))
                 .multilineTextAlignment(.center)

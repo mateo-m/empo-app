@@ -271,6 +271,7 @@ targets:
         optional: true
       - path: PrivacyInfo.xcprivacy
       - path: Assets.xcassets
+      - path: Resources
       - path: Assets.bundle
         type: folder
         buildPhase: resources
@@ -300,6 +301,8 @@ targets:
         # an explicit file unblocks ESign too.
         CODE_SIGN_ENTITLEMENTS: Empo.entitlements
         SWIFT_VERSION: "5.0"
+        SWIFT_EMIT_LOC_STRINGS: YES # yamllint disable-line rule:truthy
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES # yamllint disable-line rule:truthy
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/Empo-Bridging-Header.h
         OTHER_LDFLAGS:
           # The engine is not here. It lives in MkxpCore.framework or a

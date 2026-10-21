@@ -87,10 +87,10 @@ private struct SaveRecoverySheet: View {
             emblem: "checkmark.arrow.trianglehead.counterclockwise"
         ) {
             SheetBodyText(
-                "A defect in earlier Empo versions renamed save files on this "
-                    + "device, so games showed only \"New Game\". "
-                    + "Empo restored the most recent save file for each game "
-                    + "below."
+                LocalizedStringResource(
+                    "A bug in earlier versions of Empo renamed save files on this device, so games showed only \"New Game\". Empo restored the most recent save for each game below.",
+                    comment: "\"New Game\" is the menu item a game shows when it finds no save."
+                )
             )
 
             SheetCard {
@@ -109,8 +109,7 @@ private struct SaveRecoverySheet: View {
             }
 
             SheetFootnote(
-                "Empo kept the renamed copies as backups. If a restored save "
-                    + "isn't the one you wanted, tap Files on that game to find them."
+                "Empo kept the renamed copies as backups. If a restored save isn't the one you wanted, tap Files on that game to find them."
             )
 
             SheetPrimaryButton("Done") { isPresented = false }
@@ -159,7 +158,9 @@ private struct SaveRecoveryRow: View {
                 Spacer(minLength: Spacing.md)
 
                 HStack(spacing: Spacing.xs) {
-                    Text("Files")
+                    Text(
+                        "Files",
+                        comment: "The name of Apple's Files app. Use the name the app has in this language.")
                     Image(systemName: "arrow.up.forward")
                         .font(.caption.weight(.semibold))
                 }
@@ -171,13 +172,17 @@ private struct SaveRecoveryRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(record.name), restored \(subtitle)")
+        .accessibilityLabel(
+            LocalizedStringResource(
+                "\(record.name), restored \(subtitle)",
+                comment: "First placeholder: the game's name. Second: a list of save file names.")
+        )
         .accessibilityHint("Opens this game's folder in Files")
     }
 
     private var subtitle: String {
         record.files.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            .joined(separator: ", ")
+            .formatted(.list(type: .and, width: .narrow))
     }
 
     private func openInFiles() {

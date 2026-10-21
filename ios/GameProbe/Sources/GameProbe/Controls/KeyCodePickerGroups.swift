@@ -19,14 +19,14 @@ public extension KeyCodeTable {
     /// Picker section title.
     static func pickerGroupTitle(_ group: KeyCodePickerGroup) -> String {
         switch group {
-        case .common: return "Common"
+        case .common: return "Common keys"
         case .letters: return "Letters"
         case .numbers: return "Numbers"
-        case .function: return "Function"
+        case .function: return "Function keys"
         case .navigation: return "Navigation"
         case .symbols: return "Symbols"
         case .numpad: return "Numpad"
-        case .modifiers: return "Modifiers"
+        case .modifiers: return "Modifier keys"
         }
     }
 

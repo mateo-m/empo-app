@@ -9,25 +9,27 @@ struct ImportButton: View {
         case validating
         case multipleGames
 
-        var title: String {
+        var title: LocalizedStringResource {
             switch self {
             case .idle:
                 return "Import game"
             case .validating:
-                return "Checking game"
+                return LocalizedStringResource(
+                    "Checking game", comment: "Import button while Empo checks the picked game")
             case .multipleGames:
-                return "Choose game"
+                return LocalizedStringResource(
+                    "Choose games", comment: "Import button when the import holds more than one game")
             }
         }
 
-        var accessibilityLabel: String {
+        var accessibilityLabel: LocalizedStringResource {
             switch self {
             case .idle:
                 return "Import game"
             case .validating:
-                return "Checking game, tap to stop"
+                return "Checking game. Double-tap to stop."
             case .multipleGames:
-                return "Choose game"
+                return "Choose games"
             }
         }
 

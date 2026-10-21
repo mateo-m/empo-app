@@ -1,0 +1,606 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Controls that fit the game" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Steuerung, die zum Spiel passt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controles a la medida de cada juego"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Des commandes adaptées au jeu"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controlli su misura per ogni gioco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームに合った操作ボタン"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임에 맞는 컨트롤"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controles que combinam com o jogo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Управление под каждую игру"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "适合每个游戏的按键"
+          }
+        }
+      }
+    },
+    "Each game gets the on-screen buttons and the settings that its engine supports." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedes Spiel bekommt die Bildschirmbuttons und Einstellungen, die seine Engine unterstützt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cada juego tiene los botones en pantalla y los ajustes que admite su motor."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaque jeu a les boutons à l'écran et les réglages que son moteur prend en charge."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ogni gioco ha i pulsanti su schermo e le impostazioni supportati dal suo motore."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各ゲームで、そのエンジンが対応する画面上のボタンと設定が使えるようになりました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임마다 엔진이 지원하는 화면 버튼과 설정이 나와요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cada jogo recebe os botões na tela e os ajustes que o motor dele suporta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Каждая игра получает те экранные кнопки и настройки, которые поддерживает её движок."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每个游戏都会得到它的引擎所支持的屏幕按键和设置。"
+          }
+        }
+      }
+    },
+    "Empo now plays games made with PSDK. Import one the same way you import an RPG Maker game." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo spielt jetzt Spiele aus PSDK. Importiere sie genauso wie ein RPG-Maker-Spiel."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya puedes jugar en Empo a juegos hechos con PSDK. Impórtalos igual que un juego de RPG Maker."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo lance maintenant les jeux faits avec PSDK. Importe-les comme un jeu RPG Maker."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ora Empo avvia i giochi creati con PSDK. Importali come un gioco RPG Maker."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EmpoでPSDKのゲームが遊べるようになりました。RPG Makerのゲームと同じようにインポートしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이제 Empo에서 PSDK로 만든 게임을 플레이할 수 있어요. RPG Maker 게임과 똑같이 가져오면 돼요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agora o Empo roda jogos feitos com PSDK. Importe do mesmo jeito que um jogo de RPG Maker."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь Empo запускает игры на PSDK. Импортируйте их так же, как игры на RPG Maker."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 现在可以玩 PSDK 制作的游戏了。导入方法和 RPG Maker 游戏一样。"
+          }
+        }
+      }
+    },
+    "Empo now plays games made with RPG Maker MV and MZ. Import one the same way as any other game." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo spielt jetzt Spiele aus RPG Maker MV und MZ. Importiere sie wie jedes andere Spiel."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya puedes jugar en Empo a juegos hechos con RPG Maker MV y MZ. Impórtalos igual que cualquier otro juego."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo lance maintenant les jeux faits avec RPG Maker MV et MZ. Importe-les comme n'importe quel autre jeu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ora Empo avvia i giochi creati con RPG Maker MV e MZ. Importali come qualsiasi altro gioco."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EmpoでRPG Maker MVとMZのゲームが遊べるようになりました。ほかのゲームと同じようにインポートしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이제 Empo에서 RPG Maker MV와 MZ로 만든 게임을 플레이할 수 있어요. 다른 게임과 똑같이 가져오면 돼요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agora o Empo roda jogos feitos com RPG Maker MV e MZ. Importe do mesmo jeito que qualquer outro jogo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь Empo запускает игры на RPG Maker MV и MZ. Импортируйте их так же, как любые другие игры."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 现在可以玩 RPG Maker MV 和 MZ 制作的游戏了。导入方法和其他游戏一样。"
+          }
+        }
+      }
+    },
+    "Game cores" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spielkerne"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Núcleos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cœurs de jeu"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Core di gioco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームコア"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임 코어"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Núcleos de jogo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Игровые ядра"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游戏核心"
+          }
+        }
+      }
+    },
+    "More XP games start" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mehr XP-Spiele starten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrancan más juegos de XP"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus de jeux XP démarrent"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altri giochi XP ora partono"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "起動できるXPのゲームが増えました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "더 많은 XP 게임이 실행돼요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mais jogos de XP abrem"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запускается больше игр на XP"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多 XP 游戏能启动了"
+          }
+        }
+      }
+    },
+    "PSDK games" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PSDK-Spiele"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Juegos de PSDK"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeux PSDK"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giochi PSDK"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PSDKのゲーム"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PSDK 게임"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jogos de PSDK"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Игры PSDK"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PSDK 游戏"
+          }
+        }
+      }
+    },
+    "RPG Maker MV and MZ" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker MV und MZ"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker MV y MZ"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker MV et MZ"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker MV e MZ"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker MV・MZ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker MV 및 MZ"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker MV e MZ"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker MV и MZ"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker MV 和 MZ"
+          }
+        }
+      }
+    },
+    "See the game cores built into Empo in Settings." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sieh dir die eingebauten Spielkerne von Empo in den Einstellungen an."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mira en Ajustes los núcleos que trae Empo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retrouve les cœurs de jeu intégrés à Empo dans Réglages."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trovi i core di gioco inclusi in Empo nelle Impostazioni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empoに入っているゲームコアは「設定」で確認できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo에 들어 있는 게임 코어를 설정에서 확인해 보세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veja os núcleos de jogo do Empo em Ajustes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Посмотрите встроенные в Empo игровые ядра в настройках."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“设置”中查看 Empo 内置的游戏核心。"
+          }
+        }
+      }
+    },
+    "Some RPG Maker XP games that stopped at launch, such as Vinemon, now start." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige RPG-Maker-XP-Spiele, die beim Start hängen blieben, wie Vinemon, starten jetzt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunos juegos de RPG Maker XP que se detenían al abrirse, como Vinemon, ahora arrancan."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certains jeux RPG Maker XP qui s'arrêtaient au lancement, comme Vinemon, démarrent maintenant."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alcuni giochi RPG Maker XP che si bloccavano all'avvio, come Vinemon, ora partono."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vinemonなど、起動時に止まっていたRPG Maker XPのゲームの一部が起動するようになりました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vinemon처럼 실행하자마자 멈추던 일부 RPG Maker XP 게임이 이제 시작돼요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alguns jogos de RPG Maker XP que paravam ao abrir, como Vinemon, agora abrem."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Некоторые игры на RPG Maker XP, которые зависали при запуске, например Vinemon, теперь запускаются."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一些之前启动就卡住的 RPG Maker XP 游戏（比如 Vinemon）现在能正常启动了。"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.1"
+}

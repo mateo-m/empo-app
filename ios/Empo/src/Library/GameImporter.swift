@@ -76,10 +76,14 @@ enum GameImporter {
 
         let type = bundle.manifest.type
         guard GameCores.all.contains(where: { $0.joiPlayTypes.contains(type) }) else {
-            let games = GameCores.all.compactMap(\.joiPlayGames).joined(separator: " and ")
+            let games = GameCores.all.compactMap(\.joiPlayGames).formatted(.list(type: .and))
             throw GameImportValidator.ImportError.unsupportedRuntime(
-                "This JoiPlay archive uses '\(type)', which Empo does not support. "
-                    + "Empo imports only JoiPlay archives of \(games)."
+                String(
+                    localized:
+                        "This JoiPlay archive uses \"\(type)\", which Empo can't run. Empo imports only JoiPlay archives of \(games).",
+                    comment:
+                        "First placeholder: the game type the archive names. Second: a list of game kinds, such as \"RPG Maker XP, VX, and VX Ace games\"."
+                )
             )
         }
 

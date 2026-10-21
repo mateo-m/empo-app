@@ -72,8 +72,8 @@ public enum EmpoActionCatalog {
         ),
         EmpoAction(
             id: pauseMenu,
-            displayName: "Pause menu",
-            blurb: "Opens the pause menu.",
+            displayName: "Pause game",
+            blurb: "Pauses the game and takes you back to your library.",
             symbolName: "pause.circle",
             kind: .instant,
             touchValid: true
@@ -88,7 +88,7 @@ public enum EmpoActionCatalog {
         ),
         EmpoAction(
             id: toggleTouchControls,
-            displayName: "Show/hide touch controls",
+            displayName: "Show or hide controls",
             blurb: "Shows or hides the on-screen controls.",
             symbolName: "hand.tap",
             kind: .instant,

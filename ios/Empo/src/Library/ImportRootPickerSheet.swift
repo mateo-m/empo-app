@@ -74,30 +74,28 @@ struct ImportRootPickerSheet: View {
         selectedFreshIDs.count + selectedUpdateIDs.count
     }
 
-    private var navigationTitle: String {
+    private var navigationTitle: LocalizedStringResource {
         step == .add ? "Add games" : "Already in your library"
     }
 
-    private var bannerText: String {
+    private var bannerText: LocalizedStringResource {
         step == .add
             ? "This import includes more than one game"
-            : "Importing replaces the installed games"
+            : "Importing replaces the games in your library"
     }
 
     private var bannerSystemImage: String {
         step == .add ? "square.stack.3d.up.fill" : "arrow.triangle.2.circlepath"
     }
 
-    private var explainerText: String {
+    private var explainerText: LocalizedStringResource {
         switch step {
         case .add where updateChoices.isEmpty:
             return "Choose the games you want to add to your library."
         case .add:
-            return "Choose the new games to add. "
-                + "Next, review the ones you already have."
+            return "Choose the new games to add. Next, review the ones you already have."
         case .update:
-            return "Choose which games to update. "
-                + "The others stay as they are, and saves are always kept."
+            return "Choose which games to update. The others stay as they are, and saves are always kept."
         }
     }
 
@@ -147,7 +145,9 @@ struct ImportRootPickerSheet: View {
                         }
                         .disabled(confirmedSelectionCount == 0)
                     } else {
-                        Button("Next") {
+                        Button(
+                            LocalizedStringResource("Next", comment: "Moves to the next step of the import")
+                        ) {
                             withAnimation(Motion.gentle) { step = .update }
                         }
                     }
@@ -226,7 +226,7 @@ struct ImportRootPickerSheet: View {
 /// Brand-tinted banner atop import sheets. Shared by the root
 /// picker and the update picker.
 struct ImportRootHintBanner: View {
-    let text: String
+    let text: LocalizedStringResource
     var systemImage: String = "square.stack.3d.up.fill"
 
     var body: some View {

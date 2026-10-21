@@ -26,14 +26,19 @@ struct BindingTargetPicker: View {
                     ForEach(EmpoActionCatalog.all, id: \.id) { action in
                         let available = actions.isAvailable(action.id)
                         actionRow(
-                            label: action.displayName,
-                            blurb: action.blurb,
+                            label: action.localizedName,
+                            blurb: action.localizedBlurb,
                             note: available ? nil : unavailableNote,
                             target: .action(action.id),
                             enabled: available || scope == .allGames
                         )
                     }
-                    actionRow(label: "Do nothing", target: .unbound)
+                    actionRow(
+                        label: String(
+                            localized: "Do nothing",
+                            comment: "Choice that makes a controller button do nothing."),
+                        target: .unbound
+                    )
                 }
 
                 if offersElements {
@@ -44,7 +49,11 @@ struct BindingTargetPicker: View {
                             ForEach(section.elements) { row in
                                 actionRow(
                                     label: row.label,
-                                    blurb: "Acts as this button",
+                                    blurb: String(
+                                        localized: "Acts as this button",
+                                        comment:
+                                            "Under a controller button name, in the list of what a key can do."
+                                    ),
                                     target: .element(row.source.name)
                                 )
                             }
@@ -55,7 +64,7 @@ struct BindingTargetPicker: View {
                 ForEach(KeyCodePickerGroup.allCases, id: \.self) { group in
                     let codes = KeyCodeTable.codesByPickerGroup[group] ?? []
                     if !codes.isEmpty {
-                        Section(KeyCodeTable.pickerGroupTitle(group)) {
+                        Section(group.localizedTitle) {
                             ForEach(codes, id: \.self) { code in
                                 keyRow(code: code, group: group)
                             }
@@ -78,9 +87,12 @@ struct BindingTargetPicker: View {
     private var unavailableNote: String {
         switch scope {
         case .thisGame:
-            return "Fast forward is off for this game. Turn it on in Game settings."
+            return String(localized: "Fast forward is off for this game. Turn it on in this game's settings.")
         case .allGames:
-            return "Fast forward is off for this game. The binding works in games that have Fast forward on."
+            return String(
+                localized:
+                    "Fast forward is off for this game. This button works in games that have Fast forward on."
+            )
         }
     }
 

@@ -25,10 +25,10 @@ import SwiftUI
 
 /// A navigation-bar action on a sheet ("Cancel", "Close").
 struct SheetBarAction {
-    let label: String
+    let label: LocalizedStringResource
     let action: () -> Void
 
-    init(_ label: String, action: @escaping () -> Void) {
+    init(_ label: LocalizedStringResource, action: @escaping () -> Void) {
         self.label = label
         self.action = action
     }
@@ -57,7 +57,7 @@ enum SheetSurface {
 ///     style). Splitting them - a bar title plus a floating
 ///     symbol - reads as two competing anchors. Never do that.
 struct StandardSheet<Content: View>: View {
-    let title: String
+    let title: LocalizedStringResource
     /// SF Symbol name for the identity block. A nil value keeps the
     /// title in the navigation bar.
     var emblem: String?
@@ -105,7 +105,7 @@ struct StandardSheet<Content: View>: View {
                 .intrinsicSheetContent(size: $sheetSize)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .navigationTitle(emblem == nil ? title : "")
+            .navigationTitle(emblem == nil ? Text(title) : Text(verbatim: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(barHidden ? .hidden : .automatic, for: .navigationBar)
             .toolbar {
@@ -131,7 +131,7 @@ struct StandardSheet<Content: View>: View {
 /// leading. Rendered by `StandardSheet` when `emblem:` is set.
 private struct SheetIdentityBlock: View {
     let systemName: String
-    let title: String
+    let title: LocalizedStringResource
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
@@ -150,9 +150,9 @@ private struct SheetIdentityBlock: View {
 
 /// Leading-aligned explanation text under the emblem.
 struct SheetBodyText: View {
-    let text: String
+    let text: LocalizedStringResource
 
-    init(_ text: String) { self.text = text }
+    init(_ text: LocalizedStringResource) { self.text = text }
 
     var body: some View {
         Text(text)
@@ -165,9 +165,9 @@ struct SheetBodyText: View {
 
 /// Leading-aligned fine print near the sheet's bottom.
 struct SheetFootnote: View {
-    let text: String
+    let text: LocalizedStringResource
 
-    init(_ text: String) { self.text = text }
+    init(_ text: LocalizedStringResource) { self.text = text }
 
     var body: some View {
         Text(text)
@@ -207,10 +207,10 @@ struct SheetRowSeparator: View {
 
 /// The sheet's one full-width primary action, at the bottom.
 struct SheetPrimaryButton: View {
-    let title: String
+    let title: LocalizedStringResource
     let action: () -> Void
 
-    init(_ title: String, action: @escaping () -> Void) {
+    init(_ title: LocalizedStringResource, action: @escaping () -> Void) {
         self.title = title
         self.action = action
     }

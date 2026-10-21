@@ -7,8 +7,8 @@ import SwiftUI
 
 struct MvmzCore: GameCore {
     let framework = "MvmzCore"
-    let displayName = "RPG Maker MV and MZ core"
-    let gamesLine = "Runs RPG Maker MV and MZ games"
+    var displayName: String { String(localized: "RPG Maker MV and MZ core") }
+    var gamesLine: String { String(localized: "Runs RPG Maker MV and MZ games") }
     let madeWith = "RPG Maker"
 
     /// WebKit ends the page and all of its JavaScript when the core

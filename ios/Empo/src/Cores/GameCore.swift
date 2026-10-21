@@ -103,7 +103,10 @@ extension GameCore {
     func madeWith(at root: URL) -> String { madeWith }
 
     var notInThisBuildMessage: String {
-        "This build of Empo has no \(displayName), so it can't run this game."
+        String(
+            localized: "This build of Empo has no \(displayName), so it can't run this game.",
+            comment: "The placeholder is a game core name, such as PSDK core for Ruby 3.0."
+        )
     }
 
     /// `EngineSessionCoordinator.openCore` opens this path, so a core is

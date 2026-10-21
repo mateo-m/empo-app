@@ -40,7 +40,7 @@ struct GameCoresView: View {
                 }
             } footer: {
                 Text(
-                    "A core runs the games in its list. Empo opens the core a game needs when you start the game."
+                    "Each core runs the games named under it. Empo picks the core a game needs when you start it."
                 )
             }
         }

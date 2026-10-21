@@ -93,8 +93,8 @@ struct AddButtonSheet: View {
             Image(systemName: action.symbolName)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
-                Text(action.displayName)
-                Text(action.blurb)
+                Text(action.localizedName)
+                Text(action.localizedBlurb)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let actions, !actions.isAvailable(action.id) {
@@ -144,13 +144,13 @@ struct AddButtonSheet: View {
 /// Size presets shared by the edit sheets, so the progressions
 /// cannot drift between the button kinds.
 enum ControlSizePresets {
-    static let button: [(String, CGFloat)] = [
+    static let button: [(LocalizedStringResource, CGFloat)] = [
         ("Small", 44), ("Medium", 50),
         ("Standard", 56), ("Large", 68), ("Extra large", 80),
     ]
     /// Matches the button progression's feel. The D-pad's default
     /// (140pt) is the middle preset.
-    static let dpad: [(String, CGFloat)] = [
+    static let dpad: [(LocalizedStringResource, CGFloat)] = [
         ("Small", 110), ("Medium", 125),
         ("Standard", 140), ("Large", 160), ("Extra large", 180),
     ]
@@ -159,7 +159,7 @@ enum ControlSizePresets {
 /// The Size / Opacity / Delete sections every control edit sheet
 /// shares. One implementation, so the sheets cannot drift.
 struct ControlSizeSection: View {
-    let sizes: [(String, CGFloat)]
+    let sizes: [(LocalizedStringResource, CGFloat)]
     let current: CGFloat
     let onSelect: (CGFloat) -> Void
 
@@ -169,7 +169,7 @@ struct ControlSizeSection: View {
                 HStack {
                     Text(name)
                     Spacer()
-                    Text("\(Int(size))pt")
+                    Text("\(Int(size))pt", comment: "Size of an on-screen control, in points.")
                         .foregroundStyle(.secondary)
                     if Int(size) == Int(current) {
                         Image(systemName: "checkmark")
@@ -202,7 +202,7 @@ struct ControlOpacitySection: View {
                         onEditingBegan()
                     }
                 }
-                Text("\(Int(opacity * 100))%")
+                Text(opacity.formatted(.percent.precision(.fractionLength(0))))
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 48, alignment: .trailing)
@@ -367,8 +367,8 @@ struct ActionButtonEditSheet: View {
                             Image(systemName: action?.symbolName ?? "questionmark")
                                 .frame(width: 24)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(action?.displayName ?? button.action)
-                                if let blurb = action?.blurb {
+                                Text(action?.localizedName ?? button.action)
+                                if let blurb = action?.localizedBlurb {
                                     Text(blurb)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)

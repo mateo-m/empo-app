@@ -36,12 +36,12 @@ struct MkxpSettings: GameSettingsGroup {
 
     static func displayLabel(forKey key: String) -> String {
         switch key {
-        case "useInGameKeyboard": return "In-game keyboard"
-        case "postloadScripts": return "Postload scripts"
-        case "useModernRuby": return "Ruby compatibility mode"
-        case "rubyVersionOverride": return "Ruby version"
-        case "joiplayCompat": return "JoiPlay compatibility"
-        case "networkEnabled": return "Network access"
+        case "useInGameKeyboard": return String(localized: "In-game keyboard")
+        case "postloadScripts": return String(localized: "Fix-up scripts")
+        case "useModernRuby": return String(localized: "Ruby compatibility mode")
+        case "rubyVersionOverride": return String(localized: "Ruby version")
+        case "joiplayCompat": return String(localized: "JoiPlay compatibility")
+        case "networkEnabled": return String(localized: "Network access")
         default:
             assertionFailure("Missing displayLabel mapping for MkxpSettings.\(key)")
             return key
@@ -158,7 +158,7 @@ enum RubyVersionPick: String, CaseIterable, Hashable {
 
     var displayLabel: String {
         switch self {
-        case .auto: return "Auto-detect"
+        case .auto: return String(localized: "Auto-detect")
         case .v18: return "Ruby 1.8"
         case .v19: return "Ruby 1.9"
         case .v31: return "Ruby 3.1"
@@ -190,9 +190,9 @@ enum CompatibilityPick: String, CaseIterable, Hashable {
 
     var displayLabel: String {
         switch self {
-        case .auto: return "Auto-detect"
-        case .modern: return "Modern (newer Ruby)"
-        case .legacy: return "Legacy (older Ruby)"
+        case .auto: return String(localized: "Auto-detect")
+        case .modern: return String(localized: "Modern (newer Ruby)")
+        case .legacy: return String(localized: "Legacy (older Ruby)")
         }
     }
 }
@@ -204,7 +204,7 @@ struct MkxpEngineSection: View {
     var body: some View {
         Section {
             SettingsToggle(
-                title: "Postload scripts",
+                title: "Fix-up scripts",
                 isOn: Binding(
                     get: { state.settings.postloadScriptsEnabled },
                     set: { state.settings.postloadScripts = $0 }
@@ -221,7 +221,7 @@ struct MkxpEngineSection: View {
                         set: { state.engine.pathCache = $0 }
                     ),
                     description:
-                        "Keep a lowercase index of every game file so lookups are faster. Turn it off if the game can't find its images or sounds."
+                        "Find game files faster. Turn it off if the game can't find its images or sounds."
                 )
             }
 
@@ -254,7 +254,7 @@ struct MkxpEngineSection: View {
                     set: { state.settings.networkEnabled = $0 }
                 ),
                 description:
-                    "Let this game use the internet for updates and online features. Some games send data unencrypted. When off, the game sees no network."
+                    "Let this game use the internet for updates and online features. Some games send data without protection. When it's off, the game can't go online."
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -285,7 +285,7 @@ struct MkxpEngineSection: View {
             if state.effectiveRubyVersion >= 30 {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Picker(
-                        "Compatibility mode",
+                        "Ruby compatibility mode",
                         selection: Binding(
                             get: { CompatibilityPick.from(state.settings.useModernRuby) },
                             set: { state.settings.useModernRuby = $0.useModernRubyValue }
@@ -314,12 +314,16 @@ struct MkxpEngineSection: View {
 
     private var autoDetectLabel: String {
         let pick = RubyVersionPick.from(state.profile.rubyVersion)
-        guard pick != .auto else { return "Auto-detect" }
-        return "Auto-detect (\(pick.displayLabel))"
+        guard pick != .auto else { return String(localized: "Auto-detect") }
+        return String(
+            localized: "Auto-detect (\(pick.displayLabel))",
+            comment: "Picker option. The placeholder is the choice Empo detected for this game.")
     }
 
     private var autoDetectCompatLabel: String {
         let resolved: CompatibilityPick = state.profile.modernRubyScripts ? .modern : .legacy
-        return "Auto-detect (\(resolved.displayLabel))"
+        return String(
+            localized: "Auto-detect (\(resolved.displayLabel))",
+            comment: "Picker option. The placeholder is the choice Empo detected for this game.")
     }
 }

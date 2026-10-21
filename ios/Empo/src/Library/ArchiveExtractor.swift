@@ -36,19 +36,26 @@ enum ArchiveExtractor {
         var errorDescription: String? {
             switch self {
             case .openFailed:
-                return
-                    "Empo couldn't open this archive. It may be incomplete. Download the game again, then import it."
+                return String(
+                    localized:
+                        "Empo couldn't open this archive. It may be incomplete. Download the game again, then import it."
+                )
             case .readFailed:
-                return
-                    "Empo couldn't read this archive. It may be damaged. Download the game again, then import it."
+                return String(
+                    localized:
+                        "Empo couldn't read this archive. It may be damaged. Download the game again, then import it."
+                )
             case .writeFailed:
-                return
-                    "Empo couldn't write the game to your device. Free up space, then import again."
+                return String(
+                    localized:
+                        "Empo couldn't write the game to your device. Free up space, then import again.")
             case .pathEscape:
-                return
-                    "This archive contains unsafe file paths, so Empo stopped the import. Get the game from another source."
+                return String(
+                    localized:
+                        "This archive looks unsafe, so Empo stopped the import. Get the game from a source you trust."
+                )
             case .cancelled:
-                return "Import stopped."
+                return String(localized: "Import stopped.")
             }
         }
     }

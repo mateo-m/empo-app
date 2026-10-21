@@ -71,7 +71,7 @@ struct DebugOverlayView: View {
             memoryRow
 
             HStack(spacing: Spacing.xs) {
-                Text("\(Int(fps.rounded())) FPS")
+                Text(verbatim: "\(Int(fps.rounded())) FPS")
                     .font(AppFont.debugFPS)
                     .monospacedDigit()
                     .foregroundStyle(fpsColor)

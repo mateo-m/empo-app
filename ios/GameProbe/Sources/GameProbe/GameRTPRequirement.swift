@@ -38,8 +38,8 @@ public struct GameRTPRequirement: Sendable, Equatable {
     }
 
     /// Human-readable engine names for alert copy.
-    public var friendlySummary: String {
-        packages.map(Self.friendlyPackageName).joined(separator: ", ")
+    public var friendlyNames: [String] {
+        packages.map(Self.friendlyPackageName)
     }
 
     private static func friendlyPackageName(_ package: String) -> String {

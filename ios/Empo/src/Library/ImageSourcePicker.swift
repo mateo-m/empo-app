@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 
 struct ImageSourcePickerModifier: ViewModifier {
     @Binding var isPresented: Bool
-    let title: String
+    let title: LocalizedStringResource
     let hasExisting: Bool
     let onImageSelected: (UIImage) -> Void
     let onRemove: (() -> Void)?
@@ -45,7 +45,7 @@ struct ImageSourcePickerModifier: ViewModifier {
 extension View {
     func imageSourcePicker(
         isPresented: Binding<Bool>,
-        title: String = "Choose image",
+        title: LocalizedStringResource = "Choose image",
         hasExisting: Bool = false,
         onImageSelected: @escaping (UIImage) -> Void,
         onRemove: (() -> Void)? = nil

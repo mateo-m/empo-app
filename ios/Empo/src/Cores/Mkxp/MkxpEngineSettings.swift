@@ -15,19 +15,22 @@ enum RenderScale: String, Codable, CaseIterable, Hashable {
     case x2
     case x4
 
-    var label: String {
+    var label: LocalizedStringResource {
         switch self {
-        case .x1: "Default"
+        case .x1:
+            LocalizedStringResource("Default", comment: "Render scale option: the game's own resolution.")
         case .x2: "High (2x)"
         case .x4: "Very high (4x)"
         }
     }
 
-    var description: String {
+    var description: LocalizedStringResource {
         switch self {
-        case .x1: "Native game resolution."
-        case .x2: "Draw the game at 2x its normal size. Sharper on high-resolution screens."
-        case .x4: "Draw the game at 4x its normal size. Sharpest, but harder on the battery."
+        case .x1: "Draw the game at its own resolution."
+        case .x2:
+            "Draw the game at 2x its normal size. Sharper on high-resolution screens. The game still fits the screen the same way."
+        case .x4:
+            "Draw the game at 4x its normal size. Sharpest, but uses more battery. The game still fits the screen the same way."
         }
     }
 
@@ -143,11 +146,11 @@ struct MkxpEngineSettings: Equatable {
 
     func restartRequiredFieldsChanged(from other: MkxpEngineSettings) -> [String] {
         var changed: [String] = []
-        if renderScale != other.renderScale { changed.append("Render scale") }
-        if frameSkip != other.frameSkip { changed.append("Frame skip") }
-        if pathCache != other.pathCache { changed.append("Path cache") }
-        if fontScale != other.fontScale { changed.append("Font scale") }
-        if solidFonts != other.solidFonts { changed.append("Solid fonts") }
+        if renderScale != other.renderScale { changed.append(String(localized: "Render scale")) }
+        if frameSkip != other.frameSkip { changed.append(String(localized: "Frame skip")) }
+        if pathCache != other.pathCache { changed.append(String(localized: "Path cache")) }
+        if fontScale != other.fontScale { changed.append(String(localized: "Font scale")) }
+        if solidFonts != other.solidFonts { changed.append(String(localized: "Solid fonts")) }
         return changed
     }
 

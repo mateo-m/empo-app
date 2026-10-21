@@ -5,8 +5,8 @@ import SwiftUI
 
 struct EmptyStateView: View {
     let icon: Image
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringResource
+    let subtitle: LocalizedStringResource
     var revealed: Bool = true
     var initialDelay: TimeInterval = 0.2
     static let staggerInterval: TimeInterval = 0.1

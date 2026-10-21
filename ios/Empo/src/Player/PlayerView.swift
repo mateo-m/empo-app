@@ -407,7 +407,7 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showMoreSheet) {
             PlayerMoreSheet(
-                gameTitle: appState.selectedGame?.title ?? "this game",
+                gameTitle: appState.selectedGame?.title,
                 showDebugOverlay: $showDebugOverlay,
                 fastForwardActive: Binding(
                     get: { actions.runtime.fastForwardActive },
@@ -431,7 +431,7 @@ struct PlayerView: View {
         .sheet(isPresented: $showControllerRemap) {
             BindingsView(
                 container: layout.currentContainer,
-                gameTitle: appState.selectedGame?.title ?? "this game",
+                gameTitle: appState.selectedGame?.title,
                 manifest: layout.activeManifest?.bindings,
                 input: input,
                 actions: actions
@@ -644,18 +644,14 @@ struct PlayerView: View {
     }
 
     /// The first edit-mode notice worth showing, most severe first.
-    private var editZoneCaptionText: String? {
+    private var editZoneCaptionText: LocalizedStringResource? {
         if layout.manifestRejectionErrorCount > 0 {
-            let errorCount = layout.manifestRejectionErrorCount
-            let errorLabel = errorCount == 1 ? "error" : "errors"
             return
-                "This game's controls file has \(errorCount) \(errorLabel), so Empo used its own layout. Open Logs for details."
+                "This game's controls file has \(layout.manifestRejectionErrorCount) errors, so Empo used its own layout."
         }
         if layout.profileRejectionErrorCount > 0 {
-            let errorCount = layout.profileRejectionErrorCount
-            let errorLabel = errorCount == 1 ? "error" : "errors"
             return
-                "Your layout profile has \(errorCount) \(errorLabel), so Empo used its own layout. Open Logs for details."
+                "Your layout profile has \(layout.profileRejectionErrorCount) errors, so Empo used its own layout."
         }
         if layout.pinFellThrough {
             return "That layout profile is gone, so this game is using the Empo default."
@@ -664,7 +660,7 @@ struct PlayerView: View {
     }
 
     /// The bottom caption chrome every edit-mode notice shares.
-    private func editZoneCaption(_ text: String, safeArea: EdgeInsets) -> some View {
+    private func editZoneCaption(_ text: LocalizedStringResource, safeArea: EdgeInsets) -> some View {
         Text(text)
             .font(.caption)
             .foregroundStyle(.secondary)

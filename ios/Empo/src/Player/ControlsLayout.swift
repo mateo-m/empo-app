@@ -279,14 +279,14 @@ class ControlsLayout {
         activeManifest?.touch != nil
     }
 
-    var resetConfirmationTitle: String {
+    var resetConfirmationTitle: LocalizedStringResource {
         if case .pinnedProfile(let name) = provenance {
             return "Stop using \(name)?"
         }
-        return hasManifestTouchSection ? "Reset to game default" : "Reset to Empo default"
+        return hasManifestTouchSection ? "Reset to game default?" : "Reset to Empo default?"
     }
 
-    var resetConfirmationActionTitle: String {
+    var resetConfirmationActionTitle: LocalizedStringResource {
         if case .pinnedProfile = provenance {
             return "Stop using"
         }
@@ -296,11 +296,11 @@ class ControlsLayout {
     /// A method, not a property: building the message resolves the
     /// post-reset screen chain (two file reads). Call it when the
     /// confirm alert shows, not per render.
-    func resetConfirmationMessage() -> String {
+    func resetConfirmationMessage() -> LocalizedStringResource {
         if case .pinnedProfile(let name) = provenance {
-            let base = "This game stops using the profile \(name). The profile keeps its layout."
             return screenChangesOnReset()
-                ? base + " The screen returns to automatic placement." : base
+                ? "This game stops using the profile \(name). The profile keeps its layout. The screen returns to automatic placement."
+                : "This game stops using the profile \(name). The profile keeps its layout."
         }
         return screenChangesOnReset()
             ? "This deletes your custom layout and returns the screen to automatic placement. You can't undo this."
@@ -1750,7 +1750,10 @@ class ControlsLayout {
         case .pinToExisting(let profile, let renameToShared, let hash):
             var target = profile
             if renameToShared {
-                let shared = store.uniqueName(base: "Shared layout")
+                let shared = store.uniqueName(
+                    base: String(
+                        localized: "Shared layout",
+                        comment: "Name of a layout profile that Empo makes when several games share edits."))
                 if LayoutProfilesManager.renameProfile(from: profile, to: shared) {
                     target = shared
                     for (gameID, entry) in record.games where entry.profile == profile {

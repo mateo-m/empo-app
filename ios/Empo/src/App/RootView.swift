@@ -160,7 +160,7 @@ struct RootView: View {
             }
         }
         .alert(
-            (engineHung || appState.phase != nil) ? "Restart Empo" : "Last session ended early",
+            (engineHung || appState.phase != nil) ? Text("Restart Empo") : Text("Last session ended early"),
             isPresented: showErrorAlert
         ) {
             Button("Got it") {
@@ -175,10 +175,10 @@ struct RootView: View {
             }
         } message: {
             if engineHung {
-                Text("The game stopped responding. Close Empo and reopen it.")
+                Text("The game stopped responding. Close Empo from the app switcher, then reopen it.")
             } else if appState.phase != nil {
                 Text(
-                    "\(appState.errorMessage ?? "The game stopped.")\n\nClose Empo from the app switcher, then reopen it."
+                    "\(appState.errorMessage ?? String(localized: "The game stopped."))\n\nClose Empo from the app switcher, then reopen it."
                 )
             } else {
                 Text(appState.errorMessage ?? "")
@@ -269,7 +269,9 @@ struct RootView: View {
     private var infoAlertTitle: String {
         appState.selectedGame?.title
             ?? PauseManager.shared.pausedGame?.title
-            ?? "Game message"
+            ?? String(
+                localized: "Game message",
+                comment: "Title of an alert that shows a message from the running game.")
     }
 
     /// Unblocks the core that waits for the info alert to close.

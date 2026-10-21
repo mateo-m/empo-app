@@ -19,7 +19,7 @@ enum IconButtonSize {
 
 struct IconButton: View {
     let systemName: String
-    let label: String
+    let label: LocalizedStringResource
     let style: Style
     let size: IconButtonSize
     let tint: Color?
@@ -30,7 +30,7 @@ struct IconButton: View {
 
     init(
         _ systemName: String,
-        label: String,
+        label: LocalizedStringResource,
         style: Style = .outline,
         size: IconButtonSize = .md,
         tint: Color? = nil,

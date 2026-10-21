@@ -25,7 +25,7 @@ final class GameRTPRequirementTests: XCTestCase {
             """)
         let requirement = GameRTPRequirement.detect(at: gameDir)
         XCTAssertEqual(requirement?.packages, ["RPGVXAce"])
-        XCTAssertEqual(requirement?.friendlySummary, "RPG Maker VX Ace")
+        XCTAssertEqual(requirement?.friendlyNames, ["RPG Maker VX Ace"])
     }
 
     func testDetectsRTP1Key() throws {
