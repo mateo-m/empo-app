@@ -1,5 +1,16 @@
 [
   {
+    "version": 4,
+    "appVersion": "0.8.1",
+    "items": [
+      {
+        "symbol": "iphone",
+        "title": "iPhone Duo support",
+        "detail": "Empo now starts on iPhone Duo and puts the on-screen buttons in the right place."
+      }
+    ]
+  },
+  {
     "version": 3,
     "appVersion": "0.8.0",
     "items": [

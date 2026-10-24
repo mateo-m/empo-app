@@ -301,6 +301,66 @@
         }
       }
     },
+    "Empo now starts on iPhone Duo and puts the on-screen buttons in the right place." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo startet jetzt auf dem iPhone Duo und zeigt die Bildschirmtasten an der richtigen Stelle."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo ahora se abre en el iPhone Duo y muestra los botones en pantalla en su sitio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo démarre maintenant sur l'iPhone Duo et affiche les boutons à l'écran au bon endroit."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo ora si avvia su iPhone Duo e mostra i pulsanti sullo schermo nella posizione giusta."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EmpoがiPhone Duoで起動し、画面上のボタンも正しい位置に表示されるようになりました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이제 Empo가 iPhone Duo에서 실행되고 화면 버튼도 올바른 위치에 표시돼요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo agora abre no iPhone Duo e mostra os botões na tela no lugar certo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Теперь Empo запускается на iPhone Duo, а экранные кнопки стоят на своих местах."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 现在可以在 iPhone Duo 上启动，屏幕按钮也会显示在正确的位置。"
+          }
+        }
+      }
+    },
     "Empo speaks your language" : {
       "comment" : "Title of an item in the What's new sheet after an update.",
       "extractionState" : "manual",
@@ -417,6 +477,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "游戏核心"
+          }
+        }
+      }
+    },
+    "iPhone Duo support" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unterstützung für iPhone Duo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compatible con iPhone Duo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prise en charge de l'iPhone Duo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supporto per iPhone Duo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone Duoに対応"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone Duo 지원"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suporte ao iPhone Duo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поддержка iPhone Duo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支持 iPhone Duo"
           }
         }
       }
