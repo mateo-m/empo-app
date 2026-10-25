@@ -62,7 +62,8 @@ public enum ButtonSeparation {
                 for wall in walls {
                     pushOutOfWall(
                         index: index, wall: wall, buttonSize: buttons[index].size,
-                        width: width, height: height, positions: &positions, moved: &moved)
+                        width: width, height: height, obstacles: obstacles,
+                        positions: &positions, moved: &moved)
                 }
             }
 
@@ -144,13 +145,17 @@ public enum ButtonSeparation {
     }
 
     /// Leaves through the nearest wall edge that keeps the button in
-    /// bounds. Below the wall is the fallback when no edge does.
+    /// bounds and clear of every obstacle. An exit onto an obstacle
+    /// would let the obstacle push it straight back in. Without a
+    /// clear exit, the nearest in-bounds one wins. Without any, the
+    /// button stays where the bounds clamp put it.
     private static func pushOutOfWall(
         index: Int,
         wall: EditDragSolver.Rect,
         buttonSize: Double,
         width: Double,
         height: Double,
+        obstacles: [(x: Double, y: Double, size: Double)],
         positions: inout [(x: Double, y: Double)],
         moved: inout Bool
     ) {
@@ -162,11 +167,13 @@ public enum ButtonSeparation {
         let maxY = wall.y + wall.height + half
         guard point.x > minX, point.x < maxX, point.y > minY, point.y < maxY else { return }
 
-        let exits = [(minX, point.y), (maxX, point.y), (point.x, minY), (point.x, maxY)]
+        let inBounds = [(minX, point.y), (maxX, point.y), (point.x, minY), (point.x, maxY)]
             .filter { $0.0 >= half && $0.0 <= width - half && $0.1 >= half && $0.1 <= height - half }
-        let exit =
-            exits.min { hypot($0.0 - point.x, $0.1 - point.y) < hypot($1.0 - point.x, $1.1 - point.y) }
-            ?? (point.x, maxY)
+            .sorted { hypot($0.0 - point.x, $0.1 - point.y) < hypot($1.0 - point.x, $1.1 - point.y) }
+        let clear = inBounds.first { exit in
+            obstacles.allSatisfy { hypot(exit.0 - $0.x, exit.1 - $0.y) >= (buttonSize + $0.size) * 0.5 }
+        }
+        guard let exit = clear ?? inBounds.first else { return }
         positions[index] = (x: exit.0, y: exit.1)
         moved = true
     }

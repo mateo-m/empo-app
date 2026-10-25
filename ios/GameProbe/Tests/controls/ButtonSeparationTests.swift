@@ -99,6 +99,27 @@ final class ButtonSeparationTests: XCTestCase {
         XCTAssertTrue(pairwiseNonOverlapping(positions: result.positions, sizes: buttons.map(\.size)))
     }
 
+    func testWallExitAvoidsObstacle() {
+        let buttons = [(x: 308.0, y: 100.0, size: 56.0)]
+        let obstacles = [(x: 224.0, y: 100.0, size: 168.0)]
+        let wall = EditDragSolver.Rect(x: 336, y: 0, width: 94, height: 200)
+        let result = ButtonSeparation.separate(
+            buttons, width: 430, height: 500, obstacles: obstacles, walls: [wall])
+        let position = result.positions[0]
+        let half = buttons[0].size * 0.5
+        XCTAssertTrue(position.x + half <= wall.x + 1e-6 || position.y - half >= wall.y + wall.height - 1e-6)
+        XCTAssertGreaterThanOrEqual(
+            distance(position, (obstacles[0].x, obstacles[0].y)), (buttons[0].size + obstacles[0].size) * 0.5)
+    }
+
+    func testWallWithoutExitKeepsButtonInBounds() {
+        let buttons = [(x: 50.0, y: 50.0, size: 40.0)]
+        let wall = EditDragSolver.Rect(x: 0, y: 0, width: 100, height: 100)
+        let result = ButtonSeparation.separate(buttons, width: 100, height: 100, walls: [wall])
+        let position = result.positions[0]
+        XCTAssertTrue((20...80).contains(position.x) && (20...80).contains(position.y), "\(position)")
+    }
+
     private func distance(_ a: (x: Double, y: Double), _ b: (x: Double, y: Double)) -> Double {
         hypot(a.x - b.x, a.y - b.y)
     }
