@@ -144,11 +144,11 @@ public enum ButtonSeparation {
         moved = true
     }
 
-    /// Leaves through the nearest wall edge that keeps the button in
-    /// bounds and clear of every obstacle. An exit onto an obstacle
-    /// would let the obstacle push it straight back in. Without a
-    /// clear exit, the nearest in-bounds one wins. Without any, the
-    /// button stays where the bounds clamp put it.
+    /// Leaves to the nearest point on the wall's outline that keeps
+    /// the button in bounds and clear of every obstacle. An exit onto
+    /// an obstacle would let the obstacle push it straight back in.
+    /// Without a clear point, the nearest direct exit in bounds wins.
+    /// Without any, the button stays where the bounds clamp put it.
     private static func pushOutOfWall(
         index: Int,
         wall: EditDragSolver.Rect,
@@ -167,16 +167,52 @@ public enum ButtonSeparation {
         let maxY = wall.y + wall.height + half
         guard point.x > minX, point.x < maxX, point.y > minY, point.y < maxY else { return }
 
-        let inBounds = [(minX, point.y), (maxX, point.y), (point.x, minY), (point.x, maxY)]
-            .filter { $0.0 >= half && $0.0 <= width - half && $0.1 >= half && $0.1 <= height - half }
-            .sorted { hypot($0.0 - point.x, $0.1 - point.y) < hypot($1.0 - point.x, $1.1 - point.y) }
-        let clear = inBounds.first { exit in
+        func isClear(_ exit: (x: Double, y: Double)) -> Bool {
             obstacles.allSatisfy {
-                hypot(exit.0 - $0.x, exit.1 - $0.y) >= (buttonSize + $0.size) * 0.5 + minimumGap
+                hypot(exit.x - $0.x, exit.y - $0.y) >= (buttonSize + $0.size) * 0.5 + minimumGap - 1e-9
             }
         }
-        guard let exit = clear ?? inBounds.first else { return }
-        positions[index] = (x: exit.0, y: exit.1)
+        func distanceFromPoint(_ exit: (x: Double, y: Double)) -> Double {
+            hypot(exit.x - point.x, exit.y - point.y)
+        }
+
+        // Each outline edge clipped to bounds. On an edge, an obstacle
+        // blocks one interval, so the nearest clear point is the
+        // point's own projection or the end of a blocked interval.
+        var direct: [(x: Double, y: Double)] = []
+        var clear: [(x: Double, y: Double)] = []
+        let edges: [(fixed: Double, vertical: Bool)] = [
+            (minX, true), (maxX, true), (minY, false), (maxY, false),
+        ]
+        for edge in edges {
+            let fixedLimit = edge.vertical ? width : height
+            let freeLimit = edge.vertical ? height : width
+            guard edge.fixed >= half, edge.fixed <= fixedLimit - half else { continue }
+            let low = max(edge.vertical ? minY : minX, half)
+            let high = min(edge.vertical ? maxY : maxX, freeLimit - half)
+            guard low <= high else { continue }
+            let toPoint = { (free: Double) -> (x: Double, y: Double) in
+                edge.vertical ? (x: edge.fixed, y: free) : (x: free, y: edge.fixed)
+            }
+            let projection = toPoint(min(max(edge.vertical ? point.y : point.x, low), high))
+            direct.append(projection)
+            var candidates = [projection]
+            for obstacle in obstacles {
+                let reach = (buttonSize + obstacle.size) * 0.5 + minimumGap
+                let offset = abs(edge.fixed - (edge.vertical ? obstacle.x : obstacle.y))
+                guard offset < reach else { continue }
+                let span = (reach * reach - offset * offset).squareRoot()
+                let center = edge.vertical ? obstacle.y : obstacle.x
+                candidates += [center - span, center + span].filter { $0 >= low && $0 <= high }.map(toPoint)
+            }
+            clear += candidates.filter(isClear)
+        }
+
+        let nearest = { (exits: [(x: Double, y: Double)]) in
+            exits.min { distanceFromPoint($0) < distanceFromPoint($1) }
+        }
+        guard let exit = nearest(clear) ?? nearest(direct) else { return }
+        positions[index] = exit
         moved = true
     }
 

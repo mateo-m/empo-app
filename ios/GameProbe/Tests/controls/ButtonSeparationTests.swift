@@ -123,6 +123,20 @@ final class ButtonSeparationTests: XCTestCase {
             distance(result.positions[0], (obstacles[0].x, obstacles[0].y)), required - 1e-6)
     }
 
+    func testWallExitSlidesAlongEdgePastObstacle() {
+        let buttons = [(x: 392.0, y: 228.0, size: 56.0)]
+        let obstacles = [(x: 310.0, y: 284.0, size: 168.0)]
+        let wall = EditDragSolver.Rect(x: 336, y: 0, width: 94, height: 200)
+        let result = ButtonSeparation.separate(
+            buttons, width: 430, height: 500, obstacles: obstacles, walls: [wall])
+        let position = result.positions[0]
+        let half = buttons[0].size * 0.5
+        XCTAssertTrue(position.x + half <= wall.x + 1e-6 || position.y - half >= wall.y + wall.height - 1e-6)
+        let required = (buttons[0].size + obstacles[0].size) * 0.5 + ButtonSeparation.minimumGap
+        XCTAssertGreaterThanOrEqual(
+            distance(position, (obstacles[0].x, obstacles[0].y)), required - 1e-6)
+    }
+
     func testWallWithoutExitKeepsButtonInBounds() {
         let buttons = [(x: 50.0, y: 50.0, size: 40.0)]
         let wall = EditDragSolver.Rect(x: 0, y: 0, width: 100, height: 100)
