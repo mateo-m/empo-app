@@ -335,6 +335,7 @@ private struct SplashView: View {
     let onAcknowledgeDisclaimer: () -> Void
 
     @State private var entered = false
+    @State private var sideInset: CGFloat = 0
 
     /// Combined "logo should be visually absent" flag. True during the
     /// disclaimer phase OR during the full exit. It stays one variable
@@ -352,36 +353,50 @@ private struct SplashView: View {
                 .opacity(exiting ? 0 : 1)
                 .accessibilityHidden(true)
 
-            // Logo + wordmark. During the disclaimer phase these fade/
-            // blur/scale out but the splash background stays. Same
-            // treatment on the full exit.
-            VStack(spacing: Spacing.xl) {
-                Image(.empoMark)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 96, height: 96)
-                    .foregroundStyle(.white)
-                    .accessibilityHidden(true)
-                Text(AppInfo.name)
-                    .font(AppFont.wordmark)
-                    .foregroundStyle(.white)
-            }
-            .blur(radius: logoHidden ? 10 : 0)
-            .scaleEffect(logoHidden ? 0.8 : (entered ? 1 : 0.8))
-            .opacity(logoHidden ? 0 : (entered ? 1 : 0))
+            // The background fills the whole screen, so the content
+            // centers on the screen too. The closed iPhone Duo insets
+            // only its sensor strip side, and the system draws only at
+            // the strip's top, above the content.
+            ZStack {
+                // Logo + wordmark. During the disclaimer phase these fade/
+                // blur/scale out but the splash background stays. Same
+                // treatment on the full exit.
+                VStack(spacing: Spacing.xl) {
+                    Image(.empoMark)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 96, height: 96)
+                        .foregroundStyle(.white)
+                        .accessibilityHidden(true)
+                    Text(AppInfo.name)
+                        .font(AppFont.wordmark)
+                        .foregroundStyle(.white)
+                }
+                .blur(radius: logoHidden ? 10 : 0)
+                .scaleEffect(logoHidden ? 0.8 : (entered ? 1 : 0.8))
+                .opacity(logoHidden ? 0 : (entered ? 1 : 0))
 
-            // The disclaimer slides into the same centered position
-            // the logo just left. It mounts only while needed, so the
-            // @State-driven entry animation fires fresh.
-            if showDisclaimer {
-                DisclaimerView(onAcknowledge: onAcknowledgeDisclaimer)
-                    // Fully fade during the final exit so the whole
-                    // splash collapses cleanly.
-                    .opacity(exiting ? 0 : 1)
-                    .scaleEffect(exiting ? 0.95 : 1)
-                    .blur(radius: exiting ? 10 : 0)
+                // The disclaimer slides into the same centered position
+                // the logo just left. It mounts only while needed, so the
+                // @State-driven entry animation fires fresh.
+                if showDisclaimer {
+                    DisclaimerView(onAcknowledge: onAcknowledgeDisclaimer)
+                        // Fully fade during the final exit so the whole
+                        // splash collapses cleanly.
+                        .opacity(exiting ? 0 : 1)
+                        .scaleEffect(exiting ? 0.95 : 1)
+                        .blur(radius: exiting ? 10 : 0)
+                }
             }
+            .padding(.horizontal, sideInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea(.container, edges: .horizontal)
         }
+        .onGeometryChange(
+            for: CGFloat.self,
+            of: { min($0.safeAreaInsets.leading, $0.safeAreaInsets.trailing) },
+            action: { sideInset = $0 }
+        )
         .onAppear {
             withAnimation(Motion.gentle) {
                 entered = true
