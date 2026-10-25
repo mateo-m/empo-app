@@ -137,6 +137,16 @@ final class ButtonSeparationTests: XCTestCase {
             distance(position, (obstacles[0].x, obstacles[0].y)), required - 1e-6)
     }
 
+    func testCrowdedRowBesideWallMovesBelowIt() {
+        let buttons = [28.0, 86, 144, 202, 260, 318, 346].map { (x: $0, y: 100.0, size: 56.0) }
+        let wall = EditDragSolver.Rect(x: 374, y: 0, width: 56, height: 200)
+        let result = ButtonSeparation.separate(buttons, width: 430, height: 500, walls: [wall])
+        for position in result.positions {
+            XCTAssertTrue(position.x + 28 <= wall.x + 1e-6 || position.y - 28 >= wall.y + wall.height - 1e-6)
+        }
+        XCTAssertTrue(pairwiseNonOverlapping(positions: result.positions, sizes: buttons.map(\.size)))
+    }
+
     func testWallWithoutExitKeepsButtonInBounds() {
         let buttons = [(x: 50.0, y: 50.0, size: 40.0)]
         let wall = EditDragSolver.Rect(x: 0, y: 0, width: 100, height: 100)

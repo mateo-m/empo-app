@@ -63,6 +63,9 @@ public enum ButtonSeparation {
                     pushOutOfWall(
                         index: index, wall: wall, buttonSize: buttons[index].size,
                         width: width, height: height, obstacles: obstacles,
+                        neighbors: positions.indices.filter { $0 != index }.map {
+                            (x: positions[$0].x, y: positions[$0].y, size: buttons[$0].size)
+                        },
                         positions: &positions, moved: &moved)
                 }
             }
@@ -145,10 +148,12 @@ public enum ButtonSeparation {
     }
 
     /// Leaves to the nearest point on the wall's outline that keeps
-    /// the button in bounds and clear of every obstacle. An exit onto
-    /// an obstacle would let the obstacle push it straight back in.
-    /// Without a clear point, the nearest direct exit in bounds wins.
-    /// Without any, the button stays where the bounds clamp put it.
+    /// the button in bounds and clear of every obstacle and neighbor.
+    /// An exit onto one would push it straight back in. Next best is
+    /// a point clear of the obstacles alone, because neighbors can
+    /// still move apart later and obstacles cannot. Then the nearest
+    /// direct exit in bounds. Without any, the button stays where the
+    /// bounds clamp put it.
     private static func pushOutOfWall(
         index: Int,
         wall: EditDragSolver.Rect,
@@ -156,6 +161,7 @@ public enum ButtonSeparation {
         width: Double,
         height: Double,
         obstacles: [(x: Double, y: Double, size: Double)],
+        neighbors: [(x: Double, y: Double, size: Double)],
         positions: inout [(x: Double, y: Double)],
         moved: inout Bool
     ) {
@@ -167,8 +173,10 @@ public enum ButtonSeparation {
         let maxY = wall.y + wall.height + half
         guard point.x > minX, point.x < maxX, point.y > minY, point.y < maxY else { return }
 
-        func isClear(_ exit: (x: Double, y: Double)) -> Bool {
-            obstacles.allSatisfy {
+        func isClear(
+            _ exit: (x: Double, y: Double), of circles: [(x: Double, y: Double, size: Double)]
+        ) -> Bool {
+            circles.allSatisfy {
                 hypot(exit.x - $0.x, exit.y - $0.y) >= (buttonSize + $0.size) * 0.5 + minimumGap - 1e-9
             }
         }
@@ -176,11 +184,11 @@ public enum ButtonSeparation {
             hypot(exit.x - point.x, exit.y - point.y)
         }
 
-        // Each outline edge clipped to bounds. On an edge, an obstacle
+        // Each outline edge clipped to bounds. On an edge, a blocker
         // blocks one interval, so the nearest clear point is the
         // point's own projection or the end of a blocked interval.
         var direct: [(x: Double, y: Double)] = []
-        var clear: [(x: Double, y: Double)] = []
+        var candidates: [(x: Double, y: Double)] = []
         let edges: [(fixed: Double, vertical: Bool)] = [
             (minX, true), (maxX, true), (minY, false), (maxY, false),
         ]
@@ -196,22 +204,23 @@ public enum ButtonSeparation {
             }
             let projection = toPoint(min(max(edge.vertical ? point.y : point.x, low), high))
             direct.append(projection)
-            var candidates = [projection]
-            for obstacle in obstacles {
-                let reach = (buttonSize + obstacle.size) * 0.5 + minimumGap
-                let offset = abs(edge.fixed - (edge.vertical ? obstacle.x : obstacle.y))
+            candidates.append(projection)
+            for blocker in obstacles + neighbors {
+                let reach = (buttonSize + blocker.size) * 0.5 + minimumGap
+                let offset = abs(edge.fixed - (edge.vertical ? blocker.x : blocker.y))
                 guard offset < reach else { continue }
                 let span = (reach * reach - offset * offset).squareRoot()
-                let center = edge.vertical ? obstacle.y : obstacle.x
+                let center = edge.vertical ? blocker.y : blocker.x
                 candidates += [center - span, center + span].filter { $0 >= low && $0 <= high }.map(toPoint)
             }
-            clear += candidates.filter(isClear)
         }
+        let clearOfObstacles = candidates.filter { isClear($0, of: obstacles) }
+        let clear = clearOfObstacles.filter { isClear($0, of: neighbors) }
 
         let nearest = { (exits: [(x: Double, y: Double)]) in
             exits.min { distanceFromPoint($0) < distanceFromPoint($1) }
         }
-        guard let exit = nearest(clear) ?? nearest(direct) else { return }
+        guard let exit = nearest(clear) ?? nearest(clearOfObstacles) ?? nearest(direct) else { return }
         positions[index] = exit
         moved = true
     }
