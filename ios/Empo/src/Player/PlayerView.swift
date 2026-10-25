@@ -76,10 +76,10 @@ struct PlayerView: View {
                 isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
                 btnSize: toolbarBtnSize,
                 geoHeight: geo.size.height, forcedOverlay: forcedOverlay)
-            let controlsSafeArea = ControlsZone.controlsSafeArea(
-                safeArea, controlsMinY: controlsMinY,
-                toolbar: PlayerToolbar.placement(
-                    isPortrait: isPortrait, safeArea: safeArea, geoSize: geo.size))
+            let toolbarPlacement = PlayerToolbar.placement(
+                isPortrait: isPortrait, safeArea: safeArea, geoSize: geo.size)
+            let controlsSafeArea = ControlsZone.controlsSafeArea(safeArea, toolbar: toolbarPlacement)
+            let toolbarKeepout = ControlsZone.toolbarKeepout(toolbarPlacement, geoSize: geo.size)
 
             ZStack {
                 // Debug visualization of the touch-mouse zone: the
@@ -309,6 +309,9 @@ struct PlayerView: View {
                 // Presets compute their rect from the game's aspect.
                 // The published picture rect carries it.
                 ScreenRegionApplier.gameRectChanged(rect)
+            }
+            .onChange(of: toolbarKeepout, initial: true) { _, keepout in
+                layout.toolbarKeepout = keepout
             }
             .onChange(of: editMode) { _, editing in
                 // Entering with the preference already on applies the

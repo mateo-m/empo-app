@@ -125,18 +125,34 @@ enum ControlsZone {
         }
     }
 
-    /// A zone that starts below the toolbar column takes the sensor
-    /// strip too. A zone next to the column keeps the strip inset, so
-    /// no control can sit on a toolbar button.
-    static func controlsSafeArea(
-        _ safeArea: EdgeInsets, controlsMinY: CGFloat, toolbar: ToolbarPlacement
-    )
-        -> EdgeInsets
-    {
-        guard toolbar.isVertical, controlsMinY + padding >= toolbar.frame.maxY + toolbarEdgePad else {
-            return safeArea
-        }
+    /// A toolbar column in a sensor strip gives the strip to the
+    /// controls. Only `toolbarKeepout` stays closed to them.
+    static func controlsSafeArea(_ safeArea: EdgeInsets, toolbar: ToolbarPlacement) -> EdgeInsets {
+        guard toolbar.isVertical else { return safeArea }
         return EdgeInsets(top: safeArea.top, leading: 0, bottom: safeArea.bottom, trailing: 0)
+    }
+
+    /// The toolbar column, from the top of the screen to the column's
+    /// bottom and out to the screen edge. `.null` without a column.
+    static func toolbarKeepout(_ toolbar: ToolbarPlacement, geoSize: CGSize) -> CGRect {
+        guard toolbar.isVertical else { return .null }
+        let column = toolbar.frame.insetBy(dx: -toolbarEdgePad, dy: -toolbarEdgePad)
+        let minX = column.midX > geoSize.width / 2 ? column.minX : 0
+        let maxX = column.midX > geoSize.width / 2 ? geoSize.width : column.maxX
+        return CGRect(x: minX, y: 0, width: maxX - minX, height: column.maxY)
+    }
+
+    /// The keep-out touches the top and the side edge of the screen,
+    /// so a control leaves it either away from that side or down
+    /// below the column, whichever move is shorter.
+    static func pushedOutOfKeepout(_ point: CGPoint, controlHalf: CGFloat, keepout: CGRect) -> CGPoint {
+        let blocked = keepout.insetBy(dx: -(controlHalf + innerPadding), dy: -(controlHalf + innerPadding))
+        guard !keepout.isNull, blocked.contains(point) else { return point }
+        let sideX = keepout.minX > 0 ? blocked.minX : blocked.maxX
+        if abs(sideX - point.x) <= blocked.maxY - point.y {
+            return CGPoint(x: sideX, y: point.y)
+        }
+        return CGPoint(x: point.x, y: blocked.maxY)
     }
 
     /// Anchor the toolbar to the top-right of the device viewport. In
@@ -208,7 +224,7 @@ enum ControlsZone {
 
     static func absolutePosition(
         for relativeCenter: CGPoint, in size: CGSize, controlSize: CGSize, safeArea: EdgeInsets,
-        controlsMinY: CGFloat
+        controlsMinY: CGFloat, keepout: CGRect
     ) -> CGPoint {
         let pad = padding + innerPadding
         let hw = controlSize.width * 0.5
@@ -221,12 +237,14 @@ enum ControlsZone {
         let cy = max(minY, min(relativeCenter.y * size.height, maxY))
         let zone = bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: size)
         let radii = cornerRadii(safeArea: safeArea)
-        return clampToRoundedCorners(
+        let clamped = clampToRoundedCorners(
             CGPoint(x: cx, y: cy), controlHalf: max(hw, hh), zone: zone, radii: radii)
+        return pushedOutOfKeepout(clamped, controlHalf: max(hw, hh), keepout: keepout)
     }
 
     static func clampToSafeArea(
-        _ point: CGPoint, controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat
+        _ point: CGPoint, controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat,
+        keepout: CGRect
     ) -> CGPoint {
         let pad = padding + innerPadding
         let hw = controlSize * 0.5
@@ -235,7 +253,8 @@ enum ControlsZone {
         let y = max(minY, min(point.y, geoSize.height - safeArea.bottom - pad - hw))
         let zone = bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
         let radii = cornerRadii(safeArea: safeArea)
-        return clampToRoundedCorners(CGPoint(x: x, y: y), controlHalf: hw, zone: zone, radii: radii)
+        let clamped = clampToRoundedCorners(CGPoint(x: x, y: y), controlHalf: hw, zone: zone, radii: radii)
+        return pushedOutOfKeepout(clamped, controlHalf: hw, keepout: keepout)
     }
 
     static func clampToRoundedCorners(

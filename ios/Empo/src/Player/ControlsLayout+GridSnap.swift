@@ -34,10 +34,12 @@ extension ControlsLayout {
             let absolute = ControlsZone.absolutePosition(
                 for: relative, in: geoSize,
                 controlSize: CGSize(width: size, height: size),
-                safeArea: safeArea, controlsMinY: controlsMinY)
-            let snapped = ControlsZone.snappedToEditGrid(
-                absolute, controlSize: size, geoSize: geoSize,
-                safeArea: safeArea, controlsMinY: controlsMinY)
+                safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout)
+            let snapped = ControlsZone.pushedOutOfKeepout(
+                ControlsZone.snappedToEditGrid(
+                    absolute, controlSize: size, geoSize: geoSize,
+                    safeArea: safeArea, controlsMinY: controlsMinY),
+                controlHalf: size / 2, keepout: toolbarKeepout)
             return CGPoint(x: snapped.x / geoSize.width, y: snapped.y / geoSize.height)
         }
 
@@ -88,7 +90,7 @@ extension ControlsLayout {
         var center = ControlsZone.clampToSafeArea(
             CGPoint(x: geoSize.width / 2, y: geoSize.height / 2),
             controlSize: size, geoSize: geoSize, safeArea: safeArea,
-            controlsMinY: controlsMinY)
+            controlsMinY: controlsMinY, keepout: toolbarKeepout)
         // The new control is not in the collections yet, so every
         // existing control is a legal obstacle under any dragged ID.
         let placeholderID = UUID()
@@ -99,12 +101,14 @@ extension ControlsLayout {
                 geoSize: geoSize, safeArea: safeArea, controlsMinY: controlsMinY)
             center = ControlsZone.clampToSafeArea(
                 center, controlSize: size, geoSize: geoSize, safeArea: safeArea,
-                controlsMinY: controlsMinY)
+                controlsMinY: controlsMinY, keepout: toolbarKeepout)
         }
         if gridSnapActive {
-            center = ControlsZone.snappedToEditGrid(
-                center, controlSize: size, geoSize: geoSize,
-                safeArea: safeArea, controlsMinY: controlsMinY)
+            center = ControlsZone.pushedOutOfKeepout(
+                ControlsZone.snappedToEditGrid(
+                    center, controlSize: size, geoSize: geoSize,
+                    safeArea: safeArea, controlsMinY: controlsMinY),
+                controlHalf: size / 2, keepout: toolbarKeepout)
         }
         return CGPoint(
             x: center.x / max(geoSize.width, 1),

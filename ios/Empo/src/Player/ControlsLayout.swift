@@ -1179,6 +1179,11 @@ class ControlsLayout {
     /// underneath the header. Never persisted.
     var editChromeFrames: [CGRect] = []
 
+    /// The play toolbar's column in a sensor strip, in window space:
+    /// `ControlsZone.toolbarKeepout`. Controls never render or drop
+    /// there. Pushed by PlayerView. Never persisted.
+    var toolbarKeepout: CGRect = .null
+
     /// The canvas geometry an edit surface last rendered with, so
     /// the ADD flow can run a fresh control through the same
     /// clamp + collision + chrome-wall solve a drag gets. Pushed by
@@ -1257,7 +1262,7 @@ class ControlsLayout {
             let absolute = ControlsZone.absolutePosition(
                 for: relativeCenter, in: geoSize,
                 controlSize: CGSize(width: size, height: size),
-                safeArea: safeArea, controlsMinY: controlsMinY)
+                safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout)
             obstacles.append(
                 EditDragSolver.Circle(
                     x: Double(absolute.x), y: Double(absolute.y),
@@ -1276,7 +1281,7 @@ class ControlsLayout {
     }
 
     private var chromeWalls: [EditDragSolver.Rect] {
-        editChromeFrames.map {
+        (editChromeFrames + [toolbarKeepout].filter { !$0.isNull }).map {
             EditDragSolver.Rect(
                 x: Double($0.minX), y: Double($0.minY),
                 width: Double($0.width), height: Double($0.height))
@@ -1354,7 +1359,7 @@ class ControlsLayout {
             let clamped = ControlsZone.absolutePosition(
                 for: circle.center, in: geoSize,
                 controlSize: CGSize(width: circle.size, height: circle.size),
-                safeArea: safeArea, controlsMinY: controlsMinY
+                safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout
             )
             return (x: Double(clamped.x), y: Double(clamped.y), size: Double(circle.size))
         }
@@ -1371,7 +1376,7 @@ class ControlsLayout {
         let dpadClamped = ControlsZone.absolutePosition(
             for: dpadRelativeCenter, in: geoSize,
             controlSize: CGSize(width: dpadSize, height: dpadSize),
-            safeArea: safeArea, controlsMinY: controlsMinY
+            safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout
         )
 
         // Separation must stay inside the clamp BAND, not the full
@@ -1424,9 +1429,13 @@ class ControlsLayout {
         for (index, circle) in allCircles.enumerated() {
             let point = result.positions[index]
             let half = Double(circle.size) / 2
-            centers[circle.id] = CGPoint(
-                x: CGFloat(point.x + bandMinX),
-                y: CGFloat(min(point.y + bandMinY, maxBottom - half)))
+            // Separation runs in a rectangular band, so it can move a
+            // control back into the toolbar column.
+            centers[circle.id] = ControlsZone.pushedOutOfKeepout(
+                CGPoint(
+                    x: CGFloat(point.x + bandMinX),
+                    y: CGFloat(min(point.y + bandMinY, maxBottom - half))),
+                controlHalf: CGFloat(half), keepout: toolbarKeepout)
         }
         return centers
     }

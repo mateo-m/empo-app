@@ -106,7 +106,7 @@ struct PlayerControlsOverlay: View {
         let size = layout.dpadSize
         let pos = ControlsZone.absolutePosition(
             for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size),
-            safeArea: safeArea, controlsMinY: controlsMinY)
+            safeArea: safeArea, controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
         movementControl(size: size)
             .frame(width: size, height: size)
@@ -275,7 +275,7 @@ struct PlayerControlsOverlay: View {
         }
         return ControlsZone.absolutePosition(
             for: relative, in: geo.size, controlSize: CGSize(width: size, height: size),
-            safeArea: safeArea, controlsMinY: controlsMinY)
+            safeArea: safeArea, controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
     }
 
     /// Shared drag pipeline: alternate the zone clamp and the rigid
@@ -304,7 +304,7 @@ struct PlayerControlsOverlay: View {
             : location
         var center = ControlsZone.clampToSafeArea(
             target, controlSize: size, geoSize: geo.size, safeArea: safeArea,
-            controlsMinY: controlsMinY)
+            controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
         for _ in 0..<3 {
             center = layout.collisionResolvedCenter(
                 center, previous: lastDragResolved[key], draggedID: draggedID,
@@ -313,7 +313,7 @@ struct PlayerControlsOverlay: View {
                 controlsMinY: controlsMinY)
             center = ControlsZone.clampToSafeArea(
                 center, controlSize: size, geoSize: geo.size, safeArea: safeArea,
-                controlsMinY: controlsMinY)
+                controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
         }
         if layout.dragPositionCollides(
             center, draggedID: draggedID, draggedIsDPad: draggedIsDPad,
@@ -337,7 +337,7 @@ struct PlayerControlsOverlay: View {
                 for: center, in: geo.size,
                 controlSize: CGSize(width: size, height: size),
                 safeArea: safeArea,
-                controlsMinY: controlsMinY)
+                controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
     }
 
     /// The edit chrome every draggable button shares: tap-to-edit,
