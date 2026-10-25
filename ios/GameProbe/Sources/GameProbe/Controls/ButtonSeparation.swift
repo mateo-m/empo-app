@@ -171,7 +171,9 @@ public enum ButtonSeparation {
             .filter { $0.0 >= half && $0.0 <= width - half && $0.1 >= half && $0.1 <= height - half }
             .sorted { hypot($0.0 - point.x, $0.1 - point.y) < hypot($1.0 - point.x, $1.1 - point.y) }
         let clear = inBounds.first { exit in
-            obstacles.allSatisfy { hypot(exit.0 - $0.x, exit.1 - $0.y) >= (buttonSize + $0.size) * 0.5 }
+            obstacles.allSatisfy {
+                hypot(exit.0 - $0.x, exit.1 - $0.y) >= (buttonSize + $0.size) * 0.5 + minimumGap
+            }
         }
         guard let exit = clear ?? inBounds.first else { return }
         positions[index] = (x: exit.0, y: exit.1)

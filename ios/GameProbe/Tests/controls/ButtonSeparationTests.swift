@@ -112,6 +112,17 @@ final class ButtonSeparationTests: XCTestCase {
             distance(position, (obstacles[0].x, obstacles[0].y)), (buttons[0].size + obstacles[0].size) * 0.5)
     }
 
+    func testWallExitKeepsObstacleGap() {
+        let buttons = [(x: 308.0, y: 100.0, size: 56.0)]
+        let obstacles = [(x: 196.0, y: 100.0, size: 168.0)]
+        let wall = EditDragSolver.Rect(x: 336, y: 0, width: 94, height: 200)
+        let result = ButtonSeparation.separate(
+            buttons, width: 430, height: 500, obstacles: obstacles, walls: [wall])
+        let required = (buttons[0].size + obstacles[0].size) * 0.5 + ButtonSeparation.minimumGap
+        XCTAssertGreaterThanOrEqual(
+            distance(result.positions[0], (obstacles[0].x, obstacles[0].y)), required - 1e-6)
+    }
+
     func testWallWithoutExitKeepsButtonInBounds() {
         let buttons = [(x: 50.0, y: 50.0, size: 40.0)]
         let wall = EditDragSolver.Rect(x: 0, y: 0, width: 100, height: 100)
