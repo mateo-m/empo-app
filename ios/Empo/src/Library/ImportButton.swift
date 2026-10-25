@@ -50,6 +50,9 @@ struct ImportButton: View {
     /// inspection has confirmed an ambiguous import that needs user
     /// input.
     var phase: Phase = .idle
+    /// Collapsed center for this view's size, when the button sits in
+    /// the sensor strip column instead of the header.
+    var collapsedCenter: ((CGSize) -> CGPoint)?
     var onRequestCancelValidation: (() -> Void)?
 
     @State private var importShimmer: CGFloat = -1
@@ -63,8 +66,9 @@ struct ImportButton: View {
             let buttonSize: CGFloat = AppSize.toolbarButton
 
             // End positions (center coordinates)
-            let collapsedX = geo.size.width - 16 - buttonSize / 2
-            let collapsedY = headerHeight / 2
+            let stripCenter = collapsedCenter?(geo.size)
+            let collapsedX = stripCenter?.x ?? geo.size.width - 16 - buttonSize / 2
+            let collapsedY = stripCenter?.y ?? headerHeight / 2
             let expandedX = geo.size.width / 2
             let emptyStateBottom = geo.size.height / 2 + emptyStateOffset + emptyStateHeight / 2
             let expandedY = emptyStateBottom + Spacing._4xl + buttonHeight / 2

@@ -76,6 +76,10 @@ struct PlayerView: View {
                 isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
                 btnSize: toolbarBtnSize,
                 geoHeight: geo.size.height, forcedOverlay: forcedOverlay)
+            let controlsSafeArea = ControlsZone.controlsSafeArea(
+                safeArea, controlsMinY: controlsMinY,
+                toolbar: PlayerToolbar.placement(
+                    isPortrait: isPortrait, safeArea: safeArea, geoSize: geo.size))
 
             ZStack {
                 // Debug visualization of the touch-mouse zone: the
@@ -107,7 +111,8 @@ struct PlayerView: View {
                         .chromeHitRegion("editMode")
                         .allowsHitTesting(false)
 
-                    editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
+                    editZoneBackground(
+                        controlsMinY: controlsMinY, safeArea: controlsSafeArea, geoSize: geo.size)
                     if let caption = editZoneCaptionText {
                         editZoneCaption(caption, safeArea: safeArea)
                     }
@@ -138,7 +143,7 @@ struct PlayerView: View {
                         geo: geo,
                         controlsMinY: controlsMinY,
                         editMode: editMode,
-                        safeArea: safeArea,
+                        safeArea: controlsSafeArea,
                         editingButton: $editingButton,
                         editingActionButton: $editingActionButton,
                         editingDPad: $editingDPad,
@@ -171,7 +176,7 @@ struct PlayerView: View {
 
                     PlayerEditToolbar(
                         controlsMinY: controlsMinY,
-                        safeArea: safeArea,
+                        safeArea: controlsSafeArea,
                         geoSize: geo.size,
                         layout: layout,
                         showAddSheet: $showAddSheet,
@@ -313,7 +318,7 @@ struct PlayerView: View {
                 guard editing, snapToGrid else { return }
                 layout.applyGridSnap(
                     geoSize: geo.size,
-                    safeArea: safeArea,
+                    safeArea: controlsSafeArea,
                     controlsMinY: controlsMinY)
             }
         }

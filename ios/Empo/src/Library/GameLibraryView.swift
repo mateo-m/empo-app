@@ -54,6 +54,7 @@ struct GameLibraryView: View {
     @State private var entranceDelay: TimeInterval = 0.15
     @State private var emptyStateHeight: CGFloat = 0
     @State private var showSortSheet = false
+    @State private var windowInsets = EdgeInsets()
     @State private var gameSizes: [String: Int64] = [:]
     @State private var sizesTask: Task<Void, Never>?
     @State private var importPipeline = ImportPipeline()
@@ -151,6 +152,7 @@ struct GameLibraryView: View {
         NavigationStack(path: $path) {
             navigationContent
         }
+        .onGeometryChange(for: EdgeInsets.self, of: { $0.safeAreaInsets }, action: { windowInsets = $0 })
         // Nothing of the library draws while a game plays. The
         // handoff fade in `RootView` can still be settling when the
         // loading view goes dormant, and the grid behind it would
@@ -302,6 +304,7 @@ struct GameLibraryView: View {
             .onChange(of: splashDismissed) { _, dismissed in
                 handleSplashDismissedChange(dismissed)
             }
+            .overlay { sensorStripRail }
             .overlay(alignment: .topTrailing) { importButtonOverlay }
             .overlay(alignment: .bottom) { bulkDeleteOverlay }
             .safeAreaInset(edge: .bottom, spacing: 0) { updateBannerInset }
@@ -410,8 +413,58 @@ struct GameLibraryView: View {
                 // surface a spinner during archive/root
                 // inspection before any progress card exists.
                 phase: importPipeline.importButtonPhase,
+                collapsedCenter: sensorStripEdge.map { edge in { railSlotCenter(1, edge: edge, in: $0) } },
                 onRequestCancelValidation: { showCancelValidationAlert = true }
             )
+        }
+    }
+
+    private var sensorStripEdge: HorizontalEdge? {
+        windowInsets.sensorStripEdge(minWidth: AppSize.toolbarButton + 2 * Spacing.xs)
+    }
+
+    private static let railSlotCount = 4
+
+    /// Center of a slot in the sensor strip column, in the space of
+    /// the overlays on `libraryScene`. That space stops at the strip,
+    /// so the strip lies just past its leading or trailing edge.
+    private func railSlotCenter(_ slot: Int, edge: HorizontalEdge, in size: CGSize) -> CGPoint {
+        let pitch = AppSize.toolbarButton + Spacing.md
+        let length = CGFloat(Self.railSlotCount) * pitch - Spacing.md
+        let windowWidth = size.width + windowInsets.leading + windowInsets.trailing
+        let windowHeight = size.height + windowInsets.top + windowInsets.bottom
+        let strip =
+            edge == .trailing
+            ? CGRect(
+                x: windowWidth - windowInsets.trailing, y: 0, width: windowInsets.trailing,
+                height: windowHeight)
+            : CGRect(x: 0, y: 0, width: windowInsets.leading, height: windowHeight)
+        let x = sensorStripColumnX(strip: strip, occluded: AppWindow.occludedRects) - windowInsets.leading
+        let y = (size.height - length + AppSize.toolbarButton) / 2 + CGFloat(slot) * pitch
+        return CGPoint(x: x, y: y)
+    }
+
+    /// On a sensor strip (iPhone Duo), the header and search bar
+    /// buttons move into a column in the strip. Slot 1 stays empty:
+    /// the import button flies into it.
+    @ViewBuilder
+    private var sensorStripRail: some View {
+        if let edge = sensorStripEdge {
+            GeometryReader { geo in
+                Group {
+                    if !selectionMode {
+                        IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
+                            .position(railSlotCenter(0, edge: edge, in: geo.size))
+                    }
+                    if !library.games.isEmpty {
+                        LibrarySortButton(showSortSheet: $showSortSheet)
+                            .position(railSlotCenter(2, edge: edge, in: geo.size))
+                        LibraryDisplayModeButton(onToggle: toggleDisplayMode)
+                            .position(railSlotCenter(3, edge: edge, in: geo.size))
+                    }
+                }
+                .tint(.primary)
+            }
         }
     }
 
@@ -480,7 +533,12 @@ struct GameLibraryView: View {
                     .font(.body.weight(.semibold))
                     .tint(.brand)
             } else {
-                IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
+                if sensorStripEdge == nil {
+                    IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
+                } else {
+                    Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
+                        .accessibilityHidden(true)
+                }
                 Spacer()
                 Text("Library")
                     .font(.title)
@@ -505,15 +563,18 @@ struct GameLibraryView: View {
         LibrarySearchBar(
             searchText: $searchText,
             showSortSheet: $showSortSheet,
-            onDisplayModeToggle: {
-                withAnimation(Motion.standard) {
-                    settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
-                }
-                Task { @MainActor in
-                    staggerTrigger = UUID()
-                }
-            }
+            showsActions: sensorStripEdge == nil,
+            onDisplayModeToggle: toggleDisplayMode
         )
+    }
+
+    private func toggleDisplayMode() {
+        withAnimation(Motion.standard) {
+            settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
+        }
+        Task { @MainActor in
+            staggerTrigger = UUID()
+        }
     }
 
     private var gameContent: some View {

@@ -109,20 +109,83 @@ enum ControlsZone {
         }
     }
 
-    /// Always anchor the toolbar to the top-right of the device
-    /// viewport. In portrait it used to tuck below the game rect,
-    /// which left the keyboard-toggle button covered by the keyboard
-    /// whenever it was up. Placing it at the top keeps it reachable
-    /// in every orientation + layout mode.
-    static func toolbarOrigin(
-        safeArea: EdgeInsets, geoSize: CGSize, btnSize: CGFloat, gap: CGFloat, count: CGFloat
-    ) -> CGPoint {
-        let totalW = count * btnSize + (count - 1) * gap
-        let rightInset = max(safeArea.trailing, minLandscapeInset)
+    struct ToolbarPlacement {
+        let center: CGPoint
+        let isVertical: Bool
+        let length: CGFloat
+        let thickness: CGFloat
+
+        var frame: CGRect {
+            let size =
+                isVertical
+                ? CGSize(width: thickness, height: length) : CGSize(width: length, height: thickness)
+            return CGRect(
+                x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width,
+                height: size.height)
+        }
+    }
+
+    /// A zone that starts below the toolbar column takes the sensor
+    /// strip too. A zone next to the column keeps the strip inset, so
+    /// no control can sit on a toolbar button.
+    static func controlsSafeArea(
+        _ safeArea: EdgeInsets, controlsMinY: CGFloat, toolbar: ToolbarPlacement
+    )
+        -> EdgeInsets
+    {
+        guard toolbar.isVertical, controlsMinY + padding >= toolbar.frame.maxY + toolbarEdgePad else {
+            return safeArea
+        }
+        return EdgeInsets(top: safeArea.top, leading: 0, bottom: safeArea.bottom, trailing: 0)
+    }
+
+    /// Anchor the toolbar to the top-right of the device viewport. In
+    /// portrait it used to tuck below the game rect, which left the
+    /// keyboard-toggle button covered by the keyboard whenever it was
+    /// up. Placing it at the top keeps it reachable in every
+    /// orientation + layout mode. A sensor strip takes the toolbar as
+    /// a column, in the highest gap of the strip that the system does
+    /// not draw over.
+    static func toolbarPlacement(
+        safeArea: EdgeInsets, geoSize: CGSize, occluded: [CGRect], btnSize: CGFloat, gap: CGFloat,
+        count: CGFloat
+    ) -> ToolbarPlacement {
+        let length = count * btnSize + (count - 1) * gap
         let topInset = max(safeArea.top, minLandscapeInset)
-        let x = geoSize.width - rightInset - toolbarEdgePad - totalW / 2
+        if let edge = safeArea.sensorStripEdge(minWidth: btnSize + 2 * toolbarEdgePad) {
+            let strip =
+                edge == .trailing
+                ? CGRect(
+                    x: geoSize.width - safeArea.trailing, y: 0, width: safeArea.trailing,
+                    height: geoSize.height)
+                : CGRect(x: 0, y: 0, width: safeArea.leading, height: geoSize.height)
+            let y = stripColumnCenterY(
+                strip: strip, occluded: occluded, top: safeArea.top,
+                bottom: geoSize.height - safeArea.bottom, length: length)
+            let x = sensorStripColumnX(strip: strip, occluded: occluded)
+            return ToolbarPlacement(
+                center: CGPoint(x: x, y: y), isVertical: true, length: length, thickness: btnSize)
+        }
+        let rightInset = max(safeArea.trailing, minLandscapeInset)
+        let x = geoSize.width - rightInset - toolbarEdgePad - length / 2
         let y = topInset + toolbarEdgePad + btnSize / 2
-        return CGPoint(x: x, y: y)
+        return ToolbarPlacement(
+            center: CGPoint(x: x, y: y), isVertical: false, length: length, thickness: btnSize)
+    }
+
+    /// Without a gap that fits, the column centers in the strip.
+    private static func stripColumnCenterY(
+        strip: CGRect, occluded: [CGRect], top: CGFloat, bottom: CGFloat, length: CGFloat
+    ) -> CGFloat {
+        var gapTop = top
+        let blocks = occluded.filter { $0.intersects(strip) }.sorted { $0.minY < $1.minY }
+        for block in blocks + [CGRect(x: strip.minX, y: bottom, width: strip.width, height: 0)] {
+            if block.minY - gapTop >= length + 2 * toolbarEdgePad {
+                return gapTop + toolbarEdgePad + length / 2
+            }
+            gapTop = max(gapTop, block.maxY)
+        }
+        return (top + bottom) / 2
     }
 
     /// Align a control onto the edit grid by its TOP-LEFT EDGE, not

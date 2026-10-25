@@ -10,8 +10,8 @@ import SwiftUI
 struct LibrarySearchBar: View {
     @Binding var searchText: String
     @Binding var showSortSheet: Bool
+    var showsActions = true
     let onDisplayModeToggle: () -> Void
-    @Environment(\.appSettings) private var settings
 
     private let searchBarHeight: CGFloat = 44
 
@@ -38,21 +38,39 @@ struct LibrarySearchBar: View {
             .frame(height: searchBarHeight)
             .glassEffect(.regular.interactive(), in: .capsule)
 
-            IconButton("arrow.up.arrow.down", label: "Sort games", style: .outline) {
-                showSortSheet = true
-            }
-
-            IconButton(
-                settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2",
-                label: settings.libraryDisplayMode == .grid ? "Switch to list" : "Switch to grid",
-                style: .outline,
-                contentTransition: .symbolEffect(.replace)
-            ) {
-                onDisplayModeToggle()
+            if showsActions {
+                LibrarySortButton(showSortSheet: $showSortSheet)
+                LibraryDisplayModeButton(onToggle: onDisplayModeToggle)
             }
         }
         .padding(.horizontal)
         .padding(.bottom, Spacing.xs)
         .tint(.primary)
+    }
+}
+
+struct LibrarySortButton: View {
+    @Binding var showSortSheet: Bool
+
+    var body: some View {
+        IconButton("arrow.up.arrow.down", label: "Sort games", style: .outline) {
+            showSortSheet = true
+        }
+    }
+}
+
+struct LibraryDisplayModeButton: View {
+    let onToggle: () -> Void
+    @Environment(\.appSettings) private var settings
+
+    var body: some View {
+        IconButton(
+            settings.libraryDisplayMode == .grid ? "list.bullet" : "square.grid.2x2",
+            label: settings.libraryDisplayMode == .grid ? "Switch to list" : "Switch to grid",
+            style: .outline,
+            contentTransition: .symbolEffect(.replace)
+        ) {
+            onToggle()
+        }
     }
 }
