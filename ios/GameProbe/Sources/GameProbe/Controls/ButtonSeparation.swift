@@ -10,12 +10,14 @@ public enum ButtonSeparation {
     /// Separates intersecting circles in point space, one step at a
     /// time. Returns the adjusted centers and how many buttons moved
     /// from their inputs. Obstacles are fixed circles (for example,
-    /// the d-pad). Only buttons move.
+    /// the d-pad). Walls are fixed rectangles no button may overlap
+    /// (for example, a toolbar column). Only buttons move.
     public static func separate(
         _ buttons: [(x: Double, y: Double, size: Double)],
         width: Double,
         height: Double,
-        obstacles: [(x: Double, y: Double, size: Double)] = []
+        obstacles: [(x: Double, y: Double, size: Double)] = [],
+        walls: [EditDragSolver.Rect] = []
     ) -> (positions: [(x: Double, y: Double)], movedCount: Int) {
         guard !buttons.isEmpty, width > 0, height > 0 else {
             return (buttons.map { ($0.x, $0.y) }, 0)
@@ -57,6 +59,11 @@ public enum ButtonSeparation {
                     width: width,
                     height: height
                 )
+                for wall in walls {
+                    pushOutOfWall(
+                        index: index, wall: wall, buttonSize: buttons[index].size,
+                        width: width, height: height, positions: &positions, moved: &moved)
+                }
             }
 
             if !moved { break }
@@ -133,6 +140,34 @@ public enum ButtonSeparation {
         let penetration = required - dist
         positions[buttonIndex].x += dx / dist * penetration
         positions[buttonIndex].y += dy / dist * penetration
+        moved = true
+    }
+
+    /// Leaves through the nearest wall edge that keeps the button in
+    /// bounds. Below the wall is the fallback when no edge does.
+    private static func pushOutOfWall(
+        index: Int,
+        wall: EditDragSolver.Rect,
+        buttonSize: Double,
+        width: Double,
+        height: Double,
+        positions: inout [(x: Double, y: Double)],
+        moved: inout Bool
+    ) {
+        let half = buttonSize * 0.5
+        let point = positions[index]
+        let minX = wall.x - half
+        let maxX = wall.x + wall.width + half
+        let minY = wall.y - half
+        let maxY = wall.y + wall.height + half
+        guard point.x > minX, point.x < maxX, point.y > minY, point.y < maxY else { return }
+
+        let exits = [(minX, point.y), (maxX, point.y), (point.x, minY), (point.x, maxY)]
+            .filter { $0.0 >= half && $0.0 <= width - half && $0.1 >= half && $0.1 <= height - half }
+        let exit =
+            exits.min { hypot($0.0 - point.x, $0.1 - point.y) < hypot($1.0 - point.x, $1.1 - point.y) }
+            ?? (point.x, maxY)
+        positions[index] = (x: exit.0, y: exit.1)
         moved = true
     }
 

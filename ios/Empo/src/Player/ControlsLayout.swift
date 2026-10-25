@@ -1402,11 +1402,23 @@ class ControlsLayout {
             )
         ]
 
+        let keepout = toolbarKeepout.insetBy(
+            dx: -ControlsZone.innerPadding, dy: -ControlsZone.innerPadding)
+        let walls =
+            keepout.isNull
+            ? []
+            : [
+                EditDragSolver.Rect(
+                    x: Double(keepout.minX) - bandMinX, y: Double(keepout.minY) - bandMinY,
+                    width: Double(keepout.width), height: Double(keepout.height))
+            ]
+
         let result = ButtonSeparation.separate(
             bandInputs,
             width: bandWidth,
             height: bandHeight,
-            obstacles: obstacles
+            obstacles: obstacles,
+            walls: walls
         )
 
         if result.movedCount > 0 {
@@ -1429,13 +1441,9 @@ class ControlsLayout {
         for (index, circle) in allCircles.enumerated() {
             let point = result.positions[index]
             let half = Double(circle.size) / 2
-            // Separation runs in a rectangular band, so it can move a
-            // control back into the toolbar column.
-            centers[circle.id] = ControlsZone.pushedOutOfKeepout(
-                CGPoint(
-                    x: CGFloat(point.x + bandMinX),
-                    y: CGFloat(min(point.y + bandMinY, maxBottom - half))),
-                controlHalf: CGFloat(half), keepout: toolbarKeepout)
+            centers[circle.id] = CGPoint(
+                x: CGFloat(point.x + bandMinX),
+                y: CGFloat(min(point.y + bandMinY, maxBottom - half)))
         }
         return centers
     }

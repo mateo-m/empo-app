@@ -86,6 +86,19 @@ final class ButtonSeparationTests: XCTestCase {
         XCTAssertEqual(result.movedCount, 0)
     }
 
+    func testWallPushKeepsButtonsApart() {
+        let buttons = [(x: 328.0, y: 100.0, size: 56.0), (x: 386.0, y: 100.0, size: 56.0)]
+        let wall = EditDragSolver.Rect(x: 336, y: 0, width: 94, height: 200)
+        let result = ButtonSeparation.separate(buttons, width: 430, height: 500, walls: [wall])
+        for (position, button) in zip(result.positions, buttons) {
+            let half = button.size * 0.5
+            XCTAssertTrue(
+                position.x + half <= wall.x + 1e-6 || position.y - half >= wall.y + wall.height - 1e-6,
+                "\(position) overlaps the wall")
+        }
+        XCTAssertTrue(pairwiseNonOverlapping(positions: result.positions, sizes: buttons.map(\.size)))
+    }
+
     private func distance(_ a: (x: Double, y: Double), _ b: (x: Double, y: Double)) -> Double {
         hypot(a.x - b.x, a.y - b.y)
     }
