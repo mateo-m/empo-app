@@ -144,15 +144,25 @@ enum ControlsZone {
 
     /// The keep-out touches the top and the side edge of the screen,
     /// so a control leaves it either away from that side or down
-    /// below the column, whichever move is shorter.
-    static func pushedOutOfKeepout(_ point: CGPoint, controlHalf: CGFloat, keepout: CGRect) -> CGPoint {
+    /// below the column, whichever legal move is shorter. Without a
+    /// legal move, the control stays on the column, not off-screen.
+    static func pushedOutOfKeepout(
+        _ point: CGPoint, controlHalf: CGFloat, keepout: CGRect,
+        geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat
+    ) -> CGPoint {
         let blocked = keepout.insetBy(dx: -(controlHalf + innerPadding), dy: -(controlHalf + innerPadding))
         guard !keepout.isNull, blocked.contains(point) else { return point }
-        let sideX = keepout.minX > 0 ? blocked.minX : blocked.maxX
-        if abs(sideX - point.x) <= blocked.maxY - point.y {
-            return CGPoint(x: sideX, y: point.y)
-        }
-        return CGPoint(x: point.x, y: blocked.maxY)
+        let pad = padding + innerPadding
+        let minX = safeArea.leading + pad + controlHalf
+        let maxX = geoSize.width - safeArea.trailing - pad - controlHalf
+        let minY = max(safeArea.top, controlsMinY) + pad + controlHalf
+        let maxY = geoSize.height - safeArea.bottom - pad - controlHalf
+        let exits = [
+            CGPoint(x: keepout.minX > 0 ? blocked.minX : blocked.maxX, y: point.y),
+            CGPoint(x: point.x, y: blocked.maxY),
+        ].filter { $0.x >= minX && $0.x <= maxX && $0.y >= minY && $0.y <= maxY }
+        return exits.min { hypot($0.x - point.x, $0.y - point.y) < hypot($1.x - point.x, $1.y - point.y) }
+            ?? point
     }
 
     /// Anchor the toolbar to the top-right of the device viewport. In
@@ -237,9 +247,10 @@ enum ControlsZone {
         let cy = max(minY, min(relativeCenter.y * size.height, maxY))
         let zone = bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: size)
         let radii = cornerRadii(safeArea: safeArea)
-        let clamped = clampToRoundedCorners(
-            CGPoint(x: cx, y: cy), controlHalf: max(hw, hh), zone: zone, radii: radii)
-        return pushedOutOfKeepout(clamped, controlHalf: max(hw, hh), keepout: keepout)
+        let pushed = pushedOutOfKeepout(
+            CGPoint(x: cx, y: cy), controlHalf: max(hw, hh), keepout: keepout,
+            geoSize: size, safeArea: safeArea, controlsMinY: controlsMinY)
+        return clampToRoundedCorners(pushed, controlHalf: max(hw, hh), zone: zone, radii: radii)
     }
 
     static func clampToSafeArea(
@@ -253,8 +264,10 @@ enum ControlsZone {
         let y = max(minY, min(point.y, geoSize.height - safeArea.bottom - pad - hw))
         let zone = bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
         let radii = cornerRadii(safeArea: safeArea)
-        let clamped = clampToRoundedCorners(CGPoint(x: x, y: y), controlHalf: hw, zone: zone, radii: radii)
-        return pushedOutOfKeepout(clamped, controlHalf: hw, keepout: keepout)
+        let pushed = pushedOutOfKeepout(
+            CGPoint(x: x, y: y), controlHalf: hw, keepout: keepout,
+            geoSize: geoSize, safeArea: safeArea, controlsMinY: controlsMinY)
+        return clampToRoundedCorners(pushed, controlHalf: hw, zone: zone, radii: radii)
     }
 
     static func clampToRoundedCorners(

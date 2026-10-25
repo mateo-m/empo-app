@@ -39,7 +39,8 @@ extension ControlsLayout {
                 ControlsZone.snappedToEditGrid(
                     absolute, controlSize: size, geoSize: geoSize,
                     safeArea: safeArea, controlsMinY: controlsMinY),
-                controlHalf: size / 2, keepout: toolbarKeepout)
+                controlHalf: size / 2, keepout: toolbarKeepout,
+                geoSize: geoSize, safeArea: safeArea, controlsMinY: controlsMinY)
             return CGPoint(x: snapped.x / geoSize.width, y: snapped.y / geoSize.height)
         }
 
@@ -108,7 +109,8 @@ extension ControlsLayout {
                 ControlsZone.snappedToEditGrid(
                     center, controlSize: size, geoSize: geoSize,
                     safeArea: safeArea, controlsMinY: controlsMinY),
-                controlHalf: size / 2, keepout: toolbarKeepout)
+                controlHalf: size / 2, keepout: toolbarKeepout,
+                geoSize: geoSize, safeArea: safeArea, controlsMinY: controlsMinY)
         }
         return CGPoint(
             x: center.x / max(geoSize.width, 1),
