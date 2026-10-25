@@ -98,6 +98,28 @@ final class KirinControlsTranslatorTests: XCTestCase {
         assertArrangementEquality(portrait: touch.portrait!, landscape: touch.landscape!)
     }
 
+    /// The open iPhone Duo is 951x669 on its side: more height than
+    /// the grid needs.
+    func testTallLandscapeKeepsGridAtBottom() throws {
+        var tall = metrics
+        tall.landscapeWidth = 951
+        tall.landscapeHeight = 669
+        let data = Self.referenceExampleJSON.data(using: .utf8)!
+        let landscape = try XCTUnwrap(
+            KirinControlsTranslator.translate(data: data, metrics: tall).manifest?.touch?.landscape)
+
+        let lowestButton = try XCTUnwrap(
+            landscape.buttons?.map { ($0.y * 669) + ($0.size ?? 0) / 2 }.max())
+        let dpad = try XCTUnwrap(landscape.dpad)
+        let dpadBottom = dpad.y * 669 + (dpad.size ?? 0) / 2
+        let floor = 669 - tall.landscapeBottomInset - KirinControlsTranslator.edgeMargin
+        XCTAssertEqual(max(lowestButton, dpadBottom), floor, accuracy: 1)
+
+        let highestButton = try XCTUnwrap(
+            landscape.buttons?.map { ($0.y * 669) - ($0.size ?? 0) / 2 }.min())
+        XCTAssertGreaterThan(highestButton, tall.landscapeTopInset + KirinControlsTranslator.edgeMargin)
+    }
+
     // MARK: - Round-trip
 
     func testRoundTripReferenceExample() throws {
