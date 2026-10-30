@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 #ifndef EMPO_AUDIO_SESSION_H
 #define EMPO_AUDIO_SESSION_H
 

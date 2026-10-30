@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Builds the ANGLE prebuilt that tools/fetch-angle.sh downloads, from
 # source, with the patches in this folder.
 #

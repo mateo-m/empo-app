@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Ad-hoc sign an Empo.app that Xcode built with CODE_SIGNING_ALLOWED=NO.
 # scripts/release.sh, step 6, says why a release carries this signature.
 #

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // Opening a game core.
 //
 // Empo links no engine. A game runs either in the app, in a core the app

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import XCTest
 
 /// Plays each game of EMPO_GP_GAMES (titles joined by "|") in turn. It
