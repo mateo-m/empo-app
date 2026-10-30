@@ -303,7 +303,7 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
         childItemCount =
             isFolder
             ? (try? FileManager.default.contentsOfDirectory(atPath: url.path)).map {
-                NSNumber(value: $0.count)
+                NSNumber(value: $0.count { !$0.hasPrefix(".") })
             } : nil
         creationDate = values?.creationDate
         contentModificationDate = values?.contentModificationDate
