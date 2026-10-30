@@ -198,25 +198,14 @@ class AppState {
         quitOnPause = true
         requestPause()
         // A Ruby game pauses only between two frames, so a game that
-        // runs a long script never pauses. It then ends without the pause.
+        // runs a long script does not pause. Ending it then could cut a
+        // save that it is writing, so the quit stops, and a later pause
+        // only pauses.
         quitTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
-            guard let self, !Task.isCancelled, quitOnPause, phase == .playing else { return }
-            endQuitGame()
-        }
-    }
-
-    private func endQuitGame() {
-        session.note("The player quit the game.")
-        let game = selectedGame
-        // The phase changes first, in the same transaction. A change
-        // made before an animated phase change makes SwiftUI draw
-        // inside the phase's willSet, with `.playing`, and the screen
-        // can keep the game controls after the quit.
-        withAnimation(Motion.snappy) {
-            phase = nil
-            session.killSession(of: game)
-            clearEndedGame()
+            guard let self, !Task.isCancelled, quitOnPause else { return }
+            session.note("The game did not pause in time, and the quit stopped.")
+            quitOnPause = false
         }
     }
 
@@ -261,7 +250,17 @@ class AppState {
         // A quit can meet a background pause: the app went to the
         // background before the game paused for the quit.
         if quitOnPause {
-            endQuitGame()
+            session.note("The player quit the game.")
+            let game = selectedGame
+            // The phase changes first, in the same transaction. A change
+            // made before an animated phase change makes SwiftUI draw
+            // inside the phase's willSet, with `.playing`, and the screen
+            // can keep the game controls after the quit.
+            withAnimation(Motion.snappy) {
+                phase = nil
+                session.killSession(of: game)
+                clearEndedGame()
+            }
             return
         }
         if EngineState.shared.isBackgroundPause { return }
