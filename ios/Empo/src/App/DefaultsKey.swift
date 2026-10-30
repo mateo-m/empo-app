@@ -22,6 +22,8 @@ enum DefaultsKey {
     static let caBundleLastRefresh = "caBundleLastRefresh"
     /// `GameRunner.rawValue`. String.
     static let rubyGameRunner = "rubyGameRunner"
+    /// The app group of the data folder, from the Files add-on. String.
+    static let dataAppGroup = "dataAppGroup"
     /// The `GameReport` of the last session that started. JSON `Data`.
     static let lastGameReport = "lastGameReport"
 

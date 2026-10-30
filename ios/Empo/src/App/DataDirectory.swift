@@ -73,12 +73,18 @@ enum DataDirectory {
     static let appGroupURL: URL? = {
         // LiveContainer gives the app a made-up folder for any group
         // name, which the game process and the Files app cannot open.
-        guard ProcessInfo.processInfo.environment["LC_HOME_PATH"] == nil,
-            let filesProvider = Bundle.main.builtInPlugInsURL
-                .flatMap({ Bundle(url: $0.appendingPathComponent("FilesProvider.appex")) }),
-            let info = filesProvider.object(forInfoDictionaryKey: "NSExtension") as? [String: Any],
-            let group = info["NSExtensionFileProviderDocumentGroup"] as? String
-        else { return nil }
+        guard ProcessInfo.processInfo.environment["LC_HOME_PATH"] == nil else { return nil }
+        let info =
+            Bundle.main.builtInPlugInsURL
+            .flatMap { Bundle(url: $0.appendingPathComponent("FilesProvider.appex")) }?
+            .object(forInfoDictionaryKey: "NSExtension") as? [String: Any]
+        // An install without the Files add-on can still have the group, with
+        // the data in it. On iOS, containerURL is nil for a group that the
+        // app has no entitlement for.
+        if let group = info?["NSExtensionFileProviderDocumentGroup"] as? String {
+            UserDefaults.standard.set(group, forKey: DefaultsKey.dataAppGroup)
+        }
+        guard let group = UserDefaults.standard.string(forKey: DefaultsKey.dataAppGroup) else { return nil }
         // AltStore and SideStore add "." and the team ID to the group
         // name when they sign the app, and write the new name here.
         return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
