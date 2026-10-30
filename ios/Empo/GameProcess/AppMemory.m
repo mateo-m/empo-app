@@ -68,7 +68,7 @@ static Chunk *newChunk(size_t count) {
     // When the block is full, mimalloc takes memory of this process.
     // blockMunmap finds a chunk only inside the block.
     if (chunks != NULL && chunk->start != NULL &&
-        (chunk->start < gBlockStart || (size_t)(gBlockEnd - chunk->start) < pages * PAGE)) {
+        (chunk->start < gBlockStart || chunk->start >= gBlockEnd || (size_t)(gBlockEnd - chunk->start) < pages * PAGE)) {
         EmpoHeapFree(chunk->start);
         chunk->start = NULL;
     }
