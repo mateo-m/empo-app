@@ -61,7 +61,15 @@ static Chunk *newChunk(size_t count) {
     Chunk *chunk = calloc(1, sizeof(Chunk) + pages / 8);
     Chunk **chunks = chunk == NULL ? NULL : realloc(gChunks, (gChunkCount + 1) * sizeof *gChunks);
     if (chunks != NULL) gChunks = chunks;
-    if (chunks == NULL || (chunk->start = EmpoHeapPages(pages * PAGE)) == NULL) {
+    if (chunks != NULL) chunk->start = EmpoHeapPages(pages * PAGE);
+    // When the block is full, mimalloc takes memory of this process.
+    // blockMunmap finds a chunk only inside the block.
+    if (chunks != NULL && chunk->start != NULL &&
+        (chunk->start < gBlockStart || (size_t)(gBlockEnd - chunk->start) < pages * PAGE)) {
+        EmpoHeapFree(chunk->start);
+        chunk->start = NULL;
+    }
+    if (chunk == NULL || chunk->start == NULL) {
         free(chunk);
         return NULL;
     }
@@ -85,8 +93,7 @@ static void *blockMmap(void *addr, size_t len, int prot, int flags, int fd, off_
     if (first < 0 && (chunk = newChunk(count)) != NULL) first = (long)(chunk->pages - count);
     if (first < 0) {
         os_unfair_lock_unlock(&gChunksLock);
-        errno = ENOMEM;
-        return MAP_FAILED;
+        return realMmap(addr, len, prot, flags, fd, offset);
     }
     for (size_t page = (size_t)first; page < (size_t)first + count; page++) chunk->used[page / 64] |= 1ull << (page % 64);
     chunk->free -= count;
