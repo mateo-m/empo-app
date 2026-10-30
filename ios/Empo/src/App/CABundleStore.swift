@@ -66,7 +66,8 @@ enum CABundleStore {
     /// Fire-and-forget refresh. Safe to call on every launch.
     static func refreshIfStale(onRefresh: @escaping () -> Void) {
         let last = UserDefaults.standard.double(forKey: lastRefreshKey)
-        guard Date().timeIntervalSince1970 - last >= refreshInterval else { return }
+        let missing = refreshedURL.map { !FileManager.default.fileExists(atPath: $0.path) } ?? false
+        guard missing || Date().timeIntervalSince1970 - last >= refreshInterval else { return }
 
         Task.detached(priority: .utility) {
             do {
