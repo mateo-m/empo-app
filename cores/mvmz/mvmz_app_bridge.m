@@ -54,6 +54,8 @@ static int gSnapshotH;
 
 static void logLine(NSString *line) {
     NSLog(@"[mvmz] %@", line);
+    // The app adds its own lines to the same file.
+    [gLog seekToEndOfFile];
     [gLog writeData:[[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
 }
 
