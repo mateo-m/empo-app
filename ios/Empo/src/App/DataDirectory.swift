@@ -57,6 +57,7 @@ enum DataDirectory {
         guard
             (try? FileManager.default.createDirectory(at: storage, withIntermediateDirectories: true)) != nil
         else { return documents }
+        guard hasData || moveAll(of: documents, to: storage) else { return documents }
         moveItems(of: documents, to: storage)
         return storage
     }()
@@ -89,6 +90,39 @@ enum DataDirectory {
         // name when they sign the app, and write the new name here.
         return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
     }()
+
+    /// The first move moves every item of Documents or none. Else a game
+    /// can move without its saves, and the player saves again in the app
+    /// group. Then the next launch keeps the new save, and the old one
+    /// becomes a displaced copy. Items that are in both folders, only
+    /// hidden ones here, go to `moveItems`.
+    static func moveAll(of documents: URL, to storage: URL) -> Bool {
+        let fm = FileManager.default
+        let names = ((try? fm.contentsOfDirectory(atPath: documents.path)) ?? [])
+            .filter { $0 != "Inbox" && !exists(storage.appendingPathComponent($0), fm: fm) }
+        var moved: [String] = []
+        for name in names {
+            do {
+                try fm.moveItem(
+                    at: documents.appendingPathComponent(name), to: storage.appendingPathComponent(name))
+                moved.append(name)
+            } catch {
+                NSLog(
+                    "[DataDirectory] Cannot move %@ to the app group, so nothing moves: %@", name, "\(error)")
+                for name in moved.reversed() {
+                    do {
+                        try fm.moveItem(
+                            at: storage.appendingPathComponent(name),
+                            to: documents.appendingPathComponent(name))
+                    } catch {
+                        NSLog("[DataDirectory] Cannot move %@ back to Documents: %@", name, "\(error)")
+                    }
+                }
+                return false
+            }
+        }
+        return true
+    }
 
     /// Moves the items of Documents, from before the app group, into
     /// `storage`. A folder that is in both gets merged. For a file that
