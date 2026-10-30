@@ -723,6 +723,124 @@
         }
       }
     },
+    "%@ games" : {
+      "comment" : "The placeholder is the name of a game engine, for example RPG Maker XP.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-Spiele"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Juegos de %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeux %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giochi %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@のゲーム"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 게임"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jogos de %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Игры %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 游戏"
+          }
+        }
+      }
+    },
+    "%@ report for %@" : {
+      "comment" : "The first placeholder is the app name, Empo. The second is the game's name.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-Bericht für %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informe de %@ para %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rapport %@ pour %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Report di %@ per %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@のレポート：%@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 리포트: %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relatório do %@ para %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отчёт %@ для %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 报告：%@"
+          }
+        }
+      }
+    },
     "%@ stopped" : {
       "comment" : "The game ended because of a problem. The placeholder is the game's name.",
       "localizations" : {
@@ -4424,6 +4542,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清除你为这个游戏改过的按键。"
+          }
+        }
+      }
+    },
+    "Close %@ from the app switcher and open it again to apply this change." : {
+      "comment" : "The placeholder is the app name, Empo.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schließ %@ im App-Umschalter und öffne es wieder, damit die Änderung gilt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cierra %@ desde el selector de apps y vuelve a abrirlo para aplicar este cambio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ferme %@ depuis le sélecteur d'apps, puis rouvre-le pour appliquer ce changement."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi %@ dall'App Switcher, poi riaprilo per applicare la modifica."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "変更を反映するには、Appスイッチャーで%@を閉じてから、もう一度開いてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "변경 사항을 적용하려면 앱 전환기에서 %@를 닫고 다시 열어 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feche o %@ no seletor de apps e abra de novo para aplicar a mudança."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закройте %@ в переключателе приложений и откройте снова, чтобы применить изменение."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在 App 切换器中关闭 %@，然后重新打开，此更改才会生效。"
           }
         }
       }
@@ -10771,6 +10948,64 @@
         }
       }
     },
+    "Experimental" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Experimentell"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Experimental"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expérimental"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sperimentale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "実験的機能"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "실험 기능"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Experimental"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экспериментальное"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "实验性功能"
+          }
+        }
+      }
+    },
     "Export logs" : {
       "localizations" : {
         "de" : {
@@ -14200,6 +14435,64 @@
         }
       }
     },
+    "It stopped responding and will close. Progress you haven't saved will be lost." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es reagiert nicht mehr und wird beendet. Nicht gespeicherter Fortschritt geht verloren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dejó de responder y se va a cerrar. Perderás el progreso que no hayas guardado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il ne répond plus et va se fermer. Ta progression non sauvegardée sera perdue."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non risponde più e verrà chiuso. I progressi non salvati andranno persi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "応答しなくなったため、終了します。セーブしていない進行状況は失われます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "응답하지 않아서 닫혀요. 저장하지 않은 진행 상황은 사라져요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ele parou de responder e vai fechar. Você vai perder o progresso que não salvou."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Игра перестала отвечать и закроется. Несохранённый прогресс пропадёт."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游戏没有响应，即将关闭。没保存的进度会丢失。"
+          }
+        }
+      }
+    },
     "JoiPlay compatibility" : {
       "localizations" : {
         "de" : {
@@ -17486,6 +17779,65 @@
         }
       }
     },
+    "Not available. The tool that installed %@ left out a part that this feature needs." : {
+      "comment" : "The placeholder is the app name, Empo.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht verfügbar. Das Tool, mit dem du %@ installiert hast, hat einen Teil weggelassen, den diese Funktion braucht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No disponible. La herramienta que instaló %@ dejó fuera una parte que esta función necesita."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indisponible. L'outil qui a installé %@ a omis une partie dont cette fonction a besoin."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non disponibile. Lo strumento che ha installato %@ ha tralasciato una parte che serve a questa funzione."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "利用できません。%@をインストールしたツールが、この機能に必要な部分を省きました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사용할 수 없어요. %@를 설치한 도구가 이 기능에 필요한 부분을 빼먹었어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indisponível. A ferramenta que instalou o %@ deixou de fora uma parte de que este recurso precisa."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недоступно. Программа, которая установила %@, не добавила часть, нужную для этой функции."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不可用。安装 %@ 的工具漏掉了此功能需要的部分。"
+          }
+        }
+      }
+    },
     "Not enough space to import. Free up space on your device and try again." : {
       "localizations" : {
         "de" : {
@@ -20513,6 +20865,123 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "退出 %@"
+          }
+        }
+      }
+    },
+    "Quit a game and start another one without closing %@. Works with %@." : {
+      "comment" : "The first placeholder is the app name, Empo. The second is a list of game types, for example RPG Maker XP games and PSDK games.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beende ein Spiel und starte ein anderes, ohne %@ zu schließen. Geht mit %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sal de un juego y empieza otro sin cerrar %@. Funciona con %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitte un jeu et lances-en un autre sans fermer %@. Fonctionne avec %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci da un gioco e avviane un altro senza chiudere %@. Funziona con %@."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@を閉じずに、ゲームを終了して別のゲームを始められます。対応：%@。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@를 닫지 않고 게임을 종료하고 다른 게임을 시작해요. %@에서 작동해요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saia de um jogo e comece outro sem fechar o %@. Funciona com %@."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выходите из игры и запускайте другую, не закрывая %@. Работает для: %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无需关闭 %@ 即可退出游戏并开始另一个。适用于%@。"
+          }
+        }
+      }
+    },
+    "Quit and switch games" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spiele beenden und wechseln"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salir y cambiar de juego"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitter et changer de jeu"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci e cambia gioco"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "終了してゲームを切り替え"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "종료하고 게임 바꾸기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sair e trocar de jogo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выход и смена игры"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出并切换游戏"
           }
         }
       }
@@ -24759,6 +25228,122 @@
         }
       }
     },
+    "Share Report" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bericht teilen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir informe"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager le rapport"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Condividi report"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レポートを共有"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "리포트 공유"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar relatório"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поделиться отчётом"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共享报告"
+          }
+        }
+      }
+    },
+    "Share report" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bericht teilen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir informe"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager le rapport"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Condividi report"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レポートを共有"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "리포트 공유"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar relatório"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поделиться отчётом"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共享报告"
+          }
+        }
+      }
+    },
     "Shared layout" : {
       "comment" : "Name of a layout profile that Empo makes when several games share edits.",
       "localizations" : {
@@ -25220,6 +25805,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "以卡片网格或紧凑列表显示游戏。"
+          }
+        }
+      }
+    },
+    "Show in Files" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Dateien zeigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar en Archivos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher dans Fichiers"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra in File"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“ファイル”で表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "파일에서 보기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar no Arquivos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать в Файлах"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“文件”中显示"
           }
         }
       }
@@ -26275,6 +26918,64 @@
         }
       }
     },
+    "Something went wrong while it was running." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Spielen ist etwas schiefgelaufen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algo salió mal mientras se ejecutaba."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un problème est survenu pendant l'exécution."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualcosa è andato storto durante il gioco."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "実行中に問題が起きました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "실행 중에 문제가 생겼어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algo deu errado durante a execução."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Во время работы что-то пошло не так."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运行时出了点问题。"
+          }
+        }
+      }
+    },
     "Sort by" : {
       "localizations" : {
         "de" : {
@@ -26737,6 +27438,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止导入？"
+          }
+        }
+      }
+    },
+    "Stop Loading" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laden stoppen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detener la carga"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrêter le chargement"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interrompi caricamento"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "読み込みを中止"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "로딩 중단"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parar carregamento"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Остановить загрузку"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止加载"
           }
         }
       }
@@ -27963,6 +28722,64 @@
         }
       }
     },
+    "The game stopped" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Spiel wurde beendet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El juego se detuvo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le jeu s'est arrêté"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il gioco si è interrotto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームが停止しました"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임이 멈췄어요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O jogo parou"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Игра остановилась"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游戏已停止"
+          }
+        }
+      }
+    },
     "The game stopped responding. Close Empo from the app switcher, then reopen it." : {
       "localizations" : {
         "de" : {
@@ -28137,6 +28954,64 @@
         }
       }
     },
+    "These features are still in testing. If a game stops or doesn't start, turn on Debug logs and play it again. Then share its report from the game's Info and attach it to a GitHub issue." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Funktionen sind noch im Test. Wenn ein Spiel abbricht oder nicht startet, schalte Debug-Logs ein und spiel es noch mal. Teile dann seinen Bericht unter Info des Spiels und häng ihn an ein GitHub-Issue an."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estas funciones aún están en pruebas. Si un juego se detiene o no arranca, activa Registros de depuración y vuelve a jugarlo. Luego comparte su informe desde Info del juego y adjúntalo a un issue de GitHub."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ces fonctions sont encore en test. Si un jeu s'arrête ou ne démarre pas, active Journaux de débogage et relance-le. Partage ensuite son rapport depuis les Infos du jeu et joins-le à une issue GitHub."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queste funzioni sono ancora in prova. Se un gioco si interrompe o non parte, attiva Log di debug e giocalo di nuovo. Poi condividi il suo report dalle Info del gioco e allegalo a una issue su GitHub."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これらの機能はまだテスト中です。ゲームが止まったり始まらなかったりしたら、デバッグログをオンにしてもう一度プレイしてください。そのあと、ゲームの情報からレポートを共有して、GitHubのIssueに添付してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 기능들은 아직 테스트 중이에요. 게임이 멈추거나 시작되지 않으면 디버그 로그를 켜고 다시 플레이해 주세요. 그런 다음 게임 정보에서 리포트를 공유하고 GitHub 이슈에 첨부해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estes recursos ainda estão em teste. Se um jogo parar ou não abrir, ative Logs de depuração e jogue de novo. Depois compartilhe o relatório nas Informações do jogo e anexe a uma issue no GitHub."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эти функции ещё тестируются. Если игра останавливается или не запускается, включите «Логи отладки» и сыграйте снова. Затем поделитесь её отчётом из сведений об игре и приложите его к issue на GitHub."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些功能仍在测试中。如果游戏停止或无法启动，请打开“调试日志”后再玩一次。然后在游戏的“信息”中共享报告，并附到 GitHub issue 中。"
+          }
+        }
+      }
+    },
     "These games are already in your library" : {
       "localizations" : {
         "de" : {
@@ -28249,6 +29124,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可能会崩溃、卡死，或者加载不出来。"
+          }
+        }
+      }
+    },
+    "This game is open. Quit it, then import again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Spiel ist offen. Beende es und importiere dann erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este juego está abierto. Sal de él y vuelve a importarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce jeu est ouvert. Quitte-le, puis importe à nouveau."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo gioco è aperto. Esci dal gioco, poi importa di nuovo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このゲームは開いています。終了してから、もう一度読み込んでください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 게임이 열려 있어요. 종료한 뒤 다시 가져와 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este jogo está aberto. Saia dele e importe de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эта игра открыта. Выйдите из неё и импортируйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此游戏已打开。请先退出，再重新导入。"
           }
         }
       }
@@ -32387,6 +33320,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的修改会创建一个新方案。"
+          }
+        }
+      }
+    },
+    "Your games, saves, and logs are in the Files app. If Files doesn't show Empo, tap Browse › ⋯ › Edit and turn on Empo." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Spiele, Spielstände und Logs sind in der Dateien-App. Wenn Dateien Empo nicht zeigt, tippe auf Durchsuchen › ⋯ › Bearbeiten und schalte Empo ein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus juegos, partidas guardadas y registros están en la app Archivos. Si Archivos no muestra Empo, toca Explorar › ⋯ › Editar y activa Empo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tes jeux, sauvegardes et journaux sont dans l'app Fichiers. Si Fichiers n'affiche pas Empo, touche Parcourir › ⋯ › Modifier et active Empo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi giochi, salvataggi e log sono nell'app File. Se File non mostra Empo, tocca Sfoglia › ⋯ › Modifica e attiva Empo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲーム、セーブデータ、ログは“ファイル”Appにあります。“ファイル”にEmpoが表示されない場合は、ブラウズ › ⋯ › 編集 をタップしてEmpoをオンにしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임, 저장 파일, 로그는 파일 앱에 있어요. 파일 앱에 Empo가 보이지 않으면 탐색 › ⋯ › 편집을 탭하고 Empo를 켜 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seus jogos, saves e logs ficam no app Arquivos. Se o Arquivos não mostrar o Empo, toque em Navegar › ⋯ › Editar e ative o Empo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваши игры, сохранения и логи — в приложении «Файлы». Если «Файлы» не показывают Empo, нажмите «Обзор» › ⋯ › «Изменить» и включите Empo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的游戏、存档和日志在“文件” App 中。如果“文件”没有显示 Empo，请轻点“浏览” › ⋯ › “编辑”，然后打开 Empo。"
           }
         }
       }

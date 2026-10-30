@@ -151,8 +151,11 @@ enum GameCores {
     /// Maker XP, VX and VX Ace games".
     static var gameProcessGamesName: String {
         var names: [String] = []
-        for core in gameProcessCores where !names.contains("\(core.gamesName) games") {
-            names.append("\(core.gamesName) games")
+        for core in gameProcessCores {
+            let name = String(
+                localized: "\(core.gamesName) games",
+                comment: "The placeholder is the name of a game engine, for example RPG Maker XP.")
+            if !names.contains(name) { names.append(name) }
         }
         return ListFormatter.localizedString(byJoining: names)
     }
