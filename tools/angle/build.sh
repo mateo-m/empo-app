@@ -17,6 +17,9 @@ DEPOT_TOOLS_COMMIT=a03dfbf7f2d1cefa2795d81d59ca4f16c8616a8f
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="${1:-${TMPDIR:-/tmp}/empo-angle}"
 DEST="${2:-$HERE/../../ios/Dependencies/ANGLE}"
+mkdir -p "$WORK" "$DEST"
+WORK="$(cd "$WORK" && pwd)"
+DEST="$(cd "$DEST" && pwd)"
 SRC="$WORK/angle"
 
 [ -d "$SRC/.git" ] || git init -q "$SRC"
