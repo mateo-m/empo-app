@@ -9,8 +9,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: 0.7.2
-    CURRENT_PROJECT_VERSION: 745
+    MARKETING_VERSION: 0.8.1
+    CURRENT_PROJECT_VERSION: 770
     CLANG_CXX_LANGUAGE_STANDARD: c++14
     # `YES` / `NO` are Xcode's canonical boolean tokens for build
     # settings. xcodebuild's parser treats them specially. yamllint
@@ -303,6 +303,7 @@ targets:
         optional: true
       - path: PrivacyInfo.xcprivacy
       - path: Assets.xcassets
+      - path: Resources
       - path: Assets.bundle
         type: folder
         buildPhase: resources
@@ -324,6 +325,8 @@ targets:
         # The folder that the app shares with the game process.
         EMPO_APP_GROUP: group.$(PRODUCT_BUNDLE_IDENTIFIER)
         SWIFT_VERSION: "5.0"
+        SWIFT_EMIT_LOC_STRINGS: YES # yamllint disable-line rule:truthy
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES # yamllint disable-line rule:truthy
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src/Empo-Bridging-Header.h
         # Writes the game-process extension point that
         # GameProcessHost.swift declares into the app.
@@ -432,6 +435,12 @@ targets:
           set -e
           VERSION="$(cut -d" " -f1 "${PROJECT_DIR}/../Dependencies/mvmz-core/.fetched-pin")"
           /usr/libexec/PlistBuddy -c "Set :EmpoCoreVersion $VERSION" "${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
+      - name: Copy the MV/MZ license notices
+        # The licenses screen reads them (LicenseEntry.inThisBuild).
+        basedOnDependencyAnalysis: false
+        script: |
+          cp "${PROJECT_DIR}/../Dependencies/mvmz-core/licenses.json" \
+            "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/"
     settings:
       base:
         PRODUCT_NAME: MvmzCore

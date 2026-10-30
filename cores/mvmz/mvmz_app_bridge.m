@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // The launcher interface for the RPG Maker MV and MZ core. The core,
 // mvmz_core.h from mvmz-apple-mobile, runs the game in a web view. This
 // file puts the web view in its own window and in the launcher's

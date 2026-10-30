@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Verify ios dependency pins resolve to published releases: ANGLE in
 # empo-deps, the mkxp-z core in mkxp-z-apple-mobile, the PSDK core in
 # psdk-apple-mobile, the MV/MZ core in mvmz-apple-mobile.

@@ -5,7 +5,7 @@
 > <p align="center">Run RPG Maker and PSDK games on iPhone and iPad.</p>
 
 <p align="center">
-  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-GPLv2%2B-blue.svg" /></a>
+  <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-GPLv3-blue.svg" /></a>
   <a href="#status"><img alt="Status" src="https://img.shields.io/badge/status-pre--release-yellow.svg" /></a>
   <a href="#requirements"><img alt="Platform" src="https://img.shields.io/badge/platform-iOS%2026%2B-lightgrey.svg" /></a>
 </p>
@@ -108,7 +108,16 @@ For build requirements, build steps, and PR guidelines, see [`CONTRIBUTING.md`](
 
 ## License
 
-[GPLv2+](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html), the same license as upstream [mkxp-z](https://github.com/mkxp-z/mkxp-z). The app shows the full dependency and font license set at **Settings → Open-source licenses**.
+Copyright (C) 2026 Mateo M.
+
+The code is under the [GPLv3](LICENSE), with [additional terms](ADDITIONAL-TERMS.md) that GPLv3 section 7 permits. If you publish a copy or a fork of Empo:
+
+- Keep the text "Empo, Copyright (C) 2026 Mateo M., https://github.com/mateo-m/empo-app" on the licenses or credits screen of the app.
+- Do not say or imply that you wrote Empo, in the app, in a store listing, or on a website.
+- Use your own name and icon. The Empo name and logo are not under the GPL. See [`TRADEMARKS.md`](TRADEMARKS.md).
+- Give each user the source code of the build that they got. The GPL does not permit closed-source libraries, such as ad SDKs, in the app.
+
+The documentation is under [CC BY-NC-SA 4.0](LICENSE-DOCS.md). Versions before this change are under [GPLv2+](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html). The engine, [mkxp-z](https://github.com/mkxp-z/mkxp-z), is under GPLv2+. The app shows the full dependency and font license set at **Settings → Open-source licenses**.
 
 ## Credits
 

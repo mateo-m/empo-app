@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 struct GameCoresView: View {
@@ -37,7 +40,7 @@ struct GameCoresView: View {
                 }
             } footer: {
                 Text(
-                    "A core runs the games in its list. Empo opens the core a game needs when you start the game."
+                    "Each core runs the games named under it. Empo picks the core a game needs when you start it."
                 )
             }
         }

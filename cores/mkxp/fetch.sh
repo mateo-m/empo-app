@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Downloads the engine that cores/mkxp/.version pins, from
 # the releases of mateo-m/mkxp-z-apple-mobile, into
 # ios/Dependencies/mkxp-core. That repo's CI builds the release from a

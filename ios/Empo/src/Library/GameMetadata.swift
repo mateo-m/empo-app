@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import UIKit
 
@@ -186,17 +189,11 @@ struct GameMetadata: Codable {
     }
 
     static func formatPlayTime(_ seconds: TimeInterval?) -> String {
-        guard let seconds, seconds > 0 else { return "Not played yet" }
+        guard let seconds, seconds > 0 else { return String(localized: "Not played yet") }
         let totalMinutes = Int(seconds) / 60
-        let hours = totalMinutes / 60
-        let minutes = totalMinutes % 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        } else if minutes > 0 {
-            return "\(minutes)m"
-        } else {
-            return "Less than a minute"
-        }
+        guard totalMinutes > 0 else { return String(localized: "Less than a minute") }
+        return Duration.seconds(totalMinutes * 60)
+            .formatted(.units(allowed: [.hours, .minutes], width: .narrow))
     }
 
     static func formatDiskSize(_ bytes: Int64) -> String {

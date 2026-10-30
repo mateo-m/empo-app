@@ -1,11 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 import SwiftUI
 
 struct MvmzCore: GameCore {
     let framework = "MvmzCore"
-    let displayName = "RPG Maker MV and MZ core"
-    let gamesLine = "Runs RPG Maker MV and MZ games"
+    var displayName: String { String(localized: "RPG Maker MV and MZ core") }
+    var gamesLine: String { String(localized: "Runs RPG Maker MV and MZ games") }
     let madeWith = "RPG Maker"
 
     /// WebKit ends the page and all of its JavaScript when the core

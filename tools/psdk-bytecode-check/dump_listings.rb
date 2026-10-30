@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 $LOAD_PATH.unshift('lib/ruby/3.0.0/i386-mingw32') if RUBY_PLATFORM.include?('mingw')
 require 'zlib'
 out = ARGV[0]

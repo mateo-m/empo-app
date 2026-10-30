@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Links MkxpCore.framework for one SDK from the engine release that
 # cores/mkxp/.version pins.
 #
@@ -107,6 +110,9 @@ echo "[mkxp-framework] Linking $CORE_VERSION..."
 # bundle, which dladdr resolves to this framework (filesystemImplIOS.mm).
 cp -R "$CORE/assets" "$FW/Assets.bundle"
 cp -R "$CORE/$SDK/ruby-stdlib" "$FW/Ruby"
+
+# The licenses screen reads it (LicenseEntry.inThisBuild).
+cp "$CORE/licenses.json" "$FW/"
 
 # GameImportValidator reads EmpoCoreRGSSVersionMask at import, before
 # any core is open.

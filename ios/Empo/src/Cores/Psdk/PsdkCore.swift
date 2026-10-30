@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 import SwiftUI
@@ -16,13 +19,21 @@ struct PsdkCore: GameCore {
     let madeWith = "PSDK"
 
     var framework: String { "Psdk\(ruby.replacingOccurrences(of: ".", with: ""))Core" }
-    var displayName: String { "PSDK core for Ruby \(ruby)" }
+    var displayName: String {
+        String(
+            localized: "PSDK core for Ruby \(ruby)",
+            comment: "Game cores screen. The placeholder is a Ruby version, such as 3.0.")
+    }
 
     static let all = [
-        PsdkCore(ruby: "2.5", gamesLine: "Runs PSDK games released from December 2019 to about March 2021"),
-        PsdkCore(ruby: "3.0", gamesLine: "Runs the Windows release of PSDK games since about March 2021"),
-        PsdkCore(ruby: "3.2", gamesLine: "Runs the Mac release of PSDK games"),
-        PsdkCore(ruby: "3.3", gamesLine: "Runs the Linux release of PSDK games"),
+        PsdkCore(
+            ruby: "2.5",
+            gamesLine: String(localized: "Runs PSDK games released from December 2019 to about March 2021")),
+        PsdkCore(
+            ruby: "3.0",
+            gamesLine: String(localized: "Runs the Windows release of PSDK games since about March 2021")),
+        PsdkCore(ruby: "3.2", gamesLine: String(localized: "Runs the Mac release of PSDK games")),
+        PsdkCore(ruby: "3.3", gamesLine: String(localized: "Runs the Linux release of PSDK games")),
     ]
 
     /// Takes a release without bytecode, which runs on any Ruby, and every
@@ -64,12 +75,15 @@ struct PsdkCore: GameCore {
         if PsdkGame.isGameRoot(root) {
             guard let version = PsdkGame.bytecodeVersion(root), !Self.rubies.contains(version) else { return }
             throw GameImportValidator.ImportError.unsupportedRuntime(
-                "Empo can't run games from this version of Pokémon Studio yet."
+                String(localized: "Empo can't run games from this version of Pokémon Studio yet.")
             )
         }
         guard PsdkGame.isStudioProject(root) else { return }
         throw GameImportValidator.ImportError.unsupportedRuntime(
-            "This is a Pokémon Studio project, not a game you can play yet. In Pokémon Studio, choose Compile the project, then import the game it makes."
+            String(
+                localized:
+                    "This is a Pokémon Studio project, not a game you can play yet. In Pokémon Studio, choose Compile the project, then import the game it makes."
+            )
         )
     }
 
@@ -112,7 +126,7 @@ struct PsdkCore: GameCore {
                 } header: {
                     Text("Controls")
                 } footer: {
-                    Text("The game has to use the mouse for this to do anything.")
+                    Text("This works only in games that use a mouse.")
                 }
             })
     }

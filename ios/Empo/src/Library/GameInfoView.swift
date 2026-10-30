@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 struct GameInfoView: View {
@@ -49,7 +52,7 @@ struct GameInfoView: View {
         self.originalTitle =
             meta.baseTitle
             ?? core?.defaultTitle(of: container)
-            ?? "Untitled game"
+            ?? String(localized: "Untitled game")
         self.madeWith = core?.madeWith(at: container.gameURL)
         self.coreName = core?.displayName
     }
@@ -177,7 +180,7 @@ struct GameInfoView: View {
                         if settings.debugLogs, !runtimeRows.isEmpty {
                             GroupedSection("Runtime") {
                                 ForEach(runtimeRows) { row in
-                                    DetailRow(row.label) {
+                                    DetailRow(Text(row.label)) {
                                         if let value = row.value {
                                             Text(value).monospaced()
                                         } else {
@@ -259,14 +262,17 @@ struct GameInfoView: View {
             }
             .imageSourcePicker(
                 isPresented: $showArtworkPicker,
-                title: "Artwork",
+                title: LocalizedStringResource(
+                    "Artwork", comment: "Title of the sheet that changes the game's cover image"),
                 hasExisting: hasCustomArtwork,
                 onImageSelected: { saveArtwork($0) },
                 onRemove: { removeArtwork() }
             )
             .imageSourcePicker(
                 isPresented: $showBannerPicker,
-                title: "Banner",
+                title: LocalizedStringResource(
+                    "Banner",
+                    comment: "Title of the sheet that changes the wide image at the top of the game's page"),
                 hasExisting: hasCustomBanner,
                 onImageSelected: { saveBanner($0) },
                 onRemove: { removeBanner() }
@@ -570,10 +576,10 @@ struct GameInfoView: View {
 }
 
 private struct GroupedSection<Content: View>: View {
-    let header: String?
+    let header: LocalizedStringResource?
     @ViewBuilder let content: Content
 
-    init(_ header: String? = nil, @ViewBuilder content: () -> Content) {
+    init(_ header: LocalizedStringResource? = nil, @ViewBuilder content: () -> Content) {
         self.header = header
         self.content = content()
     }
@@ -600,17 +606,21 @@ private struct GroupedSection<Content: View>: View {
 }
 
 private struct DetailRow<Content: View>: View {
-    let label: String
+    let label: Text
     @ViewBuilder let value: Content
 
-    init(_ label: String, @ViewBuilder value: () -> Content) {
+    init(_ label: Text, @ViewBuilder value: () -> Content) {
         self.label = label
         self.value = value()
     }
 
+    init(_ label: LocalizedStringResource, @ViewBuilder value: () -> Content) {
+        self.init(Text(label), value: value)
+    }
+
     var body: some View {
         HStack {
-            Text(label)
+            label
             Spacer()
             value
                 .foregroundStyle(.secondary)

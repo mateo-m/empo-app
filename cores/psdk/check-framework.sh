@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Fail when a PSDK core framework stops being a closed boundary.
 #
 # The export list is the whole isolation mechanism, so it is the thing to

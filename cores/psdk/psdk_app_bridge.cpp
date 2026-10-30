@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // The launcher interface for the PSDK core.
 //
 // A launcher opens one core and calls it through the gamecore_* names

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // C shim over the engine's json5pp parser. The shim parses JSON5
 // input with the same `parse5` entry point the engine uses. It then
 // re-serializes the parsed value as strict JSON.

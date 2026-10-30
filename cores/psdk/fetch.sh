@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Downloads the PSDK core that cores/psdk/.version pins, from
 # the releases of mateo-m/psdk-apple-mobile, into
 # ios/Dependencies/psdk-core. That repo's CI builds the release from a

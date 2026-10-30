@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 struct GameSettingsView: View {
@@ -25,7 +28,11 @@ struct GameSettingsView: View {
         let list = changed.formatted(.list(type: .and, width: .standard))
         return Hint(
             id: "gameSettings.restartRequired",
-            excerpt: "Restart this game to apply: \(list).",
+            excerpt: LocalizedStringResource(
+                "Restart this game to apply: \(list).",
+                comment:
+                    "The placeholder is a list of setting names, such as \"Smooth scaling and Render scale\"."
+            ),
             description: nil,
             dismissal: .none,
             icon: "arrow.clockwise.circle.fill"

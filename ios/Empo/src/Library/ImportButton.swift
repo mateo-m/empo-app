@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 struct ImportButton: View {
@@ -6,25 +9,27 @@ struct ImportButton: View {
         case validating
         case multipleGames
 
-        var title: String {
+        var title: LocalizedStringResource {
             switch self {
             case .idle:
                 return "Import game"
             case .validating:
-                return "Checking game"
+                return LocalizedStringResource(
+                    "Checking game", comment: "Import button while Empo checks the picked game")
             case .multipleGames:
-                return "Choose game"
+                return LocalizedStringResource(
+                    "Choose games", comment: "Import button when the import holds more than one game")
             }
         }
 
-        var accessibilityLabel: String {
+        var accessibilityLabel: LocalizedStringResource {
             switch self {
             case .idle:
                 return "Import game"
             case .validating:
-                return "Checking game, tap to stop"
+                return "Checking game. Double-tap to stop."
             case .multipleGames:
-                return "Choose game"
+                return "Choose games"
             }
         }
 
@@ -45,6 +50,9 @@ struct ImportButton: View {
     /// inspection has confirmed an ambiguous import that needs user
     /// input.
     var phase: Phase = .idle
+    /// Collapsed center for this view's size, when the button sits in
+    /// the sensor strip column instead of the header.
+    var collapsedCenter: ((CGSize) -> CGPoint)?
     var onRequestCancelValidation: (() -> Void)?
 
     @State private var importShimmer: CGFloat = -1
@@ -58,8 +66,9 @@ struct ImportButton: View {
             let buttonSize: CGFloat = AppSize.toolbarButton
 
             // End positions (center coordinates)
-            let collapsedX = geo.size.width - 16 - buttonSize / 2
-            let collapsedY = headerHeight / 2
+            let stripCenter = collapsedCenter?(geo.size)
+            let collapsedX = stripCenter?.x ?? geo.size.width - 16 - buttonSize / 2
+            let collapsedY = stripCenter?.y ?? headerHeight / 2
             let expandedX = geo.size.width / 2
             let emptyStateBottom = geo.size.height / 2 + emptyStateOffset + emptyStateHeight / 2
             let expandedY = emptyStateBottom + Spacing._4xl + buttonHeight / 2
@@ -102,7 +111,14 @@ struct ImportButton: View {
             .onGeometryChange(for: CGFloat.self) {
                 $0.size.height
             } action: {
-                buttonHeight = $0
+                // SwiftUI snaps the measured height to the pixel grid
+                // at the button's position, and the position depends on
+                // this height. On some window sizes (iPhone Duo, closed
+                // and sideways) the two settle on no value: 37.33 and
+                // 38 swap forever and the first frame never commits.
+                if abs($0 - buttonHeight) >= 1 {
+                    buttonHeight = $0
+                }
             }
             .overlay {
                 Capsule()

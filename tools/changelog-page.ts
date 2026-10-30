@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // Writes docs/changelog.mdx from CHANGELOG.md and from the engine commits
 // between the engine pins of two releases. The docs scripts run it before
 // Blume, and the output is git-ignored, so the site page can never drift
@@ -39,7 +42,8 @@ const engineEntries = (from: string, to: string) => {
   return entries;
 };
 
-type Release = { version: string; date: string; groups: Map<string, string[]> };
+// scripts/changelog.sh writes the engine entries into CHANGELOG.md from 0.7.3 on.
+type Release = { version: string; date: string; groups: Map<string, string[]>; hasEngineEntries: boolean };
 
 const releases: Release[] = [];
 let current: Release | undefined;
@@ -48,7 +52,7 @@ let group: string | undefined;
 for (const line of source.split("\n")) {
   const release = line.match(/^## (\S+) - (\d{4}-\d{2}-\d{2})$/);
   if (release) {
-    current = { version: release[1], date: release[2], groups: new Map() };
+    current = { version: release[1], date: release[2], groups: new Map(), hasEngineEntries: false };
     releases.push(current);
     group = undefined;
     continue;
@@ -64,9 +68,10 @@ for (const line of source.split("\n")) {
   }
   if (!current || !group || !line.startsWith("- ")) continue;
   if (!keptGroups.includes(group)) continue;
+  if (line.includes("https://github.com/mateo-m/mkxp-z-apple-mobile/commit/")) current.hasEngineEntries = true;
   const entry = line
     .replace(/ \(\[`[0-9a-f]+`\]\(https:\/\/github\.com\/[^)]+\)\)$/, "")
-    .replace(/ \(#\d+\)$/, "");
+    .replace(/ \((?:[\w.-]+\/[\w.-]+)?#\d+\)$/, "");
   const entries = current.groups.get(group) ?? [];
   entries.push(entry);
   current.groups.set(group, entries);
@@ -76,7 +81,7 @@ releases.forEach((release, index) => {
   const previous = releases[index + 1];
   const to = enginePin(release.version);
   const from = previous && enginePin(previous.version);
-  if (!to || !from) return;
+  if (!to || !from || release.hasEngineEntries) return;
   for (const [group, entries] of engineEntries(from, to)) {
     release.groups.set(group, [...(release.groups.get(group) ?? []), ...entries]);
   }
@@ -90,7 +95,8 @@ const sections = releases.map((release) => {
   for (const name of keptGroups) {
     const entries = release.groups.get(name);
     if (!entries) continue;
-    parts.push("", `### ${name}`, "", ...entries);
+    // Blume reads ":Union" in "Re:Union" as a directive and drops it.
+    parts.push("", `### ${name}`, "", ...entries.map((entry) => entry.replace(/:(?=[A-Za-z])/g, "\\:")));
   }
   return parts.join("\n");
 });

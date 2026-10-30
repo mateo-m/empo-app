@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 struct EmptyStateView: View {
     let icon: Image
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringResource
+    let subtitle: LocalizedStringResource
     var revealed: Bool = true
     var initialDelay: TimeInterval = 0.2
     static let staggerInterval: TimeInterval = 0.1

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 /// Preference key the overlay uses to report its measured height
@@ -79,7 +82,7 @@ struct DebugOverlayView: View {
             }
 
             HStack(spacing: Spacing.xs) {
-                Text("\(Int(fps.rounded())) FPS")
+                Text(verbatim: "\(Int(fps.rounded())) FPS")
                     .font(AppFont.debugFPS)
                     .monospacedDigit()
                     .foregroundStyle(fpsColor)

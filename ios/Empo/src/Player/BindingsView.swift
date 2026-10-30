@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -5,7 +8,7 @@ import SwiftUI
 /// have fixed rows. Keyboard keys arrive by being pressed.
 struct BindingsView: View {
     let container: GameContainer?
-    let gameTitle: String
+    let gameTitle: String?
     let manifest: BindingMap?
     var input: SessionInput
     let actions: PlayerActionRegistry
@@ -46,9 +49,9 @@ struct BindingsView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("Scope", selection: $scope) {
+                Picker("Applies to", selection: $scope) {
                     ForEach(BindingsCatalog.Scope.allCases, id: \.self) { option in
-                        Text(option.rawValue).tag(option)
+                        Text(option.title).tag(option)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -177,8 +180,8 @@ struct BindingsView: View {
         } footer: {
             Text(
                 """
-                Some controllers send keys instead of buttons. Map \
-                those keys here to reuse your button bindings.
+                Some controllers send keyboard keys instead of buttons. Add \
+                those keys here so they do what your buttons do.
                 """
             )
         }
@@ -194,11 +197,11 @@ struct BindingsView: View {
         }
     }
 
-    private var resetTitle: String {
+    private var resetTitle: LocalizedStringResource {
         scope == .thisGame ? "Reset buttons for this game?" : "Reset buttons for all games?"
     }
 
-    private var resetFooter: String {
+    private var resetFooter: LocalizedStringResource {
         switch scope {
         case .thisGame:
             return "Clears the buttons you changed for this game."
@@ -207,10 +210,14 @@ struct BindingsView: View {
         }
     }
 
-    private var resetMessage: String {
+    private var resetMessage: LocalizedStringResource {
         switch scope {
         case .thisGame:
-            return "The buttons you changed for \(gameTitle) go back to their defaults. You can't undo this."
+            if let gameTitle {
+                return
+                    "The buttons you changed for \(gameTitle) go back to their defaults. You can't undo this."
+            }
+            return "The buttons you changed for this game go back to their defaults. You can't undo this."
         case .allGames:
             return
                 "The buttons you changed for all games go back to their defaults. Buttons you changed for one game stay. You can't undo this."

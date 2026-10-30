@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -28,14 +31,14 @@ struct GameplaySettingsSection: View {
                         }
                     ),
                     description:
-                        "Add a Fast forward button to the in-game menu. While it is on, the game runs at the speed below."
+                        "Show a Fast forward switch in the More menu while you play. When the switch is on, the game runs at the speed below."
                 )
 
                 if model.fastForwardEnabled {
                     HStack {
                         Text("Speed")
                         Spacer()
-                        Text("\(model.effectiveSpeedMultiplier)x")
+                        Text("\(model.effectiveSpeedMultiplier)x", comment: "Fast forward speed, such as 4x")
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
@@ -160,7 +163,11 @@ struct LayoutSettingsSection: View {
             )
             .onAppear { model.reloadResolvedScreen() }
         } header: {
-            Text("Layout")
+            Text(
+                "Screen layout",
+                comment:
+                    "Game settings section with the layout profile: the on-screen controls and where the game sits."
+            )
         } footer: {
             if model.resolvedScreen?.portrait.placement != nil
                 || model.resolvedScreen?.landscape.placement != nil
@@ -176,10 +183,12 @@ struct LayoutSettingsSection: View {
 
     private var currentPinLabel: String {
         switch LayoutProfilesManager.store.loadPin(forGameFolder: model.container.url).pin {
-        case .followChain: return "Automatic"
+        case .followChain:
+            return String(
+                localized: "Automatic", comment: "Layout profile choice that picks a layout on its own.")
         case .profile(let name): return name
-        case .gameLayout: return "Game layout"
-        case .defaultProfile: return "Default profile"
+        case .gameLayout: return String(localized: "Game layout")
+        case .defaultProfile: return String(localized: "Default profile")
         }
     }
 }

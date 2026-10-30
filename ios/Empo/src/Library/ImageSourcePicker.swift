@@ -1,10 +1,13 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct ImageSourcePickerModifier: ViewModifier {
     @Binding var isPresented: Bool
-    let title: String
+    let title: LocalizedStringResource
     let hasExisting: Bool
     let onImageSelected: (UIImage) -> Void
     let onRemove: (() -> Void)?
@@ -42,7 +45,7 @@ struct ImageSourcePickerModifier: ViewModifier {
 extension View {
     func imageSourcePicker(
         isPresented: Binding<Bool>,
-        title: String = "Choose image",
+        title: LocalizedStringResource = "Choose image",
         hasExisting: Bool = false,
         onImageSelected: @escaping (UIImage) -> Void,
         onRemove: (() -> Void)? = nil

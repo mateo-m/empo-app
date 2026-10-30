@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 /// To announce a release, add an entry at the top of WhatsNew.json
-/// with the next `version` and the app version that ships it. The
-/// release copies the items of that app version into the AltStore
-/// update text (scripts/whats-new-notes.sh).
+/// with the next `version` and the app version that ships it. Add its
+/// title and detail, with their translations, to
+/// Resources/WhatsNew.xcstrings: the rows look them up by their English text.
 enum WhatsNew {
     static let releases: [WhatsNewRelease] = {
         let url = Bundle.main.url(forResource: "WhatsNew", withExtension: "json")!
@@ -104,13 +107,17 @@ struct WhatsNewSheet: View {
                 SheetPrimaryButton("Continue", action: onContinue)
 
                 Link(destination: WhatsNew.releasesURL) {
-                    Text("See all changes on GitHub\u{00A0}\(Image(systemName: "arrow.up.forward"))")
-                        .font(.subheadline)
-                        .multilineTextAlignment(.center)
-                        .accessibilityLabel("See all changes on GitHub")
-                        .padding(.horizontal, Spacing.lg)
-                        .frame(minHeight: AppSize.minTapTarget)
-                        .contentShape(.rect)
+                    Text(
+                        "See all changes on GitHub\u{00A0}\(Image(systemName: "arrow.up.forward"))",
+                        comment:
+                            "Link to the release notes. The placeholder is an arrow icon. Keep it at the end."
+                    )
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .accessibilityLabel("See all changes on GitHub")
+                    .padding(.horizontal, Spacing.lg)
+                    .frame(minHeight: AppSize.minTapTarget)
+                    .contentShape(.rect)
                 }
                 .padding(.top, Spacing.sm)
             }
@@ -141,10 +148,10 @@ private struct WhatsNewRow: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(item.title)
+                Text(Bundle.main.localizedString(forKey: item.title, value: nil, table: "WhatsNew"))
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(item.detail)
+                Text(Bundle.main.localizedString(forKey: item.detail, value: nil, table: "WhatsNew"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

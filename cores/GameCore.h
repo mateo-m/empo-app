@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // GameCore.h - the interface a launcher calls a game core through.
 //
 // Every core implements each function here under this exact name, in

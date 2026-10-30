@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -103,7 +106,7 @@ struct PlayerControlsOverlay: View {
         let size = layout.dpadSize
         let pos = ControlsZone.absolutePosition(
             for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size),
-            safeArea: safeArea, controlsMinY: controlsMinY)
+            safeArea: safeArea, controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
         let anchor = UnitPoint(x: pos.x / geo.size.width, y: pos.y / geo.size.height)
         movementControl(size: size)
             .frame(width: size, height: size)
@@ -212,7 +215,7 @@ struct PlayerControlsOverlay: View {
             )
             .overlay(alignment: .bottom) {
                 if editMode && !isPreview && !actions.isAvailable(button.action) {
-                    Text("Turn this on in Game settings")
+                    Text("Turn this on in this game's settings")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
@@ -272,7 +275,7 @@ struct PlayerControlsOverlay: View {
         }
         return ControlsZone.absolutePosition(
             for: relative, in: geo.size, controlSize: CGSize(width: size, height: size),
-            safeArea: safeArea, controlsMinY: controlsMinY)
+            safeArea: safeArea, controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
     }
 
     /// Shared drag pipeline: alternate the zone clamp and the rigid
@@ -301,7 +304,7 @@ struct PlayerControlsOverlay: View {
             : location
         var center = ControlsZone.clampToSafeArea(
             target, controlSize: size, geoSize: geo.size, safeArea: safeArea,
-            controlsMinY: controlsMinY)
+            controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
         for _ in 0..<3 {
             center = layout.collisionResolvedCenter(
                 center, previous: lastDragResolved[key], draggedID: draggedID,
@@ -310,7 +313,7 @@ struct PlayerControlsOverlay: View {
                 controlsMinY: controlsMinY)
             center = ControlsZone.clampToSafeArea(
                 center, controlSize: size, geoSize: geo.size, safeArea: safeArea,
-                controlsMinY: controlsMinY)
+                controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
         }
         if layout.dragPositionCollides(
             center, draggedID: draggedID, draggedIsDPad: draggedIsDPad,
@@ -334,7 +337,7 @@ struct PlayerControlsOverlay: View {
                 for: center, in: geo.size,
                 controlSize: CGSize(width: size, height: size),
                 safeArea: safeArea,
-                controlsMinY: controlsMinY)
+                controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
     }
 
     /// The edit chrome every draggable button shares: tap-to-edit,

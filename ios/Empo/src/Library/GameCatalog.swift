@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 /// Read model for the game library: scan containers on disk and
@@ -149,7 +152,9 @@ enum GameCatalog {
         quick: Bool = false
     ) -> GameSnapshot? {
         let core = GameCores.core(forGameAt: container.gameURL, fileManager: fm)
-        let iniTitle = core?.defaultTitle(of: container) ?? "Unknown Game"
+        let iniTitle =
+            core?.defaultTitle(of: container)
+            ?? String(localized: "Untitled game")
         let defaultArtwork =
             quick
             ? quickFindArtwork(in: container, core: core) : findArtwork(in: container, core: core)

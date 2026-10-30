@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import fan from "../landing/proposals/fan.html";
 import sea from "../landing/proposals/sea.html";
 import split from "../landing/proposals/split.html";

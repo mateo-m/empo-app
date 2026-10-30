@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 struct SettingsToggle: View {
-    let title: String
+    let title: LocalizedStringResource
     @Binding var isOn: Bool
-    let description: String
+    let description: LocalizedStringResource
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -17,8 +20,8 @@ struct SettingsToggle: View {
 }
 
 struct SettingsNavigationRow<Destination: View>: View {
-    let title: String
-    let description: String
+    let title: LocalizedStringResource
+    let description: LocalizedStringResource
     @ViewBuilder let destination: () -> Destination
 
     var body: some View {
@@ -37,9 +40,9 @@ struct SettingsNavigationRow<Destination: View>: View {
 }
 
 struct SettingsPicker<SelectionValue: Hashable, Content: View>: View {
-    let title: String
+    let title: LocalizedStringResource
     @Binding var selection: SelectionValue
-    let description: String
+    let description: LocalizedStringResource
     @ViewBuilder let content: () -> Content
 
     var body: some View {

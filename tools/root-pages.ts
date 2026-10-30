@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // Writes the docs pages that mirror the markdown files at the repository root.
 // GitHub renders those files. The docs scripts run this before Blume, and the
 // output is git-ignored, so the site pages never drift from the root files.

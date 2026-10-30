@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Writes the linker export list of a core: every function GameCore.h
 # declares, and nothing else. The linker fails when the bridge does not
 # define one of them.

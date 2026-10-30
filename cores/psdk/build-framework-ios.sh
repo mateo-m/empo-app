@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Links the PSDK core frameworks for one SDK: Psdk25Core, Psdk30Core,
 # Psdk32Core and Psdk33Core.
 #
@@ -111,6 +114,9 @@ for ruby in $RUBIES; do
     # it. psdk_app_bridge.cpp finds it next to the core binary with
     # dladdr.
     cp -R "$CORE/support/$(echo "$ruby" | sed 's/./&./')" "$FW/PsdkSupport"
+
+    # The licenses screen reads it (LicenseEntry.inThisBuild).
+    cp "$CORE/licenses.json" "$FW/"
 
     cat >"$FW/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

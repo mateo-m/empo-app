@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 // The strip of game keys above the system keyboard, rendered with
@@ -159,7 +162,7 @@ struct AccessoryKey: Identifiable {
     let kind: Kind
     /// VoiceOver name. The visible face alone reads as a bare letter
     /// or symbol, which gives no hint that it is a game key.
-    let name: String
+    let name: LocalizedStringResource
 
     static func fKey(_ number: Int32) -> AccessoryKey {
         AccessoryKey(
@@ -339,8 +342,14 @@ private struct AccessoryKeyButton: View {
             }
         )
         .accessibilityLabel(key.name)
-        .accessibilityValue(isLatched ? "locked" : "")
-        .accessibilityHint(key.kind == .modifier ? "Touch and hold to lock the key down." : "")
+        .accessibilityValue(
+            isLatched
+                ? Text("Locked", comment: "Spoken state of a keyboard key held down by Empo.")
+                : Text(verbatim: "")
+        )
+        .accessibilityHint(
+            key.kind == .modifier ? Text("Touch and hold to lock the key down.") : Text(verbatim: "")
+        )
         .onDisappear {
             latchTask?.cancel()
             latchTask = nil

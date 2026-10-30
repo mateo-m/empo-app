@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import XCTest
 
 @testable import GameProbe
@@ -81,6 +84,75 @@ final class ButtonSeparationTests: XCTestCase {
         XCTAssertEqual(result.positions[0].x, 160, accuracy: 1e-6)
         XCTAssertEqual(result.positions[0].y, 160, accuracy: 1e-6)
         XCTAssertEqual(result.movedCount, 0)
+    }
+
+    func testWallPushKeepsButtonsApart() {
+        let buttons = [(x: 328.0, y: 100.0, size: 56.0), (x: 386.0, y: 100.0, size: 56.0)]
+        let wall = EditDragSolver.Rect(x: 336, y: 0, width: 94, height: 200)
+        let result = ButtonSeparation.separate(buttons, width: 430, height: 500, walls: [wall])
+        for (position, button) in zip(result.positions, buttons) {
+            let half = button.size * 0.5
+            XCTAssertTrue(
+                position.x + half <= wall.x + 1e-6 || position.y - half >= wall.y + wall.height - 1e-6,
+                "\(position) overlaps the wall")
+        }
+        XCTAssertTrue(pairwiseNonOverlapping(positions: result.positions, sizes: buttons.map(\.size)))
+    }
+
+    func testWallExitAvoidsObstacle() {
+        let buttons = [(x: 308.0, y: 100.0, size: 56.0)]
+        let obstacles = [(x: 224.0, y: 100.0, size: 168.0)]
+        let wall = EditDragSolver.Rect(x: 336, y: 0, width: 94, height: 200)
+        let result = ButtonSeparation.separate(
+            buttons, width: 430, height: 500, obstacles: obstacles, walls: [wall])
+        let position = result.positions[0]
+        let half = buttons[0].size * 0.5
+        XCTAssertTrue(position.x + half <= wall.x + 1e-6 || position.y - half >= wall.y + wall.height - 1e-6)
+        XCTAssertGreaterThanOrEqual(
+            distance(position, (obstacles[0].x, obstacles[0].y)), (buttons[0].size + obstacles[0].size) * 0.5)
+    }
+
+    func testWallExitKeepsObstacleGap() {
+        let buttons = [(x: 308.0, y: 100.0, size: 56.0)]
+        let obstacles = [(x: 196.0, y: 100.0, size: 168.0)]
+        let wall = EditDragSolver.Rect(x: 336, y: 0, width: 94, height: 200)
+        let result = ButtonSeparation.separate(
+            buttons, width: 430, height: 500, obstacles: obstacles, walls: [wall])
+        let required = (buttons[0].size + obstacles[0].size) * 0.5 + ButtonSeparation.minimumGap
+        XCTAssertGreaterThanOrEqual(
+            distance(result.positions[0], (obstacles[0].x, obstacles[0].y)), required - 1e-6)
+    }
+
+    func testWallExitSlidesAlongEdgePastObstacle() {
+        let buttons = [(x: 392.0, y: 228.0, size: 56.0)]
+        let obstacles = [(x: 310.0, y: 284.0, size: 168.0)]
+        let wall = EditDragSolver.Rect(x: 336, y: 0, width: 94, height: 200)
+        let result = ButtonSeparation.separate(
+            buttons, width: 430, height: 500, obstacles: obstacles, walls: [wall])
+        let position = result.positions[0]
+        let half = buttons[0].size * 0.5
+        XCTAssertTrue(position.x + half <= wall.x + 1e-6 || position.y - half >= wall.y + wall.height - 1e-6)
+        let required = (buttons[0].size + obstacles[0].size) * 0.5 + ButtonSeparation.minimumGap
+        XCTAssertGreaterThanOrEqual(
+            distance(position, (obstacles[0].x, obstacles[0].y)), required - 1e-6)
+    }
+
+    func testCrowdedRowBesideWallMovesBelowIt() {
+        let buttons = [28.0, 86, 144, 202, 260, 318, 346].map { (x: $0, y: 100.0, size: 56.0) }
+        let wall = EditDragSolver.Rect(x: 374, y: 0, width: 56, height: 200)
+        let result = ButtonSeparation.separate(buttons, width: 430, height: 500, walls: [wall])
+        for position in result.positions {
+            XCTAssertTrue(position.x + 28 <= wall.x + 1e-6 || position.y - 28 >= wall.y + wall.height - 1e-6)
+        }
+        XCTAssertTrue(pairwiseNonOverlapping(positions: result.positions, sizes: buttons.map(\.size)))
+    }
+
+    func testWallWithoutExitKeepsButtonInBounds() {
+        let buttons = [(x: 50.0, y: 50.0, size: 40.0)]
+        let wall = EditDragSolver.Rect(x: 0, y: 0, width: 100, height: 100)
+        let result = ButtonSeparation.separate(buttons, width: 100, height: 100, walls: [wall])
+        let position = result.positions[0]
+        XCTAssertTrue((20...80).contains(position.x) && (20...80).contains(position.y), "\(position)")
     }
 
     private func distance(_ a: (x: Double, y: Double), _ b: (x: Double, y: Double)) -> Double {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 /// "Press the button you want to use" step of the keyboard rows.
@@ -15,7 +18,7 @@ struct KeyCaptureSheet: View {
             trailingButton: SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(
-                "Press the controller button or keyboard key you want to bind."
+                "Press the controller button or keyboard key you want to set up."
             )
         }
     }

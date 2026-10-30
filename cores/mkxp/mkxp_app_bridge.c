@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // Answers GameCore.h with the host interface of the mkxp-z engine
 // release that cores/mkxp/.version pins. The engine names each function
 // mkxp_ and passes scancodes as SDL_Scancode, which GAMECORE_SCANCODE_*

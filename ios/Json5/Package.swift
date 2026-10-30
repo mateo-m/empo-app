@@ -1,4 +1,7 @@
 // swift-tools-version: 6.0
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import PackageDescription
 
 // The json5cpp target holds a copy of json5pp.hpp from

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -24,12 +27,24 @@ struct LayoutProfilePickerSheet: View {
         NavigationStack {
             List {
                 Section {
-                    row(label: "Automatic", detail: automaticResolution, target: .followChain)
+                    row(
+                        label: String(
+                            localized: "Automatic",
+                            comment: "Layout profile choice that picks a layout on its own."),
+                        detail: automaticResolution,
+                        target: .followChain
+                    )
                     if gameShipsLayout {
-                        row(label: "Game layout", detail: nil, target: .gameLayout)
+                        row(
+                            label: String(
+                                localized: "Game layout",
+                                comment: "The control layout that a game ships with."),
+                            detail: nil,
+                            target: .gameLayout
+                        )
                     }
                     if LayoutProfilesManager.defaultProfileName != nil {
-                        row(label: "Default profile", detail: nil, target: .defaultProfile)
+                        row(label: String(localized: "Default profile"), detail: nil, target: .defaultProfile)
                     }
                 } footer: {
                     Text(
@@ -76,11 +91,13 @@ struct LayoutProfilePickerSheet: View {
         gameShipsLayout = ambient.provenance == .gameLayout
         switch ambient.provenance {
         case .gameLayout:
-            automaticResolution = "Game layout"
+            automaticResolution = String(
+                localized: "Game layout", comment: "The control layout that a game ships with.")
         case .defaultProfile(let name):
             automaticResolution = name
         default:
-            automaticResolution = "Empo default"
+            automaticResolution = String(
+                localized: "Empo default", comment: "The control layout that Empo ships with.")
         }
     }
 
@@ -177,7 +194,8 @@ struct LayoutProfilesSettingsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    createText = LayoutProfilesManager.store.uniqueName(base: "My layout")
+                    createText = LayoutProfilesManager.store.uniqueName(
+                        base: String(localized: "My layout", comment: "Name of a new layout profile."))
                     showCreateDialog = true
                 } label: {
                     Image(systemName: "plus")
@@ -208,7 +226,7 @@ struct LayoutProfilesSettingsView: View {
                         performDelete(successor: successor)
                     }
                 }
-                Button("Delete and use no default", role: .destructive) {
+                Button("Delete and clear default", role: .destructive) {
                     performDelete(successor: nil)
                 }
             } else {
@@ -220,16 +238,14 @@ struct LayoutProfilesSettingsView: View {
         }
     }
 
-    private var deleteTitle: String {
-        guard let deleting else { return "" }
+    private var deleteTitle: Text {
+        guard let deleting else { return Text(verbatim: "") }
         let count = LayoutProfilesManager.store.gamesPinned(to: deleting).count
-        let games =
-            switch count {
-            case 0: "No game uses it."
-            case 1: "1 game uses it and will switch to Automatic."
-            default: "\(count) games use it and will switch to Automatic."
-            }
-        return "Delete \(deleting)? \(games) You can't undo this."
+        if count == 0 {
+            return Text("Delete \(deleting)? No game uses it. You can't undo this.")
+        }
+        return Text(
+            "Delete \(deleting)? \(count) games use it and will switch to Automatic. You can't undo this.")
     }
 
     private var renameBinding: Binding<Bool> {
@@ -820,7 +836,8 @@ struct BuiltinLayoutViewerView: View {
             .padding(.horizontal, Spacing.xl)
 
             Button("Duplicate as profile") {
-                createText = LayoutProfilesManager.store.uniqueName(base: "My layout")
+                createText = LayoutProfilesManager.store.uniqueName(
+                    base: String(localized: "My layout", comment: "Name of a new layout profile."))
                 showCreateDialog = true
             }
             .font(.footnote.weight(.semibold))

@@ -158,8 +158,7 @@ jobs:
           BUILD=$(git rev-list --count HEAD)
           sed -i "s/MARKETING_VERSION: .*/MARKETING_VERSION: $VERSION/" ios/Empo/project.yml
           sed -i "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD/" ios/Empo/project.yml
-          git-cliff --config cliff.toml --unreleased --tag "v$VERSION" --prepend CHANGELOG.md
-          perl -0pi -e 's/\n{3,}/\n\n/g' CHANGELOG.md
+          scripts/changelog.sh "$VERSION"
           echo "version: $VERSION, build: $BUILD"
 
       - name: Commit to main + create the tag
@@ -364,7 +363,7 @@ jobs:
           set -e
           VERSION="${{ needs.build.outputs.version }}"
           bun install --frozen-lockfile
-          NOTES=$(scripts/whats-new-notes.sh "$VERSION")
+          NOTES=$(scripts/altstore-notes.sh "$VERSION")
           bun scripts/update-altstore-source.ts \
             --version "$VERSION" \
             --build "${{ needs.build.outputs.build }}" \
@@ -436,9 +435,11 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
+      # A tag push checks out the tag. Announce mode checks out the
+      # branch it runs on, so it posts notes that were fixed after the
+      # release.
       - uses: actions/checkout@v6
         with:
-          ref: v${{ steps.version.outputs.version }}
           submodules: false
 
       - name: Extract release notes

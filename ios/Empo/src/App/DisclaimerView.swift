@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 /// First-launch disclaimer shown over the splash screen. The user must
@@ -20,10 +23,11 @@ struct DisclaimerView: View {
     /// alone is not visually distinct against the white-on-orange
     /// copy.
     private var githubReportLine: AttributedString {
-        var attr =
-            (try? AttributedString(
-                markdown: "Save often. If you hit issues, report them on [**GitHub**](\(GitInfo.issuesURL))."
-            )) ?? AttributedString("Save often. If you hit issues, report them on GitHub.")
+        var attr = AttributedString(
+            localized: "Save often. If you hit issues, report them on [**GitHub**](\(GitInfo.issuesURL)).",
+            comment:
+                "Launch disclaimer. Keep the Markdown link. The placeholder is the URL of the issues page."
+        )
         for run in attr.runs where run.link != nil {
             attr[run.range].underlineStyle = .single
         }
@@ -55,7 +59,7 @@ struct DisclaimerView: View {
                     .tint(.white)
                 Text("Enjoy!")
                     .padding(.top, Spacing.md)
-                Text("Grid.")
+                Text(verbatim: "Mateo.")
             }
             .font(.body.weight(.medium))
             .fontDesign(.rounded)

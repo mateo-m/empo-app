@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 import SwiftUI
@@ -12,7 +15,9 @@ struct MkxpCore: GameCore {
     /// RGSS1 and RGSS2, and 7, which adds RGSS3. A build without the core
     /// has 0, and its refusal names the full core.
     var displayName: String {
-        rgssVersionMask == 3 ? "RPG Maker XP and VX core" : "RPG Maker XP, VX and VX Ace core"
+        rgssVersionMask == 3
+            ? String(localized: "RPG Maker XP and VX core")
+            : String(localized: "RPG Maker XP, VX and VX Ace core")
     }
 
     var gamesName: String {
@@ -21,12 +26,12 @@ struct MkxpCore: GameCore {
 
     var gamesLine: String {
         rgssVersionMask == 7
-            ? "Runs RPG Maker XP, VX and VX Ace games"
-            : "Runs RPG Maker XP and VX games"
+            ? String(localized: "Runs RPG Maker XP, VX and VX Ace games")
+            : String(localized: "Runs RPG Maker XP and VX games")
     }
 
-    /// The core loads a cheat menu script and copies the bridge flag into
-    /// `$CHEATS` on every update.
+    /// The core loads a cheat menu script, which opens on HOME while the
+    /// bridge flag is on.
     var supportsCheats: Bool { true }
 
     /// Which RGSS versions the core runs, as the bitmask that
@@ -132,7 +137,7 @@ struct MkxpCore: GameCore {
     }
 
     var joiPlayTypes: Set<String> { ["rpgmxp", "rpgmvx", "rpgmvxace", "mkxp-z"] }
-    var joiPlayGames: String? { "RPG Maker XP, VX, VX Ace, and mkxp-z games" }
+    var joiPlayGames: String? { String(localized: "RPG Maker XP, VX, VX Ace, and mkxp-z games") }
 
     /// A replacement keeps the user's settings. A fresh import pins
     /// Modern when the scan finds Ruby 3 scripts, and for a JoiPlay
@@ -222,13 +227,17 @@ struct MkxpCore: GameCore {
         // declares one in Game.ini gets the warning.
         guard let requirement = GameRTPRequirement.detect(at: container.gameURL) else { return nil }
         return LaunchWarning(
-            title: "This game needs extra RPG Maker files",
-            message: """
-                "\(gameTitle)" expects shared \(requirement.friendlySummary) \
-                assets that don't ship with it. Empo can't add them yet, so \
-                the game may not start or may be missing graphics and sound.
-                """,
-            confirm: "Play anyway")
+            title: String(localized: "This game needs extra RPG Maker files"),
+            message: String(
+                localized: """
+                    "\(gameTitle)" needs shared \(requirement.friendlyNames.formatted(.list(type: .and))) \
+                    files that don't come with it. Empo can't add them yet, so \
+                    the game may not start, or pictures and sounds may be missing.
+                    """,
+                comment:
+                    "The first placeholder is the game title. The second names RPG Maker versions, such as RPG Maker VX Ace."
+            ),
+            confirm: String(localized: "Play anyway"))
     }
 
     // MARK: - Settings and info
@@ -298,17 +307,28 @@ struct MkxpCore: GameCore {
             let gameURL = container.gameURL
             var rows = [
                 InfoRow(
-                    label: "RGSS version",
+                    label: String(
+                        localized: "RGSS version",
+                        comment: "Game info row. RGSS is the RPG Maker script system."),
                     value: MkxpRuntimeProbe.rgssVersion(in: gameURL).map { "RGSS\($0)" })
             ]
             if let bundled = MkxpRuntimeProbe.bundledRubyVersion(in: gameURL) {
-                rows.append(InfoRow(label: "Ruby (bundled)", value: bundled))
+                rows.append(
+                    InfoRow(
+                        label: String(
+                            localized: "Ruby (bundled)",
+                            comment: "Game info row: the Ruby version that ships with the game."),
+                        value: bundled))
             }
             let code =
                 MkxpSettings.load(from: container.empoStateURL).rubyVersionOverride
                 ?? MkxpProfile.load(for: container).rubyVersion
             rows.append(
-                InfoRow(label: "Ruby (runtime)", value: MkxpRuntimeProbe.coreRubyVersion(forCode: code)))
+                InfoRow(
+                    label: String(
+                        localized: "Ruby (runtime)",
+                        comment: "Game info row: the Ruby version Empo runs the game with."),
+                    value: MkxpRuntimeProbe.coreRubyVersion(forCode: code)))
             return rows
         }.value
     }
@@ -333,7 +353,9 @@ struct MkxpCore: GameCore {
         case .vxAce: label = "RPG Maker VX Ace (RGSS3)"
         }
         throw GameImportValidator.ImportError.unsupportedRuntime(
-            "This game requires \(label). Empo does not support it right now.")
+            String(
+                localized: "This game requires \(label). Empo does not support it right now.",
+                comment: "The placeholder is an RPG Maker version, such as RPG Maker XP (RGSS1)."))
     }
 
     private static func rgssVersion(fromArchive name: String) -> RGSSVersion? {

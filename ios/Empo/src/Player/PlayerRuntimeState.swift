@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 import Observation
@@ -7,7 +10,7 @@ import SwiftUI
 /// forward, cheats, and the per-game `RuntimeFlag` settings the
 /// engine re-reads while it runs. It used to live as `@State` in
 /// `PlayerView`, but SwiftUI recycles that view on pause/resume
-/// while the engine's multiplier and cheat flag are process-static.
+/// while the engine's multiplier is process-static.
 /// The bridge is the source of truth. This model re-derives from it
 /// at every safe point and on every activation, never from a cached
 /// flag.
@@ -20,7 +23,6 @@ final class PlayerRuntimeState {
     /// Per-game multiplier from Game Settings. nil = fast forward is
     /// off for this game and the fast-forward actions are unavailable.
     private(set) var fastForwardMultiplier: Int?
-    private(set) var cheatsEnabled = false
 
     private var arbiter = FastForwardArbiter()
     private var container: GameContainer?
@@ -54,7 +56,6 @@ final class PlayerRuntimeState {
         )
         apply(outcome.write)
         fastForwardActive = outcome.active
-        cheatsEnabled = gamecore_getCheatsEnabled()
     }
 
     // MARK: - Fast forward
@@ -108,21 +109,14 @@ final class PlayerRuntimeState {
 
     // MARK: - Cheats
 
-    /// Toggle the JoiPlay-derived cheat menu. The first activation
-    /// arms $CHEATS and injects a HOME keypress so the in-game
-    /// Scene_Cheat hook fires immediately. The next disarms $CHEATS.
-    /// The Ruby-side poller the engine installs keeps $CHEATS in sync
-    /// with the bridge flag each Input.update.
-    func toggleCheats() {
-        let next = !gamecore_getCheatsEnabled()
-        gamecore_setCheatsEnabled(next)
-        cheatsEnabled = next
-        if next {
-            // The KEYUP must land at least one RGSS tick after the
-            // KEYDOWN or Input.trigger?(HOME) never sees the edge.
-            EngineSessionCoordinator.shared.injectKeyTap(
-                scancode: Int32(GAMECORE_SCANCODE_HOME), holdMilliseconds: 100)
-        }
+    /// The engine's cheat scripts open their menu on HOME while the
+    /// bridge flag is on.
+    func showCheats() {
+        gamecore_setCheatsEnabled(true)
+        // The KEYUP must land at least one RGSS tick after the
+        // KEYDOWN or Input.trigger?(HOME) never sees the edge.
+        EngineSessionCoordinator.shared.injectKeyTap(
+            scancode: Int32(GAMECORE_SCANCODE_HOME), holdMilliseconds: 100)
     }
 
     // MARK: - Bridge
@@ -199,8 +193,7 @@ final class PlayerActionRegistry {
         EmpoActionCatalog.pauseMenu: ActionBehavior(
             handle: Self.pressOnly { [weak self] in self?.pauseMenu() }),
         EmpoActionCatalog.toggleCheats: ActionBehavior(
-            isActive: { [runtime] in runtime.cheatsEnabled },
-            handle: Self.pressOnly { [runtime] in runtime.toggleCheats() }),
+            handle: Self.pressOnly { [runtime] in runtime.showCheats() }),
         EmpoActionCatalog.toggleTouchControls: ActionBehavior(
             handle: Self.pressOnly { [weak self] in self?.toggleTouchControls() }),
     ]

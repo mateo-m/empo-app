@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 import Observation
@@ -82,14 +85,22 @@ struct ImportPipelineAlert: Identifiable {
 
     var title: String {
         failures.count == 1
-            ? "Couldn't import \(quoted(failures[0].name))"
-            : "Some games didn't import"
+            ? String(
+                localized: "Couldn't import \"\(failures[0].name)\"",
+                comment: "Alert title. The placeholder is the game's name.")
+            : String(localized: "Some games didn't import", comment: "Alert title")
     }
 
     var message: String {
         failures.count == 1
             ? failures[0].reason
-            : failures.map { "\(quoted($0.name)): \($0.reason)" }.joined(separator: "\n\n")
+            : failures.map {
+                String(
+                    localized: "\"\($0.name)\": \($0.reason)",
+                    comment:
+                        "One line in a list of failed imports. First placeholder: the game's name. Second: why it failed."
+                )
+            }.joined(separator: "\n\n")
     }
 }
 
@@ -470,8 +481,10 @@ final class ImportPipeline {
                     selection.displayName)
                 presentError(
                     name: selection.displayName,
-                    message: "This game is already being imported. "
-                        + "Wait for the current import to finish, then try again."
+                    message: String(
+                        localized:
+                            "This game is already being imported. Wait for the current import to finish, then try again."
+                    )
                 )
 
             case .refusedDuplicateInBatch:
@@ -480,8 +493,10 @@ final class ImportPipeline {
                     selection.displayName)
                 presentError(
                     name: selection.displayName,
-                    message: "Two games in this import share the same title. "
-                        + "Import them one at a time, or rename one folder first."
+                    message: String(
+                        localized:
+                            "Two games in this import share the same title. Import them one at a time, or rename one folder first."
+                    )
                 )
 
             case .refusedOpenGame:
@@ -491,8 +506,11 @@ final class ImportPipeline {
                 presentError(
                     name: selection.displayName,
                     message: EngineSessionCoordinator.shared.canEndGame
-                        ? "This game is open. Quit it, then import again."
-                        : "This game is currently open. Close it from the app switcher and import again."
+                        ? String(localized: "This game is open. Quit it, then import again.")
+                        : String(
+                            localized:
+                                "This game is still running. Close Empo from the app switcher, reopen it, then import again."
+                        )
                 )
             }
         }
@@ -550,7 +568,7 @@ final class ImportPipeline {
             preparedSource.cleanup()
             presentError(
                 name: archiveName,
-                message: "Empo isn't ready to import yet. Reopen Empo, then try again."
+                message: String(localized: "Empo isn't ready to import yet. Reopen Empo, then try again.")
             )
             return
         }
@@ -705,10 +723,6 @@ private enum ImportPipelineService {
     }
 }
 
-private func quoted(_ value: String) -> String {
-    "\"\(value)\""
-}
-
 extension NSLock {
     fileprivate func withLock<T>(_ body: () -> T) -> T {
         lock()
@@ -757,7 +771,8 @@ extension GameLibrary {
         var errorDescription: String? {
             switch self {
             case .outOfSpace:
-                return "Not enough space to import. Free up space on your device and try again."
+                return String(
+                    localized: "Not enough space to import. Free up space on your device and try again.")
             }
         }
     }
@@ -927,8 +942,10 @@ extension GameLibrary {
                         onRescueFailure()
                     } else {
                         onError?(
-                            "Empo couldn't move this game's saves, so it kept the game. "
-                                + "Free up space, then delete again.")
+                            String(
+                                localized:
+                                    "Empo couldn't move this game's saves, so it kept the game. Free up space, then delete again."
+                            ))
                     }
                 case .failed(let message):
                     GameLibrary.shared.restoreEntryAfterFailedDelete(id: container.id)

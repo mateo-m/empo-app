@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 import UIKit
 
@@ -205,6 +208,15 @@ class AppWindow: UIWindow {
         instance?.windowScene?.screen.bounds ?? .zero
     }
 
+    /// Rects that the system draws over, in root view space: on the
+    /// closed iPhone Duo, the camera and the status bar block at the
+    /// top of the sensor strip. `statusBarFrame` reports a 2-point bar
+    /// there, so this is the only source for the block's bottom edge.
+    static var occludedRects: [CGRect] {
+        guard #available(iOS 27.1, *), let view = hostView else { return [] }
+        return view.reservedRegions(kind: .occlusion).map(\.frame)
+    }
+
     static var currentSafeArea: EdgeInsets {
         guard let window = instance else { return .init() }
         let insets = window.safeAreaInsets
@@ -405,4 +417,24 @@ class AppWindow: UIWindow {
             }
         }
     }
+}
+
+extension EdgeInsets {
+    /// The iPhone Duo keeps its camera and status bar in a strip on
+    /// one side edge, closed or open, and insets only that edge
+    /// (closed: trailing 84; open: trailing 84, bottom 34). An
+    /// iPhone on its side insets both side edges the same.
+    func sensorStripEdge(minWidth: CGFloat) -> HorizontalEdge? {
+        if leading == 0 && trailing >= minWidth { return .trailing }
+        if trailing == 0 && leading >= minWidth { return .leading }
+        return nil
+    }
+}
+
+/// The status icons center under the camera, not on the strip's middle
+/// (closed Duo: camera and icons at x 418, strip middle at 424). The
+/// camera is the smallest occluded rect in the strip.
+func sensorStripColumnX(strip: CGRect, occluded: [CGRect]) -> CGFloat {
+    occluded.filter { strip.contains($0) }.min { $0.width * $0.height < $1.width * $1.height }?.midX
+        ?? strip.midX
 }

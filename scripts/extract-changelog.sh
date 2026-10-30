@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Print the CHANGELOG.md section for one version (without its heading).
 # scripts/release.sh and .github/workflows/release.yml share this
 # script, so the GitHub release and the committed changelog always
@@ -27,7 +30,7 @@ SECTION=$(VERSION="$VERSION" perl -0ne '
     }
 ' "$CHANGELOG_PATH")
 
-if [[ -z "${SECTION//[$' \t\r\n']/}" ]]; then
+if [[ ! "$SECTION" =~ [^[:space:]] ]]; then
     echo "error: no v$VERSION section found in $CHANGELOG_PATH" >&2
     exit 1
 fi

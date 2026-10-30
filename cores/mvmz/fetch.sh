@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Downloads the MV/MZ core that cores/mvmz/.version pins, from
 # the releases of mateo-m/mvmz-apple-mobile, into
 # ios/Dependencies/mvmz-core. That repo's CI builds the release from a
